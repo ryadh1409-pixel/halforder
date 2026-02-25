@@ -21,6 +21,13 @@ export default function HomeScreen() {
         <Text style={{ color: '#2563eb', textAlign: 'center' }}>Join Order</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={{ padding: 14, borderRadius: 10, width: '80%' }}
+        onPress={() => router.push('/support' as never)}
+      >
+        <Text style={{ color: '#64748b', textAlign: 'center', fontSize: 14 }}>Contact Support</Text>
+      </TouchableOpacity>
+
     </View>
   );
 }

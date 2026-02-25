@@ -1,13 +1,21 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { auth } from '@/services/firebase';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const [isAuthenticated, setIsAuthenticated] = useState(!!auth.currentUser);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => setIsAuthenticated(!!user));
+    return () => unsub();
+  }, []);
 
   return (
     <Tabs
@@ -24,11 +32,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="chat"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Chat',
+          href: isAuthenticated ? '/chat' : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={color} />,
         }}
+      />
+      <Tabs.Screen
+        name="create"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="join"
+        options={{ href: null }}
       />
     </Tabs>
   );
