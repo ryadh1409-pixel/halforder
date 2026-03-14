@@ -21,6 +21,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAlert } from '@/services/alerts';
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
+import { logError } from '@/utils/errorLogger';
 import React, {
   createContext,
   useCallback,
@@ -56,14 +57,21 @@ async function ensureUserDocument(
   const snap = await getDoc(userRef);
   if (snap.exists()) {
     const data = snap.data();
-    if (typeof data?.displayName !== 'string') {
-      await setDoc(
-        userRef,
-        {
-          displayName: displayName ?? '',
-        },
-        { merge: true },
-      );
+    const updates: Record<string, unknown> = {};
+    if (typeof data?.displayName !== 'string') updates.displayName = displayName ?? '';
+    if (data?.email == null) updates.email = email ?? null;
+    if (data?.uid === undefined) updates.uid = uid;
+    if (data?.activeOrderId === undefined) updates.activeOrderId = null;
+    if (data?.credits === undefined) updates.credits = 0;
+    if (data?.role === undefined) updates.role = 'user';
+    if (data?.notificationsEnabled === undefined) updates.notificationsEnabled = true;
+    if (data?.ordersCount === undefined) updates.ordersCount = 0;
+    if (data?.taxGiftEligible === undefined) updates.taxGiftEligible = false;
+    if (data?.appOpenCount === undefined) updates.appOpenCount = 0;
+    if (data?.ordersCreated === undefined) updates.ordersCreated = 0;
+    if (data?.ordersJoined === undefined) updates.ordersJoined = 0;
+    if (Object.keys(updates).length > 0) {
+      await setDoc(userRef, updates, { merge: true });
     }
     return;
   }
@@ -162,18 +170,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUpWithEmail = useCallback(
     async (email: string, password: string) => {
-      const trimmed = email.trim();
-      const cred = await createUserWithEmailAndPassword(
-        auth,
-        trimmed,
-        password,
-      );
-      await ensureUserDocument(
-        cred.user.uid,
-        cred.user.displayName ?? null,
-        cred.user.email ?? null,
-        cred.user.phoneNumber ?? null,
-      );
+      const trimmed = typeof email === 'string' ? email.trim() : '';
+      if (!trimmed || !password) {
+        throw new Error('Please fill in all fields.');
+      }
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(
+          auth,
+          trimmed,
+          password,
+        );
+      } catch (err: unknown) {
+        logError(err, { alert: false });
+        const msg =
+          err && typeof err === 'object' && 'message' in err
+            ? String((err as { message: string }).message)
+            : 'Registration failed';
+        throw new Error(msg);
+      }
+      const uid = userCredential.user.uid;
+      const userEmail = userCredential.user.email ?? trimmed;
+      try {
+        await setDoc(doc(db, 'users', uid), {
+          email: userEmail,
+          createdAt: serverTimestamp(),
+          trustScore: 80,
+        });
+      } catch (e) {
+        logError(e);
+        // Do not throw: Auth succeeded; ensureUserDocument will run on onAuthStateChanged
+      }
+      try {
+        await ensureUserDocument(
+          uid,
+          userCredential.user.displayName ?? null,
+          userCredential.user.email ?? null,
+          userCredential.user.phoneNumber ?? null,
+        );
+      } catch (e) {
+        console.warn('ensureUserDocument failed (non-fatal):', e);
+      }
     },
     [],
   );
@@ -181,13 +218,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
       const trimmed = email.trim();
-      const cred = await signInWithEmailAndPassword(auth, trimmed, password);
-      await ensureUserDocument(
-        cred.user.uid,
-        cred.user.displayName ?? null,
-        cred.user.email ?? null,
-        cred.user.phoneNumber ?? null,
-      );
+      try {
+        const cred = await signInWithEmailAndPassword(auth, trimmed, password);
+        try {
+          await ensureUserDocument(
+            cred.user.uid,
+            cred.user.displayName ?? null,
+            cred.user.email ?? null,
+            cred.user.phoneNumber ?? null,
+          );
+        } catch (e) {
+          logError(e);
+          throw e;
+        }
+      } catch (err: unknown) {
+        logError(err);
+        throw err;
+      }
     },
     [],
   );

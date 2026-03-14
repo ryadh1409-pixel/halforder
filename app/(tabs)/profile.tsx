@@ -1,18 +1,22 @@
+import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
 import { DEFAULT_CAMPUSES, getCampusOptions } from '@/constants/campuses';
+import { logError } from '@/utils/errorLogger';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { useAuth } from '@/services/AuthContext';
 import { db, storage } from '@/services/firebase';
 import { doc, onSnapshot, setDoc, type DocumentData } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import { useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -53,6 +57,8 @@ export default function ProfileScreen() {
     ...DEFAULT_CAMPUSES,
   ]);
   const [savingCampus, setSavingCampus] = useState(false);
+  const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(null);
+  const displayNameInputRef = useRef<TextInput>(null);
 
   const uid = user?.uid ?? null;
   const trustScore = useTrustScore(uid);
@@ -112,6 +118,7 @@ export default function ProfileScreen() {
       );
       setCampus(selected);
     } catch (e) {
+      logError(e, { alert: false });
       Alert.alert(
         'Error',
         e instanceof Error ? e.message : 'Failed to update campus',
@@ -123,35 +130,43 @@ export default function ProfileScreen() {
 
   const pickAndUploadPhoto = async () => {
     if (!uid) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+
+    const permission =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
       Alert.alert(
-        'Permission needed',
-        'Allow access to your photos to change profile picture.',
+        'Permission required',
+        'Allow access to your photos to upload a profile image.',
       );
       return;
     }
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
     });
+
     if (result.canceled || !result.assets?.[0]?.uri) return;
-    const uri = result.assets[0].uri;
+
+    const imageUri = result.assets[0].uri;
     setUploadingPhoto(true);
+
     try {
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = () => resolve(xhr.response as Blob);
-        xhr.onerror = () => reject(new Error('Failed to read image'));
-        xhr.responseType = 'blob';
-        xhr.open('GET', uri, true);
-        xhr.send(null);
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
-      const storageRef = ref(storage, `users/${uid}/avatar.jpg`);
-      await uploadBytes(storageRef, blob);
+      if (!base64) {
+        throw new Error('Could not read image');
+      }
+
+      const storageRef = ref(storage, `profileImages/${uid}.jpg`);
+      await uploadString(storageRef, base64, 'base64', {
+        contentType: 'image/jpeg',
+      });
       const downloadURL = await getDownloadURL(storageRef);
+
       await setDoc(
         doc(db, 'users', uid),
         { photoURL: downloadURL },
@@ -159,8 +174,16 @@ export default function ProfileScreen() {
       );
       setPhotoURL(downloadURL);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Upload failed';
-      Alert.alert('Error', msg);
+      logError(e, { alert: false });
+      const message =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message: string }).message)
+          : 'Upload failed';
+      const friendly =
+        message.includes('storage/') || message.includes('Firebase')
+          ? 'Could not upload image. Please check your connection and try again.'
+          : message;
+      Alert.alert('Upload failed', friendly);
     } finally {
       setUploadingPhoto(false);
     }
@@ -182,6 +205,7 @@ export default function ProfileScreen() {
       setNameSuccessMessage('Name updated');
       setTimeout(() => setNameSuccessMessage(''), 2500);
     } catch (err) {
+      logError(err, { alert: false });
       const message =
         err instanceof Error ? err.message : 'Failed to update display name';
       Alert.alert('Error', message);
@@ -196,7 +220,8 @@ export default function ProfileScreen() {
     try {
       const userRef = doc(db, 'users', uid);
       await setDoc(userRef, { notificationsEnabled: value }, { merge: true });
-    } catch {
+    } catch (e) {
+      logError(e, { alert: false });
       setNotificationsEnabled(!value);
     }
   };
@@ -205,6 +230,7 @@ export default function ProfileScreen() {
     try {
       await signOutUser();
     } catch (err) {
+      logError(err, { alert: false });
       const message = err instanceof Error ? err.message : 'Failed to sign out';
       Alert.alert('Error', message);
       return;
@@ -277,6 +303,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={1} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -376,12 +403,17 @@ export default function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Display name</Text>
           <TextInput
+            ref={displayNameInputRef}
             style={styles.input}
             value={displayNameInput}
             onChangeText={setDisplayNameInput}
             placeholder="Add your name"
             placeholderTextColor={COLORS.textMuted}
             editable={!savingName}
+            inputAccessoryViewID={
+              Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+            }
+            onFocus={() => setFocusedInputIndex(0)}
           />
           <TouchableOpacity
             style={[styles.primaryButton, savingName && styles.buttonDisabled]}

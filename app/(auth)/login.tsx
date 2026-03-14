@@ -1,6 +1,7 @@
+import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
 import { useAuth } from '@/services/AuthContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,14 +16,33 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
+import { logError } from '@/utils/errorLogger';
+
+const LOGIN_INPUTS = 2;
 
 export default function LoginScreen() {
   const router = useRouter();
   const { redirectTo } = useLocalSearchParams<{ redirectTo?: string }>();
   const { signInWithEmail } = useAuth();
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const focusPrev = () => {
+    if (focusedIndex !== null && focusedIndex > 0) {
+      emailRef.current?.focus();
+      setFocusedIndex(0);
+    }
+  };
+  const focusNext = () => {
+    if (focusedIndex !== null && focusedIndex < LOGIN_INPUTS - 1) {
+      passwordRef.current?.focus();
+      setFocusedIndex(1);
+    }
+  };
 
   const handleLogin = async () => {
     const trimmed = email.trim();
@@ -39,6 +59,7 @@ export default function LoginScreen() {
         router.replace('/(tabs)');
       }
     } catch (err: unknown) {
+      logError(err, { alert: false });
       const code =
         err && typeof err === 'object' && 'code' in err
           ? String((err as { code: string }).code)
@@ -70,6 +91,12 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardToolbar
+        onFocusPrevious={focusPrev}
+        onFocusNext={focusNext}
+        focusedIndex={focusedIndex}
+        totalInputs={LOGIN_INPUTS}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboard}
@@ -81,6 +108,7 @@ export default function LoginScreen() {
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
             <TextInput
+              ref={emailRef}
               style={[styles.input, { color: '#000', fontSize: 16 }]}
               placeholder="you@example.com"
               placeholderTextColor="#666"
@@ -90,9 +118,14 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!busy}
+              inputAccessoryViewID={
+                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+              }
+              onFocus={() => setFocusedIndex(0)}
             />
             <Text style={styles.label}>Password</Text>
             <TextInput
+              ref={passwordRef}
               style={[styles.input, { color: '#000', fontSize: 16 }]}
               placeholder="••••••••"
               placeholderTextColor="#666"
@@ -102,6 +135,10 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!busy}
+              inputAccessoryViewID={
+                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+              }
+              onFocus={() => setFocusedIndex(1)}
             />
             <View style={styles.forgotRow}>
               <TouchableOpacity

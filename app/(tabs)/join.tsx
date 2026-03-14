@@ -1,5 +1,6 @@
 import { formatTorontoOrderTime } from '@/lib/format-toronto-time';
 import { isUserBanned } from '@/services/adminGuard';
+import { logError } from '@/utils/errorLogger';
 import { trackEvent } from '@/services/analytics';
 import { auth, db } from '@/services/firebase';
 import { hasBlockConflict } from '@/services/report-block';
@@ -343,6 +344,7 @@ export default function JoinScreen() {
       });
       Alert.alert('Success', 'Joined successfully');
     } catch (e) {
+      logError(e, { alert: false });
       const msg = e instanceof Error ? e.message : 'Failed to join';
       Alert.alert('Error', msg);
     } finally {
@@ -362,6 +364,7 @@ export default function JoinScreen() {
       await leaveOrderWithTransaction(orderId, user);
       Alert.alert('Success', 'You left the order');
     } catch (e) {
+      logError(e, { alert: false });
       const msg = e instanceof Error ? e.message : 'Failed to leave';
       if (msg === 'Not in order') {
         Alert.alert('Error', 'You are not in this order');
@@ -383,6 +386,7 @@ export default function JoinScreen() {
     try {
       await confirmParticipation(orderId, user);
     } catch (e) {
+      logError(e, { alert: false });
       const msg = e instanceof Error ? e.message : 'Failed to confirm';
       Alert.alert('Error', msg);
     }

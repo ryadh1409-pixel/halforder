@@ -1,6 +1,8 @@
+import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/KeyboardToolbar';
 import { trackOrderCreated } from '@/services/analytics';
 import { auth, db } from '@/services/firebase';
 import { getUserLocation } from '@/services/location';
+import { logError } from '@/utils/errorLogger';
 import { useRouter } from 'expo-router';
 import {
   addDoc,
@@ -16,7 +18,6 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  InputAccessoryView,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -26,8 +27,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-
-const INPUT_ACCESSORY_ID = 'createOrderAccessory';
 
 export default function CreateScreen() {
   const router = useRouter();
@@ -216,6 +215,7 @@ export default function CreateScreen() {
       Keyboard.dismiss();
       router.push(`/order/${ref.id}` as const);
     } catch (error) {
+      logError(error, { alert: false });
       Alert.alert(
         'Error',
         error instanceof Error ? error.message : 'Failed to create order',
@@ -229,49 +229,12 @@ export default function CreateScreen() {
 
   const keyboardToolbar =
     Platform.OS === 'ios' ? (
-      <InputAccessoryView nativeID={INPUT_ACCESSORY_ID}>
-        <View style={accessoryStyles.toolbar}>
-          <TouchableOpacity
-            onPress={handleAccessoryPrev}
-            style={accessoryStyles.button}
-            disabled={focusedIndex === null || focusedIndex === 0}
-          >
-            <Text
-              style={[
-                accessoryStyles.icon,
-                (focusedIndex === null || focusedIndex === 0) &&
-                  accessoryStyles.iconDisabled,
-              ]}
-            >
-              ↑
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleAccessoryNext}
-            style={accessoryStyles.button}
-            disabled={
-              focusedIndex === null || focusedIndex === inputRefs.length - 1
-            }
-          >
-            <Text
-              style={[
-                accessoryStyles.icon,
-                (focusedIndex === null ||
-                  focusedIndex === inputRefs.length - 1) &&
-                  accessoryStyles.iconDisabled,
-              ]}
-            >
-              ↓
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleAccessoryDone}
-            style={accessoryStyles.button}
-          >
-            <Text style={accessoryStyles.icon}>✓</Text>
-          </TouchableOpacity>
-        </View>
-      </InputAccessoryView>
+      <KeyboardToolbar
+        onFocusPrevious={handleAccessoryPrev}
+        onFocusNext={handleAccessoryNext}
+        focusedIndex={focusedIndex}
+        totalInputs={inputRefs.length}
+      />
     ) : null;
 
   const content = (
@@ -303,7 +266,7 @@ export default function CreateScreen() {
         onChangeText={setTotalPrice}
         keyboardType="numeric"
         inputAccessoryViewID={
-          Platform.OS === 'ios' ? INPUT_ACCESSORY_ID : undefined
+          Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
         }
         onFocus={() => setFocusedIndex(1)}
         style={{
@@ -324,7 +287,7 @@ export default function CreateScreen() {
         onChangeText={setSharingPrice}
         keyboardType="numeric"
         inputAccessoryViewID={
-          Platform.OS === 'ios' ? INPUT_ACCESSORY_ID : undefined
+          Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
         }
         onFocus={() => setFocusedIndex(2)}
         style={{
@@ -392,7 +355,7 @@ export default function CreateScreen() {
         value={restaurantName}
         onChangeText={setRestaurantName}
         inputAccessoryViewID={
-          Platform.OS === 'ios' ? INPUT_ACCESSORY_ID : undefined
+          Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
         }
         onFocus={() => setFocusedIndex(0)}
         style={{
@@ -412,7 +375,7 @@ export default function CreateScreen() {
         value={restaurantLocation}
         onChangeText={setRestaurantLocation}
         inputAccessoryViewID={
-          Platform.OS === 'ios' ? INPUT_ACCESSORY_ID : undefined
+          Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
         }
         onFocus={() => setFocusedIndex(3)}
         style={{
@@ -504,29 +467,3 @@ export default function CreateScreen() {
     </>
   );
 }
-
-const accessoryStyles = {
-  toolbar: {
-    height: 44,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'flex-end' as const,
-    paddingHorizontal: 12,
-    backgroundColor: '#d1d5db',
-    borderTopWidth: 1,
-    borderTopColor: '#9ca3af',
-  },
-  button: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginLeft: 8,
-  },
-  icon: {
-    fontSize: 18,
-    color: '#000',
-    fontWeight: '600' as const,
-  },
-  iconDisabled: {
-    opacity: 0.4,
-  },
-};

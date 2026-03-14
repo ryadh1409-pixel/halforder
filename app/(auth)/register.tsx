@@ -1,9 +1,8 @@
-import { DEFAULT_CAMPUSES, getCampusOptions } from '@/constants/campuses';
+import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
 import { useAuth } from '@/services/AuthContext';
-import { auth, db } from '@/services/firebase';
+import { logError } from '@/utils/errorLogger';
 import { useRouter } from 'expo-router';
-import { doc, updateDoc } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,28 +23,37 @@ const PLACEHOLDER = '#6B7280';
 const LABEL = '#9CA3AF';
 const BRAND = '#2563EB';
 
+const REGISTER_INPUTS = 3;
+
 export default function RegisterScreen() {
   const router = useRouter();
   const { signUpWithEmail } = useAuth();
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [campus, setCampus] = useState(DEFAULT_CAMPUSES[0]);
-  const [campusOptions, setCampusOptions] = useState<string[]>([
-    ...DEFAULT_CAMPUSES,
-  ]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    getCampusOptions().then((list) => {
-      setCampusOptions(list.length > 0 ? list : [...DEFAULT_CAMPUSES]);
-    });
-  }, []);
+  const refs = [emailRef, passwordRef, confirmPasswordRef];
+  const focusPrev = () => {
+    if (focusedIndex !== null && focusedIndex > 0) {
+      refs[focusedIndex - 1].current?.focus();
+      setFocusedIndex(focusedIndex - 1);
+    }
+  };
+  const focusNext = () => {
+    if (focusedIndex !== null && focusedIndex < REGISTER_INPUTS - 1) {
+      refs[focusedIndex + 1].current?.focus();
+      setFocusedIndex(focusedIndex + 1);
+    }
+  };
 
   const handleRegister = async () => {
-    const trimmed = email.trim();
-    if (!trimmed || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields.');
+    if (!email || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill all fields.');
       return;
     }
     if (password !== confirmPassword) {
@@ -58,17 +66,14 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     try {
-      await signUpWithEmail(trimmed, password);
-      const uid = auth.currentUser?.uid;
-      if (uid) {
-        await updateDoc(doc(db, 'users', uid), { campus });
-      }
+      await signUpWithEmail(email.trim(), password);
       router.replace('/(tabs)');
-    } catch (err: unknown) {
+    } catch (error: unknown) {
+      logError(error, { alert: false });
       const msg =
-        err && typeof err === 'object' && 'message' in err
-          ? String((err as { message: string }).message)
-          : 'Registration failed';
+        error && typeof error === 'object' && 'message' in error
+          ? String((error as { message: string }).message)
+          : 'Registration failed. Please try again.';
       Alert.alert('Error', msg);
     } finally {
       setLoading(false);
@@ -77,6 +82,12 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardToolbar
+        onFocusPrevious={focusPrev}
+        onFocusNext={focusNext}
+        focusedIndex={focusedIndex}
+        totalInputs={REGISTER_INPUTS}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboard}
@@ -88,6 +99,7 @@ export default function RegisterScreen() {
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
             <TextInput
+              ref={emailRef}
               style={styles.input}
               placeholder="you@example.com"
               placeholderTextColor={PLACEHOLDER}
@@ -97,9 +109,14 @@ export default function RegisterScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!loading}
+              inputAccessoryViewID={
+                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+              }
+              onFocus={() => setFocusedIndex(0)}
             />
             <Text style={styles.label}>Password</Text>
             <TextInput
+              ref={passwordRef}
               style={styles.input}
               placeholder="At least 6 characters"
               placeholderTextColor={PLACEHOLDER}
@@ -107,9 +124,14 @@ export default function RegisterScreen() {
               onChangeText={setPassword}
               secureTextEntry
               editable={!loading}
+              inputAccessoryViewID={
+                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+              }
+              onFocus={() => setFocusedIndex(1)}
             />
             <Text style={styles.label}>Confirm password</Text>
             <TextInput
+              ref={confirmPasswordRef}
               style={styles.input}
               placeholder="••••••••"
               placeholderTextColor={PLACEHOLDER}
@@ -117,31 +139,11 @@ export default function RegisterScreen() {
               onChangeText={setConfirmPassword}
               secureTextEntry
               editable={!loading}
+              inputAccessoryViewID={
+                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+              }
+              onFocus={() => setFocusedIndex(2)}
             />
-
-            <Text style={styles.label}>Campus</Text>
-            <View style={styles.campusRow}>
-              {campusOptions.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[
-                    styles.campusChip,
-                    campus === c && styles.campusChipActive,
-                  ]}
-                  onPress={() => setCampus(c)}
-                  disabled={loading}
-                >
-                  <Text
-                    style={[
-                      styles.campusChipText,
-                      campus === c && styles.campusChipTextActive,
-                    ]}
-                  >
-                    {c}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             <TouchableOpacity
               style={[styles.primaryBtn, loading && styles.btnDisabled]}
@@ -191,33 +193,6 @@ const styles = StyleSheet.create({
   },
   form: { gap: 16 },
   label: { fontSize: 14, fontWeight: '600', color: LABEL },
-  campusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  campusChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: INPUT_BG,
-  },
-  campusChipActive: {
-    borderColor: BRAND,
-    backgroundColor: '#111827',
-  },
-  campusChipText: {
-    color: LABEL,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  campusChipTextActive: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
   input: {
     backgroundColor: INPUT_BG,
     borderWidth: 1,
