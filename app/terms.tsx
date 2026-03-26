@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,6 +16,16 @@ const LAST_UPDATED = 'March 26, 2026';
 
 export default function TermsScreen() {
   const router = useRouter();
+  const handleOpenMail = async () => {
+    const url = `mailto:${SUPPORT_EMAIL}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) return;
+      await Linking.openURL(url);
+    } catch {
+      // Keep screen stable even if mail client is unavailable.
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -98,7 +109,7 @@ export default function TermsScreen() {
           For questions, contact:{' '}
         </Text>
         <TouchableOpacity
-          onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+          onPress={handleOpenMail}
         >
           <Text style={styles.link}>{SUPPORT_EMAIL}</Text>
         </TouchableOpacity>

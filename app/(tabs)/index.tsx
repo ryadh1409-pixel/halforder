@@ -1,34 +1,31 @@
-import { getCreditExpiryCountdown } from '@/lib/credit-expiry';
-import { getTimeAgo } from '@/lib/time-ago';
 import {
-  useAutoMatchOrders,
-  type AutoMatchOrder,
+    useAutoMatchOrders,
+    type AutoMatchOrder,
 } from '@/hooks/useAutoMatchOrders';
+import { getTimeAgo } from '@/lib/time-ago';
 import { isUserBanned } from '@/services/adminGuard';
+import { createAlert } from '@/services/alerts';
 import { getOrCreateChat } from '@/services/chat';
 import { db } from '@/services/firebase';
-import { createAlert } from '@/services/alerts';
-import { useRouter } from 'expo-router';
 import { getAuth } from '@firebase/auth';
+import { useRouter } from 'expo-router';
 import {
-  addDoc,
-  arrayUnion,
-  collection,
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
+    addDoc,
+    arrayUnion,
+    collection,
+    doc,
+    serverTimestamp,
+    updateDoc,
 } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -39,10 +36,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const auth = getAuth();
   const user = auth.currentUser;
-  const [credits, setCredits] = useState<number>(0);
-  const [creditExpiresAt, setCreditExpiresAt] = useState<number | null>(null);
-  const [ordersCount, setOrdersCount] = useState<number>(0);
-  const [creditLoading, setCreditLoading] = useState(!!user?.uid);
   const {
     orders: autoMatchOrders,
     loading: autoMatchLoading,
@@ -51,60 +44,11 @@ export default function HomeScreen() {
   } = useAutoMatchOrders();
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const uid = user?.uid;
-    if (!uid) {
-      setCredits(0);
-      setCreditExpiresAt(null);
-      setOrdersCount(0);
-      setCreditLoading(false);
-      return;
-    }
-    setCreditLoading(true);
-    const unsub = onSnapshot(
-      doc(db, 'users', uid),
-      (snap) => {
-        if (!snap.exists()) {
-          setCredits(0);
-          setCreditExpiresAt(null);
-          setOrdersCount(0);
-          setCreditLoading(false);
-          return;
-        }
-        const data = snap.data();
-        const exp =
-          data?.creditExpiresAt?.toMillis?.() ?? data?.creditExpiresAt ?? null;
-        const now = Date.now();
-        if (exp != null && now > exp) {
-          setCredits(0);
-          setCreditExpiresAt(null);
-          setDoc(doc(db, 'users', uid), { credits: 0 }, { merge: true }).catch(
-            () => {},
-          );
-        } else {
-          setCredits(typeof data?.credits === 'number' ? data.credits : 0);
-          setCreditExpiresAt(exp);
-        }
-        setOrdersCount(
-          typeof data?.ordersCount === 'number' ? data.ordersCount : 0,
-        );
-        setCreditLoading(false);
-      },
-      () => {
-        setCredits(0);
-        setCreditExpiresAt(null);
-        setOrdersCount(0);
-        setCreditLoading(false);
-      },
-    );
-    return () => unsub();
-  }, [user?.uid]);
-
-  const effectiveCredits =
-    creditExpiresAt != null && Date.now() > creditExpiresAt ? 0 : credits;
-  const expiryCountdown = getCreditExpiryCountdown(creditExpiresAt);
-  const taxGiftRemaining = ordersCount % 3 === 0 ? 3 : 3 - (ordersCount % 3);
-  const nextOrderIsTaxGift = (ordersCount + 1) % 3 === 0;
+  const ordersCount = 2;
+  const target = 5;
+  const streak = 2;
+  const remainingOrders = Math.max(target - ordersCount, 0);
+  const progress = Math.min(ordersCount / target, 1);
 
   const handleCreateOrder = () => {
     if (!user) {
@@ -215,32 +159,16 @@ export default function HomeScreen() {
         />
         <View style={styles.content}>
           {user && (
-            <View style={[layoutStyles.card, styles.creditCardInner]}>
-              {creditLoading ? (
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : (
-                <>
-                  <Text style={styles.creditBalance}>
-                    ${effectiveCredits.toFixed(2)} credit
-                  </Text>
-                  <Text style={styles.creditExpiry}>
-                    {effectiveCredits > 0
-                      ? `Expires in ${expiryCountdown}`
-                      : expiryCountdown}
-                  </Text>
-                </>
-              )}
-            </View>
-          )}
-
-          {user && (
-            <View style={[layoutStyles.cardFlat, styles.taxGiftProgressCard]}>
-              <Text style={styles.taxGiftProgressText}>
-                {nextOrderIsTaxGift
-                  ? 'This order qualifies for a tax gift 🎁'
-                  : taxGiftRemaining === 1
-                    ? 'Only 1 more order to get your tax paid by HalfOrder 🎁'
-                    : `Only ${taxGiftRemaining} more orders to get your tax paid by HalfOrder 🎁`}
+            <View style={[layoutStyles.card, styles.rewardsCard]}>
+              <Text style={styles.rewardsTitle}>Rewards</Text>
+              <Text style={styles.rewardsProgressText}>
+                {remainingOrders} more orders to unlock FREE TAX
+              </Text>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+              </View>
+              <Text style={styles.streakText}>
+                You&apos;re on a {streak}-day streak
               </Text>
             </View>
           )}
@@ -367,34 +295,46 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
     alignItems: 'center',
   },
-  creditCardInner: {
+  rewardsCard: {
+    width: '100%',
+    maxWidth: 340,
     marginBottom: theme.spacing.lg,
-    minWidth: 200,
     alignItems: 'center',
     paddingVertical: theme.spacing.md,
-  },
-  creditBalance: {
-    ...typography.bodyMedium,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  creditExpiry: {
-    ...typography.caption,
-    marginTop: theme.spacing.xs,
-  },
-  taxGiftProgressCard: {
-    paddingVertical: theme.spacing.md - 2,
     paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.primaryOrange,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  taxGiftProgressText: {
+  rewardsTitle: {
+    ...typography.title,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xs,
+  },
+  rewardsProgressText: {
     ...typography.caption,
     fontSize: 14,
     color: theme.colors.primaryDark,
     textAlign: 'center',
     fontWeight: '500',
+    marginBottom: theme.spacing.sm + 2,
+  },
+  progressTrack: {
+    width: '100%',
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: theme.colors.warningSoft,
+    overflow: 'hidden',
+    marginBottom: theme.spacing.sm + 2,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: theme.colors.primaryGreen,
+  },
+  streakText: {
+    ...typography.caption,
+    color: theme.colors.textSlateDark,
+    fontWeight: '600',
   },
   buttons: {
     width: '100%',

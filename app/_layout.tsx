@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     DarkTheme,
     DefaultTheme,
@@ -7,18 +6,11 @@ import {
 import * as Notifications from 'expo-notifications';
 import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
-    ActivityIndicator,
-    DeviceEventEmitter,
     Platform,
-    View,
 } from 'react-native';
 
-import {
-    TERMS_ACCEPTANCE_STORAGE_KEY,
-    TERMS_ACCEPTED_EVENT,
-} from '@/constants/termsAcceptance';
 import 'react-native-reanimated';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -58,38 +50,8 @@ function RootLayoutNav() {
   const { user } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
 
   const seg0 = segments[0] as string | undefined;
-
-  const termsExempt =
-    seg0 === 'index' ||
-    seg0 === 'onboarding' ||
-    seg0 === 'terms-acceptance' ||
-    seg0 === 'terms' ||
-    seg0 === 'privacy' ||
-    seg0 === '(auth)';
-
-  const termsLoadingBlock = termsAccepted === null && !termsExempt;
-
-  useEffect(() => {
-    const sub = DeviceEventEmitter.addListener(TERMS_ACCEPTED_EVENT, () => {
-      setTermsAccepted(true);
-    });
-    return () => sub.remove();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void AsyncStorage.getItem(TERMS_ACCEPTANCE_STORAGE_KEY).then((v) => {
-      if (!cancelled) {
-        setTermsAccepted(v != null && v.length > 0);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [seg0]);
 
   useEffect(() => {
     const uid = user?.uid;
@@ -176,42 +138,16 @@ function RootLayoutNav() {
       ? `/(auth)/login?redirectTo=${encodeURIComponent(pathname)}`
       : '/(auth)/login';
 
-  const needsTermsRedirect =
-    termsAccepted === false && !termsExempt;
-  const termsHref =
-    pathname !== '/' &&
-    pathname !== '/index' &&
-    !pathname.startsWith('/(auth)')
-      ? (`/terms-acceptance?returnTo=${encodeURIComponent(pathname)}` as Parameters<
-          typeof Redirect
-        >[0]['href'])
-      : ('/terms-acceptance' as Parameters<typeof Redirect>[0]['href']);
-
-  if (termsLoadingBlock) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: theme.colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
   return (
     <>
-      {needsTermsRedirect ? (
-        <Redirect href={termsHref} />
-      ) : redirectToLogin ? (
+      {redirectToLogin ? (
         <Redirect href={loginHref as Parameters<typeof Redirect>[0]['href']} />
       ) : null}
       {redirectToTabs ? <Redirect href="/(tabs)" /> : null}
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="terms" options={{ title: 'Terms of Use' }} />
+        <Stack.Screen name="privacy" options={{ title: 'Privacy Policy' }} />
         <Stack.Screen
           name="terms-acceptance"
           options={{ headerShown: false, title: 'Terms' }}

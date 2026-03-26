@@ -4,24 +4,18 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import AppLogo from '@/components/AppLogo';
-import { TERMS_ACCEPTANCE_STORAGE_KEY } from '@/constants/termsAcceptance';
 
 const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
 
 export default function Index() {
   const [done, setDone] = useState<boolean | null>(null);
-  const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [ob, ta] = await Promise.all([
-        AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY),
-        AsyncStorage.getItem(TERMS_ACCEPTANCE_STORAGE_KEY),
-      ]);
+      const ob = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
       if (!cancelled) {
         setDone(ob === 'true');
-        setTermsAccepted(ta != null && ta.length > 0);
       }
     })();
     return () => {
@@ -29,7 +23,7 @@ export default function Index() {
     };
   }, []);
 
-  if (done === null || termsAccepted === null) {
+  if (done === null) {
     return (
       <View
         style={{
@@ -47,9 +41,6 @@ export default function Index() {
 
   if (!done) {
     return <Redirect href="/onboarding" />;
-  }
-  if (!termsAccepted) {
-    return <Redirect href="/terms-acceptance" />;
   }
   return <Redirect href="/(tabs)" />;
 }

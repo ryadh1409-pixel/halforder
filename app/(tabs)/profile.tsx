@@ -43,11 +43,12 @@ export default function ProfileScreen() {
   const [savingName, setSavingName] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [nameSuccessMessage, setNameSuccessMessage] = useState('');
+  const [nameErrorMessage, setNameErrorMessage] = useState('');
   const [ordersCount, setOrdersCount] = useState<number>(0);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(null);
   const displayNameInputRef = useRef<TextInput>(null);
-  const nameSuccessClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameFeedbackClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const uid = user?.uid ?? null;
   const trustScore = useTrustScore(uid);
@@ -88,8 +89,8 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     return () => {
-      if (nameSuccessClearRef.current != null) {
-        clearTimeout(nameSuccessClearRef.current);
+      if (nameFeedbackClearRef.current != null) {
+        clearTimeout(nameFeedbackClearRef.current);
       }
     };
   }, []);
@@ -107,26 +108,29 @@ export default function ProfileScreen() {
       Alert.alert('Display name', mod.reason);
       return;
     }
-    if (nameSuccessClearRef.current != null) {
-      clearTimeout(nameSuccessClearRef.current);
-      nameSuccessClearRef.current = null;
+    if (nameFeedbackClearRef.current != null) {
+      clearTimeout(nameFeedbackClearRef.current);
+      nameFeedbackClearRef.current = null;
     }
     setSavingName(true);
     setNameSuccessMessage('');
+    setNameErrorMessage('');
     try {
       const userRef = doc(db, 'users', uid);
       await setDoc(userRef, { displayName: mod.text }, { merge: true });
       setDisplayNameInput(mod.text);
       setNameSuccessMessage('Name updated');
-      nameSuccessClearRef.current = setTimeout(() => {
+      nameFeedbackClearRef.current = setTimeout(() => {
         setNameSuccessMessage('');
-        nameSuccessClearRef.current = null;
+        nameFeedbackClearRef.current = null;
       }, 2000);
     } catch (err) {
       logError(err, { alert: false });
-      const message =
-        err instanceof Error ? err.message : 'Failed to update display name';
-      Alert.alert('Error', message);
+      setNameErrorMessage('Something went wrong, try again');
+      nameFeedbackClearRef.current = setTimeout(() => {
+        setNameErrorMessage('');
+        nameFeedbackClearRef.current = null;
+      }, 2000);
     } finally {
       setSavingName(false);
     }
@@ -345,6 +349,9 @@ export default function ProfileScreen() {
           {nameSuccessMessage ? (
             <Text style={styles.successMessage}>{nameSuccessMessage}</Text>
           ) : null}
+          {nameErrorMessage ? (
+            <Text style={styles.errorMessage}>{nameErrorMessage}</Text>
+          ) : null}
 
           <Text style={styles.sectionLabel}>Email</Text>
           <Text style={styles.readOnlyValue}>{emailLabel}</Text>
@@ -375,6 +382,23 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={openSupportEmail} activeOpacity={0.7}>
             <Text style={styles.linkText}>{SUPPORT_EMAIL}</Text>
           </TouchableOpacity>
+          <Text style={[styles.sectionLabel, { marginTop: 12 }]}>Legal</Text>
+          <View style={styles.legalButtonsRow}>
+            <TouchableOpacity
+              style={styles.legalActionButton}
+              onPress={() => router.push('/terms')}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.legalActionText}>Terms of Use</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.legalActionButton}
+              onPress={() => router.push('/privacy')}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.legalActionText}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             style={[styles.primaryButton, { marginTop: 12 }]}
             onPress={() => router.push('/complaint')}
@@ -591,6 +615,11 @@ const styles = StyleSheet.create({
     color: c.textMuted,
     marginBottom: 12,
   },
+  errorMessage: {
+    fontSize: 13,
+    color: c.dangerText,
+    marginBottom: 12,
+  },
   settingsHint: {
     fontSize: 13,
     color: c.textMuted,
@@ -625,6 +654,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: c.accentBlue,
     textDecorationLine: 'underline',
+  },
+  legalButtonsRow: {
+    marginBottom: 12,
+    gap: theme.spacing.sm,
+  },
+  legalActionButton: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: theme.radius.button,
+    minHeight: theme.spacing.touchMin,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: c.background,
+  },
+  legalActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: c.textSlateDark,
   },
   cardHint: {
     fontSize: 14,

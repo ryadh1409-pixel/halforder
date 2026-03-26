@@ -2,19 +2,17 @@
  * Firebase client for Expo (iOS, Android, web).
  *
  * **Auth (native):** `initializeAuth` + `getReactNativePersistence(AsyncStorage)`
- * from `@firebase/auth` (Metro uses the package `"react-native"` export).
- * The `firebase/auth/react-native` import path is **not** in `firebase@12`
- * `package.json` exports; `@firebase/auth` is the supported RN entry.
+ * from `firebase/auth` (resolved to RN build by Metro on native).
  *
  * **Auth (web):** `getAuth` with default browser persistence.
  *
  * Native persistence is loaded with `require()` so web bundles never static-import
  * `getReactNativePersistence` (it is not exported from the browser build).
  */
-import type { Auth, Dependencies } from '@firebase/auth';
-import { getAuth } from '@firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
+import type { Auth, Dependencies } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
@@ -50,14 +48,14 @@ function getOrCreateAuth(app: FirebaseApp): Auth {
     return getAuth(app);
   }
 
-  /** Runtime module is `@firebase/auth` RN build; types use public `Dependencies`. */
+  /** Runtime module is Firebase Auth RN build; types use public `Dependencies`. */
   /* RN-only exports must not be static-imported for Expo web bundles. */
   /* eslint-disable @typescript-eslint/no-require-imports */
   const {
     initializeAuth: initAuth,
     getAuth: getAuthImpl,
     getReactNativePersistence,
-  } = require('@firebase/auth') as {
+  } = require('firebase/auth') as {
     initializeAuth: (app: FirebaseApp, deps?: Dependencies) => Auth;
     getAuth: (app?: FirebaseApp) => Auth;
     getReactNativePersistence: (
