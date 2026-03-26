@@ -42,6 +42,7 @@ export default function ProfileScreen() {
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [savingName, setSavingName] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [nameSuccessMessage, setNameSuccessMessage] = useState('');
   const [nameErrorMessage, setNameErrorMessage] = useState('');
@@ -125,6 +126,7 @@ export default function ProfileScreen() {
       nameFeedbackClearRef.current = null;
     }
     setSavingName(true);
+    setNameSaved(false);
     setNameSuccessMessage('');
     setNameErrorMessage('');
     try {
@@ -133,8 +135,10 @@ export default function ProfileScreen() {
       await setDoc(userRef, { displayName: mod.text }, { merge: true });
       setDisplayNameInput(mod.text);
       setInitialDisplayName(mod.text);
+      setNameSaved(true);
       setNameSuccessMessage('Name updated');
       nameFeedbackClearRef.current = setTimeout(() => {
+        setNameSaved(false);
         setNameSuccessMessage('');
         nameFeedbackClearRef.current = null;
       }, 2000);
@@ -291,6 +295,7 @@ export default function ProfileScreen() {
     !savingName &&
     displayNameInput.trim().length > 0 &&
     displayNameInput.trim() !== initialDisplayName.trim();
+  const saveButtonLabel = savingName ? 'Saving...' : nameSaved ? 'Saved ✓' : 'Save';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -356,13 +361,15 @@ export default function ProfileScreen() {
             onFocus={() => setFocusedInputIndex(0)}
           />
           <TouchableOpacity
-            style={[styles.primaryButton, !canSaveName && styles.buttonDisabled]}
+            style={[
+              styles.primaryButton,
+              nameSaved && styles.primaryButtonSaved,
+              !canSaveName && !nameSaved && styles.buttonDisabled,
+            ]}
             disabled={!canSaveName}
             onPress={handleSaveDisplayName}
           >
-            <Text style={styles.primaryButtonText}>
-              {savingName ? 'Saving...' : 'Save'}
-            </Text>
+            <Text style={styles.primaryButtonText}>{saveButtonLabel}</Text>
           </TouchableOpacity>
           {nameSuccessMessage ? (
             <Text style={styles.successMessage}>{nameSuccessMessage}</Text>
@@ -619,6 +626,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 16,
+  },
+  primaryButtonSaved: {
+    backgroundColor: c.success,
   },
   primaryButtonText: {
     color: c.textOnPrimary,
