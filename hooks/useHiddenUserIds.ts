@@ -1,6 +1,7 @@
 import { auth, db } from '@/services/firebase';
 import {
   collection,
+  doc,
   onSnapshot,
   query,
   where,
@@ -21,28 +22,24 @@ export function useHiddenUserIds(): Set<string> {
       setBlockerIds([]);
       return;
     }
-    const q1 = query(
-      collection(db, 'blocks'),
-      where('blockerId', '==', uid),
-    );
+    const myRef = doc(db, 'users', uid);
     const q2 = query(
-      collection(db, 'blocks'),
-      where('blockedId', '==', uid),
+      collection(db, 'users'),
+      where('blockedUsers', 'array-contains', uid),
     );
-    const unsub1 = onSnapshot(
-      q1,
-      (snap) => {
-        setBlockedIds(
-          snap.docs.map((d) => String(d.data()?.blockedId ?? '')).filter(Boolean),
-        );
-      },
-      () => setBlockedIds([]),
-    );
+    const unsub1 = onSnapshot(myRef, (snap) => {
+      if (!snap.exists()) {
+        setBlockedIds([]);
+        return;
+      }
+      const list = snap.data()?.blockedUsers;
+      setBlockedIds(Array.isArray(list) ? list.filter(Boolean) : []);
+    });
     const unsub2 = onSnapshot(
       q2,
       (snap) => {
         setBlockerIds(
-          snap.docs.map((d) => String(d.data()?.blockerId ?? '')).filter(Boolean),
+          snap.docs.map((d) => String(d.id ?? '')).filter(Boolean),
         );
       },
       () => setBlockerIds([]),

@@ -1,22 +1,17 @@
 import { auth, db } from '@/services/firebase';
 import {
-  addDoc,
-  collection,
+  arrayUnion,
+  doc,
+  getDoc,
   getDocs,
   query,
-  serverTimestamp,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 
-type BlockDoc = {
-  blockerId: string;
-  blockedUserId: string;
-  createdAt: unknown;
-};
-
 /**
  * Blocks a user for the current signed-in user (or explicit blockerId).
- * Uses `blockedUsers` collection and prevents duplicate rows.
+ * Stores IDs in users/{uid}.blockedUsers array.
  */
 export async function blockUser(
   blockedUserId: string,
@@ -33,20 +28,15 @@ export async function blockUser(
     throw new Error('You cannot block yourself.');
   }
 
-  const existingQ = query(
-    collection(db, 'blockedUsers'),
-    where('blockerId', '==', currentUid),
-    where('blockedUserId', '==', blockedUserId),
-  );
-  const existingSnap = await getDocs(existingQ);
-  if (!existingSnap.empty) return;
+  const userRef = doc(db, 'users', currentUid);
+  const userSnap = await getDoc(userRef);
+  const existing = userSnap.exists() ? userSnap.data()?.blockedUsers : null;
+  const blockedUsers = Array.isArray(existing) ? existing : [];
+  if (blockedUsers.includes(blockedUserId)) return;
 
-  const payload: BlockDoc = {
-    blockerId: currentUid,
-    blockedUserId,
-    createdAt: serverTimestamp(),
-  };
-  await addDoc(collection(db, 'blockedUsers'), payload);
+  await updateDoc(userRef, {
+    blockedUsers: arrayUnion(blockedUserId),
+  });
 }
 
 /**
@@ -59,21 +49,17 @@ export async function isUserBlocked(
   if (!currentUserId || !otherUserId) return false;
   if (currentUserId === otherUserId) return false;
 
-  const blockedByMeQ = query(
-    collection(db, 'blockedUsers'),
-    where('blockerId', '==', currentUserId),
-    where('blockedUserId', '==', otherUserId),
-  );
-  const blockedMeQ = query(
-    collection(db, 'blockedUsers'),
-    where('blockerId', '==', otherUserId),
-    where('blockedUserId', '==', currentUserId),
-  );
-  const [byMeSnap, meSnap] = await Promise.all([
-    getDocs(blockedByMeQ),
-    getDocs(blockedMeQ),
+  const [meSnap, otherSnap] = await Promise.all([
+    getDoc(doc(db, 'users', currentUserId)),
+    getDoc(doc(db, 'users', otherUserId)),
   ]);
-  return !byMeSnap.empty || !meSnap.empty;
+  const myBlocked = meSnap.exists() ? meSnap.data()?.blockedUsers : [];
+  const otherBlocked = otherSnap.exists() ? otherSnap.data()?.blockedUsers : [];
+  const myBlockedList = Array.isArray(myBlocked) ? myBlocked : [];
+  const otherBlockedList = Array.isArray(otherBlocked) ? otherBlocked : [];
+  return (
+    myBlockedList.includes(otherUserId) || otherBlockedList.includes(currentUserId)
+  );
 }
 
 /**
@@ -82,26 +68,21 @@ export async function isUserBlocked(
 export async function getHiddenUserIds(currentUserId: string): Promise<Set<string>> {
   if (!currentUserId) return new Set<string>();
 
-  const qBlocked = query(
-    collection(db, 'blockedUsers'),
-    where('blockerId', '==', currentUserId),
-  );
+  const meRef = doc(db, 'users', currentUserId);
   const qBlockers = query(
-    collection(db, 'blockedUsers'),
-    where('blockedUserId', '==', currentUserId),
+    collection(db, 'users'),
+    where('blockedUsers', 'array-contains', currentUserId),
   );
-  const [blockedSnap, blockersSnap] = await Promise.all([
-    getDocs(qBlocked),
-    getDocs(qBlockers),
-  ]);
+  const [meSnap, blockersSnap] = await Promise.all([getDoc(meRef), getDocs(qBlockers)]);
   const ids = new Set<string>();
-  blockedSnap.docs.forEach((d) => {
-    const id = String(d.data()?.blockedUserId ?? '');
-    if (id) ids.add(id);
-  });
+  const mine = meSnap.exists() ? meSnap.data()?.blockedUsers : [];
+  if (Array.isArray(mine)) {
+    mine.forEach((id) => {
+      if (typeof id === 'string' && id) ids.add(id);
+    });
+  }
   blockersSnap.docs.forEach((d) => {
-    const id = String(d.data()?.blockerId ?? '');
-    if (id) ids.add(id);
+    if (d.id) ids.add(d.id);
   });
   return ids;
 }

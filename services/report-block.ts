@@ -1,13 +1,13 @@
 import {
   addDoc,
   collection,
-  getDocs,
-  query,
   serverTimestamp,
-  where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { blockUser as blockUserService } from './block';
+import {
+  blockUser as blockUserService,
+  isUserBlocked as isUserBlockedService,
+} from './block';
 
 export async function reportAndBlock(
   reporterUid: string,
@@ -28,39 +28,21 @@ export async function isBlockedByAny(
   blockerUids: string[],
 ): Promise<boolean> {
   if (blockerUids.length === 0) return false;
-  const q = query(
-    collection(db, 'blockedUsers'),
-    where('blockedUserId', '==', blockedUid),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.some((d) => {
-    const data = d.data();
-    return blockerUids.includes(data?.blockerId ?? '');
-  });
+  for (const blockerUid of blockerUids) {
+    if (await isUserBlockedService(blockedUid, blockerUid)) return true;
+  }
+  return false;
 }
 
 export async function hasBlockConflict(
   joinerUid: string,
   participantIds: string[],
 ): Promise<boolean> {
-  const blockedByMe = query(
-    collection(db, 'blockedUsers'),
-    where('blockerId', '==', joinerUid),
-  );
-  const blockedMe = query(
-    collection(db, 'blockedUsers'),
-    where('blockedUserId', '==', joinerUid),
-  );
-  const [snap1, snap2] = await Promise.all([
-    getDocs(blockedByMe),
-    getDocs(blockedMe),
-  ]);
-  const participantSet = new Set(participantIds);
-  for (const d of snap1.docs) {
-    if (participantSet.has(d.data()?.blockedUserId ?? '')) return true;
-  }
-  for (const d of snap2.docs) {
-    if (participantSet.has(d.data()?.blockerId ?? '')) return true;
+  for (const participantId of participantIds) {
+    if (!participantId || participantId === joinerUid) continue;
+    if (await isUserBlockedService(joinerUid, participantId)) {
+      return true;
+    }
   }
   return false;
 }

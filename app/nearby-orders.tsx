@@ -1,7 +1,9 @@
 import AppLogo from '@/components/AppLogo';
+import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import { useNearbyOrders, type NearbyOrder } from '@/hooks/useNearbyOrders';
 import { haversineDistanceKm } from '@/lib/haversine';
 import { isUserBanned } from '@/services/adminGuard';
+import { isUserBlocked } from '@/services/block';
 import { auth, db } from '@/services/firebase';
 import { trackOrderJoined } from '@/services/analytics';
 import { useRouter } from 'expo-router';
@@ -35,10 +37,17 @@ export default function NearbyOrdersScreen() {
   const { userLocation, orders, loading, error, refetch } =
     useNearbyOrders(NEARBY_RADIUS_KM);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const hiddenUserIds = useHiddenUserIds();
 
   const ordersWithDistance = useMemo(() => {
-    if (!userLocation) return orders;
-    return [...orders].sort((a, b) => {
+    const visibleOrders = orders.filter((o) => {
+      const ownerId = String(o.creatorId ?? '');
+      if (!ownerId) return false;
+      if (ownerId === auth.currentUser?.uid) return false;
+      return !hiddenUserIds.has(ownerId);
+    });
+    if (!userLocation) return visibleOrders;
+    return [...visibleOrders].sort((a, b) => {
       const distA = Math.hypot(
         a.latitude - userLocation.latitude,
         a.longitude - userLocation.longitude,
@@ -49,7 +58,7 @@ export default function NearbyOrdersScreen() {
       );
       return distA - distB;
     });
-  }, [orders, userLocation]);
+  }, [hiddenUserIds, orders, userLocation]);
 
   const handleJoin = async (order: NearbyOrder) => {
     const uid = auth.currentUser?.uid;
@@ -77,6 +86,10 @@ export default function NearbyOrdersScreen() {
     }
     setJoiningId(order.id);
     try {
+      const hostId = String(order.creatorId ?? '');
+      if (hostId && (await isUserBlocked(uid, hostId))) {
+        throw new Error('You cannot join this order.');
+      }
       const orderRef = doc(db, 'orders', order.id);
       const displayName =
         auth.currentUser?.displayName ||

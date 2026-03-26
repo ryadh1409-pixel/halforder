@@ -1,6 +1,7 @@
 import AppLogo from '@/components/AppLogo';
 import MatchAlert from '@/components/MatchAlert';
 import { shadows, theme } from '@/constants/theme';
+import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import { haversineDistanceKm } from '@/lib/haversine';
 import { getTimeAgo } from '@/lib/time-ago';
 import {
@@ -10,6 +11,7 @@ import {
 import { createAlert } from '@/services/alerts';
 import { isUserBanned } from '@/services/adminGuard';
 import { trackOrderJoined } from '@/services/analytics';
+import { isUserBlocked } from '@/services/block';
 import { getOrCreateChat } from '@/services/chat';
 import { auth, db } from '@/services/firebase';
 import { getUserLocation } from '@/services/location';
@@ -82,6 +84,7 @@ export default function ExploreScreen() {
   }, [fetchUserLocation]);
 
   const uid = auth.currentUser?.uid ?? '';
+  const hiddenUserIds = useHiddenUserIds();
 
   useEffect(() => {
     if (!uid) return;
@@ -132,6 +135,11 @@ export default function ExploreScreen() {
   const handleMatchJoin = async () => {
     const order = matchAlertOrder;
     if (!order || !uid) return;
+    if (await isUserBlocked(uid, order.creatorId)) {
+      Alert.alert('Unavailable', 'You cannot join this order.');
+      setMatchAlertOrder(null);
+      return;
+    }
     if (await isUserBanned(uid)) {
       Alert.alert(
         'Access denied',
@@ -231,7 +239,14 @@ export default function ExploreScreen() {
             distanceKm: null,
           };
         });
-        setOrders(list);
+        setOrders(
+          list.filter(
+            (o) =>
+              !!o.creatorId &&
+              o.creatorId !== uid &&
+              !hiddenUserIds.has(o.creatorId),
+          ),
+        );
         setLoading(false);
       },
       () => {
@@ -240,7 +255,7 @@ export default function ExploreScreen() {
       },
     );
     return () => unsubscribe();
-  }, []);
+  }, [hiddenUserIds, uid]);
 
   const RADAR_RADIUS_KM = 5;
 
@@ -292,6 +307,16 @@ export default function ExploreScreen() {
     setJoiningId(orderId);
     try {
       const orderRef = doc(db, 'orders', orderId);
+      const preJoinSnap = await getDoc(orderRef);
+      const hostId = preJoinSnap.exists()
+        ? String(preJoinSnap.data()?.creatorId ?? preJoinSnap.data()?.hostId ?? '')
+        : '';
+      if (!hostId) {
+        throw new Error('Order host is missing.');
+      }
+      if (await isUserBlocked(uid, hostId)) {
+        throw new Error('You cannot join this order.');
+      }
       await updateDoc(orderRef, {
         status: 'matched',
         participantIds: arrayUnion(uid),

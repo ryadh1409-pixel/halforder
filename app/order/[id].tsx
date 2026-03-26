@@ -43,6 +43,7 @@ import SafeMap, { Marker } from '@/components/SafeMap';
 import { TrustScoreLabel } from '@/components/TrustScoreLabel';
 import JoinOrderScreen from '@/screens/JoinOrderScreen';
 import { useTrustScore } from '@/hooks/useTrustScore';
+import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import { RateOrderPartnerModal } from '@/components/RateOrderPartnerModal';
 import { hasRatedOrder } from '@/services/ratings';
 import {
@@ -59,6 +60,7 @@ import { generateInviteLink, generateOrderShareLink } from '@/lib/invite-link';
 import { isMessageSafe, reportBlockedMessage } from '@/services/chatSecurity';
 import { checkTaxGift } from '@/services/taxGift';
 import { auth, db } from '@/services/firebase';
+import { isUserBlocked } from '@/services/block';
 import { trackOrderJoined } from '@/services/analytics';
 import { getOrCreateChat } from '@/services/chat';
 import { shadows, theme } from '@/constants/theme';
@@ -162,6 +164,7 @@ export default function OrderRoomScreen() {
   const flatListRef = useRef<FlatList<Message>>(null);
   const lastMessageTimeRef = useRef<number>(0);
   const CHAT_THROTTLE_MS = 2000;
+  const hiddenUserIds = useHiddenUserIds();
 
   const participantIds = order?.participantIds ?? [];
   const otherParticipantId =
@@ -404,14 +407,20 @@ export default function OrderRoomScreen() {
             type: msgType,
           };
         });
-        setMessages(msgs);
+        const visibleMessages = msgs.filter((m) => {
+          if (m.type === 'system') return true;
+          if (!m.senderId) return true;
+          if (m.senderId === auth.currentUser?.uid) return true;
+          return !hiddenUserIds.has(m.senderId);
+        });
+        setMessages(visibleMessages);
       },
       (err) => {
         console.warn('Messages listener error:', err);
       },
     );
     return () => unsubscribe();
-  }, [orderId]);
+  }, [hiddenUserIds, orderId]);
 
   const prevMessagesLengthRef = useRef(0);
   useEffect(() => {
@@ -583,6 +592,11 @@ export default function OrderRoomScreen() {
 
     const uid = auth.currentUser?.uid ?? '';
     if (!uid) return;
+    if (otherParticipantId && (await isUserBlocked(uid, otherParticipantId))) {
+      setIsBlocked(true);
+      Alert.alert('Blocked', 'You cannot send messages to this user.');
+      return;
+    }
 
     const containsLink = /(https?:\/\/|www\.)/i.test(trimmed);
     if (containsLink) {

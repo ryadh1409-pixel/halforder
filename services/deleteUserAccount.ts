@@ -89,16 +89,16 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
     }
   }
 
-  // 4) Block documents involving this user
-  const blockedByMe = await getDocs(
-    query(collection(db, 'blocks'), where('blockerId', '==', uid)),
+  // 4) Remove this user from other users' blockedUsers arrays
+  const blockedInOtherUsers = await getDocs(
+    query(collection(db, 'users'), where('blockedUsers', 'array-contains', uid)),
   );
-  const blockedMe = await getDocs(
-    query(collection(db, 'blocks'), where('blockedId', '==', uid)),
-  );
-  for (const d of [...blockedByMe.docs, ...blockedMe.docs]) {
+  for (const userDoc of blockedInOtherUsers.docs) {
+    if (userDoc.id === uid) continue;
     try {
-      await deleteDoc(d.ref);
+      await updateDoc(userDoc.ref, {
+        blockedUsers: arrayRemove(uid),
+      });
     } catch {
       // ignore
     }
