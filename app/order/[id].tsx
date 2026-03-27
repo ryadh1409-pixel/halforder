@@ -1111,6 +1111,7 @@ export default function OrderRoomScreen() {
   }
   const youPayLabel = `$${youPayAmount.toFixed(2)}`;
   const hostLabel = hostName || order?.userName || 'Host';
+  const hostUserId = order?.hostId || order?.userId || null;
   const maxPeople = order.maxPeople ?? 2;
   const isReady = participantsCount >= maxPeople;
   const statusForBadge = order.status.toLowerCase();
@@ -1406,13 +1407,31 @@ export default function OrderRoomScreen() {
 
           {/* Order details card */}
           <View style={styles.orderMetaCard}>
-            <Text style={styles.orderMetaText}>Host: {hostLabel}</Text>
+            {hostUserId ? (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push(
+                    {
+                      pathname: '/user/[id]',
+                      params: { id: hostUserId },
+                    } as never,
+                  )
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.orderMetaText, styles.hostLinkText]}>
+                  Host: {hostLabel}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.orderMetaText}>Host: {hostLabel}</Text>
+            )}
             {otherTrustScore && otherTrustScore.count > 0 ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
                 <TrustScoreLabel
                   average={otherTrustScore.average}
                   count={otherTrustScore.count}
-                  showTrusted
+                  tierLabel={otherTrustScore.label}
                   compact
                 />
               </View>
@@ -2045,6 +2064,9 @@ const styles = StyleSheet.create({
   orderMetaText: {
     fontSize: 14,
     color: c.text,
+  },
+  hostLinkText: {
+    textDecorationLine: 'underline',
   },
   orderMetaSubtext: {
     fontSize: 13,

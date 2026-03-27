@@ -16,6 +16,175 @@ const transporter = nodemailer.createTransport({
 
 const ADMIN_FCM_TOKEN = process.env.ADMIN_FCM_TOKEN || '';
 
+const BADGE_TRUSTED = '🔥 Trusted';
+const BADGE_FAST_JOINER = '⚡ Fast Joiner';
+const BADGE_COMMUNICATIVE = '💬 Communicative';
+const BADGE_FOOD_LOVER = '🍕 Food Lover';
+const MAX_CANCELLATIONS_PER_24H = 3;
+const REPORT_RESTRICTION_THRESHOLD = 5;
+
+function computeTrustScore({
+  averageRating = 0,
+  totalOrdersCompleted = 0,
+  cancellationRate = 0,
+  reportCount = 0,
+}) {
+  const normalizedCancellation =
+    cancellationRate > 1 ? cancellationRate / 100 : cancellationRate;
+  return Number(
+    (
+      averageRating * 0.5 +
+      totalOrdersCompleted * 0.3 -
+      normalizedCancellation * 0.1 -
+      reportCount * 0.1
+    ).toFixed(2),
+  );
+}
+
+function computeBadges({
+  averageRating = 0,
+  totalOrdersCompleted = 0,
+  ordersJoined = 0,
+  messagesSent = 0,
+}) {
+  const badges = [];
+  if (averageRating >= 4.5 && totalOrdersCompleted >= 8) {
+    badges.push(BADGE_TRUSTED);
+  }
+  if (ordersJoined >= 10) {
+    badges.push(BADGE_FAST_JOINER);
+  }
+  if (messagesSent >= 30) {
+    badges.push(BADGE_COMMUNICATIVE);
+  }
+  if (totalOrdersCompleted >= 20) {
+    badges.push(BADGE_FOOD_LOVER);
+  }
+  return badges;
+}
+
+function arraysEqual(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function normalizeCancellationRate(value = 0) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0;
+  return value > 1 ? value / 100 : value;
+}
+
+function sameStringArray(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  return a.every((v, i) => v === b[i]);
+}
+
+function computeSuspiciousSignals({
+  reportCount = 0,
+  cancellationRate = 0,
+  cancellationCount24h = 0,
+  totalOrdersCompleted = 0,
+}) {
+  const signals = [];
+  const normalizedCancelRate = normalizeCancellationRate(cancellationRate);
+  if (reportCount >= 3) signals.push('high_reports');
+  if (normalizedCancelRate >= 0.5 && totalOrdersCompleted >= 4) {
+    signals.push('high_cancellation_rate');
+  }
+  if (cancellationCount24h >= MAX_CANCELLATIONS_PER_24H) {
+    signals.push('frequent_daily_cancellations');
+  }
+  return signals;
+}
+
+async function refreshUserDerivedFields(db, userId) {
+  const userRef = db.doc(`users/${userId}`);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+
+  const averageRating =
+    typeof userData?.averageRating === 'number' ? userData.averageRating : 0;
+  const totalOrdersCompleted =
+    typeof userData?.totalOrdersCompleted === 'number'
+      ? userData.totalOrdersCompleted
+      : typeof userData?.ordersCount === 'number'
+        ? userData.ordersCount
+        : 0;
+  const cancellationRate =
+    typeof userData?.cancellationRate === 'number' ? userData.cancellationRate : 0;
+  const reportCount = typeof userData?.reportCount === 'number' ? userData.reportCount : 0;
+  const ordersJoined = typeof userData?.ordersJoined === 'number' ? userData.ordersJoined : 0;
+  const messagesSent = typeof userData?.messagesSent === 'number' ? userData.messagesSent : 0;
+  const cancellationCount24h =
+    typeof userData?.cancellationCount24h === 'number' ? userData.cancellationCount24h : 0;
+
+  const trustScore = computeTrustScore({
+    averageRating,
+    totalOrdersCompleted,
+    cancellationRate,
+    reportCount,
+  });
+  const badges = computeBadges({
+    averageRating,
+    totalOrdersCompleted,
+    ordersJoined,
+    messagesSent,
+  });
+  const currentBadges = Array.isArray(userData?.badges)
+    ? userData.badges.filter((x) => typeof x === 'string')
+    : [];
+  const suspiciousSignals = computeSuspiciousSignals({
+    reportCount,
+    cancellationRate,
+    cancellationCount24h,
+    totalOrdersCompleted,
+  });
+  const suspicious = suspiciousSignals.length > 0;
+  const shouldRestrictForReports = reportCount >= REPORT_RESTRICTION_THRESHOLD;
+  const alreadyRestricted = userData?.restricted === true;
+
+  const needsUpdate =
+    trustScore !== (typeof userData?.trustScore === 'number' ? userData.trustScore : 0) ||
+    !arraysEqual(currentBadges, badges) ||
+    userData?.suspicious !== suspicious ||
+    !sameStringArray(
+      Array.isArray(userData?.suspiciousSignals)
+        ? userData.suspiciousSignals.filter((x) => typeof x === 'string')
+        : [],
+      suspiciousSignals,
+    ) ||
+    (shouldRestrictForReports && !alreadyRestricted);
+
+  if (!needsUpdate) return;
+  const updates = {
+    trustScore,
+    badges,
+    suspicious,
+    suspiciousSignals,
+  };
+  if (shouldRestrictForReports && !alreadyRestricted) {
+    updates.restricted = true;
+    updates.restrictedReason = 'Too many reports';
+    updates.restrictedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+  await userRef.set(updates, { merge: true });
+}
+
+function resolveOrderOwnerId(orderData = {}) {
+  if (typeof orderData.createdBy === 'string' && orderData.createdBy) {
+    return orderData.createdBy;
+  }
+  if (typeof orderData.hostId === 'string' && orderData.hostId) {
+    return orderData.hostId;
+  }
+  if (typeof orderData.userId === 'string' && orderData.userId) {
+    return orderData.userId;
+  }
+  return null;
+}
+
 exports.onSupportMessage = functions.firestore
   .document('support_chats/{userId}/messages/{messageId}')
   .onCreate(async (snap, context) => {
@@ -115,16 +284,265 @@ exports.onRatingCreated = functions.firestore
       }
     });
     const ratingAverage = count > 0 ? Math.round((sum / count) * 10) / 10 : 0;
+    const userRef = db.doc(`users/${toUserId}`);
+    const userSnap = await userRef.get();
+    const userData = userSnap.exists ? userSnap.data() : {};
+    const totalOrdersCompleted =
+      typeof userData?.totalOrdersCompleted === 'number'
+        ? userData.totalOrdersCompleted
+        : typeof userData?.ordersCount === 'number'
+          ? userData.ordersCount
+          : 0;
+    const cancellationRate =
+      typeof userData?.cancellationRate === 'number' ? userData.cancellationRate : 0;
+    const reportCount = typeof userData?.reportCount === 'number' ? userData.reportCount : 0;
+    const trustScore = computeTrustScore({
+      averageRating: ratingAverage,
+      totalOrdersCompleted,
+      cancellationRate,
+      reportCount,
+    });
 
-    await db.doc(`users/${toUserId}`).set(
+    await userRef.set(
       {
         ratingAverage,
         ratingCount: count,
         averageRating: ratingAverage,
         totalRatings: count,
+        totalOrdersCompleted,
+        cancellationRate,
+        reportCount,
+        trustScore,
       },
       { merge: true },
     );
+    await refreshUserDerivedFields(db, toUserId);
+    return null;
+  });
+
+exports.onReportCreated = functions.firestore
+  .document('reports/{reportId}')
+  .onCreate(async (snap) => {
+    const data = snap.data();
+    const reportedUserId =
+      typeof data?.reportedUserId === 'string' ? data.reportedUserId : null;
+    if (!reportedUserId) return null;
+
+    const db = admin.firestore();
+    const userRef = db.doc(`users/${reportedUserId}`);
+    const userSnap = await userRef.get();
+    const userData = userSnap.exists ? userSnap.data() : {};
+
+    const averageRating =
+      typeof userData?.averageRating === 'number' ? userData.averageRating : 0;
+    const totalOrdersCompleted =
+      typeof userData?.totalOrdersCompleted === 'number'
+        ? userData.totalOrdersCompleted
+        : typeof userData?.ordersCount === 'number'
+          ? userData.ordersCount
+          : 0;
+    const cancellationRate =
+      typeof userData?.cancellationRate === 'number' ? userData.cancellationRate : 0;
+    const reportCount = (typeof userData?.reportCount === 'number' ? userData.reportCount : 0) + 1;
+
+    const trustScore = computeTrustScore({
+      averageRating,
+      totalOrdersCompleted,
+      cancellationRate,
+      reportCount,
+    });
+
+    await userRef.set(
+      {
+        reportCount,
+        trustScore,
+      },
+      { merge: true },
+    );
+    await refreshUserDerivedFields(db, reportedUserId);
+    return null;
+  });
+
+exports.onOrderMessageCreated = functions.firestore
+  .document('orders/{orderId}/messages/{messageId}')
+  .onCreate(async (snap) => {
+    const data = snap.data();
+    const senderId = typeof data?.senderId === 'string' ? data.senderId : null;
+    if (!senderId) return null;
+
+    const db = admin.firestore();
+    const userRef = db.doc(`users/${senderId}`);
+    await userRef.set(
+      {
+        messagesSent: admin.firestore.FieldValue.increment(1),
+      },
+      { merge: true },
+    );
+    await refreshUserDerivedFields(db, senderId);
+    return null;
+  });
+
+exports.onUserMetricsUpdated = functions.firestore
+  .document('users/{userId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const watched = [
+      'averageRating',
+      'totalOrdersCompleted',
+      'ordersCount',
+      'cancellationRate',
+      'reportCount',
+      'ordersJoined',
+      'messagesSent',
+    ];
+    const changed = watched.some((k) => before[k] !== after[k]);
+    if (!changed) return null;
+    const db = admin.firestore();
+    await refreshUserDerivedFields(db, context.params.userId);
+    return null;
+  });
+
+exports.onOrderCreated = functions.firestore
+  .document('orders/{orderId}')
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    const ownerId = resolveOrderOwnerId(data);
+    if (!ownerId) return null;
+    const db = admin.firestore();
+    await db.doc(`users/${ownerId}`).set(
+      {
+        activeOrderCount: admin.firestore.FieldValue.increment(1),
+      },
+      { merge: true },
+    );
+    await refreshUserDerivedFields(db, ownerId);
+    return null;
+  });
+
+exports.onOrderDeleted = functions.firestore
+  .document('orders/{orderId}')
+  .onDelete(async (snap) => {
+    const data = snap.data() || {};
+    const ownerId = resolveOrderOwnerId(data);
+    if (!ownerId) return null;
+    const db = admin.firestore();
+    const userRef = db.doc(`users/${ownerId}`);
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      const current = userSnap.exists
+        ? userSnap.data()?.activeOrderCount
+        : 0;
+      const currentCount = typeof current === 'number' ? current : 0;
+      tx.set(
+        userRef,
+        { activeOrderCount: Math.max(0, currentCount - 1) },
+        { merge: true },
+      );
+    });
+    await refreshUserDerivedFields(db, ownerId);
+    return null;
+  });
+
+exports.onOrderUpdatedSafety = functions.firestore
+  .document('orders/{orderId}')
+  .onUpdate(async (change) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const beforeOwnerId = resolveOrderOwnerId(before);
+    const afterOwnerId = resolveOrderOwnerId(after);
+    const db = admin.firestore();
+
+    // if owner changes (rare), move active order ownership count
+    if (beforeOwnerId && afterOwnerId && beforeOwnerId !== afterOwnerId) {
+      const beforeRef = db.doc(`users/${beforeOwnerId}`);
+      const afterRef = db.doc(`users/${afterOwnerId}`);
+      await db.runTransaction(async (tx) => {
+        const [beforeSnap, afterSnap] = await Promise.all([
+          tx.get(beforeRef),
+          tx.get(afterRef),
+        ]);
+        const beforeCount = typeof beforeSnap.data()?.activeOrderCount === 'number'
+          ? beforeSnap.data().activeOrderCount
+          : 0;
+        const afterCount = typeof afterSnap.data()?.activeOrderCount === 'number'
+          ? afterSnap.data().activeOrderCount
+          : 0;
+        tx.set(beforeRef, { activeOrderCount: Math.max(0, beforeCount - 1) }, { merge: true });
+        tx.set(afterRef, { activeOrderCount: Math.max(0, afterCount + 1) }, { merge: true });
+      });
+      await Promise.all([
+        refreshUserDerivedFields(db, beforeOwnerId),
+        refreshUserDerivedFields(db, afterOwnerId),
+      ]);
+      return null;
+    }
+
+    const ownerId = afterOwnerId || beforeOwnerId;
+    if (!ownerId) return null;
+
+    const beforeStatus = typeof before.status === 'string' ? before.status : '';
+    const afterStatus = typeof after.status === 'string' ? after.status : '';
+    const userRef = db.doc(`users/${ownerId}`);
+
+    // Count cancellations in rolling 24h window and keep a rate hint.
+    if (beforeStatus !== 'cancelled' && afterStatus === 'cancelled') {
+      await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        const d = userSnap.exists ? userSnap.data() : {};
+        const nowMs = Date.now();
+        const windowStartMs =
+          typeof d?.cancellationWindowStartMs === 'number'
+            ? d.cancellationWindowStartMs
+            : nowMs;
+        const count24hRaw =
+          typeof d?.cancellationCount24h === 'number' ? d.cancellationCount24h : 0;
+        const withinWindow = nowMs - windowStartMs <= 24 * 60 * 60 * 1000;
+        const cancellationCount24h = withinWindow ? count24hRaw + 1 : 1;
+        const nextWindowStart = withinWindow ? windowStartMs : nowMs;
+        const cancelledOrdersTotal =
+          (typeof d?.cancelledOrders === 'number' ? d.cancelledOrders : 0) + 1;
+        const completed =
+          typeof d?.totalOrdersCompleted === 'number'
+            ? d.totalOrdersCompleted
+            : typeof d?.ordersCount === 'number'
+              ? d.ordersCount
+              : 0;
+        const totalAttempts = completed + cancelledOrdersTotal;
+        const cancellationRate = totalAttempts > 0
+          ? cancelledOrdersTotal / totalAttempts
+          : 0;
+        tx.set(
+          userRef,
+          {
+            cancellationCount24h,
+            cancellationWindowStartMs: nextWindowStart,
+            cancelledOrders: cancelledOrdersTotal,
+            cancellationRate,
+            lastCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
+    }
+
+    // If order moves to terminal status, release one active slot.
+    const becameTerminal =
+      !['completed', 'cancelled', 'closed', 'expired'].includes(beforeStatus) &&
+      ['completed', 'cancelled', 'closed', 'expired'].includes(afterStatus);
+    if (becameTerminal) {
+      await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        const d = userSnap.exists ? userSnap.data() : {};
+        const count = typeof d?.activeOrderCount === 'number' ? d.activeOrderCount : 0;
+        tx.set(
+          userRef,
+          { activeOrderCount: Math.max(0, count - 1) },
+          { merge: true },
+        );
+      });
+    }
+    await refreshUserDerivedFields(db, ownerId);
     return null;
   });
 
@@ -138,6 +556,7 @@ exports.onNewChatMessage = functions.firestore
     const chatId = typeof data?.chatId === 'string' ? data.chatId : null;
     const senderId = typeof data?.senderId === 'string' ? data.senderId : null;
     if (!chatId || !senderId) return null;
+    const db = admin.firestore();
 
     const chatSnap = await db.doc(`chats/${chatId}`).get();
     if (!chatSnap.exists()) return null;

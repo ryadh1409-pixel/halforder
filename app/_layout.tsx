@@ -165,6 +165,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="order/[id]" options={{ title: 'Order' }} />
+        <Stack.Screen name="user/[id]" options={{ title: 'User Profile' }} />
         <Stack.Screen
           name="order-details/[id]"
           options={{ title: 'Order Details' }}

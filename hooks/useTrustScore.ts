@@ -1,8 +1,8 @@
-import { getTrustScore, type TrustScore } from '@/services/ratings';
+import { getTrustScoreProfile, type TrustScoreProfile } from '@/services/ratings';
 import { useEffect, useState } from 'react';
 
-export function useTrustScore(userId: string | null): TrustScore | null {
-  const [score, setScore] = useState<TrustScore | null>(null);
+export function useTrustScore(userId: string | null): TrustScoreProfile | null {
+  const [score, setScore] = useState<TrustScoreProfile | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -10,7 +10,7 @@ export function useTrustScore(userId: string | null): TrustScore | null {
       return;
     }
     let cancelled = false;
-    getTrustScore(userId).then((s) => {
+    getTrustScoreProfile(userId).then((s) => {
       if (!cancelled) setScore(s);
     });
     return () => {

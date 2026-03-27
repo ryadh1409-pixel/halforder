@@ -5,12 +5,41 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isCurrentUserRestricted() {
+      return isSignedIn()
+        && (
+          currentUserData().banned == true
+          || currentUserData().restricted == true
+        );
+    }
+
+    function isNewUserForOrderLimits() {
+      return currentUserData().totalOrdersCompleted is number
+        && currentUserData().totalOrdersCompleted <= 3;
+    }
+
+    function canCreateOrderBySafetyLimits() {
+      return !isCurrentUserRestricted()
+        && (
+          !isNewUserForOrderLimits()
+          || (
+            currentUserData().activeOrderCount is number
+            && currentUserData().activeOrderCount < 1
+          )
+        );
+    }
+
     function orderParticipants(orderData) {
       return orderData.get('usersJoined', orderData.get('participantIds', []));
     }
 
     function isValidOrderCreate() {
       return isSignedIn()
+        && canCreateOrderBySafetyLimits()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.peopleJoined == 1
         && request.resource.data.maxPeople is number
@@ -27,6 +56,7 @@ service cloud.firestore {
 
     function isSafeJoinUpdate() {
       return isSignedIn()
+        && !isCurrentUserRestricted()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['peopleJoined', 'usersJoined'])
         && request.resource.data.peopleJoined is number
         && resource.data.peopleJoined is number
@@ -42,8 +72,23 @@ service cloud.firestore {
 
     function isCreatorOnlyNonJoinUpdate() {
       return isSignedIn()
+        && !isCurrentUserRestricted()
         && resource.data.createdBy == request.auth.uid
-        && !request.resource.data.diff(resource.data).changedKeys().hasAny(['peopleJoined', 'usersJoined']);
+        && !request.resource.data.diff(resource.data).changedKeys().hasAny(['peopleJoined', 'usersJoined'])
+        && (
+          // completed orders cannot be cancelled/changed back
+          resource.data.status != 'completed'
+          || request.resource.data.status == resource.data.status
+        )
+        && (
+          // limit creator cancellations per 24h window
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['status'])
+          || request.resource.data.status != 'cancelled'
+          || (
+            currentUserData().cancellationCount24h is number
+            && currentUserData().cancellationCount24h < 3
+          )
+        );
     }
 
     match /reports/{reportId} {

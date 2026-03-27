@@ -10,6 +10,7 @@ type TrustScoreLabelProps = {
   count: number;
   showTrusted?: boolean;
   compact?: boolean;
+  tierLabel?: 'Trusted User 🔥' | 'New User' | 'Low Reliability ⚠️';
 };
 
 export function TrustScoreLabel({
@@ -17,27 +18,33 @@ export function TrustScoreLabel({
   count,
   showTrusted = false,
   compact = false,
+  tierLabel,
 }: TrustScoreLabelProps) {
-  if (count === 0) return null;
+  if (count === 0 && !tierLabel) return null;
   const numStr = average.toFixed(1);
   const suffix = compact
     ? ` ${numStr}`
     : ` ${numStr} (${count} review${count === 1 ? '' : 's'})`;
+  const statusText = tierLabel ?? (showTrusted && count >= 1 ? 'Trusted User 🔥' : null);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <Text style={{ color: STAR_COLOR, fontSize: compact ? 13 : 14 }}>★</Text>
-      <Text
-        style={{
-          color: TEXT_COLOR,
-          fontSize: compact ? 13 : 14,
-          fontWeight: '600',
-        }}
-      >
-        {suffix}
-      </Text>
-      {showTrusted && count >= 1 ? (
+      {count > 0 ? (
+        <>
+          <Text style={{ color: STAR_COLOR, fontSize: compact ? 13 : 14 }}>★</Text>
+          <Text
+            style={{
+              color: TEXT_COLOR,
+              fontSize: compact ? 13 : 14,
+              fontWeight: '600',
+            }}
+          >
+            {suffix}
+          </Text>
+        </>
+      ) : null}
+      {statusText ? (
         <Text style={{ color: TEXT_COLOR, fontSize: 12, fontWeight: '500' }}>
-          Trusted User
+          {statusText}
         </Text>
       ) : null}
     </View>

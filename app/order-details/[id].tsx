@@ -254,7 +254,22 @@ export default function OrderDetailsScreen() {
           <Text style={styles.meta}>Remaining spots: {remainingSpots}</Text>
           <Text style={styles.meta}>Distance: {order.distance.toFixed(1)} km</Text>
           <Text style={styles.meta}>Location: {order.location}</Text>
-          <Text style={styles.meta}>Created by: {order.createdBy || 'Unknown'}</Text>
+          <TouchableOpacity
+            onPress={() =>
+              order.createdBy
+                ? router.push({
+                    pathname: '/user/[id]',
+                    params: { id: order.createdBy },
+                  } as never)
+                : undefined
+            }
+            disabled={!order.createdBy}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.meta, styles.linkMeta]}>
+              Created by: {order.createdBy || 'Unknown'}
+            </Text>
+          </TouchableOpacity>
           <View style={styles.timerRow}>
             <Text style={styles.timerLabel}>Time remaining</Text>
             <Text style={styles.timerValue}>{countdownLabel}</Text>
@@ -329,6 +344,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   meta: { color: '#D1D5DB', fontSize: 14 },
+  linkMeta: { textDecorationLine: 'underline' },
   timerRow: {
     marginTop: 8,
     flexDirection: 'row',

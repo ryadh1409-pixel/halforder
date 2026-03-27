@@ -402,6 +402,9 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : null}
+          {trustScore ? (
+            <Text style={styles.profileTrustTierText}>{trustScore.label}</Text>
+          ) : null}
         </View>
 
         {/* Help */}
@@ -697,6 +700,12 @@ const styles = StyleSheet.create({
   profileReviewsText: {
     fontSize: 14,
     color: c.textMuted,
+  },
+  profileTrustTierText: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.text,
   },
   actionRow: {
     marginBottom: theme.spacing.lg,
