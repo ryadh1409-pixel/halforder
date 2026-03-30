@@ -46,20 +46,33 @@ export default function CreateOrderScreen() {
   const [mealType, setMealType] = useState<'Pizza' | 'Noodles'>('Pizza');
   const [totalPrice, setTotalPrice] = useState('');
   const [sharePrice, setSharePrice] = useState('');
-  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [mergeSuggestion, setMergeSuggestion] = useState<{
     orderId: string;
     restaurantName: string;
   } | null>(null);
   const [pendingCreate, setPendingCreate] = useState<{
-    name: string;
+    restaurantName: string;
     total: number;
     share: number;
-    whatsapp: string;
-    userName: string;
+    userAvatar: string | null;
+    userPhone: string | null;
     location: { latitude: number; longitude: number } | null;
   } | null>(null);
+
+  /** Reload Auth user so displayName is fresh; prefer non-empty displayName over email local-part. */
+  async function resolveCreatorDisplayName(): Promise<string> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return 'User';
+    console.log('DISPLAY NAME BEFORE CREATE:', currentUser.displayName);
+    await currentUser.reload();
+    const name =
+      currentUser.displayName && currentUser.displayName !== ''
+        ? currentUser.displayName
+        : currentUser.email?.split('@')[0] ?? 'User';
+    console.log('FINAL NAME USED:', name);
+    return name;
+  }
 
   const handleTotalPriceChange = (text: string) => {
     setTotalPrice(text);
@@ -70,8 +83,8 @@ export default function CreateOrderScreen() {
   };
 
   const handleCreate = async () => {
-    const name = restaurantName.trim();
-    if (!name) {
+    const trimmedRestaurant = restaurantName.trim();
+    if (!trimmedRestaurant) {
       Alert.alert('Error', 'Enter restaurant name.');
       return;
     }
@@ -102,15 +115,29 @@ export default function CreateOrderScreen() {
       );
       return;
     }
-    const userName =
-      auth.currentUser?.displayName?.trim() ||
-      auth.currentUser?.email?.split('@')[0] ||
-      'User';
-    const whatsapp = whatsappNumber.trim().replace(/\D/g, '');
-    if (!whatsapp) {
-      Alert.alert('Error', 'Enter a WhatsApp number.');
-      return;
-    }
+    const authFallbackName = await resolveCreatorDisplayName();
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    const userData = userDoc.data();
+    console.log('USER DATA FROM FIRESTORE:', userData);
+    const firestoreName =
+      typeof userData?.name === 'string' && userData.name.trim().length > 0
+        ? userData.name.trim()
+        : typeof userData?.displayName === 'string' &&
+            userData.displayName.trim().length > 0
+          ? userData.displayName.trim()
+          : '';
+    const userName = firestoreName || authFallbackName;
+    const userAvatar =
+      typeof userData?.avatar === 'string' && userData.avatar.trim().length > 0
+        ? userData.avatar.trim()
+        : typeof userData?.photoURL === 'string' &&
+            userData.photoURL.trim().length > 0
+          ? userData.photoURL.trim()
+        : null;
+    const userPhone =
+      typeof userData?.phone === 'string' && userData.phone.trim().length > 0
+        ? userData.phone.trim()
+        : null;
 
     setLoading(true);
     setMergeSuggestion(null);
@@ -148,7 +175,7 @@ export default function CreateOrderScreen() {
 
       const sameRestaurantQuery = query(
         ordersRef,
-        where('restaurantName', '==', name),
+        where('restaurantName', '==', trimmedRestaurant),
         where('status', 'in', ['active', 'waiting']),
       );
       const sameRestaurantSnap = await getDocs(sameRestaurantQuery);
@@ -175,7 +202,7 @@ export default function CreateOrderScreen() {
               restaurantName:
                 typeof data.restaurantName === 'string'
                   ? data.restaurantName
-                  : name,
+                  : trimmedRestaurant,
             };
           }
         });
@@ -183,11 +210,11 @@ export default function CreateOrderScreen() {
 
       if (nearbyOrder) {
         setPendingCreate({
-          name,
+          restaurantName: trimmedRestaurant,
           total,
           share,
-          whatsapp,
-          userName,
+          userAvatar,
+          userPhone,
           location,
         });
         setMergeSuggestion({
@@ -201,11 +228,12 @@ export default function CreateOrderScreen() {
       await doCreateOrder(
         uid,
         userName,
-        name,
+        trimmedRestaurant,
         mealType,
         total,
         share,
-        whatsapp,
+        userAvatar,
+        userPhone,
         location,
       );
     } catch (e) {
@@ -228,10 +256,7 @@ export default function CreateOrderScreen() {
       setPendingCreate(null);
       return;
     }
-    const displayName =
-      auth.currentUser.displayName?.trim() ||
-      auth.currentUser.email?.split('@')[0] ||
-      'User';
+    const displayName = await resolveCreatorDisplayName();
     setLoading(true);
     try {
       const orderRef = doc(db, 'orders', mergeSuggestion.orderId);
@@ -272,19 +297,44 @@ export default function CreateOrderScreen() {
   const handleKeepMyOrder = async () => {
     if (!pendingCreate || !auth.currentUser) return;
     const uid = auth.currentUser.uid;
-    const { name, total, share, whatsapp, userName, location } = pendingCreate;
+    const { restaurantName, total, share, userPhone, location } =
+      pendingCreate;
+    const authFallbackName = await resolveCreatorDisplayName();
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    const userData = userDoc.data();
+    console.log('USER DATA FROM FIRESTORE:', userData);
+    const firestoreName =
+      typeof userData?.name === 'string' && userData.name.trim().length > 0
+        ? userData.name.trim()
+        : typeof userData?.displayName === 'string' &&
+            userData.displayName.trim().length > 0
+          ? userData.displayName.trim()
+          : '';
+    const freshUserName = firestoreName || authFallbackName;
+    const freshUserAvatar =
+      typeof userData?.avatar === 'string' && userData.avatar.trim().length > 0
+        ? userData.avatar.trim()
+        : typeof userData?.photoURL === 'string' &&
+            userData.photoURL.trim().length > 0
+          ? userData.photoURL.trim()
+        : null;
+    const freshUserPhone =
+      typeof userData?.phone === 'string' && userData.phone.trim().length > 0
+        ? userData.phone.trim()
+        : userPhone;
     setLoading(true);
     setMergeSuggestion(null);
     setPendingCreate(null);
     try {
       await doCreateOrder(
         uid,
-        userName,
-        name,
+        freshUserName,
+        restaurantName,
         mealType,
         total,
         share,
-        whatsapp,
+        freshUserAvatar,
+        freshUserPhone,
         location,
       );
     } catch (e) {
@@ -304,7 +354,8 @@ export default function CreateOrderScreen() {
     mealType: 'Pizza' | 'Noodles',
     total: number,
     share: number,
-    whatsapp: string,
+    userAvatar: string | null,
+    userPhone: string | null,
     location: { latitude: number; longitude: number } | null,
   ) {
     const ordersRef = collection(db, 'orders');
@@ -314,15 +365,18 @@ export default function CreateOrderScreen() {
       userId: uid,
       creatorId: uid,
       hostId: uid,
+      createdBy: uid,
       userName,
+      userAvatar,
       restaurantName: name,
       mealType,
+      category: mealType.toLowerCase(),
       totalPrice: total,
       subtotal: total,
       tax: 0,
       sharePrice: share,
       serviceFee: DEFAULT_SERVICE_FEE,
-      whatsappNumber: whatsapp,
+      userPhone,
       status: 'open',
       createdAt: serverTimestamp(),
       expiresAt,
@@ -339,6 +393,7 @@ export default function CreateOrderScreen() {
       }),
     };
     const ref = await addDoc(ordersRef, orderData);
+    console.log('[CreateOrder] created order:', { id: ref.id, ...orderData });
     await createAlert('new_order', 'New order created');
     // Analytics: track order creation event for this user
     await trackOrderCreated(uid, ref.id);
@@ -493,20 +548,6 @@ export default function CreateOrderScreen() {
             The amount your partner pays when joining the order (usually half of
             the total price). Example: If total price is $20, sharing price can
             be $10.
-          </Text>
-
-          <Text style={styles.label}>WhatsApp Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 14165551234"
-            placeholderTextColor={theme.colors.textMuted}
-            value={whatsappNumber}
-            onChangeText={setWhatsappNumber}
-            keyboardType="phone-pad"
-            editable={!loading}
-          />
-          <Text style={styles.helper}>
-            Your WhatsApp number so your partner can contact you after joining.
           </Text>
 
           <TouchableOpacity

@@ -1,51 +1,51 @@
 import AppLogo from '@/components/AppLogo';
-import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
+import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/KeyboardToolbar';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { logError } from '@/utils/errorLogger';
-import { moderateUserContent } from '@/utils/contentModeration';
+import { shadows, theme } from '@/constants/theme';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { useAuth } from '@/services/AuthContext';
 import {
-  deleteUserAccount,
-  getDeleteAccountAuthErrorMessage,
-} from '@/services/deleteUserAccount';
-import {
-  getBlockedUsersByBlocker,
-  unblockUser,
+    getBlockedUsersByBlocker,
+    unblockUser,
 } from '@/services/blocks';
-import { submitReport, type ReportReason } from '@/services/reports';
+import {
+    deleteUserAccount,
+    getDeleteAccountAuthErrorMessage,
+} from '@/services/deleteUserAccount';
 import { auth, db } from '@/services/firebase';
 import { uploadProfilePhoto } from '@/services/profilePhoto';
-import {
-  doc,
-  getDoc,
-  onSnapshot,
-  setDoc,
-  updateDoc,
-  type DocumentData,
-} from 'firebase/firestore';
+import { submitReport, type ReportReason } from '@/services/reports';
+import { moderateUserContent } from '@/utils/contentModeration';
+import { logError } from '@/utils/errorLogger';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { updateProfile, type User } from '@firebase/auth';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { updateProfile, type User } from '@firebase/auth';
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    doc,
+    getDoc,
+    onSnapshot,
+    setDoc,
+    updateDoc,
+    type DocumentData,
+} from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Linking,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { shadows, theme } from '@/constants/theme';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
 const ADMIN_EMAIL = 'support@halforder.app';
@@ -104,6 +104,7 @@ function mapUsersCollectionToProfile(
   displayName: string;
   emailFromDoc: string | null;
   photoURL: string | null;
+  phone: string;
   notificationsEnabled: boolean;
   ordersCount: number;
   averageRating: number;
@@ -116,6 +117,7 @@ function mapUsersCollectionToProfile(
       displayName: authDisplay,
       emailFromDoc: null,
       photoURL,
+      phone: '',
       notificationsEnabled: true,
       ordersCount: 0,
       averageRating: 0,
@@ -130,6 +132,10 @@ function mapUsersCollectionToProfile(
     typeof emailRaw === 'string' && emailRaw.trim().length > 0
       ? emailRaw.trim()
       : null;
+  const phone =
+    typeof data.phone === 'string' && data.phone.trim().length > 0
+      ? data.phone.trim()
+      : '';
 
   const orders =
     typeof data.ordersCount === 'number' && Number.isFinite(data.ordersCount)
@@ -140,6 +146,7 @@ function mapUsersCollectionToProfile(
     displayName: fromDoc || authDisplay,
     emailFromDoc,
     photoURL,
+    phone,
     notificationsEnabled: data.notificationsEnabled !== false,
     ordersCount: orders,
     averageRating: pickRatingAverage(data),
@@ -193,6 +200,7 @@ export default function ProfileScreen() {
   const isDark = true;
   const { user, signOutUser } = useAuth();
   const [displayNameInput, setDisplayNameInput] = useState('');
+  const [phone, setPhone] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [savingName, setSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
@@ -200,6 +208,7 @@ export default function ProfileScreen() {
   const [nameSuccessMessage, setNameSuccessMessage] = useState('');
   const [nameErrorMessage, setNameErrorMessage] = useState('');
   const [initialDisplayName, setInitialDisplayName] = useState('');
+  const [initialPhone, setInitialPhone] = useState('');
   const [ordersCount, setOrdersCount] = useState<number>(0);
   const [averageRating, setAverageRating] = useState(0);
   const [totalRatings, setTotalRatings] = useState(0);
@@ -248,6 +257,8 @@ export default function ProfileScreen() {
         setTotalRatings(mapped.totalRatings);
         setEmailFromFirestore(mapped.emailFromDoc);
         setPhotoURL(mapped.photoURL);
+        setPhone(mapped.phone);
+        setInitialPhone(mapped.phone);
 
         setProfileLoading(false);
       },
@@ -262,6 +273,8 @@ export default function ProfileScreen() {
         setTotalRatings(mapped.totalRatings);
         setEmailFromFirestore(mapped.emailFromDoc);
         setPhotoURL(mapped.photoURL);
+        setPhone(mapped.phone);
+        setInitialPhone(mapped.phone);
         setProfileLoading(false);
       },
     );
@@ -297,6 +310,7 @@ export default function ProfileScreen() {
   const handleSaveDisplayName = async () => {
     if (savingName) return;
     const trimmed = displayNameInput.trim();
+    const trimmedPhone = phone.trim();
     if (!uid) return;
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -325,9 +339,23 @@ export default function ProfileScreen() {
     try {
       const userRef = doc(db, 'users', uid);
       await updateProfile(currentUser, { displayName: mod.text });
-      await setDoc(userRef, { displayName: mod.text }, { merge: true });
+      await currentUser.reload();
+      console.log('DISPLAY NAME:', auth.currentUser?.displayName);
+      console.log('UPDATED NAME:', auth.currentUser?.displayName);
+      await setDoc(
+        userRef,
+        {
+          displayName: mod.text,
+          name: mod.text,
+          avatar: currentUser.photoURL ?? null,
+          phone: trimmedPhone,
+        },
+        { merge: true },
+      );
       setDisplayNameInput(mod.text);
       setInitialDisplayName(mod.text);
+      setPhone(trimmedPhone);
+      setInitialPhone(trimmedPhone);
       setNameSaved(true);
       setNameSuccessMessage('Name updated');
       nameFeedbackClearRef.current = setTimeout(() => {
@@ -366,17 +394,15 @@ export default function ProfileScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.85,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
     });
     if (result.canceled || !result.assets?.[0]?.uri) return;
 
     const imageUri = result.assets[0].uri;
     setUploadingPhoto(true);
     try {
-      const downloadURL = await uploadProfilePhoto(uid, imageUri);
+      const downloadURL = await uploadProfilePhoto(imageUri);
       await updateProfile(currentUser, { photoURL: downloadURL });
 
       const userRef = doc(db, 'users', uid);
@@ -542,7 +568,8 @@ export default function ProfileScreen() {
   const canSaveName =
     !savingName &&
     displayNameInput.trim().length > 0 &&
-    displayNameInput.trim() !== initialDisplayName.trim();
+    (displayNameInput.trim() !== initialDisplayName.trim() ||
+      phone.trim() !== initialPhone.trim());
   const saveButtonLabel = savingName ? 'Saving…' : nameSaved ? 'Saved ✓' : 'Save name';
   const initialLetter = displayName.slice(0, 1).toUpperCase() || '?';
 
@@ -612,7 +639,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={1} />
+      <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={2} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -697,6 +724,20 @@ export default function ProfileScreen() {
                 Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
               }
               onFocus={() => setFocusedInputIndex(0)}
+            />
+            <Text style={dynamicStyles.label}>WhatsApp Number</Text>
+            <TextInput
+              style={dynamicStyles.input}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Enter WhatsApp number"
+              placeholderTextColor={pal.textTertiary}
+              keyboardType="phone-pad"
+              editable={!savingName}
+              inputAccessoryViewID={
+                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+              }
+              onFocus={() => setFocusedInputIndex(1)}
             />
             <TouchableOpacity
               style={[

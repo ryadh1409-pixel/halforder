@@ -80,6 +80,7 @@ type Message = {
 type OrderState = {
   participantIds: string[];
   status: string;
+  createdBy: string;
   allowed: boolean;
   restaurantName: string;
   restaurantLocation: string;
@@ -162,11 +163,13 @@ export default function OrderRoomScreen() {
   const [outgoingCallId, setOutgoingCallId] = useState<string | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [endingCall, setEndingCall] = useState(false);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
   const hasExpiredRef = useRef(false);
   const flatListRef = useRef<FlatList<Message>>(null);
   const lastMessageTimeRef = useRef<number>(0);
   const CHAT_THROTTLE_MS = 2000;
   const hiddenUserIds = useHiddenUserIds();
+  const currentUid = auth.currentUser?.uid ?? '';
 
   const participantIds = order?.participantIds ?? [];
   const otherParticipantId =
@@ -178,11 +181,21 @@ export default function OrderRoomScreen() {
   const isWaiting = participantIds.length === 1;
   const allowed = order?.allowed ?? false;
   const canChat = allowed && participantIds.length >= 2;
+  const currentUser = auth.currentUser;
+  const isOwner = order?.createdBy === currentUser?.uid;
+  const canCancel = order?.status === 'open';
+  const showCancel = isOwner && canCancel;
   const whatsappNum =
     order?.whatsappNumber?.replace(/\D/g, '') ||
     hostPhone?.replace(/\D/g, '') ||
     '';
   const hasWhatsApp = whatsappNum.length > 0;
+
+  useEffect(() => {
+    if (!order || !currentUid) return;
+    console.log('ORDER:', order);
+    console.log('USER:', currentUid);
+  }, [order, currentUid]);
 
   const setTyping = (value: boolean) => {
     const uid = auth.currentUser?.uid;
@@ -235,6 +248,12 @@ export default function OrderRoomScreen() {
         const hostId =
           (typeof d?.hostId === 'string' ? d.hostId : null) ??
           (typeof d?.userId === 'string' ? d.userId : '');
+        const createdBy =
+          typeof d?.createdBy === 'string'
+            ? d.createdBy
+            : typeof d?.creatorId === 'string'
+              ? d.creatorId
+              : hostId;
         const userId = typeof d?.userId === 'string' ? d.userId : hostId;
         const userName =
           typeof d?.userName === 'string' ? d.userName : undefined;
@@ -280,6 +299,7 @@ export default function OrderRoomScreen() {
         setOrder({
           participantIds: ids,
           status: typeof d?.status === 'string' ? d.status : 'open',
+          createdBy,
           allowed: uid !== '' && ids.includes(uid),
           restaurantName,
           restaurantLocation,
@@ -593,6 +613,13 @@ export default function OrderRoomScreen() {
       setShowRatingModal(true);
     }
   }, [order?.status, pendingRatingUserIds, showRatingModal, didAutoPromptRating]);
+
+  useEffect(() => {
+    console.log('createdBy:', order?.createdBy);
+    console.log('user:', currentUser?.uid);
+    console.log('status:', order?.status);
+    console.log('showCancel:', showCancel);
+  }, [order?.createdBy, currentUser?.uid, order?.status, showCancel]);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -1158,6 +1185,33 @@ export default function OrderRoomScreen() {
       : orderExpiresInLabel != null
         ? `Order expires in: ${orderExpiresInLabel}`
         : null;
+  const handleCancelOrder = async () => {
+    if (!orderId || !showCancel || cancellingOrder) return;
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancellingOrder(true);
+              await updateDoc(doc(db, 'orders', orderId), {
+                status: 'cancelled',
+              });
+              router.back();
+            } catch (e) {
+              console.error('Cancel error:', e);
+            } finally {
+              setCancellingOrder(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleJoinFromLink = async () => {
     const uid = auth.currentUser?.uid;
@@ -1657,6 +1711,7 @@ export default function OrderRoomScreen() {
               Invite via WhatsApp
             </Text>
           </TouchableOpacity>
+
         </ScrollView>
 
       {order.status === 'matched' ? (
@@ -2030,6 +2085,33 @@ export default function OrderRoomScreen() {
           setRatingToUserId(null);
         }}
       />
+
+      {showCancel ? (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 40,
+            left: 20,
+            right: 20,
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              backgroundColor: 'red',
+              padding: 16,
+              borderRadius: 12,
+              alignItems: 'center',
+              opacity: cancellingOrder ? 0.7 : 1,
+            }}
+            onPress={handleCancelOrder}
+            disabled={cancellingOrder}
+          >
+            <Text style={{ color: 'white', fontWeight: 'bold' }}>
+              {cancellingOrder ? 'Cancelling...' : 'Cancel Order'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -2308,6 +2390,19 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: c.dotInactive,
+  },
+  cancelOrderButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: theme.radius.button,
+    backgroundColor: c.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelOrderButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: c.textOnPrimary,
   },
   safetyLabel: {
     fontSize: 13,

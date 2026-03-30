@@ -1,11 +1,14 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated as RNAnimated,
   Dimensions,
   Platform,
@@ -26,22 +29,47 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  addDoc,
+  arrayUnion,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 
 import {
   getHeroImageUrlForType,
-  mockOrders,
   parseMinutesFromTimeLabel,
   SWIPE_MAIN_TABS,
-  filterCardsByTab,
   type MockFoodCard,
   type SwipeMainTab,
 } from '@/constants/mockSwipeFood';
+import { haversineDistanceKm } from '@/lib/haversine';
+import { acceptFoodSwipe } from '@/services/foodSwipeMatch';
+import { auth, db } from '@/services/firebase';
+import { getCityFromCoordinates, getUserLocationSafe } from '@/services/location';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_RADIUS = 26;
 const SWIPE_OUT = SCREEN_W * 1.35;
 const SWIPE_TRIGGER = SCREEN_W * 0.22;
 const REJECT_MS = 165;
+const AVATAR_PLACEHOLDER = 'https://via.placeholder.com/40';
+
+type SwipeCard = MockFoodCard & {
+  createdBy: string;
+  userName: string;
+  userAvatar: string | null;
+  isOwner: boolean;
+  distanceLabel: string;
+};
 
 function useDeadlineCountdown(cardId: string, totalMinutes: number) {
   const deadlineRef = useRef(Date.now() + totalMinutes * 60 * 1000);
@@ -126,7 +154,7 @@ function GlassBar({ children, style }: { children: React.ReactNode; style?: obje
   );
 }
 
-function FoodCardFace({ card }: { card: MockFoodCard }) {
+function FoodCardFace({ card }: { card: SwipeCard }) {
   const spotsLeft = Math.max(0, card.spotsLeft);
   const heroUri = getHeroImageUrlForType(card.type);
   const countdownLabel = useDeadlineCountdown(
@@ -168,6 +196,21 @@ function FoodCardFace({ card }: { card: MockFoodCard }) {
           {card.title}
         </Text>
         <View style={styles.urgencyBlock}>
+          <View style={styles.userRow}>
+            <Image
+              source={{ uri: card.userAvatar || AVATAR_PLACEHOLDER }}
+              style={styles.userAvatar}
+              contentFit="cover"
+              transition={120}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {card.userName}
+              </Text>
+              <Text style={styles.userLocation}>📍 {card.distanceLabel || 'Near you'}</Text>
+            </View>
+            {card.isOwner ? <Text style={styles.ownerTag}>Your order</Text> : null}
+          </View>
           <Text style={styles.joinedLine}>{joinedLabel}</Text>
           <Text
             style={[
@@ -236,14 +279,261 @@ function ScalePress({
 }
 
 function SwipeScreenInner() {
+  const router = useRouter();
   const [tab, setTab] = useState<SwipeMainTab>('for-you');
   const [index, setIndex] = useState(0);
   const [burstKey, setBurstKey] = useState(0);
+  const [liveOrders, setLiveOrders] = useState<SwipeCard[]>([]);
+  const [joiningOrderId, setJoiningOrderId] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [currentCity, setCurrentCity] = useState('Nearby');
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
-  const filtered = useMemo(() => filterCardsByTab(mockOrders, tab), [tab]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const loc = await getUserLocationSafe();
+      if (!loc || cancelled) return;
+      setCurrentLocation(loc);
+      const city = await getCityFromCoordinates(loc.latitude, loc.longitude);
+      if (!cancelled) setCurrentCity(city || 'Nearby');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'orders'), where('status', '==', 'open'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const currentUid = auth.currentUser?.uid ?? '';
+        const cards: SwipeCard[] = snap.docs.map((d) => {
+          const data = d.data();
+          const rawCategory =
+            typeof data?.category === 'string'
+              ? data.category.toLowerCase()
+              : typeof data?.mealType === 'string'
+                ? data.mealType.toLowerCase()
+                : 'pizza';
+          const type: MockFoodCard['type'] =
+            rawCategory === 'noodles' ? 'noodles' : 'pizza';
+          const participantIds = Array.isArray(data?.participantIds)
+            ? data.participantIds
+            : [];
+          const peopleJoined = participantIds.length > 0 ? participantIds.length : 1;
+          const maxParticipants =
+            typeof data?.maxParticipants === 'number' ? data.maxParticipants : 2;
+          const spotsLeft = Math.max(0, maxParticipants - peopleJoined);
+          const price =
+            typeof data?.sharePrice === 'number'
+              ? data.sharePrice
+              : typeof data?.totalPrice === 'number'
+                ? data.totalPrice
+                : 0;
+          return {
+            id: d.id,
+            title:
+              typeof data?.restaurantName === 'string' && data.restaurantName.trim()
+                ? data.restaurantName
+                : 'Restaurant',
+            type,
+            price,
+            time: '30 min',
+            distance: 'Location hidden',
+            peopleJoined,
+            spotsLeft,
+            categories: ['for-you', type],
+            createdBy:
+              typeof data?.createdBy === 'string' && data.createdBy.trim()
+                ? data.createdBy
+                : typeof data?.userId === 'string' && data.userId.trim()
+                  ? data.userId
+                  : '',
+            userName:
+              typeof data?.userName === 'string' && data.userName.trim()
+                ? data.userName
+                : typeof data?.name === 'string' && data.name.trim()
+                  ? data.name
+                : 'User',
+            userAvatar:
+              typeof data?.userAvatar === 'string' && data.userAvatar.trim()
+                ? data.userAvatar
+                : typeof data?.avatar === 'string' && data.avatar.trim()
+                  ? data.avatar
+                : null,
+            isOwner: currentUid !== '' && (data?.createdBy === currentUid || data?.userId === currentUid),
+            distanceLabel: (() => {
+              const lat = data?.location?.latitude ?? data?.latitude;
+              const lng = data?.location?.longitude ?? data?.longitude;
+              if (
+                currentLocation &&
+                typeof lat === 'number' &&
+                typeof lng === 'number'
+              ) {
+                const km = haversineDistanceKm(
+                  currentLocation.latitude,
+                  currentLocation.longitude,
+                  lat,
+                  lng,
+                );
+                return `${currentCity} • ${km.toFixed(1)} km`;
+              }
+              return typeof data?.distance === 'string' && data.distance.trim()
+                ? data.distance
+                : 'Nearby';
+            })(),
+          };
+        });
+        console.log(
+          '[Swipe] fetched open orders:',
+          cards.map((c) => ({ id: c.id, title: c.title, type: c.type })),
+        );
+        setLiveOrders(cards);
+      },
+      (error) => {
+        console.error('[Swipe] failed to fetch open orders:', error);
+        setLiveOrders([]);
+      },
+    );
+    return () => unsub();
+  }, [currentCity, currentLocation]);
+
+  useEffect(() => {
+    const unsubAll = onSnapshot(
+      collection(db, 'orders'),
+      (snap) => {
+        console.log(
+          '[Swipe] all orders documents:',
+          snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        );
+      },
+      (error) => {
+        console.error('[Swipe] failed to fetch all orders:', error);
+      },
+    );
+    return () => unsubAll();
+  }, []);
+
+  const handleLike = useCallback(
+    async (order: SwipeCard) => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        router.push('/(auth)/login?redirectTo=/(tabs)');
+        return;
+      }
+      if (joiningOrderId) return;
+      if (order.createdBy && order.createdBy === currentUser.uid) {
+        Alert.alert('Own order', 'You cannot join your own order.');
+        return;
+      }
+
+      setJoiningOrderId(order.id);
+      try {
+        const swipeResult = await acceptFoodSwipe(db, order.id, currentUser.uid);
+        if (!swipeResult.ok) {
+          throw new Error(swipeResult.error);
+        }
+        const orderRef = doc(db, 'orders', order.id);
+        await updateDoc(orderRef, {
+          participantIds: arrayUnion(currentUser.uid),
+        });
+        if (!swipeResult.matched) {
+          setIndex((i) => i + 1);
+          return;
+        }
+
+        const users = [currentUser.uid, swipeResult.partnerUid].sort();
+        const currentUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const currentUserData = currentUserDoc.data() ?? {};
+        const currentUserName =
+          (typeof currentUserData.name === 'string' && currentUserData.name.trim()) ||
+          (typeof currentUserData.displayName === 'string' &&
+            currentUserData.displayName.trim()) ||
+          currentUser.displayName ||
+          currentUser.email?.split('@')[0] ||
+          'User';
+        const currentUserAvatar =
+          (typeof currentUserData.avatar === 'string' && currentUserData.avatar.trim()) ||
+          (typeof currentUserData.photoURL === 'string' &&
+            currentUserData.photoURL.trim()) ||
+          currentUser.photoURL ||
+          null;
+        const existingChatQ = query(
+          collection(db, 'chats'),
+          where('orderId', '==', order.id),
+          where('users', 'array-contains', currentUser.uid),
+          limit(10),
+        );
+        const existingChatSnap = await getDocs(existingChatQ);
+        const existingChat = existingChatSnap.docs.find((d) => {
+          const data = d.data();
+          const docUsers = Array.isArray(data?.users) ? (data.users as string[]) : [];
+          return users.every((u) => docUsers.includes(u));
+        });
+
+        if (!existingChat) {
+          const initialText = '🎉 Match found! You can now chat.';
+          const chatRef = await addDoc(collection(db, 'chats'), {
+            orderId: order.id,
+            users,
+            participants: users,
+            usersData: [
+              {
+                uid: currentUser.uid,
+                name: currentUserName,
+                avatar: currentUserAvatar,
+              },
+              {
+                uid: order.createdBy,
+                name: order.userName || 'User',
+                avatar: order.userAvatar || null,
+              },
+            ],
+            lastMessage: initialText,
+            lastMessageAt: serverTimestamp(),
+            unreadCount: 0,
+            createdAt: serverTimestamp(),
+          });
+          await addDoc(collection(db, 'chats', chatRef.id, 'messages'), {
+            text: initialText,
+            system: true,
+            createdAt: serverTimestamp(),
+          });
+        }
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🎉 Match!',
+            body: 'You can now chat',
+          },
+          trigger: null,
+        }).catch(() => {});
+        setBurstKey((k) => k + 1);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setIndex((i) => i + 1);
+      } catch (error) {
+        console.error('[Swipe] failed to join order on like:', error);
+        Alert.alert(
+          'Could not join order',
+          error instanceof Error ? error.message : 'Please try again.',
+        );
+      } finally {
+        setJoiningOrderId(null);
+      }
+    },
+    [joiningOrderId, router],
+  );
+
+  const filtered = useMemo(() => {
+    if (tab === 'for-you') return liveOrders;
+    return liveOrders.filter((c) => c.categories.includes(tab));
+  }, [liveOrders, tab]);
   const current = filtered[index];
   const next = filtered[index + 1];
 
@@ -252,17 +542,22 @@ function SwipeScreenInner() {
   }, [tab]);
 
   useEffect(() => {
+    if (index >= filtered.length && filtered.length > 0) {
+      setIndex(0);
+    }
+  }, [filtered.length, index]);
+
+  useEffect(() => {
     translateX.value = 0;
     translateY.value = 0;
   }, [index, translateX, translateY]);
 
   const commitSwipeRight = useCallback(() => {
-    setBurstKey((k) => k + 1);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!current) return;
     translateX.value = 0;
     translateY.value = 0;
-    setIndex((i) => i + 1);
-  }, [translateX, translateY]);
+    void handleLike(current);
+  }, [current, handleLike, translateX, translateY]);
 
   const commitSwipeLeft = useCallback(() => {
     void Haptics.selectionAsync();
@@ -426,7 +721,7 @@ function SwipeScreenInner() {
               <Text style={styles.circleEmoji}>❌</Text>
             </View>
           </ScalePress>
-          <ScalePress onPress={() => fly('right')} disabled={!current}>
+          <ScalePress onPress={() => fly('right')} disabled={!current || !!joiningOrderId}>
             <View style={[styles.circleBtn, styles.acceptCircle]}>
               <Text style={styles.circleEmoji}>❤️</Text>
             </View>
@@ -558,6 +853,33 @@ const styles = StyleSheet.create({
   urgencyBlock: {
     marginBottom: 12,
     gap: 2,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  userName: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  userLocation: {
+    color: '#CCCCCC',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  ownerTag: {
+    color: '#6EE7B7',
+    fontSize: 12,
+    fontWeight: '700',
   },
   joinedLine: {
     color: 'rgba(255,255,255,0.9)',

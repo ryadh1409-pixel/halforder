@@ -1,13 +1,20 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import {
   addDoc,
   collection,
   doc,
+  getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
+  where,
 } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -33,12 +40,15 @@ type ChatMessage = {
   senderId: string;
   userName: string;
   createdAtMs: number;
+  delivered: boolean;
+  seen: boolean;
+  system: boolean;
 };
 
 export default function OrderChatScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-  const resolvedOrderId = String(orderId ?? '');
+  const chatId = String(orderId ?? '');
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -48,18 +58,31 @@ export default function OrderChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [typingUid, setTypingUid] = useState<string | null>(null);
+  const typingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastNotifiedMessageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!resolvedOrderId) return;
-    const orderRef = doc(db, 'orders', resolvedOrderId);
-    const unsub = onSnapshot(orderRef, (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      const creator = String(data?.createdBy ?? data?.creatorId ?? data?.hostId ?? '');
-      setOtherUserId(creator || null);
+    if (!chatId) return;
+    const chatRef = doc(db, 'chats', chatId);
+    const unsub = onSnapshot(chatRef, (snap) => {
+      if (!snap.exists()) {
+        setError('Chat not found.');
+        setLoading(false);
+        return;
+      }
+      const uid = auth.currentUser?.uid ?? '';
+      const users = Array.isArray(snap.data()?.users)
+        ? (snap.data()?.users as string[])
+        : [];
+      const partner = users.find((u) => u !== uid) ?? null;
+      setOtherUserId(partner);
+      const typingValue = snap.data()?.typing;
+      setTypingUid(typeof typingValue === 'string' ? typingValue : null);
+      setError(null);
     });
     return () => unsub();
-  }, [resolvedOrderId]);
+  }, [chatId]);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -81,13 +104,14 @@ export default function OrderChatScreen() {
   }, [otherUserId]);
 
   useEffect(() => {
-    if (!resolvedOrderId || blocked) {
+    if (!chatId || blocked) {
       setLoading(false);
       if (blocked) setMessages([]);
       return;
     }
+    setLoading(true);
     const q = query(
-      collection(db, 'orders', resolvedOrderId, 'messages'),
+      collection(db, 'chats', chatId, 'messages'),
       orderBy('createdAt', 'asc'),
     );
     const unsub = onSnapshot(
@@ -102,9 +126,29 @@ export default function OrderChatScreen() {
             senderId: String(data?.senderId ?? data?.userId ?? ''),
             userName: String(data?.userName ?? 'User'),
             createdAtMs: Number(ms),
+            delivered: data?.delivered !== false,
+            seen: data?.seen === true,
+            system: data?.system === true,
           };
         });
         setMessages(list);
+        const latest = list[list.length - 1];
+        const currentUid = auth.currentUser?.uid ?? '';
+        if (
+          latest &&
+          latest.senderId &&
+          latest.senderId !== currentUid &&
+          latest.id !== lastNotifiedMessageIdRef.current
+        ) {
+          lastNotifiedMessageIdRef.current = latest.id;
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'New Message',
+              body: latest.text || 'You received a new message',
+            },
+            trigger: null,
+          }).catch(() => {});
+        }
         setError(null);
         setLoading(false);
       },
@@ -115,7 +159,68 @@ export default function OrderChatScreen() {
       },
     );
     return () => unsub();
-  }, [blocked, resolvedOrderId]);
+  }, [blocked, chatId]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !chatId) return;
+    let cancelled = false;
+    async function markSeen() {
+      try {
+        const q = query(
+          collection(db, 'chats', chatId, 'messages'),
+          where('seen', '==', false),
+        );
+        const snapshot = await getDocs(q);
+        await Promise.all(
+          snapshot.docs.map(async (docItem) => {
+            const data = docItem.data();
+            if (data?.senderId === uid || data?.system === true) return;
+            await updateDoc(docItem.ref, {
+              seen: true,
+              seenAt: serverTimestamp(),
+            });
+          }),
+        );
+        await updateDoc(doc(db, 'chats', chatId), { unreadCount: 0 }).catch(() => {});
+      } catch {
+        if (!cancelled) {
+          // ignore seen update failures silently to avoid interrupting chat UX
+        }
+      }
+    }
+    void markSeen();
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, messages.length]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !chatId) return;
+    if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+    if (text.trim().length > 0) {
+      updateDoc(doc(db, 'chats', chatId), { typing: uid }).catch(() => {});
+      typingClearTimerRef.current = setTimeout(() => {
+        updateDoc(doc(db, 'chats', chatId), { typing: null }).catch(() => {});
+      }, 1200);
+    } else {
+      updateDoc(doc(db, 'chats', chatId), { typing: null }).catch(() => {});
+    }
+    return () => {
+      if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+    };
+  }, [chatId, text]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    return () => {
+      if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+      if (uid && chatId) {
+        updateDoc(doc(db, 'chats', chatId), { typing: null }).catch(() => {});
+      }
+    };
+  }, [chatId]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -129,23 +234,38 @@ export default function OrderChatScreen() {
     auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'You';
 
   const canSend = useMemo(
-    () => !!resolvedOrderId && text.trim().length > 0 && !sending && !blocked,
-    [blocked, resolvedOrderId, sending, text],
+    () => !!chatId && text.trim().length > 0 && !sending && !blocked,
+    [blocked, chatId, sending, text],
   );
 
   const handleSend = async () => {
     if (!canSend) return;
     const uid = auth.currentUser?.uid;
-    if (!uid || !resolvedOrderId) return;
+    if (!uid || !chatId) return;
     const payload = text.trim();
     setSending(true);
     try {
-      await addDoc(collection(db, 'orders', resolvedOrderId, 'messages'), {
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
         text: payload,
         senderId: uid,
         userName: displayName,
+        system: false,
         createdAt: serverTimestamp(),
+        delivered: true,
+        seen: false,
       });
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessage: payload,
+        lastMessageAt: serverTimestamp(),
+        unreadCount: increment(1),
+      });
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'New Message',
+          body: payload,
+        },
+        trigger: null,
+      }).catch(() => {});
       setText('');
       Haptics.selectionAsync().catch(() => {});
       setError(null);
@@ -156,8 +276,10 @@ export default function OrderChatScreen() {
     }
   };
 
-  const formatTime = (ms: number) =>
-    new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatTorontoTime = (ms: number) => {
+    const zonedDate = toZonedTime(new Date(ms), 'America/Toronto');
+    return format(zonedDate, 'MMM d, yyyy • h:mm a');
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -173,6 +295,9 @@ export default function OrderChatScreen() {
           <Text style={styles.title}>Order Chat</Text>
           <View style={{ width: 40 }} />
         </View>
+        {typingUid && typingUid !== auth.currentUser?.uid ? (
+          <Text style={styles.typingText}>Typing...</Text>
+        ) : null}
 
         {loading ? (
           <View style={styles.centered}>
@@ -204,7 +329,12 @@ export default function OrderChatScreen() {
                 <View style={[styles.msgBubble, mine ? styles.mine : styles.theirs]}>
                   <Text style={styles.userName}>{item.userName}</Text>
                   <Text style={styles.msgText}>{item.text}</Text>
-                  <Text style={styles.time}>{formatTime(item.createdAtMs)}</Text>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.time}>{formatTorontoTime(item.createdAtMs)}</Text>
+                    {!item.system && mine ? (
+                      <Text style={styles.statusTick}>{item.seen ? '✓✓' : '✓'}</Text>
+                    ) : null}
+                  </View>
                 </View>
               );
             }}
@@ -261,6 +391,24 @@ const styles = StyleSheet.create({
   userName: { color: '#6EE7B7', fontSize: 12, fontWeight: '700', marginBottom: 4 },
   msgText: { color: '#F3F4F6', fontSize: 14 },
   time: { color: '#9CA3AF', fontSize: 11, marginTop: 6, textAlign: 'right' },
+  metaRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusTick: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  typingText: {
+    color: '#AAAAAA',
+    fontSize: 12,
+    paddingHorizontal: 14,
+    paddingTop: 6,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

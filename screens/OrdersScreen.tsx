@@ -14,9 +14,9 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -120,6 +120,10 @@ export default function OrdersScreen() {
         const bTime = b.createdAt ?? 0;
         return bTime - aTime;
       });
+      console.log(
+        '[Orders] realtime orders:',
+        list.map((o) => ({ id: o.id, status: o.status, restaurant: o.restaurantName })),
+      );
       setOrders(list);
       setLoading(false);
     };
@@ -175,13 +179,20 @@ export default function OrdersScreen() {
     router.push(`/order/${orderId}` as const);
   };
 
-  const renderItem = ({ item }: { item: OrderItem }) => (
+  const activeOrders = orders.filter((order) => order.status === 'open');
+  const cancelledOrders = orders.filter((order) => order.status === 'cancelled');
+
+  const renderOrderCard = (item: OrderItem, disabled = false) => (
     <Pressable
       style={({ pressed }) => [
         styles.orderCard,
-        pressed && styles.orderCardPressed,
+        pressed && !disabled && styles.orderCardPressed,
+        disabled && styles.orderCardDisabled,
       ]}
-      onPress={() => handleOrderPress(item.id)}
+      onPress={() => {
+        if (!disabled) handleOrderPress(item.id);
+      }}
+      disabled={disabled}
     >
       <Text style={styles.cardRestaurant} numberOfLines={2}>
         {item.restaurantName}
@@ -200,6 +211,9 @@ export default function OrdersScreen() {
           </Text>
         </View>
       </View>
+      {disabled ? (
+        <Text style={styles.cancelledTag}>Cancelled</Text>
+      ) : null}
       <View style={styles.chevronRow}>
         <Text style={styles.openHint}>Open order</Text>
         <MaterialIcons
@@ -306,13 +320,28 @@ export default function OrdersScreen() {
             <Text style={styles.headerSub}>{orders.length} total</Text>
           </View>
         </GlassBar>
-        <FlatList
-          data={orders}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+        <ScrollView
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-        />
+        >
+          <Text style={styles.sectionTitle}>Active Orders</Text>
+          {activeOrders.length > 0 ? (
+            activeOrders.map((order) => (
+              <View key={order.id}>{renderOrderCard(order)}</View>
+            ))
+          ) : (
+            <Text style={styles.emptySectionText}>No active orders</Text>
+          )}
+
+          {cancelledOrders.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitleMuted}>Cancelled Orders</Text>
+              {cancelledOrders.map((order) => (
+                <View key={order.id}>{renderOrderCard(order, true)}</View>
+              ))}
+            </>
+          ) : null}
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -408,6 +437,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 28,
   },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 10,
+  },
+  sectionTitleMuted: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  emptySectionText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.45)',
+    marginBottom: 8,
+  },
   orderCard: {
     backgroundColor: '#11161F',
     borderRadius: 20,
@@ -428,6 +475,9 @@ const styles = StyleSheet.create({
   },
   orderCardPressed: {
     opacity: 0.92,
+  },
+  orderCardDisabled: {
+    opacity: 0.5,
   },
   cardRestaurant: {
     fontSize: 18,
@@ -465,6 +515,12 @@ const styles = StyleSheet.create({
   },
   openHint: {
     color: 'rgba(52, 211, 153, 0.85)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cancelledTag: {
+    marginTop: 10,
+    color: 'rgba(255,255,255,0.45)',
     fontSize: 13,
     fontWeight: '700',
   },

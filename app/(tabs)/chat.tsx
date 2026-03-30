@@ -1,16 +1,26 @@
-import * as Haptics from 'expo-haptics';
 import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { Image } from 'expo-image';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
+import {
+  collection,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  type Timestamp,
+} from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Animated,
   ActivityIndicator,
-  ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,82 +33,83 @@ import { runTapScale } from '@/utils/motion';
 const ACCENT = '#34D399';
 const D = {
   bg: '#06080C',
-  card: '#11161F',
+  card: '#0D1219',
   border: 'rgba(255,255,255,0.1)',
   text: '#F8FAFC',
   muted: 'rgba(248,250,252,0.55)',
-  chipBg: 'rgba(255,255,255,0.06)',
-  chipActive: 'rgba(52, 211, 153, 0.18)',
-  chipActiveBorder: 'rgba(52, 211, 153, 0.4)',
 };
 
-type TabId = 'all' | 'offers' | 'support' | 'updates' | 'priority';
+type ChatUserData = {
+  uid: string;
+  name?: string;
+  avatar?: string | null;
+};
 
-type InboxMessage = {
+type ChatItem = {
   id: string;
-  type?: string;
-  title?: string;
-  body?: string;
-  createdAt?: { toMillis: () => number } | number;
-  priority?: boolean;
+  users: string[];
+  usersData?: ChatUserData[];
+  orderId?: string;
+  createdAt?: Timestamp | number;
+  lastMessage?: string;
+  lastMessageAt?: Timestamp | number;
+  unreadCount?: number;
 };
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'offers', label: 'Offers' },
-  { id: 'support', label: 'Support' },
-  { id: 'updates', label: 'Updates' },
-  { id: 'priority', label: 'Priority' },
-];
+type LastMessageMap = Record<
+  string,
+  { text: string; createdAt?: Timestamp | number }
+>;
 
 export default function ChatTabScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('all');
-  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [chats, setChats] = useState<ChatItem[]>([]);
+  const [lastMessages, setLastMessages] = useState<LastMessageMap>({});
   const [loading, setLoading] = useState(true);
-  const listScale = useRef(new Animated.Value(1)).current;
 
   const uid = user?.uid ?? null;
 
   useEffect(() => {
     if (!uid) {
       setLoading(false);
-      setMessages([]);
+      setChats([]);
       return;
     }
-    const messagesRef = collection(db, 'users', uid, 'messages');
-    const q = query(messagesRef);
+    const q = query(collection(db, 'chats'), where('users', 'array-contains', uid));
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const list: InboxMessage[] = [];
+        const list: ChatItem[] = [];
         snap.docs.forEach((d) => {
           const data = d.data();
           list.push({
             id: d.id,
-            type: data?.type,
-            title: data?.title,
-            body: data?.body,
+            users: Array.isArray(data?.users) ? (data.users as string[]) : [],
+            usersData: Array.isArray(data?.usersData)
+              ? (data.usersData as ChatUserData[])
+              : [],
+            orderId: typeof data?.orderId === 'string' ? data.orderId : '',
             createdAt: data?.createdAt,
-            priority: data?.priority === true,
+            lastMessage:
+              typeof data?.lastMessage === 'string' ? data.lastMessage : '',
+            lastMessageAt: data?.lastMessageAt ?? data?.createdAt,
+            unreadCount:
+              typeof data?.unreadCount === 'number' ? data.unreadCount : 0,
           });
         });
         list.sort((a, b) => {
           const ma =
-            typeof a.createdAt === 'number'
-              ? a.createdAt
-              : ((a.createdAt as { toMillis?: () => number })?.toMillis?.() ??
-                0);
+            typeof a.lastMessageAt === 'number'
+              ? a.lastMessageAt
+              : a.lastMessageAt?.toMillis?.() ?? 0;
           const mb =
-            typeof b.createdAt === 'number'
-              ? b.createdAt
-              : ((b.createdAt as { toMillis?: () => number })?.toMillis?.() ??
-                0);
+            typeof b.lastMessageAt === 'number'
+              ? b.lastMessageAt
+              : b.lastMessageAt?.toMillis?.() ?? 0;
           return mb - ma;
         });
-        setMessages(list);
-        runTapScale(listScale);
+        setChats(list);
         setLoading(false);
       },
       () => setLoading(false),
@@ -106,31 +117,74 @@ export default function ChatTabScreen() {
     return () => unsub();
   }, [uid]);
 
-  const filtered = messages.filter((m) => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'offers')
-      return m.type === 'offers' || m.type === 'promo';
-    if (activeTab === 'support') return m.type === 'support';
-    if (activeTab === 'updates') return m.type === 'updates';
-    if (activeTab === 'priority') return m.priority === true;
-    return true;
-  });
-
-  const getMessageDate = (m: InboxMessage) => {
-    const created = m.createdAt;
-    if (!created) return '';
-    const ms =
-      typeof created === 'number'
-        ? created
-        : (created as { toMillis: () => number }).toMillis?.();
-    if (!ms) return '';
-    const d = new Date(ms);
-    return d.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+  const getLastMessage = async (chatId: string) => {
+    const q = query(
+      collection(db, 'chats', chatId, 'messages'),
+      orderBy('createdAt', 'desc'),
+      limit(1),
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs[0].data() as { text?: string; createdAt?: Timestamp };
+    }
+    return null;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLastMessages() {
+      const missing = chats.filter((chat) => !chat.lastMessage);
+      if (missing.length === 0) return;
+      const entries = await Promise.all(
+        missing.map(async (chat) => {
+          const data = await getLastMessage(chat.id);
+          return [
+            chat.id,
+            {
+              text: data?.text ?? '',
+              createdAt: data?.createdAt,
+            },
+          ] as const;
+        }),
+      );
+      if (!cancelled) {
+        setLastMessages((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+      }
+    }
+    void loadLastMessages();
+    return () => {
+      cancelled = true;
+    };
+  }, [chats]);
+
+  const formatTime = (timestamp?: Timestamp | number) => {
+    if (!timestamp) return '';
+    const baseDate =
+      typeof timestamp === 'number'
+        ? new Date(timestamp)
+        : timestamp.toDate();
+    const zoned = toZonedTime(baseDate, 'America/Toronto');
+    return format(zoned, 'h:mm a');
+  };
+
+  const getOtherUser = (chat: ChatItem, currentUserId: string) => {
+    return chat.usersData?.find((u) => u.uid !== currentUserId);
+  };
+
+  const viewData = useMemo(() => {
+    return chats.map((chat) => {
+      const otherUser = getOtherUser(chat, uid ?? '');
+      const loadedLast = lastMessages[chat.id];
+      const preview = chat.lastMessage || loadedLast?.text || 'Start chatting...';
+      const timeSource = chat.lastMessageAt ?? loadedLast?.createdAt ?? chat.createdAt;
+      return {
+        ...chat,
+        otherUser,
+        preview,
+        timeLabel: formatTime(timeSource),
+      };
+    });
+  }, [chats, lastMessages, uid]);
 
   if (!uid) {
     return (
@@ -161,32 +215,6 @@ export default function ChatTabScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabsScroll}
-          contentContainerStyle={styles.tabsContent}
-        >
-          {TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                setActiveTab(tab.id);
-              }}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === tab.id && styles.tabTextActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
         {loading ? (
           <View style={styles.skeletonWrap}>
             <ShimmerSkeleton
@@ -208,7 +236,7 @@ export default function ChatTabScreen() {
               style={{ marginTop: 14 }}
             />
           </View>
-        ) : filtered.length === 0 ? (
+        ) : viewData.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>💬</Text>
             <Text style={styles.emptyText}>No messages</Text>
@@ -217,24 +245,42 @@ export default function ChatTabScreen() {
             </Text>
           </View>
         ) : (
-          <Animated.View style={{ flex: 1, transform: [{ scale: listScale }] }}>
-            <ScrollView
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {filtered.map((m) => (
-                <View key={m.id} style={styles.messageCard}>
-                  <Text style={styles.messageTitle} numberOfLines={1}>
-                    {m.title ?? 'Message'}
+          <FlatList
+            data={viewData}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.chatItem}
+                activeOpacity={0.85}
+                onPress={() => router.push(`/chat/${item.id}` as const)}
+              >
+                <Image
+                  source={{ uri: item.otherUser?.avatar || 'https://via.placeholder.com/50' }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                />
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {item.otherUser?.name || 'User'}
                   </Text>
-                  <Text style={styles.messageBody} numberOfLines={2}>
-                    {m.body ?? ''}
+                  <Text style={styles.lastMessage} numberOfLines={1}>
+                    {item.preview}
                   </Text>
-                  <Text style={styles.messageDate}>{getMessageDate(m)}</Text>
                 </View>
-              ))}
-            </ScrollView>
-          </Animated.View>
+
+                <View style={styles.rightSide}>
+                  <Text style={styles.time}>{item.timeLabel}</Text>
+                  {(item.unreadCount ?? 0) > 0 ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{item.unreadCount}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            )}
+          />
         )}
       </ScreenFadeIn>
     </SafeAreaView>
@@ -260,64 +306,56 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: D.text,
   },
-  tabsScroll: {
-    maxHeight: 52,
-    borderBottomWidth: 1,
-    borderBottomColor: D.border,
-  },
-  tabsContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 10,
-    alignItems: 'center',
-  },
-  tab: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 8,
-    backgroundColor: D.chipBg,
-  },
-  tabActive: {
-    backgroundColor: D.chipActive,
-    borderWidth: 1,
-    borderColor: D.chipActiveBorder,
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: D.muted,
-  },
-  tabTextActive: {
-    color: '#ECFDF5',
-    fontWeight: '700',
-  },
   listContent: {
-    padding: 16,
+    paddingVertical: 8,
     paddingBottom: 32,
   },
-  messageCard: {
-    backgroundColor: D.card,
-    borderWidth: 1,
-    borderColor: D.border,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.tight,
+  chatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.3,
+    borderColor: '#333',
+    backgroundColor: D.bg,
   },
-  messageTitle: {
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    backgroundColor: D.card,
+  },
+  name: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    color: D.text,
-    marginBottom: 4,
   },
-  messageBody: {
+  lastMessage: {
+    color: '#AAAAAA',
     fontSize: 14,
-    color: D.muted,
-    marginBottom: 8,
+    marginTop: 2,
   },
-  messageDate: {
+  rightSide: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+    minWidth: 64,
+  },
+  time: {
+    color: '#AAAAAA',
     fontSize: 12,
-    color: D.muted,
+  },
+  badge: {
+    backgroundColor: '#22C55E',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   empty: {
     flex: 1,
