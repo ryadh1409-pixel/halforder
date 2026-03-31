@@ -2,7 +2,7 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     Platform,
 } from 'react-native';
@@ -58,8 +58,13 @@ function RootLayoutNav() {
   const { user } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const currentUserRef = useRef(user);
 
   const seg0 = segments[0] as string | undefined;
+
+  useEffect(() => {
+    currentUserRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     ensureAuthReady().catch((error) => {
@@ -97,6 +102,10 @@ function RootLayoutNav() {
     type TidioApi = {
       on?: (eventName: string, handler: (payload?: unknown) => void) => void;
       off?: (eventName: string, handler: (payload?: unknown) => void) => void;
+      setVisitorData?: (data: Record<string, string>) => void;
+      showMessage?: (message: string | { message: string }) => void;
+      sendMessage?: (message: string | { message: string }) => void;
+      addMessage?: (message: string | { message: string }) => void;
     };
     type TidioWindow = Window & {
       tidioChatApi?: TidioApi;
@@ -119,6 +128,8 @@ function RootLayoutNav() {
         timestamp: new Date().toISOString(),
       });
     };
+    const AUTO_REPLY_TEXT =
+      'Hey 👋 Welcome to OurFood!\nWe help you share meals and save money 🍕\n\nIf you need help, just type your issue.\nWe usually reply within a few minutes.';
 
     const attachTracking = (): boolean => {
       const tidioWindow = window as TidioWindow;
@@ -141,15 +152,24 @@ function RootLayoutNav() {
           timestamp: new Date().toISOString(),
         });
 
+        const sessionUser = currentUserRef.current;
+        const userId = sessionUser?.uid ?? null;
+        const email = sessionUser?.email ?? null;
+        const name = sessionUser?.displayName ?? null;
+
         try {
           await addDoc(collection(db, 'chats'), {
             message,
             createdAt: serverTimestamp(),
             source: 'tidio',
+            userId,
+            email,
+            name,
           });
           await notifyNewTidioMessage(message, 'sent');
           console.log('[Tidio] message saved to Firestore:', {
             message,
+            userId,
             timestamp: new Date().toISOString(),
           });
         } catch (error) {
@@ -171,14 +191,67 @@ function RootLayoutNav() {
         await notifyNewTidioMessage(message, 'received');
       };
 
+      const onChatOpened = async () => {
+        const sessionUser = currentUserRef.current;
+        const replyKey = `tidio_autoreply_seen_${sessionUser?.uid ?? 'guest'}`;
+        const alreadySent =
+          typeof sessionStorage !== 'undefined' &&
+          sessionStorage.getItem(replyKey) === '1';
+        if (alreadySent) return;
+
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(replyKey, '1');
+        }
+
+        const dynamicApi = api as unknown as Record<
+          string,
+          ((message: string | { message: string }) => void) | undefined
+        >;
+        const sender =
+          dynamicApi.showMessage ??
+          dynamicApi.sendMessage ??
+          dynamicApi.addMessage;
+        if (typeof sender === 'function') {
+          try {
+            sender({ message: AUTO_REPLY_TEXT });
+          } catch {
+            try {
+              sender(AUTO_REPLY_TEXT);
+            } catch {
+              // Keep flow safe if this Tidio build doesn't support sending from client API.
+            }
+          }
+        }
+
+        try {
+          await addDoc(collection(db, 'chats'), {
+            message: AUTO_REPLY_TEXT,
+            createdAt: serverTimestamp(),
+            source: 'tidio',
+            type: 'auto-reply',
+            userId: sessionUser?.uid ?? null,
+            email: sessionUser?.email ?? null,
+            name: sessionUser?.displayName ?? null,
+          });
+          await notifyNewTidioMessage(AUTO_REPLY_TEXT, 'received');
+          console.log('[Tidio] auto-reply triggered on chat open');
+        } catch (error) {
+          console.error('[Tidio] failed to save auto-reply:', error);
+        }
+      };
+
       api.on('messageFromVisitor', onVisitorMessage);
       api.on('messageFromOperator', onOperatorMessage);
+      api.on('chatOpen', onChatOpened);
+      api.on('chatOpened', onChatOpened);
       tidioWindow.__tidioTrackingBound = true;
 
       cleanupHandler = () => {
         try {
           api.off?.('messageFromVisitor', onVisitorMessage);
           api.off?.('messageFromOperator', onOperatorMessage);
+          api.off?.('chatOpen', onChatOpened);
+          api.off?.('chatOpened', onChatOpened);
         } catch {
           // keep cleanup safe in browsers where off() is unavailable
         }
@@ -211,6 +284,62 @@ function RootLayoutNav() {
       cleanupHandler?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof window === 'undefined') return;
+
+    type TidioApi = {
+      setVisitorData?: (data: Record<string, string>) => void;
+    };
+    type TidioWindow = Window & { tidioChatApi?: TidioApi };
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const setVisitorData = (): boolean => {
+      const api = (window as TidioWindow).tidioChatApi;
+      if (!api?.setVisitorData) return false;
+
+      const sessionUser = currentUserRef.current;
+      if (!sessionUser?.uid) return false;
+
+      api.setVisitorData({
+        distinct_id: sessionUser.uid,
+        userId: sessionUser.uid,
+        email: sessionUser.email ?? '',
+        name: sessionUser.displayName ?? '',
+      });
+
+      console.log('[Tidio] visitor data set', {
+        userId: sessionUser.uid,
+        email: sessionUser.email ?? null,
+        name: sessionUser.displayName ?? null,
+      });
+      return true;
+    };
+
+    if (!setVisitorData()) {
+      timer = setInterval(() => {
+        attempts += 1;
+        if (setVisitorData() && timer) {
+          clearInterval(timer);
+          timer = null;
+          return;
+        }
+        if (attempts >= maxAttempts && timer) {
+          clearInterval(timer);
+          timer = null;
+          console.warn('[Tidio] visitor data not set; API/user unavailable.');
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [user?.uid, user?.email, user?.displayName]);
 
   useEffect(() => {
     const uid = user?.uid;
