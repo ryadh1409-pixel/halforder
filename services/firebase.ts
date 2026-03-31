@@ -12,7 +12,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import type { Auth, Dependencies } from 'firebase/auth';
-import { getAuth } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
@@ -21,8 +21,8 @@ const firebaseConfig = {
   apiKey: 'AIzaSyDbXyGYAVJU818J7mpiJXOOexAbOQuLJvo',
   authDomain: 'halforfer.firebaseapp.com',
   projectId: 'halforfer',
-  // Default bucket name (fixes storage/unknown when *.firebasestorage.app mismatches console).
-  storageBucket: 'halforfer.appspot.com',
+  // Use the modern bucket domain format for Firebase Storage endpoints.
+  storageBucket: 'halforfer.firebasestorage.app',
   messagingSenderId: '297728229596',
   appId: '1:297728229596:web:1921b79403d9e2d11db419',
   measurementId: 'G-JC37LM61J6',
@@ -83,3 +83,51 @@ export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);
 /** Cloud Storage — uses `storageBucket` from firebaseConfig above. */
 export const storage = getStorage(app);
+
+let authBootstrapPromise: Promise<void> | null = null;
+
+/**
+ * Ensures Firebase Auth is initialized and a user exists.
+ * If no user session exists at app start, signs in anonymously.
+ */
+export function ensureAuthReady(): Promise<void> {
+  if (authBootstrapPromise) return authBootstrapPromise;
+
+  authBootstrapPromise = new Promise((resolve, reject) => {
+    if (auth.currentUser) {
+      console.log('[auth] UID:', auth.currentUser.uid);
+      resolve();
+      return;
+    }
+
+    let settled = false;
+    let signingIn = false;
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (settled) return;
+
+      if (user) {
+        settled = true;
+        unsub();
+        console.log('[auth] UID:', user.uid);
+        resolve();
+        return;
+      }
+
+      if (signingIn) return;
+      signingIn = true;
+      try {
+        const cred = await signInAnonymously(auth);
+        settled = true;
+        unsub();
+        console.log('[auth] UID:', cred.user.uid);
+        resolve();
+      } catch (error) {
+        settled = true;
+        unsub();
+        reject(error);
+      }
+    });
+  });
+
+  return authBootstrapPromise;
+}

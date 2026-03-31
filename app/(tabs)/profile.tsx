@@ -5,14 +5,14 @@ import { shadows, theme } from '@/constants/theme';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { useAuth } from '@/services/AuthContext';
 import {
-    getBlockedUsersByBlocker,
-    unblockUser,
+  getBlockedUsersByBlocker,
+  unblockUser,
 } from '@/services/blocks';
 import {
-    deleteUserAccount,
-    getDeleteAccountAuthErrorMessage,
+  deleteUserAccount,
+  getDeleteAccountAuthErrorMessage,
 } from '@/services/deleteUserAccount';
-import { auth, db } from '@/services/firebase';
+import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { uploadProfilePhoto } from '@/services/profilePhoto';
 import { submitReport, type ReportReason } from '@/services/reports';
 import { moderateUserContent } from '@/utils/contentModeration';
@@ -21,29 +21,29 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { updateProfile, type User } from '@firebase/auth';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
-    doc,
-    getDoc,
-    onSnapshot,
-    setDoc,
-    updateDoc,
-    type DocumentData,
+  doc,
+  getDoc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  type DocumentData,
 } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -380,9 +380,10 @@ export default function ProfileScreen() {
 
   const handlePickProfilePhoto = async () => {
     if (!uid || uploadingPhoto) return;
+    await ensureAuthReady();
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      Alert.alert('Could not save', 'Not signed in.');
+      Alert.alert('Could not save', 'Authentication is still initializing.');
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -417,7 +418,7 @@ export default function ProfileScreen() {
       Alert.alert('Photo updated', 'Your profile picture has been saved.');
     } catch (e) {
       logError(e, { alert: false });
-      console.error('[Profile] photo upload failed:', e);
+      console.error('UPLOAD ERROR:', e);
       const msg =
         e instanceof Error ? e.message : 'Could not upload image. Try again.';
       Alert.alert('Upload failed', msg);
@@ -706,6 +707,16 @@ export default function ProfileScreen() {
           >
             <MaterialIcons name="help-outline" size={24} color={pal.primary} />
             <Text style={dynamicStyles.quickActionText}>Help & support guides</Text>
+            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={dynamicStyles.quickAction}
+            onPress={() => router.push('/subscribe' as Href)}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons name="workspace-premium" size={24} color={pal.primary} />
+            <Text style={dynamicStyles.quickActionText}>HalfOrder Plus</Text>
             <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
           </TouchableOpacity>
 

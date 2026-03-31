@@ -7,7 +7,7 @@ import {
   signInWithPhoneNumber,
   signOut as firebaseSignOut,
   type User,
-} from '@firebase/auth';
+} from 'firebase/auth';
 import {
   addDoc,
   collection,

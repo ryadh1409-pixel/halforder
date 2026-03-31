@@ -16,6 +16,7 @@ import 'react-native-reanimated';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
+import { db, ensureAuthReady } from '@/services/firebase';
 import {
     logNotificationOpened,
     logNotificationReceived,
@@ -26,6 +27,7 @@ import {
     updateLastActive,
     updateUserLocationInFirestore,
 } from '@/services/radarAndPush';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 const NEARBY_MATCH_DATA_TYPE = 'nearby_match';
 
@@ -34,9 +36,16 @@ export const unstable_settings = {
 };
 
 export const linking = {
-  prefixes: ['halforder://', 'https://halforder.app'],
+  prefixes: [
+    'halforder://',
+    'https://halforder.app',
+    'https://www.halforder.app',
+  ],
   config: {
     screens: {
+      terms: 'terms',
+      privacy: 'privacy',
+      subscribe: 'subscribe',
       'order/[id]': 'order/:id',
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',
@@ -51,6 +60,157 @@ function RootLayoutNav() {
   const segments = useSegments();
 
   const seg0 = segments[0] as string | undefined;
+
+  useEffect(() => {
+    ensureAuthReady().catch((error) => {
+      console.warn('Anonymous auth bootstrap failed:', error);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof document === 'undefined') return;
+
+    const existing = document.getElementById('tidio-live-chat');
+    if (existing) {
+      console.log('[Tidio] script already present');
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'tidio-live-chat';
+    script.src = '//code.tidio.co/fnmubcdwbtbooaqhbih23ly2idzdyq6b.js';
+    script.async = true;
+    script.onload = () => {
+      console.log('[Tidio] script loaded');
+    };
+    script.onerror = () => {
+      console.warn('[Tidio] script failed to load');
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof window === 'undefined') return;
+
+    type TidioApi = {
+      on?: (eventName: string, handler: (payload?: unknown) => void) => void;
+      off?: (eventName: string, handler: (payload?: unknown) => void) => void;
+    };
+    type TidioWindow = Window & {
+      tidioChatApi?: TidioApi;
+      __tidioTrackingBound?: boolean;
+    };
+
+    let cleanupHandler: (() => void) | null = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const notifyNewTidioMessage = async (
+      message: string,
+      direction: 'received' | 'sent',
+    ) => {
+      // Current notification behavior (console). Keep this helper for future push integration.
+      console.log('[Tidio Notification]', {
+        direction,
+        message,
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    const attachTracking = (): boolean => {
+      const tidioWindow = window as TidioWindow;
+      const api = tidioWindow.tidioChatApi;
+      if (!api?.on || tidioWindow.__tidioTrackingBound) return false;
+
+      const onVisitorMessage = async (payload?: unknown) => {
+        const data =
+          payload && typeof payload === 'object'
+            ? (payload as Record<string, unknown>)
+            : null;
+        const messageRaw =
+          (typeof data?.message === 'string' && data.message) ||
+          (typeof data?.content === 'string' && data.content) ||
+          '';
+        const message = messageRaw.trim();
+        if (!message) return;
+        console.log('[Tidio] message captured:', {
+          message,
+          timestamp: new Date().toISOString(),
+        });
+
+        try {
+          await addDoc(collection(db, 'chats'), {
+            message,
+            createdAt: serverTimestamp(),
+            source: 'tidio',
+          });
+          await notifyNewTidioMessage(message, 'sent');
+          console.log('[Tidio] message saved to Firestore:', {
+            message,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (error) {
+          console.error('[Tidio] failed to store message:', error);
+        }
+      };
+
+      const onOperatorMessage = async (payload?: unknown) => {
+        const data =
+          payload && typeof payload === 'object'
+            ? (payload as Record<string, unknown>)
+            : null;
+        const messageRaw =
+          (typeof data?.message === 'string' && data.message) ||
+          (typeof data?.content === 'string' && data.content) ||
+          '';
+        const message = messageRaw.trim();
+        if (!message) return;
+        await notifyNewTidioMessage(message, 'received');
+      };
+
+      api.on('messageFromVisitor', onVisitorMessage);
+      api.on('messageFromOperator', onOperatorMessage);
+      tidioWindow.__tidioTrackingBound = true;
+
+      cleanupHandler = () => {
+        try {
+          api.off?.('messageFromVisitor', onVisitorMessage);
+          api.off?.('messageFromOperator', onOperatorMessage);
+        } catch {
+          // keep cleanup safe in browsers where off() is unavailable
+        }
+        tidioWindow.__tidioTrackingBound = false;
+      };
+
+      return true;
+    };
+
+    if (!attachTracking()) {
+      timer = setInterval(() => {
+        attempts += 1;
+        if (attachTracking() && timer) {
+          clearInterval(timer);
+          timer = null;
+          return;
+        }
+        if (attempts >= maxAttempts && timer) {
+          clearInterval(timer);
+          timer = null;
+          console.warn('[Tidio] chat API not available; skipping tracking.');
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) {
+        clearInterval(timer);
+      }
+      cleanupHandler?.();
+    };
+  }, []);
 
   useEffect(() => {
     const uid = user?.uid;
@@ -124,12 +284,13 @@ function RootLayoutNav() {
 
   const inAuthGroup = seg0 === '(auth)';
   const onJoinRedirect = seg0 === 'join';
-  const onTermsFlow =
+  const onPublicShellRoutes =
     seg0 === 'terms-acceptance' ||
     seg0 === 'terms' ||
-    seg0 === 'privacy';
+    seg0 === 'privacy' ||
+    seg0 === 'subscribe';
   const redirectToLogin =
-    !user && !inAuthGroup && !onJoinRedirect && !onTermsFlow;
+    !user && !inAuthGroup && !onJoinRedirect && !onPublicShellRoutes;
   const redirectToTabs = user && inAuthGroup;
   const pathname = segments.length > 0 ? `/${segments.join('/')}` : '';
   const loginHref =
@@ -147,6 +308,10 @@ function RootLayoutNav() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ title: 'Terms of Use' }} />
         <Stack.Screen name="privacy" options={{ title: 'Privacy Policy' }} />
+        <Stack.Screen
+          name="subscribe"
+          options={{ headerShown: false, title: 'Subscribe' }}
+        />
         <Stack.Screen
           name="terms-acceptance"
           options={{ headerShown: false, title: 'Terms' }}
