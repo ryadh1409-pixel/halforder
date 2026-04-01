@@ -19,6 +19,7 @@ type Message = {
   text: string;
   sender: 'user' | 'bot';
   createdAt?: number;
+  action?: 'join_order' | 'create_order' | 'none';
 };
 
 export default function ChatScreen() {
@@ -78,6 +79,7 @@ export default function ChatScreen() {
         action?: 'join_order' | 'create_order' | 'none';
         data?: { orderId?: string; items?: string[] };
       };
+      console.log('AI RESPONSE:', data);
       const replyText = data.reply ?? data.response ?? 'No response from server';
 
       const botMessage: Message = {
@@ -85,18 +87,24 @@ export default function ChatScreen() {
         text: replyText,
         sender: 'bot',
         createdAt: Date.now(),
+        action: data.action ?? 'none',
       };
 
       setMessages((prev) => [...prev, botMessage]);
-      if (data.action === 'join_order' && data.data?.orderId) {
-        router.push(`/order/${data.data.orderId}` as const);
-      } else if (data.action === 'create_order') {
-        const itemsParam =
-          data.data?.items && data.data.items.length > 0
-            ? encodeURIComponent(data.data.items.join(','))
-            : '';
-        const href = itemsParam ? `/create?items=${itemsParam}` : '/create';
-        router.push(href as '/create');
+
+      if (data.action === 'join_order') {
+        console.log('NAVIGATING TO ORDER:', data.data?.orderId);
+
+        router.push({
+          pathname: '/order/[id]',
+          params: { id: data.data?.orderId || 'test123' }
+        } as never);
+      }
+
+      if (data.action === 'create_order') {
+        console.log('NAVIGATING TO CREATE');
+
+        router.push('/create' as never);
       }
     } catch {
       const errorMessage: Message = {
@@ -127,6 +135,11 @@ export default function ChatScreen() {
       ]}
     >
       <Text style={styles.text}>{item.text}</Text>
+      {item.action ? (
+        <Text style={{ fontSize: 12, color: 'gray' }}>
+          Action: {item.action}
+        </Text>
+      ) : null}
       {item.createdAt ? (
         <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
       ) : null}
