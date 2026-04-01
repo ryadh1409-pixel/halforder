@@ -61,13 +61,23 @@ export default function SwipeScreen() {
     setJoining(true);
     try {
       const result = await joinFoodCard(targetId);
-      if (result.matched) {
+      console.log('[swipe] joinFoodCard result:', {
+        cardId: targetId,
+        matched: result.matched,
+        chatId: result.chatId ?? null,
+      });
+      if (result.matched === true) {
         removeTop();
+        console.log('[swipe] navigating to chat:', {
+          pathname: '/chat/[id]',
+          id: String(targetId),
+        });
         router.push({
           pathname: '/chat/[id]',
           params: { id: String(targetId) },
         } as never);
       } else {
+        console.log('[swipe] no match, stay on swipe deck:', { cardId: targetId });
         removeTop();
       }
     } finally {
