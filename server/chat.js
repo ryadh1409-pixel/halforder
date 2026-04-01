@@ -5,13 +5,41 @@ if (!process.env.OPENAI_API_KEY) {
   throw new Error('Missing OPENAI_API_KEY in .env');
 }
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_IP_URL = 'https://1.1.1.1/v1/chat/completions';
+const OPENAI_FALLBACK_URL = 'https://api.openai.com/v1/chat/completions';
 const REQUEST_TIMEOUT_MS = 15000;
 
-router.post('/', async (req, res) => {
+async function requestChatCompletion(message, useIpRoute) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(useIpRoute ? OPENAI_IP_URL : OPENAI_FALLBACK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...(useIpRoute ? { Host: 'api.openai.com' } : {}),
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful AI assistant inside a food sharing app.',
+          },
+          { role: 'user', content: message },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    return { response, payload };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
+router.post('/', async (req, res) => {
   try {
     const { message } = req.body;
     const prompt =
@@ -22,26 +50,14 @@ router.post('/', async (req, res) => {
       return res.json({ ok: false, response: 'Message is required' });
     }
 
-    const response = await fetch(OPENAI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful AI assistant inside a food sharing app.',
-          },
-          { role: 'user', content: prompt },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    const payload = await response.json();
+    let response;
+    let payload;
+    try {
+      ({ response, payload } = await requestChatCompletion(prompt, true));
+    } catch (primaryErr) {
+      console.error('FULL ERROR: primary IP route failed', primaryErr);
+      ({ response, payload } = await requestChatCompletion(prompt, false));
+    }
     if (!response.ok) {
       const apiError =
         payload &&
@@ -92,8 +108,6 @@ router.post('/', async (req, res) => {
       ok: false,
       response: friendly,
     });
-  } finally {
-    clearTimeout(timeout);
   }
 });
 
