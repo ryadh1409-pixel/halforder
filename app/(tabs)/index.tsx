@@ -1,6 +1,5 @@
-/**
- * Home: Tinder-style food swipe (mock data). Live Firestore deck was moved — restore from git if needed.
- */
-import { SwipeScreen } from '@/screens/SwipeScreen';
+import { Redirect } from 'expo-router';
 
-export default SwipeScreen;
+export default function SwipeIndexRedirect() {
+  return <Redirect href="/(tabs)/browse" />;
+}

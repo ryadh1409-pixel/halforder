@@ -50,6 +50,9 @@ export default function AdminScreen() {
     ordersThisWeek: number;
     activeUsers: number;
     averageOrderPrice: number;
+    activeCards: number;
+    totalMatches: number;
+    completedOrders: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,9 +60,10 @@ export default function AdminScreen() {
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const [usersSnap, ordersSnap] = await Promise.all([
+      const [usersSnap, ordersSnap, cardsSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'orders')),
+        getDocs(collection(db, 'food_cards')),
       ]);
 
       const totalUsers = usersSnap.size;
@@ -72,6 +76,7 @@ export default function AdminScreen() {
       let ordersToday = 0;
       let ordersThisWeek = 0;
       let sumPrice = 0;
+      let completedOrders = 0;
       const activeUserIds = new Set<string>();
 
       ordersSnap.docs.forEach((docSnap) => {
@@ -97,6 +102,15 @@ export default function AdminScreen() {
         const price = data?.totalPrice ?? data?.price;
         if (typeof price === 'number' && !Number.isNaN(price))
           sumPrice += price;
+        if (data?.status === 'completed') completedOrders += 1;
+      });
+
+      let activeCards = 0;
+      let totalMatches = 0;
+      cardsSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (data?.status === 'waiting') activeCards += 1;
+        if (data?.status === 'matched') totalMatches += 1;
       });
 
       const averageOrderPrice = totalOrders > 0 ? sumPrice / totalOrders : 0;
@@ -108,6 +122,9 @@ export default function AdminScreen() {
         ordersThisWeek,
         activeUsers: activeUserIds.size,
         averageOrderPrice,
+        activeCards,
+        totalMatches,
+        completedOrders,
       });
       setError(null);
     } catch (e) {
@@ -221,10 +238,29 @@ export default function AdminScreen() {
                 ${metrics.averageOrderPrice.toFixed(2)}
               </Text>
             </View>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Active Cards</Text>
+              <Text style={styles.cardValue}>{metrics.activeCards}</Text>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Total Matches</Text>
+              <Text style={styles.cardValue}>{metrics.totalMatches}</Text>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Completed Orders</Text>
+              <Text style={styles.cardValue}>{metrics.completedOrders}</Text>
+            </View>
           </View>
         ) : null}
 
         <View style={styles.navSection}>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => router.push('/admin/food-cards')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.navButtonText}>Manage Food Cards</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.navButton}
             onPress={() => router.push('/admin/dashboard')}

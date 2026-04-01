@@ -1,0 +1,209 @@
+import { auth, db } from '@/services/firebase';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where,
+  limit,
+} from 'firebase/firestore';
+
+export type FoodCard = {
+  id: string;
+  title: string;
+  image: string;
+  restaurantName: string;
+  price: number;
+  splitPrice: number;
+  location: { latitude: number; longitude: number } | null;
+  createdAt: Timestamp | null;
+  expiresAt: number;
+  status: 'waiting' | 'matched';
+  user1?: { uid: string; name: string; photo: string | null } | null;
+  user2?: { uid: string; name: string; photo: string | null } | null;
+};
+
+const FOOD_CARDS = 'food_cards';
+const ADMIN_EMAIL = 'support@halforder.app';
+
+export function subscribeWaitingFoodCards(
+  onData: (cards: FoodCard[]) => void,
+): () => void {
+  const q = query(
+    collection(db, FOOD_CARDS),
+    where('status', '==', 'waiting'),
+    limit(50),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const now = Date.now();
+      const cards = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<FoodCard, 'id'>) }))
+        .filter((card) => (card.expiresAt ?? 0) > now);
+      onData(cards);
+    },
+    () => onData([]),
+  );
+}
+
+export async function joinFoodCard(cardId: string): Promise<{ matched: boolean }> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Sign in required');
+  const userName =
+    auth.currentUser?.displayName?.trim() ||
+    auth.currentUser?.email?.split('@')[0] ||
+    'User';
+  const userPhoto = auth.currentUser?.photoURL ?? null;
+  const ref = doc(db, FOOD_CARDS, cardId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Card not found');
+  const data = snap.data() as Omit<FoodCard, 'id'>;
+  if (data.status !== 'waiting') throw new Error('Card no longer available');
+
+  if (!data.user1?.uid) {
+    await updateDoc(ref, {
+      user1: { uid, name: userName, photo: userPhoto },
+      createdAt: serverTimestamp(),
+    });
+    return { matched: false };
+  }
+  if (data.user1.uid === uid) return { matched: false };
+  if (data.user2?.uid) throw new Error('Card already matched');
+
+  await updateDoc(ref, {
+    user2: { uid, name: userName, photo: userPhoto },
+    status: 'matched',
+  });
+
+  const chatId = `${cardId}_${data.user1.uid}_${uid}`;
+  await updateDoc(doc(db, 'chats', chatId), {
+    users: [data.user1.uid, uid],
+    participants: [data.user1.uid, uid],
+    usersData: [
+      data.user1,
+      { uid, name: userName, photo: userPhoto },
+    ],
+    orderId: cardId,
+    type: 'food_card',
+    lastMessage: 'Match created',
+    lastMessageAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+  }).catch(async () => {
+    await addDoc(collection(db, 'chats'), {
+      users: [data.user1?.uid, uid],
+      participants: [data.user1?.uid, uid],
+      usersData: [data.user1, { uid, name: userName, photo: userPhoto }],
+      orderId: cardId,
+      type: 'food_card',
+      lastMessage: 'Match created',
+      lastMessageAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+  });
+
+  return { matched: true };
+}
+
+export async function createFoodCard(input: {
+  title: string;
+  image: string;
+  restaurantName: string;
+  price: number;
+  splitPrice: number;
+  latitude?: number | null;
+  longitude?: number | null;
+}) {
+  const email = auth.currentUser?.email?.toLowerCase() ?? '';
+  if (email !== ADMIN_EMAIL) throw new Error('Admin only');
+  const activeSnap = await getDocs(
+    query(collection(db, FOOD_CARDS), where('status', '==', 'waiting')),
+  );
+  if (activeSnap.size >= 10) throw new Error('Max 10 active cards');
+  const now = Date.now();
+  return addDoc(collection(db, FOOD_CARDS), {
+    title: input.title.trim(),
+    image: input.image.trim(),
+    restaurantName: input.restaurantName.trim(),
+    price: input.price,
+    splitPrice: input.splitPrice,
+    location:
+      input.latitude != null && input.longitude != null
+        ? { latitude: input.latitude, longitude: input.longitude }
+        : null,
+    createdAt: serverTimestamp(),
+    expiresAt: now + 45 * 60 * 1000,
+    status: 'waiting',
+    user1: null,
+    user2: null,
+  });
+}
+
+async function duplicateCard(cardId: string) {
+  const snap = await getDoc(doc(db, FOOD_CARDS, cardId));
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const now = Date.now();
+  await addDoc(collection(db, FOOD_CARDS), {
+    title: data.title ?? 'Food card',
+    image: data.image ?? '',
+    restaurantName: data.restaurantName ?? '',
+    price: Number(data.price) || 0,
+    splitPrice: Number(data.splitPrice) || 0,
+    location: data.location ?? null,
+    createdAt: serverTimestamp(),
+    expiresAt: now + 45 * 60 * 1000,
+    status: 'waiting',
+    user1: null,
+    user2: null,
+    regeneratedFrom: cardId,
+  });
+}
+
+export async function runFoodCardAutomationOnce(): Promise<void> {
+  const now = Date.now();
+  const waitingSnap = await getDocs(
+    query(collection(db, FOOD_CARDS), where('status', '==', 'waiting')),
+  );
+  const matchedSnap = await getDocs(
+    query(collection(db, FOOD_CARDS), where('status', '==', 'matched')),
+  );
+
+  const tasks: Promise<unknown>[] = [];
+  waitingSnap.docs.forEach((d) => {
+    const data = d.data();
+    if (typeof data.expiresAt === 'number' && data.expiresAt <= now) {
+      tasks.push(
+        duplicateCard(d.id).finally(() => deleteDoc(doc(db, FOOD_CARDS, d.id))),
+      );
+    }
+  });
+  matchedSnap.docs.forEach((d) => {
+    const data = d.data();
+    if (!data.regenerated) {
+      tasks.push(
+        duplicateCard(d.id).finally(() =>
+          updateDoc(doc(db, FOOD_CARDS, d.id), {
+            regenerated: true,
+            adminNotification: `Match completed: ${data.title ?? 'Food'} - 2 users joined`,
+          }),
+        ),
+      );
+    }
+  });
+  if (tasks.length) await Promise.allSettled(tasks);
+}
+
+export function startFoodCardAutomation(): () => void {
+  const id = setInterval(() => {
+    runFoodCardAutomationOnce().catch(() => {});
+  }, 60 * 1000);
+  return () => clearInterval(id);
+}

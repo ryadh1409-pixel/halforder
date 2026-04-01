@@ -137,6 +137,30 @@ service cloud.firestore {
         );
     }
 
+    function isAdminEmail() {
+      return isSignedIn() && request.auth.token.email == 'support@halforder.app';
+    }
+
+    function isValidFoodCardJoinUpdate() {
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['user1', 'user2', 'status', 'createdAt'])
+        && resource.data.status == 'waiting'
+        && (
+          (
+            resource.data.user1 == null
+            && request.resource.data.user1.uid == request.auth.uid
+            && request.resource.data.status == 'waiting'
+          )
+          || (
+            resource.data.user1.uid is string
+            && resource.data.user1.uid != request.auth.uid
+            && resource.data.user2 == null
+            && request.resource.data.user2.uid == request.auth.uid
+            && request.resource.data.status == 'matched'
+          )
+        );
+    }
+
     match /reports/{reportId} {
       allow create: if request.auth != null;
       // Admin inbox (Guideline 1.2 — review user reports). Email must match ops account.
@@ -289,6 +313,12 @@ service cloud.firestore {
             get(/databases/$(database)/documents/orders/$(orderId)).data
           );
       }
+    }
+
+    match /food_cards/{cardId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdminEmail();
+      allow update: if isAdminEmail() || isValidFoodCardJoinUpdate();
     }
   }
 }

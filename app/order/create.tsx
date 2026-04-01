@@ -39,6 +39,7 @@ import { theme } from '@/constants/theme';
 
 const MEAL_TYPES = ['Pizza', 'Noodles'] as const;
 const MERGE_RADIUS_KM = 0.5; // 500 meters
+const ADMIN_EMAIL = 'support@halforder.app';
 
 export default function CreateOrderScreen() {
   const router = useRouter();
@@ -83,6 +84,13 @@ export default function CreateOrderScreen() {
   };
 
   const handleCreate = async () => {
+    if ((auth.currentUser?.email ?? '').toLowerCase() !== ADMIN_EMAIL) {
+      Alert.alert(
+        'Disabled',
+        'User order creation is disabled. Swipe and join admin food cards instead.',
+      );
+      return;
+    }
     const trimmedRestaurant = restaurantName.trim();
     if (!trimmedRestaurant) {
       Alert.alert('Error', 'Enter restaurant name.');

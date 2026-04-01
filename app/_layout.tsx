@@ -16,6 +16,7 @@ import 'react-native-reanimated';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
+import { startFoodCardAutomation } from '@/services/foodCards';
 import { db, ensureAuthReady } from '@/services/firebase';
 import {
     logNotificationOpened,
@@ -750,7 +751,11 @@ function RootLayoutNav() {
   // Background cleanup of expired orders (runs every 60 seconds while app is open)
   useEffect(() => {
     const stop = startExpiredOrdersCleanup();
-    return () => stop();
+    const stopFoodCards = startFoodCardAutomation();
+    return () => {
+      stop();
+      stopFoodCards();
+    };
   }, []);
 
   useEffect(() => {
