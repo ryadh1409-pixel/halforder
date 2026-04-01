@@ -23,6 +23,7 @@ import {
   FlatList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -58,6 +59,7 @@ type LastMessageMap = Record<
   string,
   { text: string; createdAt?: Timestamp | number }
 >;
+type AiRow = { id: string; role: 'user' | 'assistant'; text: string };
 
 export default function ChatTabScreen() {
   const router = useRouter();
@@ -65,6 +67,9 @@ export default function ChatTabScreen() {
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [lastMessages, setLastMessages] = useState<LastMessageMap>({});
   const [loading, setLoading] = useState(true);
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiRows, setAiRows] = useState<AiRow[]>([]);
 
   const uid = user?.uid ?? null;
 
@@ -169,6 +174,38 @@ export default function ChatTabScreen() {
     return chat.usersData?.find((u) => u.uid !== currentUserId);
   };
 
+  const sendMessage = async (message: string) => {
+    try {
+      const res = await fetch('http://localhost:3000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message }),
+      });
+
+      const data = await res.json();
+      return data.response as string;
+    } catch (error) {
+      console.error(error);
+      return 'Error connecting to AI';
+    }
+  };
+
+  const handleSendAiMessage = async () => {
+    const text = aiInput.trim();
+    if (!text || aiLoading) return;
+    setAiRows((prev) => [...prev, { id: `${Date.now()}-u`, role: 'user', text }]);
+    setAiInput('');
+    setAiLoading(true);
+    const reply = await sendMessage(text);
+    setAiRows((prev) => [
+      ...prev,
+      { id: `${Date.now()}-a`, role: 'assistant', text: reply || 'No response' },
+    ]);
+    setAiLoading(false);
+  };
+
   const viewData = useMemo(() => {
     return chats.map((chat) => {
       const otherUser = getOtherUser(chat, uid ?? '');
@@ -212,6 +249,48 @@ export default function ChatTabScreen() {
       <ScreenFadeIn style={{ flex: 1 }}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={styles.aiCard}>
+          <Text style={styles.aiTitle}>AI Assistant</Text>
+          <View style={styles.aiInputRow}>
+            <TextInput
+              value={aiInput}
+              onChangeText={setAiInput}
+              placeholder="Ask support..."
+              placeholderTextColor={D.muted}
+              style={styles.aiInput}
+              editable={!aiLoading}
+              returnKeyType="send"
+              onSubmitEditing={handleSendAiMessage}
+            />
+            <TouchableOpacity
+              style={[styles.aiSendBtn, aiLoading && styles.aiSendBtnDisabled]}
+              onPress={handleSendAiMessage}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <ActivityIndicator size="small" color={D.text} />
+              ) : (
+                <Text style={styles.aiSendText}>Send</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          {aiRows.length > 0 ? (
+            <View style={styles.aiMessages}>
+              {aiRows.slice(-4).map((row) => (
+                <Text
+                  key={row.id}
+                  style={[
+                    styles.aiMsg,
+                    row.role === 'user' ? styles.aiMsgUser : styles.aiMsgAssistant,
+                  ]}
+                >
+                  {row.role === 'user' ? 'You: ' : 'AI: '}
+                  {row.text}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
         {loading ? (
           <View style={styles.skeletonWrap}>
@@ -303,6 +382,65 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: D.text,
+  },
+  aiCard: {
+    margin: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: D.border,
+    borderRadius: 14,
+    backgroundColor: D.card,
+    padding: 12,
+  },
+  aiTitle: {
+    color: D.text,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  aiInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  aiInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: D.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: D.text,
+    fontSize: 14,
+    backgroundColor: '#0A0F15',
+  },
+  aiSendBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: ACCENT,
+  },
+  aiSendBtnDisabled: {
+    opacity: 0.7,
+  },
+  aiSendText: {
+    color: D.bg,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  aiMessages: {
+    marginTop: 10,
+    gap: 6,
+  },
+  aiMsg: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  aiMsgUser: {
+    color: '#CDEBFF',
+  },
+  aiMsgAssistant: {
+    color: '#D1FAE5',
   },
   listContent: {
     paddingVertical: 8,
