@@ -263,15 +263,22 @@ router.post('/', async (req, res) => {
             .join('\n')
         : 'No nearby active orders found';
     const appSystemMessage =
-      'You are an AI assistant inside a food-sharing app called OurFood. ' +
-      'Always respond ONLY in English. ' +
-      'Keep responses short (max 2 sentences). ' +
-      'You MUST return JSON in this format: ' +
-      '{"reply":"text for user","action":"join_order|create_order|none","data":{}}. ' +
-      'Rules: If user wants food -> suggest or create_order. ' +
-      'If matching order exists -> join_order. ' +
-      'If unclear -> action = none. ' +
-      'Friendly tone. Food-focused.';
+      'You are an AI assistant inside a food-sharing app called OurFood.\n\n' +
+      'You MUST ALWAYS respond in valid JSON format ONLY.\n\n' +
+      'Format:\n' +
+      '{\n' +
+      '  "reply": "text for user",\n' +
+      '  "action": "join_order | create_order | none",\n' +
+      '  "data": {}\n' +
+      '}\n\n' +
+      'Rules:\n' +
+      '- Always use English\n' +
+      '- Max 2 short sentences\n' +
+      '- If user wants food -> suggest or create_order\n' +
+      '- If matching order exists -> join_order\n' +
+      '- If unclear -> action = none\n' +
+      '- NEVER return plain text\n' +
+      '- ALWAYS return JSON';
     const userContext =
       `User: ${name || 'User'}\n` +
       `UID: ${uid || 'unknown'}\n` +
@@ -297,13 +304,12 @@ router.post('/', async (req, res) => {
         'message' in payload.error
           ? String(payload.error.message)
           : `OpenAI API error (${response.status})`;
-      return res.json({
-        ok: true,
+      const parsedError = {
         reply: apiError,
         action: 'none',
         data: {},
-        response: apiError,
-      });
+      };
+      return res.json(parsedError);
     }
 
     const aiText =
@@ -320,38 +326,44 @@ router.post('/', async (req, res) => {
     try {
       parsed = JSON.parse(aiText);
     } catch {
-      parsed = null;
+      parsed = {
+        reply: aiText,
+        action: 'none',
+        data: {},
+      };
     }
-
-    const reply =
+    const safeReply =
       parsed &&
       typeof parsed === 'object' &&
       typeof parsed.reply === 'string' &&
       parsed.reply.trim()
         ? parsed.reply.trim()
         : aiText.trim() || 'No response generated';
-
-    const actionRaw =
+    const safeActionRaw =
       parsed &&
       typeof parsed === 'object' &&
       typeof parsed.action === 'string'
         ? parsed.action
         : 'none';
-    const action =
-      actionRaw === 'join_order' || actionRaw === 'create_order'
-        ? actionRaw
+    const safeAction =
+      safeActionRaw === 'join_order' || safeActionRaw === 'create_order'
+        ? safeActionRaw
         : 'none';
-    const dataRaw =
+    const parsedData =
       parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
         ? parsed.data
         : {};
-    const responseData = {
+    const safeData = {
+      ...parsedData,
       orderId:
-        typeof dataRaw.orderId === 'string' && dataRaw.orderId.trim()
-          ? dataRaw.orderId.trim()
+        typeof parsedData.orderId === 'string' && parsedData.orderId.trim()
+          ? parsedData.orderId.trim()
           : undefined,
-      items: Array.isArray(dataRaw.items)
-        ? dataRaw.items.filter((item) => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
+      items: Array.isArray(parsedData.items)
+        ? parsedData.items
+            .filter((item) => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
         : undefined,
       nearbyOrders: nearbyActiveOrders.map((order) => ({
         orderId: order.orderId,
@@ -359,14 +371,13 @@ router.post('/', async (req, res) => {
         status: order.status,
       })),
     };
+    const safeParsed = {
+      reply: safeReply,
+      action: safeAction,
+      data: safeData,
+    };
 
-    res.json({
-      ok: true,
-      reply,
-      action,
-      data: responseData,
-      response: reply,
-    });
+    return res.json(safeParsed);
   } catch (err) {
     const errObj = err && typeof err === 'object' ? err : null;
     const code =
@@ -389,13 +400,12 @@ router.post('/', async (req, res) => {
       code === 'ENOTFOUND'
         ? 'Network DNS issue reaching api.openai.com'
         : message || 'Unknown error';
-    res.json({
-      ok: true,
+    const parsedError = {
       reply: friendly,
       action: 'none',
       data: {},
-      response: friendly,
-    });
+    };
+    return res.json(parsedError);
   }
 });
 
