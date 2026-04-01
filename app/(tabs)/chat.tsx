@@ -1,4 +1,5 @@
 import { useAuth } from '@/services/AuthContext';
+import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ type Message = {
 };
 
 export default function ChatScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -70,16 +72,32 @@ export default function ChatScreen() {
         }),
       });
 
-      const data = (await res.json()) as { response?: string };
+      const data = (await res.json()) as {
+        response?: string;
+        reply?: string;
+        action?: 'join_order' | 'create_order' | 'none';
+        data?: { orderId?: string; items?: string[] };
+      };
+      const replyText = data.reply ?? data.response ?? 'No response from server';
 
       const botMessage: Message = {
         id: Date.now().toString() + '-bot',
-        text: data.response ?? 'No response from server',
+        text: replyText,
         sender: 'bot',
         createdAt: Date.now(),
       };
 
       setMessages((prev) => [...prev, botMessage]);
+      if (data.action === 'join_order' && data.data?.orderId) {
+        router.push(`/order/${data.data.orderId}` as const);
+      } else if (data.action === 'create_order') {
+        const itemsParam =
+          data.data?.items && data.data.items.length > 0
+            ? encodeURIComponent(data.data.items.join(','))
+            : '';
+        const href = itemsParam ? `/order/create?items=${itemsParam}` : '/order/create';
+        router.push(href as '/order/create');
+      }
     } catch {
       const errorMessage: Message = {
         id: Date.now().toString() + '-error',

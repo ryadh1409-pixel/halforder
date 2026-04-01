@@ -139,7 +139,7 @@ async function getRecentOrdersForUser(uid) {
   }
 }
 
-async function getNearbyActiveOrders(uid) {
+async function getNearbyOrders(uid) {
   if (!uid) return [];
   try {
     const db = getFirestoreDb();
@@ -238,7 +238,7 @@ router.post('/', async (req, res) => {
       : 'noemail@example.com';
 
     const recentOrders = await getRecentOrdersForUser(uid);
-    const nearbyActiveOrders = await getNearbyActiveOrders(uid);
+    const nearbyActiveOrders = await getNearbyOrders(uid);
     const ordersText =
       recentOrders.length > 0
         ? recentOrders
@@ -257,14 +257,14 @@ router.post('/', async (req, res) => {
             .join('\n')
         : 'No nearby active orders found';
     const appSystemMessage =
-      'You are an AI assistant inside a food-sharing app called OurFood. ' +
-      'Help users find, join, or create shared food orders. ' +
+      'You are an AI inside a food-sharing app called OurFood. ' +
+      'You MUST sometimes return actions in JSON. ' +
+      'If user wants to join, return action: join_order. ' +
+      'If user wants new food, return action: create_order. ' +
       'Always respond in English. ' +
-      'Use simple English suitable for mobile apps. ' +
-      'Maximum 2 sentences. ' +
-      'Be short, friendly, and app-focused. ' +
-      'Suggest food when relevant. ' +
-      'If nearby active orders exist, suggest joining them first before suggesting new food.';
+      'Keep tone friendly, food-focused, and short (max 2 sentences). ' +
+      'Output strictly valid JSON with shape: ' +
+      '{"reply":"string","action":"join_order|create_order|none","data":{"orderId":"string(optional)","items":["string(optional)"]}}.';
     const userContext =
       `User: ${name || 'User'}\n` +
       `UID: ${uid || 'unknown'}\n` +
@@ -293,7 +293,7 @@ router.post('/', async (req, res) => {
       return res.json({ ok: false, response: apiError });
     }
 
-    const reply =
+    const aiText =
       payload &&
       typeof payload === 'object' &&
       Array.isArray(payload.choices) &&
@@ -301,9 +301,54 @@ router.post('/', async (req, res) => {
       payload.choices[0].message &&
       typeof payload.choices[0].message.content === 'string'
         ? payload.choices[0].message.content
-        : 'No response generated';
+        : '';
 
-    res.json({ ok: true, response: reply });
+    let parsed;
+    try {
+      parsed = JSON.parse(aiText);
+    } catch {
+      parsed = null;
+    }
+
+    const reply =
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof parsed.reply === 'string' &&
+      parsed.reply.trim()
+        ? parsed.reply.trim()
+        : aiText.trim() || 'No response generated';
+
+    const actionRaw =
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof parsed.action === 'string'
+        ? parsed.action
+        : 'none';
+    const action =
+      actionRaw === 'join_order' || actionRaw === 'create_order'
+        ? actionRaw
+        : 'none';
+    const dataRaw =
+      parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
+        ? parsed.data
+        : {};
+    const responseData = {
+      orderId:
+        typeof dataRaw.orderId === 'string' && dataRaw.orderId.trim()
+          ? dataRaw.orderId.trim()
+          : undefined,
+      items: Array.isArray(dataRaw.items)
+        ? dataRaw.items.filter((item) => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
+        : undefined,
+    };
+
+    res.json({
+      ok: true,
+      reply,
+      action,
+      data: responseData,
+      response: reply,
+    });
   } catch (err) {
     const errObj = err && typeof err === 'object' ? err : null;
     const code =
