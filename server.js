@@ -1,4 +1,5 @@
 require('dotenv').config();
+console.log('ENV KEY:', process.env.OPENAI_API_KEY ? 'LOADED' : 'MISSING');
 
 const express = require('express');
 const app = express();
