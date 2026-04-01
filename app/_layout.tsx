@@ -852,7 +852,6 @@ function RootLayoutNav() {
           name="create-order"
           options={{ title: 'Create Order (Disabled)' }}
         />
-        <Stack.Screen name="admin" options={{ title: 'Admin' }} />
         <Stack.Screen name="support" options={{ title: 'Support' }} />
         <Stack.Screen
           name="admin-support"

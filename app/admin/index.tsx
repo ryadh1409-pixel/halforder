@@ -1,20 +1,32 @@
+import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
+import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { auth, db, storage } from '@/services/firebase';
 import { useRouter } from 'expo-router';
-import { collection, getDocs } from 'firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  serverTimestamp,
+  where,
+} from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
 
 const ADMIN_EMAIL = 'support@halforder.app';
 
@@ -36,13 +48,10 @@ function startOfWeekMs(): number {
 export default function AdminScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  useEffect(() => {
-    if (user && user.email !== ADMIN_EMAIL) {
-      router.replace('/(tabs)');
-    }
-  }, [user, router]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<{
     totalUsers: number;
     totalOrders: number;
@@ -54,9 +63,23 @@ export default function AdminScreen() {
     totalMatches: number;
     completedOrders: number;
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const [title, setTitle] = useState('');
+  const [restaurantName, setRestaurantName] = useState('');
+  const [price, setPrice] = useState('');
+  const [splitPrice, setSplitPrice] = useState('');
+  const [location, setLocation] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+
+  useEffect(() => {
+    if (user && !isAdmin) {
+      router.replace('/(tabs)');
+    }
+  }, [isAdmin, router, user]);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -68,11 +91,9 @@ export default function AdminScreen() {
 
       const totalUsers = usersSnap.size;
       const totalOrders = ordersSnap.size;
-
       const todayStart = startOfTodayMs();
       const weekStart = startOfWeekMs();
       const now = Date.now();
-
       let ordersToday = 0;
       let ordersThisWeek = 0;
       let sumPrice = 0;
@@ -94,14 +115,14 @@ export default function AdminScreen() {
           ordersThisWeek += 1;
           const ids = data?.participantIds ?? data?.joinedUsers ?? [];
           const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
-          if (Array.isArray(ids))
-            ids.forEach((id: string) => activeUserIds.add(id));
+          if (Array.isArray(ids)) ids.forEach((id: string) => activeUserIds.add(id));
           if (hostId) activeUserIds.add(hostId);
         }
 
-        const price = data?.totalPrice ?? data?.price;
-        if (typeof price === 'number' && !Number.isNaN(price))
-          sumPrice += price;
+        const orderPrice = data?.totalPrice ?? data?.price;
+        if (typeof orderPrice === 'number' && !Number.isNaN(orderPrice)) {
+          sumPrice += orderPrice;
+        }
         if (data?.status === 'completed') completedOrders += 1;
       });
 
@@ -113,23 +134,21 @@ export default function AdminScreen() {
         if (data?.status === 'matched') totalMatches += 1;
       });
 
-      const averageOrderPrice = totalOrders > 0 ? sumPrice / totalOrders : 0;
-
       setMetrics({
         totalUsers,
         totalOrders,
         ordersToday,
         ordersThisWeek,
         activeUsers: activeUserIds.size,
-        averageOrderPrice,
+        averageOrderPrice: totalOrders > 0 ? sumPrice / totalOrders : 0,
         activeCards,
         totalMatches,
         completedOrders,
       });
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load metrics');
       setMetrics(null);
+      setError(e instanceof Error ? e.message : 'Failed to load metrics');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -142,7 +161,7 @@ export default function AdminScreen() {
     } else {
       setLoading(false);
     }
-  }, [user, isAdmin, fetchMetrics]);
+  }, [fetchMetrics, isAdmin, user]);
 
   const onRefresh = () => {
     if (!isAdmin) return;
@@ -150,12 +169,100 @@ export default function AdminScreen() {
     fetchMetrics();
   };
 
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Allow photo access to upload card images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.82,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    try {
+      setUploading(true);
+      const uri = result.assets[0].uri;
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const uid = auth.currentUser?.uid ?? 'admin';
+      const path = `foodCards/${uid}/${Date.now()}.jpg`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
+      setImageUrl(url);
+    } catch (e) {
+      Alert.alert(
+        'Upload failed',
+        e instanceof Error ? e.message : 'Could not upload image',
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onSaveCard = async () => {
+    if (!isAdmin) {
+      Alert.alert('Access denied', 'Only admin can create food cards.');
+      return;
+    }
+    const total = Number(price);
+    const split = Number(splitPrice);
+    if (!title.trim() || !restaurantName.trim() || !imageUrl.trim()) {
+      Alert.alert('Missing fields', 'Title, restaurant, and image are required.');
+      return;
+    }
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(split) || split <= 0) {
+      Alert.alert('Invalid values', 'Use valid positive prices.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const active = await getDocs(
+        query(collection(db, 'food_cards'), where('status', '==', 'waiting')),
+      );
+      if (active.size >= 10) {
+        Alert.alert('Limit reached', 'Maximum 10 active cards allowed.');
+        return;
+      }
+      const now = Date.now();
+      await addDoc(collection(db, 'food_cards'), {
+        title: title.trim(),
+        image: imageUrl.trim(),
+        restaurantName: restaurantName.trim(),
+        price: total,
+        splitPrice: split,
+        location: location.trim() || null,
+        createdAt: serverTimestamp(),
+        expiresAt: now + 45 * 60 * 1000,
+        status: 'waiting',
+        user1: null,
+        user2: null,
+      });
+      setTitle('');
+      setRestaurantName('');
+      setPrice('');
+      setSplitPrice('');
+      setLocation('');
+      setImageUrl('');
+      fetchMetrics();
+      Alert.alert('Saved', 'Food card created successfully.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not save card');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Sign in to continue.</Text>
-          <Text style={styles.hint} onPress={() => router.back()}>
+          <Text style={styles.link} onPress={() => router.back()}>
             Go back
           </Text>
         </View>
@@ -168,9 +275,7 @@ export default function AdminScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Access denied</Text>
-          <Text style={styles.hint}>
-            You do not have permission to view this page.
-          </Text>
+          <Text style={styles.hint}>You do not have permission to view this page.</Text>
           <Text style={styles.link} onPress={() => router.back()}>
             Go back
           </Text>
@@ -184,7 +289,7 @@ export default function AdminScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading dashboard...</Text>
+          <Text style={styles.loadingText}>Loading admin...</Text>
         </View>
       </SafeAreaView>
     );
@@ -195,11 +300,7 @@ export default function AdminScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
         }
       >
         <Text style={styles.title}>Admin Dashboard</Text>
@@ -210,129 +311,46 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Create Food Card</Text>
+          <TouchableOpacity style={styles.imageButton} onPress={pickImage} disabled={uploading}>
+            <Text style={styles.imageButtonText}>{uploading ? 'Uploading...' : 'Upload Image'}</Text>
+          </TouchableOpacity>
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.preview} /> : null}
+          <TextInput style={styles.input} placeholder="Title" placeholderTextColor={COLORS.textMuted} value={title} onChangeText={setTitle} />
+          <TextInput style={styles.input} placeholder="Restaurant Name" placeholderTextColor={COLORS.textMuted} value={restaurantName} onChangeText={setRestaurantName} />
+          <TextInput style={styles.input} placeholder="Total Price" placeholderTextColor={COLORS.textMuted} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+          <TextInput style={styles.input} placeholder="Split Price" placeholderTextColor={COLORS.textMuted} value={splitPrice} onChangeText={setSplitPrice} keyboardType="decimal-pad" />
+          <TextInput style={styles.input} placeholder="Location" placeholderTextColor={COLORS.textMuted} value={location} onChangeText={setLocation} />
+          <TouchableOpacity style={styles.saveBtn} onPress={onSaveCard} disabled={saving}>
+            <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Card'}</Text>
+          </TouchableOpacity>
+        </View>
+
         {metrics ? (
           <View style={styles.cards}>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Total Users</Text>
-              <Text style={styles.cardValue}>{metrics.totalUsers}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Total Orders</Text>
-              <Text style={styles.cardValue}>{metrics.totalOrders}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Orders Today</Text>
-              <Text style={styles.cardValue}>{metrics.ordersToday}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Orders This Week</Text>
-              <Text style={styles.cardValue}>{metrics.ordersThisWeek}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Active Users (this week)</Text>
-              <Text style={styles.cardValue}>{metrics.activeUsers}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Average Order Price</Text>
-              <Text style={styles.cardValue}>
-                ${metrics.averageOrderPrice.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Active Cards</Text>
-              <Text style={styles.cardValue}>{metrics.activeCards}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Total Matches</Text>
-              <Text style={styles.cardValue}>{metrics.totalMatches}</Text>
-            </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Completed Orders</Text>
-              <Text style={styles.cardValue}>{metrics.completedOrders}</Text>
-            </View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Total Users</Text><Text style={styles.cardValue}>{metrics.totalUsers}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Total Orders</Text><Text style={styles.cardValue}>{metrics.totalOrders}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Orders Today</Text><Text style={styles.cardValue}>{metrics.ordersToday}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Orders This Week</Text><Text style={styles.cardValue}>{metrics.ordersThisWeek}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Active Users (this week)</Text><Text style={styles.cardValue}>{metrics.activeUsers}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Average Order Price</Text><Text style={styles.cardValue}>${metrics.averageOrderPrice.toFixed(2)}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Active Cards</Text><Text style={styles.cardValue}>{metrics.activeCards}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Total Matches</Text><Text style={styles.cardValue}>{metrics.totalMatches}</Text></View>
+            <View style={styles.card}><Text style={styles.cardLabel}>Completed Orders</Text><Text style={styles.cardValue}>{metrics.completedOrders}</Text></View>
           </View>
         ) : null}
 
         <View style={styles.navSection}>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>Manage Food Cards</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin/dashboard')}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin/dashboard')} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>Dashboard</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin-users')}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-users')} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>Manage Users</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin-reports')}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-reports')} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>User Reports (UGC)</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin-orders')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>Manage Orders</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin-notifications')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>Send Notifications</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin/notifications')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>Notification Tracking</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin/complaints')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>User Complaints</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin/map')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>Activity Map</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/admin/broadcast')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.navButtonText}>Broadcast</Text>
-          </TouchableOpacity>
-          {__DEV__ ? (
-            <TouchableOpacity
-              style={styles.navButton}
-              onPress={() => router.push('/admin/test-order-flow')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.navButtonText}>Developer tools</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -340,81 +358,52 @@ export default function AdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
+  container: { flex: 1, backgroundColor: COLORS.background },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  title: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: 20, textAlign: 'center' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
+  accessDenied: { fontSize: 18, fontWeight: '600', color: COLORS.error, marginBottom: 8, textAlign: 'center' },
+  hint: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', marginBottom: 16 },
+  link: { fontSize: 16, color: COLORS.primary, fontWeight: '600' },
+  loadingText: { marginTop: 12, fontSize: 14, color: COLORS.textMuted },
+  errorBox: { backgroundColor: COLORS.dangerBg, padding: 12, borderRadius: 8, marginBottom: 16 },
+  errorText: { color: COLORS.error, fontSize: 14 },
+  cards: { gap: 12 },
+  card: { ...adminCardShell, marginBottom: 12 },
+  cardLabel: { fontSize: 13, color: COLORS.textMuted, marginBottom: 4 },
+  cardValue: { fontSize: 22, fontWeight: '700', color: COLORS.text },
+  imageButton: {
+    height: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#34D399',
     alignItems: 'center',
-    padding: 24,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  accessDenied: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.error,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  hint: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  link: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: COLORS.textMuted,
-  },
-  errorBox: {
-    backgroundColor: COLORS.dangerBg,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-  },
-  cards: {
-    gap: 12,
-  },
-  card: {
-    ...adminCardShell,
+    justifyContent: 'center',
     marginBottom: 12,
   },
-  cardLabel: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginBottom: 4,
+  imageButtonText: { color: '#A7F3D0', fontWeight: '700' },
+  preview: { width: '100%', height: 180, borderRadius: 14, marginBottom: 12 },
+  input: {
+    backgroundColor: '#11161F',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    color: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
   },
-  cardValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.text,
+  saveBtn: {
+    marginTop: 6,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  navSection: {
-    marginTop: 24,
-    gap: 12,
-  },
+  saveText: { color: '#07241A', fontWeight: '800' },
+  navSection: { marginTop: 24, gap: 12 },
   navButton: {
     backgroundColor: COLORS.primary,
     paddingVertical: 16,
@@ -425,9 +414,5 @@ const styles = StyleSheet.create({
     minHeight: theme.spacing.touchMin,
     marginBottom: 12,
   },
-  navButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
+  navButtonText: { fontSize: 16, fontWeight: '600', color: COLORS.text },
 });
