@@ -75,6 +75,14 @@ function RootLayoutNav() {
     status: string;
     items: string;
   } | null>(null);
+  const latestOrdersRef = useRef<
+    Array<{
+      orderId: string;
+      status: string;
+      items: string;
+      createdAt: string;
+    }>
+  >([]);
   const orderStateCacheRef = useRef<Record<string, { status: string; participants: number }>>({});
   const tidioOrderEventSentRef = useRef<Set<string>>(new Set());
 
@@ -98,7 +106,7 @@ function RootLayoutNav() {
           baseRef,
           where('userId', '==', uid),
           orderBy('createdAt', 'desc'),
-          limit(1),
+          limit(3),
         );
         let snapshot = await getDocs(q);
 
@@ -109,31 +117,50 @@ function RootLayoutNav() {
 
         if (snapshot.empty) {
           latestOrderRef.current = null;
+          latestOrdersRef.current = [];
           return;
         }
 
-        const docSnap = snapshot.docs[0];
-        const data = (docSnap.data() ?? {}) as DocumentData;
-        const status =
-          typeof data.status === 'string' && data.status.trim()
-            ? data.status.trim()
-            : 'unknown';
-        const itemsSource =
-          typeof data.itemsSummary === 'string'
-            ? data.itemsSummary
-            : typeof data.restaurantName === 'string'
-              ? data.restaurantName
-              : typeof data.mealType === 'string'
-                ? data.mealType
-                : '';
-        latestOrderRef.current = {
-          orderId: docSnap.id,
-          status,
-          items: itemsSource.trim() || 'meal item',
-        };
+        const mapped = snapshot.docs.slice(0, 3).map((docSnap) => {
+          const data = (docSnap.data() ?? {}) as DocumentData;
+          const status =
+            typeof data.status === 'string' && data.status.trim()
+              ? data.status.trim()
+              : 'unknown';
+          const itemsSource =
+            typeof data.itemsSummary === 'string'
+              ? data.itemsSummary
+              : typeof data.restaurantName === 'string'
+                ? data.restaurantName
+                : typeof data.mealType === 'string'
+                  ? data.mealType
+                  : '';
+          const createdAtValue = data.createdAt;
+          let createdAt = 'unknown';
+          if (
+            createdAtValue &&
+            typeof createdAtValue === 'object' &&
+            'toDate' in createdAtValue &&
+            typeof (createdAtValue as { toDate: () => Date }).toDate === 'function'
+          ) {
+            createdAt = (createdAtValue as { toDate: () => Date }).toDate().toISOString();
+          } else if (typeof createdAtValue === 'string') {
+            createdAt = createdAtValue;
+          }
+          return {
+            orderId: docSnap.id,
+            status,
+            items: itemsSource.trim() || 'meal item',
+            createdAt,
+          };
+        });
+
+        latestOrdersRef.current = mapped;
+        latestOrderRef.current = mapped[0] ?? null;
       } catch (error) {
         console.warn('[Tidio] failed loading latest order:', error);
         latestOrderRef.current = null;
+        latestOrdersRef.current = [];
       }
     };
 
@@ -322,12 +349,31 @@ function RootLayoutNav() {
     ] as const;
     const AI_ENDPOINT =
       process.env.EXPO_PUBLIC_SUPPORT_AI_ENDPOINT || 'http://localhost:3000/ai-support-reply';
+    const buildUserContext = (): string => {
+      const sessionUser = currentUserRef.current;
+      const userName = sessionUser?.displayName?.trim() || 'User';
+      const userEmail = sessionUser?.email?.trim() || 'noemail@example.com';
+      const orders = latestOrdersRef.current;
+      const ordersBlock =
+        orders.length > 0
+          ? orders
+              .map(
+                (o) =>
+                  `#${o.orderId} - ${o.status} - ${o.items} (createdAt: ${o.createdAt})`,
+              )
+              .join('\n')
+          : 'You don’t have any active orders yet';
+      return `User info:\nName: ${userName}\nEmail: ${userEmail}\n\nOrders:\n${ordersBlock}`;
+    };
     const requestAiReply = async (message: string): Promise<string | null> => {
       try {
         const response = await fetch(AI_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({
+            message,
+            userContext: buildUserContext(),
+          }),
         });
         if (!response.ok) return null;
         const json = (await response.json()) as { aiResponse?: unknown };

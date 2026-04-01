@@ -2,9 +2,11 @@ import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
-import { Image } from 'expo-image';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import {
   collection,
   getDocs,
@@ -15,8 +17,6 @@ import {
   where,
   type Timestamp,
 } from 'firebase/firestore';
-import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,8 +27,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
-import { runTapScale } from '@/utils/motion';
 
 const ACCENT = '#34D399';
 const D = {
