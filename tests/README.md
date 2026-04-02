@@ -20,9 +20,9 @@
 
 ### What the test does
 
-1. **User A** creates an order in the `orders` collection with `status: "open"`, `participantIds: [userA]`, `maxPeople: 3`.
+1. **User A** creates an order in the `orders` collection with `status: "open"`, `participants: [userA]`, `maxPeople: 3`.
 2. Fetches the order from Firestore and asserts initial state.
 3. **User B** joins using the same transaction logic as `joinOrderWithTransaction` (status must be `"open"`, then `arrayUnion(userB)` and status stays `"open"` until full).
-4. Asserts: `participantIds.length === 2`, both users included, `status === "open"` (since 2 < 3).
+4. Asserts: `participants.length === 2`, both users included, `status === "open"` (since 2 < 3).
 
 If the emulator is not running, the test fails after ~8s with a message asking you to start it.

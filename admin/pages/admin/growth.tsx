@@ -133,10 +133,7 @@ export default function GrowthPage() {
         ordersSnap.docs.forEach((d) => {
           const data = d.data();
           const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
-          const participants = (data?.participants ??
-            data?.participantIds ??
-            data?.joinedUsers ??
-            []) as string[];
+          const participants = (data?.participants ?? []) as string[];
           const all = hostId ? [hostId, ...participants] : participants;
           if (all.some((id: string) => referredIds.has(id)))
             ordersFromReferrals += 1;

@@ -21,8 +21,6 @@ type RawOrder = {
   id: string;
   createdAt?: { toMillis?: () => number };
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
   hostId?: string;
   creatorId?: string;
   userId?: string;
@@ -47,8 +45,8 @@ function getOrderCreatedAt(o: RawOrder): number {
   return 0;
 }
 
-function getOrderParticipantIds(o: RawOrder): string[] {
-  const ids = (o.participants ?? o.participantIds ?? o.joinedUsers ?? []) as string[];
+function getOrderParticipants(o: RawOrder): string[] {
+  const ids = (o.participants ?? []) as string[];
   const host = (o.hostId ?? o.creatorId ?? o.userId) as string | undefined;
   if (host && !ids.includes(host)) return [host, ...ids];
   return [...ids];
@@ -124,20 +122,20 @@ export default function InvestorPage() {
       .filter((x) => x.createdAt > 0);
     const totalOrders = ordersWithTime.length;
     const matchedOrders = ordersWithTime.filter(
-      ({ order }) => getOrderParticipantIds(order).length >= 2,
+      ({ order }) => getOrderParticipants(order).length >= 2,
     ).length;
     const matchRate = totalOrders > 0 ? (matchedOrders / totalOrders) * 100 : 0;
 
     const dauSet = new Set<string>();
     ordersWithTime.forEach(({ order, createdAt }) => {
       if (createdAt >= todayStartMs)
-        getOrderParticipantIds(order).forEach((id) => dauSet.add(id));
+        getOrderParticipants(order).forEach((id) => dauSet.add(id));
     });
     const dailyActiveUsers = dauSet.size;
 
     const userOrderCount: Record<string, number> = {};
     ordersWithTime.forEach(({ order }) => {
-      getOrderParticipantIds(order).forEach((uid) => {
+      getOrderParticipants(order).forEach((uid) => {
         userOrderCount[uid] = (userOrderCount[uid] ?? 0) + 1;
       });
     });
@@ -202,7 +200,7 @@ export default function InvestorPage() {
       const k = new Date(createdAt).toISOString().slice(0, 10);
       if (matchByDay[k]) {
         matchByDay[k].total += 1;
-        if (getOrderParticipantIds(order).length >= 2)
+        if (getOrderParticipants(order).length >= 2)
           matchByDay[k].matched += 1;
       }
     });

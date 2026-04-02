@@ -66,10 +66,8 @@ export default async function handler(
       const data = d.data();
       const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
       if (hostId) activeOrderUserIds.add(hostId);
-      const ids =
-        data?.participants ?? data?.participantIds ?? data?.joinedUsers ?? [];
-      if (Array.isArray(ids))
-        ids.forEach((id: string) => activeOrderUserIds.add(id));
+      const ids = Array.isArray(data?.participants) ? data.participants : [];
+      ids.forEach((id: string) => activeOrderUserIds.add(id));
     });
 
     const users: UserRow[] = [];

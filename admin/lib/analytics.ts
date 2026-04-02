@@ -6,8 +6,6 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 type RawOrder = Record<string, unknown> & {
   createdAt?: { toMillis?: () => number };
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
   hostId?: string;
   creatorId?: string;
   userId?: string;
@@ -45,11 +43,8 @@ function getOrderPrice(order: RawOrder): number | null {
   return typeof p === 'number' ? p : null;
 }
 
-function getOrderParticipantIds(order: RawOrder): string[] {
-  const ids = (order.participants ??
-    order.participantIds ??
-    order.joinedUsers ??
-    []) as string[];
+function getOrderParticipants(order: RawOrder): string[] {
+  const ids = (order.participants ?? []) as string[];
   const host = (order.hostId ?? order.creatorId ?? order.userId) as
     | string
     | undefined;
@@ -126,13 +121,13 @@ export async function computeInvestorMetrics(): Promise<InvestorReportMetrics> {
 
   ordersWithTime.forEach(({ order, createdAt }) => {
     if (createdAt >= sevenDaysAgo)
-      getOrderParticipantIds(order).forEach((uid) => activeUserIds.add(uid));
+      getOrderParticipants(order).forEach((uid) => activeUserIds.add(uid));
     if (createdAt >= fourteenDaysAgo && createdAt < sevenDaysAgo) {
-      getOrderParticipantIds(order).forEach((uid) =>
+      getOrderParticipants(order).forEach((uid) =>
         activeUserIdsPreviousWeek.add(uid),
       );
     }
-    const ids = getOrderParticipantIds(order);
+    const ids = getOrderParticipants(order);
     if (ids.length > 1) matchedOrders += 1;
     ids.forEach((uid) => {
       if (!userOrderCount[uid]) userOrderCount[uid] = { total: 0, joined: 0 };

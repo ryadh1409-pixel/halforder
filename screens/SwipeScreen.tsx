@@ -53,6 +53,7 @@ import {
 } from '@/constants/mockSwipeFood';
 import { haversineDistanceKm } from '@/lib/haversine';
 import { acceptFoodSwipe } from '@/services/foodSwipeMatch';
+import { ensureOrderChatInitialized } from '@/services/chat';
 import { auth, db } from '@/services/firebase';
 import { getCityFromCoordinates, getUserLocationSafe } from '@/services/location';
 
@@ -460,64 +461,7 @@ function SwipeScreenInner() {
           return;
         }
 
-        const users = [currentUser.uid, swipeResult.partnerUid].sort();
-        const currentUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        const currentUserData = currentUserDoc.data() ?? {};
-        const currentUserName =
-          (typeof currentUserData.name === 'string' && currentUserData.name.trim()) ||
-          (typeof currentUserData.displayName === 'string' &&
-            currentUserData.displayName.trim()) ||
-          currentUser.displayName ||
-          currentUser.email?.split('@')[0] ||
-          'User';
-        const currentUserAvatar =
-          (typeof currentUserData.avatar === 'string' && currentUserData.avatar.trim()) ||
-          (typeof currentUserData.photoURL === 'string' &&
-            currentUserData.photoURL.trim()) ||
-          currentUser.photoURL ||
-          null;
-        const existingChatQ = query(
-          collection(db, 'chats'),
-          where('orderId', '==', order.id),
-          where('users', 'array-contains', currentUser.uid),
-          limit(10),
-        );
-        const existingChatSnap = await getDocs(existingChatQ);
-        const existingChat = existingChatSnap.docs.find((d) => {
-          const data = d.data();
-          const docUsers = Array.isArray(data?.users) ? (data.users as string[]) : [];
-          return users.every((u) => docUsers.includes(u));
-        });
-
-        if (!existingChat) {
-          const initialText = '🎉 You are in a shared order — you can chat now.';
-          const chatRef = await addDoc(collection(db, 'chats'), {
-            orderId: order.id,
-            users,
-            participants: users,
-            usersData: [
-              {
-                uid: currentUser.uid,
-                name: currentUserName,
-                avatar: currentUserAvatar,
-              },
-              {
-                uid: order.createdBy,
-                name: order.userName || 'User',
-                avatar: order.userAvatar || null,
-              },
-            ],
-            lastMessage: initialText,
-            lastMessageAt: serverTimestamp(),
-            unreadCount: 0,
-            createdAt: serverTimestamp(),
-          });
-          await addDoc(collection(db, 'chats', chatRef.id, 'messages'), {
-            text: initialText,
-            system: true,
-            createdAt: serverTimestamp(),
-          });
-        }
+        await ensureOrderChatInitialized(order.id);
         Notifications.scheduleNotificationAsync({
           content: {
             title: '🎉 Shared order',

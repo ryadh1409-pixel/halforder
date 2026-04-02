@@ -1,48 +1,40 @@
 import { db } from '@/services/firebase';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 /**
- * Chat ID for an order: orderId + "_" + sorted participant IDs (deterministic).
+ * Order chat initializer.
+ *
+ * Order chat lives exclusively under:
+ * `orders/{orderId}/messages`
+ *
+ * This function intentionally depends on `orderId` only (no `participants`
+ * parameter) and lets Firestore security rules enforce membership.
  */
-export function getChatIdForOrder(
+export async function ensureOrderChatInitialized(
   orderId: string,
-  participantIds: string[],
-): string {
-  const sorted = [...participantIds].filter(Boolean).sort();
-  return `${orderId}_${sorted.join('_')}`;
-}
+): Promise<void> {
+  const trimmed = orderId.trim();
+  if (!trimmed) return;
 
-export type Chat = {
-  chatId: string;
-  participants: string[];
-  orderId: string;
-  lastMessage?: string;
-  updatedAt: unknown;
-};
+  const existingQ = query(
+    collection(db, 'orders', trimmed, 'messages'),
+    limit(1),
+  );
+  const existing = await getDocs(existingQ);
+  if (!existing.empty) return;
 
-/**
- * Ensure a chat document exists for this order and participants. Creates it if missing.
- * Call when order has 2 participants (matched).
- */
-/**
- * Ensure a chat document exists. Creates it if missing.
- */
-export async function getOrCreateChat(
-  orderId: string,
-  participantIds: string[],
-): Promise<string> {
-  if (participantIds.length < 2)
-    throw new Error('Need at least 2 participants');
-  const chatId = getChatIdForOrder(orderId, participantIds);
-  const chatRef = doc(db, 'chats', chatId);
-  const snap = await getDoc(chatRef);
-  if (snap.exists()) return chatId;
-  await setDoc(chatRef, {
-    chatId,
-    participants: participantIds,
-    orderId,
-    lastMessage: '',
-    updatedAt: serverTimestamp(),
+  await addDoc(collection(db, 'orders', trimmed, 'messages'), {
+    text: 'You both joined this order 🍕',
+    senderId: 'system',
+    senderName: 'System',
+    type: 'system',
+    createdAt: serverTimestamp(),
   });
-  return chatId;
 }

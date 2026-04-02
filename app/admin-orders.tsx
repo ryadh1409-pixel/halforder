@@ -63,9 +63,8 @@ export default function AdminOrdersScreen() {
             : typeof createdAt?.seconds === 'number'
               ? createdAt.seconds * 1000
               : 0;
-        const rawList =
-          data?.participants ?? data?.participantIds ?? data?.joinedUsers;
-        const participantIds = Array.isArray(rawList)
+        const rawList = data?.participants;
+        const participantsList = Array.isArray(rawList)
           ? rawList.filter((x): x is string => typeof x === 'string')
           : [];
         list.push({
@@ -77,7 +76,7 @@ export default function AdminOrdersScreen() {
           creatorEmail: (emailByUid[creatorId] ?? creatorId) || '—',
           createdAt: ms ? new Date(ms).toLocaleString() : '—',
           status: typeof data?.status === 'string' ? data.status : '—',
-          participants: participantIds.length,
+          participants: participantsList.length,
         });
       });
       list.sort((a, b) =>

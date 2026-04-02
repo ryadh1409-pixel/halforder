@@ -23,8 +23,6 @@ type RawOrder = {
   hostId?: string;
   creatorId?: string;
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
   restaurantName?: string;
   restaurant?: string;
   totalPrice?: number;
@@ -68,9 +66,8 @@ function getOrderPrice(order: RawOrder): number | null {
   return typeof p === 'number' ? p : null;
 }
 
-function getOrderParticipantIds(order: RawOrder): string[] {
-  const ids =
-    order.participants ?? order.participantIds ?? order.joinedUsers ?? [];
+function getOrderParticipants(order: RawOrder): string[] {
+  const ids = (order.participants ?? []) as string[];
   const host = order.hostId ?? order.creatorId ?? order.userId;
   if (host && !ids.includes(host)) return [host, ...ids];
   return Array.isArray(ids) ? [...ids] : [];
@@ -160,13 +157,13 @@ export default function AnalyticsPage() {
 
     ordersWithTime.forEach(({ order, createdAt }) => {
       if (createdAt >= SEVEN_DAYS_AGO)
-        getOrderParticipantIds(order).forEach((uid) => activeUserIds.add(uid));
+        getOrderParticipants(order).forEach((uid) => activeUserIds.add(uid));
       if (createdAt >= FOURTEEN_DAYS_AGO && createdAt < SEVEN_DAYS_AGO) {
-        getOrderParticipantIds(order).forEach((uid) =>
+        getOrderParticipants(order).forEach((uid) =>
           activeUserIdsPrevWeek.add(uid),
         );
       }
-      const ids = getOrderParticipantIds(order);
+      const ids = getOrderParticipants(order);
       if (ids.length >= 2) matchedOrders += 1;
       ids.forEach((uid) => {
         if (!userOrderCount[uid])
@@ -262,7 +259,7 @@ export default function AnalyticsPage() {
       const key = new Date(createdAt).toISOString().slice(0, 10);
       if (matchByDay[key]) {
         matchByDay[key].total += 1;
-        if (getOrderParticipantIds(order).length >= 2)
+        if (getOrderParticipants(order).length >= 2)
           matchByDay[key].matched += 1;
       }
     });
@@ -301,7 +298,7 @@ export default function AnalyticsPage() {
 
     const ordersList = ordersWithTime
       .map(({ order, createdAt }) => {
-        const ids = getOrderParticipantIds(order);
+        const ids = getOrderParticipants(order);
         const hostId = order.hostId ?? order.creatorId ?? order.userId;
         const host = hostId ? userById.get(hostId) : null;
         return {

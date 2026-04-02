@@ -23,8 +23,6 @@ type RawOrder = {
   creatorId?: string;
   userId?: string;
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
   latitude?: number;
   longitude?: number;
   location?: { latitude?: number; longitude?: number };
@@ -68,11 +66,8 @@ function getOrderCreatedAt(o: RawOrder): number {
   return c && typeof c.toMillis === 'function' ? c.toMillis() : 0;
 }
 
-function getOrderParticipantIds(o: RawOrder): string[] {
-  const ids = (o.participants ??
-    o.participantIds ??
-    o.joinedUsers ??
-    []) as string[];
+function getOrderParticipants(o: RawOrder): string[] {
+  const ids = (o.participants ?? []) as string[];
   const host = (o.hostId ?? o.creatorId ?? o.userId) as string | undefined;
   if (host && !ids.includes(host)) return [host, ...ids];
   return [...ids];
@@ -192,7 +187,7 @@ export default function FounderPage() {
       (x) => x.createdAt >= todayStartMs,
     ).length;
     const matchedOrders = ordersWithTime.filter(
-      ({ order }) => getOrderParticipantIds(order).length >= 2,
+      ({ order }) => getOrderParticipants(order).length >= 2,
     ).length;
     const totalOrders = ordersWithTime.length;
     const matchRate = totalOrders > 0 ? (matchedOrders / totalOrders) * 100 : 0;
@@ -270,8 +265,6 @@ export default function FounderPage() {
         location: o.location,
         status: (o as RawOrder & { status?: string }).status,
         participants: o.participants,
-        participantIds: o.participantIds,
-        joinedUsers: o.joinedUsers,
       }));
       const { ordersCreated, matchesCreated } = countOrdersAndMatchesInRadius(
         ordersForStats,

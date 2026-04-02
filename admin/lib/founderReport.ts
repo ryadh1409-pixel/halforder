@@ -12,8 +12,6 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 type RawOrder = Record<string, unknown> & {
   createdAt?: { toMillis?: () => number };
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
   hostId?: string;
   creatorId?: string;
   userId?: string;
@@ -37,11 +35,8 @@ function getOrderRestaurant(order: RawOrder): string {
   return String(name).trim() || '—';
 }
 
-function getOrderParticipantIds(order: RawOrder): string[] {
-  const ids = (order.participants ??
-    order.participantIds ??
-    order.joinedUsers ??
-    []) as string[];
+function getOrderParticipants(order: RawOrder): string[] {
+  const ids = Array.isArray(order.participants) ? order.participants : [];
   const host = (order.hostId ?? order.creatorId ?? order.userId) as
     | string
     | undefined;
@@ -121,8 +116,8 @@ export async function runFounderReport(): Promise<FounderReportPayload> {
 
   ordersWithTime.forEach(({ order, createdAt }) => {
     if (createdAt >= last7d)
-      getOrderParticipantIds(order).forEach((uid) => activeUserIds7d.add(uid));
-    const ids = getOrderParticipantIds(order);
+      getOrderParticipants(order).forEach((uid) => activeUserIds7d.add(uid));
+    const ids = getOrderParticipants(order);
     if (ids.length > 1) matchedOrders += 1;
     const rest = getOrderRestaurant(order);
     restaurantCount[rest] = (restaurantCount[rest] || 0) + 1;

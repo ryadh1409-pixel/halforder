@@ -10,8 +10,6 @@ export type OrderForStats = {
   location?: { latitude?: number; longitude?: number };
   status?: string;
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
 };
 
 export function getOrderLatLng(
@@ -45,8 +43,9 @@ export function countOrdersAndMatchesInRadius(
     );
     if (dist > RADIUS_KM) continue;
     ordersCreated += 1;
-    const participants =
-      order.participants ?? order.participantIds ?? order.joinedUsers ?? [];
+    const participants = Array.isArray(order.participants)
+      ? order.participants
+      : [];
     const isMatch = order.status === 'matched' || participants.length >= 2;
     if (isMatch) matchesCreated += 1;
   }

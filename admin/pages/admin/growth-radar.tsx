@@ -26,8 +26,6 @@ type RawOrder = {
   creatorId?: string;
   userId?: string;
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
   restaurantName?: string;
   restaurant?: string;
   latitude?: number;
@@ -45,8 +43,8 @@ function getOrderRestaurant(o: RawOrder): string {
   return (o.restaurantName ?? o.restaurant ?? '—').toString().trim() || '—';
 }
 
-function getOrderParticipantIds(o: RawOrder): string[] {
-  const ids = (o.participants ?? o.participantIds ?? o.joinedUsers ?? []) as string[];
+function getOrderParticipants(o: RawOrder): string[] {
+  const ids = (o.participants ?? []) as string[];
   const host = (o.hostId ?? o.creatorId ?? o.userId) as string | undefined;
   if (host && !ids.includes(host)) return [host, ...ids];
   return [...ids];
@@ -105,7 +103,7 @@ export default function GrowthRadarPage() {
       if (!ll) return;
       const key = getGridKey(ll.lat, ll.lng);
       locationTotal[key] = (locationTotal[key] ?? 0) + 1;
-      const isMatched = getOrderParticipantIds(order).length >= 2;
+      const isMatched = getOrderParticipants(order).length >= 2;
       if (isMatched) locationMatched[key] = (locationMatched[key] ?? 0) + 1;
       if (createdAt >= last7Start)
         locationLast7[key] = (locationLast7[key] ?? 0) + 1;
@@ -147,7 +145,7 @@ export default function GrowthRadarPage() {
     ordersWithTime.forEach(({ order }) => {
       const name = getOrderRestaurant(order);
       restTotal[name] = (restTotal[name] ?? 0) + 1;
-      if (getOrderParticipantIds(order).length >= 2)
+      if (getOrderParticipants(order).length >= 2)
         restMatched[name] = (restMatched[name] ?? 0) + 1;
     });
     const topRestaurants = Object.entries(restTotal)

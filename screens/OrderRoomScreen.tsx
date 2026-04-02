@@ -61,7 +61,7 @@ import { checkTaxGift } from '@/services/taxGift';
 import { auth, db } from '@/services/firebase';
 import { isUserBlocked } from '@/services/block';
 import { trackOrderJoined } from '@/services/analytics';
-import { getOrCreateChat } from '@/services/chat';
+import { ensureOrderChatInitialized } from '@/services/chat';
 import {
   ORDER_JOIN_WINDOW_MS,
   ensureParticipantRecordForUid,
@@ -162,7 +162,7 @@ export default function OrderRoomScreen() {
   const [completedOrderAlreadyRated, setCompletedOrderAlreadyRated] = useState<
     boolean | null
   >(null);
-  const [chatId, setChatId] = useState<string | null>(null);
+  // Order chat messages are stored under `orders/{orderId}/messages`.
   const [incomingCall, setIncomingCall] = useState<{
     callId: string;
     callerId: string;
@@ -389,22 +389,11 @@ export default function OrderRoomScreen() {
     return () => unsubscribe();
   }, [order?.hostId, order?.userId, order?.userName]);
 
-  // Ensure chat exists when order has 2 participants
+  // Ensure order chat is initialized (writes only to `orders/{orderId}/messages`).
   useEffect(() => {
-    if (!orderId || !canChat || participants.length < 2) {
-      setChatId(null);
-      return;
-    }
-    let cancelled = false;
-    getOrCreateChat(orderId, participants)
-      .then((id) => {
-        if (!cancelled) setChatId(id);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [orderId, canChat, participants.join(',')]);
+    if (!orderId || !canChat) return;
+    void ensureOrderChatInitialized(orderId).catch(() => {});
+  }, [orderId, canChat]);
 
   // Real-time messages from orders/{orderId}/messages (updates instantly across devices)
   useEffect(() => {
@@ -1368,10 +1357,7 @@ export default function OrderRoomScreen() {
           user2Name: displayName,
         },
       );
-      const newMembers = [...(order?.participants ?? []), uid].filter(Boolean);
-      if (newMembers.length >= 2) {
-        getOrCreateChat(orderId, newMembers).catch(() => {});
-      }
+      // Order chat is stored under `orders/{orderId}/messages` (no `chats` doc).
       const { createAlert } = await import('@/services/alerts');
       await createAlert('order_matched', 'Order matched');
       const { incrementGrowthMatches } =
@@ -1954,7 +1940,7 @@ export default function OrderRoomScreen() {
         ) : null}
         <FlatList
           ref={flatListRef}
-          key={`chat-${chatId ?? orderId}`}
+          key={`chat-${orderId}`}
           data={messages}
           extraData={messages}
           keyExtractor={(item) => item.id}

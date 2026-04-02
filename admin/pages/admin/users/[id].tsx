@@ -38,15 +38,13 @@ export default function UserDetailPage() {
         const list: OrderRow[] = [];
         ordersSnap.docs.forEach((d) => {
           const data = d.data();
-          const participantIds =
-            data?.participants ??
-            data?.participantIds ??
-            data?.joinedUsers ??
-            [];
+          const participants = Array.isArray(data?.participants)
+            ? data.participants.filter((x: unknown): x is string => typeof x === 'string')
+            : [];
           const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
           const isParticipant =
             hostId === id ||
-            (Array.isArray(participantIds) && participantIds.includes(id));
+            participants.includes(id);
           if (!isParticipant) return;
 
           const created = data?.createdAt?.toMillis?.() ?? data?.createdAt ?? 0;

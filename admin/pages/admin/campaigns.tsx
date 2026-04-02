@@ -51,8 +51,6 @@ type OrderDoc = {
   location?: { latitude?: number; longitude?: number };
   status?: string;
   participants?: string[];
-  participantIds?: string[];
-  joinedUsers?: string[];
 };
 
 function getCreatedAtMs(d: {
@@ -106,8 +104,6 @@ export default function CampaignsPage() {
       location: o.location,
       status: o.status,
       participants: o.participants,
-      participantIds: o.participantIds,
-      joinedUsers: o.joinedUsers,
     }));
   }, [orders]);
 
