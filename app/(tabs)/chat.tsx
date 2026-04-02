@@ -1,4 +1,8 @@
-import { useAuth } from '@/services/AuthContext';
+import {
+  type AssistantOrderSummary,
+  detectFoodIntent,
+  fetchActiveJoinableOrders,
+} from '@/services/chatAssistantOrders';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
@@ -13,18 +17,40 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Message = {
+export type AssistantMessageAction = 'join_order' | 'create_order' | 'none';
+
+export type MessageOrderRef = { id: string; title: string };
+
+export type Message = {
   id: string;
   text: string;
   sender: 'user' | 'bot';
   createdAt?: number;
-  action?: 'join_order' | 'create_order' | 'none';
+  action?: AssistantMessageAction;
+  orders?: MessageOrderRef[];
 };
+
+function toMessageOrders(rows: AssistantOrderSummary[]): MessageOrderRef[] {
+  return rows.map((r) => ({
+    id: r.id,
+    title:
+      [r.restaurantName, r.mealType].filter(Boolean).join(' · ') ||
+      'Order',
+  }));
+}
+
+function buildJoinReply(count: number, orders: MessageOrderRef[]): string {
+  if (count <= 0) return '';
+  if (count === 1) {
+    return `I found a nearby order: ${orders[0]?.title ?? 'order'} — tap to open 🍕`;
+  }
+  return `I found ${count} active orders — tap to browse and join 🍕`;
+}
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,81 +70,96 @@ export default function ChatScreen() {
     });
   };
 
+  const handleJoinOrderAction = (item: Message) => {
+    const orders = item.orders;
+    if (!orders?.length) {
+      router.push({ pathname: '/(tabs)/join' } as never);
+      return;
+    }
+    if (orders.length > 1) {
+      router.push({ pathname: '/(tabs)/join' } as never);
+      return;
+    }
+    router.push({
+      pathname: '/order/[id]',
+      params: { id: orders[0].id },
+    } as never);
+  };
+
+  const handleCreateOrderAction = () => {
+    router.push({ pathname: '/(tabs)/create' } as never);
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
-    const outgoingText = input;
+    const outgoingText = input.trim();
     setError('');
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-u`,
       text: outgoingText,
       sender: 'user',
       createdAt: Date.now(),
+      action: 'none',
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setLoading(true);
 
-    try {
-      const res = await fetch('http://localhost:3000/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: outgoingText,
-          user: {
-            uid: user?.uid ?? '',
-            name: user?.displayName ?? 'User',
-          },
-        }),
-      });
+    let botMessage: Message;
 
-      const data = (await res.json()) as {
-        response?: string;
-        reply?: string;
-        action?: 'join_order' | 'create_order' | 'none';
-        data?: { orderId?: string; items?: string[] };
-      };
-      console.log('AI RESPONSE:', data);
-      const replyText = data.reply ?? data.response ?? 'No response from server';
-
-      const botMessage: Message = {
-        id: Date.now().toString() + '-bot',
-        text: replyText,
+    if (!detectFoodIntent(outgoingText)) {
+      botMessage = {
+        id: `${Date.now()}-b`,
+        text: 'Say you’re hungry, want pizza, or mention food — I’ll look for active orders you can join.',
         sender: 'bot',
         createdAt: Date.now(),
-        action: data.action ?? 'none',
+        action: 'none',
       };
-
       setMessages((prev) => [...prev, botMessage]);
-
-      if (data.action === 'join_order') {
-        console.log('NAVIGATING TO ORDER:', data.data?.orderId);
-
-        router.push({
-          pathname: '/order/[id]',
-          params: { id: data.data?.orderId || 'test123' }
-        } as never);
-      }
-
-      if (data.action === 'create_order') {
-        console.log('NAVIGATING TO CREATE');
-
-        router.push('/create' as never);
-      }
-    } catch {
-      const errorMessage: Message = {
-        id: Date.now().toString() + '-error',
-        text: 'Error connecting to AI',
-        sender: 'bot',
-        createdAt: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, errorMessage]);
-      setError('Could not reach AI server.');
+      return;
     }
 
-    setLoading(false);
+    setLoading(true);
+    try {
+      const fetched = await fetchActiveJoinableOrders(3);
+      const orderRefs = toMessageOrders(fetched);
+
+      if (orderRefs.length > 0) {
+        botMessage = {
+          id: `${Date.now()}-b`,
+          text: buildJoinReply(orderRefs.length, orderRefs),
+          sender: 'bot',
+          createdAt: Date.now(),
+          action: 'join_order',
+          orders: orderRefs,
+        };
+      } else {
+        botMessage = {
+          id: `${Date.now()}-b`,
+          text: 'No open orders nearby. Tap below to create one — others can join you 🍕',
+          sender: 'bot',
+          createdAt: Date.now(),
+          action: 'create_order',
+        };
+      }
+
+      setMessages((prev) => [...prev, botMessage]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-err`,
+          text: 'Could not load orders. Check your connection and try again.',
+          sender: 'bot',
+          createdAt: Date.now(),
+          action: 'none',
+        },
+      ]);
+      setError('Failed to fetch orders.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleMicPress = () => {
@@ -127,76 +168,111 @@ export default function ChatScreen() {
     setTimeout(() => setListening(false), 1500);
   };
 
-  const renderItem = ({ item }: { item: Message }) => (
-    <View
-      style={[
-        styles.message,
-        item.sender === 'user' ? styles.user : styles.bot,
-      ]}
-    >
-      <Text style={styles.text}>{item.text}</Text>
-      {item.action ? (
-        <Text style={{ fontSize: 12, color: 'gray' }}>
-          Action: {item.action}
-        </Text>
-      ) : null}
-      {item.createdAt ? (
-        <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
-      ) : null}
-    </View>
-  );
+  const renderItem = ({ item }: { item: Message }) => {
+    const isUser = item.sender === 'user';
+    const joinable =
+      !isUser && item.action === 'join_order';
+    const creatable =
+      !isUser && item.action === 'create_order';
+
+    const body = (
+      <>
+        {joinable ? (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() => handleJoinOrderAction(item)}
+            style={styles.actionTextTap}
+          >
+            <Text style={styles.text}>{item.text}</Text>
+            <Text style={styles.actionHint}>Join order →</Text>
+          </TouchableOpacity>
+        ) : creatable ? (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={handleCreateOrderAction}
+            style={styles.actionTextTap}
+          >
+            <Text style={styles.text}>{item.text}</Text>
+            <Text style={styles.actionHint}>Create order →</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.text}>{item.text}</Text>
+        )}
+        {item.createdAt ? (
+          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+        ) : null}
+      </>
+    );
+
+    return (
+      <View
+        style={[styles.message, isUser ? styles.user : styles.bot]}
+      >
+        {body}
+      </View>
+    );
+  };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-      />
-
-      {loading ? (
-        <View style={styles.typingRow}>
-          <ActivityIndicator size="small" color="#9CA3AF" />
-          <Text style={styles.typingText}>Typing...</Text>
-        </View>
-      ) : null}
-      {listening ? <Text style={styles.listeningText}>Listening...</Text> : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <View style={styles.inputContainer}>
-        <TouchableOpacity onPress={handleMicPress} style={styles.micButton}>
-          <Text style={styles.micText}>🎤</Text>
-        </TouchableOpacity>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="Type a message..."
-          placeholderTextColor="#8A8A8A"
-          style={styles.input}
-          editable={!loading}
-          onSubmitEditing={sendMessage}
-          returnKeyType="send"
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() =>
+            flatListRef.current?.scrollToEnd({ animated: true })
+          }
+          onLayout={() =>
+            flatListRef.current?.scrollToEnd({ animated: false })
+          }
         />
-        <TouchableOpacity
-          onPress={sendMessage}
-          style={[styles.button, loading && styles.buttonDisabled]}
-          disabled={loading}
-        >
-          <Text style={{ color: '#fff' }}>Send</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+
+        {loading ? (
+          <View style={styles.typingRow}>
+            <ActivityIndicator size="small" color="#9CA3AF" />
+            <Text style={styles.typingText}>Loading orders…</Text>
+          </View>
+        ) : null}
+        {listening ? (
+          <Text style={styles.listeningText}>Listening...</Text>
+        ) : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <View style={styles.inputContainer}>
+          <TouchableOpacity onPress={handleMicPress} style={styles.micButton}>
+            <Text style={styles.micText}>🎤</Text>
+          </TouchableOpacity>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Type a message..."
+            placeholderTextColor="#8A8A8A"
+            style={styles.input}
+            editable={!loading}
+            onSubmitEditing={sendMessage}
+            returnKeyType="send"
+          />
+          <TouchableOpacity
+            onPress={sendMessage}
+            style={[styles.button, loading && styles.buttonDisabled]}
+            disabled={loading}
+          >
+            <Text style={{ color: '#fff' }}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#111' },
   container: { flex: 1, backgroundColor: '#111' },
   messagesContent: { padding: 12, paddingBottom: 20 },
 
@@ -218,6 +294,13 @@ const styles = StyleSheet.create({
   },
 
   text: { color: '#fff' },
+  actionTextTap: { alignSelf: 'stretch' },
+  actionHint: {
+    color: '#6EE7B7',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 6,
+  },
   time: { color: '#B6B6B6', marginTop: 4, fontSize: 11 },
   typingRow: {
     flexDirection: 'row',
