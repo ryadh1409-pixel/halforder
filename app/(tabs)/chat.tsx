@@ -7,9 +7,9 @@ import {
   fetchActiveJoinableOrdersForContext,
 } from '@/services/chatAssistantOrders';
 import {
-  GHOST_JOIN_BOT_COPY,
-  generateGhostOrder,
-} from '@/services/ghostOrder';
+  SUGGESTED_ORDER_BOT_COPY,
+  generateSuggestedOrder,
+} from '@/services/suggestedOrder';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
@@ -31,9 +31,9 @@ export type AssistantMessageAction = 'join_order' | 'create_order' | 'none';
 export type MessageOrderRef = {
   id: string;
   title: string;
-  isGhost?: boolean;
+  isSuggested?: boolean;
   priceSplit?: string;
-  peopleNeeded?: number;
+  mealCategory?: string;
 };
 
 export type Message = {
@@ -71,14 +71,14 @@ function buildIntroSuggestionMessage(
       orders: orderRefs,
     };
   }
-  const ghost = generateGhostOrder(ctx);
+  const suggested = generateSuggestedOrder(ctx);
   return {
     id: ASSISTANT_INTRO_MESSAGE_ID,
-    text: GHOST_JOIN_BOT_COPY,
+    text: SUGGESTED_ORDER_BOT_COPY,
     sender: 'bot',
     createdAt: Date.now(),
     action: 'join_order',
-    orders: [ghost],
+    orders: [suggested],
   };
 }
 
@@ -97,14 +97,14 @@ function buildUserTurnBotMessage(
       orders: orderRefs,
     };
   }
-  const ghost = generateGhostOrder(ctx);
+  const suggested = generateSuggestedOrder(ctx);
   return {
     id: `${Date.now()}-b`,
-    text: GHOST_JOIN_BOT_COPY,
+    text: SUGGESTED_ORDER_BOT_COPY,
     sender: 'bot',
     createdAt: Date.now(),
     action: 'join_order',
-    orders: [ghost],
+    orders: [suggested],
   };
 }
 
@@ -170,13 +170,16 @@ export default function ChatScreen() {
       return;
     }
     const first = orders[0];
-    if (first.isGhost === true) {
+    if (first.isSuggested === true) {
       router.push({
         pathname: '/(tabs)/create',
         params: {
           prefillTitle: first.title,
           prefillPriceSplit: first.priceSplit ?? '$8',
-          fromGhost: '1',
+          fromSuggested: '1',
+          ...(first.mealCategory
+            ? { prefillMealCategory: first.mealCategory }
+            : {}),
         },
       } as never);
       return;
@@ -214,7 +217,7 @@ export default function ChatScreen() {
     if (!detectFoodIntent(outgoingText)) {
       const botMessage: Message = {
         id: `${Date.now()}-b`,
-        text: 'Say you’re hungry, want pizza, or mention food — I’ll look for active orders you can join.',
+        text: 'Mention food or that you’re hungry — I’ll look for open orders you can join, or suggest a template to start your own.',
         sender: 'bot',
         createdAt: Date.now(),
         action: 'none',
@@ -259,6 +262,7 @@ export default function ChatScreen() {
     const creatable =
       !isUser && item.action === 'create_order';
     const primaryOrder = item.orders?.[0];
+    const isSuggestedCard = primaryOrder?.isSuggested === true;
 
     const body = (
       <>
@@ -269,18 +273,21 @@ export default function ChatScreen() {
             style={styles.actionTextTap}
           >
             <Text style={styles.text}>{item.text}</Text>
-            {primaryOrder?.isGhost === true ? (
-              <View style={styles.ghostOrderCard}>
-                <Text style={styles.ghostOrderTitle}>{primaryOrder.title}</Text>
-                <Text style={styles.ghostOrderMeta}>
-                  {primaryOrder.priceSplit ?? ''}
+            {isSuggestedCard && primaryOrder ? (
+              <View style={styles.suggestedOrderCard}>
+                <Text style={styles.suggestedBadge}>Suggested order</Text>
+                <Text style={styles.suggestedOrderTitle}>{primaryOrder.title}</Text>
+                <Text style={styles.suggestedOrderMeta}>
+                  Example share: {primaryOrder.priceSplit ?? ''}
                 </Text>
-                <Text style={styles.ghostWaitingLabel}>
-                  Waiting for 1 more person
+                <Text style={styles.suggestedNote}>
+                  Others can join once you create it
                 </Text>
               </View>
             ) : null}
-            <Text style={styles.actionHint}>Join order →</Text>
+            <Text style={styles.actionHint}>
+              {isSuggestedCard ? 'Start from this template →' : 'Join order →'}
+            </Text>
           </TouchableOpacity>
         ) : creatable ? (
           <TouchableOpacity
@@ -339,7 +346,7 @@ export default function ChatScreen() {
         {loading ? (
           <View style={styles.typingRow}>
             <ActivityIndicator size="small" color="#9CA3AF" />
-            <Text style={styles.typingText}>Loading orders…</Text>
+            <Text style={styles.typingText}>Loading open orders…</Text>
           </View>
         ) : null}
         {listening ? (
@@ -404,7 +411,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 6,
   },
-  ghostOrderCard: {
+  suggestedOrderCard: {
     marginTop: 10,
     padding: 10,
     borderRadius: 8,
@@ -412,21 +419,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  ghostOrderTitle: {
+  suggestedBadge: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  suggestedOrderTitle: {
     color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '700',
   },
-  ghostOrderMeta: {
+  suggestedOrderMeta: {
     color: 'rgba(248,250,252,0.75)',
     fontSize: 13,
     marginTop: 4,
   },
-  ghostWaitingLabel: {
-    color: '#93C5FD',
+  suggestedNote: {
+    color: 'rgba(248,250,252,0.55)',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 8,
+    fontStyle: 'italic',
   },
   time: { color: '#B6B6B6', marginTop: 4, fontSize: 11 },
   typingRow: {

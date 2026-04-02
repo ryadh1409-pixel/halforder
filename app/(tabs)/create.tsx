@@ -3,15 +3,25 @@ import React from 'react';
 import { Text, View } from 'react-native';
 
 export default function CreateTabDisabledScreen() {
-  const { prefillTitle, prefillPriceSplit, fromGhost } = useLocalSearchParams<{
+  const {
+    prefillTitle,
+    prefillPriceSplit,
+    prefillMealCategory,
+    fromSuggested,
+    fromGhost,
+  } = useLocalSearchParams<{
     prefillTitle?: string;
     prefillPriceSplit?: string;
+    prefillMealCategory?: string;
+    fromSuggested?: string;
     fromGhost?: string;
   }>();
 
-  const ghostPrefill = fromGhost === '1' && typeof prefillTitle === 'string';
+  const suggestedPrefill =
+    (fromSuggested === '1' || fromGhost === '1') &&
+    typeof prefillTitle === 'string';
 
-  if (ghostPrefill) {
+  if (suggestedPrefill) {
     const price =
       typeof prefillPriceSplit === 'string' && prefillPriceSplit.trim()
         ? prefillPriceSplit.trim()
@@ -28,13 +38,26 @@ export default function CreateTabDisabledScreen() {
       >
         <Text
           style={{
+            color: '#9CA3AF',
+            fontSize: 12,
+            fontWeight: '700',
+            textAlign: 'center',
+            textTransform: 'uppercase',
+            letterSpacing: 0.8,
+            marginBottom: 8,
+          }}
+        >
+          Suggested order · template only
+        </Text>
+        <Text
+          style={{
             color: '#F8FAFC',
             fontSize: 22,
             fontWeight: '800',
             textAlign: 'center',
           }}
         >
-          Start this split
+          Start from this idea
         </Text>
         <Text
           style={{
@@ -57,6 +80,19 @@ export default function CreateTabDisabledScreen() {
         >
           Target share: {price}
         </Text>
+        {typeof prefillMealCategory === 'string' &&
+        prefillMealCategory.trim() ? (
+          <Text
+            style={{
+              color: 'rgba(248,250,252,0.55)',
+              marginTop: 12,
+              textAlign: 'center',
+              fontSize: 14,
+            }}
+          >
+            Time of day: {prefillMealCategory}
+          </Text>
+        ) : null}
         <Text
           style={{
             color: 'rgba(248,250,252,0.65)',
@@ -65,8 +101,8 @@ export default function CreateTabDisabledScreen() {
             lineHeight: 22,
           }}
         >
-          Open Swipe and join a food card — we prefilled this idea from chat so you
-          can match faster.
+          This is a suggestion — not another user’s order. Open Swipe to join real
+          food cards; others can join after you start.
         </Text>
       </View>
     );

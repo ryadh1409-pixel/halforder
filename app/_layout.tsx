@@ -237,13 +237,19 @@ function RootLayoutNav() {
           };
 
           if (prev.status !== 'matched' && status === 'matched') {
-            emitOnce(`${orderId}:matched`, '🎉 Your order has been matched! Someone joined your order!');
+            emitOnce(
+              `${orderId}:matched`,
+              '🎉 Your order was matched. Another participant joined this shared order.',
+            );
           }
           if (prev.status !== 'completed' && status === 'completed') {
             emitOnce(`${orderId}:completed`, '✅ Your order is completed 🍕');
           }
           if (participantsCount > prev.participants && status === 'pending') {
-            emitOnce(`${orderId}:join-request`, '👀 Someone wants to join your order');
+            emitOnce(
+              `${orderId}:join-request`,
+              '👀 A user is trying to join your order.',
+            );
           }
         });
       },

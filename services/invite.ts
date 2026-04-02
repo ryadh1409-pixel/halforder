@@ -7,7 +7,7 @@ export async function inviteFriend(
   inviterName: string,
 ): Promise<string> {
   const trimmedEmail = email.trim();
-  const trimmedName = inviterName.trim() || 'Someone';
+  const trimmedName = inviterName.trim() || 'User';
   if (!trimmedEmail || !orderId) {
     throw new Error('Email and orderId are required');
   }

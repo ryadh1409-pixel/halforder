@@ -1381,7 +1381,7 @@ export default function OrderRoomScreen() {
       await addDoc(messagesRef, {
         userId: uid,
         userName: displayName,
-        text: 'Joined the order',
+        text: 'You joined this shared order',
         createdAt: serverTimestamp(),
         type: 'system',
       });
@@ -1666,7 +1666,7 @@ export default function OrderRoomScreen() {
 
             {/* Participants */}
             <Text style={styles.participantsText}>
-              {participantsCount} / {maxPeople} people joined
+              {participantsCount} / {maxPeople} participants
             </Text>
             {participantsCount >= maxPeople ? (
               <Text style={styles.readyMessage}>Order is ready 🎉</Text>

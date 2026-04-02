@@ -70,6 +70,8 @@ type OpenOrder = {
   createdAt: number;
   pricePerPerson: number | null;
   expiresAt: number | null;
+  /** Marketing / template rows must not appear as real joinable orders */
+  isSuggested?: boolean;
 };
 
 const FOOD_EMOJI: Record<string, string> = {
@@ -231,6 +233,7 @@ export default function JoinScreen() {
               ? d2.participantIds
               : [],
             totalPrice: Number(d2?.totalPrice ?? 0),
+            isSuggested: d2?.isSuggested === true,
             status: typeof d2?.status === 'string' ? d2.status : 'open',
             paidBy: typeof d2?.paidBy === 'string' ? d2.paidBy : null,
             confirmations:
@@ -256,6 +259,7 @@ export default function JoinScreen() {
         });
         // Only keep orders that are not full and not expired
         const filtered = list.filter((o) => {
+          if (o.isSuggested === true) return false;
           const hasRoom = o.participantIds.length < o.maxPeople;
           const notExpired = o.expiresAt == null || o.expiresAt > now;
           return hasRoom && notExpired;
@@ -325,7 +329,7 @@ export default function JoinScreen() {
       const messagesRef = collection(db, 'orders', orderId, 'messages');
       await addDoc(messagesRef, {
         type: 'system',
-        text: 'User joined the order',
+        text: 'A participant joined',
         senderId: '',
         createdAt: serverTimestamp(),
       });
@@ -488,8 +492,9 @@ export default function JoinScreen() {
         data={displayOrders}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
-          <Text style={{ color: c.textMuted, marginTop: 16 }}>
-            No open orders
+          <Text style={{ color: c.textMuted, marginTop: 16, lineHeight: 20 }}>
+            Orders may be available in your area. Start one from Swipe or Home to
+            get matched.
           </Text>
         }
         renderItem={({ item }) => {
@@ -559,7 +564,7 @@ export default function JoinScreen() {
                   Please be ready 5 minutes before order time
                 </Text>
                 <Text style={{ color: c.textMuted, fontSize: 14 }}>
-                  👥 {item.participantIds.length} / {item.maxPeople} people
+                  Participants: {item.participantIds.length} / {item.maxPeople}
                 </Text>
                 <Text
                   style={{ color: c.textSlateDark, fontSize: 14, marginTop: 2 }}
@@ -581,18 +586,18 @@ export default function JoinScreen() {
                       : 'Paid by creator'}
                   </Text>
                 ) : null}
-                {almostFull && (
+                {almostFull ? (
                   <Text
                     style={{
-                      color: c.timerAccent,
+                      color: c.textMuted,
                       fontSize: 12,
                       fontWeight: '600',
                       marginTop: 4,
                     }}
                   >
-                    🔥 Almost full
+                    One spot left
                   </Text>
-                )}
+                ) : null}
                 <Text
                   style={{ color: c.iconInactive, fontSize: 12, marginTop: 4 }}
                 >

@@ -202,7 +202,7 @@ export default function JoinInviteScreen() {
           <View style={styles.previewBubble}>
             <Text style={styles.previewLabel}>Invitation</Text>
             <Text style={styles.previewText}>
-              Someone invited you to split a meal and save money with HalfOrder.
+              You opened a shared-order invite with HalfOrder.
             </Text>
           </View>
 
@@ -232,7 +232,7 @@ export default function JoinInviteScreen() {
           </View>
 
           <Text style={styles.inviteMessage}>
-            Someone invited you to split a meal and save money.
+            Open the order to join this shared meal.
           </Text>
 
           {isFull ? (

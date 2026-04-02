@@ -219,7 +219,9 @@ export default function SwipeScreen() {
                   <Text style={styles.hostName}>{topCard.user1.name}</Text>
                 </View>
               ) : (
-                <Text style={styles.waitingText}>Waiting for someone...</Text>
+                <Text style={styles.waitingText}>
+                  Match to see host details
+                </Text>
               )}
             </View>
           </Animated.View>

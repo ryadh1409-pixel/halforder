@@ -44,6 +44,7 @@ type OrderItem = {
   createdBy: string;
   participantIds: string[];
   participantRecords: OrderParticipantRecord[];
+  isSuggested?: boolean;
 };
 
 function GlassBar({
@@ -149,6 +150,7 @@ export default function OrdersScreen() {
           createdBy,
           participantIds,
           participantRecords,
+          isSuggested: data?.isSuggested === true,
         });
       };
       hostSnap.docs.forEach(add);
@@ -327,6 +329,14 @@ export default function OrdersScreen() {
           <Text style={styles.cardRestaurant} numberOfLines={2}>
             {item.restaurantName}
           </Text>
+          {item.isSuggested ? (
+            <View style={styles.suggestedBanner}>
+              <Text style={styles.suggestedBannerTitle}>Suggested order</Text>
+              <Text style={styles.suggestedBannerNote}>
+                Others can join once you create it
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.metaRow}>
             <View style={styles.metaPill}>
               <MaterialIcons name="flag" size={14} color="#7DD3FC" />
@@ -664,6 +674,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 12,
     letterSpacing: -0.2,
+  },
+  suggestedBanner: {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.25)',
+  },
+  suggestedBannerTitle: {
+    color: '#A7F3D0',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  suggestedBannerNote: {
+    color: 'rgba(248,250,252,0.55)',
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   metaRow: {
     flexDirection: 'row',

@@ -162,7 +162,9 @@ function FoodCardFace({ card }: { card: SwipeCard }) {
     parseMinutesFromTimeLabel(card.time),
   );
   const joinedLabel =
-    card.peopleJoined === 1 ? '1 person joined' : `${card.peopleJoined} people joined`;
+    card.peopleJoined === 1
+      ? '1 participant'
+      : `${card.peopleJoined} participants`;
   const spotsLabel =
     spotsLeft <= 0
       ? 'Full'

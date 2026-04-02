@@ -109,13 +109,13 @@ export default function NearbyOrdersScreen() {
       await addDoc(messagesRef, {
         userId: uid,
         userName: displayName,
-        text: 'Joined the order',
+        text: 'You joined this shared order',
         createdAt: serverTimestamp(),
         type: 'system',
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, order.id);
-      Alert.alert('Success', 'You joined the order.');
+      Alert.alert('Success', 'You joined this shared order.');
       router.push(`/match/${order.id}` as const);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join';

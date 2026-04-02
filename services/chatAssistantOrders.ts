@@ -205,10 +205,10 @@ export function buildSmartMatchIntroText(
 ): string {
   const n = orders.length;
   if (n === 0) {
-    return `No ${ctx.emptyLabel} orders yet. Be the first ${ctx.emptyEmoji}`;
+    return 'Orders may be available in your area. Start one to get matched.';
   }
   const food = pickHighlightFoodWord(orders, ctx);
-  return `${ctx.greetingLabel} ${ctx.segmentEmoji} I found ${n} ${food} order${n === 1 ? '' : 's'} near you`;
+  return `${ctx.greetingLabel} ${ctx.segmentEmoji} There ${n === 1 ? 'is' : 'are'} ${n} open ${food} order${n === 1 ? '' : 's'} you can join.`;
 }
 
 /**
