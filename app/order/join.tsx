@@ -86,7 +86,7 @@ export default function JoinOrderScreen() {
       const orderRef = doc(db, 'orders', orderId);
       await updateDoc(orderRef, { status: 'matched' });
       Alert.alert('Success', 'You joined the order.');
-      router.push(`/order/${orderId}` as const);
+      router.push(`/order/room/${orderId}` as const);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join';
       Alert.alert('Error', msg);

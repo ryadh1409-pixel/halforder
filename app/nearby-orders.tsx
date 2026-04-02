@@ -5,6 +5,7 @@ import { haversineDistanceKm } from '@/lib/haversine';
 import { isUserBanned } from '@/services/adminGuard';
 import { isUserBlocked } from '@/services/block';
 import { auth, db } from '@/services/firebase';
+import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
 import { trackOrderJoined } from '@/services/analytics';
 import { useRouter } from 'expo-router';
 import {
@@ -74,7 +75,7 @@ export default function NearbyOrdersScreen() {
       return;
     }
     if (order.participantIds.includes(uid)) {
-      router.push(`/order/${order.id}` as const);
+      router.push(`/order/room/${order.id}` as const);
       return;
     }
     if (order.participantIds.length >= order.maxParticipants) {
@@ -90,14 +91,12 @@ export default function NearbyOrdersScreen() {
       if (hostId && (await isUserBlocked(uid, hostId))) {
         throw new Error('You cannot join this order.');
       }
-      const orderRef = doc(db, 'orders', order.id);
       const displayName =
         auth.currentUser?.displayName ||
         auth.currentUser?.email?.split('@')[0] ||
         'User';
-      await updateDoc(orderRef, {
+      await joinOrderWithParticipantRecord(db, order.id, uid, {
         status: 'matched',
-        participantIds: arrayUnion(uid),
         user2Id: uid,
         user2Name: displayName,
       });

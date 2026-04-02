@@ -137,6 +137,108 @@ service cloud.firestore {
         );
     }
 
+    function orderCreatorUidFromDoc(data) {
+      return data.get(
+        'createdBy',
+        data.get('userId', data.get('hostId', ''))
+      );
+    }
+
+    function participantListHasUserId(participants, uid, idx) {
+      return idx < participants.size()
+        && (
+          (participants[idx].userId == uid)
+          || participantListHasUserId(participants, uid, idx + 1)
+        );
+    }
+
+    /** Swipe / match path: only `participantIds` grows by one (no `joinedAt` yet). */
+    function isParticipantIdsOnlyAppend() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['participantIds'])
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size()
+          == resource.data.get('participantIds', []).size() + 1
+        && request.auth.uid in request.resource.data.participantIds
+        && !(request.auth.uid in resource.data.get('participantIds', []));
+    }
+
+    /** User already in `participantIds`; adds `{ userId, joinedAt }` only. */
+    function isParticipantsBackfillOnly() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['participants'])
+        && request.resource.data.participantIds == resource.data.participantIds
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size()
+          == resource.data.get('participants', []).size() + 1
+        && request.resource.data.participants[request.resource.data.participants.size() - 1].userId
+          == request.auth.uid
+        && request.resource.data.participants[request.resource.data.participants.size() - 1].joinedAt
+          is timestamp
+        && request.auth.uid in resource.data.get('participantIds', []);
+    }
+
+    function isHalfOrderParticipantJoinUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['participantIds', 'participants', 'status', 'user2Id', 'user2Name'])
+        && request.resource.data.participantIds is list
+        && request.resource.data.participants is list
+        && request.resource.data.participantIds.size()
+          == resource.data.get('participantIds', []).size() + 1
+        && request.auth.uid in request.resource.data.participantIds
+        && !(request.auth.uid in resource.data.get('participantIds', []))
+        && request.resource.data.participants.size()
+          == resource.data.get('participants', []).size() + 1
+        && request.resource.data.participants[request.resource.data.participants.size() - 1].userId
+          == request.auth.uid
+        && request.resource.data.participants[request.resource.data.participants.size() - 1].joinedAt
+          is timestamp;
+    }
+
+    /** Non-host removes self when `participants` is tracked. */
+    function isHalfOrderParticipantLeaveUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && orderCreatorUidFromDoc(resource.data) != request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['participantIds', 'participants', 'status'])
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size()
+          == resource.data.get('participantIds', []).size() - 1
+        && !(request.auth.uid in request.resource.data.participantIds)
+        && request.auth.uid in resource.data.get('participantIds', [])
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size()
+          == resource.data.get('participants', []).size() - 1
+        && participantListHasUserId(resource.data.get('participants', []), request.auth.uid, 0)
+        && !participantListHasUserId(request.resource.data.participants, request.auth.uid, 0);
+    }
+
+    /** Non-host removes self when there is no `participants` array yet. */
+    function isParticipantIdsLeaveOnly() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && orderCreatorUidFromDoc(resource.data) != request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['participantIds', 'status'])
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size()
+          == resource.data.get('participantIds', []).size() - 1
+        && !(request.auth.uid in request.resource.data.participantIds)
+        && request.auth.uid in resource.data.get('participantIds', []);
+    }
+
+    function isMarkOrderExpiredUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status'])
+        && resource.data.status in ['open', 'matched', 'full']
+        && request.resource.data.status == 'expired'
+        && request.auth.uid in resource.data.get('participantIds', []);
+    }
+
     function isAdminEmail() {
       return isSignedIn() && request.auth.token.email == 'support@halforder.app';
     }
@@ -279,7 +381,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isValidOrderCreate();
       // Join is backend-validated here: auth required, no duplicate join, no over-capacity.
-      allow update: if isSafeJoinUpdate() || isCreatorOnlyNonJoinUpdate() || isSwipeAcceptUpdate();
+      allow update: if isSafeJoinUpdate()
+        || isCreatorOnlyNonJoinUpdate()
+        || isSwipeAcceptUpdate()
+        || isParticipantIdsOnlyAppend()
+        || isParticipantsBackfillOnly()
+        || isHalfOrderParticipantJoinUpdate()
+        || isHalfOrderParticipantLeaveUpdate()
+        || isParticipantIdsLeaveOnly()
+        || isMarkOrderExpiredUpdate();
       allow delete: if request.auth != null
         && resource.data.createdBy == request.auth.uid;
 

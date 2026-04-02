@@ -1,12 +1,21 @@
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
+import {
+  deriveLifecycleForViewer,
+  formatOrderCountdown,
+  leaveOrderParticipant,
+  normalizeOrderParticipantRecords,
+  type OrderParticipantRecord,
+} from '@/services/orderLifecycle';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   collection,
+  doc,
   onSnapshot,
   query,
+  updateDoc,
   where,
   type QuerySnapshot,
 } from 'firebase/firestore';
@@ -14,6 +23,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -31,6 +41,9 @@ type OrderItem = {
   status: string;
   totalPrice: number;
   createdAt: number | null;
+  createdBy: string;
+  participantIds: string[];
+  participantRecords: OrderParticipantRecord[];
 };
 
 function GlassBar({
@@ -57,6 +70,13 @@ export default function OrdersScreen() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 15_000);
+    return () => clearInterval(t);
+  }, []);
 
   const uid = user?.uid ?? null;
   const hostSnapRef = useRef<QuerySnapshot | null>(null);
@@ -100,6 +120,22 @@ export default function OrdersScreen() {
         } else if (typeof rawCreated === 'number') {
           createdAt = rawCreated;
         }
+        const createdBy =
+          typeof data?.createdBy === 'string' && data.createdBy.trim()
+            ? data.createdBy
+            : typeof data?.userId === 'string' && data.userId.trim()
+              ? data.userId
+              : typeof data?.hostId === 'string' && data.hostId.trim()
+                ? data.hostId
+                : '';
+        const participantIds: string[] = Array.isArray(data?.participantIds)
+          ? data.participantIds.filter(
+              (x): x is string => typeof x === 'string',
+            )
+          : [];
+        const participantRecords = normalizeOrderParticipantRecords(
+          data?.participants,
+        );
         byId.set(d.id, {
           id: d.id,
           restaurantName:
@@ -110,6 +146,9 @@ export default function OrdersScreen() {
           status: typeof data?.status === 'string' ? data.status : '—',
           totalPrice: Number(data?.totalPrice ?? 0),
           createdAt,
+          createdBy,
+          participantIds,
+          participantRecords,
         });
       };
       hostSnap.docs.forEach(add);
@@ -179,51 +218,162 @@ export default function OrdersScreen() {
     router.push(`/order/${orderId}` as const);
   };
 
-  const activeOrders = orders.filter((order) => order.status === 'open');
+  const activeOrders = orders.filter(
+    (order) =>
+      order.status !== 'cancelled' && order.status !== 'completed',
+  );
   const cancelledOrders = orders.filter((order) => order.status === 'cancelled');
 
-  const renderOrderCard = (item: OrderItem, disabled = false) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.orderCard,
-        pressed && !disabled && styles.orderCardPressed,
-        disabled && styles.orderCardDisabled,
-      ]}
-      onPress={() => {
-        if (!disabled) handleOrderPress(item.id);
-      }}
-      disabled={disabled}
-    >
-      <Text style={styles.cardRestaurant} numberOfLines={2}>
-        {item.restaurantName}
-      </Text>
-      <View style={styles.metaRow}>
-        <View style={styles.metaPill}>
-          <MaterialIcons name="flag" size={14} color="#7DD3FC" />
-          <Text style={styles.metaPillText} numberOfLines={1}>
-            {item.status}
+  const handleCancelOrLeave = (item: OrderItem) => {
+    if (!uid || cancellingId) return;
+    const isHost = item.createdBy === uid;
+    const raw = item.status.toLowerCase();
+    if (raw === 'cancelled' || raw === 'completed' || raw === 'expired') return;
+
+    if (isHost) {
+      Alert.alert(
+        'Cancel order',
+        'Cancel this order for everyone?',
+        [
+          { text: 'No', style: 'cancel' },
+          {
+            text: 'Cancel order',
+            style: 'destructive',
+            onPress: async () => {
+              setCancellingId(item.id);
+              try {
+                await updateDoc(doc(db, 'orders', item.id), {
+                  status: 'cancelled',
+                });
+              } catch (e) {
+                Alert.alert(
+                  'Error',
+                  e instanceof Error ? e.message : 'Could not cancel.',
+                );
+              } finally {
+                setCancellingId(null);
+              }
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert('Leave order', 'Remove yourself from this order?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: async () => {
+          setCancellingId(item.id);
+          try {
+            await leaveOrderParticipant(db, item.id, uid);
+          } catch (e) {
+            Alert.alert(
+              'Error',
+              e instanceof Error ? e.message : 'Could not leave.',
+            );
+          } finally {
+            setCancellingId(null);
+          }
+        },
+      },
+    ]);
+  };
+
+  const renderOrderCard = (item: OrderItem, disabled = false) => {
+    const u = uid ?? '';
+    const { lifecycle, remainingMs } = deriveLifecycleForViewer({
+      uid: u,
+      createdBy: item.createdBy,
+      participantIds: item.participantIds,
+      participantRecords: item.participantRecords,
+      orderStatus: item.status,
+      now: nowTick,
+    });
+    const lifecycleLabel =
+      lifecycle === 'cancelled'
+        ? 'cancelled'
+        : lifecycle === 'waiting'
+          ? 'waiting'
+          : lifecycle === 'expired'
+            ? 'expired'
+            : 'active';
+    const countdownLabel =
+      item.participantIds.includes(u) &&
+      remainingMs != null &&
+      remainingMs > 0
+        ? formatOrderCountdown(remainingMs)
+        : null;
+    const canCancel =
+      !disabled &&
+      u &&
+      item.status.toLowerCase() !== 'expired' &&
+      item.status !== 'cancelled';
+
+    return (
+      <View style={[styles.orderCardWrap, disabled && styles.orderCardDisabled]}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.orderCard,
+            pressed && !disabled && styles.orderCardPressed,
+          ]}
+          onPress={() => {
+            if (!disabled) handleOrderPress(item.id);
+          }}
+          disabled={disabled}
+        >
+          <Text style={styles.cardRestaurant} numberOfLines={2}>
+            {item.restaurantName}
           </Text>
-        </View>
-        <View style={styles.metaPill}>
-          <MaterialIcons name="payments" size={14} color="#A7F3D0" />
-          <Text style={styles.metaPillText}>
-            ${item.totalPrice.toFixed(2)}
-          </Text>
-        </View>
+          <View style={styles.metaRow}>
+            <View style={styles.metaPill}>
+              <MaterialIcons name="flag" size={14} color="#7DD3FC" />
+              <Text style={styles.metaPillText} numberOfLines={1}>
+                {lifecycleLabel}
+              </Text>
+            </View>
+            <View style={styles.metaPill}>
+              <MaterialIcons name="payments" size={14} color="#A7F3D0" />
+              <Text style={styles.metaPillText}>
+                ${item.totalPrice.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+          {countdownLabel ? (
+            <Text style={styles.countdownText}>{countdownLabel}</Text>
+          ) : null}
+          {disabled ? (
+            <Text style={styles.cancelledTag}>Cancelled</Text>
+          ) : null}
+          <View style={styles.chevronRow}>
+            <Text style={styles.openHint}>Open order</Text>
+            <MaterialIcons
+              name="chevron-right"
+              size={20}
+              color="rgba(255,255,255,0.35)"
+            />
+          </View>
+        </Pressable>
+        {canCancel ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              pressed && styles.cancelBtnPressed,
+              cancellingId === item.id && styles.cancelBtnDisabled,
+            ]}
+            onPress={() => handleCancelOrLeave(item)}
+            disabled={cancellingId !== null}
+          >
+            <Text style={styles.cancelBtnText}>
+              {item.createdBy === u ? 'Cancel order' : 'Cancel'}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
-      {disabled ? (
-        <Text style={styles.cancelledTag}>Cancelled</Text>
-      ) : null}
-      <View style={styles.chevronRow}>
-        <Text style={styles.openHint}>Open order</Text>
-        <MaterialIcons
-          name="chevron-right"
-          size={20}
-          color="rgba(255,255,255,0.35)"
-        />
-      </View>
-    </Pressable>
-  );
+    );
+  };
 
   if (uid == null) {
     return (
@@ -455,11 +605,13 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     marginBottom: 8,
   },
+  orderCardWrap: {
+    marginBottom: 12,
+  },
   orderCard: {
     backgroundColor: '#11161F',
     borderRadius: 20,
     padding: 18,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     ...Platform.select({
@@ -478,6 +630,33 @@ const styles = StyleSheet.create({
   },
   orderCardDisabled: {
     opacity: 0.5,
+  },
+  countdownText: {
+    marginTop: 10,
+    color: 'rgba(250, 204, 21, 0.95)',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cancelBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(248, 113, 113, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(248, 113, 113, 0.4)',
+  },
+  cancelBtnPressed: {
+    opacity: 0.85,
+  },
+  cancelBtnDisabled: {
+    opacity: 0.45,
+  },
+  cancelBtnText: {
+    color: '#FCA5A5',
+    fontSize: 14,
+    fontWeight: '700',
   },
   cardRestaurant: {
     fontSize: 18,

@@ -3,6 +3,11 @@ import { formatTorontoOrderTime } from '@/lib/format-toronto-time';
 import { isUserBanned } from '@/services/adminGuard';
 import { trackEvent } from '@/services/analytics';
 import { auth, db } from '@/services/firebase';
+import {
+  joinOrderWithParticipantRecord,
+  leaveOrderParticipant,
+  normalizeOrderParticipantRecords,
+} from '@/services/orderLifecycle';
 import { hasBlockConflict } from '@/services/report-block';
 import { blockUser, submitUserReport } from '@/services/userSafety';
 import { logError } from '@/utils/errorLogger';
@@ -12,8 +17,6 @@ import type { User } from '@firebase/auth';
 import { onAuthStateChanged } from '@firebase/auth';
 import {
   addDoc,
-  arrayRemove,
-  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -81,38 +84,17 @@ async function joinOrderWithTransaction(
   if (!user?.uid) {
     throw new Error('You must be signed in to join.');
   }
-  const orderRef = doc(db, 'orders', orderId);
-  await runTransaction(db, async (transaction) => {
-    const orderSnap = await transaction.get(orderRef);
-
-    if (!orderSnap.exists()) {
-      throw new Error('Order not found');
-    }
-
-    const orderData = orderSnap.data();
-    if (orderData.status !== 'open') {
-      throw new Error('Order is not open');
-    }
-
-    const participants: string[] = Array.isArray(orderData.participantIds)
-      ? orderData.participantIds
-      : [];
-    const maxPeople = Number(orderData.maxPeople ?? 0);
-
-    if (participants.includes(user.uid)) {
-      throw new Error('You already joined this order');
-    }
-
-    if (participants.length >= maxPeople) {
-      throw new Error('Order is full');
-    }
-
-    const newCount = participants.length + 1;
-    transaction.update(orderRef, {
-      participantIds: arrayUnion(user.uid),
-      status: newCount >= maxPeople ? 'full' : 'open',
-    });
-  });
+  await joinOrderWithParticipantRecord(
+    db,
+    orderId,
+    user.uid,
+    {},
+    {
+      requireOpenForJoin: true,
+      resolveStatus: (nextCount, maxPeople) =>
+        nextCount >= maxPeople ? 'full' : 'open',
+    },
+  );
 }
 
 async function leaveOrderWithTransaction(
@@ -122,31 +104,7 @@ async function leaveOrderWithTransaction(
   if (!user?.uid) {
     throw new Error('You must be signed in to leave.');
   }
-  const orderRef = doc(db, 'orders', orderId);
-  await runTransaction(db, async (transaction) => {
-    const orderSnap = await transaction.get(orderRef);
-    if (!orderSnap.exists()) {
-      throw new Error('Order not found');
-    }
-    const data = orderSnap.data();
-    const participantIds: string[] = Array.isArray(data?.participantIds)
-      ? data.participantIds
-      : [];
-    const maxPeople = Number(data?.maxPeople ?? 0);
-    if (!participantIds.includes(user.uid)) {
-      throw new Error('Not in order');
-    }
-    const newCount = participantIds.length - 1;
-    const updateData: Record<string, unknown> = {
-      participantIds: arrayRemove(user.uid),
-    };
-    const currentStatus =
-      typeof data?.status === 'string' ? data.status : 'open';
-    if (currentStatus === 'closed' && newCount < maxPeople) {
-      updateData.status = 'open';
-    }
-    transaction.update(orderRef, updateData);
-  });
+  await leaveOrderParticipant(db, orderId, user.uid);
 }
 
 async function confirmParticipation(
@@ -342,11 +300,20 @@ export default function JoinScreen() {
     setJoiningId(orderId);
     try {
       const orderSnap = await getDoc(doc(db, 'orders', orderId));
-      const participantIds: string[] = Array.isArray(
-        orderSnap.data()?.participantIds,
-      )
-        ? orderSnap.data()!.participantIds
+      const orderData = orderSnap.data();
+      const participantIds: string[] = Array.isArray(orderData?.participantIds)
+        ? orderData!.participantIds
         : [];
+      const existingRecs = normalizeOrderParticipantRecords(
+        orderData?.participants,
+      );
+      if (
+        participantIds.includes(user.uid) &&
+        existingRecs.some((r) => r.userId === user.uid)
+      ) {
+        Alert.alert('Already joined', 'You are already in this order.');
+        return;
+      }
       if (await hasBlockConflict(user.uid, participantIds)) {
         Alert.alert(
           'Cannot join',
