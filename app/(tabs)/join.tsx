@@ -4,9 +4,10 @@ import { isUserBanned } from '@/services/adminGuard';
 import { trackEvent } from '@/services/analytics';
 import { auth, db } from '@/services/firebase';
 import {
+  getJoinedAtMsForUser,
   joinOrderWithParticipantRecord,
   leaveOrderParticipant,
-  normalizeOrderParticipantRecords,
+  normalizeParticipantsStrings,
 } from '@/services/orderLifecycle';
 import { hasBlockConflict } from '@/services/report-block';
 import { blockUser, submitUserReport } from '@/services/userSafety';
@@ -57,7 +58,7 @@ type OpenOrder = {
   id: string;
   hostId: string;
   maxPeople: number;
-  participantIds: string[];
+  participants: string[];
   totalPrice: number;
   status: string;
   paidBy: string | null;
@@ -123,10 +124,10 @@ async function confirmParticipation(
       throw new Error('Order not found');
     }
     const data = orderSnap.data();
-    const participantIds: string[] = Array.isArray(data?.participantIds)
-      ? data.participantIds
+    const plist: string[] = Array.isArray(data?.participants)
+      ? data.participants.filter((x): x is string => typeof x === 'string')
       : [];
-    if (!participantIds.includes(user.uid)) {
+    if (!plist.includes(user.uid)) {
       throw new Error('Not in order');
     }
     const rawConfirmations = data?.confirmations;
@@ -136,8 +137,7 @@ async function confirmParticipation(
         : {};
     confirmations[user.uid] = true;
     const allConfirmed =
-      participantIds.length > 0 &&
-      participantIds.every((id) => confirmations[id]);
+      plist.length > 0 && plist.every((id) => confirmations[id]);
     const updateData: Record<string, unknown> = {
       [`confirmations.${user.uid}`]: true,
     };
@@ -159,15 +159,15 @@ async function lockOrder(orderId: string): Promise<void> {
     throw new Error('Order not found');
   }
   const data = orderSnap.data();
-  const participantIds: string[] = Array.isArray(data?.participantIds)
-    ? data.participantIds
+  const plist: string[] = Array.isArray(data?.participants)
+    ? data.participants.filter((x): x is string => typeof x === 'string')
     : [];
-  const creatorId = participantIds[0] ?? '';
+  const creatorId = plist[0] ?? '';
   if (creatorId !== user.uid) {
     throw new Error('Only creator can lock');
   }
   const confirmations: Record<string, boolean> = {};
-  participantIds.forEach((id) => {
+  plist.forEach((id) => {
     confirmations[id] = false;
   });
   await updateDoc(orderRef, {
@@ -226,15 +226,17 @@ export default function JoinScreen() {
           const hostId =
             (typeof d2?.hostId === 'string' && d2.hostId) ||
             (typeof d2?.userId === 'string' && d2.userId) ||
-            (Array.isArray(d2?.participantIds) && d2.participantIds[0]
-              ? String(d2.participantIds[0])
+            (Array.isArray(d2?.participants) && d2.participants[0]
+              ? String(d2.participants[0])
               : '');
           return {
             id: d.id,
             hostId,
             maxPeople: Number(d2?.maxPeople ?? 0),
-            participantIds: Array.isArray(d2?.participantIds)
-              ? d2.participantIds
+            participants: Array.isArray(d2?.participants)
+              ? d2.participants.filter(
+                  (x): x is string => typeof x === 'string',
+                )
               : [],
             totalPrice: Number(d2?.totalPrice ?? 0),
             isSuggested: d2?.isSuggested === true,
@@ -264,7 +266,7 @@ export default function JoinScreen() {
         // Only keep orders that are not full and not expired
         const filtered = list.filter((o) => {
           if (o.isSuggested === true) return false;
-          const hasRoom = o.participantIds.length < o.maxPeople;
+          const hasRoom = o.participants.length < o.maxPeople;
           const notExpired = o.expiresAt == null || o.expiresAt > now;
           return hasRoom && notExpired;
         });
@@ -313,20 +315,15 @@ export default function JoinScreen() {
     try {
       const orderSnap = await getDoc(doc(db, 'orders', orderId));
       const orderData = orderSnap.data();
-      const participantIds: string[] = Array.isArray(orderData?.participantIds)
-        ? orderData!.participantIds
-        : [];
-      const existingRecs = normalizeOrderParticipantRecords(
-        orderData?.participants,
-      );
+      const plist = normalizeParticipantsStrings(orderData?.participants);
       if (
-        participantIds.includes(user.uid) &&
-        existingRecs.some((r) => r.userId === user.uid)
+        plist.includes(user.uid) &&
+        getJoinedAtMsForUser(orderData?.joinedAtMap, user.uid) != null
       ) {
         Alert.alert('Already joined', 'You are already in this order.');
         return;
       }
-      if (await hasBlockConflict(user.uid, participantIds)) {
+      if (await hasBlockConflict(user.uid, plist)) {
         Alert.alert(
           'Cannot join',
           'You cannot join this order due to a block.',
@@ -343,10 +340,7 @@ export default function JoinScreen() {
         senderName: '',
         createdAt: serverTimestamp(),
       });
-      router.replace({
-        pathname: '/order/room/[id]',
-        params: { id: orderId },
-      });
+      router.replace(`/order/${orderId}` as never);
     } catch (e) {
       logError(e, { alert: false });
       const msg = e instanceof Error ? e.message : 'Failed to join';
@@ -545,7 +539,7 @@ export default function JoinScreen() {
         renderItem={({ item }) => {
           const currentUid = user?.uid ?? '';
           const alreadyJoined =
-            currentUid !== '' && item.participantIds.includes(currentUid);
+            currentUid !== '' && item.participants.includes(currentUid);
           const joining = joiningId === item.id;
           const foodType = (item.foodType || 'pizza').toLowerCase();
           const foodLabel =
@@ -562,7 +556,7 @@ export default function JoinScreen() {
               : foodType === 'noodles'
                 ? c.warning
                 : c.iconInactive;
-          const almostFull = item.maxPeople - item.participantIds.length === 1;
+          const almostFull = item.maxPeople - item.participants.length === 1;
 
           return (
             <View style={{ marginBottom: 14 }}>
@@ -609,7 +603,7 @@ export default function JoinScreen() {
                   Please be ready 5 minutes before order time
                 </Text>
                 <Text style={{ color: c.textMuted, fontSize: 14 }}>
-                  Participants: {item.participantIds.length} / {item.maxPeople}
+                  Participants: {item.participants.length} / {item.maxPeople}
                 </Text>
                 <Text
                   style={{ color: c.textSlateDark, fontSize: 14, marginTop: 2 }}
@@ -618,8 +612,8 @@ export default function JoinScreen() {
                 </Text>
                 <Text style={{ color: c.success, fontSize: 14, marginTop: 2 }}>
                   Per person: $
-                  {item.participantIds.length > 0
-                    ? (item.totalPrice / item.participantIds.length).toFixed(2)
+                  {item.participants.length > 0
+                    ? (item.totalPrice / item.participants.length).toFixed(2)
                     : item.totalPrice.toFixed(2)}
                 </Text>
                 {item.paidBy ? (

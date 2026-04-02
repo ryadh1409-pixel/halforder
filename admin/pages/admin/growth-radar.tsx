@@ -25,6 +25,7 @@ type RawOrder = {
   hostId?: string;
   creatorId?: string;
   userId?: string;
+  participants?: string[];
   participantIds?: string[];
   joinedUsers?: string[];
   restaurantName?: string;
@@ -45,7 +46,7 @@ function getOrderRestaurant(o: RawOrder): string {
 }
 
 function getOrderParticipantIds(o: RawOrder): string[] {
-  const ids = (o.participantIds ?? o.joinedUsers ?? []) as string[];
+  const ids = (o.participants ?? o.participantIds ?? o.joinedUsers ?? []) as string[];
   const host = (o.hostId ?? o.creatorId ?? o.userId) as string | undefined;
   if (host && !ids.includes(host)) return [host, ...ids];
   return [...ids];

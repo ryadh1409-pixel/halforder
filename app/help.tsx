@@ -53,7 +53,7 @@ export default function HelpScreen() {
       const ordersRef = collection(db, 'orders');
       const q = query(
         ordersRef,
-        where('participantIds', 'array-contains', uid),
+        where('participants', 'array-contains', uid),
         where('status', '==', 'completed'),
       );
       const snap = await getDocs(q);
@@ -62,13 +62,13 @@ export default function HelpScreen() {
         const data = d.data();
         const createdAt =
           data?.createdAt?.toMillis?.() ?? data?.createdAt ?? Date.now();
-        const participantIds: string[] = Array.isArray(data?.participantIds)
-          ? data.participantIds
+        const plist: string[] = Array.isArray(data?.participants)
+          ? data.participants.filter((x): x is string => typeof x === 'string')
           : [];
         const hostId =
           typeof data?.hostId === 'string' && data.hostId ? data.hostId : null;
         let otherUserId =
-          participantIds.find((pid) => pid !== uid) ?? null;
+          plist.find((pid) => pid !== uid) ?? null;
         if (!otherUserId && hostId && hostId !== uid) {
           otherUserId = hostId;
         }

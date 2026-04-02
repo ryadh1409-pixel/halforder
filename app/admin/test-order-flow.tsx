@@ -5,15 +5,7 @@
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { Redirect, useRouter } from 'expo-router';
-import {
-  addDoc,
-  arrayUnion,
-  collection,
-  doc,
-  getDoc,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,8 +17,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminColors as C } from '@/constants/adminTheme';
-
-const TEST_USER_2 = 'test_user_2';
 
 function TestOrderFlowScreenDev() {
   const router = useRouter();
@@ -52,10 +42,15 @@ function TestOrderFlowScreenDev() {
     try {
       const ordersRef = collection(db, 'orders');
       const orderData = {
-        hostId: currentUserUid,
-        participantIds: [currentUserUid],
-        maxPeople: 3,
+        createdBy: currentUserUid,
+        participants: [currentUserUid],
+        joinedAtMap: { [currentUserUid]: serverTimestamp() },
+        usersAccepted: [] as string[],
+        foodName: 'Dev test order',
+        image: 'https://example.com/dev-test.jpg',
+        pricePerPerson: 10,
         totalPrice: 30,
+        maxPeople: 3,
         status: 'open',
         createdAt: serverTimestamp(),
       };
@@ -63,40 +58,21 @@ function TestOrderFlowScreenDev() {
       const orderId = ref.id;
 
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
-        participantIds: arrayUnion(TEST_USER_2),
-      });
-
       const snap = await getDoc(orderRef);
       if (!snap.exists()) {
         setResult('Order flow test failed');
-        setErrorDetail('Order not found after update');
-        Alert.alert('Order flow test failed', 'Order not found after update');
+        setErrorDetail('Order not found after create');
+        Alert.alert('Order flow test failed', 'Order not found after create');
         return;
       }
 
       const data = snap.data();
-      const participantIds = Array.isArray(data?.participantIds)
-        ? data.participantIds
+      const plist = Array.isArray(data?.participants)
+        ? data.participants.filter((x): x is string => typeof x === 'string')
         : [];
 
-      if (participantIds.length !== 2) {
-        setResult('Order flow test failed');
-        setErrorDetail(
-          `Expected participantIds.length === 2, got ${participantIds.length}`,
-        );
-        Alert.alert(
-          'Order flow test failed',
-          `participantIds.length should be 2, got ${participantIds.length}`,
-        );
-        return;
-      }
-
-      if (
-        !participantIds.includes(currentUserUid) ||
-        !participantIds.includes(TEST_USER_2)
-      ) {
-        const detail = `participantIds should contain both users, got: ${participantIds.join(', ')}`;
+      if (plist.length !== 1 || !plist.includes(currentUserUid)) {
+        const detail = `Expected participants === [current user], got: ${plist.join(', ')}`;
         setResult('Order flow test failed');
         setErrorDetail(detail);
         Alert.alert('Order flow test failed', detail);
@@ -123,8 +99,8 @@ function TestOrderFlowScreenDev() {
       </TouchableOpacity>
       <Text style={styles.title}>Order Flow Test</Text>
       <Text style={styles.subtitle}>
-        Creates a test order, simulates a second user joining, and verifies
-        participantIds.
+        Creates a valid test order (participants + joinedAtMap) and verifies
+        membership fields. A second-user join requires signing in as that user.
       </Text>
       <TouchableOpacity
         style={[styles.button, running && styles.buttonDisabled]}

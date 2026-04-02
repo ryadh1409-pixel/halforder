@@ -4,8 +4,6 @@ import {
   deriveLifecycleForViewer,
   formatOrderCountdown,
   leaveOrderParticipant,
-  normalizeOrderParticipantRecords,
-  type OrderParticipantRecord,
 } from '@/services/orderLifecycle';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
@@ -17,10 +15,9 @@ import {
   query,
   updateDoc,
   where,
-  type QuerySnapshot,
 } from 'firebase/firestore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,8 +39,8 @@ type OrderItem = {
   totalPrice: number;
   createdAt: number | null;
   createdBy: string;
-  participantIds: string[];
-  participantRecords: OrderParticipantRecord[];
+  participants: string[];
+  joinedAtMap: unknown;
   isSuggested?: boolean;
 };
 
@@ -82,10 +79,6 @@ export default function OrdersScreen() {
   }, []);
 
   const uid = user?.uid ?? null;
-  const hostSnapRef = useRef<QuerySnapshot | null>(null);
-  const createdBySnapRef = useRef<QuerySnapshot | null>(null);
-  const participantSnapRef = useRef<QuerySnapshot | null>(null);
-  const usersJoinedSnapRef = useRef<QuerySnapshot | null>(null);
 
   useEffect(() => {
     if (!uid) {
@@ -94,99 +87,11 @@ export default function OrdersScreen() {
       return;
     }
 
-    console.log('[Orders] subscribe uid', uid);
+    console.log('UID:', uid);
 
     setLoading(true);
     const ordersRef = collection(db, 'orders');
-    // Member list for queries must be string[] (`participantIds` / `usersJoined`), not `participants` objects (no array-contains on maps).
-    const qHost = query(ordersRef, where('hostId', '==', uid));
-    const qCreatedBy = query(ordersRef, where('createdBy', '==', uid));
-    const qParticipant = query(
-      ordersRef,
-      where('participantIds', 'array-contains', uid),
-    );
-    const qUsersJoined = query(
-      ordersRef,
-      where('usersJoined', 'array-contains', uid),
-    );
-
-    const mergeAndSort = () => {
-      const hostSnap = hostSnapRef.current;
-      const createdBySnap = createdBySnapRef.current;
-      const participantSnap = participantSnapRef.current;
-      const usersJoinedSnap = usersJoinedSnapRef.current;
-      if (!hostSnap || !createdBySnap || !participantSnap || !usersJoinedSnap)
-        return;
-      const byId = new Map<string, OrderItem>();
-      const add = (d: { id: string; data: () => Record<string, unknown> }) => {
-        const data = d.data();
-        const rawCreated = data?.createdAt;
-        let createdAt: number | null = null;
-        if (
-          rawCreated &&
-          typeof rawCreated === 'object' &&
-          'toMillis' in rawCreated &&
-          typeof (rawCreated as { toMillis: () => number }).toMillis ===
-            'function'
-        ) {
-          createdAt = (rawCreated as { toMillis: () => number }).toMillis();
-        } else if (typeof rawCreated === 'number') {
-          createdAt = rawCreated;
-        }
-        const createdBy =
-          typeof data?.createdBy === 'string' && data.createdBy.trim()
-            ? data.createdBy
-            : typeof data?.userId === 'string' && data.userId.trim()
-              ? data.userId
-              : typeof data?.hostId === 'string' && data.hostId.trim()
-                ? data.hostId
-                : '';
-        const participantIds: string[] = Array.isArray(data?.participantIds)
-          ? data.participantIds.filter(
-              (x): x is string => typeof x === 'string',
-            )
-          : [];
-        const participantRecords = normalizeOrderParticipantRecords(
-          data?.participants,
-        );
-        byId.set(d.id, {
-          id: d.id,
-          restaurantName:
-            typeof data?.restaurantName === 'string' &&
-            data.restaurantName.trim()
-              ? data.restaurantName
-              : 'Restaurant',
-          status: typeof data?.status === 'string' ? data.status : '—',
-          totalPrice: Number(data?.totalPrice ?? 0),
-          createdAt,
-          createdBy,
-          participantIds,
-          participantRecords,
-          isSuggested: data?.isSuggested === true,
-        });
-      };
-      hostSnap.docs.forEach(add);
-      createdBySnap.docs.forEach(add);
-      participantSnap.docs.forEach(add);
-      usersJoinedSnap.docs.forEach(add);
-      const list = Array.from(byId.values()).sort((a, b) => {
-        const aTime = a.createdAt ?? 0;
-        const bTime = b.createdAt ?? 0;
-        return bTime - aTime;
-      });
-      console.log('[Orders] fetched count', list.length, {
-        ids: list.map((o) => o.id),
-        participantsSample: list[0]
-          ? {
-              participantIds: list[0].participantIds,
-              records: list[0].participantRecords.map((r) => r.userId),
-            }
-          : null,
-      });
-      setOrders(list);
-      setLoadError(false);
-      setLoading(false);
-    };
+    const q = query(ordersRef, where('participants', 'array-contains', uid));
 
     const onListenError = () => {
       setLoadError(true);
@@ -194,48 +99,65 @@ export default function OrdersScreen() {
       setLoading(false);
     };
 
-    const unsubHost = onSnapshot(
-      qHost,
+    const unsub = onSnapshot(
+      q,
       (snap) => {
-        hostSnapRef.current = snap;
-        mergeAndSort();
+        const list: OrderItem[] = snap.docs.map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          const rawCreated = data?.createdAt;
+          let createdAt: number | null = null;
+          if (
+            rawCreated &&
+            typeof rawCreated === 'object' &&
+            'toMillis' in rawCreated &&
+            typeof (rawCreated as { toMillis: () => number }).toMillis ===
+              'function'
+          ) {
+            createdAt = (rawCreated as { toMillis: () => number }).toMillis();
+          } else if (typeof rawCreated === 'number') {
+            createdAt = rawCreated;
+          }
+          const createdBy =
+            typeof data?.createdBy === 'string' && data.createdBy.trim()
+              ? data.createdBy
+              : typeof data?.userId === 'string' && data.userId.trim()
+                ? data.userId
+                : typeof data?.hostId === 'string' && data.hostId.trim()
+                  ? data.hostId
+                  : '';
+          const participants: string[] = Array.isArray(data?.participants)
+            ? data.participants.filter(
+                (x): x is string => typeof x === 'string',
+              )
+            : [];
+          return {
+            id: d.id,
+            restaurantName:
+              typeof data?.restaurantName === 'string' &&
+              data.restaurantName.trim()
+                ? data.restaurantName
+                : 'Restaurant',
+            status: typeof data?.status === 'string' ? data.status : '—',
+            totalPrice: Number(data?.totalPrice ?? 0),
+            createdAt,
+            createdBy,
+            participants,
+            joinedAtMap: data?.joinedAtMap,
+            isSuggested: data?.isSuggested === true,
+          };
+        });
+        list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+        if (list[0]) {
+          console.log('ORDER PARTICIPANTS:', list[0].participants);
+        }
+        setOrders(list);
+        setLoadError(false);
+        setLoading(false);
       },
       onListenError,
     );
 
-    const unsubParticipant = onSnapshot(
-      qParticipant,
-      (snap) => {
-        participantSnapRef.current = snap;
-        mergeAndSort();
-      },
-      onListenError,
-    );
-
-    const unsubCreatedBy = onSnapshot(
-      qCreatedBy,
-      (snap) => {
-        createdBySnapRef.current = snap;
-        mergeAndSort();
-      },
-      onListenError,
-    );
-
-    const unsubUsersJoined = onSnapshot(
-      qUsersJoined,
-      (snap) => {
-        usersJoinedSnapRef.current = snap;
-        mergeAndSort();
-      },
-      onListenError,
-    );
-
-    return () => {
-      unsubHost();
-      unsubCreatedBy();
-      unsubParticipant();
-      unsubUsersJoined();
-    };
+    return () => unsub();
   }, [uid, retryNonce]);
 
   const handleSignIn = () => {
@@ -315,8 +237,8 @@ export default function OrdersScreen() {
     const { lifecycle, remainingMs } = deriveLifecycleForViewer({
       uid: u,
       createdBy: item.createdBy,
-      participantIds: item.participantIds,
-      participantRecords: item.participantRecords,
+      participants: item.participants,
+      joinedAtMap: item.joinedAtMap,
       orderStatus: item.status,
       now: nowTick,
     });
@@ -329,7 +251,7 @@ export default function OrdersScreen() {
             ? 'expired'
             : 'active';
     const countdownLabel =
-      item.participantIds.includes(u) &&
+      item.participants.includes(u) &&
       remainingMs != null &&
       remainingMs > 0
         ? formatOrderCountdown(remainingMs)

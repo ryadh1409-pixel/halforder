@@ -26,7 +26,7 @@ type OrderData = {
   mealType: string;
   sharePrice: number;
   hostName: string;
-  participantIds: string[];
+  participants: string[];
   maxPeople: number;
   expiresAtMs: number | null;
   status: string;
@@ -80,8 +80,8 @@ export default function JoinInviteScreen() {
           return;
         }
         const d = snap.data();
-        const participantIds = Array.isArray(d?.participantIds)
-          ? d.participantIds
+        const plist = Array.isArray(d?.participants)
+          ? d.participants.filter((x): x is string => typeof x === 'string')
           : [];
         const maxPeople =
           typeof d?.maxPeople === 'number' && d.maxPeople >= 1 ? d.maxPeople : 2;
@@ -104,7 +104,7 @@ export default function JoinInviteScreen() {
               : typeof d?.restaurantName === 'string'
                 ? d.restaurantName
                 : 'Host',
-          participantIds,
+          participants: plist,
           maxPeople,
           expiresAtMs,
           status: typeof d?.status === 'string' ? d.status : 'open',
@@ -129,7 +129,7 @@ export default function JoinInviteScreen() {
     (order.status === 'expired' ||
       (order.expiresAtMs != null && order.expiresAtMs <= Date.now()));
   const isFull =
-    order != null && order.participantIds.length >= order.maxPeople;
+    order != null && order.participants.length >= order.maxPeople;
 
   const handleJoinOrder = () => {
     if (!orderId) return;

@@ -63,8 +63,10 @@ export default function AdminOrdersScreen() {
             : typeof createdAt?.seconds === 'number'
               ? createdAt.seconds * 1000
               : 0;
-        const participantIds = Array.isArray(data?.participantIds)
-          ? data.participantIds
+        const rawList =
+          data?.participants ?? data?.participantIds ?? data?.joinedUsers;
+        const participantIds = Array.isArray(rawList)
+          ? rawList.filter((x): x is string => typeof x === 'string')
           : [];
         list.push({
           id: d.id,

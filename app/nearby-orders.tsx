@@ -74,11 +74,11 @@ export default function NearbyOrdersScreen() {
       );
       return;
     }
-    if (order.participantIds.includes(uid)) {
+    if (order.participants.includes(uid)) {
       router.push(`/order/room/${order.id}` as const);
       return;
     }
-    if (order.participantIds.length >= order.maxParticipants) {
+    if (order.participants.length >= order.maxParticipants) {
       Alert.alert(
         'Order full',
         'This order already has the maximum number of participants.',
@@ -116,7 +116,7 @@ export default function NearbyOrdersScreen() {
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, order.id);
-      router.replace(`/order/room/${order.id}` as const);
+      router.replace(`/order/${order.id}` as const);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join';
       Alert.alert('Error', msg);
@@ -180,7 +180,7 @@ export default function NearbyOrdersScreen() {
               const distanceKm = getDistanceKm(order);
               const distanceLabel =
                 distanceKm != null ? `${distanceKm.toFixed(2)} km away` : '—';
-              const participantsLabel = `${order.participantIds.length} / ${order.maxParticipants} participants`;
+              const participantsLabel = `${order.participants.length} / ${order.maxParticipants} participants`;
               const isJoining = joiningId === order.id;
 
               return (

@@ -20,6 +20,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 type RawOrder = {
   id: string;
   createdAt?: { toMillis?: () => number };
+  participants?: string[];
   participantIds?: string[];
   joinedUsers?: string[];
   hostId?: string;
@@ -47,7 +48,7 @@ function getOrderCreatedAt(o: RawOrder): number {
 }
 
 function getOrderParticipantIds(o: RawOrder): string[] {
-  const ids = (o.participantIds ?? o.joinedUsers ?? []) as string[];
+  const ids = (o.participants ?? o.participantIds ?? o.joinedUsers ?? []) as string[];
   const host = (o.hostId ?? o.creatorId ?? o.userId) as string | undefined;
   if (host && !ids.includes(host)) return [host, ...ids];
   return [...ids];

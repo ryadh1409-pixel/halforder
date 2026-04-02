@@ -15,7 +15,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-let testEnv: RulesTestEnvironment;
+let testEnv: RulesTestEnvironment | undefined;
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
@@ -29,78 +29,64 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testEnv.cleanup();
+  if (testEnv) await testEnv.cleanup();
 });
 
 beforeEach(async () => {
-  await testEnv.clearFirestore();
+  if (testEnv) await testEnv.clearFirestore();
 });
 
-describe('firestore rules: orders create + join safety', () => {
+function baseOrderFields(createdByUid: string) {
+  return {
+    id: 'o1',
+    foodName: 'Pepperoni Pizza',
+    image: 'https://example.com/pizza.jpg',
+    pricePerPerson: 10,
+    totalPrice: 30,
+    maxPeople: 3,
+    usersAccepted: [] as string[],
+    createdBy: createdByUid,
+    createdAt: serverTimestamp(),
+  };
+}
+
+describe('firestore rules: orders create + participants join', () => {
   it('allows valid order create by owner', async () => {
     const db = testEnv.authenticatedContext('u1').firestore();
     await assertSucceeds(
       setDoc(doc(db, 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 30,
-        peopleJoined: 1,
-        maxPeople: 3,
-        usersJoined: ['u1'],
-        users: [{ uid: 'u1', displayName: 'U1' }],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
+        ...baseOrderFields('u1'),
+        participants: ['u1'],
+        joinedAtMap: { u1: serverTimestamp() },
       }),
     );
   });
 
-  it('denies create when usersJoined does not include creator', async () => {
+  it('denies create when creator is not in participants', async () => {
     const db = testEnv.authenticatedContext('u1').firestore();
     await assertFails(
       setDoc(doc(db, 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 30,
-        peopleJoined: 1,
-        maxPeople: 3,
-        usersJoined: ['u2'],
-        users: [{ uid: 'u2', displayName: 'U2' }],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
+        ...baseOrderFields('u1'),
+        participants: ['u2'],
+        joinedAtMap: { u2: serverTimestamp() },
       }),
     );
   });
 
-  it('allows one valid join update (+1 peopleJoined and append uid)', async () => {
+  it('allows one valid join update (+1 participant and joinedAtMap for joiner)', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 30,
-        peopleJoined: 1,
-        maxPeople: 2,
-        usersJoined: ['u1'],
-        users: [{ uid: 'u1', displayName: 'U1' }],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
+        ...baseOrderFields('u1'),
+        participants: ['u1'],
+        joinedAtMap: { u1: serverTimestamp() },
       });
     });
 
     const dbU2 = testEnv.authenticatedContext('u2').firestore();
     await assertSucceeds(
       updateDoc(doc(dbU2, 'orders', 'o1'), {
-        peopleJoined: 2,
-        usersJoined: ['u1', 'u2'],
-        users: [
-          { uid: 'u1', displayName: 'U1' },
-          { uid: 'u2', displayName: 'U2' },
-        ],
+        participants: arrayUnion('u2'),
+        'joinedAtMap.u2': serverTimestamp(),
       }),
     );
   });
@@ -108,63 +94,40 @@ describe('firestore rules: orders create + join safety', () => {
   it('denies duplicate join by same user', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 30,
-        peopleJoined: 1,
+        ...baseOrderFields('u1'),
+        participants: ['u1'],
+        joinedAtMap: { u1: serverTimestamp() },
         maxPeople: 3,
-        usersJoined: ['u1'],
-        users: [{ uid: 'u1', displayName: 'U1' }],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
       });
     });
 
     const dbU1 = testEnv.authenticatedContext('u1').firestore();
     await assertFails(
       updateDoc(doc(dbU1, 'orders', 'o1'), {
-        peopleJoined: 2,
-        usersJoined: ['u1', 'u1'],
-        users: [
-          { uid: 'u1', displayName: 'U1' },
-          { uid: 'u1', displayName: 'U1' },
-        ],
+        participants: arrayUnion('u1'),
+        'joinedAtMap.u1': serverTimestamp(),
       }),
     );
   });
 
-  it('denies overfill update when peopleJoined exceeds maxPeople', async () => {
+  it('denies overfill when participants would exceed maxPeople', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 20,
-        peopleJoined: 2,
+        ...baseOrderFields('u1'),
+        participants: ['u1', 'u2'],
+        joinedAtMap: {
+          u1: serverTimestamp(),
+          u2: serverTimestamp(),
+        },
         maxPeople: 2,
-        usersJoined: ['u1', 'u2'],
-        users: [
-          { uid: 'u1', displayName: 'U1' },
-          { uid: 'u2', displayName: 'U2' },
-        ],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
       });
     });
 
     const dbU3 = testEnv.authenticatedContext('u3').firestore();
     await assertFails(
       updateDoc(doc(dbU3, 'orders', 'o1'), {
-        peopleJoined: 3,
-        usersJoined: ['u1', 'u2', 'u3'],
-        users: [
-          { uid: 'u1', displayName: 'U1' },
-          { uid: 'u2', displayName: 'U2' },
-          { uid: 'u3', displayName: 'U3' },
-        ],
+        participants: arrayUnion('u3'),
+        'joinedAtMap.u3': serverTimestamp(),
       }),
     );
   });
@@ -172,29 +135,18 @@ describe('firestore rules: orders create + join safety', () => {
   it('denies changing unrelated fields during join update', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 30,
-        peopleJoined: 1,
+        ...baseOrderFields('u1'),
+        participants: ['u1'],
+        joinedAtMap: { u1: serverTimestamp() },
         maxPeople: 3,
-        usersJoined: ['u1'],
-        users: [{ uid: 'u1', displayName: 'U1' }],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
       });
     });
 
     const dbU2 = testEnv.authenticatedContext('u2').firestore();
     await assertFails(
       updateDoc(doc(dbU2, 'orders', 'o1'), {
-        peopleJoined: 2,
-        usersJoined: ['u1', 'u2'],
-        users: [
-          { uid: 'u1', displayName: 'U1' },
-          { uid: 'u2', displayName: 'U2' },
-        ],
+        participants: arrayUnion('u2'),
+        'joinedAtMap.u2': serverTimestamp(),
         foodName: 'Changed',
       }),
     );
@@ -203,21 +155,18 @@ describe('firestore rules: orders create + join safety', () => {
   it('creator can still perform non-join update', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
-        id: 'o1',
-        foodName: 'Pepperoni Pizza',
-        image: 'https://example.com/pizza.jpg',
-        pricePerPerson: 10,
-        totalPrice: 30,
-        peopleJoined: 1,
+        ...baseOrderFields('u1'),
+        participants: ['u1'],
+        joinedAtMap: { u1: serverTimestamp() },
         maxPeople: 3,
-        usersJoined: ['u1'],
-        users: [{ uid: 'u1', displayName: 'U1' }],
-        createdBy: 'u1',
-        createdAt: serverTimestamp(),
       });
     });
     const dbU1 = testEnv.authenticatedContext('u1').firestore();
-    await assertSucceeds(updateDoc(doc(dbU1, 'orders', 'o1'), { image: 'https://example.com/new.jpg' }));
+    await assertSucceeds(
+      updateDoc(doc(dbU1, 'orders', 'o1'), {
+        image: 'https://example.com/new.jpg',
+      }),
+    );
     const snap = await getDoc(doc(dbU1, 'orders', 'o1'));
     expect(snap.data()?.image).toBe('https://example.com/new.jpg');
   });

@@ -50,6 +50,7 @@ type OrderDoc = {
   longitude?: number;
   location?: { latitude?: number; longitude?: number };
   status?: string;
+  participants?: string[];
   participantIds?: string[];
   joinedUsers?: string[];
 };
@@ -104,6 +105,7 @@ export default function CampaignsPage() {
       longitude: o.longitude,
       location: o.location,
       status: o.status,
+      participants: o.participants,
       participantIds: o.participantIds,
       joinedUsers: o.joinedUsers,
     }));

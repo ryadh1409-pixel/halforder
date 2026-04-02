@@ -27,7 +27,7 @@ export type NearbyOrder = {
   creatorId?: string;
   latitude: number;
   longitude: number;
-  participantIds: string[];
+  participants: string[];
   maxParticipants: number;
   status?: string;
 };
@@ -81,8 +81,8 @@ export function useNearbyOrders(radiusKm: number = DEFAULT_RADIUS_KM) {
             lng,
           );
           if (distance <= radiusKm) {
-            const participantIds = Array.isArray(data?.participantIds)
-              ? data.participantIds
+            const plist = Array.isArray(data?.participants)
+              ? data.participants.filter((x): x is string => typeof x === 'string')
               : [];
             list.push({
               id: d.id,
@@ -105,7 +105,7 @@ export function useNearbyOrders(radiusKm: number = DEFAULT_RADIUS_KM) {
                   : data?.hostId,
               latitude: lat,
               longitude: lng,
-              participantIds,
+              participants: plist,
               maxParticipants:
                 typeof data?.maxParticipants === 'number'
                   ? data.maxParticipants
@@ -199,8 +199,8 @@ export function useNearbyOrdersRealtime(
               lng,
             );
             if (distance > radiusKm) return;
-            const participantIds = Array.isArray(data?.participantIds)
-              ? data.participantIds
+            const plist = Array.isArray(data?.participants)
+              ? data.participants.filter((x): x is string => typeof x === 'string')
               : [];
             list.push({
               id: d.id,
@@ -223,7 +223,7 @@ export function useNearbyOrdersRealtime(
                   : data?.hostId,
               latitude: lat,
               longitude: lng,
-              participantIds,
+              participants: plist,
               maxParticipants:
                 typeof data?.maxParticipants === 'number'
                   ? data.maxParticipants

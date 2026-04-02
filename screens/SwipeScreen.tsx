@@ -328,12 +328,18 @@ function SwipeScreenInner() {
                 : 'pizza';
           const type: MockFoodCard['type'] =
             rawCategory === 'noodles' ? 'noodles' : 'pizza';
-          const participantIds = Array.isArray(data?.participantIds)
-            ? data.participantIds
+          const plist = Array.isArray(data?.participants)
+            ? (data.participants as unknown[]).filter(
+                (x): x is string => typeof x === 'string',
+              )
             : [];
-          const peopleJoined = participantIds.length > 0 ? participantIds.length : 1;
+          const peopleJoined = plist.length > 0 ? plist.length : 1;
           const maxParticipants =
-            typeof data?.maxParticipants === 'number' ? data.maxParticipants : 2;
+            typeof data?.maxPeople === 'number'
+              ? data.maxPeople
+              : typeof data?.maxParticipants === 'number'
+                ? data.maxParticipants
+                : 2;
           const spotsLeft = Math.max(0, maxParticipants - peopleJoined);
           const price =
             typeof data?.sharePrice === 'number'
@@ -446,7 +452,8 @@ function SwipeScreenInner() {
         }
         const orderRef = doc(db, 'orders', order.id);
         await updateDoc(orderRef, {
-          participantIds: arrayUnion(currentUser.uid),
+          participants: arrayUnion(currentUser.uid),
+          [`joinedAtMap.${currentUser.uid}`]: serverTimestamp(),
         });
         if (!swipeResult.matched) {
           setIndex((i) => i + 1);
@@ -520,7 +527,7 @@ function SwipeScreenInner() {
         }).catch(() => {});
         setBurstKey((k) => k + 1);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push(`/order/room/${order.id}` as const);
+        router.replace(`/order/${order.id}` as const);
         setIndex((i) => i + 1);
       } catch (error) {
         console.error('[Swipe] failed to join order on like:', error);

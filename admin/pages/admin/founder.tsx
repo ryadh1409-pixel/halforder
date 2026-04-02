@@ -22,6 +22,7 @@ type RawOrder = {
   hostId?: string;
   creatorId?: string;
   userId?: string;
+  participants?: string[];
   participantIds?: string[];
   joinedUsers?: string[];
   latitude?: number;
@@ -68,7 +69,10 @@ function getOrderCreatedAt(o: RawOrder): number {
 }
 
 function getOrderParticipantIds(o: RawOrder): string[] {
-  const ids = (o.participantIds ?? o.joinedUsers ?? []) as string[];
+  const ids = (o.participants ??
+    o.participantIds ??
+    o.joinedUsers ??
+    []) as string[];
   const host = (o.hostId ?? o.creatorId ?? o.userId) as string | undefined;
   if (host && !ids.includes(host)) return [host, ...ids];
   return [...ids];
@@ -265,6 +269,7 @@ export default function FounderPage() {
         longitude: o.longitude,
         location: o.location,
         status: (o as RawOrder & { status?: string }).status,
+        participants: o.participants,
         participantIds: o.participantIds,
         joinedUsers: o.joinedUsers,
       }));

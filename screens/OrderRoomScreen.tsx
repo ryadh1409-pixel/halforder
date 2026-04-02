@@ -66,11 +66,8 @@ import {
   ORDER_JOIN_WINDOW_MS,
   ensureParticipantRecordForUid,
   formatOrderCountdown,
-  getParticipantJoinedAtForUser,
+  getJoinedAtMsForUser,
   joinOrderWithParticipantRecord,
-  normalizeOrderParticipantRecords,
-  parseJoinedAtMs,
-  type OrderParticipantRecord,
 } from '@/services/orderLifecycle';
 import { shadows, theme } from '@/constants/theme';
 
@@ -87,8 +84,8 @@ type Message = {
 };
 
 type OrderState = {
-  participantIds: string[];
-  participantRecords: OrderParticipantRecord[];
+  participants: string[];
+  joinedAtMap: unknown;
   status: string;
   createdBy: string;
   allowed: boolean;
@@ -184,16 +181,16 @@ export default function OrderRoomScreen() {
   const hiddenUserIds = useHiddenUserIds();
   const currentUid = auth.currentUser?.uid ?? '';
 
-  const participantIds = order?.participantIds ?? [];
+  const participants = order?.participants ?? [];
   const otherParticipantId =
-    participantIds.length >= 2
-      ? (participantIds.find((id) => id !== auth.currentUser?.uid) ?? null)
+    participants.length >= 2
+      ? (participants.find((id) => id !== auth.currentUser?.uid) ?? null)
       : null;
   const otherTrustScore = useTrustScore(otherParticipantId);
   const isClosed = order?.status === 'closed';
-  const isWaiting = participantIds.length === 1;
+  const isWaiting = participants.length === 1;
   const allowed = order?.allowed ?? false;
-  const canChat = allowed && participantIds.length >= 2;
+  const canChat = allowed && participants.length >= 2;
   const currentUser = auth.currentUser;
   const isOwner = order?.createdBy === currentUser?.uid;
   const canCancel = order?.status === 'open';
@@ -236,23 +233,12 @@ export default function OrderRoomScreen() {
           return;
         }
         const d = orderSnap.data();
-        const fromParticipantIds: string[] = Array.isArray(d?.participantIds)
-          ? d.participantIds.filter((x): x is string => typeof x === 'string')
+        const ids: string[] = Array.isArray(d?.participants)
+          ? d.participants.filter((x): x is string => typeof x === 'string')
           : [];
-        const fromUsersJoined: string[] = Array.isArray(d?.usersJoined)
-          ? d.usersJoined.filter((x): x is string => typeof x === 'string')
-          : [];
-        const ids: string[] = Array.from(
-          new Set([...fromParticipantIds, ...fromUsersJoined]),
-        );
-        console.log('[OrderRoom] order snapshot', orderSnap.id, {
-          uid: auth.currentUser?.uid ?? null,
-          participantIds: fromParticipantIds,
-          usersJoined: fromUsersJoined,
-          mergedParticipantIds: ids,
-          participantsRaw: d?.participants,
-        });
         const uid = auth.currentUser?.uid ?? '';
+        console.log('UID:', uid);
+        console.log('ORDER PARTICIPANTS:', ids);
         const createdRaw = d?.createdAt;
         let createdAtMs: number | null = null;
         if (
@@ -322,12 +308,9 @@ export default function OrderRoomScreen() {
               ? expRaw.toMillis()
               : null;
         const typing = d?.typing;
-        const participantRecords = normalizeOrderParticipantRecords(
-          d?.participants,
-        );
         setOrder({
-          participantIds: ids,
-          participantRecords,
+          participants: ids,
+          joinedAtMap: d?.joinedAtMap,
           status: typeof d?.status === 'string' ? d.status : 'open',
           createdBy,
           allowed: uid !== '' && ids.includes(uid),
@@ -408,12 +391,12 @@ export default function OrderRoomScreen() {
 
   // Ensure chat exists when order has 2 participants
   useEffect(() => {
-    if (!orderId || !canChat || participantIds.length < 2) {
+    if (!orderId || !canChat || participants.length < 2) {
       setChatId(null);
       return;
     }
     let cancelled = false;
-    getOrCreateChat(orderId, participantIds)
+    getOrCreateChat(orderId, participants)
       .then((id) => {
         if (!cancelled) setChatId(id);
       })
@@ -421,7 +404,7 @@ export default function OrderRoomScreen() {
     return () => {
       cancelled = true;
     };
-  }, [orderId, canChat, participantIds.join(',')]);
+  }, [orderId, canChat, participants.join(',')]);
 
   // Real-time messages from orders/{orderId}/messages (updates instantly across devices)
   useEffect(() => {
@@ -500,10 +483,10 @@ export default function OrderRoomScreen() {
 
   useEffect(() => {
     const uid = auth.currentUser?.uid ?? '';
-    if (!uid || participantIds.length === 0) return;
-    const others = participantIds.filter((u) => u !== uid);
+    if (!uid || participants.length === 0) return;
+    const others = participants.filter((u) => u !== uid);
     isBlockedByAny(uid, others).then(setIsBlocked);
-  }, [participantIds.join(',')]);
+  }, [participants.join(',')]);
 
   // Incoming voice call listener
   useEffect(() => {
@@ -566,8 +549,7 @@ export default function OrderRoomScreen() {
       setRemainingMs(null);
       return;
     }
-    const joinedAt = getParticipantJoinedAtForUser(order.participantRecords, uid);
-    const joinedMs = joinedAt ? parseJoinedAtMs(joinedAt) : null;
+    const joinedMs = getJoinedAtMsForUser(order.joinedAtMap, uid);
     const updateRemaining = () => {
       const now = Date.now();
       if (joinedMs != null) {
@@ -606,7 +588,7 @@ export default function OrderRoomScreen() {
     const id = setInterval(updateRemaining, 1000);
     return () => clearInterval(id);
   }, [
-    order?.participantRecords,
+    order?.joinedAtMap,
     order?.expiresAtMs,
     order?.status,
     orderId,
@@ -616,7 +598,7 @@ export default function OrderRoomScreen() {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!orderId || !uid || !order) return;
-    if (!order.participantIds.includes(uid)) return;
+    if (!order.participants.includes(uid)) return;
     if (
       ['cancelled', 'expired', 'completed', 'closed'].includes(order.status)
     ) {
@@ -624,18 +606,18 @@ export default function OrderRoomScreen() {
     }
     if (
       uid === order.createdBy &&
-      order.participantIds.length === 1
+      order.participants.length === 1
     ) {
       return;
     }
-    if (getParticipantJoinedAtForUser(order.participantRecords, uid)) return;
+    if (getJoinedAtMsForUser(order.joinedAtMap, uid) != null) return;
     void ensureParticipantRecordForUid(db, orderId, uid);
   }, [
     orderId,
-    order?.participantIds,
+    order?.participants,
     order?.status,
     order?.createdBy,
-    order?.participantRecords,
+    order?.joinedAtMap,
   ]);
 
   useEffect(() => {
@@ -686,7 +668,7 @@ export default function OrderRoomScreen() {
       return;
     }
     let cancelled = false;
-    const others = (order.participantIds ?? []).filter((id) => id !== uid);
+    const others = (order.participants ?? []).filter((id) => id !== uid);
     getRatedUserIdsForOrder(orderId, uid).then((ratedSet) => {
       if (cancelled) return;
       const pending = others.filter((id) => !ratedSet.has(id));
@@ -696,7 +678,7 @@ export default function OrderRoomScreen() {
     return () => {
       cancelled = true;
     };
-  }, [order?.status, order?.participantIds, orderId, auth.currentUser?.uid]);
+  }, [order?.status, order?.participants, orderId, auth.currentUser?.uid]);
 
   useEffect(() => {
     if (
@@ -781,7 +763,6 @@ export default function OrderRoomScreen() {
         text: trimmed,
         senderId: uid,
         senderName: userName,
-        userName: userName || undefined,
         createdAt: serverTimestamp(),
       });
       lastMessageTimeRef.current = Date.now();
@@ -1001,7 +982,7 @@ export default function OrderRoomScreen() {
     setCompleting(true);
     try {
       const orderRef = doc(db, 'orders', orderId);
-      const ids = order.participantIds ?? [];
+      const ids = order.participants ?? [];
       const [user1Id, user2Id] = ids;
       let user1Name = hostName || order.userName || 'User 1';
       let user2Name = 'User 2';
@@ -1097,7 +1078,7 @@ export default function OrderRoomScreen() {
       } catch {
         // ignore
       }
-      const numUsers = Math.max(1, order.participantIds?.length ?? 0);
+      const numUsers = Math.max(1, order.participants?.length ?? 0);
       const totalForSplit = order.totalPrice ?? 0;
       const subtotalForSplit = order.subtotal ?? order.totalPrice ?? 0;
       const serviceFeeAmt =
@@ -1207,7 +1188,7 @@ export default function OrderRoomScreen() {
     order.totalPrice != null ? `$${order.totalPrice.toFixed(2)}` : '—';
   const sharePriceLabel =
     order.sharePrice != null ? `$${order.sharePrice.toFixed(2)}` : '—';
-  const participantsCount = order.participantIds?.length ?? 0;
+  const participantsCount = order.participants?.length ?? 0;
   const numUsers = Math.max(1, participantsCount);
   const subtotalForSplit = order.subtotal ?? order.totalPrice ?? 0;
   const totalForSplit = order.totalPrice ?? 0;
@@ -1257,13 +1238,10 @@ export default function OrderRoomScreen() {
   const hasLocationCoords =
     typeof orderLat === 'number' && typeof orderLng === 'number';
   const uidForExpiry = auth.currentUser?.uid ?? '';
-  const joinedAtForUser =
+  const joinedMsForDisplay =
     order && uidForExpiry
-      ? getParticipantJoinedAtForUser(order.participantRecords, uidForExpiry)
+      ? getJoinedAtMsForUser(order.joinedAtMap, uidForExpiry)
       : null;
-  const joinedMsForDisplay = joinedAtForUser
-    ? parseJoinedAtMs(joinedAtForUser)
-    : null;
   const joinRemainingForDisplay =
     joinedMsForDisplay != null
       ? ORDER_JOIN_WINDOW_MS - (Date.now() - joinedMsForDisplay)
@@ -1362,16 +1340,16 @@ export default function OrderRoomScreen() {
       Alert.alert('Order expired', 'This order expired.');
       return;
     }
-    const participantIds = order?.participantIds ?? [];
+    const memberIds = order?.participants ?? [];
     const maxPeople = order?.maxPeople ?? 2;
-    if (participantIds.length >= maxPeople) {
+    if (memberIds.length >= maxPeople) {
       Alert.alert(
         'Order full',
         'This order already has the maximum number of participants.',
       );
       return;
     }
-    if (participantIds.includes(uid)) {
+    if (memberIds.includes(uid)) {
       return;
     }
     setJoiningAsGuest(true);
@@ -1390,11 +1368,9 @@ export default function OrderRoomScreen() {
           user2Name: displayName,
         },
       );
-      const newParticipantIds = [...(order?.participantIds ?? []), uid].filter(
-        Boolean,
-      );
-      if (newParticipantIds.length >= 2) {
-        getOrCreateChat(orderId, newParticipantIds).catch(() => {});
+      const newMembers = [...(order?.participants ?? []), uid].filter(Boolean);
+      if (newMembers.length >= 2) {
+        getOrCreateChat(orderId, newMembers).catch(() => {});
       }
       const { createAlert } = await import('@/services/alerts');
       await createAlert('order_matched', 'Order matched');
@@ -1405,14 +1381,13 @@ export default function OrderRoomScreen() {
       await addDoc(messagesRef, {
         senderId: uid,
         senderName: displayName,
-        userName: displayName,
         text: 'You joined this shared order',
         createdAt: serverTimestamp(),
         type: 'system',
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, orderId);
-      router.replace(`/order/room/${orderId}` as never);
+      router.replace(`/order/${orderId}` as never);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to join');
     } finally {

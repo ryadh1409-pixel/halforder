@@ -112,7 +112,8 @@ export default function AdminScreen() {
         if (ms >= todayStart && ms <= now) ordersToday += 1;
         if (ms >= weekStart && ms <= now) {
           ordersThisWeek += 1;
-          const ids = data?.participantIds ?? data?.joinedUsers ?? [];
+          const ids =
+            data?.participants ?? data?.participantIds ?? data?.joinedUsers ?? [];
           const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
           if (Array.isArray(ids)) ids.forEach((id: string) => activeUserIds.add(id));
           if (hostId) activeUserIds.add(hostId);

@@ -3,11 +3,9 @@ import { auth, db } from '@/services/firebase';
 import {
   ORDER_JOIN_WINDOW_MS,
   formatOrderCountdown,
-  getParticipantJoinedAtForUser,
-  normalizeOrderParticipantRecords,
-  parseJoinedAtMs,
+  getJoinedAtMsForUser,
+  normalizeParticipantsStrings,
 } from '@/services/orderLifecycle';
-import { generateOrderShareLink } from '@/lib/invite-link';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -25,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type OrderDoc = {
   title: string;
-  participantIds: string[];
+  participants: string[];
   participantLines: string[];
   status: string;
 };
@@ -43,13 +41,20 @@ function mapSnapToOrder(
       ? data.foodName
       : null) ??
     'Order';
-  const participantIds: string[] = Array.isArray(data.participantIds)
-    ? data.participantIds.filter((x): x is string => typeof x === 'string')
-    : [];
-  const records = normalizeOrderParticipantRecords(data.participants);
-  const participantLines = participantIds.map((uid) => {
-    const rec = records.find((r) => r.userId === uid);
-    const j = rec ? parseJoinedAtMs(rec.joinedAt) : null;
+  const participants = normalizeParticipantsStrings(data.participants);
+  const jm = data.joinedAtMap as Record<string, unknown> | undefined;
+  const participantLines = participants.map((uid) => {
+    const raw = jm?.[uid];
+    const j =
+      raw &&
+      typeof raw === 'object' &&
+      raw !== null &&
+      'toMillis' in raw &&
+      typeof (raw as { toMillis: () => number }).toMillis === 'function'
+        ? (raw as { toMillis: () => number }).toMillis()
+        : typeof raw === 'number'
+          ? raw
+          : null;
     const joined =
       j != null
         ? `joined ${new Date(j).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`
@@ -62,7 +67,7 @@ function mapSnapToOrder(
       : 'open';
   return {
     title,
-    participantIds,
+    participants,
     participantLines,
     status,
   };
@@ -103,6 +108,11 @@ export default function OrderDetailsScreen() {
           return;
         }
         const data = snap.data() as Record<string, unknown>;
+        console.log('UID:', auth.currentUser?.uid ?? '');
+        console.log(
+          'ORDER PARTICIPANTS:',
+          normalizeParticipantsStrings(data.participants),
+        );
         setDocData(data);
         setOrder(mapSnapToOrder(snap.id, data));
         setLoading(false);
@@ -119,9 +129,7 @@ export default function OrderDetailsScreen() {
   const countdownLabel = useMemo(() => {
     const uid = auth.currentUser?.uid ?? '';
     if (!uid || !docData) return null;
-    const records = normalizeOrderParticipantRecords(docData.participants);
-    const joinedAt = getParticipantJoinedAtForUser(records, uid);
-    const joinedMs = joinedAt ? parseJoinedAtMs(joinedAt) : null;
+    const joinedMs = getJoinedAtMsForUser(docData.joinedAtMap, uid);
     if (joinedMs == null) return null;
     const rem = ORDER_JOIN_WINDOW_MS - (nowTick - joinedMs);
     if (rem <= 0) return "Time's up";
@@ -129,20 +137,10 @@ export default function OrderDetailsScreen() {
   }, [docData, nowTick]);
 
   const inviteWhatsApp = useCallback(async () => {
-    const refUserId = auth.currentUser?.uid ?? null;
-    const link = generateOrderShareLink(orderId, refUserId);
-    const message = `Join my food order 🍕: ${link}`;
+    const link = `https://yourapp.com/order/${orderId}`;
+    const message = `Join my order 🍕 ${link}`;
     const httpsUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    const appUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
-    try {
-      if (await Linking.canOpenURL(httpsUrl)) {
-        await Linking.openURL(httpsUrl);
-        return;
-      }
-    } catch {
-      // fall through
-    }
-    await Linking.openURL(appUrl).catch(() => {});
+    await Linking.openURL(httpsUrl).catch(() => {});
   }, [orderId]);
 
   if (!orderId.trim()) {

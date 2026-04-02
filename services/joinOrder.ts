@@ -1,52 +1,12 @@
 /**
- * HalfOrder: join a shared Firestore order (modular SDK).
- * Uses a transaction + arrayUnion(usersJoined) for atomic, duplicate-safe joins,
- * and appends a user object to the `users` array (full replacement; not arrayUnion on maps).
+ * Join `orders/{orderId}` using normalized `participants: string[]` + `joinedAtMap`.
  */
-import {
-  arrayUnion,
-  doc,
-  getDoc,
-  increment,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-} from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 import { isUserBanned } from '@/services/adminGuard';
 import { hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
 import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
-
-export type OrderMemberUser = {
-  uid: string;
-  displayName: string;
-  photoURL?: string | null;
-  joinedAt?: unknown;
-};
-
-function normalizeUsersFromDoc(data: Record<string, unknown>): OrderMemberUser[] {
-  const joined = Array.isArray(data.usersJoined)
-    ? (data.usersJoined as unknown[]).filter((u): u is string => typeof u === 'string')
-    : [];
-  const rawUsers = Array.isArray(data.users) ? (data.users as Record<string, unknown>[]) : [];
-
-  if (rawUsers.length === joined.length) {
-    return rawUsers.map((u, i) => ({
-      uid: typeof u?.uid === 'string' ? u.uid : joined[i] ?? '',
-      displayName: typeof u?.displayName === 'string' ? u.displayName : '',
-      photoURL: typeof u?.photoURL === 'string' ? u.photoURL : null,
-      joinedAt: u?.joinedAt ?? null,
-    }));
-  }
-
-  return joined.map((uid) => ({
-    uid,
-    displayName: '',
-    photoURL: null,
-    joinedAt: null,
-  }));
-}
 
 /**
  * Join the current user to `orders/{orderId}`.
@@ -82,64 +42,12 @@ export async function joinOrder(orderId: string): Promise<void> {
     }
   }
 
-  const displayName =
-    user.displayName || user.email?.split('@')[0] || 'User';
-  const photoURL = user.photoURL ?? null;
+  console.log('UID:', uid);
+  console.log('ORDER PARTICIPANTS:', preData.participants);
 
-  console.log('[joinOrder] start', { uid, orderId: trimmedId });
-
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(orderRef);
-    if (!snap.exists()) {
-      throw new Error('Order no longer exists.');
-    }
-    const d = snap.data() as Record<string, unknown>;
-    const peopleJoined = Number(d?.peopleJoined ?? 1);
-    const maxPeople = Number(d?.maxPeople ?? 2);
-    const usersJoined = Array.isArray(d?.usersJoined)
-      ? (d.usersJoined as unknown[]).filter((x): x is string => typeof x === 'string')
-      : [];
-
-    if (usersJoined.includes(uid)) {
-      throw new Error('You already joined this order.');
-    }
-    if (peopleJoined >= maxPeople) {
-      throw new Error('Order is already full.');
-    }
-
-    const existingUsers = normalizeUsersFromDoc(d);
-    const nextUsers: Record<string, unknown>[] = [
-      ...existingUsers.map((u) => ({
-        uid: u.uid,
-        displayName: u.displayName,
-        photoURL: u.photoURL ?? null,
-        ...(u.joinedAt != null ? { joinedAt: u.joinedAt } : {}),
-      })),
-      {
-        uid,
-        displayName,
-        photoURL,
-        joinedAt: serverTimestamp(),
-      },
-    ];
-
-    tx.update(orderRef, {
-      peopleJoined: increment(1),
-      usersJoined: arrayUnion(uid),
-      users: nextUsers,
-    });
+  await joinOrderWithParticipantRecord(db, trimmedId, uid, {}, {
+    requireOpenForJoin: false,
   });
-
-  try {
-    await joinOrderWithParticipantRecord(db, trimmedId, uid, {}, {
-      requireOpenForJoin: false,
-    });
-  } catch (syncErr) {
-    console.warn(
-      '[joinOrder] participantIds/participants sync failed (non-fatal)',
-      syncErr,
-    );
-  }
 
   await setDoc(
     doc(db, 'orders', trimmedId, 'joins', uid),
@@ -153,9 +61,5 @@ export async function joinOrder(orderId: string): Promise<void> {
     { merge: true },
   ).catch(() => {});
 
-  console.info('[joinOrder] success', {
-    orderId: trimmedId,
-    uid,
-    note: 'usersJoined + participantIds synced',
-  });
+  console.info('[joinOrder] success', { orderId: trimmedId, uid });
 }

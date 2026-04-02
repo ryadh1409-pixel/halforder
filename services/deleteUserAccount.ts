@@ -12,6 +12,7 @@ import {
   arrayRemove,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   limit,
@@ -75,14 +76,15 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
     await deleteOrderSubcollectionsAndDoc(orderId);
   }
 
-  // 3) Orders where user is a participant (not host) — remove uid from participantIds
+  // 3) Orders where user is a participant (not host) — remove uid from participants + joinedAtMap
   const participantSnap = await getDocs(
-    query(collection(db, 'orders'), where('participantIds', 'array-contains', uid)),
+    query(collection(db, 'orders'), where('participants', 'array-contains', uid)),
   );
   for (const orderDoc of participantSnap.docs) {
     try {
       await updateDoc(orderDoc.ref, {
-        participantIds: arrayRemove(uid),
+        participants: arrayRemove(uid),
+        [`joinedAtMap.${uid}`]: deleteField(),
       });
     } catch {
       // Order may have been deleted or permission edge case — continue

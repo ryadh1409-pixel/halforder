@@ -1,21 +1,21 @@
 import {
+  arrayRemove,
+  arrayUnion,
+  deleteField,
   doc,
   runTransaction,
   serverTimestamp,
-  Timestamp,
-  type FieldValue,
   type Firestore,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
-
-/** 45-minute window after a user joins (participant record). */
+/** 45-minute window after a user joins (`joinedAtMap[uid]`). */
 export const ORDER_JOIN_WINDOW_MS = 45 * 60 * 1000;
 
-export type OrderParticipantRecord = {
-  userId: string;
-  joinedAt: Timestamp;
-};
+/** Canonical membership: `orders.participants` is `string[]` only. */
+export function normalizeParticipantsStrings(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
+}
 
 export function parseJoinedAtMs(v: unknown): number | null {
   if (v == null) return null;
@@ -27,34 +27,19 @@ export function parseJoinedAtMs(v: unknown): number | null {
   return null;
 }
 
-export function normalizeOrderParticipantRecords(
-  raw: unknown,
-): OrderParticipantRecord[] {
-  if (!Array.isArray(raw)) return [];
-  const out: OrderParticipantRecord[] = [];
-  for (const entry of raw) {
-    if (!entry || typeof entry !== 'object') continue;
-    const userId = (entry as { userId?: unknown }).userId;
-    if (typeof userId !== 'string' || !userId) continue;
-    const joinedAt = (entry as { joinedAt?: unknown }).joinedAt;
-    const ms = parseJoinedAtMs(joinedAt);
-    if (joinedAt != null && ms == null) continue;
-    if (ms != null && joinedAt && typeof joinedAt === 'object' && 'toMillis' in joinedAt) {
-      out.push({ userId, joinedAt: joinedAt as Timestamp });
-    }
-  }
-  return out;
-}
-
-export function getParticipantJoinedAtForUser(
-  records: OrderParticipantRecord[],
+export function getJoinedAtMsForUser(
+  joinedAtMap: unknown,
   uid: string,
-): Timestamp | null {
-  const r = records.find((p) => p.userId === uid);
-  return r?.joinedAt ?? null;
+): number | null {
+  if (!joinedAtMap || typeof joinedAtMap !== 'object') return null;
+  const v = (joinedAtMap as Record<string, unknown>)[uid];
+  return parseJoinedAtMs(v);
 }
 
-export function remainingMsAfterJoin(joinedAtMs: number | null, now: number): number | null {
+export function remainingMsAfterJoin(
+  joinedAtMs: number | null,
+  now: number,
+): number | null {
   if (joinedAtMs == null) return null;
   return ORDER_JOIN_WINDOW_MS - (now - joinedAtMs);
 }
@@ -68,8 +53,8 @@ export type LifecycleDisplayStatus =
 export function deriveLifecycleForViewer(input: {
   uid: string;
   createdBy: string;
-  participantIds: string[];
-  participantRecords: OrderParticipantRecord[];
+  participants: string[];
+  joinedAtMap: unknown;
   orderStatus: string;
   now: number;
 }): {
@@ -77,8 +62,7 @@ export function deriveLifecycleForViewer(input: {
   remainingMs: number | null;
   joinedAtMs: number | null;
 } {
-  const { uid, createdBy, participantIds, participantRecords, orderStatus, now } =
-    input;
+  const { uid, createdBy, participants, joinedAtMap, orderStatus, now } = input;
   if (orderStatus === 'cancelled') {
     return {
       lifecycle: 'cancelled',
@@ -93,18 +77,17 @@ export function deriveLifecycleForViewer(input: {
       joinedAtMs: null,
     };
   }
-  const joinedAt = getParticipantJoinedAtForUser(participantRecords, uid);
-  const joinedAtMs = joinedAt ? parseJoinedAtMs(joinedAt) : null;
+  const joinedAtMs = getJoinedAtMsForUser(joinedAtMap, uid);
   const rem = remainingMsAfterJoin(joinedAtMs, now);
 
   if (joinedAtMs != null && rem != null && rem <= 0) {
     return { lifecycle: 'expired', remainingMs: rem, joinedAtMs };
   }
 
-  if (participantIds.includes(uid)) {
+  if (participants.includes(uid)) {
     if (joinedAtMs == null) {
       const onlyHost =
-        participantIds.length === 1 && participantIds[0] === createdBy;
+        participants.length === 1 && participants[0] === createdBy;
       const isCreator = uid === createdBy;
       if (isCreator && onlyHost) {
         return { lifecycle: 'waiting', remainingMs: null, joinedAtMs: null };
@@ -127,30 +110,6 @@ export function formatOrderCountdown(remainingMs: number): string {
   return `⏱ ${mins} min left`;
 }
 
-export type ParticipantWriteRecord = {
-  userId: string;
-  joinedAt: Timestamp | FieldValue;
-};
-
-export function mergeParticipantRecordsForJoin(
-  existing: OrderParticipantRecord[],
-  uid: string,
-  joinedAt: Timestamp | FieldValue,
-): ParticipantWriteRecord[] {
-  const without = existing.filter((p) => p.userId !== uid);
-  return [
-    ...without.map((p) => ({ userId: p.userId, joinedAt: p.joinedAt })),
-    { userId: uid, joinedAt },
-  ];
-}
-
-export function mergeParticipantRecordsForLeave(
-  existing: OrderParticipantRecord[],
-  uid: string,
-): OrderParticipantRecord[] {
-  return existing.filter((p) => p.userId !== uid);
-}
-
 export type JoinOrderParticipantExtras = {
   status?: string;
   user2Id?: string;
@@ -158,14 +117,16 @@ export type JoinOrderParticipantExtras = {
 };
 
 export type JoinOrderWithParticipantOptions = {
-  /** When true, join only if current `status` is `'open'`. */
   requireOpenForJoin?: boolean;
-  /** If set, merged into the update after computing `nextIds` (overrides `extras.status` when both set). */
-  resolveStatus?: (nextParticipantCount: number, maxPeople: number) => string | undefined;
+  resolveStatus?: (
+    nextParticipantCount: number,
+    maxPeople: number,
+  ) => string | undefined;
 };
 
 /**
- * Idempotent: if uid already in participantIds, only backfills participants entry when missing.
+ * Join: `participants: arrayUnion(uid)` and `joinedAtMap.{uid}: serverTimestamp()`.
+ * Idempotent if uid already in `participants` (backfills `joinedAtMap` only when missing).
  */
 export async function joinOrderWithParticipantRecord(
   firestore: Firestore,
@@ -185,10 +146,7 @@ export async function joinOrderWithParticipantRecord(
     if (options.requireOpenForJoin && d.status !== 'open') {
       throw new Error('Order is not open');
     }
-    const participantIds: string[] = Array.isArray(d.participantIds)
-      ? d.participantIds.filter((x): x is string => typeof x === 'string')
-      : [];
-    const records = normalizeOrderParticipantRecords(d.participants);
+    const parts = normalizeParticipantsStrings(d.participants);
     const maxPeople =
       typeof d.maxPeople === 'number'
         ? d.maxPeople
@@ -196,33 +154,26 @@ export async function joinOrderWithParticipantRecord(
           ? d.maxParticipants
           : 2;
 
-    if (participantIds.includes(uid)) {
-      if (records.some((r) => r.userId === uid)) return;
-      const nextRecords = mergeParticipantRecordsForJoin(
-        records,
-        uid,
-        serverTimestamp(),
-      );
-      tx.update(orderRef, { participants: nextRecords });
+    if (parts.includes(uid)) {
+      const jm = d.joinedAtMap as Record<string, unknown> | undefined;
+      if (jm && parseJoinedAtMs(jm[uid]) != null) return;
+      tx.update(orderRef, {
+        [`joinedAtMap.${uid}`]: serverTimestamp(),
+      });
       return;
     }
 
-    if (participantIds.length >= maxPeople) {
+    if (parts.length >= maxPeople) {
       throw new Error('Order is already full.');
     }
 
-    const nextIds = [...participantIds, uid];
-    const nextRecords = mergeParticipantRecordsForJoin(
-      records,
-      uid,
-      serverTimestamp(),
-    );
-    const resolved = options.resolveStatus?.(nextIds.length, maxPeople);
+    const resolved = options.resolveStatus?.(parts.length + 1, maxPeople);
     const statusPatch =
       resolved !== undefined ? { status: resolved } : {};
+
     tx.update(orderRef, {
-      participantIds: nextIds,
-      participants: nextRecords,
+      participants: arrayUnion(uid),
+      [`joinedAtMap.${uid}`]: serverTimestamp(),
       ...extras,
       ...statusPatch,
     });
@@ -247,27 +198,19 @@ export async function leaveOrderParticipant(
     const snap = await tx.get(orderRef);
     if (!snap.exists()) throw new Error('Order no longer exists.');
     const d = snap.data() as Record<string, unknown>;
-    const participantIds: string[] = Array.isArray(d.participantIds)
-      ? d.participantIds.filter((x): x is string => typeof x === 'string')
-      : [];
-    if (!participantIds.includes(uid)) {
+    const parts = normalizeParticipantsStrings(d.participants);
+    if (!parts.includes(uid)) {
       throw new Error('Not in order');
     }
 
-    const nextIds = participantIds.filter((id) => id !== uid);
-    const records = normalizeOrderParticipantRecords(d.participants);
-    const hadParticipantRecord = records.some((r) => r.userId === uid);
-
     const patch: Record<string, unknown> = {
-      participantIds: nextIds,
+      participants: arrayRemove(uid),
+      [`joinedAtMap.${uid}`]: deleteField(),
     };
-    if (hadParticipantRecord) {
-      patch.participants = mergeParticipantRecordsForLeave(records, uid);
-    }
 
     const currentStatus = typeof d.status === 'string' ? d.status : 'open';
     const maxPeople = Number(d.maxPeople ?? d.maxParticipants ?? 2);
-    if (currentStatus === 'closed' && nextIds.length < maxPeople) {
+    if (currentStatus === 'closed' && parts.length - 1 < maxPeople) {
       patch.status = 'open';
     }
 

@@ -73,12 +73,12 @@ export default function MatchCheckoutScreen() {
 
         const d = orderSnap.data();
         const hostId = (d?.hostId ?? d?.userId ?? '') as string;
-        const participantIds: string[] = Array.isArray(d?.participantIds)
-          ? d.participantIds
+        const plist: string[] = Array.isArray(d?.participants)
+          ? d.participants.filter((x): x is string => typeof x === 'string')
           : [];
         const uid = auth.currentUser?.uid ?? '';
         const otherId =
-          participantIds.find((id) => id !== uid) ??
+          plist.find((id) => id !== uid) ??
           (d?.user2Id as string) ??
           '';
 

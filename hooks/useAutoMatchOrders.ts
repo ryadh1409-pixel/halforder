@@ -13,7 +13,7 @@ export type AutoMatchOrder = {
   restaurantName: string;
   latitude: number;
   longitude: number;
-  participantIds: string[];
+  participants: string[];
   maxParticipants: number;
   createdAtMs: number;
   hostId: string;
@@ -64,8 +64,8 @@ export function useAutoMatchOrders() {
             ? createdAt.seconds * 1000
             : 0);
         if (createdAtMs < cutoff) return;
-        const participantIds = Array.isArray(data?.participantIds)
-          ? data.participantIds
+        const plist = Array.isArray(data?.participants)
+          ? data.participants.filter((x): x is string => typeof x === 'string')
           : [];
         list.push({
           id: d.id,
@@ -76,7 +76,7 @@ export function useAutoMatchOrders() {
               : 'Not specified',
           latitude: lat,
           longitude: lng,
-          participantIds,
+          participants: plist,
           maxParticipants:
             typeof data?.maxParticipants === 'number'
               ? data.maxParticipants

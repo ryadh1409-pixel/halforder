@@ -39,7 +39,10 @@ export default function UserDetailPage() {
         ordersSnap.docs.forEach((d) => {
           const data = d.data();
           const participantIds =
-            data?.participantIds ?? data?.joinedUsers ?? [];
+            data?.participants ??
+            data?.participantIds ??
+            data?.joinedUsers ??
+            [];
           const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
           const isParticipant =
             hostId === id ||

@@ -123,18 +123,12 @@ export function buildHostedOrderWithSwipeField(opts: {
     image: opts.image.trim(),
     pricePerPerson: Number((total / people).toFixed(2)),
     totalPrice: Number(total.toFixed(2)),
-    peopleJoined: 1,
     maxPeople: people,
     usersAccepted: [] as string[],
-    usersJoined: [opts.hostUid],
-    users: [
-      {
-        uid: opts.hostUid,
-        displayName: opts.displayName,
-        photoURL: opts.photoURL,
-        joinedAt: opts.joinedAt,
-      },
-    ],
+    participants: [opts.hostUid],
+    joinedAtMap: {
+      [opts.hostUid]: opts.joinedAt,
+    },
     createdBy: opts.hostUid,
     createdAt: opts.createdAt,
   };

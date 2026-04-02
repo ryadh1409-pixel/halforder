@@ -31,8 +31,6 @@ import {
 import {
   addDoc,
   collection,
-  getDocs,
-  limit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -102,24 +100,14 @@ function RootLayoutNav() {
       return;
     }
 
-    const loadLatestOrder = async () => {
-      try {
-        const baseRef = collection(db, 'orders');
-        const [hostSnap, createdBySnap, partSnap, joinedSnap] = await Promise.all([
-          getDocs(query(baseRef, where('hostId', '==', uid), limit(12))),
-          getDocs(query(baseRef, where('createdBy', '==', uid), limit(12))),
-          getDocs(
-            query(baseRef, where('participantIds', 'array-contains', uid), limit(12)),
-          ),
-          getDocs(
-            query(baseRef, where('usersJoined', 'array-contains', uid), limit(12)),
-          ),
-        ]);
-        const byId = new Map<string, (typeof hostSnap.docs)[number]>();
-        for (const s of [hostSnap, createdBySnap, partSnap, joinedSnap]) {
-          s.docs.forEach((d) => byId.set(d.id, d));
-        }
-        const merged = Array.from(byId.values()).sort((a, b) => {
+    const q = query(
+      collection(db, 'orders'),
+      where('participants', 'array-contains', uid),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const merged = [...snap.docs].sort((a, b) => {
           const ad = a.data() as DocumentData;
           const bd = b.data() as DocumentData;
           const am =
@@ -138,13 +126,11 @@ function RootLayoutNav() {
               : 0;
           return bm - am;
         });
-
         if (merged.length === 0) {
           latestOrderRef.current = null;
           latestOrdersRef.current = [];
           return;
         }
-
         const mapped = merged.slice(0, 3).map((docSnap) => {
           const data = (docSnap.data() ?? {}) as DocumentData;
           const status =
@@ -178,17 +164,16 @@ function RootLayoutNav() {
             createdAt,
           };
         });
-
         latestOrdersRef.current = mapped;
         latestOrderRef.current = mapped[0] ?? null;
-      } catch (error) {
-        console.warn('[Tidio] failed loading latest order:', error);
+      },
+      (error) => {
+        console.warn('[Tidio] latest orders listener failed:', error);
         latestOrderRef.current = null;
         latestOrdersRef.current = [];
-      }
-    };
-
-    loadLatestOrder().catch(() => {});
+      },
+    );
+    return () => unsub();
   }, [user?.uid]);
 
   useEffect(() => {
@@ -236,8 +221,8 @@ function RootLayoutNav() {
       const data = (change.doc.data() ?? {}) as DocumentData;
       const status =
         typeof data.status === 'string' ? data.status.toLowerCase() : 'unknown';
-      const participantsCount = Array.isArray(data.participantIds)
-        ? data.participantIds.length
+      const participantsCount = Array.isArray(data.participants)
+        ? data.participants.length
         : 0;
 
       const prev = orderStateCacheRef.current[orderId];
@@ -271,43 +256,22 @@ function RootLayoutNav() {
       }
     };
 
-    const qHost = query(ordersRef, where('hostId', '==', uid));
-    const qCreatedBy = query(ordersRef, where('createdBy', '==', uid));
-    const qParticipant = query(
+    const qMyOrders = query(
       ordersRef,
-      where('participantIds', 'array-contains', uid),
-    );
-    const qUsersJoined = query(
-      ordersRef,
-      where('usersJoined', 'array-contains', uid),
+      where('participants', 'array-contains', uid),
     );
 
     const onErr = (error: Error) => {
       console.warn('[Tidio] order listener failed:', error);
     };
 
-    const unsubs = [
-      onSnapshot(qHost, (snapshot) => snapshot.docChanges().forEach(processOrderChange), onErr),
-      onSnapshot(
-        qCreatedBy,
-        (snapshot) => snapshot.docChanges().forEach(processOrderChange),
-        onErr,
-      ),
-      onSnapshot(
-        qParticipant,
-        (snapshot) => snapshot.docChanges().forEach(processOrderChange),
-        onErr,
-      ),
-      onSnapshot(
-        qUsersJoined,
-        (snapshot) => snapshot.docChanges().forEach(processOrderChange),
-        onErr,
-      ),
-    ];
+    const unsub = onSnapshot(
+      qMyOrders,
+      (snapshot) => snapshot.docChanges().forEach(processOrderChange),
+      onErr,
+    );
 
-    return () => {
-      unsubs.forEach((u) => u());
-    };
+    return () => unsub();
   }, [user?.uid]);
 
   useEffect(() => {

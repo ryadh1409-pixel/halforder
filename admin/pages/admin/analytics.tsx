@@ -22,6 +22,7 @@ type RawOrder = {
   userId?: string;
   hostId?: string;
   creatorId?: string;
+  participants?: string[];
   participantIds?: string[];
   joinedUsers?: string[];
   restaurantName?: string;
@@ -68,7 +69,8 @@ function getOrderPrice(order: RawOrder): number | null {
 }
 
 function getOrderParticipantIds(order: RawOrder): string[] {
-  const ids = order.participantIds ?? order.joinedUsers ?? [];
+  const ids =
+    order.participants ?? order.participantIds ?? order.joinedUsers ?? [];
   const host = order.hostId ?? order.creatorId ?? order.userId;
   if (host && !ids.includes(host)) return [host, ...ids];
   return Array.isArray(ids) ? [...ids] : [];

@@ -62,7 +62,8 @@ export default function AdminUsersScreen() {
         const hostId = data?.hostId ?? data?.creatorId ?? data?.userId;
         if (hostId)
           orderCountByUid[hostId] = (orderCountByUid[hostId] ?? 0) + 1;
-        const ids = data?.participantIds ?? data?.joinedUsers ?? [];
+        const ids =
+          data?.participants ?? data?.participantIds ?? data?.joinedUsers ?? [];
         if (Array.isArray(ids))
           ids.forEach((id: string) => {
             orderCountByUid[id] = (orderCountByUid[id] ?? 0) + 1;

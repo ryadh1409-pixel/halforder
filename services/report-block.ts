@@ -36,9 +36,9 @@ export async function isBlockedByAny(
 
 export async function hasBlockConflict(
   joinerUid: string,
-  participantIds: string[],
+  participants: string[],
 ): Promise<boolean> {
-  for (const participantId of participantIds) {
+  for (const participantId of participants) {
     if (!participantId || participantId === joinerUid) continue;
     if (await isUserBlockedService(joinerUid, participantId)) {
       return true;
