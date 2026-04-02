@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { adminRoutes } from '@/constants/adminRoutes';
 import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
@@ -200,7 +201,7 @@ export default function AdminDashboardScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-users')}
+              onPress={() => router.push(adminRoutes.users as never)}
             >
               <Text style={styles.cardLabel}>Total Users</Text>
               <Text style={styles.cardValue}>{stats.totalUsers}</Text>
@@ -209,7 +210,7 @@ export default function AdminDashboardScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-orders' as never)}
+              onPress={() => router.push(adminRoutes.orders() as never)}
             >
               <Text style={styles.cardLabel}>Total Orders</Text>
               <Text style={styles.cardValue}>{stats.totalOrders}</Text>
@@ -219,7 +220,7 @@ export default function AdminDashboardScreen() {
               style={styles.card}
               activeOpacity={0.85}
               onPress={() =>
-                router.push('/admin-orders?filter=active' as never)
+                router.push(adminRoutes.orders({ filter: 'active' }) as never)
               }
             >
               <Text style={styles.cardLabel}>Active Orders</Text>
@@ -229,31 +230,25 @@ export default function AdminDashboardScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin/complaints')}
+              onPress={() => router.push(adminRoutes.reports as never)}
             >
-              <Text style={styles.cardLabel}>Complaints</Text>
-              <Text style={styles.cardValue}>{stats.complaints}</Text>
-              <Text style={styles.cardCta}>Open inbox →</Text>
+              <Text style={styles.cardLabel}>Reports & moderation</Text>
+              <Text style={styles.cardValue}>{stats.reports}</Text>
+              <Text style={styles.cardSub}>
+                Complaint tickets: {stats.complaints}
+              </Text>
+              <Text style={styles.cardCta}>Open reports →</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
               onPress={() =>
-                router.push('/admin-orders?filter=today' as never)
+                router.push(adminRoutes.orders({ filter: 'today' }) as never)
               }
             >
               <Text style={styles.cardLabel}>Orders Today</Text>
               <Text style={styles.cardValue}>{stats.ordersToday}</Text>
               <Text style={styles.cardCta}>Today only →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push('/admin-reports' as never)}
-            >
-              <Text style={styles.cardLabel}>UGC Reports</Text>
-              <Text style={styles.cardValue}>{stats.reports}</Text>
-              <Text style={styles.cardCta}>Review queue →</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -310,6 +305,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  cardSub: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 6,
   },
   cardCta: {
     marginTop: 8,

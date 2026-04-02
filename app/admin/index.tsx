@@ -1,3 +1,4 @@
+import { adminRoutes } from '@/constants/adminRoutes';
 import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
@@ -334,7 +335,7 @@ export default function AdminScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-users')}
+              onPress={() => router.push(adminRoutes.users)}
             >
               <Text style={styles.cardLabel}>Total Users</Text>
               <Text style={styles.cardValue}>{metrics.totalUsers}</Text>
@@ -343,7 +344,7 @@ export default function AdminScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-orders' as never)}
+              onPress={() => router.push(adminRoutes.orders())}
             >
               <Text style={styles.cardLabel}>Total Orders</Text>
               <Text style={styles.cardValue}>{metrics.totalOrders}</Text>
@@ -353,7 +354,7 @@ export default function AdminScreen() {
               style={styles.card}
               activeOpacity={0.85}
               onPress={() =>
-                router.push('/admin-orders?filter=today' as never)
+                router.push(adminRoutes.orders({ filter: 'today' }))
               }
             >
               <Text style={styles.cardLabel}>Orders Today</Text>
@@ -363,7 +364,7 @@ export default function AdminScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-orders' as never)}
+              onPress={() => router.push(adminRoutes.orders())}
             >
               <Text style={styles.cardLabel}>Orders This Week</Text>
               <Text style={styles.cardValue}>{metrics.ordersThisWeek}</Text>
@@ -372,7 +373,7 @@ export default function AdminScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-users')}
+              onPress={() => router.push(adminRoutes.users)}
             >
               <Text style={styles.cardLabel}>Active Users (this week)</Text>
               <Text style={styles.cardValue}>{metrics.activeUsers}</Text>
@@ -381,7 +382,7 @@ export default function AdminScreen() {
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/admin-orders' as never)}
+              onPress={() => router.push(adminRoutes.orders())}
             >
               <Text style={styles.cardLabel}>Average Order Price</Text>
               <Text style={styles.cardValue}>
@@ -407,7 +408,7 @@ export default function AdminScreen() {
               style={styles.card}
               activeOpacity={0.85}
               onPress={() =>
-                router.push('/admin-orders?filter=completed' as never)
+                router.push(adminRoutes.orders({ filter: 'completed' }))
               }
             >
               <Text style={styles.cardLabel}>Completed Orders</Text>
@@ -421,13 +422,13 @@ export default function AdminScreen() {
           <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin/dashboard')} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>Dashboard</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-users')} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.users)} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>Manage Users</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-orders' as never)} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.orders())} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>Manage Orders</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-reports')} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.reports)} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>User Reports (UGC)</Text>
           </TouchableOpacity>
         </View>
