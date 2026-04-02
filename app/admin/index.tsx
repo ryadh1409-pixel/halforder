@@ -1,3 +1,4 @@
+import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
@@ -27,8 +28,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 function startOfTodayMs(): number {
   const d = new Date();
@@ -73,7 +72,7 @@ export default function AdminScreen() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
     if (user && !isAdmin) {
@@ -332,15 +331,89 @@ export default function AdminScreen() {
 
         {metrics ? (
           <View style={styles.cards}>
-            <View style={styles.card}><Text style={styles.cardLabel}>Total Users</Text><Text style={styles.cardValue}>{metrics.totalUsers}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Total Orders</Text><Text style={styles.cardValue}>{metrics.totalOrders}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Orders Today</Text><Text style={styles.cardValue}>{metrics.ordersToday}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Orders This Week</Text><Text style={styles.cardValue}>{metrics.ordersThisWeek}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Active Users (this week)</Text><Text style={styles.cardValue}>{metrics.activeUsers}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Average Order Price</Text><Text style={styles.cardValue}>${metrics.averageOrderPrice.toFixed(2)}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Active Cards</Text><Text style={styles.cardValue}>{metrics.activeCards}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Total Matches</Text><Text style={styles.cardValue}>{metrics.totalMatches}</Text></View>
-            <View style={styles.card}><Text style={styles.cardLabel}>Completed Orders</Text><Text style={styles.cardValue}>{metrics.completedOrders}</Text></View>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-users')}
+            >
+              <Text style={styles.cardLabel}>Total Users</Text>
+              <Text style={styles.cardValue}>{metrics.totalUsers}</Text>
+              <Text style={styles.cardCta}>View users →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-orders' as never)}
+            >
+              <Text style={styles.cardLabel}>Total Orders</Text>
+              <Text style={styles.cardValue}>{metrics.totalOrders}</Text>
+              <Text style={styles.cardCta}>View orders →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push('/admin-orders?filter=today' as never)
+              }
+            >
+              <Text style={styles.cardLabel}>Orders Today</Text>
+              <Text style={styles.cardValue}>{metrics.ordersToday}</Text>
+              <Text style={styles.cardCta}>Today orders →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-orders' as never)}
+            >
+              <Text style={styles.cardLabel}>Orders This Week</Text>
+              <Text style={styles.cardValue}>{metrics.ordersThisWeek}</Text>
+              <Text style={styles.cardCta}>All orders (scroll) →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-users')}
+            >
+              <Text style={styles.cardLabel}>Active Users (this week)</Text>
+              <Text style={styles.cardValue}>{metrics.activeUsers}</Text>
+              <Text style={styles.cardCta}>User directory →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-orders' as never)}
+            >
+              <Text style={styles.cardLabel}>Average Order Price</Text>
+              <Text style={styles.cardValue}>
+                ${metrics.averageOrderPrice.toFixed(2)}
+              </Text>
+              <Text style={styles.cardCta}>Orders data →</Text>
+            </TouchableOpacity>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Active Cards</Text>
+              <Text style={styles.cardValue}>{metrics.activeCards}</Text>
+              <Text style={styles.cardHint}>Listed above (food card tool)</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/explore' as never)}
+            >
+              <Text style={styles.cardLabel}>Total Matches</Text>
+              <Text style={styles.cardValue}>{metrics.totalMatches}</Text>
+              <Text style={styles.cardCta}>Open browse feed →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push('/admin-orders?filter=completed' as never)
+              }
+            >
+              <Text style={styles.cardLabel}>Completed Orders</Text>
+              <Text style={styles.cardValue}>{metrics.completedOrders}</Text>
+              <Text style={styles.cardCta}>Completed filter →</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -350,6 +423,9 @@ export default function AdminScreen() {
           </TouchableOpacity>
           <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-users')} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>Manage Users</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-orders' as never)} activeOpacity={0.85}>
+            <Text style={styles.navButtonText}>Manage Orders</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin-reports')} activeOpacity={0.85}>
             <Text style={styles.navButtonText}>User Reports (UGC)</Text>
@@ -376,6 +452,17 @@ const styles = StyleSheet.create({
   card: { ...adminCardShell, marginBottom: 12 },
   cardLabel: { fontSize: 13, color: COLORS.textMuted, marginBottom: 4 },
   cardValue: { fontSize: 22, fontWeight: '700', color: COLORS.text },
+  cardCta: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  cardHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
   imageButton: {
     height: 46,
     borderRadius: 10,

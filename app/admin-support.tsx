@@ -19,11 +19,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatTorontoTime } from '@/lib/format-toronto-time';
 import { auth, db } from '@/services/firebase';
+import { isAdminUser } from '@/constants/adminUid';
 import { theme } from '@/constants/theme';
 
 const c = theme.colors;
-
-const ADMIN_UID = 'REPLACE_WITH_ADMIN_UID';
 
 type SupportMessage = {
   id: string;
@@ -41,8 +40,7 @@ export default function AdminSupportScreen() {
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
-  const uid = auth.currentUser?.uid ?? '';
-  const isAdmin = uid === ADMIN_UID;
+  const isAdmin = isAdminUser(auth.currentUser);
 
   useEffect(() => {
     if (!isAdmin) {

@@ -22,9 +22,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 function getToken(data: {
   expoPushToken?: unknown;
@@ -46,10 +45,10 @@ export default function AdminNotificationsScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
-    if (user && user.email !== ADMIN_EMAIL) {
+    if (user && !isAdminUser(user)) {
       router.replace('/(tabs)');
     }
   }, [user, router]);
@@ -232,7 +231,7 @@ export default function AdminNotificationsScreen() {
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Access denied</Text>
           <Text style={styles.hint}>
-            Only support@halforder.app can access this page.
+            Only the configured admin account can access this page.
           </Text>
           <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
             <Text style={styles.link}>Go to Home</Text>

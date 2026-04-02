@@ -12,9 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 type Complaint = {
   id: string;
@@ -39,14 +38,14 @@ export default function AdminComplaintsScreen() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
-    if (user.email !== ADMIN_EMAIL) {
+    if (!isAdminUser(user)) {
       setLoading(false);
       return;
     }

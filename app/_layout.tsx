@@ -14,6 +14,7 @@ import 'react-native-reanimated';
  * Main app chrome lives in `app/(tabs)/_layout.tsx`.
  */
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { isAdminUser } from '@/constants/adminUid';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
 import { startFoodCardAutomation } from '@/services/foodCards';
@@ -66,7 +67,7 @@ export const linking = {
 };
 
 function RootLayoutNav() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const currentUserRef = useRef(user);
@@ -87,6 +88,16 @@ function RootLayoutNav() {
   const tidioOrderEventSentRef = useRef<Set<string>>(new Set());
 
   const seg0 = segments[0] as string | undefined;
+
+  const isAdminPath =
+    seg0 === 'admin' ||
+    seg0 === 'admin-users' ||
+    seg0 === 'admin-orders' ||
+    seg0 === 'admin-user' ||
+    seg0 === 'admin-order' ||
+    seg0 === 'admin-notifications' ||
+    seg0 === 'admin-reports' ||
+    seg0 === 'admin-support';
 
   useEffect(() => {
     currentUserRef.current = user;
@@ -841,6 +852,13 @@ function RootLayoutNav() {
   const redirectToLogin =
     !user && !inAuthGroup && !onJoinRedirect && !onPublicShellRoutes;
   const redirectToTabs = user && inAuthGroup;
+  const redirectNonAdminFromAdminRoutes =
+    !authLoading &&
+    !!user &&
+    !isAdminUser(user) &&
+    isAdminPath &&
+    !inAuthGroup &&
+    !onPublicShellRoutes;
   const pathname = segments.length > 0 ? `/${segments.join('/')}` : '';
   const loginHref =
     pathname && pathname !== '/' && pathname !== ''
@@ -853,6 +871,7 @@ function RootLayoutNav() {
         <Redirect href={loginHref as Parameters<typeof Redirect>[0]['href']} />
       ) : null}
       {redirectToTabs ? <Redirect href="/(tabs)" /> : null}
+      {redirectNonAdminFromAdminRoutes ? <Redirect href="/(tabs)" /> : null}
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ title: 'Terms of Use' }} />
@@ -908,6 +927,14 @@ function RootLayoutNav() {
         <Stack.Screen
           name="admin-reports"
           options={{ title: 'User reports' }}
+        />
+        <Stack.Screen
+          name="admin-user/[userId]"
+          options={{ title: 'User' }}
+        />
+        <Stack.Screen
+          name="admin-order/[orderId]"
+          options={{ title: 'Order' }}
         />
         <Stack.Screen
           name="wallet"

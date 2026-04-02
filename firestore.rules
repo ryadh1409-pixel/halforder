@@ -5,6 +5,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    /** Must match constants/adminUid.ts ADMIN_UID. */
+    function isAdmin() {
+      return isSignedIn() && request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1';
+    }
+
     function currentUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -211,10 +216,6 @@ service cloud.firestore {
         && request.auth.uid in resource.data.get('participants', []);
     }
 
-    function isAdminEmail() {
-      return isSignedIn() && request.auth.token.email == 'support@halforder.app';
-    }
-
     function foodCardMaxUsersCap() {
       return resource.data.keys().hasAll(['maxUsers'])
         && resource.data.maxUsers is int
@@ -265,18 +266,14 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow create: if request.auth != null;
-      allow read: if request.auth != null
-        && request.auth.token.email == 'support@halforder.app';
-      allow update, delete: if false;
+      allow read, update, delete: if isAdmin();
     }
     match /support_chats/{userId} {
-      allow read: if request.auth != null
-        && (request.auth.uid == 'REPLACE_WITH_ADMIN_UID' || request.auth.token.get('support', false) == true);
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
       allow write: if false;
     }
     match /support_chats/{userId}/messages/{messageId} {
-      allow read, write: if request.auth != null
-        && (userId == request.auth.uid || request.auth.uid == 'REPLACE_WITH_ADMIN_UID' || request.auth.token.get('support', false) == true);
+      allow read, write: if isSignedIn() && (userId == request.auth.uid || isAdmin());
     }
     match /ratings/{ratingId} {
       allow create: if request.auth != null
@@ -293,41 +290,56 @@ service cloud.firestore {
     }
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow delete: if (request.auth != null && request.auth.uid == userId) || isAdmin();
       match /messages/{messageId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
       }
     }
     match /chats/{chatId} {
-      allow read, update: if request.auth != null
-        && (
-          request.auth.uid in resource.data.get('participants', [])
-          || request.auth.uid in resource.data.get('users', [])
+      allow read, update: if isAdmin()
+        || (
+          request.auth != null
+          && (
+            request.auth.uid in resource.data.get('participants', [])
+            || request.auth.uid in resource.data.get('users', [])
+          )
         );
-      allow create: if request.auth != null
-        && (
-          request.auth.uid in request.resource.data.get('participants', [])
-          || request.auth.uid in request.resource.data.get('users', [])
+      allow create: if isAdmin()
+        || (
+          request.auth != null
+          && (
+            request.auth.uid in request.resource.data.get('participants', [])
+            || request.auth.uid in request.resource.data.get('users', [])
+          )
         );
-      allow delete: if false;
+      allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read: if request.auth != null
-          && (
-            request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', [])
-            || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('users', [])
+        allow read: if isAdmin()
+          || (
+            request.auth != null
+            && (
+              request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', [])
+              || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('users', [])
+            )
           );
-        allow create, update, delete: if request.auth != null;
+        allow create, update, delete: if isAdmin() || request.auth != null;
       }
     }
     match /messages/{messageId} {
-      allow read: if request.auth != null
-        && request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants;
-      allow create: if request.auth != null
-        && request.resource.data.senderId == request.auth.uid
-        && request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants;
-      allow update, delete: if false;
+      allow read: if isAdmin()
+        || (
+          request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants
+        );
+      allow create: if isAdmin()
+        || (
+          request.auth != null
+          && request.resource.data.senderId == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants
+        );
+      allow update, delete: if isAdmin();
     }
     match /calls/{callId} {
       allow create: if request.auth != null && request.resource.data.callerId == request.auth.uid;
@@ -377,8 +389,9 @@ service cloud.firestore {
     }
     match /orders/{orderId} {
       allow read: if isSignedIn();
-      allow create: if isValidOrderCreate();
-      allow update: if isParticipantsJoinUpdate()
+      allow create: if isValidOrderCreate() || isAdmin();
+      allow update: if isAdmin()
+        || isParticipantsJoinUpdate()
         || isParticipantsJoinWithExtrasUpdate()
         || isJoinedAtMapBackfillUpdate()
         || isParticipantsLeaveUpdate()
@@ -386,28 +399,39 @@ service cloud.firestore {
         || isCreatorOnlyNonJoinUpdate()
         || isSwipeAcceptUpdate()
         || isMarkOrderExpiredUpdate();
-      allow delete: if request.auth != null
-        && resource.data.createdBy == request.auth.uid;
+      allow delete: if isAdmin()
+        || (
+          request.auth != null
+          && resource.data.createdBy == request.auth.uid
+        );
 
       match /messages/{messageId} {
-        allow read, write: if isOrderMember(
-          get(/databases/$(database)/documents/orders/$(orderId)).data
-        );
+        allow read, write: if isAdmin()
+          || isOrderMember(
+            get(/databases/$(database)/documents/orders/$(orderId)).data
+          );
       }
 
       match /ratings/{ratingId} {
-        allow read, write: if isSignedIn()
-          && ratingId == request.auth.uid
-          && isOrderMember(
-            get(/databases/$(database)/documents/orders/$(orderId)).data
+        allow read, write: if isAdmin()
+          || (
+            isSignedIn()
+            && ratingId == request.auth.uid
+            && isOrderMember(
+              get(/databases/$(database)/documents/orders/$(orderId)).data
+            )
           );
       }
     }
 
     match /food_cards/{cardId} {
       allow read: if isSignedIn();
-      allow create, delete: if isAdminEmail();
-      allow update: if isAdminEmail() || isValidFoodCardJoinUpdate();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isValidFoodCardJoinUpdate();
+    }
+
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
   }
 }

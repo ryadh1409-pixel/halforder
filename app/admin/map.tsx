@@ -19,9 +19,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminColors as COLORS } from '@/constants/adminTheme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 type ActivityPoint = {
   id: string;
@@ -46,14 +45,14 @@ export default function AdminActivityMapScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
-    if (user.email !== ADMIN_EMAIL) {
+    if (!isAdminUser(user)) {
       setLoading(false);
       return;
     }

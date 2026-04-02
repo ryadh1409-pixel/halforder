@@ -18,9 +18,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { sendExpoPush } from '@/services/sendExpoPush';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminColors as COLORS } from '@/constants/adminTheme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 function getPushToken(data: {
   expoPushToken?: unknown;
@@ -37,7 +36,7 @@ export default function AdminBroadcastScreen() {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   const handleSendBroadcast = async () => {
     const t = title.trim() || 'HalfOrder';
@@ -46,7 +45,7 @@ export default function AdminBroadcastScreen() {
       Alert.alert('Error', 'Please enter a message.');
       return;
     }
-    if (!user || user.email !== ADMIN_EMAIL) return;
+    if (!user || !isAdminUser(user)) return;
 
     setSending(true);
     try {
@@ -68,7 +67,7 @@ export default function AdminBroadcastScreen() {
       await addDoc(collection(db, 'broadcasts'), {
         title: t,
         message: b,
-        sentBy: ADMIN_EMAIL,
+        sentBy: user.email ?? user.uid,
         sentAt: serverTimestamp(),
         totalUsers: tokens.length,
       });

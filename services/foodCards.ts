@@ -1,3 +1,4 @@
+import { ADMIN_UID } from '@/constants/adminUid';
 import { auth, db } from '@/services/firebase';
 import {
   addDoc,
@@ -35,7 +36,6 @@ export type FoodCard = {
 };
 
 const FOOD_CARDS = 'food_cards';
-const ADMIN_EMAIL = 'support@halforder.app';
 
 export function subscribeWaitingFoodCards(
   onData: (cards: FoodCard[]) => void,
@@ -251,10 +251,8 @@ export async function createFoodCard(input: {
   latitude?: number | null;
   longitude?: number | null;
 }) {
-  const email = auth.currentUser?.email?.toLowerCase() ?? '';
-  if (email !== ADMIN_EMAIL) throw new Error('Admin only');
   const uid = auth.currentUser?.uid ?? '';
-  if (!uid) throw new Error('Sign in required');
+  if (!uid || uid !== ADMIN_UID) throw new Error('Admin only');
   const activeSnap = await getDocs(
     query(collection(db, FOOD_CARDS), where('status', '==', 'waiting')),
   );

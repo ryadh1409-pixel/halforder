@@ -1,11 +1,12 @@
+import { isAdminUser } from '@/constants/adminUid';
+import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
-import { useRouter } from 'expo-router';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
-import React, { useCallback, useEffect, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,30 +15,43 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 type OrderRow = {
   id: string;
   restaurantName: string;
   creatorEmail: string;
+  creatorId: string;
   createdAt: string;
+  createdMs: number;
   status: string;
   participants: number;
 };
 
+function startOfTodayMs(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 export default function AdminOrdersScreen() {
   const router = useRouter();
+  const { filter: filterRaw } = useLocalSearchParams<{ filter?: string }>();
+  const filter =
+    typeof filterRaw === 'string'
+      ? filterRaw
+      : Array.isArray(filterRaw)
+        ? filterRaw[0]
+        : 'all';
+  const effectiveFilter =
+    !filter || filter === '' ? 'all' : filter;
+
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -55,7 +69,11 @@ export default function AdminOrdersScreen() {
       const list: OrderRow[] = [];
       ordersSnap.docs.forEach((d) => {
         const data = d.data();
-        const creatorId = data?.hostId ?? data?.creatorId ?? data?.userId ?? '';
+        const creatorId = (data?.createdBy ??
+          data?.hostId ??
+          data?.creatorId ??
+          data?.userId ??
+          '') as string;
         const createdAt = data?.createdAt;
         const ms =
           typeof createdAt?.toMillis === 'function'
@@ -72,18 +90,18 @@ export default function AdminOrdersScreen() {
           restaurantName:
             typeof data?.restaurantName === 'string'
               ? data.restaurantName
-              : '—',
+              : typeof data?.foodName === 'string'
+                ? data.foodName
+                : '—',
           creatorEmail: (emailByUid[creatorId] ?? creatorId) || '—',
+          creatorId: typeof creatorId === 'string' ? creatorId : '',
           createdAt: ms ? new Date(ms).toLocaleString() : '—',
+          createdMs: ms,
           status: typeof data?.status === 'string' ? data.status : '—',
           participants: participantsList.length,
         });
       });
-      list.sort((a, b) =>
-        b.createdAt !== '—' && a.createdAt !== '—'
-          ? b.createdAt.localeCompare(a.createdAt)
-          : 0,
-      );
+      list.sort((a, b) => b.createdMs - a.createdMs);
       setOrders(list);
       setError(null);
     } catch (e) {
@@ -95,6 +113,24 @@ export default function AdminOrdersScreen() {
     }
   }, []);
 
+  const filtered = useMemo(() => {
+    const todayStart = startOfTodayMs();
+    if (effectiveFilter === 'today') {
+      return orders.filter((o) => o.createdMs >= todayStart);
+    }
+    if (effectiveFilter === 'active') {
+      return orders.filter((o) =>
+        ['open', 'active', 'matched', 'full', 'locked', 'ready_to_pay'].includes(
+          o.status,
+        ),
+      );
+    }
+    if (effectiveFilter === 'completed') {
+      return orders.filter((o) => o.status === 'completed');
+    }
+    return orders;
+  }, [orders, effectiveFilter]);
+
   useEffect(() => {
     if (user && isAdmin) {
       fetchOrders();
@@ -105,34 +141,10 @@ export default function AdminOrdersScreen() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.email !== ADMIN_EMAIL) {
+    if (!isAdminUser(user)) {
       router.replace('/(tabs)');
     }
   }, [user, router]);
-
-  const handleDelete = (orderId: string) => {
-    Alert.alert('Delete Order', 'Permanently delete this order?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeletingId(orderId);
-          try {
-            await deleteDoc(doc(db, 'orders', orderId));
-            setOrders((prev) => prev.filter((o) => o.id !== orderId));
-          } catch (e) {
-            Alert.alert(
-              'Error',
-              e instanceof Error ? e.message : 'Failed to delete',
-            );
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      },
-    ]);
-  };
 
   if (!user) {
     return (
@@ -152,9 +164,6 @@ export default function AdminOrdersScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Access denied</Text>
-          <Text style={styles.hint}>
-            Only support@halforder.app can access this page.
-          </Text>
           <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
             <Text style={styles.link}>Go to Home</Text>
           </TouchableOpacity>
@@ -174,6 +183,15 @@ export default function AdminOrdersScreen() {
     );
   }
 
+  const filterLabel =
+    effectiveFilter === 'today'
+      ? 'Today'
+      : effectiveFilter === 'active'
+        ? 'Active'
+        : effectiveFilter === 'completed'
+          ? 'Completed'
+          : 'All';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -192,17 +210,60 @@ export default function AdminOrdersScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.link}>← Dashboard</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Orders Management</Text>
+        <Text style={styles.title}>Orders ({filterLabel})</Text>
+        <View style={styles.chipRow}>
+          {(
+            [
+              ['all', 'All'],
+              ['today', 'Today'],
+              ['active', 'Active'],
+              ['completed', 'Done'],
+            ] as const
+          ).map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              style={[
+                styles.chip,
+                (effectiveFilter === key ||
+                  (key === 'all' && effectiveFilter === 'all')) &&
+                  styles.chipActive,
+              ]}
+              onPress={() => {
+                if (key === 'all') router.replace('/admin-orders' as never);
+                else
+                  router.replace(
+                    `/admin-orders?filter=${encodeURIComponent(key)}` as never,
+                  );
+              }}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  (effectiveFilter === key ||
+                    (key === 'all' && effectiveFilter === 'all')) &&
+                    styles.chipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
-        {orders.map((o) => (
-          <View key={o.id} style={styles.card}>
+        {filtered.map((o) => (
+          <TouchableOpacity
+            key={o.id}
+            style={styles.card}
+            activeOpacity={0.85}
+            onPress={() => router.push(`/admin-order/${o.id}` as never)}
+          >
             <Text style={styles.rowLabel}>Restaurant</Text>
             <Text style={styles.rowValue}>{o.restaurantName}</Text>
-            <Text style={styles.rowLabel}>Creator email</Text>
+            <Text style={styles.rowLabel}>Creator</Text>
             <Text style={styles.rowValue}>{o.creatorEmail}</Text>
             <Text style={styles.rowLabel}>Created</Text>
             <Text style={styles.rowValue}>{o.createdAt}</Text>
@@ -210,18 +271,8 @@ export default function AdminOrdersScreen() {
             <Text style={styles.rowValue}>{o.status}</Text>
             <Text style={styles.rowLabel}>Participants</Text>
             <Text style={styles.rowValue}>{o.participants}</Text>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleDelete(o.id)}
-              disabled={deletingId === o.id}
-            >
-              {deletingId === o.id ? (
-                <ActivityIndicator size="small" color={COLORS.background} />
-              ) : (
-                <Text style={styles.deleteButtonText}>Delete Order</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+            <Text style={styles.tapHint}>Tap for details & actions →</Text>
+          </TouchableOpacity>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -239,24 +290,39 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 20, paddingBottom: 40 },
   backBtn: { marginBottom: 12 },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 20,
+    marginBottom: 12,
     textAlign: 'center',
   },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+    justifyContent: 'center',
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  chipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipText: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
+  chipTextActive: { color: COLORS.onPrimary },
   accessDenied: {
     fontSize: 18,
     fontWeight: '600',
     color: COLORS.error,
     marginBottom: 8,
     textAlign: 'center',
-  },
-  hint: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   link: { fontSize: 16, color: COLORS.primary, fontWeight: '600' },
   loadingText: { marginTop: 12, fontSize: 14, color: COLORS.textMuted },
@@ -273,18 +339,10 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 13, color: COLORS.textMuted, marginBottom: 2 },
   rowValue: { fontSize: 16, color: COLORS.text, marginBottom: 12 },
-  deleteButton: {
-    backgroundColor: COLORS.error,
-    paddingVertical: 14,
-    borderRadius: theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: theme.spacing.touchMin,
-    marginTop: 4,
-  },
-  deleteButtonText: {
-    color: COLORS.onPrimary,
-    fontWeight: '600',
+  tapHint: {
     fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginTop: 4,
   },
 });

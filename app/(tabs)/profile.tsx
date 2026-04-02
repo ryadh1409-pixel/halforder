@@ -1,6 +1,7 @@
 import AppLogo from '@/components/AppLogo';
 import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/KeyboardToolbar';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { isAdminUser } from '@/constants/adminUid';
 import { shadows, theme } from '@/constants/theme';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { useAuth } from '@/services/AuthContext';
@@ -48,7 +49,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
-const ADMIN_EMAIL = 'support@halforder.app';
 
 const tc = theme.colors;
 
@@ -693,9 +693,11 @@ export default function ProfileScreen() {
                   : '· No reviews yet'}
               </Text>
             </View>
-            {trustScore ? (
+            {trustScore || isAdminUser(user) ? (
               <View style={dynamicStyles.trustChip}>
-                <Text style={dynamicStyles.trustChipText}>{trustScore.label}</Text>
+                <Text style={dynamicStyles.trustChipText}>
+                  {isAdminUser(user) ? 'Admin' : (trustScore?.label ?? '')}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -968,7 +970,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {user?.email === ADMIN_EMAIL ? (
+          {isAdminUser(user) ? (
             <View style={dynamicStyles.card}>
               <Text style={dynamicStyles.label}>Admin</Text>
               <TouchableOpacity

@@ -12,10 +12,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 function startOfTodayMs(): number {
   const d = new Date();
@@ -35,6 +34,7 @@ type Stats = {
   activeOrders: number;
   complaints: number;
   ordersToday: number;
+  reports: number;
 };
 
 export default function AdminDashboardScreen() {
@@ -44,14 +44,14 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
-    if (user.email !== ADMIN_EMAIL) {
+    if (!isAdminUser(user)) {
       setLoading(false);
       return;
     }
@@ -60,17 +60,20 @@ export default function AdminDashboardScreen() {
 
     async function fetchStats() {
       try {
-        const [usersSnap, ordersSnap, complaintsSnap] = await Promise.all([
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'orders')),
-          getDocs(collection(db, 'complaints')),
-        ]);
+        const [usersSnap, ordersSnap, complaintsSnap, reportsSnap] =
+          await Promise.all([
+            getDocs(collection(db, 'users')),
+            getDocs(collection(db, 'orders')),
+            getDocs(collection(db, 'complaints')),
+            getDocs(collection(db, 'reports')),
+          ]);
 
         if (cancelled) return;
 
         const totalUsers = usersSnap.size;
         const totalOrders = ordersSnap.size;
         const complaints = complaintsSnap.size;
+        const reports = reportsSnap.size;
 
         const todayStart = startOfTodayMs();
         const todayEnd = endOfTodayMs();
@@ -81,7 +84,19 @@ export default function AdminDashboardScreen() {
         ordersSnap.docs.forEach((doc) => {
           const data = doc.data();
           const status = data?.status;
-          if (status === 'active') activeOrders += 1;
+          if (
+            typeof status === 'string' &&
+            [
+              'open',
+              'active',
+              'matched',
+              'full',
+              'locked',
+              'ready_to_pay',
+            ].includes(status)
+          ) {
+            activeOrders += 1;
+          }
 
           const created = data?.createdAt?.toMillis?.() ?? data?.createdAt ?? 0;
           const ms = typeof created === 'number' ? created : Number(created);
@@ -94,6 +109,7 @@ export default function AdminDashboardScreen() {
           activeOrders,
           complaints,
           ordersToday,
+          reports,
         });
         setError(null);
       } catch (e) {
@@ -181,26 +197,64 @@ export default function AdminDashboardScreen() {
 
         {stats ? (
           <View style={styles.cards}>
-            <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-users')}
+            >
               <Text style={styles.cardLabel}>Total Users</Text>
               <Text style={styles.cardValue}>{stats.totalUsers}</Text>
-            </View>
-            <View style={styles.card}>
+              <Text style={styles.cardCta}>Open list →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-orders' as never)}
+            >
               <Text style={styles.cardLabel}>Total Orders</Text>
               <Text style={styles.cardValue}>{stats.totalOrders}</Text>
-            </View>
-            <View style={styles.card}>
+              <Text style={styles.cardCta}>Open list →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push('/admin-orders?filter=active' as never)
+              }
+            >
               <Text style={styles.cardLabel}>Active Orders</Text>
               <Text style={styles.cardValue}>{stats.activeOrders}</Text>
-            </View>
-            <View style={styles.card}>
+              <Text style={styles.cardCta}>Filtered view →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin/complaints')}
+            >
               <Text style={styles.cardLabel}>Complaints</Text>
               <Text style={styles.cardValue}>{stats.complaints}</Text>
-            </View>
-            <View style={styles.card}>
+              <Text style={styles.cardCta}>Open inbox →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push('/admin-orders?filter=today' as never)
+              }
+            >
               <Text style={styles.cardLabel}>Orders Today</Text>
               <Text style={styles.cardValue}>{stats.ordersToday}</Text>
-            </View>
+              <Text style={styles.cardCta}>Today only →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push('/admin-reports' as never)}
+            >
+              <Text style={styles.cardLabel}>UGC Reports</Text>
+              <Text style={styles.cardValue}>{stats.reports}</Text>
+              <Text style={styles.cardCta}>Review queue →</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
       </ScrollView>
@@ -256,6 +310,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  cardCta: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   centered: {
     flex: 1,

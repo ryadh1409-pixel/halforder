@@ -14,10 +14,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
-
-const ADMIN_EMAIL = 'support@halforder.app';
 
 type UserRow = {
   id: string;
@@ -48,7 +47,7 @@ export default function AdminUsersScreen() {
   const [banningId, setBanningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -104,7 +103,7 @@ export default function AdminUsersScreen() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.email !== ADMIN_EMAIL) router.replace('/(tabs)');
+    if (!isAdminUser(user)) router.replace('/(tabs)');
   }, [user, router]);
 
   const handleBan = (userId: string) => {
@@ -154,7 +153,7 @@ export default function AdminUsersScreen() {
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Access denied</Text>
           <Text style={styles.hint}>
-            Only support@halforder.app can access this page.
+            Only the configured admin account can access this page.
           </Text>
           <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
             <Text style={styles.link}>Go to Home</Text>
@@ -201,14 +200,20 @@ export default function AdminUsersScreen() {
         ) : null}
         {users.map((u) => (
           <View key={u.id} style={styles.card}>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.rowValue}>{u.email ?? '—'}</Text>
-            <Text style={styles.rowLabel}>Display name</Text>
-            <Text style={styles.rowValue}>{u.displayName}</Text>
-            <Text style={styles.rowLabel}>Created</Text>
-            <Text style={styles.rowValue}>{u.createdAt}</Text>
-            <Text style={styles.rowLabel}>Total orders</Text>
-            <Text style={styles.rowValue}>{u.totalOrders}</Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push(`/admin-user/${u.id}` as never)}
+            >
+              <Text style={styles.rowLabel}>Email</Text>
+              <Text style={styles.rowValue}>{u.email ?? '—'}</Text>
+              <Text style={styles.rowLabel}>Display name</Text>
+              <Text style={styles.rowValue}>{u.displayName}</Text>
+              <Text style={styles.rowLabel}>Created</Text>
+              <Text style={styles.rowValue}>{u.createdAt}</Text>
+              <Text style={styles.rowLabel}>Total orders</Text>
+              <Text style={styles.rowValue}>{u.totalOrders}</Text>
+              <Text style={styles.tapHint}>Tap for full profile →</Text>
+            </TouchableOpacity>
             {u.banned ? (
               <Text style={styles.bannedBadge}>Banned</Text>
             ) : (
@@ -294,5 +299,11 @@ const styles = StyleSheet.create({
     color: COLORS.onPrimary,
     fontWeight: '600',
     fontSize: 14,
+  },
+  tapHint: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginTop: 4,
   },
 });
