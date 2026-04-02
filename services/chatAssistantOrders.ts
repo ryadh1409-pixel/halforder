@@ -28,8 +28,126 @@ export type AssistantOrderSummary = {
   id: string;
   restaurantName: string;
   mealType?: string;
+  itemsSummary?: string;
   status?: string;
 };
+
+export type TimeOfDayPeriod = 'morning' | 'lunch' | 'evening' | 'late_night';
+
+export type TimeContext = {
+  period: TimeOfDayPeriod;
+  greetingLabel: string;
+  segmentEmoji: string;
+  matchKeywords: readonly string[];
+  emptyLabel: string;
+  emptyEmoji: string;
+  /** Shown in “I found N {fallbackFood} orders” when no keyword match in copy. */
+  fallbackFood: string;
+};
+
+/**
+ * Local wall-clock windows:
+ * Morning 5–11, Lunch 11–15, Evening 15–20, Late night 20–5.
+ */
+export function detectTimeContext(date: Date = new Date()): TimeContext {
+  const h = date.getHours();
+  if (h >= 5 && h < 11) {
+    return {
+      period: 'morning',
+      greetingLabel: 'Morning',
+      segmentEmoji: '☕',
+      matchKeywords: [
+        'coffee',
+        'cafe',
+        'bakery',
+        'breakfast',
+        'bagel',
+        'donut',
+        'espresso',
+        'muffin',
+        'croissant',
+        'pastry',
+        'latte',
+      ],
+      emptyLabel: 'breakfast',
+      emptyEmoji: '☕',
+      fallbackFood: 'breakfast',
+    };
+  }
+  if (h >= 11 && h < 15) {
+    return {
+      period: 'lunch',
+      greetingLabel: 'Lunch time',
+      segmentEmoji: '🍔',
+      matchKeywords: [
+        'pizza',
+        'burger',
+        'sandwich',
+        'bowl',
+        'taco',
+        'burrito',
+        'ramen',
+        'salad',
+        'wings',
+        'fried',
+        'pho',
+        'fast',
+        'sub',
+      ],
+      emptyLabel: 'lunch',
+      emptyEmoji: '🍕',
+      fallbackFood: 'pizza',
+    };
+  }
+  if (h >= 15 && h < 20) {
+    return {
+      period: 'evening',
+      greetingLabel: 'Evening',
+      segmentEmoji: '🍽️',
+      matchKeywords: [
+        'dinner',
+        'steak',
+        'pasta',
+        'sushi',
+        'curry',
+        'grill',
+        'seafood',
+        'thai',
+        'italian',
+        'korean',
+        'bbq',
+        'bistro',
+        'fine',
+      ],
+      emptyLabel: 'dinner',
+      emptyEmoji: '🍝',
+      fallbackFood: 'dinner',
+    };
+  }
+  return {
+    period: 'late_night',
+    greetingLabel: 'Late night',
+    segmentEmoji: '🌙',
+    matchKeywords: [
+      'snack',
+      'fries',
+      'cheap',
+      'pizza',
+      'wings',
+      'dessert',
+      'kebab',
+      'diner',
+      '24',
+      'ice cream',
+      'treat',
+      'value',
+      'combo',
+    ],
+    emptyLabel: 'late-night',
+    emptyEmoji: '🍟',
+    fallbackFood: 'snack',
+  };
+}
 
 export function detectFoodIntent(text: string): boolean {
   const normalized = text.trim().toLowerCase();
@@ -37,13 +155,69 @@ export function detectFoodIntent(text: string): boolean {
   return FOOD_INTENT_KEYWORDS.some((kw) => normalized.includes(kw));
 }
 
+function orderHaystack(order: AssistantOrderSummary): string {
+  return [
+    order.restaurantName,
+    order.mealType ?? '',
+    order.itemsSummary ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+export function orderMatchesTimeKeywords(
+  order: AssistantOrderSummary,
+  keywords: readonly string[],
+): boolean {
+  const hay = orderHaystack(order);
+  return keywords.some((kw) => hay.includes(kw.toLowerCase()));
+}
+
+export function filterOrdersByTimeContext(
+  orders: AssistantOrderSummary[],
+  ctx: TimeContext,
+): AssistantOrderSummary[] {
+  return orders.filter((o) =>
+    orderMatchesTimeKeywords(o, ctx.matchKeywords),
+  );
+}
+
+/** First keyword from context that appears in any order text (for intro copy). */
+export function pickHighlightFoodWord(
+  orders: AssistantOrderSummary[],
+  ctx: TimeContext,
+): string {
+  const keywords = [...ctx.matchKeywords];
+  for (const order of orders) {
+    const hay = orderHaystack(order);
+    for (const kw of keywords) {
+      if (hay.includes(kw.toLowerCase())) {
+        return kw;
+      }
+    }
+  }
+  return ctx.fallbackFood;
+}
+
+export function buildSmartMatchIntroText(
+  ctx: TimeContext,
+  orders: AssistantOrderSummary[],
+): string {
+  const n = orders.length;
+  if (n === 0) {
+    return `No ${ctx.emptyLabel} orders yet. Be the first ${ctx.emptyEmoji}`;
+  }
+  const food = pickHighlightFoodWord(orders, ctx);
+  return `${ctx.greetingLabel} ${ctx.segmentEmoji} I found ${n} ${food} order${n === 1 ? '' : 's'} near you`;
+}
+
 /**
- * Fetches up to `scanLimit` docs from Firestore, filters out expired orders,
- * returns at most `maxResults` summaries (default 3).
+ * Fetches active orders, filters by time-of-day keywords, returns up to `maxResults`.
  */
-export async function fetchActiveJoinableOrders(
+export async function fetchActiveJoinableOrdersForContext(
+  ctx: TimeContext,
   maxResults: number,
-  scanLimit: number = 40,
+  scanLimit: number = 48,
 ): Promise<AssistantOrderSummary[]> {
   const q = query(
     collection(db, 'orders'),
@@ -52,7 +226,7 @@ export async function fetchActiveJoinableOrders(
   );
   const snap = await getDocs(q);
   const now = Date.now();
-  const out: AssistantOrderSummary[] = [];
+  const summaries: AssistantOrderSummary[] = [];
 
   for (const d of snap.docs) {
     const data = d.data() as Record<string, unknown>;
@@ -61,7 +235,13 @@ export async function fetchActiveJoinableOrders(
     if (exp != null && exp <= now) {
       continue;
     }
-    out.push({
+    const itemsSummary =
+      typeof data.itemsSummary === 'string'
+        ? data.itemsSummary
+        : typeof data.title === 'string'
+          ? data.title
+          : undefined;
+    summaries.push({
       id: d.id,
       restaurantName:
         typeof data.restaurantName === 'string' && data.restaurantName.trim()
@@ -69,12 +249,11 @@ export async function fetchActiveJoinableOrders(
           : 'Order',
       mealType:
         typeof data.mealType === 'string' ? data.mealType : undefined,
+      itemsSummary,
       status: typeof data.status === 'string' ? data.status : undefined,
     });
-    if (out.length >= maxResults) {
-      break;
-    }
   }
 
-  return out;
+  const matched = filterOrdersByTimeContext(summaries, ctx);
+  return matched.slice(0, maxResults);
 }

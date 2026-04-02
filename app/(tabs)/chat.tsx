@@ -1,7 +1,10 @@
 import {
   type AssistantOrderSummary,
+  type TimeContext,
+  buildSmartMatchIntroText,
   detectFoodIntent,
-  fetchActiveJoinableOrders,
+  detectTimeContext,
+  fetchActiveJoinableOrdersForContext,
 } from '@/services/chatAssistantOrders';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
@@ -41,24 +44,17 @@ function toMessageOrders(rows: AssistantOrderSummary[]): MessageOrderRef[] {
   }));
 }
 
-function buildJoinReply(count: number, orders: MessageOrderRef[]): string {
-  if (count <= 0) return '';
-  if (count === 1) {
-    return `I found a nearby order: ${orders[0]?.title ?? 'order'} — tap to open 🍕`;
-  }
-  return `I found ${count} active orders — tap to browse and join 🍕`;
-}
-
 const ASSISTANT_INTRO_MESSAGE_ID = 'assistant-intro-suggestion';
 
 function buildIntroSuggestionMessage(
-  orderRefs: MessageOrderRef[],
+  ctx: TimeContext,
+  rows: AssistantOrderSummary[],
 ): Message {
-  const n = orderRefs.length;
-  if (n > 0) {
+  const orderRefs = toMessageOrders(rows);
+  if (rows.length > 0) {
     return {
       id: ASSISTANT_INTRO_MESSAGE_ID,
-      text: `I found ${n} order${n === 1 ? '' : 's'} near you 🍕`,
+      text: buildSmartMatchIntroText(ctx, rows),
       sender: 'bot',
       createdAt: Date.now(),
       action: 'join_order',
@@ -67,7 +63,31 @@ function buildIntroSuggestionMessage(
   }
   return {
     id: ASSISTANT_INTRO_MESSAGE_ID,
-    text: 'No active orders right now. Want to create one?',
+    text: buildSmartMatchIntroText(ctx, []),
+    sender: 'bot',
+    createdAt: Date.now(),
+    action: 'create_order',
+  };
+}
+
+function buildUserTurnBotMessage(
+  ctx: TimeContext,
+  rows: AssistantOrderSummary[],
+): Message {
+  const orderRefs = toMessageOrders(rows);
+  if (rows.length > 0) {
+    return {
+      id: `${Date.now()}-b`,
+      text: buildSmartMatchIntroText(ctx, rows),
+      sender: 'bot',
+      createdAt: Date.now(),
+      action: 'join_order',
+      orders: orderRefs,
+    };
+  }
+  return {
+    id: `${Date.now()}-b`,
+    text: buildSmartMatchIntroText(ctx, []),
     sender: 'bot',
     createdAt: Date.now(),
     action: 'create_order',
@@ -88,10 +108,10 @@ export default function ChatScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const fetched = await fetchActiveJoinableOrders(3);
+        const ctx = detectTimeContext();
+        const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
         if (cancelled) return;
-        const orderRefs = toMessageOrders(fetched);
-        const intro = buildIntroSuggestionMessage(orderRefs);
+        const intro = buildIntroSuggestionMessage(ctx, fetched);
         setMessages((prev) => {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
@@ -104,7 +124,7 @@ export default function ChatScreen() {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
           }
-          return [...prev, buildIntroSuggestionMessage([])];
+          return [...prev, buildIntroSuggestionMessage(detectTimeContext(), [])];
         });
       } finally {
         if (!cancelled) {
@@ -165,10 +185,8 @@ export default function ChatScreen() {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
 
-    let botMessage: Message;
-
     if (!detectFoodIntent(outgoingText)) {
-      botMessage = {
+      const botMessage: Message = {
         id: `${Date.now()}-b`,
         text: 'Say you’re hungry, want pizza, or mention food — I’ll look for active orders you can join.',
         sender: 'bot',
@@ -181,28 +199,9 @@ export default function ChatScreen() {
 
     setLoading(true);
     try {
-      const fetched = await fetchActiveJoinableOrders(3);
-      const orderRefs = toMessageOrders(fetched);
-
-      if (orderRefs.length > 0) {
-        botMessage = {
-          id: `${Date.now()}-b`,
-          text: buildJoinReply(orderRefs.length, orderRefs),
-          sender: 'bot',
-          createdAt: Date.now(),
-          action: 'join_order',
-          orders: orderRefs,
-        };
-      } else {
-        botMessage = {
-          id: `${Date.now()}-b`,
-          text: 'No open orders nearby. Tap below to create one — others can join you 🍕',
-          sender: 'bot',
-          createdAt: Date.now(),
-          action: 'create_order',
-        };
-      }
-
+      const ctx = detectTimeContext();
+      const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
+      const botMessage = buildUserTurnBotMessage(ctx, fetched);
       setMessages((prev) => [...prev, botMessage]);
     } catch {
       setMessages((prev) => [
