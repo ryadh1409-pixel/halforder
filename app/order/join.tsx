@@ -1,12 +1,13 @@
 import { isUserBanned } from '@/services/adminGuard';
 import { auth, db } from '@/services/firebase';
+import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
 import { useRouter } from 'expo-router';
 import {
+  addDoc,
   collection,
-  doc,
   onSnapshot,
   query,
-  updateDoc,
+  serverTimestamp,
   where,
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
@@ -89,10 +90,21 @@ export default function JoinOrderScreen() {
     }
     setJoiningId(orderId);
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status: 'matched' });
-      Alert.alert('Success', 'You joined this shared order.');
-      router.push(`/order/room/${orderId}` as const);
+      await joinOrderWithParticipantRecord(db, orderId, uid, {}, {
+        requireOpenForJoin: true,
+      });
+      console.log('[order/join] joined', orderId, 'uid', uid);
+      await addDoc(collection(db, 'orders', orderId, 'messages'), {
+        type: 'system',
+        text: 'A participant joined',
+        senderId: '',
+        senderName: '',
+        createdAt: serverTimestamp(),
+      });
+      router.replace({
+        pathname: '/order/room/[id]',
+        params: { id: orderId },
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join';
       Alert.alert('Could not join', msg);

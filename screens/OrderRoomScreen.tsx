@@ -236,9 +236,22 @@ export default function OrderRoomScreen() {
           return;
         }
         const d = orderSnap.data();
-        const ids: string[] = Array.isArray(d?.participantIds)
-          ? d.participantIds
+        const fromParticipantIds: string[] = Array.isArray(d?.participantIds)
+          ? d.participantIds.filter((x): x is string => typeof x === 'string')
           : [];
+        const fromUsersJoined: string[] = Array.isArray(d?.usersJoined)
+          ? d.usersJoined.filter((x): x is string => typeof x === 'string')
+          : [];
+        const ids: string[] = Array.from(
+          new Set([...fromParticipantIds, ...fromUsersJoined]),
+        );
+        console.log('[OrderRoom] order snapshot', orderSnap.id, {
+          uid: auth.currentUser?.uid ?? null,
+          participantIds: fromParticipantIds,
+          usersJoined: fromUsersJoined,
+          mergedParticipantIds: ids,
+          participantsRaw: d?.participants,
+        });
         const uid = auth.currentUser?.uid ?? '';
         const createdRaw = d?.createdAt;
         let createdAtMs: number | null = null;
@@ -423,11 +436,21 @@ export default function OrderRoomScreen() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        console.log(
+          '[OrderRoom] messages snapshot',
+          orderId,
+          'count',
+          snapshot.docs.length,
+        );
         const msgs: Message[] = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
           const created = d?.createdAt?.toMillis?.() ?? d?.createdAt ?? 0;
           const userName =
-            typeof d?.userName === 'string' ? d.userName : undefined;
+            typeof d?.senderName === 'string'
+              ? d.senderName
+              : typeof d?.userName === 'string'
+                ? d.userName
+                : undefined;
           const senderId =
             typeof d?.senderId === 'string'
               ? d.senderId
@@ -757,6 +780,7 @@ export default function OrderRoomScreen() {
       await addDoc(messagesRef, {
         text: trimmed,
         senderId: uid,
+        senderName: userName,
         userName: userName || undefined,
         createdAt: serverTimestamp(),
       });
@@ -1379,7 +1403,8 @@ export default function OrderRoomScreen() {
       await incrementGrowthMatches();
       const messagesRef = collection(db, 'orders', orderId, 'messages');
       await addDoc(messagesRef, {
-        userId: uid,
+        senderId: uid,
+        senderName: displayName,
         userName: displayName,
         text: 'You joined this shared order',
         createdAt: serverTimestamp(),
@@ -1387,7 +1412,7 @@ export default function OrderRoomScreen() {
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, orderId);
-      router.push(`/match/${orderId}` as never);
+      router.replace(`/order/room/${orderId}` as never);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to join');
     } finally {

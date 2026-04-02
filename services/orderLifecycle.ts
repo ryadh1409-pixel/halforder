@@ -1,7 +1,9 @@
 import {
   doc,
   runTransaction,
+  serverTimestamp,
   Timestamp,
+  type FieldValue,
   type Firestore,
 } from 'firebase/firestore';
 
@@ -125,13 +127,21 @@ export function formatOrderCountdown(remainingMs: number): string {
   return `⏱ ${mins} min left`;
 }
 
+export type ParticipantWriteRecord = {
+  userId: string;
+  joinedAt: Timestamp | FieldValue;
+};
+
 export function mergeParticipantRecordsForJoin(
   existing: OrderParticipantRecord[],
   uid: string,
-  joinedAt: Timestamp,
-): OrderParticipantRecord[] {
+  joinedAt: Timestamp | FieldValue,
+): ParticipantWriteRecord[] {
   const without = existing.filter((p) => p.userId !== uid);
-  return [...without, { userId: uid, joinedAt }];
+  return [
+    ...without.map((p) => ({ userId: p.userId, joinedAt: p.joinedAt })),
+    { userId: uid, joinedAt },
+  ];
 }
 
 export function mergeParticipantRecordsForLeave(
@@ -167,7 +177,6 @@ export async function joinOrderWithParticipantRecord(
   const trimmed = orderId.trim();
   if (!trimmed) throw new Error('Invalid order.');
   const orderRef = doc(firestore, 'orders', trimmed);
-  const joinedAt = Timestamp.now();
 
   await runTransaction(firestore, async (tx) => {
     const snap = await tx.get(orderRef);
@@ -189,7 +198,11 @@ export async function joinOrderWithParticipantRecord(
 
     if (participantIds.includes(uid)) {
       if (records.some((r) => r.userId === uid)) return;
-      const nextRecords = mergeParticipantRecordsForJoin(records, uid, joinedAt);
+      const nextRecords = mergeParticipantRecordsForJoin(
+        records,
+        uid,
+        serverTimestamp(),
+      );
       tx.update(orderRef, { participants: nextRecords });
       return;
     }
@@ -199,7 +212,11 @@ export async function joinOrderWithParticipantRecord(
     }
 
     const nextIds = [...participantIds, uid];
-    const nextRecords = mergeParticipantRecordsForJoin(records, uid, joinedAt);
+    const nextRecords = mergeParticipantRecordsForJoin(
+      records,
+      uid,
+      serverTimestamp(),
+    );
     const resolved = options.resolveStatus?.(nextIds.length, maxPeople);
     const statusPatch =
       resolved !== undefined ? { status: resolved } : {};
@@ -209,6 +226,11 @@ export async function joinOrderWithParticipantRecord(
       ...extras,
       ...statusPatch,
     });
+  });
+
+  console.log('[joinOrderWithParticipantRecord] done', {
+    orderId: trimmed,
+    uid,
   });
 }
 

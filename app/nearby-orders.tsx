@@ -107,7 +107,8 @@ export default function NearbyOrdersScreen() {
       await incrementGrowthMatches();
       const messagesRef = collection(db, 'orders', order.id, 'messages');
       await addDoc(messagesRef, {
-        userId: uid,
+        senderId: uid,
+        senderName: displayName,
         userName: displayName,
         text: 'You joined this shared order',
         createdAt: serverTimestamp(),
@@ -115,8 +116,7 @@ export default function NearbyOrdersScreen() {
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, order.id);
-      Alert.alert('Success', 'You joined this shared order.');
-      router.push(`/match/${order.id}` as const);
+      router.replace(`/order/room/${order.id}` as const);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join';
       Alert.alert('Error', msg);

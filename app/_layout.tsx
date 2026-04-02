@@ -34,10 +34,10 @@ import {
   getDocs,
   limit,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   where,
+  type DocumentChange,
   type DocumentData,
 } from 'firebase/firestore';
 
@@ -105,26 +105,47 @@ function RootLayoutNav() {
     const loadLatestOrder = async () => {
       try {
         const baseRef = collection(db, 'orders');
-        const q = query(
-          baseRef,
-          where('userId', '==', uid),
-          orderBy('createdAt', 'desc'),
-          limit(3),
-        );
-        let snapshot = await getDocs(q);
-
-        // Fallback when a composite index is not available yet.
-        if (snapshot.empty) {
-          snapshot = await getDocs(query(baseRef, where('userId', '==', uid), limit(10)));
+        const [hostSnap, createdBySnap, partSnap, joinedSnap] = await Promise.all([
+          getDocs(query(baseRef, where('hostId', '==', uid), limit(12))),
+          getDocs(query(baseRef, where('createdBy', '==', uid), limit(12))),
+          getDocs(
+            query(baseRef, where('participantIds', 'array-contains', uid), limit(12)),
+          ),
+          getDocs(
+            query(baseRef, where('usersJoined', 'array-contains', uid), limit(12)),
+          ),
+        ]);
+        const byId = new Map<string, (typeof hostSnap.docs)[number]>();
+        for (const s of [hostSnap, createdBySnap, partSnap, joinedSnap]) {
+          s.docs.forEach((d) => byId.set(d.id, d));
         }
+        const merged = Array.from(byId.values()).sort((a, b) => {
+          const ad = a.data() as DocumentData;
+          const bd = b.data() as DocumentData;
+          const am =
+            ad.createdAt &&
+            typeof ad.createdAt === 'object' &&
+            'toMillis' in ad.createdAt &&
+            typeof (ad.createdAt as { toMillis: () => number }).toMillis === 'function'
+              ? (ad.createdAt as { toMillis: () => number }).toMillis()
+              : 0;
+          const bm =
+            bd.createdAt &&
+            typeof bd.createdAt === 'object' &&
+            'toMillis' in bd.createdAt &&
+            typeof (bd.createdAt as { toMillis: () => number }).toMillis === 'function'
+              ? (bd.createdAt as { toMillis: () => number }).toMillis()
+              : 0;
+          return bm - am;
+        });
 
-        if (snapshot.empty) {
+        if (merged.length === 0) {
           latestOrderRef.current = null;
           latestOrdersRef.current = [];
           return;
         }
 
-        const mapped = snapshot.docs.slice(0, 3).map((docSnap) => {
+        const mapped = merged.slice(0, 3).map((docSnap) => {
           const data = (docSnap.data() ?? {}) as DocumentData;
           const status =
             typeof data.status === 'string' && data.status.trim()
@@ -208,58 +229,84 @@ function RootLayoutNav() {
       }
     };
 
-    const q = query(collection(db, 'orders'), where('userId', '==', uid));
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'removed') return;
-          const orderId = change.doc.id;
-          const data = (change.doc.data() ?? {}) as DocumentData;
-          const status =
-            typeof data.status === 'string' ? data.status.toLowerCase() : 'unknown';
-          const participantsCount = Array.isArray(data.participantIds)
-            ? data.participantIds.length
-            : 0;
+    const ordersRef = collection(db, 'orders');
+    const processOrderChange = (change: DocumentChange) => {
+      if (change.type === 'removed') return;
+      const orderId = change.doc.id;
+      const data = (change.doc.data() ?? {}) as DocumentData;
+      const status =
+        typeof data.status === 'string' ? data.status.toLowerCase() : 'unknown';
+      const participantsCount = Array.isArray(data.participantIds)
+        ? data.participantIds.length
+        : 0;
 
-          const prev = orderStateCacheRef.current[orderId];
-          orderStateCacheRef.current[orderId] = {
-            status,
-            participants: participantsCount,
-          };
-          if (!prev) return;
+      const prev = orderStateCacheRef.current[orderId];
+      orderStateCacheRef.current[orderId] = {
+        status,
+        participants: participantsCount,
+      };
+      if (!prev) return;
 
-          const emitOnce = (key: string, text: string) => {
-            if (tidioOrderEventSentRef.current.has(key)) return;
-            tidioOrderEventSentRef.current.add(key);
-            sendTidioOrderNotification(text);
-            console.log('[Tidio] order event notification:', { orderId, key, text });
-          };
+      const emitOnce = (key: string, text: string) => {
+        if (tidioOrderEventSentRef.current.has(key)) return;
+        tidioOrderEventSentRef.current.add(key);
+        sendTidioOrderNotification(text);
+        console.log('[Tidio] order event notification:', { orderId, key, text });
+      };
 
-          if (prev.status !== 'matched' && status === 'matched') {
-            emitOnce(
-              `${orderId}:matched`,
-              '🎉 Your order was matched. Another participant joined this shared order.',
-            );
-          }
-          if (prev.status !== 'completed' && status === 'completed') {
-            emitOnce(`${orderId}:completed`, '✅ Your order is completed 🍕');
-          }
-          if (participantsCount > prev.participants && status === 'pending') {
-            emitOnce(
-              `${orderId}:join-request`,
-              '👀 A user is trying to join your order.',
-            );
-          }
-        });
-      },
-      (error) => {
-        console.warn('[Tidio] order listener failed:', error);
-      },
+      if (prev.status !== 'matched' && status === 'matched') {
+        emitOnce(
+          `${orderId}:matched`,
+          '🎉 Your order was matched. Another participant joined this shared order.',
+        );
+      }
+      if (prev.status !== 'completed' && status === 'completed') {
+        emitOnce(`${orderId}:completed`, '✅ Your order is completed 🍕');
+      }
+      if (participantsCount > prev.participants && status === 'pending') {
+        emitOnce(
+          `${orderId}:join-request`,
+          '👀 A user is trying to join your order.',
+        );
+      }
+    };
+
+    const qHost = query(ordersRef, where('hostId', '==', uid));
+    const qCreatedBy = query(ordersRef, where('createdBy', '==', uid));
+    const qParticipant = query(
+      ordersRef,
+      where('participantIds', 'array-contains', uid),
+    );
+    const qUsersJoined = query(
+      ordersRef,
+      where('usersJoined', 'array-contains', uid),
     );
 
+    const onErr = (error: Error) => {
+      console.warn('[Tidio] order listener failed:', error);
+    };
+
+    const unsubs = [
+      onSnapshot(qHost, (snapshot) => snapshot.docChanges().forEach(processOrderChange), onErr),
+      onSnapshot(
+        qCreatedBy,
+        (snapshot) => snapshot.docChanges().forEach(processOrderChange),
+        onErr,
+      ),
+      onSnapshot(
+        qParticipant,
+        (snapshot) => snapshot.docChanges().forEach(processOrderChange),
+        onErr,
+      ),
+      onSnapshot(
+        qUsersJoined,
+        (snapshot) => snapshot.docChanges().forEach(processOrderChange),
+        onErr,
+      ),
+    ];
+
     return () => {
-      unsub();
+      unsubs.forEach((u) => u());
     };
   }, [user?.uid]);
 

@@ -334,14 +334,19 @@ export default function JoinScreen() {
         return;
       }
       await joinOrderWithTransaction(orderId, user);
+      console.log('[join tab] joined order', orderId, 'uid', user.uid);
       const messagesRef = collection(db, 'orders', orderId, 'messages');
       await addDoc(messagesRef, {
         type: 'system',
         text: 'A participant joined',
         senderId: '',
+        senderName: '',
         createdAt: serverTimestamp(),
       });
-      Alert.alert('Success', 'Joined successfully');
+      router.replace({
+        pathname: '/order/room/[id]',
+        params: { id: orderId },
+      });
     } catch (e) {
       logError(e, { alert: false });
       const msg = e instanceof Error ? e.message : 'Failed to join';

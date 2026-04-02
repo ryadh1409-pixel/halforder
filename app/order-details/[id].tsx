@@ -138,10 +138,9 @@ export default function OrderDetailsScreen() {
     setJoining(true);
     try {
       await joinOrder(order.id);
-      Alert.alert('Joined', 'You joined this order.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.push({
-        pathname: '/chat/[id]',
+      router.replace({
+        pathname: '/order/room/[id]',
         params: { id: order.id },
       } as never);
     } catch (e) {

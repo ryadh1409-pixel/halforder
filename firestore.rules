@@ -33,10 +33,14 @@ service cloud.firestore {
         );
     }
 
-    function orderParticipants(orderData) {
-      return orderData.get('usersJoined', []).size() > 0
-        ? orderData.get('usersJoined', [])
-        : orderData.get('usersAccepted', orderData.get('participantIds', []));
+    /** User may be in usersJoined (legacy swipe), participantIds / usersAccepted (shared orders), or both. */
+    function isOrderMember(orderData) {
+      return isSignedIn()
+        && (
+          request.auth.uid in orderData.get('usersJoined', [])
+          || request.auth.uid in orderData.get('participantIds', [])
+          || request.auth.uid in orderData.get('usersAccepted', [])
+        );
     }
 
     /** Tinder-style like: only `usersAccepted` changes, +1 size, cap by maxPeople. */
@@ -394,16 +398,15 @@ service cloud.firestore {
         && resource.data.createdBy == request.auth.uid;
 
       match /messages/{messageId} {
-        allow read, write: if isSignedIn()
-          && request.auth.uid in orderParticipants(
-            get(/databases/$(database)/documents/orders/$(orderId)).data
-          );
+        allow read, write: if isOrderMember(
+          get(/databases/$(database)/documents/orders/$(orderId)).data
+        );
       }
 
       match /ratings/{ratingId} {
         allow read, write: if isSignedIn()
           && ratingId == request.auth.uid
-          && request.auth.uid in orderParticipants(
+          && isOrderMember(
             get(/databases/$(database)/documents/orders/$(orderId)).data
           );
       }

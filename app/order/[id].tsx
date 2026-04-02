@@ -7,12 +7,14 @@ import {
   normalizeOrderParticipantRecords,
   parseJoinedAtMs,
 } from '@/services/orderLifecycle';
+import { generateOrderShareLink } from '@/lib/invite-link';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -126,14 +128,22 @@ export default function OrderDetailsScreen() {
     return formatOrderCountdown(rem);
   }, [docData, nowTick]);
 
-  const openRoomHref = useMemo(
-    (): Href =>
-      ({
-        pathname: '/order/room/[id]',
-        params: { id: orderId },
-      }) as Href,
-    [orderId],
-  );
+  const inviteWhatsApp = useCallback(async () => {
+    const refUserId = auth.currentUser?.uid ?? null;
+    const link = generateOrderShareLink(orderId, refUserId);
+    const message = `Join my food order 🍕: ${link}`;
+    const httpsUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const appUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    try {
+      if (await Linking.canOpenURL(httpsUrl)) {
+        await Linking.openURL(httpsUrl);
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    await Linking.openURL(appUrl).catch(() => {});
+  }, [orderId]);
 
   if (!orderId.trim()) {
     return (
@@ -219,6 +229,15 @@ export default function OrderDetailsScreen() {
           onPress={() => router.push(`/order/room/${orderId}` as never)}
         >
           <Text style={styles.primaryBtnText}>Open order room</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.secondaryInviteBtn,
+            pressed && styles.primaryBtnPressed,
+          ]}
+          onPress={() => void inviteWhatsApp()}
+        >
+          <Text style={styles.secondaryInviteBtnText}>Invite on WhatsApp</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -335,6 +354,20 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#A7F3D0',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  secondaryInviteBtn: {
+    marginTop: 12,
+    backgroundColor: 'rgba(37, 211, 102, 0.2)',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 211, 102, 0.45)',
+  },
+  secondaryInviteBtnText: {
+    color: '#86EFAC',
     fontSize: 16,
     fontWeight: '800',
   },

@@ -16,6 +16,7 @@ import {
 import { isUserBanned } from '@/services/adminGuard';
 import { hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
+import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
 
 export type OrderMemberUser = {
   uid: string;
@@ -85,6 +86,8 @@ export async function joinOrder(orderId: string): Promise<void> {
     user.displayName || user.email?.split('@')[0] || 'User';
   const photoURL = user.photoURL ?? null;
 
+  console.log('[joinOrder] start', { uid, orderId: trimmedId });
+
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(orderRef);
     if (!snap.exists()) {
@@ -127,6 +130,17 @@ export async function joinOrder(orderId: string): Promise<void> {
     });
   });
 
+  try {
+    await joinOrderWithParticipantRecord(db, trimmedId, uid, {}, {
+      requireOpenForJoin: false,
+    });
+  } catch (syncErr) {
+    console.warn(
+      '[joinOrder] participantIds/participants sync failed (non-fatal)',
+      syncErr,
+    );
+  }
+
   await setDoc(
     doc(db, 'orders', trimmedId, 'joins', uid),
     { userId: uid, joinedAt: serverTimestamp() },
@@ -139,5 +153,9 @@ export async function joinOrder(orderId: string): Promise<void> {
     { merge: true },
   ).catch(() => {});
 
-  console.info('[joinOrder] success', { orderId: trimmedId, uid });
+  console.info('[joinOrder] success', {
+    orderId: trimmedId,
+    uid,
+    note: 'usersJoined + participantIds synced',
+  });
 }

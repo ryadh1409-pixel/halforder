@@ -77,14 +77,15 @@ export default function OrdersScreen() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setNowTick(Date.now()), 15_000);
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
   const uid = user?.uid ?? null;
   const hostSnapRef = useRef<QuerySnapshot | null>(null);
+  const createdBySnapRef = useRef<QuerySnapshot | null>(null);
   const participantSnapRef = useRef<QuerySnapshot | null>(null);
-  const userIdSnapRef = useRef<QuerySnapshot | null>(null);
+  const usersJoinedSnapRef = useRef<QuerySnapshot | null>(null);
 
   useEffect(() => {
     if (!uid) {
@@ -93,20 +94,29 @@ export default function OrdersScreen() {
       return;
     }
 
+    console.log('[Orders] subscribe uid', uid);
+
     setLoading(true);
     const ordersRef = collection(db, 'orders');
+    // Member list for queries must be string[] (`participantIds` / `usersJoined`), not `participants` objects (no array-contains on maps).
     const qHost = query(ordersRef, where('hostId', '==', uid));
+    const qCreatedBy = query(ordersRef, where('createdBy', '==', uid));
     const qParticipant = query(
       ordersRef,
       where('participantIds', 'array-contains', uid),
     );
-    const qUserId = query(ordersRef, where('userId', '==', uid));
+    const qUsersJoined = query(
+      ordersRef,
+      where('usersJoined', 'array-contains', uid),
+    );
 
     const mergeAndSort = () => {
       const hostSnap = hostSnapRef.current;
+      const createdBySnap = createdBySnapRef.current;
       const participantSnap = participantSnapRef.current;
-      const userIdSnap = userIdSnapRef.current;
-      if (!hostSnap || !participantSnap || !userIdSnap) return;
+      const usersJoinedSnap = usersJoinedSnapRef.current;
+      if (!hostSnap || !createdBySnap || !participantSnap || !usersJoinedSnap)
+        return;
       const byId = new Map<string, OrderItem>();
       const add = (d: { id: string; data: () => Record<string, unknown> }) => {
         const data = d.data();
@@ -156,17 +166,23 @@ export default function OrdersScreen() {
         });
       };
       hostSnap.docs.forEach(add);
+      createdBySnap.docs.forEach(add);
       participantSnap.docs.forEach(add);
-      userIdSnap.docs.forEach(add);
+      usersJoinedSnap.docs.forEach(add);
       const list = Array.from(byId.values()).sort((a, b) => {
         const aTime = a.createdAt ?? 0;
         const bTime = b.createdAt ?? 0;
         return bTime - aTime;
       });
-      console.log(
-        '[Orders] realtime orders:',
-        list.map((o) => ({ id: o.id, status: o.status, restaurant: o.restaurantName })),
-      );
+      console.log('[Orders] fetched count', list.length, {
+        ids: list.map((o) => o.id),
+        participantsSample: list[0]
+          ? {
+              participantIds: list[0].participantIds,
+              records: list[0].participantRecords.map((r) => r.userId),
+            }
+          : null,
+      });
       setOrders(list);
       setLoadError(false);
       setLoading(false);
@@ -196,10 +212,19 @@ export default function OrdersScreen() {
       onListenError,
     );
 
-    const unsubUserId = onSnapshot(
-      qUserId,
+    const unsubCreatedBy = onSnapshot(
+      qCreatedBy,
       (snap) => {
-        userIdSnapRef.current = snap;
+        createdBySnapRef.current = snap;
+        mergeAndSort();
+      },
+      onListenError,
+    );
+
+    const unsubUsersJoined = onSnapshot(
+      qUsersJoined,
+      (snap) => {
+        usersJoinedSnapRef.current = snap;
         mergeAndSort();
       },
       onListenError,
@@ -207,8 +232,9 @@ export default function OrdersScreen() {
 
     return () => {
       unsubHost();
+      unsubCreatedBy();
       unsubParticipant();
-      unsubUserId();
+      unsubUsersJoined();
     };
   }, [uid, retryNonce]);
 
