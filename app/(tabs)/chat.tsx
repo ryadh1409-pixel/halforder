@@ -6,6 +6,10 @@ import {
   detectTimeContext,
   fetchActiveJoinableOrdersForContext,
 } from '@/services/chatAssistantOrders';
+import {
+  GHOST_JOIN_BOT_COPY,
+  generateGhostOrder,
+} from '@/services/ghostOrder';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
@@ -24,7 +28,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export type AssistantMessageAction = 'join_order' | 'create_order' | 'none';
 
-export type MessageOrderRef = { id: string; title: string };
+export type MessageOrderRef = {
+  id: string;
+  title: string;
+  isGhost?: boolean;
+  priceSplit?: string;
+  peopleNeeded?: number;
+};
 
 export type Message = {
   id: string;
@@ -61,12 +71,14 @@ function buildIntroSuggestionMessage(
       orders: orderRefs,
     };
   }
+  const ghost = generateGhostOrder(ctx);
   return {
     id: ASSISTANT_INTRO_MESSAGE_ID,
-    text: buildSmartMatchIntroText(ctx, []),
+    text: GHOST_JOIN_BOT_COPY,
     sender: 'bot',
     createdAt: Date.now(),
-    action: 'create_order',
+    action: 'join_order',
+    orders: [ghost],
   };
 }
 
@@ -85,12 +97,14 @@ function buildUserTurnBotMessage(
       orders: orderRefs,
     };
   }
+  const ghost = generateGhostOrder(ctx);
   return {
     id: `${Date.now()}-b`,
-    text: buildSmartMatchIntroText(ctx, []),
+    text: GHOST_JOIN_BOT_COPY,
     sender: 'bot',
     createdAt: Date.now(),
-    action: 'create_order',
+    action: 'join_order',
+    orders: [ghost],
   };
 }
 
@@ -155,13 +169,25 @@ export default function ChatScreen() {
       router.push({ pathname: '/(tabs)/join' } as never);
       return;
     }
+    const first = orders[0];
+    if (first.isGhost === true) {
+      router.push({
+        pathname: '/(tabs)/create',
+        params: {
+          prefillTitle: first.title,
+          prefillPriceSplit: first.priceSplit ?? '$8',
+          fromGhost: '1',
+        },
+      } as never);
+      return;
+    }
     if (orders.length > 1) {
       router.push({ pathname: '/(tabs)/join' } as never);
       return;
     }
     router.push({
       pathname: '/order/[id]',
-      params: { id: orders[0].id },
+      params: { id: first.id },
     } as never);
   };
 
@@ -232,6 +258,7 @@ export default function ChatScreen() {
       !isUser && item.action === 'join_order';
     const creatable =
       !isUser && item.action === 'create_order';
+    const primaryOrder = item.orders?.[0];
 
     const body = (
       <>
@@ -242,6 +269,17 @@ export default function ChatScreen() {
             style={styles.actionTextTap}
           >
             <Text style={styles.text}>{item.text}</Text>
+            {primaryOrder?.isGhost === true ? (
+              <View style={styles.ghostOrderCard}>
+                <Text style={styles.ghostOrderTitle}>{primaryOrder.title}</Text>
+                <Text style={styles.ghostOrderMeta}>
+                  {primaryOrder.priceSplit ?? ''}
+                </Text>
+                <Text style={styles.ghostWaitingLabel}>
+                  Waiting for 1 more person
+                </Text>
+              </View>
+            ) : null}
             <Text style={styles.actionHint}>Join order →</Text>
           </TouchableOpacity>
         ) : creatable ? (
@@ -365,6 +403,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginTop: 6,
+  },
+  ghostOrderCard: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  ghostOrderTitle: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  ghostOrderMeta: {
+    color: 'rgba(248,250,252,0.75)',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  ghostWaitingLabel: {
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 8,
   },
   time: { color: '#B6B6B6', marginTop: 4, fontSize: 11 },
   typingRow: {
