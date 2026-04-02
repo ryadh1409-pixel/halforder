@@ -49,14 +49,73 @@ function buildJoinReply(count: number, orders: MessageOrderRef[]): string {
   return `I found ${count} active orders — tap to browse and join 🍕`;
 }
 
+const ASSISTANT_INTRO_MESSAGE_ID = 'assistant-intro-suggestion';
+
+function buildIntroSuggestionMessage(
+  orderRefs: MessageOrderRef[],
+): Message {
+  const n = orderRefs.length;
+  if (n > 0) {
+    return {
+      id: ASSISTANT_INTRO_MESSAGE_ID,
+      text: `I found ${n} order${n === 1 ? '' : 's'} near you 🍕`,
+      sender: 'bot',
+      createdAt: Date.now(),
+      action: 'join_order',
+      orders: orderRefs,
+    };
+  }
+  return {
+    id: ASSISTANT_INTRO_MESSAGE_ID,
+    text: 'No active orders right now. Want to create one?',
+    sender: 'bot',
+    createdAt: Date.now(),
+    action: 'create_order',
+  };
+}
+
 export default function ChatScreen() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [introLoading, setIntroLoading] = useState(true);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const fetched = await fetchActiveJoinableOrders(3);
+        if (cancelled) return;
+        const orderRefs = toMessageOrders(fetched);
+        const intro = buildIntroSuggestionMessage(orderRefs);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
+            return prev;
+          }
+          return [...prev, intro];
+        });
+      } catch {
+        if (cancelled) return;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
+            return prev;
+          }
+          return [...prev, buildIntroSuggestionMessage([])];
+        });
+      } finally {
+        if (!cancelled) {
+          setIntroLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     flatListRef.current?.scrollToEnd({ animated: true });
@@ -225,6 +284,13 @@ export default function ChatScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.messagesContent}
+          ListEmptyComponent={
+            introLoading ? (
+              <View style={styles.introPlaceholder}>
+                <ActivityIndicator size="small" color="#6B7280" />
+              </View>
+            ) : null
+          }
           onContentSizeChange={() =>
             flatListRef.current?.scrollToEnd({ animated: true })
           }
@@ -357,5 +423,10 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  introPlaceholder: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
