@@ -31,6 +31,8 @@ export default function SwipeScreen() {
   const router = useRouter();
   const [cards, setCards] = useState<FoodCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cardsError, setCardsError] = useState(false);
+  const [cardsRetryKey, setCardsRetryKey] = useState(0);
   const [tick, setTick] = useState(0);
   const [joining, setJoining] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
@@ -38,13 +40,19 @@ export default function SwipeScreen() {
   const swipeInFlightRef = useRef(false);
 
   useEffect(() => {
-    const unsub = subscribeWaitingFoodCards((rows) => {
-      console.log('[swipe] cards from food_cards:', rows);
-      setCards(rows);
-      setLoading(false);
-    });
+    setLoading(true);
+    setCardsError(false);
+    const unsub = subscribeWaitingFoodCards(
+      (rows) => {
+        console.log('[swipe] cards from food_cards:', rows);
+        setCardsError(false);
+        setCards(rows);
+        setLoading(false);
+      },
+      () => setCardsError(true),
+    );
     return () => unsub();
-  }, []);
+  }, [cardsRetryKey]);
 
   useEffect(() => {
     const id = setInterval(() => setTick((x) => x + 1), 1000);
@@ -174,10 +182,30 @@ export default function SwipeScreen() {
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color="#34D399" />
+          <Text style={styles.loadingHint}>Loading food cards…</Text>
         </View>
       ) : !topCard ? (
         <View style={styles.centered}>
-          <Text style={styles.empty}>No active food cards.</Text>
+          {cardsError ? (
+            <>
+              <Text style={styles.empty}>
+                Could not load food cards. Check your connection.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => {
+                  setCardsError(false);
+                  setCardsRetryKey((k) => k + 1);
+                }}
+              >
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.empty}>
+              No active food cards yet. Check back soon.
+            </Text>
+          )}
         </View>
       ) : (
         <View style={styles.deck}>
@@ -206,7 +234,9 @@ export default function SwipeScreen() {
               <Text style={styles.meta}>${topCard.splitPrice.toFixed(2)} each</Text>
               <Text style={styles.meta}>{topCard.restaurantName}</Text>
               <Text style={styles.meta}>
-                {topCard.location ? 'Nearby location' : 'Location unavailable'}
+                {topCard.location
+                  ? 'Location included on this card'
+                  : 'Location not listed on this card'}
               </Text>
               <Text style={styles.timer}>Ends in {formatTimer(topCard.expiresAt + tick * 0)}</Text>
               {topCard.user1 ? (
@@ -220,7 +250,7 @@ export default function SwipeScreen() {
                 </View>
               ) : (
                 <Text style={styles.waitingText}>
-                  Match to see host details
+                  Join this card to see host details when an order is created
                 </Text>
               )}
             </View>
@@ -228,10 +258,26 @@ export default function SwipeScreen() {
         </View>
       )}
       <View style={styles.actions}>
-        <TouchableOpacity onPress={() => onSkip()} style={[styles.btn, styles.skipBtn]}>
+        <TouchableOpacity
+          disabled={!topCard || joining}
+          onPress={() => onSkip()}
+          style={[
+            styles.btn,
+            styles.skipBtn,
+            (!topCard || joining) && styles.btnDisabled,
+          ]}
+        >
           <Text style={styles.skipText}>❌ Skip</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => onLike()} style={[styles.btn, styles.likeBtn]}>
+        <TouchableOpacity
+          disabled={!topCard || joining}
+          onPress={() => onLike()}
+          style={[
+            styles.btn,
+            styles.likeBtn,
+            (!topCard || joining) && styles.btnDisabled,
+          ]}
+        >
           <Text style={styles.likeText}>{joining ? '...' : '❤️ Join'}</Text>
         </TouchableOpacity>
       </View>
@@ -244,8 +290,28 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: theme.spacing.screen, paddingVertical: 12 },
   title: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
   subtitle: { color: 'rgba(248,250,252,0.6)', marginTop: 4 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  empty: { color: 'rgba(248,250,252,0.65)' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  loadingHint: {
+    marginTop: 12,
+    color: 'rgba(248,250,252,0.55)',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  empty: {
+    color: 'rgba(248,250,252,0.65)',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.45)',
+  },
+  retryBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 15 },
   deck: { flex: 1, paddingHorizontal: 16, justifyContent: 'center' },
   card: {
     borderRadius: 22,
@@ -316,6 +382,7 @@ const styles = StyleSheet.create({
   },
   skipBtn: { backgroundColor: 'rgba(239,68,68,0.14)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.4)' },
   likeBtn: { backgroundColor: '#34D399' },
+  btnDisabled: { opacity: 0.45 },
   skipText: { color: '#FCA5A5', fontWeight: '800' },
   likeText: { color: '#07241A', fontWeight: '800' },
 });

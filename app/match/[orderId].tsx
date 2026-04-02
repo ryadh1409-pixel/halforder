@@ -279,14 +279,14 @@ export default function MatchCheckoutScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.screenTitle}>Match checkout</Text>
+          <Text style={styles.screenTitle}>Order checkout</Text>
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Restaurant</Text>
             <Text style={styles.infoLine}>Restaurant: {restaurantName}</Text>
             <Text style={styles.infoLine}>Meal: {mealName}</Text>
             <Text style={styles.infoLine}>
-              Matched with: {otherUserName || creatorName}
+              Sharing this order: {otherUserName || creatorName}
             </Text>
             <Text style={styles.infoLine}>
               Distance: {distanceM != null ? `${distanceM}m` : '—'}

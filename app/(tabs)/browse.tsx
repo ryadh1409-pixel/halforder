@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -26,15 +27,22 @@ export default function BrowseScreen() {
   const router = useRouter();
   const [cards, setCards] = useState<FoodCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = subscribeWaitingFoodCards((rows) => {
-      setCards(rows);
-      setLoading(false);
-    });
+    setLoading(true);
+    setListError(false);
+    const unsub = subscribeWaitingFoodCards(
+      (rows) => {
+        setCards(rows);
+        setLoading(false);
+      },
+      () => setListError(true),
+    );
     return () => unsub();
-  }, []);
+  }, [retryKey]);
 
   const onJoin = async (id: string) => {
     setJoiningId(id);
@@ -43,8 +51,9 @@ export default function BrowseScreen() {
       if (result.matched) {
         router.push(`/match/${id}` as const);
       }
-    } catch {
-      // keep screen stable
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not join this card.';
+      Alert.alert('Could not join', msg);
     } finally {
       setJoiningId(null);
     }
@@ -55,16 +64,31 @@ export default function BrowseScreen() {
       <StatusBar style="light" />
       <View style={styles.header}>
         <Text style={styles.title}>Swipe & Join</Text>
-        <Text style={styles.subtitle}>Admin-curated food cards nearby</Text>
+        <Text style={styles.subtitle}>Admin-curated food cards</Text>
       </View>
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color="#34D399" />
+          <Text style={styles.loadingHint}>Loading food cards…</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {cards.length === 0 ? (
-            <Text style={styles.empty}>No active cards right now.</Text>
+            listError ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.empty}>
+                  Could not load food cards. Check your connection.
+                </Text>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => setRetryKey((k) => k + 1)}
+                >
+                  <Text style={styles.retryText}>Try again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.empty}>No active food cards yet. Check back soon.</Text>
+            )
           ) : (
             cards.map((card) => (
               <View key={card.id} style={styles.card}>
@@ -103,8 +127,20 @@ const styles = StyleSheet.create({
   title: { color: D.text, fontSize: 24, fontWeight: '800' },
   subtitle: { color: D.muted, marginTop: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingHint: { marginTop: 12, color: D.muted, fontSize: 14, fontWeight: '600' },
   content: { padding: theme.spacing.screen, paddingBottom: 32 },
-  empty: { color: D.muted, textAlign: 'center', marginTop: 30 },
+  emptyWrap: { marginTop: 30, alignItems: 'center' },
+  empty: { color: D.muted, textAlign: 'center', lineHeight: 22 },
+  retryBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.35)',
+  },
+  retryText: { color: '#A7F3D0', fontWeight: '800' },
   card: {
     borderRadius: 18,
     overflow: 'hidden',

@@ -35,4 +35,4 @@ export function generateSuggestedOrder(ctx: TimeContext): SuggestedMessageOrder 
 
 /** Shown when there are no real joinable orders to list. */
 export const SUGGESTED_ORDER_BOT_COPY =
-  'Orders may be available in your area. Here’s a suggested order based on your preferences — start one and others nearby can join.';
+  'No open orders to list right now. Here’s a suggested order based on your preferences — start one and others can join when you publish it.';

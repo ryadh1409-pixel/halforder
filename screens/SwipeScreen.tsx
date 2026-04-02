@@ -209,7 +209,9 @@ function FoodCardFace({ card }: { card: SwipeCard }) {
               <Text style={styles.userName} numberOfLines={1}>
                 {card.userName}
               </Text>
-              <Text style={styles.userLocation}>📍 {card.distanceLabel || 'Near you'}</Text>
+              <Text style={styles.userLocation}>
+                📍 {card.distanceLabel || 'Distance unavailable'}
+              </Text>
             </View>
             {card.isOwner ? <Text style={styles.ownerTag}>Your order</Text> : null}
           </View>
@@ -481,7 +483,7 @@ function SwipeScreenInner() {
         });
 
         if (!existingChat) {
-          const initialText = '🎉 Match found! You can now chat.';
+          const initialText = '🎉 You are in a shared order — you can chat now.';
           const chatRef = await addDoc(collection(db, 'chats'), {
             orderId: order.id,
             users,
@@ -511,7 +513,7 @@ function SwipeScreenInner() {
         }
         Notifications.scheduleNotificationAsync({
           content: {
-            title: '🎉 Match!',
+            title: '🎉 Shared order',
             body: 'You can now chat',
           },
           trigger: null,
@@ -681,10 +683,13 @@ function SwipeScreenInner() {
         <View style={[styles.deck, { maxHeight: cardMaxH }]}>
           {!current ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>You’re all caught up</Text>
-              <Text style={styles.emptySub}>Pull fresh picks or switch a tab.</Text>
+              <Text style={styles.emptyTitle}>No more cards right now</Text>
+              <Text style={styles.emptySub}>
+                No active orders to show — start one and others can join, or replay
+                this list.
+              </Text>
               <Pressable style={styles.resetBtn} onPress={resetDeck}>
-                <Text style={styles.resetBtnText}>Replay deck</Text>
+                <Text style={styles.resetBtnText}>Show cards again</Text>
               </Pressable>
             </View>
           ) : (

@@ -33,6 +33,8 @@ export default function JoinOrderScreen() {
   const router = useRouter();
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,9 +42,12 @@ export default function JoinOrderScreen() {
       collection(db, 'orders'),
       where('status', '==', 'open'),
     );
+    setLoading(true);
+    setListError(false);
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
+        setListError(false);
         const list: OpenOrder[] = snap.docs.map((d) => {
           const data = d.data();
           return {
@@ -57,14 +62,15 @@ export default function JoinOrderScreen() {
         setLoading(false);
       },
       () => {
+        setListError(true);
         setOrders([]);
         setLoading(false);
       },
     );
     return () => unsubscribe();
-  }, []);
+  }, [retryNonce]);
 
-  const handleCreateOrder = () => {
+  const handleGoSwipe = () => {
     router.push('/(tabs)/index');
   };
 
@@ -89,7 +95,7 @@ export default function JoinOrderScreen() {
       router.push(`/order/room/${orderId}` as const);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join';
-      Alert.alert('Error', msg);
+      Alert.alert('Could not join', msg);
     } finally {
       setJoiningId(null);
     }
@@ -112,7 +118,7 @@ export default function JoinOrderScreen() {
             color={theme.colors.textOnPrimary}
           />
         ) : (
-          <Text style={styles.joinBtnText}>Join Order</Text>
+          <Text style={styles.joinBtnText}>Join order</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -122,6 +128,7 @@ export default function JoinOrderScreen() {
     return (
       <SafeAreaView style={styles.centered} edges={['top']}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingCaption}>Loading open orders…</Text>
       </SafeAreaView>
     );
   }
@@ -131,7 +138,7 @@ export default function JoinOrderScreen() {
       <Text style={styles.title}>Orders</Text>
       <TouchableOpacity
         style={styles.createButton}
-        onPress={handleCreateOrder}
+        onPress={handleGoSwipe}
         activeOpacity={0.85}
       >
         <Text style={styles.createButtonText}>Go to Swipe</Text>
@@ -142,9 +149,29 @@ export default function JoinOrderScreen() {
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            No open orders. Create one to get started.
-          </Text>
+          <View style={styles.emptyBlock}>
+            {listError ? (
+              <>
+                <Text style={styles.emptyText}>
+                  Could not load orders. Check your connection and try again.
+                </Text>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => {
+                    setListError(false);
+                    setLoading(true);
+                    setRetryNonce((n) => n + 1);
+                  }}
+                >
+                  <Text style={styles.retryBtnText}>Try again</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>
+                No active orders yet — start one and others can join.
+              </Text>
+            )}
+          </View>
         }
       />
     </SafeAreaView>
@@ -162,6 +189,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingCaption: {
+    marginTop: 14,
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
@@ -178,58 +211,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: theme.spacing.touchMin,
-    marginBottom: theme.spacing.section,
+    ...shadows.button,
   },
   createButtonText: {
     color: theme.colors.textOnPrimary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   listContent: {
     paddingHorizontal: theme.spacing.screen,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
   card: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.chromeWash,
+    borderRadius: theme.radius.card,
     padding: theme.spacing.md,
     marginBottom: theme.spacing.tight,
-    ...shadows.card,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   cardLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: theme.colors.textMuted,
-    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   cardValue: {
     fontSize: 16,
+    fontWeight: '600',
     color: theme.colors.text,
+    marginTop: 4,
     marginBottom: 12,
   },
   joinBtn: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 14,
+    backgroundColor: theme.colors.accentBlue,
+    paddingVertical: 12,
     borderRadius: theme.radius.button,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: theme.spacing.touchMin,
-    marginTop: theme.spacing.xs,
-  },
-  joinBtnText: {
-    color: theme.colors.textOnPrimary,
-    fontSize: 16,
-    fontWeight: '600',
   },
   btnDisabled: {
     opacity: 0.6,
   },
-  emptyText: {
+  joinBtnText: {
+    color: theme.colors.textOnPrimary,
+    fontWeight: '700',
     fontSize: 16,
-    color: theme.colors.textMuted,
-    textAlign: 'center',
+  },
+  emptyBlock: {
     marginTop: 24,
+  },
+  emptyText: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  retryBtn: {
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.accentBlue,
+  },
+  retryBtnText: {
+    color: theme.colors.textOnPrimary,
+    fontWeight: '700',
   },
 });

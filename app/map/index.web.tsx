@@ -23,9 +23,18 @@ export default function MapScreenWeb() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.title}>Nearby Orders</Text>
       {!userLocation ? (
-        <Text style={styles.hint}>Allow location to see orders near you.</Text>
+        <Text style={styles.hint}>
+          Turn on location to sort open orders by distance.
+        </Text>
       ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.error}>{error}</Text>
+          <TouchableOpacity style={styles.retryFab} onPress={refetch}>
+            <Text style={styles.retryFabText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={c.primary} />
@@ -38,7 +47,9 @@ export default function MapScreenWeb() {
           }
         >
           {orders.length === 0 ? (
-            <Text style={styles.empty}>No nearby orders within 3 km.</Text>
+            <Text style={styles.empty}>
+              No active orders in range — start one and others can join.
+            </Text>
           ) : (
             orders.map((order) => (
               <TouchableOpacity
@@ -94,6 +105,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingHint: {
+    marginTop: 12,
+    fontSize: 14,
+    color: c.textMuted,
+    fontWeight: '600',
+  },
+  errorBox: { paddingHorizontal: 16, marginBottom: 8, gap: 8 },
+  retryFab: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.4)',
+  },
+  retryFabText: { color: '#A7F3D0', fontWeight: '800' },
   list: { padding: 16, paddingBottom: 100 },
   empty: {
     fontSize: 16,

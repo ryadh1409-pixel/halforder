@@ -533,7 +533,7 @@ function RootLayoutNav() {
                 : '';
             sendSupportMessage(
               api,
-              `You can swipe cards to join food matches near you.${latestLine} If you tell me what you want to eat, I can guide you.`,
+              `You can swipe curated food cards to join open shared orders.${latestLine} Say what you want to eat and I can guide you.`,
             );
             await notifyNewTidioMessage(
               'Order guidance flow response sent.',
@@ -545,7 +545,7 @@ function RootLayoutNav() {
           if (isNewUserIntent) {
             sendSupportMessage(
               api,
-              'OurFood lets you split meal costs with nearby users by creating or joining shared orders. You choose a meal, match with others, and each person pays their share directly in the app flow.',
+              'OurFood helps you split meal costs by creating or joining shared orders. When another participant joins your order, each person pays their share in the app.',
             );
             await notifyNewTidioMessage(
               'New user sharing explanation sent.',

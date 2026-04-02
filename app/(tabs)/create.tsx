@@ -135,7 +135,7 @@ export default function CreateTabDisabledScreen() {
           textAlign: 'center',
         }}
       >
-        Swipe right on admin cards to join food matches.
+        Swipe right on admin cards to join shared food orders.
       </Text>
     </View>
   );

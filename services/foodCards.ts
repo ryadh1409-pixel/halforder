@@ -36,6 +36,7 @@ const ADMIN_EMAIL = 'support@halforder.app';
 
 export function subscribeWaitingFoodCards(
   onData: (cards: FoodCard[]) => void,
+  onError?: (err: Error) => void,
 ): () => void {
   const q = query(
     collection(db, FOOD_CARDS),
@@ -51,7 +52,11 @@ export function subscribeWaitingFoodCards(
       console.log('[food_cards] fetched cards:', cards);
       onData(cards);
     },
-    () => onData([]),
+    (e) => {
+      console.warn('[food_cards] listener error', e);
+      onData([]);
+      onError?.(e instanceof Error ? e : new Error('Failed to load food cards'));
+    },
   );
 }
 

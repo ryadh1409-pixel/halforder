@@ -71,6 +71,8 @@ export default function OrdersScreen() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
@@ -166,6 +168,13 @@ export default function OrdersScreen() {
         list.map((o) => ({ id: o.id, status: o.status, restaurant: o.restaurantName })),
       );
       setOrders(list);
+      setLoadError(false);
+      setLoading(false);
+    };
+
+    const onListenError = () => {
+      setLoadError(true);
+      setOrders([]);
       setLoading(false);
     };
 
@@ -175,10 +184,7 @@ export default function OrdersScreen() {
         hostSnapRef.current = snap;
         mergeAndSort();
       },
-      () => {
-        setOrders([]);
-        setLoading(false);
-      },
+      onListenError,
     );
 
     const unsubParticipant = onSnapshot(
@@ -187,10 +193,7 @@ export default function OrdersScreen() {
         participantSnapRef.current = snap;
         mergeAndSort();
       },
-      () => {
-        setOrders([]);
-        setLoading(false);
-      },
+      onListenError,
     );
 
     const unsubUserId = onSnapshot(
@@ -199,10 +202,7 @@ export default function OrdersScreen() {
         userIdSnapRef.current = snap;
         mergeAndSort();
       },
-      () => {
-        setOrders([]);
-        setLoading(false);
-      },
+      onListenError,
     );
 
     return () => {
@@ -210,7 +210,7 @@ export default function OrdersScreen() {
       unsubParticipant();
       unsubUserId();
     };
-  }, [uid]);
+  }, [uid, retryNonce]);
 
   const handleSignIn = () => {
     router.push('/(auth)/login?redirectTo=/(tabs)/orders');
@@ -429,6 +429,7 @@ export default function OrdersScreen() {
           </GlassBar>
           <View style={[styles.centerBlock, styles.flexCenter]}>
             <ActivityIndicator size="large" color={TAB_SPINNER} />
+            <Text style={styles.loadingCaption}>Loading your orders…</Text>
           </View>
         </SafeAreaView>
       </View>
@@ -453,16 +454,33 @@ export default function OrdersScreen() {
                 size={48}
                 color="rgba(255,255,255,0.2)"
               />
-              <Text style={styles.emptyTitle}>No orders yet</Text>
-              <Text style={styles.emptySub}>
-                Create or join an order and it will show up here.
+              <Text style={styles.emptyTitle}>
+                {loadError ? 'Could not load orders' : 'No orders yet'}
               </Text>
-              <Pressable
-                style={styles.primaryBtn}
-                onPress={() => router.push('/order/create')}
-              >
-                <Text style={styles.primaryBtnText}>Create order</Text>
-              </Pressable>
+              <Text style={styles.emptySub}>
+                {loadError
+                  ? 'Check your network connection, then try again.'
+                  : 'No active orders yet — start one and others can join.'}
+              </Text>
+              {loadError ? (
+                <Pressable
+                  style={styles.primaryBtn}
+                  onPress={() => {
+                    setLoadError(false);
+                    setLoading(true);
+                    setRetryNonce((n) => n + 1);
+                  }}
+                >
+                  <Text style={styles.primaryBtnText}>Try again</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={styles.primaryBtn}
+                  onPress={() => router.push('/(tabs)/index')}
+                >
+                  <Text style={styles.primaryBtnText}>Go to Swipe</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </SafeAreaView>
@@ -490,7 +508,9 @@ export default function OrdersScreen() {
               <View key={order.id}>{renderOrderCard(order)}</View>
             ))
           ) : (
-            <Text style={styles.emptySectionText}>No active orders</Text>
+            <Text style={styles.emptySectionText}>
+              No active orders yet — start one and others can join
+            </Text>
           )}
 
           {cancelledOrders.length > 0 ? (
@@ -552,6 +572,12 @@ const styles = StyleSheet.create({
   flexCenter: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingCaption: {
+    marginTop: 14,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyPanel: {
     flex: 1,

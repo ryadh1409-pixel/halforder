@@ -157,7 +157,9 @@ export default function NearbyOrdersScreen() {
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Getting your location...</Text>
+          <Text style={styles.loadingText}>
+            Loading location and open orders…
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -170,7 +172,8 @@ export default function NearbyOrdersScreen() {
         >
           {ordersWithDistance.length === 0 ? (
             <Text style={styles.emptyText}>
-              No open orders within {NEARBY_RADIUS_KM} km.
+              No active orders within {NEARBY_RADIUS_KM} km — start one and others
+              can join.
             </Text>
           ) : (
             ordersWithDistance.map((order) => {

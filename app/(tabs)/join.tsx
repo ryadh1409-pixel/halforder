@@ -182,6 +182,8 @@ export default function JoinScreen() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [listRetryNonce, setListRetryNonce] = useState(0);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string | null>(null);
   const hiddenUserIds = useHiddenUserIds();
@@ -202,12 +204,14 @@ export default function JoinScreen() {
       orderBy('createdAt', 'desc'),
     );
     setLoading(true);
+    setListError(false);
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
         if (__DEV__) {
           console.log('Realtime orders update:', snap.docs.length);
         }
+        setListError(false);
         const now = Date.now();
         const list: OpenOrder[] = snap.docs.map((d) => {
           const d2 = d.data();
@@ -265,12 +269,16 @@ export default function JoinScreen() {
           return hasRoom && notExpired;
         });
         setOrders(filtered);
+        setLoading(false);
       },
-      () => setOrders([]),
+      () => {
+        setListError(true);
+        setOrders([]);
+        setLoading(false);
+      },
     );
-    setLoading(false);
     return () => unsubscribe();
-  }, []);
+  }, [listRetryNonce]);
 
   const displayOrders = useMemo(
     () =>
@@ -468,6 +476,9 @@ export default function JoinScreen() {
         }}
       >
         <ActivityIndicator size="large" />
+        <Text style={{ color: c.textMuted, marginTop: 14, fontSize: 14 }}>
+          Loading open orders…
+        </Text>
       </SafeAreaView>
     );
   }
@@ -492,10 +503,39 @@ export default function JoinScreen() {
         data={displayOrders}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
-          <Text style={{ color: c.textMuted, marginTop: 16, lineHeight: 20 }}>
-            Orders may be available in your area. Start one from Swipe or Home to
-            get matched.
-          </Text>
+          <View style={{ marginTop: 16 }}>
+            {listError ? (
+              <>
+                <Text style={{ color: c.danger, lineHeight: 20 }}>
+                  Could not load orders. Check your connection and try again.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setListError(false);
+                    setLoading(true);
+                    setListRetryNonce((n) => n + 1);
+                  }}
+                  style={{
+                    marginTop: 14,
+                    alignSelf: 'flex-start',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    backgroundColor: c.accentBlue,
+                  }}
+                >
+                  <Text style={{ color: c.textOnPrimary, fontWeight: '700' }}>
+                    Try again
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={{ color: c.textMuted, lineHeight: 20 }}>
+                No active orders yet — start one and others can join. Open Swipe
+                to browse food cards.
+              </Text>
+            )}
+          </View>
         }
         renderItem={({ item }) => {
           const currentUid = user?.uid ?? '';

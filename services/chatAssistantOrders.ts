@@ -205,7 +205,7 @@ export function buildSmartMatchIntroText(
 ): string {
   const n = orders.length;
   if (n === 0) {
-    return 'Orders may be available in your area. Start one to get matched.';
+    return 'No active orders yet — start one and others can join.';
   }
   const food = pickHighlightFoodWord(orders, ctx);
   return `${ctx.greetingLabel} ${ctx.segmentEmoji} There ${n === 1 ? 'is' : 'are'} ${n} open ${food} order${n === 1 ? '' : 's'} you can join.`;

@@ -11,10 +11,10 @@ import {
   generateSuggestedOrder,
 } from '@/services/suggestedOrder';
 import { useRouter } from 'expo-router';
-import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -114,7 +114,7 @@ export default function ChatScreen() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [introLoading, setIntroLoading] = useState(true);
-  const [listening, setListening] = useState(false);
+  const [introFetchFailed, setIntroFetchFailed] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message> | null>(null);
 
@@ -125,6 +125,7 @@ export default function ChatScreen() {
         const ctx = detectTimeContext();
         const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
         if (cancelled) return;
+        setIntroFetchFailed(false);
         const intro = buildIntroSuggestionMessage(ctx, fetched);
         setMessages((prev) => {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
@@ -134,6 +135,7 @@ export default function ChatScreen() {
         });
       } catch {
         if (cancelled) return;
+        setIntroFetchFailed(true);
         setMessages((prev) => {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
@@ -250,9 +252,10 @@ export default function ChatScreen() {
   };
 
   const handleMicPress = () => {
-    Speech.stop();
-    setListening(true);
-    setTimeout(() => setListening(false), 1500);
+    Alert.alert(
+      'Voice input',
+      'Please type your message for now. Voice input is not available in this version.',
+    );
   };
 
   const renderItem = ({ item }: { item: Message }) => {
@@ -349,8 +352,10 @@ export default function ChatScreen() {
             <Text style={styles.typingText}>Loading open orders…</Text>
           </View>
         ) : null}
-        {listening ? (
-          <Text style={styles.listeningText}>Listening...</Text>
+        {introFetchFailed ? (
+          <Text style={styles.bannerText}>
+            Live order list unavailable — showing suggestions only.
+          </Text>
         ) : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -370,8 +375,11 @@ export default function ChatScreen() {
           />
           <TouchableOpacity
             onPress={sendMessage}
-            style={[styles.button, loading && styles.buttonDisabled]}
-            disabled={loading}
+            style={[
+              styles.button,
+              (loading || !input.trim()) && styles.buttonDisabled,
+            ]}
+            disabled={loading || !input.trim()}
           >
             <Text style={{ color: '#fff' }}>Send</Text>
           </TouchableOpacity>
@@ -453,11 +461,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   typingText: { color: '#B6B6B6', fontSize: 13 },
-  listeningText: {
-    color: '#93C5FD',
+  bannerText: {
+    color: 'rgba(250, 204, 21, 0.95)',
     paddingHorizontal: 14,
     marginBottom: 8,
     fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     color: '#FCA5A5',
