@@ -46,10 +46,81 @@ service cloud.firestore {
         );
     }
 
-    /** Order membership: `participants` is string[] of user ids. */
+    /** Order membership: legacy `participants` or HalfOrder `users`. */
     function isOrderMember(orderData) {
       return isSignedIn()
-        && request.auth.uid in orderData.get('participants', []);
+        && (
+          request.auth.uid in orderData.get('participants', [])
+          || request.auth.uid in orderData.get('users', [])
+        );
+    }
+
+    function usersAllStrings(users, idx) {
+      return idx >= users.size()
+        || (
+          users[idx] is string
+          && usersAllStrings(users, idx + 1)
+        );
+    }
+
+    /** HalfOrder: food-card swipe creates `orders` with `cardId` + `users`. */
+    function isValidHalfOrderCreate() {
+      return isSignedIn()
+        && canCreateOrderBySafetyLimits()
+        && !isCurrentUserRestricted()
+        && request.resource.data.cardId is string
+        && request.resource.data.cardId.size() > 0
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 1
+        && usersAllStrings(request.resource.data.users, 0)
+        && request.auth.uid == request.resource.data.users[0]
+        && request.resource.data.status == 'active'
+        && request.resource.data.maxUsers is int
+        && request.resource.data.maxUsers >= 2
+        && request.resource.data.maxUsers <= 20
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt != null;
+    }
+
+    function isHalfOrderUsersJoinUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.get('users', []).size() > 0
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['users'])
+        && request.resource.data.users is list
+        && usersAllStrings(request.resource.data.users, 0)
+        && request.resource.data.users.size() == resource.data.get('users', []).size() + 1
+        && request.auth.uid in request.resource.data.users
+        && !(request.auth.uid in resource.data.get('users', []))
+        && request.resource.data.users.size() <= resource.data.get('maxUsers', 2)
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.createdBy == resource.data.createdBy;
+    }
+
+    function orderLinkTargetsCard(orderId, cardId) {
+      return exists(/databases/$(database)/documents/orders/$(orderId))
+        && get(/databases/$(database)/documents/orders/$(orderId)).data.cardId == cardId;
+    }
+
+    function requesterInOrderUsers(orderId) {
+      return request.auth.uid
+        in get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []);
+    }
+
+    /** First link: set `food_cards.orderId` to a new HalfOrder doc (caller must be in order.users). */
+    function isValidFoodCardOrderIdLink(cardId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['orderId'])
+        && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && (
+          !resource.data.keys().hasAny(['orderId'])
+          || resource.data.orderId == null
+        )
+        && orderLinkTargetsCard(request.resource.data.orderId, cardId)
+        && requesterInOrderUsers(request.resource.data.orderId);
     }
 
     /** Tinder-style like: only `usersAccepted` changes, +1 size, cap by maxPeople. */
@@ -229,24 +300,6 @@ service cloud.firestore {
       return s == 'active';
     }
 
-    function isValidFoodCardJoinedUsersJoinUpdate() {
-      let prevJoin = resource.data.get('joinedUsers', []);
-      let cap = foodCardMaxUsersCap();
-      let nextJoin = request.resource.data.joinedUsers;
-      return foodCardOpenStatus(resource.data.status)
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['joinedUsers', 'status'])
-        && nextJoin is list
-        && prevJoin is list
-        && nextJoin.hasAll(prevJoin)
-        && nextJoin.size() == prevJoin.size() + 1
-        && nextJoin.hasAny([request.auth.uid])
-        && !prevJoin.hasAny([request.auth.uid])
-        && (
-          (nextJoin.size() >= cap && request.resource.data.status == 'full')
-          || (nextJoin.size() < cap && foodCardOpenStatus(request.resource.data.status))
-        );
-    }
-
     function isValidFoodCardJoinUpdate() {
       return isSignedIn()
         && (
@@ -268,7 +321,6 @@ service cloud.firestore {
               )
             )
           )
-          || isValidFoodCardJoinedUsersJoinUpdate()
         );
     }
 
@@ -304,35 +356,71 @@ service cloud.firestore {
         allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
       }
     }
-    match /chats/{chatId} {
-      allow read, update: if isAdmin()
-        || (
-          request.auth != null
-          && (
-            request.auth.uid in resource.data.get('participants', [])
-            || request.auth.uid in resource.data.get('users', [])
-          )
+    function isChatDocMember(chatId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && (
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', [])
+          || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('users', [])
         );
+    }
+
+    function isChatUsersAppendUpdate(chatId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.orderId == chatId
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['users'])
+        && request.resource.data.users is list
+        && usersAllStrings(request.resource.data.users, 0)
+        && resource.data.get('users', []).size() > 0
+        && request.resource.data.users.size() == resource.data.get('users', []).size() + 1
+        && request.auth.uid in request.resource.data.users
+        && !(request.auth.uid in resource.data.get('users', []));
+    }
+
+    function isChatLastMessagePatch(chatId) {
+      return isSignedIn()
+        && isChatDocMember(chatId)
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastMessage', 'lastMessageAt']);
+    }
+
+    match /chats/{chatId} {
+      allow read: if isAdmin() || isChatDocMember(chatId);
       allow create: if isAdmin()
         || (
-          request.auth != null
-          && (
-            request.auth.uid in request.resource.data.get('participants', [])
-            || request.auth.uid in request.resource.data.get('users', [])
-          )
+          isSignedIn()
+          && !isCurrentUserRestricted()
+          && request.resource.data.orderId == chatId
+          && request.resource.data.users is list
+          && request.resource.data.users.size() >= 1
+          && usersAllStrings(request.resource.data.users, 0)
+          && request.auth.uid in request.resource.data.users
+          && request.resource.data.createdAt != null
         );
+      allow update: if isAdmin()
+        || isChatUsersAppendUpdate(chatId)
+        || isChatLastMessagePatch(chatId);
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read: if isAdmin()
+        allow read: if isAdmin() || isChatDocMember(chatId);
+        allow create: if isAdmin()
           || (
-            request.auth != null
+            isSignedIn()
+            && request.resource.data.text is string
+            && request.resource.data.createdAt != null
             && (
-              request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', [])
-              || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('users', [])
+              request.resource.data.senderId == 'system'
+              || request.resource.data.sender == 'ai'
+              || (
+                request.resource.data.senderId == request.auth.uid
+                && isChatDocMember(chatId)
+              )
             )
           );
-        allow create, update, delete: if isAdmin() || request.auth != null;
+        allow update, delete: if isAdmin();
       }
     }
     match /messages/{messageId} {
@@ -397,7 +485,7 @@ service cloud.firestore {
     }
     match /orders/{orderId} {
       allow read: if isSignedIn();
-      allow create: if isValidOrderCreate() || isAdmin();
+      allow create: if isValidOrderCreate() || isValidHalfOrderCreate() || isAdmin();
       allow update: if isAdmin()
         || isParticipantsJoinUpdate()
         || isParticipantsJoinWithExtrasUpdate()
@@ -406,7 +494,8 @@ service cloud.firestore {
         || isOrderTypingUpdate()
         || isCreatorOnlyNonJoinUpdate()
         || isSwipeAcceptUpdate()
-        || isMarkOrderExpiredUpdate();
+        || isMarkOrderExpiredUpdate()
+        || isHalfOrderUsersJoinUpdate();
       allow delete: if isAdmin()
         || (
           request.auth != null
@@ -435,7 +524,9 @@ service cloud.firestore {
     match /food_cards/{cardId} {
       allow read: if isSignedIn();
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || isValidFoodCardJoinUpdate();
+      allow update: if isAdmin()
+        || isValidFoodCardOrderIdLink(cardId)
+        || isValidFoodCardJoinUpdate();
     }
 
     match /{document=**} {

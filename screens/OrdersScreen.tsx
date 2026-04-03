@@ -15,6 +15,7 @@ import {
   query,
   updateDoc,
   where,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useState } from 'react';
@@ -40,6 +41,10 @@ type OrderItem = {
   createdAt: number | null;
   createdBy: string;
   participants: string[];
+  /** HalfOrder `users` (food-card swipe). */
+  halfUsers: string[];
+  usesHalf: boolean;
+  maxPeople: number;
   joinedAtMap: unknown;
   isSuggested?: boolean;
 };
@@ -91,7 +96,11 @@ export default function OrdersScreen() {
 
     setLoading(true);
     const ordersRef = collection(db, 'orders');
-    const q = query(ordersRef, where('participants', 'array-contains', uid));
+    const qParticipants = query(
+      ordersRef,
+      where('participants', 'array-contains', uid),
+    );
+    const qUsers = query(ordersRef, where('users', 'array-contains', uid));
 
     const onListenError = () => {
       setLoadError(true);
@@ -99,65 +108,103 @@ export default function OrdersScreen() {
       setLoading(false);
     };
 
-    const unsub = onSnapshot(
-      q,
+    let listPart: OrderItem[] = [];
+    let listUsers: OrderItem[] = [];
+    let heardPart = false;
+    let heardUsers = false;
+
+    function mapOrderDoc(d: QueryDocumentSnapshot): OrderItem {
+      const data = d.data() as Record<string, unknown>;
+      const rawCreated = data?.createdAt;
+      let createdAt: number | null = null;
+      if (
+        rawCreated &&
+        typeof rawCreated === 'object' &&
+        'toMillis' in rawCreated &&
+        typeof (rawCreated as { toMillis: () => number }).toMillis === 'function'
+      ) {
+        createdAt = (rawCreated as { toMillis: () => number }).toMillis();
+      } else if (typeof rawCreated === 'number') {
+        createdAt = rawCreated;
+      }
+      const createdBy =
+        typeof data?.createdBy === 'string' && data.createdBy.trim()
+          ? data.createdBy
+          : typeof data?.userId === 'string' && data.userId.trim()
+            ? data.userId
+            : typeof data?.hostId === 'string' && data.hostId.trim()
+              ? data.hostId
+              : '';
+      const participants: string[] = Array.isArray(data?.participants)
+        ? data.participants.filter((x): x is string => typeof x === 'string')
+        : [];
+      const halfUsers: string[] = Array.isArray(data?.users)
+        ? data.users.filter((x): x is string => typeof x === 'string')
+        : [];
+      const usesHalf = halfUsers.length > 0;
+      const maxPeople =
+        typeof data?.maxPeople === 'number' && data.maxPeople > 0
+          ? data.maxPeople
+          : typeof data?.maxUsers === 'number' && data.maxUsers > 0
+            ? data.maxUsers
+            : 2;
+      return {
+        id: d.id,
+        restaurantName:
+          typeof data?.restaurantName === 'string' && data.restaurantName.trim()
+            ? data.restaurantName
+            : typeof data?.foodName === 'string' && String(data.foodName).trim()
+              ? String(data.foodName)
+              : 'Restaurant',
+        status: typeof data?.status === 'string' ? data.status : '—',
+        totalPrice: Number(data?.totalPrice ?? 0),
+        createdAt,
+        createdBy,
+        participants,
+        halfUsers,
+        usesHalf,
+        maxPeople,
+        joinedAtMap: data?.joinedAtMap,
+        isSuggested: data?.isSuggested === true,
+      };
+    }
+
+    const merge = () => {
+      if (!heardPart || !heardUsers) return;
+      const byId = new Map<string, OrderItem>();
+      [...listPart, ...listUsers].forEach((row) => byId.set(row.id, row));
+      const merged = [...byId.values()].sort(
+        (a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0),
+      );
+      setOrders(merged);
+      setLoadError(false);
+      setLoading(false);
+    };
+
+    const unsubPart = onSnapshot(
+      qParticipants,
       (snap) => {
-        const list: OrderItem[] = snap.docs.map((d) => {
-          const data = d.data() as Record<string, unknown>;
-          const rawCreated = data?.createdAt;
-          let createdAt: number | null = null;
-          if (
-            rawCreated &&
-            typeof rawCreated === 'object' &&
-            'toMillis' in rawCreated &&
-            typeof (rawCreated as { toMillis: () => number }).toMillis ===
-              'function'
-          ) {
-            createdAt = (rawCreated as { toMillis: () => number }).toMillis();
-          } else if (typeof rawCreated === 'number') {
-            createdAt = rawCreated;
-          }
-          const createdBy =
-            typeof data?.createdBy === 'string' && data.createdBy.trim()
-              ? data.createdBy
-              : typeof data?.userId === 'string' && data.userId.trim()
-                ? data.userId
-                : typeof data?.hostId === 'string' && data.hostId.trim()
-                  ? data.hostId
-                  : '';
-          const participants: string[] = Array.isArray(data?.participants)
-            ? data.participants.filter(
-                (x): x is string => typeof x === 'string',
-              )
-            : [];
-          return {
-            id: d.id,
-            restaurantName:
-              typeof data?.restaurantName === 'string' &&
-              data.restaurantName.trim()
-                ? data.restaurantName
-                : 'Restaurant',
-            status: typeof data?.status === 'string' ? data.status : '—',
-            totalPrice: Number(data?.totalPrice ?? 0),
-            createdAt,
-            createdBy,
-            participants,
-            joinedAtMap: data?.joinedAtMap,
-            isSuggested: data?.isSuggested === true,
-          };
-        });
-        list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-        if (list[0]) {
-          console.log('ORDER PARTICIPANTS:', list[0].participants);
-        }
-        setOrders(list);
-        setLoadError(false);
-        setLoading(false);
+        listPart = snap.docs.map(mapOrderDoc);
+        heardPart = true;
+        merge();
       },
       onListenError,
     );
 
-    return () => unsub();
+    const unsubUsers = onSnapshot(
+      qUsers,
+      (snap) => {
+        listUsers = snap.docs.map(mapOrderDoc);
+        heardUsers = true;
+        merge();
+      },
+      onListenError,
+    );
+
+    return () => {
+      unsubPart();
+      unsubUsers();
+    };
   }, [uid, retryNonce]);
 
   const handleSignIn = () => {
@@ -234,10 +281,11 @@ export default function OrdersScreen() {
 
   const renderOrderCard = (item: OrderItem, disabled = false) => {
     const u = uid ?? '';
+    const lifecycleParticipants = item.usesHalf ? item.halfUsers : item.participants;
     const { lifecycle, remainingMs } = deriveLifecycleForViewer({
       uid: u,
       createdBy: item.createdBy,
-      participants: item.participants,
+      participants: lifecycleParticipants,
       joinedAtMap: item.joinedAtMap,
       orderStatus: item.status,
       now: nowTick,
@@ -250,8 +298,9 @@ export default function OrdersScreen() {
           : lifecycle === 'expired'
             ? 'expired'
             : 'active';
+    const userCount = item.usesHalf ? item.halfUsers.length : item.participants.length;
     const countdownLabel =
-      item.participants.includes(u) &&
+      lifecycleParticipants.includes(u) &&
       remainingMs != null &&
       remainingMs > 0
         ? formatOrderCountdown(remainingMs)
@@ -260,7 +309,8 @@ export default function OrdersScreen() {
       !disabled &&
       u &&
       item.status.toLowerCase() !== 'expired' &&
-      item.status !== 'cancelled';
+      item.status !== 'cancelled' &&
+      !(item.usesHalf && item.createdBy !== u);
 
     return (
       <View style={[styles.orderCardWrap, disabled && styles.orderCardDisabled]}>
@@ -298,7 +348,24 @@ export default function OrdersScreen() {
                 ${item.totalPrice.toFixed(2)}
               </Text>
             </View>
+            {item.usesHalf ? (
+              <View style={styles.metaPill}>
+                <MaterialIcons name="people" size={14} color="#FBBF24" />
+                <Text style={styles.metaPillText}>
+                  {userCount}/{item.maxPeople}
+                </Text>
+              </View>
+            ) : null}
           </View>
+          {item.usesHalf ? (
+            <Pressable
+              style={styles.chatLinkBtn}
+              onPress={() => router.push(`/chat/${item.id}` as never)}
+            >
+              <MaterialIcons name="chat" size={18} color="#7dd3fc" />
+              <Text style={styles.chatLinkText}>Order chat</Text>
+            </Pressable>
+          ) : null}
           {countdownLabel ? (
             <Text style={styles.countdownText}>{countdownLabel}</Text>
           ) : null}
@@ -620,6 +687,24 @@ const styles = StyleSheet.create({
     color: 'rgba(250, 204, 21, 0.95)',
     fontSize: 14,
     fontWeight: '700',
+  },
+  chatLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(125, 211, 252, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 211, 252, 0.35)',
+  },
+  chatLinkText: {
+    marginLeft: 8,
+    color: '#7dd3fc',
+    fontWeight: '700',
+    fontSize: 14,
   },
   cancelBtn: {
     marginTop: 10,

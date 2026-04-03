@@ -6,9 +6,9 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
 import { auth, db, storage } from '@/services/firebase';
 import {
+  countFoodCardsWithStatus,
+  countVisibleActiveFoodCardsInSnapshot,
   foodCardExpiresAtFromNow,
-  isActiveFoodCardStatus,
-  queryVisibleActiveFoodCards,
 } from '@/services/foodCards';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -126,15 +126,8 @@ export default function AdminScreen() {
         if (data?.status === 'completed') completedOrders += 1;
       });
 
-      let activeCards = 0;
-      let totalMatches = 0;
-      cardsSnap.docs.forEach((d) => {
-        const data = d.data();
-        if (typeof data?.status === 'string' && isOpenFoodCardStatus(data.status)) {
-          activeCards += 1;
-        }
-        if (data?.status === 'matched') totalMatches += 1;
-      });
+      const activeCards = countVisibleActiveFoodCardsInSnapshot(cardsSnap, now);
+      const totalMatches = countFoodCardsWithStatus(cardsSnap, 'matched');
 
       const nextMetrics = {
         totalUsers,
@@ -226,8 +219,8 @@ export default function AdminScreen() {
 
     setSaving(true);
     try {
-      const active = await getDocs(queryVisibleActiveFoodCards());
-      if (active.size >= 10) {
+      const cardsCap = await getDocs(collection(db, 'food_cards'));
+      if (countVisibleActiveFoodCardsInSnapshot(cardsCap) >= 10) {
         Alert.alert('Limit reached', 'Maximum 10 active cards allowed.');
         return;
       }
@@ -240,7 +233,6 @@ export default function AdminScreen() {
         splitPrice: split,
         location: location.trim() || null,
         ownerId: user.uid,
-        joinedUsers: [] as string[],
         maxUsers: 2,
         createdAt: serverTimestamp(),
         expiresAt: foodCardExpiresAtFromNow(now),

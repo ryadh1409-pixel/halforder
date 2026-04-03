@@ -63,20 +63,40 @@ export default function AdminDashboardScreen() {
     async function fetchStats() {
       try {
         adminLog('dashboard', 'getDocs users, orders, complaints, reports');
-        const [usersSnap, ordersSnap, complaintsSnap, reportsSnap] =
-          await Promise.all([
-            getDocs(collection(db, 'users')),
-            getDocs(collection(db, 'orders')),
-            getDocs(collection(db, 'complaints')),
-            getDocs(collection(db, 'reports')),
-          ]);
+        const labels = ['users', 'orders', 'complaints', 'reports'] as const;
+        const settled = await Promise.allSettled([
+          getDocs(collection(db, 'users')),
+          getDocs(collection(db, 'orders')),
+          getDocs(collection(db, 'complaints')),
+          getDocs(collection(db, 'reports')),
+        ]);
 
         if (cancelled) return;
 
-        const totalUsers = usersSnap.size;
-        const totalOrders = ordersSnap.size;
-        const complaints = complaintsSnap.size;
-        const reports = reportsSnap.size;
+        const fetchErrors = settled
+          .map((r, i) =>
+            r.status === 'rejected'
+              ? `${labels[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`
+              : null,
+          )
+          .filter((x): x is string => x != null);
+        if (fetchErrors.length > 0) {
+          adminError('dashboard', 'partial fetch failures', fetchErrors.join('; '));
+          setError(fetchErrors.join('; '));
+        } else {
+          setError(null);
+        }
+
+        const usersSnap = settled[0].status === 'fulfilled' ? settled[0].value : null;
+        const ordersSnap = settled[1].status === 'fulfilled' ? settled[1].value : null;
+        const complaintsSnap =
+          settled[2].status === 'fulfilled' ? settled[2].value : null;
+        const reportsSnap = settled[3].status === 'fulfilled' ? settled[3].value : null;
+
+        const totalUsers = usersSnap?.size ?? 0;
+        const totalOrders = ordersSnap?.size ?? 0;
+        const complaints = complaintsSnap?.size ?? 0;
+        const reports = reportsSnap?.size ?? 0;
 
         const todayStart = startOfTodayMs();
         const todayEnd = endOfTodayMs();
@@ -84,7 +104,7 @@ export default function AdminDashboardScreen() {
         let activeOrders = 0;
         let ordersToday = 0;
 
-        ordersSnap.docs.forEach((doc) => {
+        (ordersSnap?.docs ?? []).forEach((doc) => {
           const data = doc.data();
           const status = data?.status;
           if (
@@ -116,7 +136,6 @@ export default function AdminDashboardScreen() {
         };
         adminLog('dashboard', 'stats loaded', payload);
         setStats(payload);
-        setError(null);
       } catch (e) {
         adminError('dashboard', 'fetchStats failed', e);
         if (!cancelled) {

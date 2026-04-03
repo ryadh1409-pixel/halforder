@@ -5,7 +5,7 @@ import {
   onSnapshot,
   type DocumentSnapshot,
 } from 'firebase/firestore';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,8 +23,12 @@ import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { blockUser, hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
-import { joinOrder as joinFirestoreOrder } from '@/services/joinOrder';
+import {
+  joinHalfOrderByOrderId,
+  joinOrder as joinFirestoreOrder,
+} from '@/services/joinOrder';
 import { joinOrder as joinFoodCardOrder } from '@/services/foodCards';
+import { normalizeParticipantsStrings } from '@/services/orderLifecycle';
 
 const PLACEHOLDER_FOOD_IMAGE =
   'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80';
@@ -41,6 +45,10 @@ type OrderDetails = {
   distance: number;
   timeRemaining: number;
   createdBy: string;
+  /** HalfOrder swipe flow (`orders.users`). */
+  usesHalfUsers?: boolean;
+  /** All member uids (HalfOrder `users` or legacy `participants`). */
+  memberIds?: string[];
   /** Present when row came from `food_cards` (swipe / admin cards). */
   foodCardStatus?: string;
 };
@@ -50,6 +58,23 @@ function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
   if (!d) {
     throw new Error('Missing order data');
   }
+  const usersList = Array.isArray(d?.users)
+    ? (d.users as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : [];
+  const partCount = normalizeParticipantsStrings(d?.participants).length;
+  const peopleJoined =
+    usersList.length > 0
+      ? usersList.length
+      : partCount > 0
+        ? partCount
+        : Number(d?.peopleJoined ?? 1);
+  const createdBy =
+    typeof d?.createdBy === 'string' && d.createdBy
+      ? d.createdBy
+      : usersList[0] ?? '';
+  const participantsList = normalizeParticipantsStrings(d?.participants);
+  const memberIds =
+    usersList.length > 0 ? usersList : participantsList;
   return {
     id: snap.id,
     foodName: String(d?.foodName ?? 'Shared order'),
@@ -59,12 +84,14 @@ function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
         : PLACEHOLDER_FOOD_IMAGE,
     pricePerPerson: Number(d?.pricePerPerson ?? 0),
     totalPrice: Number(d?.totalPrice ?? 0),
-    peopleJoined: Number(d?.peopleJoined ?? 1),
-    maxPeople: Number(d?.maxPeople ?? 2),
+    peopleJoined,
+    maxPeople: Number(d?.maxPeople ?? d?.maxUsers ?? 2),
     location: String(d?.location ?? 'Nearby'),
     distance: Number(d?.distance ?? 0),
     timeRemaining: Number(d?.timeRemaining ?? 20),
-    createdBy: String(d?.createdBy ?? ''),
+    createdBy: String(createdBy),
+    usesHalfUsers: usersList.length > 0,
+    memberIds,
   };
 }
 
@@ -73,10 +100,6 @@ function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
   if (!d) {
     throw new Error('Missing food card data');
   }
-  const joined = Array.isArray(d.joinedUsers)
-    ? d.joinedUsers.filter((x: unknown): x is string => typeof x === 'string')
-        .length
-    : 0;
   const max =
     typeof d.maxUsers === 'number' && d.maxUsers > 0 ? d.maxUsers : 2;
   const exp = typeof d.expiresAt === 'number' ? d.expiresAt : 0;
@@ -99,7 +122,7 @@ function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
     image: img,
     pricePerPerson: Number(d.splitPrice ?? 0),
     totalPrice: Number(d.price ?? 0),
-    peopleJoined: joined,
+    peopleJoined: 0,
     maxPeople: max,
     location: loc,
     distance: 0,
@@ -123,6 +146,7 @@ export default function OrderDetailsScreen() {
   const [blocking, setBlocking] = useState(false);
   const [countdownSec, setCountdownSec] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
+  const prevJoinedCountRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!orderId.trim()) {
@@ -135,13 +159,17 @@ export default function OrderDetailsScreen() {
     setOrder(null);
     setDetailSource(null);
 
-    let orderRow: OrderDetails | null = null;
+    let primaryOrderRow: OrderDetails | null = null;
+    let linkedOrderRow: OrderDetails | null = null;
     let cardRow: OrderDetails | null = null;
-    let orderHeard = false;
+    let primaryHeard = false;
     let cardHeard = false;
+    let linkedHeard = true;
+    let unsubLinked: (() => void) | null = null;
 
     const settle = () => {
-      if (!orderHeard || !cardHeard) return;
+      if (!primaryHeard || !cardHeard || !linkedHeard) return;
+      const orderRow = primaryOrderRow ?? linkedOrderRow ?? null;
       if (orderRow) {
         setDetailSource('order');
         setOrder(orderRow);
@@ -157,20 +185,53 @@ export default function OrderDetailsScreen() {
       setLoading(false);
     };
 
-    const unsubOrder = onSnapshot(
+    const subLinkedOrder = (rawOid: unknown) => {
+      if (unsubLinked) {
+        unsubLinked();
+        unsubLinked = null;
+      }
+      linkedOrderRow = null;
+      const oid =
+        typeof rawOid === 'string' && rawOid.trim() ? rawOid.trim() : '';
+      if (!oid || oid === orderId) {
+        linkedHeard = true;
+        settle();
+        return;
+      }
+      linkedHeard = false;
+      unsubLinked = onSnapshot(
+        doc(db, 'orders', oid),
+        (snap) => {
+          linkedHeard = true;
+          try {
+            linkedOrderRow = snap.exists() ? mapOrderDocument(snap) : null;
+          } catch {
+            linkedOrderRow = null;
+          }
+          settle();
+        },
+        () => {
+          linkedHeard = true;
+          linkedOrderRow = null;
+          settle();
+        },
+      );
+    };
+
+    const unsubOrderPrimary = onSnapshot(
       doc(db, 'orders', orderId),
       (snap) => {
-        orderHeard = true;
+        primaryHeard = true;
         try {
-          orderRow = snap.exists() ? mapOrderDocument(snap) : null;
+          primaryOrderRow = snap.exists() ? mapOrderDocument(snap) : null;
         } catch {
-          orderRow = null;
+          primaryOrderRow = null;
         }
         settle();
       },
       () => {
-        orderHeard = true;
-        orderRow = null;
+        primaryHeard = true;
+        primaryOrderRow = null;
         settle();
       },
     );
@@ -181,23 +242,47 @@ export default function OrderDetailsScreen() {
         cardHeard = true;
         try {
           cardRow = snap.exists() ? mapFoodCardDocument(snap) : null;
+          const oid = snap.exists() ? snap.data()?.orderId : undefined;
+          subLinkedOrder(oid);
         } catch {
           cardRow = null;
+          subLinkedOrder(undefined);
         }
         settle();
       },
       () => {
         cardHeard = true;
         cardRow = null;
+        subLinkedOrder(undefined);
         settle();
       },
     );
 
     return () => {
-      unsubOrder();
+      unsubOrderPrimary();
       unsubCard();
+      if (unsubLinked) unsubLinked();
     };
   }, [orderId]);
+
+  useEffect(() => {
+    if (!order || detailSource !== 'order') {
+      prevJoinedCountRef.current = null;
+      return;
+    }
+    if (!order.usesHalfUsers) {
+      prevJoinedCountRef.current = order.peopleJoined;
+      return;
+    }
+    const prev = prevJoinedCountRef.current;
+    prevJoinedCountRef.current = order.peopleJoined;
+    if (prev === 1 && order.peopleJoined >= 2 && auth.currentUser?.uid) {
+      Alert.alert(
+        'Someone joined your order!',
+        'Open chat to coordinate.',
+      );
+    }
+  }, [order?.peopleJoined, order?.id, detailSource, order?.usesHalfUsers]);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -231,6 +316,13 @@ export default function OrderDetailsScreen() {
     return Math.max(order.maxPeople - order.peopleJoined, 0);
   }, [order]);
 
+  const viewerUid = auth.currentUser?.uid;
+  const alreadyMember = !!(
+    viewerUid &&
+    order?.memberIds &&
+    order.memberIds.includes(viewerUid)
+  );
+
   const countdownLabel = useMemo(() => {
     const mins = Math.floor(countdownSec / 60);
     const secs = countdownSec % 60;
@@ -251,13 +343,24 @@ export default function OrderDetailsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
           () => {},
         );
-        if (result.alreadyJoined) {
-          Alert.alert('Already joined', 'You are already on this card.');
-        } else if (result.isFull) {
-          Alert.alert('Order full', 'This card has reached the maximum joiners.');
-        } else {
-          Alert.alert('Joined', 'You have joined this food card.');
+        if (result.justBecamePair) {
+          Alert.alert(
+            'Someone joined your order!',
+            'Say hi in chat.',
+          );
         }
+        router.replace(`/order-details/${result.orderId}` as never);
+        return;
+      }
+      if (order.usesHalfUsers) {
+        const half = await joinHalfOrderByOrderId(order.id);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => {},
+        );
+        if (half.justBecamePair) {
+          Alert.alert('Someone joined your order!', 'Say hi in chat.');
+        }
+        router.push(`/order-details/${order.id}` as never);
         return;
       }
       await joinFirestoreOrder(order.id);
@@ -362,10 +465,20 @@ export default function OrderDetailsScreen() {
             <Text style={styles.timerValue}>{countdownLabel}</Text>
           </View>
         </View>
+        {detailSource === 'order' && order.usesHalfUsers ? (
+          <TouchableOpacity
+            style={styles.chatNavButton}
+            onPress={() => router.push(`/chat/${order.id}` as never)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.chatNavButtonText}>Open order chat</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={[
             styles.joinButton,
             (joining ||
+              alreadyMember ||
               remainingSpots <= 0 ||
               isBlocked ||
               (detailSource === 'food_card' &&
@@ -376,6 +489,7 @@ export default function OrderDetailsScreen() {
           onPress={handleJoinOrder}
           disabled={
             joining ||
+            alreadyMember ||
             remainingSpots <= 0 ||
             isBlocked ||
             (detailSource === 'food_card' &&
@@ -387,15 +501,17 @@ export default function OrderDetailsScreen() {
           <Text style={styles.joinButtonText}>
             {joining
               ? 'Joining...'
-              : isBlocked
-                ? 'Blocked'
-                : detailSource === 'food_card' &&
-                    order.foodCardStatus != null &&
-                    order.foodCardStatus !== 'active'
-                  ? 'Not available'
-                  : remainingSpots <= 0
-                    ? 'Order Full'
-                    : 'Join Order'}
+              : alreadyMember
+                ? 'Joined'
+                : isBlocked
+                  ? 'Blocked'
+                  : detailSource === 'food_card' &&
+                      order.foodCardStatus != null &&
+                      order.foodCardStatus !== 'active'
+                    ? 'Not available'
+                    : remainingSpots <= 0
+                      ? 'Order Full'
+                      : 'Join Order'}
           </Text>
         </TouchableOpacity>
         {auth.currentUser?.uid && order.createdBy && auth.currentUser.uid !== order.createdBy ? (
@@ -457,6 +573,16 @@ const styles = StyleSheet.create({
   },
   timerLabel: { color: '#FB923C', fontSize: 14, fontWeight: '700' },
   timerValue: { color: '#FB923C', fontSize: 24, fontWeight: '900' },
+  chatNavButton: {
+    backgroundColor: '#1e293b',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  chatNavButtonText: { color: '#7dd3fc', fontWeight: '800', fontSize: 16 },
   joinButton: {
     marginTop: 16,
     backgroundColor: '#34D399',

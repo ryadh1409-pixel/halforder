@@ -5,8 +5,11 @@ import { theme } from '@/constants/theme';
 import { adminError, adminLog } from '@/lib/admin/adminDebug';
 import { formatMillisToronto } from '@/lib/admin/orderHelpers';
 import { db } from '@/services/firebase';
-import { queryVisibleActiveFoodCards } from '@/services/foodCards';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import {
+  countFoodCardsWithStatus,
+  countVisibleActiveFoodCardsInSnapshot,
+} from '@/services/foodCards';
+import { collection, getDocs } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -38,26 +41,17 @@ export default function AdminAnalyticsScreen() {
   const load = useCallback(async () => {
     try {
       adminLog('analytics', 'fetch aggregates');
-      const [
-        usersSnap,
-        ordersSnap,
-        activeFoodSnap,
-        matchedSnap,
-        reportsSnap,
-      ] = await Promise.all([
+      const [usersSnap, ordersSnap, foodSnap, reportsSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'orders')),
-        getDocs(queryVisibleActiveFoodCards()),
-        getDocs(
-          query(collection(db, 'food_cards'), where('status', '==', 'matched')),
-        ),
+        getDocs(collection(db, 'food_cards')),
         getDocs(collection(db, 'reports')),
       ]);
       const payload = {
         users: usersSnap.size,
         orders: ordersSnap.size,
-        foodWaiting: activeFoodSnap.size,
-        foodMatched: matchedSnap.size,
+        foodWaiting: countVisibleActiveFoodCardsInSnapshot(foodSnap),
+        foodMatched: countFoodCardsWithStatus(foodSnap, 'matched'),
         reports: reportsSnap.size,
       };
       adminLog('analytics', 'fetch done', payload);

@@ -1,7 +1,12 @@
 import { ADMIN_UID } from '@/constants/adminUid';
 import { auth, db } from '@/services/firebase';
 import {
+  ensureHalfOrderChat,
+  postHalfOrderChatSystemMessage,
+} from '@/services/halfOrderChat';
+import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -15,6 +20,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  type QuerySnapshot,
 } from 'firebase/firestore';
 
 export type FoodCard = {
@@ -27,9 +33,12 @@ export type FoodCard = {
   location: { latitude: number; longitude: number } | null;
   createdAt: Timestamp | null;
   expiresAt: number;
-  /** Open deck = `active`; `matched` / `full` = closed to new joins. */
+  /** Deck listing: only `active` is joinable (see `isFoodCardJoinDisabled`). */
   status: 'active' | 'matched' | 'full';
   ownerId?: string;
+  /** HalfOrder: links to `orders/{orderId}`. */
+  orderId?: string | null;
+  /** @deprecated Legacy field; prefer order `users`. */
   joinedUsers?: string[];
   maxUsers?: number;
   user1?: { uid: string; name: string; photo: string | null } | null;
@@ -84,32 +93,65 @@ function coerceExpiresAtMs(raw: unknown): number {
 }
 
 /**
- * Real-time listener for the swipe/browse deck: **`food_cards`** only (not `orders`),
- * `where("status","==","active")` + `where("expiresAt", ">", Date.now())`, plus client-side
- * expiry guard so cards drop off as soon as `expiresAt` passes even without a server event.
+ * Admin metrics / caps: count visible deck cards from one `getDocs(collection('food_cards'))`
+ * (no composite index). Matches swipe deck rules: `active` and `expiresAt > nowMs`.
+ */
+export function countVisibleActiveFoodCardsInSnapshot(
+  snap: QuerySnapshot,
+  nowMs: number = Date.now(),
+): number {
+  let n = 0;
+  for (const d of snap.docs) {
+    const data = d.data();
+    if (data?.status !== 'active') continue;
+    if (coerceExpiresAtMs(data?.expiresAt) > nowMs) n += 1;
+  }
+  return n;
+}
+
+/** Count documents with exact `status` (e.g. `matched`) from a `food_cards` snapshot. */
+export function countFoodCardsWithStatus(
+  snap: QuerySnapshot,
+  status: string,
+): number {
+  let n = 0;
+  for (const d of snap.docs) {
+    if (d.data()?.status === status) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Real-time listener for the swipe/browse deck: **`food_cards`**, `status == "active"` only
+ * (single-field query — no composite index). Drops expired rows client-side.
  */
 export function subscribeActiveFoodCards(
   onData: (cards: FoodCard[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  const queryNow = Date.now();
   return onSnapshot(
-    queryVisibleActiveFoodCards(queryNow),
+    query(collection(db, FOOD_CARDS), where('status', '==', 'active')),
     (snap) => {
       const now = Date.now();
       const raw = snap.docs.map((d) => {
         const data = d.data() as Omit<FoodCard, 'id' | 'expiresAt'> & {
           expiresAt?: unknown;
+          orderId?: unknown;
         };
         const expiresAt = coerceExpiresAtMs(data.expiresAt);
+        const oid =
+          typeof data.orderId === 'string' && data.orderId.trim()
+            ? data.orderId.trim()
+            : null;
         return {
           id: d.id,
           ...data,
+          orderId: oid,
           expiresAt,
         } as FoodCard;
       });
       console.log(
-        `[food_cards] onSnapshot status==active expiresAt>${queryNow} rawDocs=${snap.size}`,
+        `[food_cards] onSnapshot status==active rawDocs=${snap.size} (expiry filtered client-side)`,
       );
       raw.forEach((c) => {
         console.log(
@@ -232,11 +274,48 @@ export async function joinFoodCard(cardId: string): Promise<{
 }
 
 export type JoinOrderResult = {
-  /** True when this uid was already listed in `joinedUsers` (no write performed). */
   alreadyJoined: boolean;
-  /** True after this join when `joinedUsers.length` reached `maxUsers`. */
   isFull: boolean;
+  orderId: string;
+  /** True when this join brought the group from one member to two. */
+  justBecamePair?: boolean;
 };
+
+function normalizeOrderUsers(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
+}
+
+function buildHalfOrderFromCard(
+  data: Record<string, unknown>,
+  cardId: string,
+  uid: string,
+  maxUsers: number,
+): Record<string, unknown> {
+  const title = typeof data.title === 'string' ? data.title : 'Shared order';
+  const image = typeof data.image === 'string' ? data.image : '';
+  const price = Number(data.price) || 0;
+  const splitPrice = Number(data.splitPrice) || 0;
+  const pricePerPerson =
+    splitPrice > 0 ? splitPrice : maxUsers > 0 ? price / maxUsers : 0;
+  const restaurant =
+    typeof data.restaurantName === 'string' ? data.restaurantName.trim() : '';
+
+  return {
+    cardId,
+    users: [uid],
+    status: 'active',
+    maxUsers,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+    foodName: title.trim() || 'Shared order',
+    image: image.trim(),
+    pricePerPerson: Number(pricePerPerson.toFixed(2)),
+    totalPrice: Number(price.toFixed(2)),
+    location: restaurant || 'Nearby',
+    restaurantName: restaurant,
+  };
+}
 
 function isCardOwnedByUser(card: FoodCard, uid: string): boolean {
   if (typeof card.ownerId === 'string' && card.ownerId === uid) return true;
@@ -244,29 +323,29 @@ function isCardOwnedByUser(card: FoodCard, uid: string): boolean {
   return false;
 }
 
-/** Disable the food-card Join control when signed out, already in `joinedUsers`, at capacity, admin preview, or own card. */
+/**
+ * Disable join for non-`active` cards, capacity (via live `orderUsers` when provided), admin preview, or own card.
+ */
 export function isFoodCardJoinDisabled(
   card: FoodCard,
   uid: string | undefined,
+  orderUsersHint?: string[] | null,
 ): boolean {
   if (!uid) return true;
   if (uid === ADMIN_UID) return true;
   if (isCardOwnedByUser(card, uid)) return true;
   const cap =
     typeof card.maxUsers === 'number' && card.maxUsers > 0 ? card.maxUsers : 2;
-  const joined = Array.isArray(card.joinedUsers)
-    ? card.joinedUsers.filter((x): x is string => typeof x === 'string' && x.length > 0)
-    : [];
-  if (card.status === 'full' || card.status === 'matched') return true;
   if (!isActiveFoodCardStatus(card.status)) return true;
-  if (joined.includes(uid)) return true;
-  if (joined.length >= cap) return true;
+  if ((card.expiresAt ?? 0) <= Date.now()) return true;
+  const orderUsers = orderUsersHint ?? null;
+  if (orderUsers?.includes(uid)) return true;
+  if (orderUsers != null && orderUsers.length >= cap) return true;
   return false;
 }
 
 /**
- * Join a food card order by appending the user to `joinedUsers`, using a
- * transaction so concurrent joins cannot oversubscribe.
+ * HalfOrder join: create or update `orders` with `users` + `cardId`, set `food_cards.orderId`, sync `chats/{orderId}`.
  */
 export async function joinOrder(
   cardId: string,
@@ -281,11 +360,11 @@ export async function joinOrder(
 
   const cardRef = doc(db, FOOD_CARDS, trimmed);
 
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(cardRef);
-    if (!snap.exists()) throw new Error('Card not found');
+  const outcome = await runTransaction(db, async (tx) => {
+    const cardSnap = await tx.get(cardRef);
+    if (!cardSnap.exists()) throw new Error('Card not found');
 
-    const data = snap.data() as Record<string, unknown>;
+    const data = cardSnap.data() as Record<string, unknown>;
     const status = typeof data.status === 'string' ? data.status : '';
     if (!isActiveFoodCardStatus(status)) {
       throw new Error('This order is not open for joining');
@@ -303,31 +382,77 @@ export async function joinOrder(
     const maxUsers =
       typeof data.maxUsers === 'number' && data.maxUsers > 0 ? data.maxUsers : 2;
 
-    const joinedUsers = Array.isArray(data.joinedUsers)
-      ? data.joinedUsers.filter((x): x is string => typeof x === 'string' && x.length > 0)
-      : [];
+    const linkedOrderIdRaw = data.orderId;
+    const linkedOrderId =
+      typeof linkedOrderIdRaw === 'string' && linkedOrderIdRaw.trim()
+        ? linkedOrderIdRaw.trim()
+        : '';
 
-    if (joinedUsers.includes(authedUid)) {
+    if (linkedOrderId) {
+      const oRef = doc(db, 'orders', linkedOrderId);
+      const oSnap = await tx.get(oRef);
+      if (!oSnap.exists()) throw new Error('Order not found');
+      const od = oSnap.data() as Record<string, unknown>;
+      const users = normalizeOrderUsers(od.users);
+      const orderMax =
+        typeof od.maxUsers === 'number' && od.maxUsers > 0 ? od.maxUsers : maxUsers;
+      if (users.includes(authedUid)) {
+        return {
+          kind: 'joined_existing' as const,
+          orderId: linkedOrderId,
+          maxUsers: orderMax,
+          priorUserCount: users.length,
+          alreadyIn: true,
+        };
+      }
+      if (users.length >= orderMax) {
+        throw new Error('Order is full');
+      }
+      tx.update(oRef, { users: arrayUnion(authedUid) });
       return {
-        alreadyJoined: true,
-        isFull: joinedUsers.length >= maxUsers,
+        kind: 'joined_existing' as const,
+        orderId: linkedOrderId,
+        maxUsers: orderMax,
+        priorUserCount: users.length,
+        alreadyIn: false,
       };
     }
 
-    if (joinedUsers.length >= maxUsers) {
-      throw new Error('Order is full');
-    }
-
-    const nextJoined = [...joinedUsers, authedUid];
-    const isFull = nextJoined.length >= maxUsers;
-
-    tx.update(cardRef, {
-      joinedUsers: nextJoined,
-      status: isFull ? 'full' : 'active',
-    });
-
-    return { alreadyJoined: false, isFull };
+    const newRef = doc(collection(db, 'orders'));
+    tx.set(newRef, buildHalfOrderFromCard(data, trimmed, authedUid, maxUsers));
+    tx.update(cardRef, { orderId: newRef.id });
+    return {
+      kind: 'created' as const,
+      orderId: newRef.id,
+      maxUsers,
+    };
   });
+
+  const finalSnap = await getDoc(doc(db, 'orders', outcome.orderId));
+  const finalUsers = normalizeOrderUsers(finalSnap.data()?.users);
+
+  await ensureHalfOrderChat(outcome.orderId, finalUsers);
+
+  let justBecamePair = false;
+  if (outcome.kind === 'joined_existing' && !outcome.alreadyIn) {
+    if (outcome.priorUserCount === 1 && finalUsers.length >= 2) {
+      justBecamePair = true;
+      await postHalfOrderChatSystemMessage(
+        outcome.orderId,
+        'Someone joined your order!',
+      );
+    }
+  }
+
+  const alreadyJoined =
+    outcome.kind === 'joined_existing' && outcome.alreadyIn === true;
+
+  return {
+    alreadyJoined,
+    isFull: finalUsers.length >= outcome.maxUsers,
+    orderId: outcome.orderId,
+    justBecamePair,
+  };
 }
 
 export async function createFoodCard(input: {
@@ -341,8 +466,10 @@ export async function createFoodCard(input: {
 }) {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid || uid !== ADMIN_UID) throw new Error('Admin only');
-  const activeSnap = await getDocs(queryVisibleActiveFoodCards());
-  if (activeSnap.size >= 10) throw new Error('Max 10 active cards');
+  const cardsSnap = await getDocs(collection(db, FOOD_CARDS));
+  if (countVisibleActiveFoodCardsInSnapshot(cardsSnap) >= 10) {
+    throw new Error('Max 10 active cards');
+  }
   const now = Date.now();
   return addDoc(collection(db, FOOD_CARDS), {
     title: input.title.trim(),
@@ -355,7 +482,6 @@ export async function createFoodCard(input: {
         ? { latitude: input.latitude, longitude: input.longitude }
         : null,
     ownerId: uid,
-    joinedUsers: [] as string[],
     maxUsers: 2,
     createdAt: serverTimestamp(),
     expiresAt: foodCardExpiresAtFromNow(now),
@@ -382,7 +508,6 @@ async function duplicateCard(cardId: string) {
     splitPrice: Number(data.splitPrice) || 0,
     location: data.location ?? null,
     ownerId: owner,
-    joinedUsers: [] as string[],
     maxUsers: 2,
     createdAt: serverTimestamp(),
     expiresAt: foodCardExpiresAtFromNow(now),

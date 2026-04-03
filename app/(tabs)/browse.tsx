@@ -1,11 +1,13 @@
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
+import { db } from '@/services/firebase';
 import {
   isFoodCardJoinDisabled,
   joinOrder,
   subscribeActiveFoodCards,
   type FoodCard,
 } from '@/services/foodCards';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
@@ -28,6 +30,100 @@ const D = {
   text: '#F8FAFC',
   muted: 'rgba(248,250,252,0.55)',
 };
+
+function BrowseFoodCardRow({
+  card,
+  uid,
+  joiningId,
+  onJoin,
+  router,
+}: {
+  card: FoodCard;
+  uid: string | undefined;
+  joiningId: string | null;
+  onJoin: (c: FoodCard) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const [orderUsers, setOrderUsers] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!card.orderId) {
+      setOrderUsers(null);
+      return;
+    }
+    const unsub = onSnapshot(
+      doc(db, 'orders', card.orderId),
+      (s) => {
+        const raw = s.data()?.users;
+        setOrderUsers(
+          Array.isArray(raw)
+            ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0)
+            : [],
+        );
+      },
+      () => setOrderUsers(null),
+    );
+    return () => unsub();
+  }, [card.orderId]);
+
+  const cap =
+    typeof card.maxUsers === 'number' && card.maxUsers > 0 ? card.maxUsers : 2;
+  const joinBusy = joiningId === card.id;
+  const joinDisabled =
+    joinBusy || (!!uid && isFoodCardJoinDisabled(card, uid, orderUsers));
+  const detailPath = card.orderId ?? card.id;
+  const alreadyIn = !!(uid && card.orderId && orderUsers?.includes(uid));
+  const atCapacity =
+    orderUsers != null && orderUsers.length >= cap;
+  let joinLabel = '❤️ Join';
+  if (!uid) joinLabel = 'Sign in to join';
+  else if (alreadyIn) joinLabel = 'Joined';
+  else if (atCapacity) joinLabel = 'Full';
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={() => router.push(`/order-details/${detailPath}` as never)}
+      >
+        <Image source={{ uri: card.image }} style={styles.hero} />
+      </TouchableOpacity>
+      <View style={styles.cardBody}>
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => router.push(`/order-details/${detailPath}` as never)}
+        >
+          <Text style={styles.cardTitle}>{card.title}</Text>
+        </TouchableOpacity>
+        <Text style={styles.meta}>{card.restaurantName}</Text>
+        <Text style={styles.meta}>
+          ${card.splitPrice.toFixed(2)} each · total ${card.price.toFixed(2)}
+        </Text>
+        <Text style={styles.meta}>Expires in 45 minutes</Text>
+        <TouchableOpacity
+          style={styles.detailsRow}
+          activeOpacity={0.88}
+          onPress={() => router.push(`/order-details/${detailPath}` as never)}
+        >
+          <Text style={styles.detailsRowText}>View details →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.joinBtn,
+            joinDisabled && !joinBusy && styles.joinBtnDisabled,
+          ]}
+          disabled={joinDisabled}
+          onPress={() => onJoin(card)}
+        >
+          {joinBusy ? (
+            <ActivityIndicator color="#0B1A15" />
+          ) : (
+            <Text style={styles.joinText}>{joinLabel}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 export default function BrowseScreen() {
   const router = useRouter();
@@ -68,13 +164,10 @@ export default function BrowseScreen() {
     setJoiningId(card.id);
     try {
       const result = await joinOrder(card.id, uid);
-      if (result.alreadyJoined) {
-        Alert.alert('Already joined', 'You are already on this order.');
-      } else if (result.isFull) {
-        Alert.alert('Order full', 'This card has reached the maximum number of joiners.');
-      } else {
-        Alert.alert('Joined', 'You have joined this order.');
+      if (result.justBecamePair) {
+        Alert.alert('Match', 'Someone joined your order! Open chat to say hi.');
       }
+      router.push(`/order-details/${result.orderId}` as never);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join this card.';
       Alert.alert('Could not join', msg);
@@ -114,71 +207,16 @@ export default function BrowseScreen() {
               <Text style={styles.empty}>No active food cards yet. Check back soon.</Text>
             )
           ) : (
-            cards.map((card) => {
-              const uid = user?.uid;
-              const joinBusy = joiningId === card.id;
-              const joinDisabled =
-                joinBusy || (!!uid && isFoodCardJoinDisabled(card, uid));
-              const cap =
-                typeof card.maxUsers === 'number' && card.maxUsers > 0
-                  ? card.maxUsers
-                  : 2;
-              const joinedCount = card.joinedUsers?.length ?? 0;
-              const alreadyIn = uid ? (card.joinedUsers?.includes(uid) ?? false) : false;
-              const atCapacity =
-                card.status === 'full' || joinedCount >= cap;
-              let joinLabel = '❤️ Join';
-              if (!uid) joinLabel = 'Sign in to join';
-              else if (alreadyIn) joinLabel = 'Joined';
-              else if (atCapacity) joinLabel = 'Full';
-              return (
-                <View key={card.id} style={styles.card}>
-                  <TouchableOpacity
-                    activeOpacity={0.92}
-                    onPress={() =>
-                      router.push(`/order-details/${card.id}` as never)
-                    }
-                  >
-                    <Image source={{ uri: card.image }} style={styles.hero} />
-                  </TouchableOpacity>
-                  <View style={styles.cardBody}>
-                    <TouchableOpacity
-                      activeOpacity={0.88}
-                      onPress={() =>
-                        router.push(`/order-details/${card.id}` as never)
-                      }
-                    >
-                      <Text style={styles.cardTitle}>{card.title}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.meta}>{card.restaurantName}</Text>
-                    <Text style={styles.meta}>
-                      ${card.splitPrice.toFixed(2)} each · total ${card.price.toFixed(2)}
-                    </Text>
-                    <Text style={styles.meta}>Expires in 45 minutes</Text>
-                    <TouchableOpacity
-                      style={styles.detailsRow}
-                      activeOpacity={0.88}
-                      onPress={() =>
-                        router.push(`/order-details/${card.id}` as never)
-                      }
-                    >
-                      <Text style={styles.detailsRowText}>View details →</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.joinBtn, joinDisabled && !joinBusy && styles.joinBtnDisabled]}
-                      disabled={joinDisabled}
-                      onPress={() => onJoin(card)}
-                    >
-                      {joinBusy ? (
-                        <ActivityIndicator color="#0B1A15" />
-                      ) : (
-                        <Text style={styles.joinText}>{joinLabel}</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
+            cards.map((card) => (
+              <BrowseFoodCardRow
+                key={card.id}
+                card={card}
+                uid={user?.uid}
+                joiningId={joiningId}
+                onJoin={onJoin}
+                router={router}
+              />
+            ))
           )}
         </ScrollView>
       )}

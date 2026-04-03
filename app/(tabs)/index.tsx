@@ -1,6 +1,7 @@
 import { isAdminUser } from '@/constants/adminUid';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
+import { db } from '@/services/firebase';
 import {
   isFoodCardJoinDisabled,
   joinOrder,
@@ -8,6 +9,7 @@ import {
   subscribeActiveFoodCards,
   type FoodCard,
 } from '@/services/foodCards';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -81,9 +83,38 @@ export default function SwipeScreen() {
   }, [cards, adminPreview, uid]);
   const topCard = deckCards[0] ?? null;
   const secondCard = deckCards[1] ?? null;
+  const [topOrderUsers, setTopOrderUsers] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!topCard?.orderId) {
+      setTopOrderUsers(null);
+      return;
+    }
+    const oid = topCard.orderId;
+    const unsub = onSnapshot(
+      doc(db, 'orders', oid),
+      (s) => {
+        if (!s.exists()) {
+          setTopOrderUsers(null);
+          return;
+        }
+        const raw = s.data()?.users;
+        setTopOrderUsers(
+          Array.isArray(raw)
+            ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0)
+            : [],
+        );
+      },
+      () => setTopOrderUsers(null),
+    );
+    return () => unsub();
+  }, [topCard?.orderId]);
+
   /** Block swipe / primary join when signed in but cannot join this card (already in, full, admin, own card, etc.). */
   const joinBlockedForUser =
-    !!uid && !!topCard && isFoodCardJoinDisabled(topCard, uid);
+    !!uid &&
+    !!topCard &&
+    isFoodCardJoinDisabled(topCard, uid, topOrderUsers);
   const joinPrimaryDisabled =
     !topCard || joining || (!!uid && joinBlockedForUser);
 
@@ -101,21 +132,23 @@ export default function SwipeScreen() {
       return;
     }
     const card = cards.find((c) => c.id === targetId) ?? topCard;
-    if (!card || isFoodCardJoinDisabled(card, joinUid)) return;
+    const hint =
+      card && topCard && card.id === topCard.id ? topOrderUsers : null;
+    if (!card || isFoodCardJoinDisabled(card, joinUid, hint)) return;
     setJoining(true);
     try {
       const result = await joinOrder(targetId, joinUid);
       console.log('[swipe] joinOrder result:', {
         cardId: targetId,
+        orderId: result.orderId,
         alreadyJoined: result.alreadyJoined,
         isFull: result.isFull,
       });
-      if (result.alreadyJoined) {
-        Alert.alert('Already joined', 'You are already on this order.');
-      } else if (result.isFull) {
-        Alert.alert('Order full', 'This card has reached the maximum number of joiners.');
+      if (result.justBecamePair) {
+        Alert.alert('Match', 'Someone joined your order! Open chat to say hi.');
       }
       removeCardById(targetId);
+      router.push(`/order-details/${result.orderId}` as never);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join this card.';
       Alert.alert('Could not join', msg);
@@ -297,7 +330,9 @@ export default function SwipeScreen() {
               <TouchableOpacity
                 activeOpacity={0.88}
                 onPress={() =>
-                  router.push(`/order-details/${topCard.id}` as never)
+                  router.push(
+                    `/order-details/${topCard.orderId ?? topCard.id}` as never,
+                  )
                 }
                 style={styles.detailsBtn}
               >
@@ -318,9 +353,11 @@ export default function SwipeScreen() {
                   <Text style={styles.inlineJoinText}>
                     {!uid
                       ? 'Sign in to join'
-                      : topCard.joinedUsers?.includes(uid)
+                      : topCard.orderId &&
+                          topOrderUsers?.includes(uid)
                         ? 'Joined'
-                        : topCard.status === 'full'
+                        : topOrderUsers != null &&
+                            topOrderUsers.length >= (topCard.maxUsers ?? 2)
                           ? 'Full'
                           : '❤️ Join order'}
                   </Text>
@@ -371,9 +408,13 @@ export default function SwipeScreen() {
             <Text style={styles.likeText}>
               {!uid
                 ? 'Sign in'
-                : topCard && topCard.joinedUsers?.includes(uid)
+                : topCard &&
+                    topCard.orderId &&
+                    topOrderUsers?.includes(uid)
                   ? 'Joined'
-                  : topCard && (topCard.status === 'full' || (topCard.joinedUsers?.length ?? 0) >= (topCard.maxUsers ?? 2))
+                  : topCard &&
+                      topOrderUsers != null &&
+                      topOrderUsers.length >= (topCard.maxUsers ?? 2)
                     ? 'Full'
                     : '❤️ Join'}
             </Text>
