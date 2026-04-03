@@ -448,6 +448,13 @@ export default function AdminScreen() {
             ) : null}
 
             <View style={styles.navSection}>
+              <TouchableOpacity
+                style={styles.navButton}
+                onPress={() => router.push(adminRoutes.sendNotification as never)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.navButtonText}>Send notification</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin/dashboard' as never)} activeOpacity={0.85}>
                 <Text style={styles.navButtonText}>Dashboard</Text>
               </TouchableOpacity>

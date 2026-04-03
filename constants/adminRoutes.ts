@@ -14,4 +14,6 @@ export const adminRoutes = {
   reports: '/admin/reports',
   report: (id: string) => `/admin/report/${encodeURIComponent(id)}`,
   complaints: '/admin/complaints',
+  /** Broadcast push to all / targeted users (Expo push). */
+  sendNotification: '/admin/broadcast',
 } as const;

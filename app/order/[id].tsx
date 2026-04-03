@@ -27,6 +27,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import {
+  PAYMENT_DISCLAIMER_ORDER_DETAILS,
+  PAYMENT_DISCLAIMER_SAFETY,
+  PAYMENT_MATCH_ALERT_MESSAGE,
+  PAYMENT_MATCH_ALERT_TITLE,
+} from '@/constants/paymentDisclaimer';
 import { theme } from '@/constants/theme';
 import { buildOrderWhatsAppInviteLink } from '@/lib/invite-link';
 import { friendlyErrorMessage } from '@/lib/friendlyError';
@@ -399,10 +405,7 @@ export default function OrderDetailsScreen() {
     const prev = prevJoinedCountRef.current;
     prevJoinedCountRef.current = count;
     if (prev === 1 && count >= 2 && auth.currentUser?.uid) {
-      Alert.alert(
-        'Someone joined your order!',
-        'Open chat to coordinate.',
-      );
+      Alert.alert(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
     }
   }, [
     order?.peopleJoined,
@@ -476,10 +479,7 @@ export default function OrderDetailsScreen() {
           () => {},
         );
         if (result.justBecamePair) {
-          Alert.alert(
-            'Someone joined your order!',
-            'Say hi in chat.',
-          );
+          Alert.alert(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
         }
         router.replace(`/order/${result.orderId}` as never);
         return;
@@ -490,7 +490,7 @@ export default function OrderDetailsScreen() {
           () => {},
         );
         if (half.justBecamePair) {
-          Alert.alert('Someone joined your order!', 'Say hi in chat.');
+          Alert.alert(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
         }
         router.push(`/order/${order.id}` as never);
         return;
@@ -717,6 +717,19 @@ export default function OrderDetailsScreen() {
             <Text style={styles.timerValue}>{countdownLabel}</Text>
           </View>
         </View>
+        {order.usesHalfUsers ? (
+          <View style={styles.paymentDisclaimerBox}>
+            <Text style={styles.paymentDisclaimerIcon}>💡</Text>
+            <View style={styles.paymentDisclaimerTextCol}>
+              <Text style={styles.paymentDisclaimerMain}>
+                {PAYMENT_DISCLAIMER_ORDER_DETAILS}
+              </Text>
+              <Text style={styles.paymentDisclaimerSafety}>
+                {PAYMENT_DISCLAIMER_SAFETY}
+              </Text>
+            </View>
+          </View>
+        ) : null}
         {detailSource === 'order' && order.usesHalfUsers && alreadyMember ? (
           <View style={styles.sectionDivider} />
         ) : null}
@@ -945,6 +958,32 @@ const styles = StyleSheet.create({
   },
   timerLabel: { color: '#FB923C', fontSize: 14, fontWeight: '700' },
   timerValue: { color: '#FB923C', fontSize: 24, fontWeight: '900' },
+  paymentDisclaimerBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#1a2430',
+    borderWidth: 1,
+    borderColor: '#2a3644',
+  },
+  paymentDisclaimerIcon: { fontSize: 16, lineHeight: 20, marginTop: 1 },
+  paymentDisclaimerTextCol: { flex: 1, gap: 6 },
+  paymentDisclaimerMain: {
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '500',
+  },
+  paymentDisclaimerSafety: {
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
   chatNavButton: {
     backgroundColor: '#1e293b',
     borderRadius: 14,

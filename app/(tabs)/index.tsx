@@ -1,4 +1,8 @@
 import { isAdminUser } from '@/constants/adminUid';
+import {
+  PAYMENT_MATCH_ALERT_MESSAGE,
+  PAYMENT_MATCH_ALERT_TITLE,
+} from '@/constants/paymentDisclaimer';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
@@ -185,7 +189,7 @@ export default function SwipeScreen() {
         isFull: result.isFull,
       });
       if (result.justBecamePair) {
-        Alert.alert('Match', 'Someone joined your order! Open chat to say hi.');
+        Alert.alert(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
       }
       removeCardById(targetId);
       router.push(`/order/${result.orderId}` as never);

@@ -13,6 +13,10 @@ import 'react-native-reanimated';
  */
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { isAdminUser } from '@/constants/adminUid';
+import {
+  PAYMENT_MATCH_ALERT_MESSAGE,
+  PAYMENT_MATCH_ALERT_TITLE,
+} from '@/constants/paymentDisclaimer';
 import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
@@ -825,7 +829,10 @@ function RootLayoutNav() {
           if (distanceKm) {
             message = `They're ${distanceKm} km away. ${message}`;
           }
-          Alert.alert('Someone joined your order 🎉', message);
+          Alert.alert(
+            PAYMENT_MATCH_ALERT_TITLE,
+            `${message}\n\n${PAYMENT_MATCH_ALERT_MESSAGE}`,
+          );
         }
         const notificationId = data?.notificationId as string | undefined;
         if (notificationId) {

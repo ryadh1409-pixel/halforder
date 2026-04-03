@@ -1,5 +1,14 @@
+import { ADMIN_BROADCAST_TEMPLATES } from '@/constants/adminBroadcastTemplates';
+import { adminColors as COLORS } from '@/constants/adminTheme';
+import { isAdminUser } from '@/constants/adminUid';
+import {
+  collectBroadcastRecipientTokens,
+  type AdminBroadcastTargetMode,
+} from '@/services/adminBroadcastRecipients';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
+import { getUserLocationSafe } from '@/services/location';
+import { sendExpoPush } from '@/services/sendExpoPush';
 import {
   addDoc,
   collection,
@@ -10,6 +19,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,93 +27,121 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { sendExpoPush } from '@/services/sendExpoPush';
-import { isAdminUser } from '@/constants/adminUid';
-import { adminColors as COLORS } from '@/constants/adminTheme';
 
-function getPushToken(data: {
-  expoPushToken?: unknown;
-  pushToken?: unknown;
-}): string | null {
-  const t = data?.expoPushToken ?? data?.pushToken;
-  return typeof t === 'string' && t.length > 0 ? t : null;
-}
-
-export default function AdminBroadcastScreen() {
+export default function AdminSendNotificationScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [targetMode, setTargetMode] = useState<AdminBroadcastTargetMode>('all');
+  const [radiusKmText, setRadiusKmText] = useState('');
   const [sending, setSending] = useState(false);
 
   const isAdmin = isAdminUser(user);
 
-  const handleSendBroadcast = async () => {
-    const t = title.trim() || 'HalfOrder';
-    const b = message.trim();
-    if (!b) {
-      Alert.alert('Error', 'Please enter a message.');
+  const applyTemplate = (t: (typeof ADMIN_BROADCAST_TEMPLATES)[number]) => {
+    setTitle(t.title);
+    setMessage(t.message);
+  };
+
+  const handleSend = async () => {
+    const adminTitle = title.trim() || 'HalfOrder';
+    const adminMessage = message.trim();
+    if (!adminMessage) {
+      Alert.alert('Message required', 'Please enter a notification message.');
       return;
     }
     if (!user || !isAdminUser(user)) return;
 
+    let radiusKm: number | null = null;
+    const rParsed = parseFloat(radiusKmText.replace(',', '.'));
+    if (radiusKmText.trim() !== '') {
+      if (!Number.isFinite(rParsed) || rParsed <= 0) {
+        Alert.alert(
+          'Distance',
+          'Enter a positive number for kilometers, or leave blank to skip distance filtering.',
+        );
+        return;
+      }
+      radiusKm = rParsed;
+    }
+
     setSending(true);
     try {
+      let center: { lat: number; lng: number } | null = null;
+      if (radiusKm != null) {
+        const loc = await getUserLocationSafe();
+        if (!loc) {
+          Alert.alert(
+            'Location needed',
+            'Allow location to filter users by distance, or clear the radius field.',
+          );
+          setSending(false);
+          return;
+        }
+        center = { lat: loc.latitude, lng: loc.longitude };
+      }
+
       const usersSnap = await getDocs(collection(db, 'users'));
-      const tokens: string[] = [];
-      usersSnap.docs.forEach((doc) => {
-        const token = getPushToken(doc.data());
-        if (token) tokens.push(token);
-      });
+      const { tokens, skippedNoToken, skippedFilter } =
+        collectBroadcastRecipientTokens(usersSnap.docs, {
+          targetMode,
+          radiusKm,
+          center,
+        });
 
       if (tokens.length === 0) {
-        Alert.alert('No recipients', 'No user push tokens found.');
+        Alert.alert(
+          'No recipients',
+          'No users with valid Expo push tokens matched your filters. Skipped without token: '
+            + skippedNoToken
+            + (skippedFilter ? ` · Filtered out: ${skippedFilter}` : ''),
+        );
         setSending(false);
         return;
       }
 
-      const result = await sendExpoPush(tokens, t, b, { type: 'broadcast' });
-
-      await addDoc(collection(db, 'broadcasts'), {
-        title: t,
-        message: b,
-        sentBy: user.email ?? user.uid,
-        sentAt: serverTimestamp(),
-        totalUsers: tokens.length,
+      const result = await sendExpoPush(tokens, adminTitle, adminMessage, {
+        type: 'admin_broadcast',
       });
 
-      Alert.alert(
-        'Success',
-        `Broadcast sent successfully.\nSent: ${result.sent}${result.failed > 0 ? `, Failed: ${result.failed}` : ''}`,
-      );
+      await addDoc(collection(db, 'admin_notifications'), {
+        title: adminTitle,
+        message: adminMessage,
+        sentToCount: tokens.length,
+        deliveredOk: result.sent,
+        failedCount: result.failed,
+        targetMode,
+        radiusKm: radiusKm ?? null,
+        skippedNoToken,
+        skippedFilter,
+        createdAt: serverTimestamp(),
+        sentByUid: user.uid,
+        sentByEmail: user.email ?? null,
+      });
+
+      const okLine = `Notification sent to ${result.sent} users ✅`;
+      const detailParts = [
+        result.failed > 0
+          ? `${result.failed} delivery ticket(s) reported an error (see device logs).`
+          : null,
+        `Unique tokens targeted: ${tokens.length}.`,
+      ].filter(Boolean);
+
+      Alert.alert('Done', [okLine, ...detailParts].join('\n\n'));
       setMessage('');
     } catch (e) {
+      console.warn('[admin broadcast]', e);
       Alert.alert(
         'Error',
-        e instanceof Error ? e.message : 'Failed to send broadcast.',
+        e instanceof Error ? e.message : 'Failed to send notification.',
       );
     } finally {
       setSending(false);
     }
   };
 
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <Text style={styles.unauthorized}>You are not authorized</Text>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
-            <Text style={styles.backBtnText}>Go back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!isAdmin) {
+  if (!user || !isAdmin) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
@@ -125,39 +163,116 @@ export default function AdminBroadcastScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin Broadcast</Text>
+        <Text style={styles.headerTitle}>Send notification</Text>
       </View>
-      <View style={styles.content}>
-        <Text style={styles.label}>Notification title</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.hint}>
+          Sends via Expo push. Batches of 100 per request; tokens are deduped.
+        </Text>
+
+        <Text style={styles.label}>Quick templates</Text>
+        <View style={styles.templateRow}>
+          {ADMIN_BROADCAST_TEMPLATES.map((tpl) => (
+            <TouchableOpacity
+              key={tpl.label}
+              style={styles.templateChip}
+              onPress={() => applyTemplate(tpl)}
+              disabled={sending}
+            >
+              <Text style={styles.templateChipText}>{tpl.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Title</Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g. HalfOrder"
+          placeholder="Notification title"
           placeholderTextColor={COLORS.textMuted}
           style={styles.input}
           editable={!sending}
         />
-        <Text style={styles.label}>Notification message</Text>
+
+        <Text style={styles.label}>Message</Text>
         <TextInput
           value={message}
           onChangeText={setMessage}
-          placeholder="Enter your message..."
+          placeholder="What should users hear?"
           placeholderTextColor={COLORS.textMuted}
           style={[styles.input, styles.messageInput]}
           multiline
-          numberOfLines={4}
           editable={!sending}
         />
+
+        <Text style={styles.label}>Audience</Text>
+        <View style={styles.segmentRow}>
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              targetMode === 'all' && styles.segmentBtnActive,
+            ]}
+            onPress={() => setTargetMode('all')}
+            disabled={sending}
+          >
+            <Text
+              style={[
+                styles.segmentBtnText,
+                targetMode === 'all' && styles.segmentBtnTextActive,
+              ]}
+            >
+              All users
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              targetMode === 'active_users' && styles.segmentBtnActive,
+            ]}
+            onPress={() => setTargetMode('active_users')}
+            disabled={sending}
+          >
+            <Text
+              style={[
+                styles.segmentBtnText,
+                targetMode === 'active_users' && styles.segmentBtnTextActive,
+              ]}
+            >
+              Active (24h)
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.microHint}>
+          Active = opened the app in the last 24 hours (`lastActive`).
+        </Text>
+
+        <Text style={styles.label}>Optional: within km of you</Text>
+        <TextInput
+          value={radiusKmText}
+          onChangeText={setRadiusKmText}
+          placeholder="e.g. 25 (leave empty for worldwide)"
+          placeholderTextColor={COLORS.textMuted}
+          style={styles.input}
+          keyboardType="decimal-pad"
+          editable={!sending}
+        />
+        <Text style={styles.microHint}>
+          Uses this device&apos;s location. Users need `latitude` / `longitude`
+          (or `location`) saved on their profile.
+        </Text>
+
         <TouchableOpacity
           style={[styles.button, sending && styles.buttonDisabled]}
-          onPress={handleSendBroadcast}
+          onPress={handleSend}
           disabled={sending || !message.trim()}
         >
-          <Text style={styles.buttonText}>
-            {sending ? 'Sending...' : 'Send Broadcast'}
-          </Text>
+          <Text style={styles.buttonText}>{sending ? 'Sending…' : 'Send'}</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -167,6 +282,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -187,15 +304,38 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginLeft: 16,
   },
-  content: {
-    padding: 20,
+  hint: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginBottom: 16,
+    lineHeight: 18,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 8,
-    marginTop: 12,
+    marginTop: 14,
+  },
+  microHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 6,
+    lineHeight: 17,
+  },
+  templateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  templateChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  templateChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   input: {
     borderWidth: 1,
@@ -210,19 +350,44 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    alignItems: 'center',
+  },
+  segmentBtnActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+  },
+  segmentBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  segmentBtnTextActive: {
+    color: COLORS.primary,
+  },
   button: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 28,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.text,
   },
   centered: {

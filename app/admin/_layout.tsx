@@ -40,7 +40,7 @@ export default function AdminLayout() {
         options={{ title: 'Notification Tracking' }}
       />
       <Stack.Screen name="map" options={{ title: 'Activity Map' }} />
-      <Stack.Screen name="broadcast" options={{ title: 'Broadcast' }} />
+      <Stack.Screen name="broadcast" options={{ title: 'Send notification' }} />
       <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}

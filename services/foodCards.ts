@@ -1,4 +1,5 @@
 import { ADMIN_UID } from '@/constants/adminUid';
+import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '@/constants/paymentDisclaimer';
 import {
   HALF_ORDER_MATCH_WAIT_MS,
   ORDER_STATUS,
@@ -521,6 +522,10 @@ export async function joinOrder(
       await postHalfOrderChatSystemMessage(
         outcome.orderId,
         'Someone joined your order!',
+      );
+      await postHalfOrderChatSystemMessage(
+        outcome.orderId,
+        PAYMENT_DISCLAIMER_CHAT_MATCHED,
       );
       void trySendPairJoinExpoPush(outcome.orderId, authedUid);
       void applyHalfOrderPairReferralRewards(outcome.orderId, authedUid);

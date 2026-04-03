@@ -26,6 +26,7 @@ import {
 import { syncOrderMemberProfilesForOrder } from '@/services/orderMemberProfile';
 import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
 import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
+import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '@/constants/paymentDisclaimer';
 import { applyHalfOrderPairReferralRewards } from '@/services/referralRewards';
 import { getPublicUserFields } from '@/services/users';
 
@@ -168,6 +169,10 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
     await postHalfOrderChatSystemMessage(
       trimmedId,
       'Someone joined your order!',
+    );
+    await postHalfOrderChatSystemMessage(
+      trimmedId,
+      PAYMENT_DISCLAIMER_CHAT_MATCHED,
     );
     void trySendPairJoinExpoPush(trimmedId, uid);
     void applyHalfOrderPairReferralRewards(trimmedId, uid);
