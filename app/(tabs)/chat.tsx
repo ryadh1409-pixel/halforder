@@ -1,8 +1,8 @@
+import { useAIChat } from '@/hooks/useAIChat';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useAuth } from '@/services/AuthContext';
 import {
   buildSmartMatchIntroText,
-  detectFoodIntent,
   detectTimeContext,
   fetchActiveJoinableOrdersForContext,
   type AssistantOrderSummary,
@@ -16,8 +16,9 @@ import {
   SUGGESTED_ORDER_BOT_COPY,
   generateSuggestedOrder,
 } from '@/services/suggestedOrder';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -63,6 +64,18 @@ function toMessageOrders(rows: AssistantOrderSummary[]): MessageOrderRef[] {
 
 const ASSISTANT_INTRO_MESSAGE_ID = 'assistant-intro-suggestion';
 
+const QUICK_ACTIONS = [
+  { label: '🍕 Pizza', message: 'Pizza 🍕' },
+  { label: '🍔 Burger', message: 'Burger 🍔' },
+  { label: '☕ Coffee', message: 'Hungry — coffee and a bite ☕' },
+  { label: '🥗 Healthy', message: 'Healthy lunch 🥗' },
+] as const;
+
+const IDEA_CHIPS = [
+  { label: 'Late night snack 🌙', message: 'Late night snack 🌙' },
+  { label: 'Lunch deal 🍱', message: 'Lunch deal 🍱' },
+] as const;
+
 function buildIntroSuggestionMessage(
   ctx: TimeContext,
   rows: AssistantOrderSummary[],
@@ -89,36 +102,11 @@ function buildIntroSuggestionMessage(
   };
 }
 
-function buildUserTurnBotMessage(
-  ctx: TimeContext,
-  rows: AssistantOrderSummary[],
-): Message {
-  const orderRefs = toMessageOrders(rows);
-  if (rows.length > 0) {
-    return {
-      id: `${Date.now()}-b`,
-      text: buildSmartMatchIntroText(ctx, rows),
-      sender: 'bot',
-      createdAt: Date.now(),
-      action: 'join_order',
-      orders: orderRefs,
-    };
-  }
-  const suggested = generateSuggestedOrder(ctx);
-  return {
-    id: `${Date.now()}-b`,
-    text: SUGGESTED_ORDER_BOT_COPY,
-    sender: 'bot',
-    createdAt: Date.now(),
-    action: 'join_order',
-    orders: [suggested],
-  };
-}
-
 export default function ChatScreen() {
   const router = useRouter();
   const { user: authUser } = useAuth();
   const { profile } = useCurrentUser();
+  const { markIntroSuggestedTemplate, runUserTurn } = useAIChat();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -131,6 +119,17 @@ export default function ChatScreen() {
     nearbyOrders: SmartMatchOrder[];
   } | null>(null);
   const flatListRef = useRef<FlatList<Message> | null>(null);
+  const inputRef = useRef<TextInput | null>(null);
+  const assistantInFlightRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      const t = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 200);
+      return () => clearTimeout(t);
+    }, []),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +167,9 @@ export default function ChatScreen() {
         if (cancelled) return;
         setIntroFetchFailed(false);
         const intro = buildIntroSuggestionMessage(ctx, fetched);
+        if (intro.orders?.[0]?.isSuggested === true) {
+          markIntroSuggestedTemplate();
+        }
         setMessages((prev) => {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
@@ -177,11 +179,15 @@ export default function ChatScreen() {
       } catch {
         if (cancelled) return;
         setIntroFetchFailed(true);
+        const fallbackIntro = buildIntroSuggestionMessage(detectTimeContext(), []);
+        if (fallbackIntro.orders?.[0]?.isSuggested === true) {
+          markIntroSuggestedTemplate();
+        }
         setMessages((prev) => {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
           }
-          return [...prev, buildIntroSuggestionMessage(detectTimeContext(), [])];
+          return [...prev, fallbackIntro];
         });
       } finally {
         if (!cancelled) {
@@ -192,7 +198,7 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [markIntroSuggestedTemplate]);
 
   useEffect(() => {
     flatListRef.current?.scrollToEnd({ animated: true });
@@ -238,55 +244,98 @@ export default function ChatScreen() {
     router.push({ pathname: '/(tabs)/create' } as never);
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+  const submitAssistantText = useCallback(
+    async (outgoingRaw: string, options?: { clearInput?: boolean }) => {
+      const outgoingText = outgoingRaw.trim();
+      if (!outgoingText || assistantInFlightRef.current) return;
 
-    const outgoingText = input.trim();
-    setError('');
-    const userMessage: Message = {
-      id: `${Date.now()}-u`,
-      text: outgoingText,
-      sender: 'user',
-      createdAt: Date.now(),
-      action: 'none',
-    };
+      setError('');
+      if (options?.clearInput !== false) {
+        setInput('');
+      }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-
-    if (!detectFoodIntent(outgoingText)) {
-      const botMessage: Message = {
-        id: `${Date.now()}-b`,
-        text: 'Mention food or that you’re hungry — I’ll look for open orders you can join, or suggest a template to start your own.',
-        sender: 'bot',
+      const userMessage: Message = {
+        id: `${Date.now()}-u`,
+        text: outgoingText,
+        sender: 'user',
         createdAt: Date.now(),
         action: 'none',
       };
-      setMessages((prev) => [...prev, botMessage]);
-      return;
-    }
+      setMessages((prev) => [...prev, userMessage]);
 
-    setLoading(true);
-    try {
-      const ctx = detectTimeContext();
-      const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
-      const botMessage = buildUserTurnBotMessage(ctx, fetched);
-      setMessages((prev) => [...prev, botMessage]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-err`,
-          text: 'Could not load orders. Check your connection and try again.',
+      const uid = authUser?.uid;
+      if (!uid) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-b`,
+            text: 'Sign in to create orders from chat.',
+            sender: 'bot',
+            createdAt: Date.now(),
+            action: 'none',
+          },
+        ]);
+        return;
+      }
+
+      assistantInFlightRef.current = true;
+      setLoading(true);
+      try {
+        const ctx = detectTimeContext();
+        const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
+        const result = await runUserTurn({
+          text: outgoingText,
+          uid,
+          nearbyJoinableCount: fetched.length,
+          timeContext: ctx,
+        });
+
+        const baseId = Date.now();
+        const botMessages: Message[] = result.messages.map((m, i) => ({
+          id: `${baseId}-b-${i}`,
+          text: m.text,
           sender: 'bot',
           createdAt: Date.now(),
-          action: 'none',
-        },
-      ]);
-      setError('Failed to fetch orders.');
-    } finally {
-      setLoading(false);
-    }
+          action: m.action,
+          orders: m.orders as Message['orders'],
+        }));
+
+        if (botMessages.length > 0) {
+          setMessages((prev) => [...prev, ...botMessages]);
+        }
+
+        if (result.navigateToOrderId) {
+          router.push(`/order/${result.navigateToOrderId}` as never);
+        }
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-err`,
+            text: 'Could not complete that. Check your connection and try again.',
+            sender: 'bot',
+            createdAt: Date.now(),
+            action: 'none',
+          },
+        ]);
+        setError('Assistant request failed.');
+      } finally {
+        assistantInFlightRef.current = false;
+        setLoading(false);
+      }
+    },
+    [authUser?.uid, router, runUserTurn],
+  );
+
+  const sendMessageFromInput = () => {
+    if (!input.trim() || loading) return;
+    void submitAssistantText(input, { clearInput: true });
+  };
+
+  const sendQuick = (message: string) => {
+    if (loading) return;
+    setInput('');
+    void submitAssistantText(message, { clearInput: true });
   };
 
   const handleMicPress = () => {
@@ -357,14 +406,23 @@ export default function ChatScreen() {
     );
   };
 
+  const showIdeaChips = !input.trim() && !loading;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <View style={styles.screenHeader}>
+          <Text style={styles.screenTitle}>AI Assistant</Text>
+          <Text style={styles.screenSubtitle}>
+            Tell me what you want to eat 🍕
+          </Text>
+        </View>
         <FlatList
           ref={flatListRef}
+          style={styles.messageList}
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
@@ -437,10 +495,54 @@ export default function ChatScreen() {
           }
         />
 
+        {showIdeaChips ? (
+          <View style={styles.composerSection}>
+            <Text style={styles.composerSectionLabel}>Ideas</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipScroller}
+            >
+              {IDEA_CHIPS.map((chip) => (
+                <TouchableOpacity
+                  key={chip.label}
+                  style={styles.ideaChip}
+                  activeOpacity={0.85}
+                  onPress={() => sendQuick(chip.message)}
+                  disabled={loading}
+                >
+                  <Text style={styles.ideaChipText}>{chip.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        <View style={styles.composerSection}>
+          <Text style={styles.composerSectionLabel}>Quick actions</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipScroller}
+          >
+            {QUICK_ACTIONS.map((q) => (
+              <TouchableOpacity
+                key={q.label}
+                style={styles.quickChip}
+                activeOpacity={0.85}
+                onPress={() => sendQuick(q.message)}
+                disabled={loading}
+              >
+                <Text style={styles.quickChipText}>{q.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {loading ? (
           <View style={styles.typingRow}>
-            <ActivityIndicator size="small" color="#9CA3AF" />
-            <Text style={styles.typingText}>Loading open orders…</Text>
+            <ActivityIndicator size="small" color="#6EE7B7" />
+            <Text style={styles.typingText}>Assistant is thinking…</Text>
           </View>
         ) : null}
         {introFetchFailed ? (
@@ -455,17 +557,18 @@ export default function ChatScreen() {
             <Text style={styles.micText}>🎤</Text>
           </TouchableOpacity>
           <TextInput
+            ref={inputRef}
             value={input}
             onChangeText={setInput}
-            placeholder="Type a message..."
+            placeholder="Ask anything…"
             placeholderTextColor="#8A8A8A"
             style={styles.input}
             editable={!loading}
-            onSubmitEditing={sendMessage}
+            onSubmitEditing={sendMessageFromInput}
             returnKeyType="send"
           />
           <TouchableOpacity
-            onPress={sendMessage}
+            onPress={sendMessageFromInput}
             style={[
               styles.button,
               (loading || !input.trim()) && styles.buttonDisabled,
@@ -481,8 +584,73 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#111' },
-  container: { flex: 1, backgroundColor: '#111' },
+  safe: { flex: 1, backgroundColor: '#0d0f14' },
+  container: { flex: 1, backgroundColor: '#0d0f14' },
+  screenHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(110, 231, 183, 0.12)',
+  },
+  screenTitle: {
+    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  screenSubtitle: {
+    marginTop: 4,
+    color: 'rgba(110, 231, 183, 0.9)',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  composerSection: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  composerSectionLabel: {
+    color: 'rgba(248, 250, 252, 0.45)',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  chipScroller: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 4,
+  },
+  ideaChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.35)',
+  },
+  ideaChipText: {
+    color: '#A7F3D0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  quickChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  quickChipText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  messageList: { flex: 1 },
   messagesContent: { padding: 12, paddingBottom: 20 },
 
   message: {
