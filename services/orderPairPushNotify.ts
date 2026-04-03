@@ -1,6 +1,6 @@
 /**
  * When a HalfOrder reaches exactly two members, notify the other user via Expo Push API.
- * Deduped with `orders.notified` (legacy `pairJoinPushSent` also blocks re-send).
+ * Prefers `participants[].expoPushToken` when present. Deduped with `orders.notified`.
  */
 import {
   doc,
@@ -12,85 +12,11 @@ import {
 import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
 import { sendPushNotification } from '@/services/expoPushSend';
 import { db } from '@/services/firebase';
-import { haversineDistanceKm } from '@/services/haversineKm';
-import { mapOrderMemberSnap } from '@/services/orderMemberProfile';
+import { normalizeParticipantRecords } from '@/services/orders';
 
 function normalizeOrderUsers(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
-}
-
-function parseUserLatLng(d: Record<string, unknown>): { lat: number; lng: number } | null {
-  const latRaw = d.latitude;
-  const lngRaw = d.longitude;
-  if (typeof latRaw === 'number' && typeof lngRaw === 'number') {
-    if (Number.isFinite(latRaw) && Number.isFinite(lngRaw)) {
-      return { lat: latRaw, lng: lngRaw };
-    }
-  }
-  const loc = d.location;
-  if (loc && typeof loc === 'object' && loc !== null) {
-    const o = loc as Record<string, unknown>;
-    const la =
-      typeof o.latitude === 'number'
-        ? o.latitude
-        : typeof o.lat === 'number'
-          ? o.lat
-          : null;
-    const lo =
-      typeof o.longitude === 'number'
-        ? o.longitude
-        : typeof o.lng === 'number'
-          ? o.lng
-          : null;
-    if (la != null && lo != null && Number.isFinite(la) && Number.isFinite(lo)) {
-      return { lat: la, lng: lo };
-    }
-  }
-  return null;
-}
-
-type JoinerProfile = {
-  name: string;
-  avatar: string | null;
-  latLng: { lat: number; lng: number } | null;
-};
-
-async function fetchJoinerProfile(joinerUid: string): Promise<JoinerProfile> {
-  const snap = await getDoc(doc(db, 'users', joinerUid));
-  if (!snap.exists()) {
-    return { name: 'Someone', avatar: null, latLng: null };
-  }
-  const d = snap.data() as Record<string, unknown>;
-  const fromName =
-    (typeof d.name === 'string' && d.name.trim() ? d.name.trim() : '') ||
-    (typeof d.displayName === 'string' && d.displayName.trim()
-      ? d.displayName.trim()
-      : '');
-  const email = typeof d.email === 'string' ? d.email.trim() : '';
-  const local =
-    email.includes('@') ? (email.split('@')[0]?.trim() ?? '') : '';
-  const name = fromName || local || 'Someone';
-
-  const avatarRaw =
-    (typeof d.avatar === 'string' && d.avatar.trim() ? d.avatar.trim() : '') ||
-    (typeof d.photoURL === 'string' && d.photoURL.trim()
-      ? d.photoURL.trim()
-      : '');
-  const avatar =
-    /^https?:\/\//i.test(avatarRaw) && avatarRaw.length < 2000 ? avatarRaw : null;
-
-  return { name, avatar, latLng: parseUserLatLng(d) };
-}
-
-async function latLngFromOrderMember(
-  orderId: string,
-  uid: string,
-): Promise<{ lat: number; lng: number } | null> {
-  const snap = await getDoc(doc(db, 'orders', orderId, 'order_members', uid));
-  if (!snap.exists()) return null;
-  const m = mapOrderMemberSnap(uid, snap.data() as Record<string, unknown>);
-  return m.location;
 }
 
 async function getExpoPushTokenForUser(uid: string): Promise<string | null> {
@@ -124,6 +50,21 @@ async function getExpoPushTokenForUser(uid: string): Promise<string | null> {
     if (typeof t === 'string' && t.trim()) return t.trim();
   }
   return null;
+}
+
+async function fetchJoinerDisplayName(joinerUid: string): Promise<string> {
+  const snap = await getDoc(doc(db, 'users', joinerUid));
+  if (!snap.exists()) return 'Someone';
+  const d = snap.data() as Record<string, unknown>;
+  const fromName =
+    (typeof d.name === 'string' && d.name.trim() ? d.name.trim() : '') ||
+    (typeof d.displayName === 'string' && d.displayName.trim()
+      ? d.displayName.trim()
+      : '');
+  const email = typeof d.email === 'string' ? d.email.trim() : '';
+  const local =
+    email.includes('@') ? (email.split('@')[0]?.trim() ?? '') : '';
+  return fromName || local || 'Someone';
 }
 
 /**
@@ -167,35 +108,30 @@ export async function trySendPairJoinExpoPush(
 
   if (!recipientUid) return;
 
-  const [token, joiner, joinerLoc, otherLoc] = await Promise.all([
-    getExpoPushTokenForUser(recipientUid),
-    fetchJoinerProfile(jid),
-    latLngFromOrderMember(oid, jid),
-    latLngFromOrderMember(oid, recipientUid),
-  ]);
+  const orderSnap = await getDoc(doc(db, 'orders', oid));
+  const orderData = orderSnap.exists() ? orderSnap.data() : null;
+  const participants = normalizeParticipantRecords(orderData?.participants);
+  const recipientParticipant = participants.find(
+    (p) => p.userId === recipientUid,
+  );
+  const tokenFromOrder =
+    typeof recipientParticipant?.expoPushToken === 'string' &&
+    recipientParticipant.expoPushToken.trim()
+      ? recipientParticipant.expoPushToken.trim()
+      : null;
 
-  const joinerPoint = joinerLoc ?? joiner.latLng;
-  const otherPoint = otherLoc;
-  let body = 'Open your order to connect and chat!';
-  if (joinerPoint && otherPoint) {
-    const km = haversineDistanceKm(joinerPoint, otherPoint);
-    if (Number.isFinite(km)) {
-      body = `Distance: ${km.toFixed(1)} km`;
-    }
-  }
+  const token = tokenFromOrder ?? (await getExpoPushTokenForUser(recipientUid));
+  const joinerName = await fetchJoinerDisplayName(jid);
 
-  const title = `${joiner.name} joined your order 🍕`;
+  const title = `${joinerName} joined your order 🍕`;
+  const body = 'You can now chat';
 
   const data: Record<string, string> = {
     type: HALF_ORDER_PAIR_JOIN_PUSH_TYPE,
     orderId: oid,
     userId: jid,
-    joinerName: joiner.name,
+    joinerName,
   };
-  if (joinerPoint && otherPoint) {
-    const km = haversineDistanceKm(joinerPoint, otherPoint);
-    if (Number.isFinite(km)) data.distanceKm = km.toFixed(1);
-  }
 
   await sendPushNotification(token, title, body, data);
 }
