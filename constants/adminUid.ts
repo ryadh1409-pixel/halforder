@@ -5,7 +5,7 @@
 export const ADMIN_UID = 'KT3LfXRsVgaH4LfRTQaexvj3CRn1';
 
 /** Email admins may sign in with (must match Storage/Firestore rules). */
-export const ADMIN_PANEL_EMAIL = 'admin@yourapp.com';
+export const ADMIN_PANEL_EMAIL = 'admin@ourfood.com';
 
 function normalizeEmail(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase();

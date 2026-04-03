@@ -10,10 +10,8 @@ import {
   subscribeActiveFoodCards,
   type FoodCard,
 } from '@/services/foodCards';
-import {
-  subscribeFoodTemplates,
-  type FoodTemplate,
-} from '@/services/foodTemplates';
+import { subscribeActiveFoodTemplates } from '@/services/foodTemplates';
+import type { FoodTemplate } from '@/types/food';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -75,7 +73,7 @@ export default function SwipeScreen() {
   }, [cardsRetryKey]);
 
   useEffect(() => {
-    const unsub = subscribeFoodTemplates(
+    const unsub = subscribeActiveFoodTemplates(
       (rows) => setFoodTemplates(rows),
       () => setFoodTemplates([]),
     );

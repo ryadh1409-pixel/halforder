@@ -1,5 +1,10 @@
+import {
+  AdminFoodCatalogFab,
+  AdminFoodCatalogList,
+  AdminFoodCatalogProvider,
+} from './components/AdminFoodCatalog';
 import { adminRoutes } from '@/constants/adminRoutes';
-import { isAdminUser } from '@/constants/adminUid';
+import { ADMIN_PANEL_EMAIL, isAdminUser } from '@/constants/adminUid';
 import { adminError, adminLog } from '@/lib/admin/adminDebug';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
@@ -217,6 +222,12 @@ export default function AdminScreen() {
       return;
     }
 
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      Alert.alert('Error', 'No admin user id.');
+      return;
+    }
+
     setSaving(true);
     try {
       const cardsCap = await getDocs(collection(db, 'food_cards'));
@@ -232,7 +243,7 @@ export default function AdminScreen() {
         price: total,
         splitPrice: split,
         location: location.trim() || null,
-        ownerId: user.uid,
+        ownerId,
         maxUsers: 2,
         createdAt: serverTimestamp(),
         expiresAt: foodCardExpiresAtFromNow(now),
@@ -273,7 +284,10 @@ export default function AdminScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Access denied</Text>
-          <Text style={styles.hint}>You do not have permission to view this page.</Text>
+          <Text style={styles.hint}>
+            You do not have permission to view this page. Admin sign-in:{' '}
+            {ADMIN_PANEL_EMAIL}
+          </Text>
           <Text style={styles.link} onPress={() => router.back()}>
             Go back
           </Text>
@@ -295,34 +309,38 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
-        }
-      >
-        <Text style={styles.title}>Admin Dashboard</Text>
+      <AdminFoodCatalogProvider enabled={isAdmin}>
+        <View style={styles.mainCol}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.primary}
+              />
+            }
+          >
+            <Text style={styles.title}>Admin Dashboard</Text>
 
-        <TouchableOpacity
-          style={styles.navCard}
-          activeOpacity={0.88}
-          onPress={() => router.push(adminRoutes.foodTemplates as never)}
-        >
-          <Text style={styles.navCardTitle}>Food catalog templates</Text>
-          <Text style={styles.navCardSub}>
-            Up to 10 items · Home screen · Storage images
-          </Text>
-          <Text style={styles.navCardCta}>Open editor →</Text>
-        </TouchableOpacity>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Home menu catalog</Text>
+              <Text style={styles.cardHint}>
+                Up to 10 templates · Shown on the Home tab (when visible) · Use
+                + to add
+              </Text>
+              <AdminFoodCatalogList />
+            </View>
 
-        {error ? (
+            {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
-        ) : null}
+            ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Create Food Card</Text>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Create Food Card (Swipe)</Text>
           <TouchableOpacity style={styles.imageButton} onPress={pickImage} disabled={uploading}>
             <Text style={styles.imageButtonText}>{uploading ? 'Uploading...' : 'Upload Image'}</Text>
           </TouchableOpacity>
@@ -332,13 +350,13 @@ export default function AdminScreen() {
           <TextInput style={styles.input} placeholder="Total Price" placeholderTextColor={COLORS.textMuted} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
           <TextInput style={styles.input} placeholder="Split Price" placeholderTextColor={COLORS.textMuted} value={splitPrice} onChangeText={setSplitPrice} keyboardType="decimal-pad" />
           <TextInput style={styles.input} placeholder="Location" placeholderTextColor={COLORS.textMuted} value={location} onChangeText={setLocation} />
-          <TouchableOpacity style={styles.saveBtn} onPress={onSaveCard} disabled={saving}>
-            <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Card'}</Text>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity style={styles.saveBtn} onPress={onSaveCard} disabled={saving}>
+                <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Card'}</Text>
+              </TouchableOpacity>
+            </View>
 
-        {metrics ? (
-          <View style={styles.cards}>
+            {metrics ? (
+              <View style={styles.cards}>
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
@@ -426,32 +444,37 @@ export default function AdminScreen() {
               <Text style={styles.cardValue}>{metrics.completedOrders}</Text>
               <Text style={styles.cardCta}>Completed filter →</Text>
             </TouchableOpacity>
-          </View>
-        ) : null}
+              </View>
+            ) : null}
 
-        <View style={styles.navSection}>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin/dashboard')} activeOpacity={0.85}>
-            <Text style={styles.navButtonText}>Dashboard</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.users)} activeOpacity={0.85}>
-            <Text style={styles.navButtonText}>Manage Users</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.orders())} activeOpacity={0.85}>
-            <Text style={styles.navButtonText}>Manage Orders</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.reports)} activeOpacity={0.85}>
-            <Text style={styles.navButtonText}>User Reports (UGC)</Text>
-          </TouchableOpacity>
+            <View style={styles.navSection}>
+              <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin/dashboard' as never)} activeOpacity={0.85}>
+                <Text style={styles.navButtonText}>Dashboard</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.users as never)} activeOpacity={0.85}>
+                <Text style={styles.navButtonText}>Manage Users</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.orders() as never)} activeOpacity={0.85}>
+                <Text style={styles.navButtonText}>Manage Orders</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.reports as never)} activeOpacity={0.85}>
+                <Text style={styles.navButtonText}>User Reports (UGC)</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+          <AdminFoodCatalogFab />
         </View>
-      </ScrollView>
+      </AdminFoodCatalogProvider>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  mainCol: { flex: 1, position: 'relative' },
+  scrollView: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
   title: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: 20, textAlign: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
   accessDenied: { fontSize: 18, fontWeight: '600', color: COLORS.error, marginBottom: 8, textAlign: 'center' },
@@ -505,15 +528,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveText: { color: '#07241A', fontWeight: '800' },
-  navCard: {
-    ...adminCardShell,
-    marginBottom: 16,
-    borderColor: 'rgba(52, 211, 153, 0.35)',
-    backgroundColor: 'rgba(52, 211, 153, 0.08)',
-  },
-  navCardTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
-  navCardSub: { marginTop: 6, fontSize: 13, color: COLORS.textMuted, lineHeight: 18 },
-  navCardCta: { marginTop: 10, fontSize: 14, fontWeight: '700', color: COLORS.primary },
   navSection: { marginTop: 24, gap: 12 },
   navButton: {
     backgroundColor: COLORS.primary,

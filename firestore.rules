@@ -12,7 +12,7 @@ service cloud.firestore {
           request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
           || (
             request.auth.token.email is string
-            && request.auth.token.email == 'admin@yourapp.com'
+            && request.auth.token.email == 'admin@ourfood.com'
           )
         );
     }
