@@ -5,7 +5,7 @@ import {
   isFoodCardJoinDisabled,
   joinOrder,
   skipFoodCard,
-  subscribeWaitingFoodCards,
+  subscribeActiveFoodCards,
   type FoodCard,
 } from '@/services/foodCards';
 import { useRouter } from 'expo-router';
@@ -47,9 +47,14 @@ export default function SwipeScreen() {
   useEffect(() => {
     setLoading(true);
     setCardsError(false);
-    const unsub = subscribeWaitingFoodCards(
+    const unsub = subscribeActiveFoodCards(
       (rows) => {
-        console.log('[swipe] cards from food_cards:', rows);
+        console.log(
+          `[swipe] deck count=${rows.length} (food_cards · status==active · onSnapshot)`,
+        );
+        rows.forEach((c) =>
+          console.log(`[swipe] card ${c.id} status=${c.status}`),
+        );
         setCardsError(false);
         setCards(rows);
         setLoading(false);
@@ -290,6 +295,15 @@ export default function SwipeScreen() {
               </Text>
               <Text style={styles.timer}>Ends in {formatTimer(topCard.expiresAt + tick * 0)}</Text>
               <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() =>
+                  router.push(`/order-details/${topCard.id}` as never)
+                }
+                style={styles.detailsBtn}
+              >
+                <Text style={styles.detailsBtnText}>View details →</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 activeOpacity={0.85}
                 disabled={joinPrimaryDisabled}
                 onPress={() => onLike(topCard.id)}
@@ -425,6 +439,16 @@ const styles = StyleSheet.create({
   cardTitle: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
   meta: { color: 'rgba(248,250,252,0.7)', marginTop: 5 },
   timer: { color: '#34D399', marginTop: 8, fontWeight: '700' },
+  detailsBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.45)',
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
+  },
+  detailsBtnText: { color: '#6EE7B7', fontWeight: '800', fontSize: 15 },
   hostRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
   avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#1f2937' },
   avatarPlaceholder: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },

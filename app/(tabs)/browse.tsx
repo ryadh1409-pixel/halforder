@@ -3,7 +3,7 @@ import { useAuth } from '@/services/AuthContext';
 import {
   isFoodCardJoinDisabled,
   joinOrder,
-  subscribeWaitingFoodCards,
+  subscribeActiveFoodCards,
   type FoodCard,
 } from '@/services/foodCards';
 import { useRouter } from 'expo-router';
@@ -41,8 +41,14 @@ export default function BrowseScreen() {
   useEffect(() => {
     setLoading(true);
     setListError(false);
-    const unsub = subscribeWaitingFoodCards(
+    const unsub = subscribeActiveFoodCards(
       (rows) => {
+        console.log(
+          `[browse] count=${rows.length} (food_cards · status==active)`,
+        );
+        rows.forEach((c) =>
+          console.log(`[browse] card ${c.id} status=${c.status}`),
+        );
         setCards(rows);
         setLoading(false);
       },
@@ -127,14 +133,37 @@ export default function BrowseScreen() {
               else if (atCapacity) joinLabel = 'Full';
               return (
                 <View key={card.id} style={styles.card}>
-                  <Image source={{ uri: card.image }} style={styles.hero} />
+                  <TouchableOpacity
+                    activeOpacity={0.92}
+                    onPress={() =>
+                      router.push(`/order-details/${card.id}` as never)
+                    }
+                  >
+                    <Image source={{ uri: card.image }} style={styles.hero} />
+                  </TouchableOpacity>
                   <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle}>{card.title}</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.88}
+                      onPress={() =>
+                        router.push(`/order-details/${card.id}` as never)
+                      }
+                    >
+                      <Text style={styles.cardTitle}>{card.title}</Text>
+                    </TouchableOpacity>
                     <Text style={styles.meta}>{card.restaurantName}</Text>
                     <Text style={styles.meta}>
                       ${card.splitPrice.toFixed(2)} each · total ${card.price.toFixed(2)}
                     </Text>
                     <Text style={styles.meta}>Expires in 45 minutes</Text>
+                    <TouchableOpacity
+                      style={styles.detailsRow}
+                      activeOpacity={0.88}
+                      onPress={() =>
+                        router.push(`/order-details/${card.id}` as never)
+                      }
+                    >
+                      <Text style={styles.detailsRowText}>View details →</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.joinBtn, joinDisabled && !joinBusy && styles.joinBtnDisabled]}
                       disabled={joinDisabled}
@@ -189,6 +218,12 @@ const styles = StyleSheet.create({
   cardBody: { padding: 14 },
   cardTitle: { color: D.text, fontSize: 20, fontWeight: '800' },
   meta: { color: D.muted, marginTop: 6 },
+  detailsRow: {
+    marginTop: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  detailsRowText: { color: '#6EE7B7', fontWeight: '800', fontSize: 15 },
   joinBtn: {
     marginTop: 12,
     height: 46,

@@ -1,6 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { doc, onSnapshot } from 'firebase/firestore';
+import {
+  doc,
+  onSnapshot,
+  type DocumentSnapshot,
+} from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,7 +23,11 @@ import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { blockUser, hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
-import { joinOrder } from '@/services/joinOrder';
+import { joinOrder as joinFirestoreOrder } from '@/services/joinOrder';
+import { joinOrder as joinFoodCardOrder } from '@/services/foodCards';
+
+const PLACEHOLDER_FOOD_IMAGE =
+  'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80';
 
 type OrderDetails = {
   id: string;
@@ -33,7 +41,73 @@ type OrderDetails = {
   distance: number;
   timeRemaining: number;
   createdBy: string;
+  /** Present when row came from `food_cards` (swipe / admin cards). */
+  foodCardStatus?: string;
 };
+
+function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
+  const d = snap.data();
+  if (!d) {
+    throw new Error('Missing order data');
+  }
+  return {
+    id: snap.id,
+    foodName: String(d?.foodName ?? 'Shared order'),
+    image:
+      typeof d?.image === 'string' && d.image.trim()
+        ? d.image
+        : PLACEHOLDER_FOOD_IMAGE,
+    pricePerPerson: Number(d?.pricePerPerson ?? 0),
+    totalPrice: Number(d?.totalPrice ?? 0),
+    peopleJoined: Number(d?.peopleJoined ?? 1),
+    maxPeople: Number(d?.maxPeople ?? 2),
+    location: String(d?.location ?? 'Nearby'),
+    distance: Number(d?.distance ?? 0),
+    timeRemaining: Number(d?.timeRemaining ?? 20),
+    createdBy: String(d?.createdBy ?? ''),
+  };
+}
+
+function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
+  const d = snap.data();
+  if (!d) {
+    throw new Error('Missing food card data');
+  }
+  const joined = Array.isArray(d.joinedUsers)
+    ? d.joinedUsers.filter((x: unknown): x is string => typeof x === 'string')
+        .length
+    : 0;
+  const max =
+    typeof d.maxUsers === 'number' && d.maxUsers > 0 ? d.maxUsers : 2;
+  const exp = typeof d.expiresAt === 'number' ? d.expiresAt : 0;
+  const msLeft = Math.max(0, exp - Date.now());
+  const timeRemainingMinutes =
+    msLeft > 0 ? Math.max(1, Math.ceil(msLeft / 60000)) : 0;
+  const img =
+    typeof d.image === 'string' && d.image.trim()
+      ? d.image.trim()
+      : PLACEHOLDER_FOOD_IMAGE;
+  const loc =
+    typeof d.restaurantName === 'string' && d.restaurantName.trim()
+      ? d.restaurantName.trim()
+      : d.location
+        ? 'Location on file'
+        : 'Nearby';
+  return {
+    id: snap.id,
+    foodName: String(d.title ?? 'Food card'),
+    image: img,
+    pricePerPerson: Number(d.splitPrice ?? 0),
+    totalPrice: Number(d.price ?? 0),
+    peopleJoined: joined,
+    maxPeople: max,
+    location: loc,
+    distance: 0,
+    timeRemaining: timeRemainingMinutes || 1,
+    createdBy: String(d.ownerId ?? ''),
+    foodCardStatus: typeof d.status === 'string' ? d.status : undefined,
+  };
+}
 
 export default function OrderDetailsScreen() {
   const router = useRouter();
@@ -41,6 +115,9 @@ export default function OrderDetailsScreen() {
   const orderId = String(params.id ?? '');
 
   const [order, setOrder] = useState<OrderDetails | null>(null);
+  const [detailSource, setDetailSource] = useState<'order' | 'food_card' | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [blocking, setBlocking] = useState(false);
@@ -48,46 +125,78 @@ export default function OrderDetailsScreen() {
   const [isBlocked, setIsBlocked] = useState(false);
 
   useEffect(() => {
-    if (!orderId) {
+    if (!orderId.trim()) {
+      setOrder(null);
+      setDetailSource(null);
       setLoading(false);
       return;
     }
-    const ref = doc(db, 'orders', orderId);
-    const unsub = onSnapshot(
-      ref,
+    setLoading(true);
+    setOrder(null);
+    setDetailSource(null);
+
+    let orderRow: OrderDetails | null = null;
+    let cardRow: OrderDetails | null = null;
+    let orderHeard = false;
+    let cardHeard = false;
+
+    const settle = () => {
+      if (!orderHeard || !cardHeard) return;
+      if (orderRow) {
+        setDetailSource('order');
+        setOrder(orderRow);
+        setCountdownSec(Math.max(orderRow.timeRemaining, 0) * 60);
+      } else if (cardRow) {
+        setDetailSource('food_card');
+        setOrder(cardRow);
+        setCountdownSec(Math.max(cardRow.timeRemaining, 0) * 60);
+      } else {
+        setDetailSource(null);
+        setOrder(null);
+      }
+      setLoading(false);
+    };
+
+    const unsubOrder = onSnapshot(
+      doc(db, 'orders', orderId),
       (snap) => {
-        if (!snap.exists()) {
-          setOrder(null);
-          setLoading(false);
-          return;
+        orderHeard = true;
+        try {
+          orderRow = snap.exists() ? mapOrderDocument(snap) : null;
+        } catch {
+          orderRow = null;
         }
-        const d = snap.data();
-        const mapped: OrderDetails = {
-          id: snap.id,
-          foodName: String(d?.foodName ?? 'Shared order'),
-          image:
-            typeof d?.image === 'string' && d.image.trim()
-              ? d.image
-              : 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80',
-          pricePerPerson: Number(d?.pricePerPerson ?? 0),
-          totalPrice: Number(d?.totalPrice ?? 0),
-          peopleJoined: Number(d?.peopleJoined ?? 1),
-          maxPeople: Number(d?.maxPeople ?? 2),
-          location: String(d?.location ?? 'Nearby'),
-          distance: Number(d?.distance ?? 0),
-          timeRemaining: Number(d?.timeRemaining ?? 20),
-          createdBy: String(d?.createdBy ?? ''),
-        };
-        setOrder(mapped);
-        setCountdownSec(Math.max(mapped.timeRemaining, 0) * 60);
-        setLoading(false);
+        settle();
       },
       () => {
-        setOrder(null);
-        setLoading(false);
+        orderHeard = true;
+        orderRow = null;
+        settle();
       },
     );
-    return () => unsub();
+
+    const unsubCard = onSnapshot(
+      doc(db, 'food_cards', orderId),
+      (snap) => {
+        cardHeard = true;
+        try {
+          cardRow = snap.exists() ? mapFoodCardDocument(snap) : null;
+        } catch {
+          cardRow = null;
+        }
+        settle();
+      },
+      () => {
+        cardHeard = true;
+        cardRow = null;
+        settle();
+      },
+    );
+
+    return () => {
+      unsubOrder();
+      unsubCard();
+    };
   }, [orderId]);
 
   useEffect(() => {
@@ -129,7 +238,7 @@ export default function OrderDetailsScreen() {
   }, [countdownSec]);
 
   const handleJoinOrder = async () => {
-    if (!order) return;
+    if (!order || !detailSource) return;
     const uid = auth.currentUser?.uid;
     if (!uid) {
       router.push('/(auth)/login?redirectTo=/order-details/' + order.id);
@@ -137,14 +246,32 @@ export default function OrderDetailsScreen() {
     }
     setJoining(true);
     try {
-      await joinOrder(order.id);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.push(`/order/${order.id}` as never);
+      if (detailSource === 'food_card') {
+        const result = await joinFoodCardOrder(order.id, uid);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => {},
+        );
+        if (result.alreadyJoined) {
+          Alert.alert('Already joined', 'You are already on this card.');
+        } else if (result.isFull) {
+          Alert.alert('Order full', 'This card has reached the maximum joiners.');
+        } else {
+          Alert.alert('Joined', 'You have joined this food card.');
+        }
+        return;
+      }
+      await joinFirestoreOrder(order.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+        () => {},
+      );
+      router.push(`/order-details/${order.id}` as never);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to join order.';
-      console.error('[joinOrder]', msg, e);
+      console.error('[order-details join]', msg, e);
       Alert.alert('Join failed', msg);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+        () => {},
+      );
     } finally {
       setJoining(false);
     }
@@ -238,10 +365,23 @@ export default function OrderDetailsScreen() {
         <TouchableOpacity
           style={[
             styles.joinButton,
-            (joining || remainingSpots <= 0 || isBlocked) && styles.joinButtonDisabled,
+            (joining ||
+              remainingSpots <= 0 ||
+              isBlocked ||
+              (detailSource === 'food_card' &&
+                order.foodCardStatus != null &&
+                order.foodCardStatus !== 'active')) &&
+              styles.joinButtonDisabled,
           ]}
           onPress={handleJoinOrder}
-          disabled={joining || remainingSpots <= 0 || isBlocked}
+          disabled={
+            joining ||
+            remainingSpots <= 0 ||
+            isBlocked ||
+            (detailSource === 'food_card' &&
+              order.foodCardStatus != null &&
+              order.foodCardStatus !== 'active')
+          }
           activeOpacity={0.85}
         >
           <Text style={styles.joinButtonText}>
@@ -249,9 +389,13 @@ export default function OrderDetailsScreen() {
               ? 'Joining...'
               : isBlocked
                 ? 'Blocked'
-                : remainingSpots <= 0
-                  ? 'Order Full'
-                  : 'Join Order'}
+                : detailSource === 'food_card' &&
+                    order.foodCardStatus != null &&
+                    order.foodCardStatus !== 'active'
+                  ? 'Not available'
+                  : remainingSpots <= 0
+                    ? 'Order Full'
+                    : 'Join Order'}
           </Text>
         </TouchableOpacity>
         {auth.currentUser?.uid && order.createdBy && auth.currentUser.uid !== order.createdBy ? (

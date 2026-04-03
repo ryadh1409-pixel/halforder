@@ -27,7 +27,8 @@ export type FoodCard = {
   location: { latitude: number; longitude: number } | null;
   createdAt: Timestamp | null;
   expiresAt: number;
-  status: 'waiting' | 'matched' | 'full';
+  /** Open deck = `active`; `matched` / `full` = closed to new joins. */
+  status: 'active' | 'matched' | 'full';
   ownerId?: string;
   joinedUsers?: string[];
   maxUsers?: number;
@@ -37,22 +38,88 @@ export type FoodCard = {
 
 const FOOD_CARDS = 'food_cards';
 
-export function subscribeWaitingFoodCards(
+/** Listing lifetime from creation (45 minutes). */
+export const FOOD_CARD_TTL_MS = 45 * 60 * 1000;
+
+export function foodCardExpiresAtFromNow(nowMs = Date.now()): number {
+  return nowMs + FOOD_CARD_TTL_MS;
+}
+
+export function isActiveFoodCardStatus(status: string): boolean {
+  return status === 'active';
+}
+
+/** All docs still marked `active` (includes expired until automation cleans up). */
+export function queryAllActiveFoodCards() {
+  return query(collection(db, FOOD_CARDS), where('status', '==', 'active'));
+}
+
+/**
+ * User-visible deck: `status == "active"` and `expiresAt > nowMs` (server-side filter).
+ * Pass fresh `Date.now()` when building the listener so the query matches current time.
+ */
+export function queryVisibleActiveFoodCards(nowMs: number = Date.now()) {
+  return query(
+    collection(db, FOOD_CARDS),
+    where('status', '==', 'active'),
+    where('expiresAt', '>', nowMs),
+  );
+}
+
+/** @deprecated Use `queryVisibleActiveFoodCards` for user-facing counts; `queryAllActiveFoodCards` for maintenance. */
+export function queryActiveFoodCards(nowMs: number = Date.now()) {
+  return queryVisibleActiveFoodCards(nowMs);
+}
+
+function coerceExpiresAtMs(raw: unknown): number {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (raw && typeof raw === 'object' && raw !== null && 'toMillis' in raw) {
+    const fn = (raw as { toMillis: () => number }).toMillis;
+    if (typeof fn === 'function') {
+      const ms = fn.call(raw);
+      return typeof ms === 'number' ? ms : 0;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Real-time listener for the swipe/browse deck: **`food_cards`** only (not `orders`),
+ * `where("status","==","active")` + `where("expiresAt", ">", Date.now())`, plus client-side
+ * expiry guard so cards drop off as soon as `expiresAt` passes even without a server event.
+ */
+export function subscribeActiveFoodCards(
   onData: (cards: FoodCard[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  const q = query(
-    collection(db, FOOD_CARDS),
-    where('status', '==', 'waiting'),
-  );
+  const queryNow = Date.now();
   return onSnapshot(
-    q,
+    queryVisibleActiveFoodCards(queryNow),
     (snap) => {
       const now = Date.now();
-      const cards = snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() as Omit<FoodCard, 'id'>) }))
-        .filter((card) => (card.expiresAt ?? 0) > now);
-      console.log('[food_cards] fetched cards:', cards);
+      const raw = snap.docs.map((d) => {
+        const data = d.data() as Omit<FoodCard, 'id' | 'expiresAt'> & {
+          expiresAt?: unknown;
+        };
+        const expiresAt = coerceExpiresAtMs(data.expiresAt);
+        return {
+          id: d.id,
+          ...data,
+          expiresAt,
+        } as FoodCard;
+      });
+      console.log(
+        `[food_cards] onSnapshot status==active expiresAt>${queryNow} rawDocs=${snap.size}`,
+      );
+      raw.forEach((c) => {
+        console.log(
+          `[food_cards] card id=${c.id} status=${String(c.status)} expiresAt=${c.expiresAt}`,
+        );
+      });
+      const cards = raw.filter((card) => (card.expiresAt ?? 0) > now);
+      console.log(
+        `[food_cards] visibleAfterClientExpiryCheck count=${cards.length}`,
+      );
       onData(cards);
     },
     (e) => {
@@ -62,6 +129,9 @@ export function subscribeWaitingFoodCards(
     },
   );
 }
+
+/** @deprecated Use `subscribeActiveFoodCards` */
+export const subscribeWaitingFoodCards = subscribeActiveFoodCards;
 
 export async function joinFoodCard(cardId: string): Promise<{
   matched: boolean;
@@ -82,7 +152,7 @@ export async function joinFoodCard(cardId: string): Promise<{
     const snap = await tx.get(cardRef);
     if (!snap.exists()) throw new Error('Card not found');
     const data = snap.data() as Omit<FoodCard, 'id'>;
-    if (data.status !== 'waiting') throw new Error('Card no longer available');
+    if (!isActiveFoodCardStatus(data.status)) throw new Error('Card no longer available');
 
     if (!data.user1?.uid) {
       tx.update(cardRef, {
@@ -187,7 +257,8 @@ export function isFoodCardJoinDisabled(
   const joined = Array.isArray(card.joinedUsers)
     ? card.joinedUsers.filter((x): x is string => typeof x === 'string' && x.length > 0)
     : [];
-  if (card.status === 'full') return true;
+  if (card.status === 'full' || card.status === 'matched') return true;
+  if (!isActiveFoodCardStatus(card.status)) return true;
   if (joined.includes(uid)) return true;
   if (joined.length >= cap) return true;
   return false;
@@ -216,7 +287,7 @@ export async function joinOrder(
 
     const data = snap.data() as Record<string, unknown>;
     const status = typeof data.status === 'string' ? data.status : '';
-    if (status !== 'waiting') {
+    if (!isActiveFoodCardStatus(status)) {
       throw new Error('This order is not open for joining');
     }
 
@@ -252,7 +323,7 @@ export async function joinOrder(
 
     tx.update(cardRef, {
       joinedUsers: nextJoined,
-      status: isFull ? 'full' : 'waiting',
+      status: isFull ? 'full' : 'active',
     });
 
     return { alreadyJoined: false, isFull };
@@ -270,9 +341,7 @@ export async function createFoodCard(input: {
 }) {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid || uid !== ADMIN_UID) throw new Error('Admin only');
-  const activeSnap = await getDocs(
-    query(collection(db, FOOD_CARDS), where('status', '==', 'waiting')),
-  );
+  const activeSnap = await getDocs(queryVisibleActiveFoodCards());
   if (activeSnap.size >= 10) throw new Error('Max 10 active cards');
   const now = Date.now();
   return addDoc(collection(db, FOOD_CARDS), {
@@ -289,8 +358,8 @@ export async function createFoodCard(input: {
     joinedUsers: [] as string[],
     maxUsers: 2,
     createdAt: serverTimestamp(),
-    expiresAt: now + 45 * 60 * 1000,
-    status: 'waiting',
+    expiresAt: foodCardExpiresAtFromNow(now),
+    status: 'active',
     user1: null,
     user2: null,
   });
@@ -316,8 +385,8 @@ async function duplicateCard(cardId: string) {
     joinedUsers: [] as string[],
     maxUsers: 2,
     createdAt: serverTimestamp(),
-    expiresAt: now + 45 * 60 * 1000,
-    status: 'waiting',
+    expiresAt: foodCardExpiresAtFromNow(now),
+    status: 'active',
     user1: null,
     user2: null,
     regeneratedFrom: cardId,
@@ -326,15 +395,13 @@ async function duplicateCard(cardId: string) {
 
 export async function runFoodCardAutomationOnce(): Promise<void> {
   const now = Date.now();
-  const waitingSnap = await getDocs(
-    query(collection(db, FOOD_CARDS), where('status', '==', 'waiting')),
-  );
+  const activeDeckSnap = await getDocs(queryAllActiveFoodCards());
   const matchedSnap = await getDocs(
     query(collection(db, FOOD_CARDS), where('status', '==', 'matched')),
   );
 
   const tasks: Promise<unknown>[] = [];
-  waitingSnap.docs.forEach((d) => {
+  activeDeckSnap.docs.forEach((d) => {
     const data = d.data();
     if (typeof data.expiresAt === 'number' && data.expiresAt <= now) {
       tasks.push(

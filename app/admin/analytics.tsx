@@ -5,6 +5,7 @@ import { theme } from '@/constants/theme';
 import { adminError, adminLog } from '@/lib/admin/adminDebug';
 import { formatMillisToronto } from '@/lib/admin/orderHelpers';
 import { db } from '@/services/firebase';
+import { queryVisibleActiveFoodCards } from '@/services/foodCards';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -40,15 +41,13 @@ export default function AdminAnalyticsScreen() {
       const [
         usersSnap,
         ordersSnap,
-        waitingSnap,
+        activeFoodSnap,
         matchedSnap,
         reportsSnap,
       ] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'orders')),
-        getDocs(
-          query(collection(db, 'food_cards'), where('status', '==', 'waiting')),
-        ),
+        getDocs(queryVisibleActiveFoodCards()),
         getDocs(
           query(collection(db, 'food_cards'), where('status', '==', 'matched')),
         ),
@@ -57,7 +56,7 @@ export default function AdminAnalyticsScreen() {
       const payload = {
         users: usersSnap.size,
         orders: ordersSnap.size,
-        foodWaiting: waitingSnap.size,
+        foodWaiting: activeFoodSnap.size,
         foodMatched: matchedSnap.size,
         reports: reportsSnap.size,
       };
@@ -138,7 +137,7 @@ export default function AdminAnalyticsScreen() {
                 activeOpacity={0.88}
                 onPress={() => router.push(adminRoutes.orders())}
               >
-                <Text style={styles.label}>Food cards (waiting)</Text>
+                <Text style={styles.label}>Food cards (active)</Text>
                 <Text style={styles.value}>{data.foodWaiting}</Text>
                 <Text style={styles.cta}>Orders hub →</Text>
               </TouchableOpacity>

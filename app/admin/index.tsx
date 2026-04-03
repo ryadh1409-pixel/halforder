@@ -5,16 +5,14 @@ import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
 import { auth, db, storage } from '@/services/firebase';
+import {
+  foodCardExpiresAtFromNow,
+  isActiveFoodCardStatus,
+  queryVisibleActiveFoodCards,
+} from '@/services/foodCards';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import {
-  addDoc,
-  collection,
-  getDocs,
-  query,
-  serverTimestamp,
-  where,
-} from 'firebase/firestore';
+import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -132,7 +130,9 @@ export default function AdminScreen() {
       let totalMatches = 0;
       cardsSnap.docs.forEach((d) => {
         const data = d.data();
-        if (data?.status === 'waiting') activeCards += 1;
+        if (typeof data?.status === 'string' && isOpenFoodCardStatus(data.status)) {
+          activeCards += 1;
+        }
         if (data?.status === 'matched') totalMatches += 1;
       });
 
@@ -226,9 +226,7 @@ export default function AdminScreen() {
 
     setSaving(true);
     try {
-      const active = await getDocs(
-        query(collection(db, 'food_cards'), where('status', '==', 'waiting')),
-      );
+      const active = await getDocs(queryVisibleActiveFoodCards());
       if (active.size >= 10) {
         Alert.alert('Limit reached', 'Maximum 10 active cards allowed.');
         return;
@@ -245,8 +243,8 @@ export default function AdminScreen() {
         joinedUsers: [] as string[],
         maxUsers: 2,
         createdAt: serverTimestamp(),
-        expiresAt: now + 45 * 60 * 1000,
-        status: 'waiting',
+        expiresAt: foodCardExpiresAtFromNow(now),
+        status: 'active',
         user1: null,
         user2: null,
       });
