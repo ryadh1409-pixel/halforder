@@ -621,6 +621,28 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    /** Assistant chat → product feedback (one doc per message; onCreate email to support). */
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null
+        && !isCurrentUserRestricted()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userName is string
+        && request.resource.data.message is string
+        && (
+          request.resource.data.sentiment == 'positive'
+          || request.resource.data.sentiment == 'negative'
+          || request.resource.data.sentiment == 'neutral'
+        )
+        && request.resource.data.source == 'assistant_chat'
+        && request.resource.data.createdAt == request.time
+        && (
+          !request.resource.data.keys().hasAny(['userEmail'])
+          || request.resource.data.userEmail is string
+        );
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
     /** First pair-join on a half-order: one doc per orderId (idempotency). */
     match /referrals/{orderId} {
       allow read: if isSignedIn();

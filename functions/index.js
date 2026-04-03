@@ -863,3 +863,59 @@ exports.inactiveUserReminder = functions.pubsub
 
     return null;
   });
+
+const FEEDBACK_NOTIFY_TO =
+  process.env.FEEDBACK_EMAIL_TO || 'support@halforder.app';
+const DAILY_REPORT_TO =
+  process.env.DAILY_REPORT_EMAIL_TO || FEEDBACK_NOTIFY_TO;
+
+/** Assistant `feedback/{id}` onCreate → single email per doc. */
+exports.onFeedbackCreated = functions.firestore
+  .document('feedback/{feedbackId}')
+  .onCreate(async (snap) => {
+    const d = snap.data() || {};
+    const userName = typeof d.userName === 'string' ? d.userName : 'Unknown';
+    const message = typeof d.message === 'string' ? d.message : '';
+    const textBody = `User: ${userName}\nMessage: ${message}`;
+    try {
+      await transporter.sendMail({
+        from: '"HalfOrder" <noreply@halforder.app>',
+        to: FEEDBACK_NOTIFY_TO,
+        subject: 'New Feedback',
+        text: textBody,
+      });
+      console.log('[onFeedbackCreated] sent', snap.id);
+    } catch (err) {
+      console.error('[onFeedbackCreated] failed', snap.id, err);
+    }
+    return null;
+  });
+
+/** Daily report 14:00 America/Toronto. */
+exports.halfOrderDailyReport = functions.pubsub
+  .schedule('0 14 * * *')
+  .timeZone('America/Toronto')
+  .onRun(async () => {
+    const db = admin.firestore();
+    try {
+      const [usersSnap, ordersSnap, feedbackSnap] = await Promise.all([
+        db.collection('users').get(),
+        db.collection('orders').get(),
+        db.collection('feedback').get(),
+      ]);
+      const users = usersSnap.size;
+      const orders = ordersSnap.size;
+      const feedback = feedbackSnap.size;
+      const body = `Users: ${users}\nOrders: ${orders}\nFeedback: ${feedback}`;
+      await transporter.sendMail({
+        from: '"HalfOrder Reports" <noreply@halforder.app>',
+        to: DAILY_REPORT_TO,
+        subject: 'HalfOrder Daily Report',
+        text: body,
+      });
+      console.log('[halfOrderDailyReport] ok', { users, orders, feedback });
+    } catch (err) {
+      console.error('[halfOrderDailyReport] failed', err);
+    }
+    return null;
+  });

@@ -2,6 +2,7 @@ import type { TimeContext } from '@/services/chatAssistantOrders';
 import {
   handleUserChatTurn,
   initialChatState,
+  type AssistantUserContext,
   type ChatState,
 } from '@/services/ai';
 import { useCallback, useRef } from 'react';
@@ -30,6 +31,7 @@ export function useAIChat() {
       nearbyJoinableCount: number;
       timeContext: TimeContext;
       awaitingPartnerAlone?: boolean;
+      assistantContext?: AssistantUserContext | null;
     }) => {
       const result = await handleUserChatTurn({
         text: params.text,
@@ -38,6 +40,7 @@ export function useAIChat() {
         nearbyJoinableCount: params.nearbyJoinableCount,
         timeContext: params.timeContext,
         awaitingPartnerAlone: params.awaitingPartnerAlone,
+        assistantContext: params.assistantContext,
       });
       stateRef.current = result.state;
       return result;

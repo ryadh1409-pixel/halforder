@@ -1,5 +1,6 @@
 import { useAIChat } from '@/hooks/useAIChat';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { buildProductAssistantIntro } from '@/services/ai';
 import { useAuth } from '@/services/AuthContext';
 import {
   buildSmartMatchIntroText,
@@ -8,6 +9,7 @@ import {
   type AssistantOrderSummary,
   type TimeContext,
 } from '@/services/chatAssistantOrders';
+import { saveAssistantChatFeedback } from '@/services/chatService';
 import {
   getSmartMatches,
   type SmartMatchOrder,
@@ -17,6 +19,7 @@ import {
   SUGGESTED_ORDER_BOT_COPY,
   generateSuggestedOrder,
 } from '@/services/suggestedOrder';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -64,6 +67,8 @@ function toMessageOrders(rows: AssistantOrderSummary[]): MessageOrderRef[] {
 }
 
 const ASSISTANT_INTRO_MESSAGE_ID = 'assistant-intro-suggestion';
+const PRODUCT_INTRO_MESSAGE_ID = 'halforder-product-assistant-intro';
+const PRODUCT_INTRO_SEEN_KEY = 'halforder_product_assistant_intro_seen_v1';
 
 const QUICK_ACTIONS = [
   { label: '🍕 Pizza', message: 'Pizza 🍕' },
@@ -162,6 +167,28 @@ export default function ChatScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let productIntro: Message | null = null;
+      if (authUser?.uid) {
+        try {
+          const seen = await AsyncStorage.getItem(PRODUCT_INTRO_SEEN_KEY);
+          if (!seen && !cancelled) {
+            const dn =
+              profile?.name ||
+              authUser.displayName ||
+              'there';
+            productIntro = {
+              id: PRODUCT_INTRO_MESSAGE_ID,
+              text: buildProductAssistantIntro(dn),
+              sender: 'bot',
+              createdAt: Date.now(),
+              action: 'none',
+            };
+            await AsyncStorage.setItem(PRODUCT_INTRO_SEEN_KEY, '1');
+          }
+        } catch (e) {
+          console.warn('[chat] product intro storage', e);
+        }
+      }
       try {
         const ctx = detectTimeContext();
         const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
@@ -175,7 +202,9 @@ export default function ChatScreen() {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
           }
-          return [...prev, intro];
+          const base = prev.filter((m) => m.id !== PRODUCT_INTRO_MESSAGE_ID);
+          const prefix = productIntro ? [productIntro] : [];
+          return [...base, ...prefix, intro];
         });
       } catch {
         if (cancelled) return;
@@ -188,7 +217,9 @@ export default function ChatScreen() {
           if (prev.some((m) => m.id === ASSISTANT_INTRO_MESSAGE_ID)) {
             return prev;
           }
-          return [...prev, fallbackIntro];
+          const base = prev.filter((m) => m.id !== PRODUCT_INTRO_MESSAGE_ID);
+          const prefix = productIntro ? [productIntro] : [];
+          return [...base, ...prefix, fallbackIntro];
         });
       } finally {
         if (!cancelled) {
@@ -199,7 +230,12 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [markIntroSuggestedTemplate]);
+  }, [
+    markIntroSuggestedTemplate,
+    authUser?.uid,
+    authUser?.displayName,
+    profile?.name,
+  ]);
 
   useEffect(() => {
     flatListRef.current?.scrollToEnd({ animated: true });
@@ -279,18 +315,34 @@ export default function ChatScreen() {
         return;
       }
 
+      void saveAssistantChatFeedback({
+        userId: uid,
+        userName:
+          profile?.name ||
+          authUser.displayName ||
+          'User',
+        message: outgoingText,
+        email: profile?.email ?? authUser.email ?? null,
+      });
+
       assistantInFlightRef.current = true;
       setLoading(true);
       try {
         const ctx = detectTimeContext();
         const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
         const awaitingPartnerAlone = await userHasSoloWaitingHalfOrder(uid);
+        const dn =
+          profile?.name || authUser.displayName || 'Friend';
         const result = await runUserTurn({
           text: outgoingText,
           uid,
           nearbyJoinableCount: fetched.length,
           timeContext: ctx,
           awaitingPartnerAlone,
+          assistantContext: {
+            displayName: dn,
+            email: profile?.email ?? authUser.email ?? null,
+          },
         });
 
         const baseId = Date.now();
@@ -327,7 +379,15 @@ export default function ChatScreen() {
         setLoading(false);
       }
     },
-    [authUser?.uid, router, runUserTurn],
+    [
+      authUser?.uid,
+      authUser?.displayName,
+      authUser?.email,
+      profile?.name,
+      profile?.email,
+      router,
+      runUserTurn,
+    ],
   );
 
   const sendMessageFromInput = () => {

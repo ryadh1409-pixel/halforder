@@ -1,5 +1,5 @@
 /**
- * Assistant chat: intent detection, varied copy, swipe-order creation, de-duplication.
+ * HalfOrder product assistant: orders + short, friendly guidance + feedback prompts.
  */
 import { autoInvite } from '@/services/autoInvite';
 import { detectFoodIntent } from '@/services/chatAssistantOrders';
@@ -15,6 +15,12 @@ import {
 export type ChatIntent = 'food' | 'confirm' | 'reject' | 'hungry' | 'unknown';
 
 export type FoodSuggestionKind = 'pizza' | 'burger' | 'general';
+
+export type AssistantUserContext = {
+  /** Shown as “You are helping {displayName}” in product copy — use first name in replies. */
+  displayName: string;
+  email?: string | null;
+};
 
 export type ChatState = {
   lastSuggestion: FoodSuggestionKind | null;
@@ -46,6 +52,58 @@ export type AiBotMessage = {
 
 function norm(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function assistantFirstName(ctx: AssistantUserContext | undefined): string {
+  const raw = (ctx?.displayName ?? '').trim();
+  if (!raw) return 'there';
+  return raw.split(/\s+/)[0] ?? 'there';
+}
+
+/** First-open product intro (Chat tab). */
+export function buildProductAssistantIntro(displayName: string): string {
+  const name = assistantFirstName({ displayName });
+  return `Hey ${name} 👋
+I help you use HalfOrder.
+
+You can:
+• Join orders
+• Split food
+• Chat with others
+
+Quick question:
+What do you think so far?`;
+}
+
+type ProductAssistantIntent = 'help_app' | 'feedback' | 'none';
+
+function detectProductAssistantIntent(message: string): ProductAssistantIntent {
+  const t = message.trim().toLowerCase();
+  if (!t) return 'none';
+  if (
+    /\bhow (does|do) (this|half|it|halforder)\b/.test(t) ||
+    /\bwhat is halforder\b/.test(t) ||
+    /\bhow to join\b/.test(t) ||
+    /\bsplit (a |the )?(meal|food|order)\b/.test(t) ||
+    /\bexplain\b/.test(t) ||
+    /\bhow .* works\b/.test(t) ||
+    t.includes('how does the app') ||
+    t.includes('what can you do')
+  ) {
+    return 'help_app';
+  }
+  if (
+    /\b(confus|confusing|improve|feedback|suggest|wish\b|hate\b|love\b|annoying|missing|frustrat|terrible|great app|bad ux)\b/.test(
+      t,
+    ) ||
+    t.includes('what should') ||
+    t.includes('not sure') ||
+    t.includes('don’t understand') ||
+    t.includes("don't understand")
+  ) {
+    return 'feedback';
+  }
+  return 'none';
 }
 
 /** Keyword intent layered with broader food detection from chatAssistantOrders. */
@@ -209,8 +267,35 @@ function withState(
   return { ...base, ...patch };
 }
 
+function lateNightLocal(): boolean {
+  const h = new Date().getHours();
+  return h >= 22 || h < 5;
+}
+
+function productHelpLine(name: string): string {
+  return `${name}, here’s the gist: browse or swipe an order, join or start one, then use order chat to split cost and meet up. Want pizza 🍕 or burger 🍔?`;
+}
+
+function productFeedbackLine(name: string): string {
+  return `Thanks ${name} — that helps. What feels most confusing, and what should we improve next?`;
+}
+
+function productDefaultLine(
+  name: string,
+  nearbyJoinableCount: number,
+): string {
+  if (lateNightLocal()) {
+    return `${name}, 🌙 Late night snack? Say pizza or burger and I’ll line up an order you can share.`;
+  }
+  if (nearbyJoinableCount > 0) {
+    return `${name}, check Smart matches above for live orders — or say what you’re craving. What do you like most so far?`;
+  }
+  return `${name}, say pizza, burger, or “hungry” and I’ll help you start or join. Anything confusing?`;
+}
+
 /**
  * Runs one user turn → next state + outgoing bot message(s) + optional navigation.
+ * Uses `assistantContext` so copy stays personal (“You are helping ${displayName}”).
  */
 export async function handleUserChatTurn(input: {
   text: string;
@@ -218,13 +303,15 @@ export async function handleUserChatTurn(input: {
   uid: string;
   nearbyJoinableCount: number;
   timeContext: TimeContext;
-  /** You’re alone on a waiting half-order — assistant may nudge to invite. */
   awaitingPartnerAlone?: boolean;
+  assistantContext?: AssistantUserContext | null;
 }): Promise<{
   state: ChatState;
   messages: AiBotMessage[];
   navigateToOrderId?: string;
 }> {
+  const name = assistantFirstName(input.assistantContext ?? undefined);
+  const productIntent = detectProductAssistantIntent(input.text);
   const intent = detectIntent(input.text);
   let state = { ...input.state };
   const messages: AiBotMessage[] = [];
@@ -268,7 +355,7 @@ export async function handleUserChatTurn(input: {
 
   if (intent === 'confirm' && !state.awaitingConfirmation) {
     push({
-      text: "Tell me what you're craving first (e.g. pizza or burger) — then say yes and I'll start the order.",
+      text: `${name}, tell me what you're craving first (pizza or burger) — then say yes and I'll start the order.`,
       action: 'none',
     });
     return { state, messages };
@@ -284,6 +371,16 @@ export async function handleUserChatTurn(input: {
       text: pickRandom(REJECT_ALTERNATIVE[kind]),
       action: 'none',
     });
+    return { state, messages };
+  }
+
+  if (productIntent === 'help_app') {
+    push({ text: productHelpLine(name), action: 'none' });
+    return { state, messages };
+  }
+
+  if (productIntent === 'feedback') {
+    push({ text: productFeedbackLine(name), action: 'none' });
     return { state, messages };
   }
 
@@ -320,13 +417,13 @@ export async function handleUserChatTurn(input: {
         suggestTemplateOnce();
       } else {
         push({
-          text: `${pickRandom(GENERIC_FOOD_PROMPTS)} Tap “Create order” below to start one — others can join after you publish.`,
+          text: `${name}, ${pickRandom(GENERIC_FOOD_PROMPTS)} Tap “Create order” below to start — others can join after you publish.`,
           action: 'create_order',
         });
       }
     } else {
       push({
-        text: `${pickRandom(GENERIC_FOOD_PROMPTS)} There are open orders — check Smart matches above, or say pizza or burger.`,
+        text: `${name}, ${pickRandom(GENERIC_FOOD_PROMPTS)} There are open orders — check Smart matches, or say pizza or burger.`,
         action: 'none',
       });
     }
@@ -336,7 +433,7 @@ export async function handleUserChatTurn(input: {
   if (intent === 'unknown') {
     if (input.awaitingPartnerAlone) {
       push({
-        text: 'Want to invite a friend and get a reward? 🎁 Use Invite on your order screen, or tell me what you’re craving.',
+        text: `${name}, want to invite a friend and get a reward? 🎁 Use Invite on your order, or tell me what’s confusing.`,
         action: 'none',
       });
       return { state, messages };
@@ -346,7 +443,7 @@ export async function handleUserChatTurn(input: {
       return { state, messages };
     }
     push({
-      text: 'Mention food or that you’re hungry — I’ll find joins nearby or help you start an order. Say yes after I suggest something to create it instantly.',
+      text: productDefaultLine(name, input.nearbyJoinableCount),
       action: 'none',
     });
     return { state, messages };

@@ -8,6 +8,8 @@ import { db } from '@/services/firebase';
 export type PublicUserFields = {
   userId: string;
   name: string;
+  /** Mirrors `displayName` / name on `users/{uid}` for assistant context. */
+  email: string | null;
   avatar: string | null;
   phone: string | null;
   expoPushToken: string | null;
@@ -73,9 +75,11 @@ export function mapRawUserDocument(
   d: Record<string, unknown>,
 ): PublicUserFields {
   const phoneRaw = typeof d.phone === 'string' ? d.phone.trim() : '';
+  const emailRaw = typeof d.email === 'string' ? d.email.trim() : '';
   return {
     userId: userId.trim(),
     name: resolveName(d),
+    email: emailRaw || null,
     avatar: resolveAvatar(d),
     phone: phoneRaw || null,
     expoPushToken: resolveExpoToken(d),
