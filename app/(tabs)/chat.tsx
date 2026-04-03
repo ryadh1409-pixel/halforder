@@ -162,7 +162,7 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [authUser?.uid, profile?.location?.lat, profile?.location?.lng]);
+  }, [authUser?.uid, profile?.location]);
 
   useEffect(() => {
     let cancelled = false;

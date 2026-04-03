@@ -263,7 +263,8 @@ exports.sendOrderInvite = functions.firestore
     const body = `Hi,\n\n${inviterName} invited you to join a shared order on HalfOrder.\n\nClick here to join:\n${inviteLink}`;
 
     try {
-      await transporter.sendMail({
+      const transport = getMailTransporter();
+      await transport.sendMail({
         from: '"HalfOrder" <noreply@halforder.app>',
         to: email,
         subject,
