@@ -61,12 +61,17 @@ export const linking = {
       terms: 'terms',
       privacy: 'privacy',
       subscribe: 'subscribe',
-      'order/[id]': 'order/:id',
+      order: {
+        path: 'order',
+        screens: {
+          '[id]': ':id',
+          'room/[id]': 'room/:id',
+        },
+      },
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',
       'join/[orderId]': 'join/:orderId',
       'chat/[id]': 'chat/:id',
-      'order-details/[id]': 'order-details/:id',
     },
   },
 };
@@ -858,7 +863,7 @@ function RootLayoutNav() {
         if (data?.type === HALF_ORDER_PAIR_JOIN_PUSH_TYPE) {
           const orderId = typeof data.orderId === 'string' ? data.orderId.trim() : '';
           if (orderId) {
-            router.push(`/order-details/${orderId}` as never);
+            router.push(`/order/${orderId}` as never);
           }
         }
       },
@@ -881,7 +886,7 @@ function RootLayoutNav() {
         const orderId = typeof data.orderId === 'string' ? data.orderId.trim() : '';
         if (orderId) {
           setTimeout(
-            () => router.push(`/order-details/${orderId}` as never),
+            () => router.push(`/order/${orderId}` as never),
             300,
           );
         }
@@ -946,12 +951,7 @@ function RootLayoutNav() {
         />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="order/[id]" options={{ title: 'Order' }} />
         <Stack.Screen name="user/[id]" options={{ title: 'User Profile' }} />
-        <Stack.Screen
-          name="order-details/[id]"
-          options={{ title: 'Order Details' }}
-        />
         <Stack.Screen name="match/[orderId]" options={{ headerShown: false }} />
         <Stack.Screen
           name="food-match/[matchId]"

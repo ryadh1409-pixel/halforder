@@ -83,14 +83,14 @@ function BrowseFoodCardRow({
     <View style={styles.card}>
       <TouchableOpacity
         activeOpacity={0.92}
-        onPress={() => router.push(`/order-details/${detailPath}` as never)}
+        onPress={() => router.push(`/order/${detailPath}` as never)}
       >
         <Image source={{ uri: card.image }} style={styles.hero} />
       </TouchableOpacity>
       <View style={styles.cardBody}>
         <TouchableOpacity
           activeOpacity={0.88}
-          onPress={() => router.push(`/order-details/${detailPath}` as never)}
+          onPress={() => router.push(`/order/${detailPath}` as never)}
         >
           <Text style={styles.cardTitle}>{card.title}</Text>
         </TouchableOpacity>
@@ -102,7 +102,7 @@ function BrowseFoodCardRow({
         <TouchableOpacity
           style={styles.detailsRow}
           activeOpacity={0.88}
-          onPress={() => router.push(`/order-details/${detailPath}` as never)}
+          onPress={() => router.push(`/order/${detailPath}` as never)}
         >
           <Text style={styles.detailsRowText}>View details →</Text>
         </TouchableOpacity>
@@ -167,7 +167,7 @@ export default function BrowseScreen() {
       if (result.justBecamePair) {
         Alert.alert('Match', 'Someone joined your order! Open chat to say hi.');
       }
-      router.push(`/order-details/${result.orderId}` as never);
+      router.push(`/order/${result.orderId}` as never);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join this card.';
       Alert.alert('Could not join', msg);

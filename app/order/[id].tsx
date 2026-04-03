@@ -1,326 +1,925 @@
-import { theme } from '@/constants/theme';
-import { auth, db } from '@/services/firebase';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import {
-  addDoc,
-  collection,
-  orderBy,
-  query,
-  serverTimestamp,
+  doc,
+  onSnapshot,
+  type DocumentSnapshot,
 } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
+  Alert,
+  Image,
+  Linking,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { onSnapshot } from 'firebase/firestore';
 
-type OrderMessage = {
+import { useOrderHalfMembers } from '@/hooks/useOrderHalfMembers';
+import { theme } from '@/constants/theme';
+import { buildOrderWhatsAppInviteLink } from '@/lib/invite-link';
+import { ScreenFadeIn } from '@/components/ScreenFadeIn';
+import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
+import { blockUser as blockUserProfile } from '@/services/block';
+import { hasBlockBetween } from '@/services/blocks';
+import { cancelHalfOrder } from '@/services/halfOrderCancel';
+import { auth, db } from '@/services/firebase';
+import { formatDistanceKm, haversineDistanceKm } from '@/services/haversineKm';
+import { submitUserReport } from '@/services/userSafety';
+import {
+  joinHalfOrderByOrderId,
+  joinOrder as joinFirestoreOrder,
+} from '@/services/joinOrder';
+import { joinOrder as joinFoodCardOrder } from '@/services/foodCards';
+import { normalizeParticipantsStrings } from '@/services/orderLifecycle';
+
+const PLACEHOLDER_FOOD_IMAGE =
+  'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80';
+
+const WHATSAPP_PREFILL = encodeURIComponent('Hey we matched on HalfOrder 🍕');
+
+function buildWhatsAppUrl(phone: string | null | undefined): string | null {
+  if (!phone || !phone.trim()) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  return `https://wa.me/${digits}?text=${WHATSAPP_PREFILL}`;
+}
+
+type OrderDetails = {
   id: string;
-  text?: string;
-  senderId?: string;
-  senderName?: string;
-  createdAt?: unknown;
+  foodName: string;
+  image: string;
+  pricePerPerson: number;
+  totalPrice: number;
+  peopleJoined: number;
+  maxPeople: number;
+  location: string;
+  distance: number;
+  timeRemaining: number;
+  createdBy: string;
+  /** HalfOrder swipe flow (`orders.users`). */
+  usesHalfUsers?: boolean;
+  /** All member uids (HalfOrder `users` or legacy `participants`). */
+  memberIds?: string[];
+  /** Present when row came from `food_cards` (swipe / admin cards). */
+  foodCardStatus?: string;
+  /** HalfOrder lifecycle (`active` | `cancelled`). */
+  orderStatus?: string;
+  hostId?: string;
 };
 
-export default function OrderChatScreen() {
+function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
+  const d = snap.data();
+  if (!d) {
+    throw new Error('Missing order data');
+  }
+  const usersList = Array.isArray(d?.users)
+    ? (d.users as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : [];
+  const partCount = normalizeParticipantsStrings(d?.participants).length;
+  const peopleJoined =
+    usersList.length > 0
+      ? usersList.length
+      : partCount > 0
+        ? partCount
+        : Number(d?.peopleJoined ?? 1);
+  const createdBy =
+    typeof d?.createdBy === 'string' && d.createdBy
+      ? d.createdBy
+      : usersList[0] ?? '';
+  const hostId =
+    typeof d?.hostId === 'string' && d.hostId.trim()
+      ? d.hostId.trim()
+      : createdBy;
+  const participantsList = normalizeParticipantsStrings(d?.participants);
+  const memberIds =
+    usersList.length > 0 ? usersList : participantsList;
+  const orderStatus =
+    typeof d?.status === 'string' && d.status.trim() ? d.status.trim() : undefined;
+  return {
+    id: snap.id,
+    foodName: String(d?.foodName ?? 'Shared order'),
+    image:
+      typeof d?.image === 'string' && d.image.trim()
+        ? d.image
+        : PLACEHOLDER_FOOD_IMAGE,
+    pricePerPerson: Number(d?.pricePerPerson ?? 0),
+    totalPrice: Number(d?.totalPrice ?? 0),
+    peopleJoined,
+    maxPeople: Number(d?.maxPeople ?? d?.maxUsers ?? 2),
+    location: String(d?.location ?? 'Nearby'),
+    distance: Number(d?.distance ?? 0),
+    timeRemaining: Number(d?.timeRemaining ?? 20),
+    createdBy: String(createdBy),
+    hostId: String(hostId),
+    usesHalfUsers: usersList.length > 0,
+    memberIds,
+    orderStatus,
+  };
+}
+
+function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
+  const d = snap.data();
+  if (!d) {
+    throw new Error('Missing food card data');
+  }
+  const max =
+    typeof d.maxUsers === 'number' && d.maxUsers > 0 ? d.maxUsers : 2;
+  const exp = typeof d.expiresAt === 'number' ? d.expiresAt : 0;
+  const msLeft = Math.max(0, exp - Date.now());
+  const timeRemainingMinutes =
+    msLeft > 0 ? Math.max(1, Math.ceil(msLeft / 60000)) : 0;
+  const img =
+    typeof d.image === 'string' && d.image.trim()
+      ? d.image.trim()
+      : PLACEHOLDER_FOOD_IMAGE;
+  const loc =
+    typeof d.restaurantName === 'string' && d.restaurantName.trim()
+      ? d.restaurantName.trim()
+      : d.location
+        ? 'Location on file'
+        : 'Nearby';
+  return {
+    id: snap.id,
+    foodName: String(d.title ?? 'Food card'),
+    image: img,
+    pricePerPerson: Number(d.splitPrice ?? 0),
+    totalPrice: Number(d.price ?? 0),
+    peopleJoined: 0,
+    maxPeople: max,
+    location: loc,
+    distance: 0,
+    timeRemaining: timeRemainingMinutes || 1,
+    createdBy: String(d.ownerId ?? ''),
+    foodCardStatus: typeof d.status === 'string' ? d.status : undefined,
+  };
+}
+
+export default function OrderDetailsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const orderId = useMemo(() => {
-    const raw = params.id;
-    const str = Array.isArray(raw) ? raw[0] : raw;
-    return typeof str === 'string' ? str : '';
-  }, [params.id]);
+  const params = useLocalSearchParams<{ id?: string }>();
+  const orderId = String(params.id ?? '');
 
-  const [messages, setMessages] = useState<OrderMessage[]>([]);
+  const [order, setOrder] = useState<OrderDetails | null>(null);
+  const [detailSource, setDetailSource] = useState<'order' | 'food_card' | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [input, setInput] = useState('');
-  const listRef = useRef<FlatList<OrderMessage> | null>(null);
-
-  const currentUser = auth.currentUser;
-  const uid = currentUser?.uid ?? '';
-
-  const messagesRef = useMemo(() => {
-    if (!orderId.trim()) return null;
-    return collection(db, 'orders', orderId, 'messages');
-  }, [orderId]);
-
-  const q = useMemo(() => {
-    if (!messagesRef) return null;
-    return query(messagesRef, orderBy('createdAt', 'asc'));
-  }, [messagesRef]);
+  const [joining, setJoining] = useState(false);
+  const [blocking, setBlocking] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [countdownSec, setCountdownSec] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const prevJoinedCountRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!q) {
-      setMessages([]);
+    if (!orderId.trim()) {
+      setOrder(null);
+      setDetailSource(null);
       setLoading(false);
-      setError(orderId.trim() ? null : 'Missing order id.');
       return;
     }
-
     setLoading(true);
-    setError(null);
+    setOrder(null);
+    setDetailSource(null);
 
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        const next: OrderMessage[] = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<OrderMessage, 'id'>),
-        }));
-        setMessages(next);
-        setLoading(false);
+    let primaryOrderRow: OrderDetails | null = null;
+    let linkedOrderRow: OrderDetails | null = null;
+    let cardRow: OrderDetails | null = null;
+    let primaryHeard = false;
+    let cardHeard = false;
+    let linkedHeard = true;
+    let unsubLinked: (() => void) | null = null;
+
+    const settle = () => {
+      if (!primaryHeard || !cardHeard || !linkedHeard) return;
+      const orderRow = primaryOrderRow ?? linkedOrderRow ?? null;
+      if (orderRow) {
+        setDetailSource('order');
+        setOrder(orderRow);
+        setCountdownSec(Math.max(orderRow.timeRemaining, 0) * 60);
+      } else if (cardRow) {
+        setDetailSource('food_card');
+        setOrder(cardRow);
+        setCountdownSec(Math.max(cardRow.timeRemaining, 0) * 60);
+      } else {
+        setDetailSource(null);
+        setOrder(null);
+      }
+      setLoading(false);
+    };
+
+    const subLinkedOrder = (rawOid: unknown) => {
+      if (unsubLinked) {
+        unsubLinked();
+        unsubLinked = null;
+      }
+      linkedOrderRow = null;
+      const oid =
+        typeof rawOid === 'string' && rawOid.trim() ? rawOid.trim() : '';
+      if (!oid || oid === orderId) {
+        linkedHeard = true;
+        settle();
+        return;
+      }
+      linkedHeard = false;
+      unsubLinked = onSnapshot(
+        doc(db, 'orders', oid),
+        (snap) => {
+          linkedHeard = true;
+          try {
+            linkedOrderRow = snap.exists() ? mapOrderDocument(snap) : null;
+          } catch {
+            linkedOrderRow = null;
+          }
+          settle();
+        },
+        () => {
+          linkedHeard = true;
+          linkedOrderRow = null;
+          settle();
+        },
+      );
+    };
+
+    const unsubOrderPrimary = onSnapshot(
+      doc(db, 'orders', orderId),
+      (snap) => {
+        primaryHeard = true;
+        try {
+          primaryOrderRow = snap.exists() ? mapOrderDocument(snap) : null;
+        } catch {
+          primaryOrderRow = null;
+        }
+        settle();
       },
-      (e) => {
-        setError(e instanceof Error ? e.message : 'Failed to load messages');
-        setLoading(false);
+      () => {
+        primaryHeard = true;
+        primaryOrderRow = null;
+        settle();
       },
     );
 
-    return () => unsub();
-  }, [q, orderId]);
+    const unsubCard = onSnapshot(
+      doc(db, 'food_cards', orderId),
+      (snap) => {
+        cardHeard = true;
+        try {
+          cardRow = snap.exists() ? mapFoodCardDocument(snap) : null;
+          const oid = snap.exists() ? snap.data()?.orderId : undefined;
+          subLinkedOrder(oid);
+        } catch {
+          cardRow = null;
+          subLinkedOrder(undefined);
+        }
+        settle();
+      },
+      () => {
+        cardHeard = true;
+        cardRow = null;
+        subLinkedOrder(undefined);
+        settle();
+      },
+    );
+
+    return () => {
+      unsubOrderPrimary();
+      unsubCard();
+      if (unsubLinked) unsubLinked();
+    };
+  }, [orderId]);
+
+  const halfOrderIdForMembers =
+    detailSource === 'order' && order?.usesHalfUsers ? order.id : '';
+  const { members: halfMembers } = useOrderHalfMembers(halfOrderIdForMembers);
+
+  const viewerUid = auth.currentUser?.uid ?? null;
+
+  const partnerUserId = useMemo(() => {
+    if (!viewerUid || !order?.memberIds || order.memberIds.length < 2) return null;
+    return order.memberIds.find((x) => x !== viewerUid) ?? null;
+  }, [viewerUid, order?.memberIds]);
+
+  const partnerProfile = useMemo(() => {
+    if (!partnerUserId) return null;
+    return halfMembers.find((m) => m.userId === partnerUserId) ?? null;
+  }, [halfMembers, partnerUserId]);
+
+  const partnerDistanceKm = useMemo(() => {
+    if (!partnerProfile?.location || !viewerUid) return null;
+    const me = halfMembers.find((m) => m.userId === viewerUid);
+    if (!me?.location) return null;
+    const km = haversineDistanceKm(me.location, partnerProfile.location);
+    return Number.isFinite(km) ? km : null;
+  }, [halfMembers, partnerProfile, viewerUid]);
+
+  const isHalfCancelled =
+    order?.usesHalfUsers === true && order.orderStatus === 'cancelled';
 
   useEffect(() => {
-    if (!listRef.current) return;
-    // Fire-and-forget scroll on every message update.
-    // The list updates are driven by Firestore snapshots.
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated: true });
-    });
-  }, [messages.length]);
+    if (!order || detailSource !== 'order') {
+      prevJoinedCountRef.current = null;
+      return;
+    }
+    if (!order.usesHalfUsers) {
+      prevJoinedCountRef.current = order.peopleJoined;
+      return;
+    }
+    const prev = prevJoinedCountRef.current;
+    prevJoinedCountRef.current = order.peopleJoined;
+    if (prev === 1 && order.peopleJoined >= 2 && auth.currentUser?.uid) {
+      Alert.alert(
+        'Someone joined your order!',
+        'Open chat to coordinate.',
+      );
+    }
+  }, [order?.peopleJoined, order?.id, detailSource, order?.usesHalfUsers]);
 
-  const canSend = !!uid && input.trim().length > 0 && !sending;
-
-  const onSend = async () => {
-    if (!messagesRef) return;
-    if (!uid) return;
-    if (!canSend) return;
-
-    const text = input.trim();
-    setSending(true);
-    try {
-      await addDoc(messagesRef, {
-        text,
-        senderId: uid,
-        senderName:
-          typeof currentUser?.displayName === 'string' && currentUser.displayName.trim()
-            ? currentUser.displayName
-            : currentUser?.email?.split('@')[0] ?? 'User',
-        createdAt: serverTimestamp(),
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    const other = partnerUserId;
+    if (!uid || !other) {
+      setIsBlocked(false);
+      return;
+    }
+    let cancelled = false;
+    hasBlockBetween(uid, other)
+      .then((v) => {
+        if (!cancelled) setIsBlocked(v);
+      })
+      .catch(() => {
+        if (!cancelled) setIsBlocked(false);
       });
-      setInput('');
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerUserId]);
+
+  useEffect(() => {
+    if (countdownSec <= 0) return;
+    const id = setInterval(() => {
+      setCountdownSec((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [countdownSec]);
+
+  const remainingSpots = useMemo(() => {
+    if (!order) return 0;
+    return Math.max(order.maxPeople - order.peopleJoined, 0);
+  }, [order]);
+
+  const alreadyMember = !!(
+    viewerUid &&
+    order?.memberIds &&
+    order.memberIds.includes(viewerUid)
+  );
+
+  const countdownLabel = useMemo(() => {
+    const mins = Math.floor(countdownSec / 60);
+    const secs = countdownSec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }, [countdownSec]);
+
+  const handleJoinOrder = async () => {
+    if (!order || !detailSource) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      router.push(
+        `/(auth)/login?redirectTo=/order/${order.id}` as never,
+      );
+      return;
+    }
+    setJoining(true);
+    try {
+      if (detailSource === 'food_card') {
+        const result = await joinFoodCardOrder(order.id, uid);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => {},
+        );
+        if (result.justBecamePair) {
+          Alert.alert(
+            'Someone joined your order!',
+            'Say hi in chat.',
+          );
+        }
+        router.replace(`/order/${result.orderId}` as never);
+        return;
+      }
+      if (order.usesHalfUsers) {
+        const half = await joinHalfOrderByOrderId(order.id);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => {},
+        );
+        if (half.justBecamePair) {
+          Alert.alert('Someone joined your order!', 'Say hi in chat.');
+        }
+        router.push(`/order/${order.id}` as never);
+        return;
+      }
+      await joinFirestoreOrder(order.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+        () => {},
+      );
+      router.push(`/order/${order.id}` as never);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send message');
+      const msg = e instanceof Error ? e.message : 'Failed to join order.';
+      console.error('[order join]', msg, e);
+      Alert.alert('Join failed', msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+        () => {},
+      );
     } finally {
-      setSending(false);
+      setJoining(false);
     }
   };
 
-  const renderMessage = ({ item }: { item: OrderMessage }) => {
-    const mine = item.senderId === uid;
-    const bubbleStyle = mine ? styles.bubbleMine : styles.bubbleTheirs;
-    const textStyle = mine ? styles.textMine : styles.textTheirs;
-    return (
-      <View style={[styles.row, mine ? styles.rowRight : styles.rowLeft]}>
-        <View style={[styles.bubble, bubbleStyle]}>
-          {!mine && item.senderName ? (
-            <Text style={[styles.senderName, styles.textMuted]}>{item.senderName}</Text>
-          ) : null}
-          <Text style={[styles.text, textStyle]}>{item.text ?? ''}</Text>
-        </View>
-      </View>
+  const handleBlockUser = () => {
+    const uid = auth.currentUser?.uid;
+    const target = partnerUserId;
+    if (!uid || !target) return;
+    Alert.alert('Block user', 'They will not be able to match or join orders with you.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Block',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setBlocking(true);
+            try {
+              await blockUserProfile(target, uid);
+              setIsBlocked(true);
+              Alert.alert('Blocked', 'User has been blocked.');
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Failed to block user.';
+              Alert.alert('Block failed', msg);
+            } finally {
+              setBlocking(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const handleOpenWhatsApp = () => {
+    const url = buildWhatsAppUrl(partnerProfile?.phone);
+    if (!url) {
+      Alert.alert('No phone', 'This user has no phone number on file.');
+      return;
+    }
+    void Linking.openURL(url).catch(() => {
+      Alert.alert('Could not open WhatsApp');
+    });
+  };
+
+  const handleWhatsAppOrderInvite = () => {
+    if (!order?.id) return;
+    const url = buildOrderWhatsAppInviteLink(order.id);
+    void Linking.openURL(url).catch(() => {
+      Alert.alert('Could not open WhatsApp');
+    });
+  };
+
+  const handleReportUser = () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !order || !partnerUserId) return;
+    const reasons = [
+      'Harassment',
+      'Spam or scam',
+      'Inappropriate content',
+      'Other',
+    ];
+    Alert.alert('Report user', 'Why are you reporting?', [
+      ...reasons.map((reason) => ({
+        text: reason,
+        onPress: () => {
+          void (async () => {
+            try {
+              await submitUserReport({
+                reporterId: uid,
+                reportedUserId: partnerUserId,
+                orderId: order.id,
+                reason,
+              });
+              Alert.alert('Thanks', 'We received your report.');
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Could not submit report.';
+              Alert.alert('Report failed', msg);
+            }
+          })();
+        },
+      })),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleCancelOrder = () => {
+    if (!order?.usesHalfUsers || !order.id) return;
+    Alert.alert(
+      'Cancel order',
+      'The other person will be notified. Continue?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Cancel order',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setCancelling(true);
+              try {
+                await cancelHalfOrder(order.id);
+                Alert.alert('Cancelled', 'This half order was cancelled.');
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : 'Could not cancel.';
+                Alert.alert('Cancel failed', msg);
+              } finally {
+                setCancelling(false);
+              }
+            })();
+          },
+        },
+      ],
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loadingWrap}>
+        <ShimmerSkeleton width="92%" height={220} borderRadius={18} style={styles.skeletonGap} />
+        <ShimmerSkeleton width="72%" height={22} style={styles.skeletonGapLine} />
+        <ShimmerSkeleton width="44%" height={14} />
+        <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 16 }} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!order) {
+    return (
+      <SafeAreaView style={styles.loadingWrap}>
+        <Text style={styles.emptyText}>Order not found.</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <MaterialIcons name="arrow-back" size={22} color="#F8FAFC" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Order Chat</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <View style={styles.chatBody}>
-        {loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-          </View>
-        ) : error ? (
-          <View style={styles.centered}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(m) => m.id}
-            renderItem={renderMessage}
-            contentContainerStyle={styles.listContent}
-            onContentSizeChange={() =>
-              listRef.current?.scrollToEnd({ animated: true })
-            }
-          />
-        )}
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.inputRow}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Write a message..."
-            placeholderTextColor="#9CA3AF"
-            style={styles.input}
-            editable={!sending && !!uid}
-            onSubmitEditing={onSend}
-          />
+    <SafeAreaView style={styles.container}>
+      <ScreenFadeIn style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Image source={{ uri: order.image }} style={styles.image} />
+        <Text style={styles.foodName}>{order.foodName}</Text>
+        <Text style={styles.price}>${order.pricePerPerson.toFixed(2)} per person</Text>
+        <View style={styles.card}>
+          <Text style={styles.meta}>Total: ${order.totalPrice.toFixed(2)}</Text>
+          <Text style={styles.meta}>
+            Joined: {order.peopleJoined}/{order.maxPeople}
+          </Text>
+          <Text style={styles.meta}>Remaining spots: {remainingSpots}</Text>
+          <Text style={styles.meta}>
+            {order.usesHalfUsers && order.peopleJoined >= 2 && partnerDistanceKm != null
+              ? `Distance: ${formatDistanceKm(partnerDistanceKm, 1)}`
+              : order.usesHalfUsers && order.peopleJoined >= 2
+                ? 'Distance: —'
+                : `Distance: ${order.distance.toFixed(1)} km`}
+          </Text>
+          <Text style={styles.meta}>Location: {order.location}</Text>
           <TouchableOpacity
-            style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-            disabled={!canSend}
-            onPress={() => void onSend()}
+            onPress={() =>
+              order.createdBy
+                ? router.push({
+                    pathname: '/user/[id]',
+                    params: { id: order.createdBy },
+                  } as never)
+                : undefined
+            }
+            disabled={!order.createdBy}
+            activeOpacity={0.8}
           >
-            <Text style={styles.sendBtnText}>{sending ? '...' : 'Send'}</Text>
+            <Text style={[styles.meta, styles.linkMeta]}>
+              Created by: {order.createdBy || 'Unknown'}
+            </Text>
           </TouchableOpacity>
+          <View style={styles.timerRow}>
+            <Text style={styles.timerLabel}>Time remaining</Text>
+            <Text style={styles.timerValue}>{countdownLabel}</Text>
+          </View>
         </View>
-      </KeyboardAvoidingView>
+        {isHalfCancelled ? (
+          <View style={styles.cancelledBanner}>
+            <Text style={styles.cancelledBannerText}>This order was cancelled.</Text>
+          </View>
+        ) : null}
+        {detailSource === 'order' &&
+        order.usesHalfUsers &&
+        alreadyMember &&
+        order.peopleJoined < 2 ? (
+          <View style={styles.waitingCard}>
+            <Text style={styles.waitingTitle}>Waiting for second user…</Text>
+            <Text style={styles.waitingSub}>
+              You will get a notification when someone joins. You can open chat anytime.
+            </Text>
+            <TouchableOpacity
+              style={styles.inviteWhatsAppBtn}
+              onPress={handleWhatsAppOrderInvite}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.inviteWhatsAppBtnText}>Invite via WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {detailSource === 'order' &&
+        order.usesHalfUsers &&
+        alreadyMember &&
+        order.peopleJoined >= 2 &&
+        partnerUserId ? (
+          <View style={styles.partnerCard}>
+            <Text style={styles.partnerSectionTitle}>Your match</Text>
+            <View style={styles.partnerRow}>
+              {partnerProfile?.avatar ? (
+                <Image source={{ uri: partnerProfile.avatar }} style={styles.partnerAvatar} />
+              ) : (
+                <View style={[styles.partnerAvatar, styles.partnerAvatarPlaceholder]} />
+              )}
+              <View style={styles.partnerTextCol}>
+                <Text style={styles.partnerName}>
+                  {partnerProfile?.name ?? 'Order partner'}
+                </Text>
+                <Text style={styles.partnerMeta}>
+                  {partnerDistanceKm != null
+                    ? `Distance: ${formatDistanceKm(partnerDistanceKm, 1)}`
+                    : 'Distance: —'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.actionGrid}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => router.push(`/chat/${order.id}` as never)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnText}>Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={handleOpenWhatsApp}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnText}>WhatsApp</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnDangerOutline]}
+                onPress={handleBlockUser}
+                disabled={blocking}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnDangerText}>
+                  {blocking ? '…' : 'Block'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={handleReportUser}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnText}>Report</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.inviteWhatsAppBtn}
+              onPress={handleWhatsAppOrderInvite}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.inviteWhatsAppBtnText}>Share order invite (WhatsApp)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.cancelOrderBtn, cancelling && styles.joinButtonDisabled]}
+              onPress={handleCancelOrder}
+              disabled={cancelling || isHalfCancelled}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.cancelOrderBtnText}>
+                {cancelling ? 'Cancelling…' : 'Cancel order'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {detailSource === 'order' &&
+        order.usesHalfUsers &&
+        !isHalfCancelled &&
+        !(alreadyMember && order.peopleJoined >= 2) ? (
+          <TouchableOpacity
+            style={styles.chatNavButton}
+            onPress={() => router.push(`/chat/${order.id}` as never)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.chatNavButtonText}>Open order chat</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          style={[
+            styles.joinButton,
+            (joining ||
+              alreadyMember ||
+              remainingSpots <= 0 ||
+              isBlocked ||
+              isHalfCancelled ||
+              (detailSource === 'food_card' &&
+                order.foodCardStatus != null &&
+                order.foodCardStatus !== 'active')) &&
+              styles.joinButtonDisabled,
+          ]}
+          onPress={handleJoinOrder}
+          disabled={
+            joining ||
+            alreadyMember ||
+            remainingSpots <= 0 ||
+            isBlocked ||
+            isHalfCancelled ||
+            (detailSource === 'food_card' &&
+              order.foodCardStatus != null &&
+              order.foodCardStatus !== 'active')
+          }
+          activeOpacity={0.85}
+        >
+          <Text style={styles.joinButtonText}>
+            {joining
+              ? 'Joining...'
+              : alreadyMember
+                ? 'Joined'
+                : isHalfCancelled
+                  ? 'Cancelled'
+                  : isBlocked
+                    ? 'Blocked'
+                    : detailSource === 'food_card' &&
+                        order.foodCardStatus != null &&
+                        order.foodCardStatus !== 'active'
+                      ? 'Not available'
+                      : remainingSpots <= 0
+                        ? 'Order Full'
+                        : 'Join Order'}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+      </ScreenFadeIn>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  container: { flex: 1, backgroundColor: '#0B0D10' },
+  loadingWrap: {
     flex: 1,
-    backgroundColor: '#06080C',
-    paddingHorizontal: 14,
-  },
-  headerRow: {
-    flexDirection: 'row',
+    backgroundColor: '#0B0D10',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
+  },
+  emptyText: { color: '#E5E7EB', fontSize: 16 },
+  skeletonGap: { marginBottom: 16 },
+  skeletonGapLine: { marginBottom: 10 },
+  backBtn: {
+    marginTop: 14,
+    backgroundColor: '#141922',
+    borderColor: '#232A35',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  backBtn: {
-    padding: 8,
-  },
-  headerTitle: {
-    color: '#F8FAFC',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  headerSpacer: {
-    width: 38,
-  },
-  chatBody: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 14,
-  },
-  listContent: {
-    paddingVertical: 12,
-    paddingBottom: 16,
-  },
-  row: {
-    width: '100%',
-    marginBottom: 10,
-  },
-  rowLeft: {
-    alignItems: 'flex-start',
-  },
-  rowRight: {
-    alignItems: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '80%',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  backBtnText: { color: '#C7D2FE', fontWeight: '700' },
+  content: { padding: 16, paddingBottom: 32 },
+  image: { width: '100%', height: 260, borderRadius: 20, marginBottom: 14 },
+  foodName: { color: '#F8FAFC', fontSize: 28, fontWeight: '800' },
+  price: { color: '#6EE7B7', fontSize: 18, fontWeight: '700', marginTop: 6, marginBottom: 14 },
+  card: {
+    backgroundColor: '#141922',
+    borderColor: '#232A35',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 14,
+    gap: 6,
   },
-  bubbleMine: {
-    backgroundColor: 'rgba(16, 36, 29, 0.95)',
-    borderColor: 'rgba(52, 211, 153, 0.25)',
-  },
-  bubbleTheirs: {
-    backgroundColor: 'rgba(20, 25, 34, 0.95)',
-    borderColor: 'rgba(125, 211, 252, 0.18)',
-  },
-  senderName: {
-    marginBottom: 6,
-  },
-  text: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  textMine: {
-    color: '#E9FFF6',
-  },
-  textTheirs: {
-    color: '#F8FAFC',
-  },
-  textMuted: {
-    color: 'rgba(248,250,252,0.62)',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  inputRow: {
+  meta: { color: '#D1D5DB', fontSize: 14 },
+  linkMeta: { textDecorationLine: 'underline' },
+  timerRow: {
+    marginTop: 8,
     flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 10,
-    paddingBottom: 16,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  input: {
-    flex: 1,
-    backgroundColor: 'rgba(17, 22, 31, 0.95)',
+  timerLabel: { color: '#FB923C', fontSize: 14, fontWeight: '700' },
+  timerValue: { color: '#FB923C', fontSize: 24, fontWeight: '900' },
+  chatNavButton: {
+    backgroundColor: '#1e293b',
     borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    color: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    fontWeight: '500',
+    borderColor: '#334155',
   },
-  sendBtn: {
-    backgroundColor: 'rgba(52, 211, 153, 0.22)',
+  chatNavButtonText: { color: '#7dd3fc', fontWeight: '800', fontSize: 16 },
+  joinButton: {
+    marginTop: 16,
+    backgroundColor: '#34D399',
     borderRadius: 14,
-    paddingHorizontal: 16,
+    minHeight: 50,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  joinButtonDisabled: { opacity: 0.6 },
+  joinButtonText: { color: '#052E1A', fontSize: 16, fontWeight: '800' },
+  blockButton: {
+    marginTop: 10,
+    backgroundColor: '#261317',
+    borderRadius: 14,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#4B1D24',
+  },
+  blockButtonText: { color: '#FCA5A5', fontSize: 14, fontWeight: '800' },
+  cancelledBanner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#3f1d1d',
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+  },
+  cancelledBannerText: { color: '#FECACA', fontWeight: '700', textAlign: 'center' },
+  waitingCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#141922',
+    borderWidth: 1,
+    borderColor: '#232A35',
+  },
+  waitingTitle: { color: '#F8FAFC', fontSize: 17, fontWeight: '800', marginBottom: 6 },
+  waitingSub: { color: '#9CA3AF', fontSize: 14, lineHeight: 20 },
+  inviteWhatsAppBtn: {
+    marginTop: 14,
+    backgroundColor: '#14532d',
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
+    borderColor: '#22c55e',
   },
-  sendBtnDisabled: {
-    opacity: 0.6,
+  inviteWhatsAppBtnText: { color: '#bbf7d0', fontWeight: '800', fontSize: 15 },
+  partnerCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#141922',
+    borderWidth: 1,
+    borderColor: '#232A35',
+    gap: 12,
   },
-  sendBtnText: {
-    color: '#A7F3D0',
-    fontWeight: '800',
-    fontSize: 14,
+  partnerSectionTitle: { color: '#94A3B8', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  partnerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  partnerAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#1e293b' },
+  partnerAvatarPlaceholder: { borderWidth: 1, borderColor: '#334155' },
+  partnerTextCol: { flex: 1, gap: 4 },
+  partnerName: { color: '#F8FAFC', fontSize: 18, fontWeight: '800' },
+  partnerMeta: { color: '#9CA3AF', fontSize: 14 },
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
   },
+  actionBtn: {
+    flexGrow: 1,
+    minWidth: '44%',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  actionBtnText: { color: '#7dd3fc', fontWeight: '800', fontSize: 15 },
+  actionBtnDangerOutline: {
+    backgroundColor: '#261317',
+    borderColor: '#4B1D24',
+  },
+  actionBtnDangerText: { color: '#FCA5A5', fontWeight: '800', fontSize: 15 },
+  cancelOrderBtn: {
+    marginTop: 4,
+    backgroundColor: '#1c1917',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#44403c',
+  },
+  cancelOrderBtnText: { color: '#d6d3d1', fontWeight: '800', fontSize: 15 },
 });
-

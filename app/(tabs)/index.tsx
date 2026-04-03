@@ -176,7 +176,7 @@ export default function SwipeScreen() {
         Alert.alert('Match', 'Someone joined your order! Open chat to say hi.');
       }
       removeCardById(targetId);
-      router.push(`/order-details/${result.orderId}` as never);
+      router.push(`/order/${result.orderId}` as never);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join this card.';
       Alert.alert('Could not join', msg);
@@ -359,7 +359,7 @@ export default function SwipeScreen() {
                 activeOpacity={0.88}
                 onPress={() =>
                   router.push(
-                    `/order-details/${topCard.orderId ?? topCard.id}` as never,
+                    `/order/${topCard.orderId ?? topCard.id}` as never,
                   )
                 }
                 style={styles.detailsBtn}

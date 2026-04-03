@@ -135,7 +135,7 @@ export default function JoinInviteScreen() {
     if (!orderId) return;
     const deepLink = `halforder://order/${orderId}`;
     if (Platform.OS === 'web') {
-      router.push(`/order-details/${orderId}` as never);
+      router.push(`/order/${orderId}` as never);
       return;
     }
     Linking.openURL(deepLink).catch(() => {

@@ -212,7 +212,7 @@ export default function OrdersScreen() {
   };
 
   const handleOrderPress = (orderId: string) => {
-    router.push(`/order-details/${orderId}` as const);
+    router.push(`/order/${orderId}` as const);
   };
 
   const activeOrders = orders.filter(
