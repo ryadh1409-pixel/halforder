@@ -3,10 +3,11 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
-  doc,
   where,
 } from 'firebase/firestore';
 
@@ -37,6 +38,17 @@ export async function hasBlockBetween(
   userB: string,
 ): Promise<boolean> {
   if (!userA || !userB || userA === userB) return false;
+
+  const [snapA, snapB] = await Promise.all([
+    getDoc(doc(db, 'users', userA)),
+    getDoc(doc(db, 'users', userB)),
+  ]);
+  const aBlocked = snapA.exists() ? snapA.data()?.blockedUsers : [];
+  const bBlocked = snapB.exists() ? snapB.data()?.blockedUsers : [];
+  const listA = Array.isArray(aBlocked) ? aBlocked : [];
+  const listB = Array.isArray(bBlocked) ? bBlocked : [];
+  if (listA.includes(userB) || listB.includes(userA)) return true;
+
   const q1 = query(
     collection(db, 'blocks'),
     where('blockerId', '==', userA),

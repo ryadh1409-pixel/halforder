@@ -699,7 +699,13 @@ exports.sendMessageNotification = functions.firestore
         ? data.text.trim().slice(0, 200)
         : 'New message';
 
-    await notifyUsersExpo(db, recipients, 'New Message 💬', bodyText, {
+    const senderNameRaw =
+      (typeof data.userName === 'string' && data.userName.trim()) ||
+      (typeof data.senderName === 'string' && data.senderName.trim()) ||
+      '';
+    const title = senderNameRaw || 'Someone';
+
+    await notifyUsersExpo(db, recipients, title, bodyText, {
       type: 'chat_message',
       chatId,
       messageId: context.params.messageId,
@@ -726,6 +732,28 @@ exports.joinCancelledNotification = functions.firestore
     const before = change.before.data() || {};
     const after = change.after.data() || {};
     const db = admin.firestore();
+    const orderId = context.params.orderId;
+
+    if (before.status !== 'cancelled' && after.status === 'cancelled') {
+      const members = orderMemberIds(after);
+      const cancelledBy =
+        typeof after.cancelledBy === 'string' && after.cancelledBy
+          ? after.cancelledBy
+          : null;
+      const targets = cancelledBy
+        ? members.filter((id) => id && id !== cancelledBy)
+        : members.filter(Boolean);
+      if (targets.length > 0) {
+        await notifyUsersExpo(
+          db,
+          targets,
+          'Order cancelled',
+          'The other person cancelled this half order.',
+          { type: 'order_cancelled', orderId },
+        );
+      }
+      return null;
+    }
 
     const beforeMembers = orderMemberIds(before);
     const afterMembers = orderMemberIds(after);

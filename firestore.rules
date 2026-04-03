@@ -79,6 +79,7 @@ service cloud.firestore {
         && request.resource.data.maxUsers >= 2
         && request.resource.data.maxUsers <= 20
         && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.hostId == request.auth.uid
         && request.resource.data.createdAt != null;
     }
 
@@ -95,7 +96,36 @@ service cloud.firestore {
         && request.resource.data.users.size() <= resource.data.get('maxUsers', 2)
         && request.resource.data.cardId == resource.data.cardId
         && request.resource.data.status == resource.data.status
-        && request.resource.data.createdBy == resource.data.createdBy;
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '')
+          == resource.data.get('hostId', '');
+    }
+
+    /** HalfOrder member cancels the match (notify others via Cloud Function). */
+    function isHalfOrderCancelUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.cardId.size() > 0
+        && resource.data.status == 'active'
+        && request.resource.data.status == 'cancelled'
+        && request.auth.uid in resource.data.get('users', [])
+        && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '')
+          == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['status', 'cancelledBy', 'cancelledAt'])
+        && request.resource.data.cancelledAt != null;
+    }
+
+    function isOrderMemberByOrderId(orderId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/orders/$(orderId))
+        && request.auth.uid in get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []);
     }
 
     /** Exactly-once: pair-join push ack via `notified` (client sends Expo push). */
@@ -114,6 +144,8 @@ service cloud.firestore {
         && request.resource.data.cardId == resource.data.cardId
         && request.resource.data.status == resource.data.status
         && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '')
+          == resource.data.get('hostId', '')
         && request.resource.data.maxUsers == resource.data.maxUsers;
     }
 
@@ -524,12 +556,24 @@ service cloud.firestore {
         || isSwipeAcceptUpdate()
         || isMarkOrderExpiredUpdate()
         || isHalfOrderUsersJoinUpdate()
+        || isHalfOrderCancelUpdate()
         || isOrderPairJoinNotifiedUpdate();
       allow delete: if isAdmin()
         || (
           request.auth != null
           && resource.data.createdBy == request.auth.uid
         );
+
+      match /order_members/{memberId} {
+        allow read: if isAdmin() || isOrderMemberByOrderId(orderId);
+        allow create, update: if isAdmin()
+          || (
+            !isCurrentUserRestricted()
+            && request.auth.uid == memberId
+            && isOrderMemberByOrderId(orderId)
+          );
+        allow delete: if isAdmin();
+      }
 
       match /messages/{messageId} {
         allow read, write: if isAdmin()

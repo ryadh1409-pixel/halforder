@@ -10,28 +10,14 @@ import {
 } from 'firebase/firestore';
 
 import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
+import { sendPushNotification } from '@/services/expoPushSend';
 import { db } from '@/services/firebase';
-
-const EXPO_PUSH_SEND_URL = 'https://exp.host/--/api/v2/push/send';
+import { haversineDistanceKm } from '@/services/haversineKm';
+import { mapOrderMemberSnap } from '@/services/orderMemberProfile';
 
 function normalizeOrderUsers(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
-}
-
-/** Haversine distance in km, one decimal. */
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): string {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return (R * c).toFixed(1);
 }
 
 function parseUserLatLng(d: Record<string, unknown>): { lat: number; lng: number } | null {
@@ -97,6 +83,16 @@ async function fetchJoinerProfile(joinerUid: string): Promise<JoinerProfile> {
   return { name, avatar, latLng: parseUserLatLng(d) };
 }
 
+async function latLngFromOrderMember(
+  orderId: string,
+  uid: string,
+): Promise<{ lat: number; lng: number } | null> {
+  const snap = await getDoc(doc(db, 'orders', orderId, 'order_members', uid));
+  if (!snap.exists()) return null;
+  const m = mapOrderMemberSnap(uid, snap.data() as Record<string, unknown>);
+  return m.location;
+}
+
 async function getExpoPushTokenForUser(uid: string): Promise<string | null> {
   const uSnap = await getDoc(doc(db, 'users', uid));
   if (uSnap.exists()) {
@@ -129,8 +125,6 @@ async function getExpoPushTokenForUser(uid: string): Promise<string | null> {
   }
   return null;
 }
-
-type ExpoPushTicket = { status?: string; message?: string; id?: string };
 
 /**
  * Claim `orders.notified` in a transaction, then send Expo push to the other member.
@@ -173,43 +167,24 @@ export async function trySendPairJoinExpoPush(
 
   if (!recipientUid) return;
 
-  const [token, joiner, recipientSnap] = await Promise.all([
+  const [token, joiner, joinerLoc, otherLoc] = await Promise.all([
     getExpoPushTokenForUser(recipientUid),
     fetchJoinerProfile(jid),
-    getDoc(doc(db, 'users', recipientUid)),
+    latLngFromOrderMember(oid, jid),
+    latLngFromOrderMember(oid, recipientUid),
   ]);
 
-  if (!token) {
-    console.warn('[pairPush] no Expo push token for user', recipientIdLog(recipientUid));
-    return;
-  }
-
-  const recipientData = recipientSnap.exists()
-    ? (recipientSnap.data() as Record<string, unknown>)
-    : null;
-  const recipientLatLng = recipientData ? parseUserLatLng(recipientData) : null;
-
-  let distanceKm: string | null = null;
-  if (
-    joiner.latLng &&
-    recipientLatLng &&
-    Number.isFinite(joiner.latLng.lat) &&
-    Number.isFinite(joiner.latLng.lng) &&
-    Number.isFinite(recipientLatLng.lat) &&
-    Number.isFinite(recipientLatLng.lng)
-  ) {
-    distanceKm = getDistance(
-      joiner.latLng.lat,
-      joiner.latLng.lng,
-      recipientLatLng.lat,
-      recipientLatLng.lng,
-    );
+  const joinerPoint = joinerLoc ?? joiner.latLng;
+  const otherPoint = otherLoc;
+  let body = 'Open your order to connect and chat!';
+  if (joinerPoint && otherPoint) {
+    const km = haversineDistanceKm(joinerPoint, otherPoint);
+    if (Number.isFinite(km)) {
+      body = `Distance: ${km.toFixed(1)} km`;
+    }
   }
 
   const title = `${joiner.name} joined your order 🍕`;
-  const body = distanceKm
-    ? `He is ${distanceKm} km away`
-    : 'Open your order to connect and chat!';
 
   const data: Record<string, string> = {
     type: HALF_ORDER_PAIR_JOIN_PUSH_TYPE,
@@ -217,47 +192,10 @@ export async function trySendPairJoinExpoPush(
     userId: jid,
     joinerName: joiner.name,
   };
-  if (distanceKm) data.distanceKm = distanceKm;
-
-  const message: Record<string, unknown> = {
-    to: token,
-    title,
-    body,
-    sound: 'default',
-    priority: 'high',
-    channelId: 'default',
-    data,
-  };
-  if (joiner.avatar) {
-    message.image = joiner.avatar;
+  if (joinerPoint && otherPoint) {
+    const km = haversineDistanceKm(joinerPoint, otherPoint);
+    if (Number.isFinite(km)) data.distanceKm = km.toFixed(1);
   }
 
-  try {
-    const pushToken = token;
-    console.log('Sending notification to:', pushToken);
-
-    const res = await fetch(EXPO_PUSH_SEND_URL, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([message]),
-    });
-
-    console.log('Notification sent');
-
-    const json = (await res.json()) as { data?: ExpoPushTicket[] };
-    const ticket = json.data?.[0];
-    if (ticket?.status === 'error') {
-      console.warn('[pairPush] Expo push error:', ticket.message ?? ticket);
-    }
-  } catch (e) {
-    console.warn('[pairPush] Expo push request failed', e);
-  }
-}
-
-function recipientIdLog(uid: string): string {
-  return uid.length > 6 ? `${uid.slice(0, 3)}…${uid.slice(-2)}` : uid;
+  await sendPushNotification(token, title, body, data);
 }

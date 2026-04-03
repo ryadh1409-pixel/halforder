@@ -17,6 +17,7 @@ import {
   postHalfOrderChatSystemMessage,
 } from '@/services/halfOrderChat';
 import { auth, db } from '@/services/firebase';
+import { syncOrderMemberProfilesForOrder } from '@/services/orderMemberProfile';
 import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
 import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
 
@@ -145,6 +146,7 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
   const postSnap = await getDoc(orderRef);
   const finalUsers = normalizeOrderUsersArray(postSnap.data()?.users);
   await ensureHalfOrderChat(trimmedId, finalUsers);
+  await syncOrderMemberProfilesForOrder(trimmedId, finalUsers);
 
   let justBecamePair = false;
   if (txResult.tag === 'added' && txResult.priorCount === 1 && finalUsers.length >= 2) {

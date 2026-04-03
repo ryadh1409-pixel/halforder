@@ -4,7 +4,9 @@ import {
   ensureHalfOrderChat,
   postHalfOrderChatSystemMessage,
 } from '@/services/halfOrderChat';
+import { hasBlockBetween } from '@/services/blocks';
 import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
+import { syncOrderMemberProfilesForOrder } from '@/services/orderMemberProfile';
 import {
   addDoc,
   arrayUnion,
@@ -308,6 +310,7 @@ function buildHalfOrderFromCard(
     status: 'active',
     maxUsers,
     createdBy: uid,
+    hostId: uid,
     createdAt: serverTimestamp(),
     foodName: title.trim() || 'Shared order',
     image: image.trim(),
@@ -360,6 +363,25 @@ export async function joinOrder(
   if (!uid || uid !== authedUid) throw new Error('Not authorized');
 
   const cardRef = doc(db, FOOD_CARDS, trimmed);
+
+  const cardSnapPrejoin = await getDoc(cardRef);
+  if (cardSnapPrejoin.exists()) {
+    const d0 = cardSnapPrejoin.data() as Record<string, unknown>;
+    const oid0 =
+      typeof d0.orderId === 'string' && d0.orderId.trim()
+        ? d0.orderId.trim()
+        : '';
+    if (oid0) {
+      const o0 = await getDoc(doc(db, 'orders', oid0));
+      if (o0.exists()) {
+        for (const m of normalizeOrderUsers(o0.data()?.users)) {
+          if (await hasBlockBetween(authedUid, m)) {
+            throw new Error('You cannot join this order due to a block.');
+          }
+        }
+      }
+    }
+  }
 
   const outcome = await runTransaction(db, async (tx) => {
     const cardSnap = await tx.get(cardRef);
@@ -433,6 +455,7 @@ export async function joinOrder(
   const finalUsers = normalizeOrderUsers(finalSnap.data()?.users);
 
   await ensureHalfOrderChat(outcome.orderId, finalUsers);
+  await syncOrderMemberProfilesForOrder(outcome.orderId, finalUsers);
 
   let justBecamePair = false;
   if (outcome.kind === 'joined_existing' && !outcome.alreadyIn) {

@@ -2,6 +2,7 @@ import { isAdminUser } from '@/constants/adminUid';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
+import { getHiddenUserIds } from '@/services/block';
 import {
   isFoodCardJoinDisabled,
   joinOrder,
@@ -42,6 +43,7 @@ export default function SwipeScreen() {
   const [cardsRetryKey, setCardsRetryKey] = useState(0);
   const [tick, setTick] = useState(0);
   const [joining, setJoining] = useState(false);
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const swipeInFlightRef = useRef(false);
@@ -72,15 +74,41 @@ export default function SwipeScreen() {
   }, []);
 
   const uid = user?.uid;
+
+  useEffect(() => {
+    if (!uid) {
+      setHiddenUserIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    getHiddenUserIds(uid)
+      .then((s) => {
+        if (!cancelled) setHiddenUserIds(s);
+      })
+      .catch(() => {
+        if (!cancelled) setHiddenUserIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
   const adminPreview = isAdminUser(user);
   const deckCards = useMemo(() => {
+    let list = cards;
     if (adminPreview && uid) {
-      return cards.filter(
+      list = list.filter(
         (c) => typeof c.ownerId !== 'string' || c.ownerId !== uid,
       );
     }
-    return cards;
-  }, [cards, adminPreview, uid]);
+    if (uid && hiddenUserIds.size > 0) {
+      list = list.filter(
+        (c) =>
+          typeof c.ownerId !== 'string' || !hiddenUserIds.has(c.ownerId),
+      );
+    }
+    return list;
+  }, [cards, adminPreview, uid, hiddenUserIds]);
   const topCard = deckCards[0] ?? null;
   const secondCard = deckCards[1] ?? null;
   const [topOrderUsers, setTopOrderUsers] = useState<string[] | null>(null);

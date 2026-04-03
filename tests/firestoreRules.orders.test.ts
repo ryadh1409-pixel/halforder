@@ -257,7 +257,13 @@ describe('firestore rules: HalfOrder pair-join notified ack', () => {
       status: 'active' as const,
       maxUsers: 2,
       createdBy: 'u1',
+      hostId: 'u1',
       createdAt: serverTimestamp(),
+      foodName: 'Pizza',
+      image: 'https://example.com/p.jpg',
+      pricePerPerson: 5,
+      totalPrice: 10,
+      location: 'Here',
     };
   }
 
@@ -300,6 +306,95 @@ describe('firestore rules: HalfOrder pair-join notified ack', () => {
       updateDoc(doc(dbU3, 'orders', 'ho1'), {
         notified: true,
         notifiedAt: serverTimestamp(),
+      }),
+    );
+  });
+});
+
+describe('firestore rules: HalfOrder cancel + order_members', () => {
+  function halfOrderActivePair() {
+    return {
+      cardId: 'fc2',
+      users: ['u1', 'u2'],
+      status: 'active' as const,
+      maxUsers: 2,
+      createdBy: 'u1',
+      hostId: 'u1',
+      createdAt: serverTimestamp(),
+      foodName: 'Pizza',
+      image: 'https://example.com/p.jpg',
+      pricePerPerson: 5,
+      totalPrice: 10,
+      location: 'Here',
+    };
+  }
+
+  it('allows a member to cancel a HalfOrder with cancelledBy + cancelledAt', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho2'), halfOrderActivePair());
+    });
+    const dbU2 = te().authenticatedContext('u2').firestore();
+    await assertSucceeds(
+      updateDoc(doc(dbU2, 'orders', 'ho2'), {
+        status: 'cancelled',
+        cancelledBy: 'u2',
+        cancelledAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies cancel when cancelledBy does not match caller', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho3'), halfOrderActivePair());
+    });
+    const dbU3 = te().authenticatedContext('u3').firestore();
+    await assertFails(
+      updateDoc(doc(dbU3, 'orders', 'ho3'), {
+        status: 'cancelled',
+        cancelledBy: 'u2',
+        cancelledAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('allows order member to upsert their order_members profile', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho4'), {
+        ...halfOrderActivePair(),
+        users: ['u1', 'u2'],
+      });
+    });
+    const dbU1 = te().authenticatedContext('u1').firestore();
+    await assertSucceeds(
+      setDoc(doc(dbU1, 'orders', 'ho4', 'order_members', 'u1'), {
+        userId: 'u1',
+        name: 'Alice',
+        avatar: null,
+        phone: null,
+        pushToken: null,
+        joinedAt: serverTimestamp(),
+        location: { lat: 1, lng: 2 },
+      }),
+    );
+  });
+
+  it('denies order_members write for non-member', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho5'), {
+        ...halfOrderActivePair(),
+        users: ['u1', 'u2'],
+      });
+    });
+    const dbU3 = te().authenticatedContext('u3').firestore();
+    await assertFails(
+      setDoc(doc(dbU3, 'orders', 'ho5', 'order_members', 'u3'), {
+        userId: 'u3',
+        name: 'Eve',
+        avatar: null,
+        phone: null,
+        pushToken: null,
+        joinedAt: serverTimestamp(),
+        location: null,
       }),
     );
   });

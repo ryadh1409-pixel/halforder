@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,11 +19,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useOrderHalfMembers } from '@/hooks/useOrderHalfMembers';
 import { theme } from '@/constants/theme';
 import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
-import { blockUser, hasBlockBetween } from '@/services/blocks';
+import { blockUser as blockUserProfile } from '@/services/block';
+import { hasBlockBetween } from '@/services/blocks';
+import { cancelHalfOrder } from '@/services/halfOrderCancel';
 import { auth, db } from '@/services/firebase';
+import { formatDistanceKm, haversineDistanceKm } from '@/services/haversineKm';
+import { submitUserReport } from '@/services/userSafety';
 import {
   joinHalfOrderByOrderId,
   joinOrder as joinFirestoreOrder,
@@ -32,6 +38,15 @@ import { normalizeParticipantsStrings } from '@/services/orderLifecycle';
 
 const PLACEHOLDER_FOOD_IMAGE =
   'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80';
+
+const WHATSAPP_PREFILL = encodeURIComponent('Hey we matched on HalfOrder 🍕');
+
+function buildWhatsAppUrl(phone: string | null | undefined): string | null {
+  if (!phone || !phone.trim()) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  return `https://wa.me/${digits}?text=${WHATSAPP_PREFILL}`;
+}
 
 type OrderDetails = {
   id: string;
@@ -51,6 +66,9 @@ type OrderDetails = {
   memberIds?: string[];
   /** Present when row came from `food_cards` (swipe / admin cards). */
   foodCardStatus?: string;
+  /** HalfOrder lifecycle (`active` | `cancelled`). */
+  orderStatus?: string;
+  hostId?: string;
 };
 
 function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
@@ -72,9 +90,15 @@ function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
     typeof d?.createdBy === 'string' && d.createdBy
       ? d.createdBy
       : usersList[0] ?? '';
+  const hostId =
+    typeof d?.hostId === 'string' && d.hostId.trim()
+      ? d.hostId.trim()
+      : createdBy;
   const participantsList = normalizeParticipantsStrings(d?.participants);
   const memberIds =
     usersList.length > 0 ? usersList : participantsList;
+  const orderStatus =
+    typeof d?.status === 'string' && d.status.trim() ? d.status.trim() : undefined;
   return {
     id: snap.id,
     foodName: String(d?.foodName ?? 'Shared order'),
@@ -90,8 +114,10 @@ function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
     distance: Number(d?.distance ?? 0),
     timeRemaining: Number(d?.timeRemaining ?? 20),
     createdBy: String(createdBy),
+    hostId: String(hostId),
     usesHalfUsers: usersList.length > 0,
     memberIds,
+    orderStatus,
   };
 }
 
@@ -144,6 +170,7 @@ export default function OrderDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [blocking, setBlocking] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [countdownSec, setCountdownSec] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const prevJoinedCountRef = useRef<number | null>(null);
@@ -265,6 +292,33 @@ export default function OrderDetailsScreen() {
     };
   }, [orderId]);
 
+  const halfOrderIdForMembers =
+    detailSource === 'order' && order?.usesHalfUsers ? order.id : '';
+  const { members: halfMembers } = useOrderHalfMembers(halfOrderIdForMembers);
+
+  const viewerUid = auth.currentUser?.uid ?? null;
+
+  const partnerUserId = useMemo(() => {
+    if (!viewerUid || !order?.memberIds || order.memberIds.length < 2) return null;
+    return order.memberIds.find((x) => x !== viewerUid) ?? null;
+  }, [viewerUid, order?.memberIds]);
+
+  const partnerProfile = useMemo(() => {
+    if (!partnerUserId) return null;
+    return halfMembers.find((m) => m.userId === partnerUserId) ?? null;
+  }, [halfMembers, partnerUserId]);
+
+  const partnerDistanceKm = useMemo(() => {
+    if (!partnerProfile?.location || !viewerUid) return null;
+    const me = halfMembers.find((m) => m.userId === viewerUid);
+    if (!me?.location) return null;
+    const km = haversineDistanceKm(me.location, partnerProfile.location);
+    return Number.isFinite(km) ? km : null;
+  }, [halfMembers, partnerProfile, viewerUid]);
+
+  const isHalfCancelled =
+    order?.usesHalfUsers === true && order.orderStatus === 'cancelled';
+
   useEffect(() => {
     if (!order || detailSource !== 'order') {
       prevJoinedCountRef.current = null;
@@ -286,12 +340,13 @@ export default function OrderDetailsScreen() {
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !order?.createdBy || uid === order.createdBy) {
+    const other = partnerUserId;
+    if (!uid || !other) {
       setIsBlocked(false);
       return;
     }
     let cancelled = false;
-    hasBlockBetween(uid, order.createdBy)
+    hasBlockBetween(uid, other)
       .then((v) => {
         if (!cancelled) setIsBlocked(v);
       })
@@ -301,7 +356,7 @@ export default function OrderDetailsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [order?.createdBy]);
+  }, [partnerUserId]);
 
   useEffect(() => {
     if (countdownSec <= 0) return;
@@ -316,7 +371,6 @@ export default function OrderDetailsScreen() {
     return Math.max(order.maxPeople - order.peopleJoined, 0);
   }, [order]);
 
-  const viewerUid = auth.currentUser?.uid;
   const alreadyMember = !!(
     viewerUid &&
     order?.memberIds &&
@@ -333,7 +387,9 @@ export default function OrderDetailsScreen() {
     if (!order || !detailSource) return;
     const uid = auth.currentUser?.uid;
     if (!uid) {
-      router.push('/(auth)/login?redirectTo=/order-details/' + order.id);
+      router.push(
+        `/(auth)/login?redirectTo=/order-details/${order.id}` as never,
+      );
       return;
     }
     setJoining(true);
@@ -380,10 +436,11 @@ export default function OrderDetailsScreen() {
     }
   };
 
-  const handleBlockUser = async () => {
+  const handleBlockUser = () => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !order?.createdBy || uid === order.createdBy) return;
-    Alert.alert('Block user', 'Are you sure you want to block this user?', [
+    const target = partnerUserId;
+    if (!uid || !target) return;
+    Alert.alert('Block user', 'They will not be able to match or join orders with you.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Block',
@@ -392,7 +449,7 @@ export default function OrderDetailsScreen() {
           void (async () => {
             setBlocking(true);
             try {
-              await blockUser(uid, order.createdBy);
+              await blockUserProfile(target, uid);
               setIsBlocked(true);
               Alert.alert('Blocked', 'User has been blocked.');
             } catch (e) {
@@ -405,6 +462,79 @@ export default function OrderDetailsScreen() {
         },
       },
     ]);
+  };
+
+  const handleOpenWhatsApp = () => {
+    const url = buildWhatsAppUrl(partnerProfile?.phone);
+    if (!url) {
+      Alert.alert('No phone', 'This user has no phone number on file.');
+      return;
+    }
+    void Linking.openURL(url).catch(() => {
+      Alert.alert('Could not open WhatsApp');
+    });
+  };
+
+  const handleReportUser = () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !order || !partnerUserId) return;
+    const reasons = [
+      'Harassment',
+      'Spam or scam',
+      'Inappropriate content',
+      'Other',
+    ];
+    Alert.alert('Report user', 'Why are you reporting?', [
+      ...reasons.map((reason) => ({
+        text: reason,
+        onPress: () => {
+          void (async () => {
+            try {
+              await submitUserReport({
+                reporterId: uid,
+                reportedUserId: partnerUserId,
+                orderId: order.id,
+                reason,
+              });
+              Alert.alert('Thanks', 'We received your report.');
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Could not submit report.';
+              Alert.alert('Report failed', msg);
+            }
+          })();
+        },
+      })),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleCancelOrder = () => {
+    if (!order?.usesHalfUsers || !order.id) return;
+    Alert.alert(
+      'Cancel order',
+      'The other person will be notified. Continue?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Cancel order',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setCancelling(true);
+              try {
+                await cancelHalfOrder(order.id);
+                Alert.alert('Cancelled', 'This half order was cancelled.');
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : 'Could not cancel.';
+                Alert.alert('Cancel failed', msg);
+              } finally {
+                setCancelling(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   if (loading) {
@@ -442,7 +572,13 @@ export default function OrderDetailsScreen() {
             Joined: {order.peopleJoined}/{order.maxPeople}
           </Text>
           <Text style={styles.meta}>Remaining spots: {remainingSpots}</Text>
-          <Text style={styles.meta}>Distance: {order.distance.toFixed(1)} km</Text>
+          <Text style={styles.meta}>
+            {order.usesHalfUsers && order.peopleJoined >= 2 && partnerDistanceKm != null
+              ? `Distance: ${formatDistanceKm(partnerDistanceKm, 1)}`
+              : order.usesHalfUsers && order.peopleJoined >= 2
+                ? 'Distance: —'
+                : `Distance: ${order.distance.toFixed(1)} km`}
+          </Text>
           <Text style={styles.meta}>Location: {order.location}</Text>
           <TouchableOpacity
             onPress={() =>
@@ -465,7 +601,95 @@ export default function OrderDetailsScreen() {
             <Text style={styles.timerValue}>{countdownLabel}</Text>
           </View>
         </View>
-        {detailSource === 'order' && order.usesHalfUsers ? (
+        {isHalfCancelled ? (
+          <View style={styles.cancelledBanner}>
+            <Text style={styles.cancelledBannerText}>This order was cancelled.</Text>
+          </View>
+        ) : null}
+        {detailSource === 'order' &&
+        order.usesHalfUsers &&
+        alreadyMember &&
+        order.peopleJoined < 2 ? (
+          <View style={styles.waitingCard}>
+            <Text style={styles.waitingTitle}>Waiting for second user…</Text>
+            <Text style={styles.waitingSub}>
+              You will get a notification when someone joins. You can open chat anytime.
+            </Text>
+          </View>
+        ) : null}
+        {detailSource === 'order' &&
+        order.usesHalfUsers &&
+        alreadyMember &&
+        order.peopleJoined >= 2 &&
+        partnerUserId ? (
+          <View style={styles.partnerCard}>
+            <Text style={styles.partnerSectionTitle}>Your match</Text>
+            <View style={styles.partnerRow}>
+              {partnerProfile?.avatar ? (
+                <Image source={{ uri: partnerProfile.avatar }} style={styles.partnerAvatar} />
+              ) : (
+                <View style={[styles.partnerAvatar, styles.partnerAvatarPlaceholder]} />
+              )}
+              <View style={styles.partnerTextCol}>
+                <Text style={styles.partnerName}>
+                  {partnerProfile?.name ?? 'Order partner'}
+                </Text>
+                <Text style={styles.partnerMeta}>
+                  {partnerDistanceKm != null
+                    ? `Distance: ${formatDistanceKm(partnerDistanceKm, 1)}`
+                    : 'Distance: —'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.actionGrid}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => router.push(`/chat/${order.id}` as never)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnText}>Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={handleOpenWhatsApp}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnText}>WhatsApp</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnDangerOutline]}
+                onPress={handleBlockUser}
+                disabled={blocking}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnDangerText}>
+                  {blocking ? '…' : 'Block'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={handleReportUser}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.actionBtnText}>Report</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.cancelOrderBtn, cancelling && styles.joinButtonDisabled]}
+              onPress={handleCancelOrder}
+              disabled={cancelling || isHalfCancelled}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.cancelOrderBtnText}>
+                {cancelling ? 'Cancelling…' : 'Cancel order'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {detailSource === 'order' &&
+        order.usesHalfUsers &&
+        !isHalfCancelled &&
+        !(alreadyMember && order.peopleJoined >= 2) ? (
           <TouchableOpacity
             style={styles.chatNavButton}
             onPress={() => router.push(`/chat/${order.id}` as never)}
@@ -481,6 +705,7 @@ export default function OrderDetailsScreen() {
               alreadyMember ||
               remainingSpots <= 0 ||
               isBlocked ||
+              isHalfCancelled ||
               (detailSource === 'food_card' &&
                 order.foodCardStatus != null &&
                 order.foodCardStatus !== 'active')) &&
@@ -492,6 +717,7 @@ export default function OrderDetailsScreen() {
             alreadyMember ||
             remainingSpots <= 0 ||
             isBlocked ||
+            isHalfCancelled ||
             (detailSource === 'food_card' &&
               order.foodCardStatus != null &&
               order.foodCardStatus !== 'active')
@@ -503,27 +729,19 @@ export default function OrderDetailsScreen() {
               ? 'Joining...'
               : alreadyMember
                 ? 'Joined'
-                : isBlocked
-                  ? 'Blocked'
-                  : detailSource === 'food_card' &&
-                      order.foodCardStatus != null &&
-                      order.foodCardStatus !== 'active'
-                    ? 'Not available'
-                    : remainingSpots <= 0
-                      ? 'Order Full'
-                      : 'Join Order'}
+                : isHalfCancelled
+                  ? 'Cancelled'
+                  : isBlocked
+                    ? 'Blocked'
+                    : detailSource === 'food_card' &&
+                        order.foodCardStatus != null &&
+                        order.foodCardStatus !== 'active'
+                      ? 'Not available'
+                      : remainingSpots <= 0
+                        ? 'Order Full'
+                        : 'Join Order'}
           </Text>
         </TouchableOpacity>
-        {auth.currentUser?.uid && order.createdBy && auth.currentUser.uid !== order.createdBy ? (
-          <TouchableOpacity
-            style={[styles.blockButton, blocking && styles.joinButtonDisabled]}
-            onPress={handleBlockUser}
-            disabled={blocking}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.blockButtonText}>{blocking ? 'Blocking...' : 'Block User'}</Text>
-          </TouchableOpacity>
-        ) : null}
       </ScrollView>
       </ScreenFadeIn>
     </SafeAreaView>
@@ -604,4 +822,71 @@ const styles = StyleSheet.create({
     borderColor: '#4B1D24',
   },
   blockButtonText: { color: '#FCA5A5', fontSize: 14, fontWeight: '800' },
+  cancelledBanner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#3f1d1d',
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+  },
+  cancelledBannerText: { color: '#FECACA', fontWeight: '700', textAlign: 'center' },
+  waitingCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#141922',
+    borderWidth: 1,
+    borderColor: '#232A35',
+  },
+  waitingTitle: { color: '#F8FAFC', fontSize: 17, fontWeight: '800', marginBottom: 6 },
+  waitingSub: { color: '#9CA3AF', fontSize: 14, lineHeight: 20 },
+  partnerCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#141922',
+    borderWidth: 1,
+    borderColor: '#232A35',
+    gap: 12,
+  },
+  partnerSectionTitle: { color: '#94A3B8', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  partnerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  partnerAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#1e293b' },
+  partnerAvatarPlaceholder: { borderWidth: 1, borderColor: '#334155' },
+  partnerTextCol: { flex: 1, gap: 4 },
+  partnerName: { color: '#F8FAFC', fontSize: 18, fontWeight: '800' },
+  partnerMeta: { color: '#9CA3AF', fontSize: 14 },
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  actionBtn: {
+    flexGrow: 1,
+    minWidth: '44%',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  actionBtnText: { color: '#7dd3fc', fontWeight: '800', fontSize: 15 },
+  actionBtnDangerOutline: {
+    backgroundColor: '#261317',
+    borderColor: '#4B1D24',
+  },
+  actionBtnDangerText: { color: '#FCA5A5', fontWeight: '800', fontSize: 15 },
+  cancelOrderBtn: {
+    marginTop: 4,
+    backgroundColor: '#1c1917',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#44403c',
+  },
+  cancelOrderBtnText: { color: '#d6d3d1', fontWeight: '800', fontSize: 15 },
 });
