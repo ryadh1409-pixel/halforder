@@ -17,6 +17,15 @@ import {
 
 let testEnv: RulesTestEnvironment | undefined;
 
+function te(): RulesTestEnvironment {
+  if (!testEnv) {
+    throw new Error(
+      'Rules test environment not initialized (is the Firestore emulator on 127.0.0.1:8080?)',
+    );
+  }
+  return testEnv;
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: 'demo-test',
@@ -33,7 +42,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  if (testEnv) await testEnv.clearFirestore();
+  await te().clearFirestore();
 });
 
 function baseOrderFields(createdByUid: string) {
@@ -52,7 +61,7 @@ function baseOrderFields(createdByUid: string) {
 
 describe('firestore rules: orders create + participants join', () => {
   it('allows valid order create by owner', async () => {
-    const db = testEnv.authenticatedContext('u1').firestore();
+    const db = te().authenticatedContext('u1').firestore();
     await assertSucceeds(
       setDoc(doc(db, 'orders', 'o1'), {
         ...baseOrderFields('u1'),
@@ -63,7 +72,7 @@ describe('firestore rules: orders create + participants join', () => {
   });
 
   it('denies create when creator is not in participants', async () => {
-    const db = testEnv.authenticatedContext('u1').firestore();
+    const db = te().authenticatedContext('u1').firestore();
     await assertFails(
       setDoc(doc(db, 'orders', 'o1'), {
         ...baseOrderFields('u1'),
@@ -74,7 +83,7 @@ describe('firestore rules: orders create + participants join', () => {
   });
 
   it('allows one valid join update (+1 participant and joinedAtMap for joiner)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
         ...baseOrderFields('u1'),
         participants: ['u1'],
@@ -82,7 +91,7 @@ describe('firestore rules: orders create + participants join', () => {
       });
     });
 
-    const dbU2 = testEnv.authenticatedContext('u2').firestore();
+    const dbU2 = te().authenticatedContext('u2').firestore();
     await assertSucceeds(
       updateDoc(doc(dbU2, 'orders', 'o1'), {
         participants: arrayUnion('u2'),
@@ -92,7 +101,7 @@ describe('firestore rules: orders create + participants join', () => {
   });
 
   it('denies duplicate join by same user', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
         ...baseOrderFields('u1'),
         participants: ['u1'],
@@ -101,7 +110,7 @@ describe('firestore rules: orders create + participants join', () => {
       });
     });
 
-    const dbU1 = testEnv.authenticatedContext('u1').firestore();
+    const dbU1 = te().authenticatedContext('u1').firestore();
     await assertFails(
       updateDoc(doc(dbU1, 'orders', 'o1'), {
         participants: arrayUnion('u1'),
@@ -111,7 +120,7 @@ describe('firestore rules: orders create + participants join', () => {
   });
 
   it('denies overfill when participants would exceed maxPeople', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
         ...baseOrderFields('u1'),
         participants: ['u1', 'u2'],
@@ -123,7 +132,7 @@ describe('firestore rules: orders create + participants join', () => {
       });
     });
 
-    const dbU3 = testEnv.authenticatedContext('u3').firestore();
+    const dbU3 = te().authenticatedContext('u3').firestore();
     await assertFails(
       updateDoc(doc(dbU3, 'orders', 'o1'), {
         participants: arrayUnion('u3'),
@@ -133,7 +142,7 @@ describe('firestore rules: orders create + participants join', () => {
   });
 
   it('denies changing unrelated fields during join update', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
         ...baseOrderFields('u1'),
         participants: ['u1'],
@@ -142,7 +151,7 @@ describe('firestore rules: orders create + participants join', () => {
       });
     });
 
-    const dbU2 = testEnv.authenticatedContext('u2').firestore();
+    const dbU2 = te().authenticatedContext('u2').firestore();
     await assertFails(
       updateDoc(doc(dbU2, 'orders', 'o1'), {
         participants: arrayUnion('u2'),
@@ -153,7 +162,7 @@ describe('firestore rules: orders create + participants join', () => {
   });
 
   it('creator can still perform non-join update', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'o1'), {
         ...baseOrderFields('u1'),
         participants: ['u1'],
@@ -161,7 +170,7 @@ describe('firestore rules: orders create + participants join', () => {
         maxPeople: 3,
       });
     });
-    const dbU1 = testEnv.authenticatedContext('u1').firestore();
+    const dbU1 = te().authenticatedContext('u1').firestore();
     await assertSucceeds(
       updateDoc(doc(dbU1, 'orders', 'o1'), {
         image: 'https://example.com/new.jpg',
@@ -174,7 +183,7 @@ describe('firestore rules: orders create + participants join', () => {
 
 describe('firestore rules: swipe usersAccepted + food matches', () => {
   it('allows a signed-in user to add themselves once to usersAccepted', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'sw1'), {
         foodName: 'Swipe Pizza',
         image: 'https://example.com/p.jpg',
@@ -185,7 +194,7 @@ describe('firestore rules: swipe usersAccepted + food matches', () => {
       });
     });
 
-    const dbU1 = testEnv.authenticatedContext('u1').firestore();
+    const dbU1 = te().authenticatedContext('u1').firestore();
     await assertSucceeds(
       updateDoc(doc(dbU1, 'orders', 'sw1'), {
         usersAccepted: arrayUnion('u1'),
@@ -194,7 +203,7 @@ describe('firestore rules: swipe usersAccepted + food matches', () => {
   });
 
   it('allows a second user to like, then either user can create a match doc', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'sw1'), {
         foodName: 'Swipe Pizza',
         image: 'https://example.com/p.jpg',
@@ -205,7 +214,7 @@ describe('firestore rules: swipe usersAccepted + food matches', () => {
       });
     });
 
-    const dbU1 = testEnv.authenticatedContext('u1').firestore();
+    const dbU1 = te().authenticatedContext('u1').firestore();
     await assertSucceeds(
       setDoc(doc(dbU1, 'matches', 'sw1_u1_u2'), {
         orderId: 'sw1',
@@ -217,7 +226,7 @@ describe('firestore rules: swipe usersAccepted + food matches', () => {
   });
 
   it('denies match create when match id does not match canonical pattern', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'sw1'), {
         foodName: 'Swipe Pizza',
         image: 'https://example.com/p.jpg',
@@ -228,13 +237,69 @@ describe('firestore rules: swipe usersAccepted + food matches', () => {
       });
     });
 
-    const dbU1 = testEnv.authenticatedContext('u1').firestore();
+    const dbU1 = te().authenticatedContext('u1').firestore();
     await assertFails(
       setDoc(doc(dbU1, 'matches', 'wrong-id'), {
         orderId: 'sw1',
         users: ['u1', 'u2'],
         status: 'matched',
         createdAt: serverTimestamp(),
+      }),
+    );
+  });
+});
+
+describe('firestore rules: HalfOrder pair-join notified ack', () => {
+  function halfOrderPairDoc() {
+    return {
+      cardId: 'fc1',
+      users: ['u1', 'u2'],
+      status: 'active' as const,
+      maxUsers: 2,
+      createdBy: 'u1',
+      createdAt: serverTimestamp(),
+    };
+  }
+
+  it('allows an order member to set notified once', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho1'), halfOrderPairDoc());
+    });
+    const dbU2 = te().authenticatedContext('u2').firestore();
+    await assertSucceeds(
+      updateDoc(doc(dbU2, 'orders', 'ho1'), {
+        notified: true,
+        notifiedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies duplicate notified when already true', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho1'), {
+        ...halfOrderPairDoc(),
+        notified: true,
+        notifiedAt: serverTimestamp(),
+      });
+    });
+    const dbU2 = te().authenticatedContext('u2').firestore();
+    await assertFails(
+      updateDoc(doc(dbU2, 'orders', 'ho1'), {
+        notified: true,
+        notifiedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies notified ack when caller is not in users', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'ho1'), halfOrderPairDoc());
+    });
+    const dbU3 = te().authenticatedContext('u3').firestore();
+    await assertFails(
+      updateDoc(doc(dbU3, 'orders', 'ho1'), {
+        notified: true,
+        notifiedAt: serverTimestamp(),
       }),
     );
   });

@@ -33,6 +33,8 @@ export async function ensureHalfOrderChat(
     await setDoc(chatRef, {
       orderId: t,
       users: unique,
+      /** Kept in sync with `users` for Cloud Functions + rules (`participants`). */
+      participants: unique,
       createdAt: serverTimestamp(),
       lastMessage: '',
       lastMessageAt: Date.now(),
@@ -47,7 +49,7 @@ export async function ensureHalfOrderChat(
   if (changed) {
     await setDoc(
       chatRef,
-      { users: merged, orderId: t },
+      { users: merged, participants: merged, orderId: t },
       { merge: true },
     );
   }

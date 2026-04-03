@@ -2,6 +2,8 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 
+const { notifyUsersExpo } = require('./lib/expoPush');
+
 admin.initializeApp();
 
 const transporter = nodemailer.createTransport({
@@ -568,7 +570,8 @@ exports.onNewChatMessage = functions.firestore
     const userSnap = await db.doc(`users/${receiverId}`).get();
     if (!userSnap.exists()) return null;
     const userData = userSnap.data();
-    const token = userData?.expoPushToken ?? userData?.pushToken;
+    const token =
+      userData?.fcmToken ?? userData?.expoPushToken ?? userData?.pushToken;
     if (typeof token !== 'string' || !token) return null;
     if (userData?.notificationsEnabled === false) return null;
 
@@ -664,6 +667,82 @@ const INACTIVE_HOURS = 48;
 const REMINDER_TITLE = 'HalfOrder';
 const REMINDER_BODY = 'Hungry? Find someone to split a meal with 🍔';
 
+/**
+ * New chat message under HalfOrder / order thread: `chats/{chatId}/messages/*`.
+ * Sends via Expo Push API (not FCM directly).
+ */
+exports.sendMessageNotification = functions.firestore
+  .document('chats/{chatId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    const senderId = typeof data.senderId === 'string' ? data.senderId : null;
+    if (!senderId || senderId === 'system') return null;
+    if (data.sender === 'ai') return null;
+
+    const db = admin.firestore();
+    const chatId = context.params.chatId;
+    const chatSnap = await db.doc(`chats/${chatId}`).get();
+    if (!chatSnap.exists) return null;
+    const c = chatSnap.data() || {};
+    const participants = Array.isArray(c.participants)
+      ? c.participants.filter((x) => typeof x === 'string')
+      : [];
+    const users = Array.isArray(c.users) ? c.users.filter((x) => typeof x === 'string') : [];
+    const members = participants.length > 0 ? participants : users;
+    if (members.length === 0) return null;
+
+    const recipients = members.filter((id) => id !== senderId);
+    if (recipients.length === 0) return null;
+
+    const bodyText =
+      typeof data.text === 'string' && data.text.trim()
+        ? data.text.trim().slice(0, 200)
+        : 'New message';
+
+    await notifyUsersExpo(db, recipients, 'New Message 💬', bodyText, {
+      type: 'chat_message',
+      chatId,
+      messageId: context.params.messageId,
+    });
+
+    return null;
+  });
+
+/** Prefer `participants` (contract), fall back to HalfOrder `users`. */
+function orderMemberIds(data) {
+  const p = Array.isArray(data?.participants)
+    ? data.participants.filter((x) => typeof x === 'string')
+    : [];
+  if (p.length > 0) return p;
+  return Array.isArray(data?.users) ? data.users.filter((x) => typeof x === 'string') : [];
+}
+
+/**
+ * Someone removed from order participants/users — notify remaining members via Expo.
+ */
+exports.joinCancelledNotification = functions.firestore
+  .document('orders/{orderId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const db = admin.firestore();
+
+    const beforeMembers = orderMemberIds(before);
+    const afterMembers = orderMemberIds(after);
+    const leavers = beforeMembers.filter((id) => !afterMembers.includes(id));
+    if (leavers.length === 0) return null;
+
+    const notifyIds = [...new Set(afterMembers)].filter(Boolean);
+    if (notifyIds.length === 0) return null;
+
+    await notifyUsersExpo(db, notifyIds, 'Order Update ❌', 'Someone left the order', {
+      type: 'order_member_left',
+      orderId: context.params.orderId,
+    });
+
+    return null;
+  });
+
 exports.inactiveUserReminder = functions.pubsub
   .schedule('every 1 hours')
   .timeZone('America/Toronto')
@@ -682,7 +761,7 @@ exports.inactiveUserReminder = functions.pubsub
     for (const doc of usersSnap.docs) {
       const uid = doc.id;
       const data = doc.data();
-      const token = data?.expoPushToken ?? data?.pushToken;
+      const token = data?.fcmToken ?? data?.expoPushToken ?? data?.pushToken;
       if (typeof token !== 'string' || !token) continue;
       if (data?.notificationsEnabled === false) continue;
 

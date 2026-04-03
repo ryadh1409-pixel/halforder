@@ -98,6 +98,25 @@ service cloud.firestore {
         && request.resource.data.createdBy == resource.data.createdBy;
     }
 
+    /** Exactly-once: pair-join push ack via `notified` (client sends Expo push). */
+    function isOrderPairJoinNotifiedUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.cardId.size() > 0
+        && resource.data.get('users', []).size() == 2
+        && request.auth.uid in resource.data.get('users', [])
+        && resource.data.get('notified', false) != true
+        && request.resource.data.notified == true
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['notified', 'notifiedAt'])
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.maxUsers == resource.data.maxUsers;
+    }
+
     function orderLinkTargetsCard(orderId, cardId) {
       return exists(/databases/$(database)/documents/orders/$(orderId))
         && get(/databases/$(database)/documents/orders/$(orderId)).data.cardId == cardId;
@@ -355,6 +374,15 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
       }
+      /** Expo push token doc(s): e.g. `pushToken/default`. */
+      match /pushToken/{docId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+      match /fcmToken/{docId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
     function isChatDocMember(chatId) {
       return isSignedIn()
@@ -495,7 +523,8 @@ service cloud.firestore {
         || isCreatorOnlyNonJoinUpdate()
         || isSwipeAcceptUpdate()
         || isMarkOrderExpiredUpdate()
-        || isHalfOrderUsersJoinUpdate();
+        || isHalfOrderUsersJoinUpdate()
+        || isOrderPairJoinNotifiedUpdate();
       allow delete: if isAdmin()
         || (
           request.auth != null

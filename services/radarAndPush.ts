@@ -1,4 +1,3 @@
-import * as Notifications from 'expo-notifications';
 import {
   addDoc,
   collection,
@@ -6,9 +5,10 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { Platform } from 'react-native';
-import { db } from './firebase';
 import { getUserLocation } from './location';
+
+import { registerExpoPushTokenAndSyncToFirestore } from '@/services/pushNotifications';
+import { db } from './firebase';
 
 /**
  * Updates lastActive timestamp when the app launches.
@@ -58,31 +58,11 @@ export async function updateUserLocationInFirestore(
 }
 
 /**
- * Registers for Expo Push Notifications and saves the token to users/{userId}.
- * Requires notificationsEnabled to be respected by backend when sending.
+ * @deprecated Prefer `registerExpoPushTokenAndSyncToFirestore` from `@/services/pushNotifications` (used from Auth on login).
  */
 export async function registerPushTokenAndSave(uid: string): Promise<void> {
   try {
-    if (Platform.OS === 'web') return;
-
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return;
-
-    const tokenData = await Notifications.getExpoPushTokenAsync();
-    const token = tokenData?.data;
-    if (!token || typeof token !== 'string') return;
-
-    const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, {
-      expoPushToken: token,
-      pushToken: token,
-    });
+    await registerExpoPushTokenAndSyncToFirestore(uid);
   } catch {
     // Ignore push registration errors
   }

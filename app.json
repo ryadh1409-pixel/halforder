@@ -103,6 +103,13 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-notifications",
+        {
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
       "expo-router",
       [
         "expo-location",

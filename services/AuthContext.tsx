@@ -30,9 +30,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { theme } from '@/constants/theme';
 import { auth, db } from '@/services/firebase';
+import { subscribeExpoPushTokenRefresh } from '@/services/notifications';
+import {
+  persistUserPushTokens,
+  registerExpoPushTokenAndSyncToFirestore,
+} from '@/services/pushNotifications';
 
 const REFERRAL_CREDIT = 2;
 
@@ -204,11 +209,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // non-fatal
         }
+        registerExpoPushTokenAndSyncToFirestore(firebaseUser.uid).catch(
+          () => {},
+        );
       }
       setLoading(false);
     });
     return () => unsub();
   }, []);
+
+  /** Re-save Expo token when it rotates (must stay in sync with Firestore). */
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const u = user;
+    if (!u?.uid || u.isAnonymous) return;
+    const uid = u.uid;
+    const sub = subscribeExpoPushTokenRefresh((token) => {
+      persistUserPushTokens(uid, token).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [user?.uid, user?.isAnonymous]);
 
   const signUpWithEmail = useCallback(
     async (email: string, password: string) => {

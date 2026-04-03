@@ -3,9 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
-import {
-    Platform,
-} from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 import 'react-native-reanimated';
 
@@ -15,6 +13,7 @@ import 'react-native-reanimated';
  */
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { isAdminUser } from '@/constants/adminUid';
+import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
 import { startFoodCardAutomation } from '@/services/foodCards';
@@ -25,9 +24,12 @@ import {
 } from '@/services/notificationTracking';
 import { startExpiredOrdersCleanup } from '@/services/orders';
 import {
-    registerPushTokenAndSave,
-    updateLastActive,
-    updateUserLocationInFirestore,
+  configureExpoPushNotificationHandler,
+  requestNotificationPermissionOnAppLaunch,
+} from '@/services/pushNotifications';
+import {
+  updateLastActive,
+  updateUserLocationInFirestore,
 } from '@/services/radarAndPush';
 import {
   addDoc,
@@ -41,6 +43,8 @@ import {
 } from 'firebase/firestore';
 
 const NEARBY_MATCH_DATA_TYPE = 'nearby_match';
+
+configureExpoPushNotificationHandler();
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -62,6 +66,7 @@ export const linking = {
       'food-match/[matchId]': 'food-match/:matchId',
       'join/[orderId]': 'join/:orderId',
       'chat/[id]': 'chat/:id',
+      'order-details/[id]': 'order-details/:id',
     },
   },
 };
@@ -773,7 +778,6 @@ function RootLayoutNav() {
     if (!uid) return;
     updateLastActive(uid).catch(() => {});
     updateUserLocationInFirestore(uid, user?.email ?? null).catch(() => {});
-    registerPushTokenAndSave(uid).catch(() => {});
     trackAppOpen(uid).catch(() => {});
   }, [user?.uid, user?.email]);
 
@@ -787,6 +791,13 @@ function RootLayoutNav() {
     };
   }, []);
 
+  /** Ask for notification permission once on native app start (before sign-in). */
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    requestNotificationPermissionOnAppLaunch().catch(() => {});
+  }, []);
+
+  /** Foreground: analytics when a notification is delivered while app is active. */
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
@@ -795,12 +806,35 @@ function RootLayoutNav() {
         const data = notification?.request?.content?.data as
           | Record<string, unknown>
           | undefined;
+        if (data?.type === HALF_ORDER_PAIR_JOIN_PUSH_TYPE) {
+          const joinerName =
+            typeof data.joinerName === 'string' ? data.joinerName.trim() : '';
+          const distanceKm =
+            typeof data.distanceKm === 'string' ? data.distanceKm.trim() : '';
+          let message =
+            joinerName && joinerName !== 'Someone'
+              ? `${joinerName} is ready to chat on this order.`
+              : 'Your order is now ready to chat!';
+          if (distanceKm) {
+            message = `They're ${distanceKm} km away. ${message}`;
+          }
+          Alert.alert('Someone joined your order 🎉', message);
+        }
         const notificationId = data?.notificationId as string | undefined;
         if (notificationId) {
           logNotificationReceived(notificationId).catch(() => {});
         }
       },
     );
+
+    return () => {
+      receivedSub.remove();
+    };
+  }, []);
+
+  /** Background / quit: user tapped a notification; cold start via getLastNotificationResponseAsync. */
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
 
     const responseSub = Notifications.addNotificationResponseReceivedListener(
       (response) => {
@@ -814,11 +848,18 @@ function RootLayoutNav() {
         if (notificationId) {
           logNotificationOpened(notificationId).catch(() => {});
         }
-        trackNotificationOpen(user?.uid ?? null, notificationId).catch(
+        trackNotificationOpen(currentUserRef.current?.uid ?? null, notificationId).catch(
           () => {},
         );
         if (data?.type === NEARBY_MATCH_DATA_TYPE) {
           router.push('/(tabs)');
+          return;
+        }
+        if (data?.type === HALF_ORDER_PAIR_JOIN_PUSH_TYPE) {
+          const orderId = typeof data.orderId === 'string' ? data.orderId.trim() : '';
+          if (orderId) {
+            router.push(`/order-details/${orderId}` as never);
+          }
         }
       },
     );
@@ -834,10 +875,19 @@ function RootLayoutNav() {
       }
       if (data?.type === NEARBY_MATCH_DATA_TYPE) {
         setTimeout(() => router.push('/(tabs)'), 300);
+        return;
+      }
+      if (data?.type === HALF_ORDER_PAIR_JOIN_PUSH_TYPE) {
+        const orderId = typeof data.orderId === 'string' ? data.orderId.trim() : '';
+        if (orderId) {
+          setTimeout(
+            () => router.push(`/order-details/${orderId}` as never),
+            300,
+          );
+        }
       }
     });
     return () => {
-      receivedSub.remove();
       responseSub.remove();
     };
   }, [router]);

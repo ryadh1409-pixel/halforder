@@ -17,6 +17,7 @@ import {
   postHalfOrderChatSystemMessage,
 } from '@/services/halfOrderChat';
 import { auth, db } from '@/services/firebase';
+import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
 import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
 
 function normalizeOrderUsersArray(raw: unknown): string[] {
@@ -152,6 +153,7 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
       trimmedId,
       'Someone joined your order!',
     );
+    void trySendPairJoinExpoPush(trimmedId, uid);
   }
 
   await setDoc(

@@ -4,6 +4,7 @@ import {
   ensureHalfOrderChat,
   postHalfOrderChatSystemMessage,
 } from '@/services/halfOrderChat';
+import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
 import {
   addDoc,
   arrayUnion,
@@ -441,6 +442,7 @@ export async function joinOrder(
         outcome.orderId,
         'Someone joined your order!',
       );
+      void trySendPairJoinExpoPush(outcome.orderId, authedUid);
     }
   }
 
