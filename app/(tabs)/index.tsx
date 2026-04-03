@@ -10,6 +10,10 @@ import {
   subscribeActiveFoodCards,
   type FoodCard,
 } from '@/services/foodCards';
+import {
+  subscribeFoodTemplates,
+  type FoodTemplate,
+} from '@/services/foodTemplates';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +23,7 @@ import {
   Animated,
   Image,
   PanResponder,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -44,6 +49,7 @@ export default function SwipeScreen() {
   const [tick, setTick] = useState(0);
   const [joining, setJoining] = useState(false);
   const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const [foodTemplates, setFoodTemplates] = useState<FoodTemplate[]>([]);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const swipeInFlightRef = useRef(false);
@@ -67,6 +73,14 @@ export default function SwipeScreen() {
     );
     return () => unsub();
   }, [cardsRetryKey]);
+
+  useEffect(() => {
+    const unsub = subscribeFoodTemplates(
+      (rows) => setFoodTemplates(rows),
+      () => setFoodTemplates([]),
+    );
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setTick((x) => x + 1), 1000);
@@ -291,6 +305,57 @@ export default function SwipeScreen() {
           </View>
         ) : null}
       </View>
+      {foodTemplates.length > 0 ? (
+        <View style={styles.templateSection}>
+          <Text style={styles.templateSectionTitle}>Order from menu</Text>
+          <Text style={styles.templateSectionSub}>
+            Tap to start an order with name, price, and photo filled in
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.templateStrip}
+          >
+            {foodTemplates.map((t) => (
+              <TouchableOpacity
+                key={t.id}
+                activeOpacity={0.88}
+                style={styles.templateCard}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(tabs)/create',
+                    params: {
+                      fromFoodTemplate: '1',
+                      prefillTitle: t.name,
+                      prefillPriceSplit: `$${t.price.toFixed(2)}`,
+                      prefillImageUrl: t.imageUrl,
+                      prefillDescription: t.description,
+                      templateId: t.id,
+                    },
+                  } as never)
+                }
+              >
+                {t.imageUrl ? (
+                  <Image
+                    source={{ uri: t.imageUrl }}
+                    style={styles.templateImage}
+                  />
+                ) : (
+                  <View style={[styles.templateImage, styles.templateImagePh]} />
+                )}
+                <View style={styles.templateCardBody}>
+                  <Text style={styles.templateName} numberOfLines={2}>
+                    {t.name}
+                  </Text>
+                  <Text style={styles.templatePrice}>
+                    ${t.price.toFixed(2)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color="#34D399" />
@@ -456,6 +521,49 @@ export default function SwipeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#070A0F' },
   header: { paddingHorizontal: theme.spacing.screen, paddingVertical: 12 },
+  templateSection: {
+    paddingLeft: theme.spacing.screen,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  templateSectionTitle: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  templateSectionSub: {
+    color: 'rgba(248,250,252,0.5)',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 10,
+    paddingRight: theme.spacing.screen,
+  },
+  templateStrip: { paddingRight: theme.spacing.screen },
+  templateCard: {
+    width: 148,
+    marginRight: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#11161F',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  templateImage: { width: '100%', height: 104, backgroundColor: '#1a1f28' },
+  templateImagePh: { alignItems: 'center', justifyContent: 'center' },
+  templateCardBody: { padding: 10 },
+  templateName: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  templatePrice: {
+    color: '#34D399',
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 6,
+  },
   title: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
   subtitle: { color: 'rgba(248,250,252,0.6)', marginTop: 4 },
   adminBanner: {

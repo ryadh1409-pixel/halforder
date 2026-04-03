@@ -22,6 +22,10 @@ export default function AdminLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" options={{ title: 'Admin' }} />
+      <Stack.Screen
+        name="food-templates"
+        options={{ title: 'Food catalog' }}
+      />
       <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
       <Stack.Screen name="users" options={{ title: 'Users' }} />
       <Stack.Screen name="user/[id]" options={{ title: 'User' }} />

@@ -303,6 +303,18 @@ export default function AdminScreen() {
       >
         <Text style={styles.title}>Admin Dashboard</Text>
 
+        <TouchableOpacity
+          style={styles.navCard}
+          activeOpacity={0.88}
+          onPress={() => router.push(adminRoutes.foodTemplates as never)}
+        >
+          <Text style={styles.navCardTitle}>Food catalog templates</Text>
+          <Text style={styles.navCardSub}>
+            Up to 10 items · Home screen · Storage images
+          </Text>
+          <Text style={styles.navCardCta}>Open editor →</Text>
+        </TouchableOpacity>
+
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
@@ -493,6 +505,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveText: { color: '#07241A', fontWeight: '800' },
+  navCard: {
+    ...adminCardShell,
+    marginBottom: 16,
+    borderColor: 'rgba(52, 211, 153, 0.35)',
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
+  },
+  navCardTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  navCardSub: { marginTop: 6, fontSize: 13, color: COLORS.textMuted, lineHeight: 18 },
+  navCardCta: { marginTop: 10, fontSize: 14, fontWeight: '700', color: COLORS.primary },
   navSection: { marginTop: 24, gap: 12 },
   navButton: {
     backgroundColor: COLORS.primary,

@@ -1,6 +1,7 @@
 /** Canonical admin URLs (Expo Router / `app/admin/`). */
 export const adminRoutes = {
   home: '/admin',
+  foodTemplates: '/admin/food-templates',
   dashboard: '/admin/dashboard',
   analytics: '/admin/analytics',
   users: '/admin/users',
