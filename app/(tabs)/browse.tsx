@@ -25,6 +25,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AIDescription } from '@/components/AIDescription';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const D = {
@@ -98,6 +99,7 @@ function BrowseFoodCardRow({
         >
           <Text style={styles.cardTitle}>{card.title}</Text>
         </TouchableOpacity>
+        <AIDescription description={card.aiDescription} title={card.title} />
         <Text style={styles.meta}>{card.restaurantName}</Text>
         <Text style={styles.meta}>
           ${card.splitPrice.toFixed(2)} each · total ${card.price.toFixed(2)}

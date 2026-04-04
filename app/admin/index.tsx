@@ -10,6 +10,7 @@ import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
 import { auth, db, storage } from '@/services/firebase';
+import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
 import {
   countFoodCardsWithStatus,
   countVisibleActiveFoodCardsInSnapshot,
@@ -237,11 +238,13 @@ export default function AdminScreen() {
         return;
       }
       const now = Date.now();
+      const aiTrim = aiDescription.trim();
       await addDoc(collection(db, 'food_cards'), {
         title: title.trim(),
         image: imageUrl.trim(),
         restaurantName: restaurantName.trim(),
         description: description.trim() || '',
+        ...(aiTrim ? { aiDescription: aiTrim } : {}),
         price: total,
         splitPrice: split,
         location: location.trim() || null,
@@ -259,6 +262,7 @@ export default function AdminScreen() {
       setSplitPrice('');
       setLocation('');
       setDescription('');
+      setAiDescription('');
       setImageUrl('');
       fetchMetrics();
       Alert.alert('Saved', 'Food card created successfully.');
@@ -350,7 +354,37 @@ export default function AdminScreen() {
           {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.preview} /> : null}
           <TextInput style={styles.input} placeholder="Title" placeholderTextColor={COLORS.textMuted} value={title} onChangeText={setTitle} />
           <TextInput style={styles.input} placeholder="Restaurant Name" placeholderTextColor={COLORS.textMuted} value={restaurantName} onChangeText={setRestaurantName} />
-          <TextInput style={styles.input} placeholder="Description (optional)" placeholderTextColor={COLORS.textMuted} value={description} onChangeText={setDescription} multiline />
+          <TextInput style={styles.input} placeholder="Venue notes (optional)" placeholderTextColor={COLORS.textMuted} value={description} onChangeText={setDescription} multiline />
+          <TextInput style={[styles.input, styles.inputMultiline]} placeholder="AI description (shown on card)" placeholderTextColor={COLORS.textMuted} value={aiDescription} onChangeText={setAiDescription} multiline />
+          <TouchableOpacity
+            style={[styles.genAiBtn, aiGenerating && styles.genAiBtnDisabled]}
+            disabled={aiGenerating || !title.trim() || !restaurantName.trim()}
+            onPress={() => {
+              void (async () => {
+                setAiGenerating(true);
+                try {
+                  const gen = await generateFoodCardAiDescription({
+                    title: title.trim(),
+                    restaurantName: restaurantName.trim(),
+                    adminDescription: description.trim() || undefined,
+                  });
+                  if (gen) setAiDescription(gen);
+                  else {
+                    Alert.alert(
+                      'Could not generate',
+                      'Add EXPO_PUBLIC_OPENAI_API_KEY (or expo.extra.openaiApiKey) and try again, or type a description manually.',
+                    );
+                  }
+                } finally {
+                  setAiGenerating(false);
+                }
+              })();
+            }}
+          >
+            <Text style={styles.genAiBtnText}>
+              {aiGenerating ? 'Generating…' : 'Generate AI description'}
+            </Text>
+          </TouchableOpacity>
           <TextInput style={styles.input} placeholder="Total Price" placeholderTextColor={COLORS.textMuted} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
           <TextInput style={styles.input} placeholder="Split Price" placeholderTextColor={COLORS.textMuted} value={splitPrice} onChangeText={setSplitPrice} keyboardType="decimal-pad" />
           <TextInput style={styles.input} placeholder="Location" placeholderTextColor={COLORS.textMuted} value={location} onChangeText={setLocation} />
@@ -537,6 +571,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 10,
   },
+  inputMultiline: { minHeight: 88, textAlignVertical: 'top' },
+  genAiBtn: {
+    marginBottom: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(99,102,241,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(129,140,248,0.5)',
+    alignItems: 'center',
+  },
+  genAiBtnDisabled: { opacity: 0.55 },
+  genAiBtnText: { color: '#C7D2FE', fontWeight: '700', fontSize: 14 },
   saveBtn: {
     marginTop: 6,
     height: 48,

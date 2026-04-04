@@ -17,6 +17,7 @@ import {
 import { subscribeActiveFoodTemplates } from '@/services/foodTemplates';
 import type { FoodTemplate } from '@/types/food';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { AIDescription } from '@/components/AIDescription';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -414,6 +415,11 @@ export default function SwipeScreen() {
             ) : null}
             <View style={styles.info}>
               <Text style={styles.cardTitle}>{topCard.title}</Text>
+              <AIDescription
+                description={topCard.aiDescription}
+                title={topCard.title}
+                compact
+              />
               <Text style={styles.meta}>${topCard.splitPrice.toFixed(2)} each</Text>
               <Text style={styles.meta}>{topCard.restaurantName}</Text>
               <Text style={styles.meta}>

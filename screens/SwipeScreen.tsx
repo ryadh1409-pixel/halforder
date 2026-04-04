@@ -44,6 +44,7 @@ import {
   where,
 } from 'firebase/firestore';
 
+import { AIDescription } from '@/components/AIDescription';
 import {
   getHeroImageUrlForType,
   parseMinutesFromTimeLabel,
@@ -198,6 +199,11 @@ function FoodCardFace({ card }: { card: SwipeCard }) {
         <Text style={styles.foodTitle} numberOfLines={2}>
           {card.title}
         </Text>
+        <AIDescription
+          title={card.title}
+          category={card.type === 'pizza' ? 'Pizza' : 'Noodles'}
+          compact
+        />
         <View style={styles.urgencyBlock}>
           <View style={styles.userRow}>
             <Image

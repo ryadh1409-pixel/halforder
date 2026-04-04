@@ -38,6 +38,7 @@ import {
 import { theme } from '@/constants/theme';
 import { buildOrderWhatsAppInviteLink } from '@/lib/invite-link';
 import { friendlyErrorMessage } from '@/lib/friendlyError';
+import { AIDescription } from '@/components/AIDescription';
 import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { blockUser } from '@/services/block';
@@ -101,6 +102,8 @@ type OrderDetails = {
   foodCardStatus?: string;
   orderStatus?: string;
   hostId?: string;
+  /** From `food_cards` when opened as a card. */
+  aiDescription?: string;
 };
 
 function mapOrderDocument(snap: DocumentSnapshot): OrderDetails {
@@ -189,6 +192,10 @@ function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
         ? 'Location on file'
         : 'Nearby';
   const ownerId = String(d.ownerId ?? '');
+  const aiDesc =
+    typeof d.aiDescription === 'string' && d.aiDescription.trim()
+      ? d.aiDescription.trim()
+      : '';
   return {
     id: snap.id,
     foodName: String(d.title ?? 'Food card'),
@@ -205,6 +212,7 @@ function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
     participants: [],
     hostId: ownerId || undefined,
     foodCardStatus: typeof d.status === 'string' ? d.status : undefined,
+    aiDescription: aiDesc || undefined,
   };
 }
 
@@ -698,6 +706,13 @@ export default function OrderDetailsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Image source={{ uri: order.image }} style={styles.image} />
         <Text style={styles.foodName}>{order.foodName}</Text>
+        {detailSource === 'food_card' ? (
+          <AIDescription
+            description={order.aiDescription}
+            title={order.foodName}
+            containerStyle={styles.aiDescOrderWrap}
+          />
+        ) : null}
         <Text style={styles.price}>${order.pricePerPerson.toFixed(2)} per person</Text>
         <View style={styles.card}>
           <Text style={styles.meta}>Total: ${order.totalPrice.toFixed(2)}</Text>
@@ -1012,6 +1027,10 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   image: { width: '100%', height: 260, borderRadius: 20, marginBottom: 14 },
   foodName: { color: '#F8FAFC', fontSize: 28, fontWeight: '800' },
+  aiDescOrderWrap: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
   price: { color: '#6EE7B7', fontSize: 18, fontWeight: '700', marginTop: 6, marginBottom: 14 },
   card: {
     backgroundColor: '#141922',

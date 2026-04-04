@@ -44,6 +44,8 @@ import {
 export type FoodCard = {
   id: string;
   title: string;
+  /** Optional AI-written blurb for the dish (shown in deck + detail). */
+  aiDescription?: string;
   image: string;
   restaurantName: string;
   price: number;
@@ -161,11 +163,16 @@ export function subscribeActiveFoodCards(
           typeof data.orderId === 'string' && data.orderId.trim()
             ? data.orderId.trim()
             : null;
+        const aiDesc =
+          typeof data.aiDescription === 'string' && data.aiDescription.trim()
+            ? data.aiDescription.trim()
+            : undefined;
         return {
           id: d.id,
           ...data,
           orderId: oid,
           expiresAt,
+          aiDescription: aiDesc,
         } as FoodCard;
       });
       console.log(
@@ -565,6 +572,7 @@ export async function createFoodCard(input: {
   splitPrice: number;
   latitude?: number | null;
   longitude?: number | null;
+  aiDescription?: string;
 }) {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid || uid !== ADMIN_UID) throw new Error('Admin only');
@@ -573,10 +581,15 @@ export async function createFoodCard(input: {
     throw new Error('Max 10 active cards');
   }
   const now = Date.now();
+  const aiDesc =
+    typeof input.aiDescription === 'string' && input.aiDescription.trim()
+      ? input.aiDescription.trim()
+      : undefined;
   return addDoc(collection(db, FOOD_CARDS), {
     title: input.title.trim(),
     image: input.image.trim(),
     restaurantName: input.restaurantName.trim(),
+    ...(aiDesc ? { aiDescription: aiDesc } : {}),
     price: input.price,
     splitPrice: input.splitPrice,
     location:
@@ -602,10 +615,15 @@ async function duplicateCard(cardId: string) {
     typeof data.ownerId === 'string' && data.ownerId
       ? data.ownerId
       : auth.currentUser?.uid ?? '';
+  const dupAi =
+    typeof data.aiDescription === 'string' && data.aiDescription.trim()
+      ? data.aiDescription.trim()
+      : undefined;
   await addDoc(collection(db, FOOD_CARDS), {
     title: data.title ?? 'Food card',
     image: data.image ?? '',
     restaurantName: data.restaurantName ?? '',
+    ...(dupAi ? { aiDescription: dupAi } : {}),
     price: Number(data.price) || 0,
     splitPrice: Number(data.splitPrice) || 0,
     location: data.location ?? null,
