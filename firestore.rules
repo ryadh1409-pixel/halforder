@@ -190,7 +190,7 @@ service cloud.firestore {
         + (parts.size() > 19 && parts[19] is map && parts[19].userId == uid ? 1 : 0);
     }
 
-    /** HalfOrder: food-card swipe creates `orders` with `cardId` + `users` + `host` + `participants`. */
+    /** HalfOrder: food-card swipe creates `orders` with `cardId` + `users` + `host`, string `participants`, `joinedAtMap`. */
     function isValidHalfOrderCreate() {
       return isSignedIn()
         && canCreateOrderBySafetyLimits()
@@ -206,9 +206,10 @@ service cloud.firestore {
         && request.resource.data.host.userId == request.auth.uid
         && request.resource.data.participants is list
         && request.resource.data.participants.size() == 1
-        && validParticipantDoc(request.resource.data.participants[0])
-        && request.resource.data.participants[0].userId == request.auth.uid
-        && allParticipantDocsValid(request.resource.data.participants)
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants[0] == request.auth.uid
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
         && (
           request.resource.data.status == 'waiting'
           || request.resource.data.status == 'active'
@@ -225,7 +226,7 @@ service cloud.firestore {
         && request.resource.data.createdAt != null;
     }
 
-    /** +1 user and +1 participant map; host unchanged. Optional status -> matched when pair forms. */
+    /** +1 `users`, string `participants` mirrors `users`, `joinedAtMap` gains joiner entry. Optional status -> matched. */
     function isHalfOrderParticipantIncrementalJoin() {
       return isSignedIn()
         && !isCurrentUserRestricted()
@@ -234,11 +235,18 @@ service cloud.firestore {
         && request.resource.data.users is list
         && usersAllStrings(request.resource.data.users)
         && request.resource.data.participants is list
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants.size()
+          == request.resource.data.users.size()
         && request.resource.data.users.size() == resource.data.get('users', []).size() + 1
         && request.resource.data.participants.size()
           == resource.data.get('participants', []).size() + 1
         && request.auth.uid in request.resource.data.users
         && !(request.auth.uid in resource.data.get('users', []))
+        && participantListContainsUid(request.resource.data.participants, request.auth.uid)
+        && !participantListContainsUid(resource.data.get('participants', []), request.auth.uid)
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
         && request.resource.data.users.size() <= resource.data.get('maxUsers', 2)
         && request.resource.data.cardId == resource.data.cardId
         && request.resource.data.createdBy == resource.data.createdBy
@@ -249,21 +257,15 @@ service cloud.firestore {
           !resource.data.keys().hasAny(['host'])
           || request.resource.data.host == resource.data.host
         )
-        && countParticipantUserId(
-          request.resource.data.participants, request.auth.uid
-        ) == countParticipantUserId(
-          resource.data.get('participants', []), request.auth.uid
-        ) + 1
-        && allParticipantDocsValid(request.resource.data.participants)
         && (
           (
             request.resource.data.diff(resource.data).changedKeys()
-              .hasOnly(['users', 'participants'])
+              .hasOnly(['users', 'participants', 'joinedAtMap'])
             && request.resource.data.status == resource.data.status
           )
           || (
             request.resource.data.diff(resource.data).changedKeys()
-              .hasOnly(['users', 'participants', 'status'])
+              .hasOnly(['users', 'participants', 'joinedAtMap', 'status'])
             && request.resource.data.status == 'matched'
             && (
               resource.data.status == 'waiting'
@@ -273,7 +275,7 @@ service cloud.firestore {
         );
     }
 
-    /** Legacy order: empty participants, one user -> two users + two participant maps + host. */
+    /** Empty participants, one user -> two users, two string participant ids, `host`, joiner in `joinedAtMap`. */
     function isHalfOrderParticipantBootstrapJoin() {
       return isSignedIn()
         && !isCurrentUserRestricted()
@@ -285,14 +287,15 @@ service cloud.firestore {
         && usersAllStrings(request.resource.data.users)
         && request.resource.data.participants is list
         && request.resource.data.participants.size() == 2
+        && participantsAllStrings(request.resource.data.participants)
         && request.auth.uid in request.resource.data.users
         && !(request.auth.uid in resource.data.get('users', []))
-        && request.resource.data.participants[0].userId == resource.data.users[0]
-        && request.resource.data.participants[1].userId == request.auth.uid
+        && request.resource.data.participants[0] == resource.data.users[0]
+        && request.resource.data.participants[1] == request.auth.uid
         && validOrderHostDoc(request.resource.data.host)
         && request.resource.data.host.userId == resource.data.users[0]
-        && validParticipantDoc(request.resource.data.participants[0])
-        && validParticipantDoc(request.resource.data.participants[1])
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
         && request.resource.data.cardId == resource.data.cardId
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.get('hostId', '')
@@ -301,12 +304,12 @@ service cloud.firestore {
         && (
           (
             request.resource.data.diff(resource.data).changedKeys()
-              .hasOnly(['users', 'participants', 'host'])
+              .hasOnly(['users', 'participants', 'host', 'joinedAtMap'])
             && request.resource.data.status == resource.data.status
           )
           || (
             request.resource.data.diff(resource.data).changedKeys()
-              .hasOnly(['users', 'participants', 'host', 'status'])
+              .hasOnly(['users', 'participants', 'host', 'joinedAtMap', 'status'])
             && request.resource.data.status == 'matched'
             && (
               resource.data.status == 'waiting'

@@ -20,6 +20,8 @@ export type AdminFoodCardSlot = {
   title: string;
   image: string;
   price: number;
+  sharingPrice: number;
+  venueLocation: string;
   active: boolean;
   aiDescription: string;
   restaurantName: string;
@@ -31,12 +33,27 @@ function coerceSlot(
 ): AdminFoodCardSlot {
   const idNum =
     raw && typeof raw.id === 'number' ? raw.id : Number.parseInt(docId, 10) || 1;
+  const price =
+    typeof raw?.price === 'number' && raw.price > 0 ? raw.price : 0;
+  const splitFallback =
+    price > 0 ? Number((price / 2).toFixed(2)) : 0;
+  const sharing =
+    typeof raw?.sharingPrice === 'number' && raw.sharingPrice > 0
+      ? raw.sharingPrice
+      : typeof raw?.splitPrice === 'number' && raw.splitPrice > 0
+        ? raw.splitPrice
+        : splitFallback;
+  let venue = '';
+  const loc = raw?.location;
+  if (typeof loc === 'string' && loc.trim()) venue = loc.trim();
   return {
     docId,
     id: idNum,
     title: typeof raw?.title === 'string' ? raw.title : '',
     image: typeof raw?.image === 'string' ? raw.image : '',
-    price: typeof raw?.price === 'number' && raw.price > 0 ? raw.price : 0,
+    price,
+    sharingPrice: sharing,
+    venueLocation: venue,
     active: raw?.active === true,
     aiDescription:
       typeof raw?.aiDescription === 'string' ? raw.aiDescription : '',
@@ -81,6 +98,8 @@ export async function saveAdminFoodCardSlot(
     title: string;
     image: string;
     price: number;
+    sharingPrice: number;
+    venueLocation?: string;
     active: boolean;
     aiDescription?: string;
     restaurantName?: string;
@@ -92,6 +111,10 @@ export async function saveAdminFoodCardSlot(
   if (!Number.isFinite(price) || price <= 0) {
     throw new Error('Valid price required');
   }
+  const sharing = Number(input.sharingPrice);
+  if (!Number.isFinite(sharing) || sharing <= 0) {
+    throw new Error('Valid sharing price per person is required');
+  }
   const title = input.title.trim();
   if (!title) throw new Error('Title required');
   const image = input.image.trim();
@@ -102,6 +125,10 @@ export async function saveAdminFoodCardSlot(
       ? input.aiDescription.trim()
       : '';
 
+  const venue =
+    typeof input.venueLocation === 'string' ? input.venueLocation.trim() : '';
+  const shareFixed = Number(sharing.toFixed(2));
+
   await setDoc(
     doc(db, 'food_cards', slotDocId),
     {
@@ -109,7 +136,9 @@ export async function saveAdminFoodCardSlot(
       title,
       image,
       price,
-      splitPrice: Number((price / 2).toFixed(2)),
+      sharingPrice: shareFixed,
+      splitPrice: shareFixed,
+      location: venue,
       active: input.active === true,
       maxUsers: 2,
       restaurantName:

@@ -20,7 +20,8 @@ export type OrderHost = {
 };
 
 export type OrderParticipant = OrderHost & {
-  joinedAt?: Timestamp | ReturnType<typeof serverTimestamp> | null;
+  /** Prefer `orders.joinedAtMap[uid]`; optional on legacy embedded rows. */
+  joinedAt?: Timestamp | null;
   location: { lat: number; lng: number } | null;
 };
 
@@ -34,9 +35,12 @@ export function publicUserToOrderHost(u: PublicUserFields): OrderHost {
   };
 }
 
+/**
+ * Rich participant row for `orders.participants` (no `joinedAt` — Firestore forbids
+ * `serverTimestamp()` inside array elements; use `joinedAtMap.{userId}` instead).
+ */
 export function publicUserToOrderParticipantWrite(
   u: PublicUserFields,
-  joinedAt: ReturnType<typeof serverTimestamp>,
 ): Record<string, unknown> {
   return {
     userId: u.userId,
@@ -44,19 +48,16 @@ export function publicUserToOrderParticipantWrite(
     avatar: u.avatar,
     phone: u.phone,
     expoPushToken: u.expoPushToken,
-    joinedAt,
     location: u.location,
   };
 }
 
 export async function loadHalfOrderCreatorProfiles(
   uid: string,
-): Promise<{ host: OrderHost; firstParticipant: Record<string, unknown> } | null> {
+): Promise<{ host: OrderHost } | null> {
   const row = await getPublicUserFields(uid);
   if (!row) return null;
-  const host = publicUserToOrderHost(row);
-  const firstParticipant = publicUserToOrderParticipantWrite(row, serverTimestamp());
-  return { host, firstParticipant };
+  return { host: publicUserToOrderHost(row) };
 }
 
 export async function loadJoiningParticipantPayload(
@@ -64,7 +65,7 @@ export async function loadJoiningParticipantPayload(
 ): Promise<Record<string, unknown> | null> {
   const row = await getPublicUserFields(uid);
   if (!row) return null;
-  return publicUserToOrderParticipantWrite(row, serverTimestamp());
+  return publicUserToOrderParticipantWrite(row);
 }
 
 /** Parse `participants` as rich objects or legacy string IDs. */
@@ -143,6 +144,12 @@ export type HalfOrderJoinPlan =
   | { kind: 'already_member' }
   | { kind: 'update'; fields: Record<string, unknown> };
 
+/** True when `participants` is a Firestore list of plain user-id strings (no rich objects). */
+function participantsArrayIsPlainStringUids(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false;
+  return raw.every((x) => typeof x === 'string' && x.trim().length > 0);
+}
+
 function withMatchedStatusWhenPair(
   fields: Record<string, unknown>,
   usersBeforeCount: number,
@@ -154,18 +161,18 @@ function withMatchedStatusWhenPair(
 }
 
 /**
- * Build Firestore `update` fields for HalfOrder join (users + participants + optional host bootstrap).
+ * Build Firestore `update` fields for HalfOrder join.
+ * `participants` is **string[]** (userIds only); join times live in `joinedAtMap.{uid}`.
  */
 export function planHalfOrderJoin(args: {
   orderData: Record<string, unknown>;
   joinerUid: string;
-  joinerParticipant: Record<string, unknown>;
   orderMaxUsers: number;
   /** When `participants` empty and one user, pass loaded host profile (same uid as sole user). */
   hostProfileIfBootstrapping: PublicUserFields | null;
 }): HalfOrderJoinPlan {
   const users = normalizeOrderUserIds(args.orderData.users);
-  const parts = normalizeParticipantRecords(args.orderData.participants);
+  const partIds = normalizeOrderUserIds(args.orderData.participants);
 
   if (users.includes(args.joinerUid)) {
     return { kind: 'already_member' };
@@ -174,17 +181,17 @@ export function planHalfOrderJoin(args: {
     throw new Error('Order is full');
   }
 
-  if (parts.length === 0 && users.length === 1) {
+  if (partIds.length === 0 && users.length === 1) {
     const hp = args.hostProfileIfBootstrapping;
     if (!hp || hp.userId !== users[0]) {
       throw new Error('Host profile could not be loaded for this order.');
     }
     const host = publicUserToOrderHost(hp);
-    const p0 = publicUserToOrderParticipantWrite(hp, serverTimestamp());
     const fields = {
       users: arrayUnion(args.joinerUid),
-      participants: [p0, args.joinerParticipant],
+      participants: arrayUnion(users[0], args.joinerUid),
       host,
+      [`joinedAtMap.${args.joinerUid}`]: serverTimestamp(),
     };
     return {
       kind: 'update',
@@ -192,10 +199,18 @@ export function planHalfOrderJoin(args: {
     };
   }
 
-  if (parts.length === users.length) {
+  if (partIds.length === users.length) {
+    const rawParts = args.orderData.participants;
+    const participantWrite: Record<string, unknown> =
+      participantsArrayIsPlainStringUids(rawParts)
+        ? { participants: arrayUnion(args.joinerUid) }
+        : {
+            participants: [...users, args.joinerUid],
+          };
     const fields = {
       users: arrayUnion(args.joinerUid),
-      participants: arrayUnion(args.joinerParticipant),
+      ...participantWrite,
+      [`joinedAtMap.${args.joinerUid}`]: serverTimestamp(),
     };
     return {
       kind: 'update',

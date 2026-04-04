@@ -7,7 +7,9 @@ import {
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
 import { getHiddenUserIds } from '@/services/block';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import {
+  formatFoodCardSharingPriceLine,
   isFoodCardJoinDisabled,
   joinOrder,
   skipFoodCard,
@@ -18,6 +20,7 @@ import { subscribeJoinHintsForFoodCard } from '@/services/foodCardSlotOrders';
 import { subscribeActiveFoodTemplates } from '@/services/foodTemplates';
 import type { FoodTemplate } from '@/types/food';
 import { AIDescription } from '@/components/AIDescription';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -32,7 +35,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 function formatTimer(expiresAt: number): string {
   const left = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
@@ -43,6 +49,7 @@ function formatTimer(expiresAt: number): string {
 
 export default function SwipeScreen() {
   const SWIPE_TRIGGER = 90;
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const [cards, setCards] = useState<FoodCard[]>([]);
@@ -182,6 +189,12 @@ export default function SwipeScreen() {
     setJoining(true);
     try {
       const result = await joinOrder(targetId, joinUid);
+      if (!result.ok) {
+        if (!result.silent && result.message) {
+          Alert.alert('Could not join', result.message);
+        }
+        return;
+      }
       console.log('[swipe] joinOrder result:', {
         cardId: targetId,
         orderId: result.orderId,
@@ -390,6 +403,7 @@ export default function SwipeScreen() {
           )}
         </View>
       ) : (
+        <View style={styles.deckWithActions}>
         <View style={styles.deck}>
           {secondCard ? (
             <View style={[styles.card, styles.cardUnder]}>
@@ -418,13 +432,18 @@ export default function SwipeScreen() {
                 title={topCard.title}
                 compact
               />
-              <Text style={styles.meta}>${topCard.splitPrice.toFixed(2)} each</Text>
-              <Text style={styles.meta}>{topCard.restaurantName}</Text>
               <Text style={styles.meta}>
-                {topCard.location
-                  ? 'Location included on this card'
-                  : 'Location not listed on this card'}
+                {formatFoodCardSharingPriceLine(topCard.sharingPrice)}
               </Text>
+              <Text style={styles.meta}>{topCard.restaurantName}</Text>
+              <Text style={styles.meta} numberOfLines={3}>
+                {topCard.venueLocation.trim()
+                  ? `Location: ${topCard.venueLocation.trim()}`
+                  : topCard.location
+                    ? 'Location included on this card'
+                    : 'Location not listed on this card'}
+              </Text>
+              <FoodCardPaymentDisclaimer style={styles.cardDisclaimer} />
               {isAdminFoodCardSlotId(topCard.id) ||
               topCard.expiresAt > 1e15 ? null : (
                 <Text style={styles.timer}>
@@ -502,42 +521,49 @@ export default function SwipeScreen() {
             </View>
           </Animated.View>
         </View>
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.actionsBarWrap,
+            { bottom: Math.max(20, 10 + insets.bottom) },
+          ]}
+        >
+          <BlurView intensity={48} tint="dark" style={styles.actionsBlur}>
+            <View style={styles.actionsInner}>
+              <TouchableOpacity
+                disabled={joining}
+                onPress={() => onSkip()}
+                style={[styles.skipBarBtn, joining && styles.barBtnDisabled]}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.skipBarText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={joinPrimaryDisabled}
+                onPress={() => onLike()}
+                style={[
+                  styles.joinBarBtn,
+                  joinPrimaryDisabled && styles.barBtnDisabled,
+                ]}
+                activeOpacity={0.88}
+              >
+                {joining ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.joinBarText}>
+                    {!uid
+                      ? 'Sign in'
+                      : topJoinHint?.anyOpenOrderMemberIds.includes(uid)
+                        ? 'Joined'
+                        : 'Join'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </BlurView>
+        </View>
+        </View>
       )}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          disabled={!topCard || joining}
-          onPress={() => onSkip()}
-          style={[
-            styles.btn,
-            styles.skipBtn,
-            (!topCard || joining) && styles.btnDisabled,
-          ]}
-        >
-          <Text style={styles.skipText}>❌ Skip</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          disabled={joinPrimaryDisabled}
-          onPress={() => onLike()}
-          style={[
-            styles.btn,
-            styles.likeBtn,
-            joinPrimaryDisabled && styles.btnDisabled,
-          ]}
-        >
-          {joining ? (
-            <ActivityIndicator color="#07241A" />
-          ) : (
-            <Text style={styles.likeText}>
-              {!uid
-                ? 'Sign in'
-                : topCard &&
-                    topJoinHint?.anyOpenOrderMemberIds.includes(uid)
-                  ? 'Joined'
-                  : '❤️ Join'}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -626,7 +652,62 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(52, 211, 153, 0.45)',
   },
   retryBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 15 },
-  deck: { flex: 1, paddingHorizontal: 16, justifyContent: 'center' },
+  deckWithActions: { flex: 1, position: 'relative' },
+  deck: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    paddingBottom: 96,
+  },
+  actionsBarWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 20,
+  },
+  actionsBlur: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(15, 23, 32, 0.65)',
+  },
+  actionsInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  skipBarBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.38)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  joinBarBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(45, 212, 191, 0.88)',
+  },
+  barBtnDisabled: { opacity: 0.45 },
+  skipBarText: {
+    color: 'rgba(203, 213, 225, 0.95)',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  joinBarText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   card: {
     borderRadius: 22,
     overflow: 'hidden',
@@ -639,6 +720,7 @@ const styles = StyleSheet.create({
   info: { padding: 14 },
   cardTitle: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
   meta: { color: 'rgba(248,250,252,0.7)', marginTop: 5 },
+  cardDisclaimer: { alignSelf: 'stretch' },
   timer: { color: '#34D399', marginTop: 8, fontWeight: '700' },
   detailsBtn: {
     marginTop: 10,
@@ -730,17 +812,4 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 8,
   },
-  actions: { flexDirection: 'row', gap: 12, padding: 16 },
-  btn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  skipBtn: { backgroundColor: 'rgba(239,68,68,0.14)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.4)' },
-  likeBtn: { backgroundColor: '#34D399' },
-  btnDisabled: { opacity: 0.45 },
-  skipText: { color: '#FCA5A5', fontWeight: '800' },
-  likeText: { color: '#07241A', fontWeight: '800' },
 });

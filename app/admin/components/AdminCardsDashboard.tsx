@@ -32,6 +32,8 @@ type Draft = {
   title: string;
   image: string;
   price: string;
+  sharingPrice: string;
+  venueLocation: string;
   active: boolean;
   aiDescription: string;
   restaurantName: string;
@@ -42,6 +44,8 @@ function emptyDraft(): Draft {
     title: '',
     image: '',
     price: '',
+    sharingPrice: '',
+    venueLocation: '',
     active: false,
     aiDescription: '',
     restaurantName: 'HalfOrder',
@@ -66,6 +70,9 @@ export function AdminCardsDashboard() {
               title: r.title,
               image: r.image,
               price: r.price > 0 ? String(r.price) : '',
+              sharingPrice:
+                r.sharingPrice > 0 ? String(r.sharingPrice) : '',
+              venueLocation: r.venueLocation,
               active: r.active,
               aiDescription: r.aiDescription,
               restaurantName: r.restaurantName,
@@ -98,6 +105,9 @@ export function AdminCardsDashboard() {
         title: r.title,
         image: r.image,
         price: r.price > 0 ? String(r.price) : '',
+        sharingPrice:
+          r.sharingPrice > 0 ? String(r.sharingPrice) : '',
+        venueLocation: r.venueLocation,
         active: r.active,
         aiDescription: r.aiDescription,
         restaurantName: r.restaurantName,
@@ -140,12 +150,20 @@ export function AdminCardsDashboard() {
     const docId = slot.docId;
     const d = ensureDraft(docId);
     const priceNum = Number(d.price);
+    const sharingNum = Number(d.sharingPrice);
     if (!d.title.trim() || !d.image.trim()) {
       Alert.alert('Required', 'Title and image are required to save.');
       return;
     }
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
       Alert.alert('Price', 'Enter a valid total price.');
+      return;
+    }
+    if (!Number.isFinite(sharingNum) || sharingNum <= 0) {
+      Alert.alert(
+        'Sharing price',
+        'Enter a valid price per person (sharing).',
+      );
       return;
     }
     setSavingId(docId);
@@ -155,6 +173,8 @@ export function AdminCardsDashboard() {
         title: d.title,
         image: d.image,
         price: priceNum,
+        sharingPrice: sharingNum,
+        venueLocation: d.venueLocation,
         active: d.active,
         aiDescription: d.aiDescription,
         restaurantName: d.restaurantName,
@@ -263,6 +283,21 @@ export function AdminCardsDashboard() {
               value={d.price}
               onChangeText={(t) => setField(docId, { price: t })}
               keyboardType="decimal-pad"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Price per person (Sharing)"
+              placeholderTextColor={COLORS.textMuted}
+              value={d.sharingPrice}
+              onChangeText={(t) => setField(docId, { sharingPrice: t })}
+              keyboardType="decimal-pad"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Location"
+              placeholderTextColor={COLORS.textMuted}
+              value={d.venueLocation}
+              onChangeText={(t) => setField(docId, { venueLocation: t })}
             />
             <TextInput
               style={[styles.input, styles.multiline]}

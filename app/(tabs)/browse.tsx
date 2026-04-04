@@ -5,7 +5,9 @@ import {
 import { theme } from '@/constants/theme';
 import { FoodCardGrid } from '@/components/FoodCardGrid';
 import { useAuth } from '@/services/AuthContext';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import {
+  formatFoodCardSharingPriceLine,
   isFoodCardJoinDisabled,
   joinOrder,
   subscribeActiveFoodCards,
@@ -92,9 +94,18 @@ function BrowseFoodCardRow({
         <AIDescription description={card.aiDescription} title={card.title} />
         <Text style={styles.meta}>{card.restaurantName}</Text>
         <Text style={styles.meta}>
-          ${card.splitPrice.toFixed(2)} each · total ${card.price.toFixed(2)}
+          {formatFoodCardSharingPriceLine(card.sharingPrice)}
+        </Text>
+        <Text style={styles.meta}>Total ${card.price.toFixed(2)}</Text>
+        <Text style={styles.meta} numberOfLines={3}>
+          {card.venueLocation.trim()
+            ? `Location: ${card.venueLocation.trim()}`
+            : card.location
+              ? 'Location on map'
+              : 'Location not listed'}
         </Text>
         <Text style={styles.meta}>HalfOrder share · up to 2 people</Text>
+        <FoodCardPaymentDisclaimer style={styles.rowDisclaimer} />
         <TouchableOpacity
           style={styles.detailsRow}
           activeOpacity={0.88}
@@ -160,6 +171,12 @@ export default function BrowseScreen() {
     setJoiningId(card.id);
     try {
       const result = await joinOrder(card.id, uid);
+      if (!result.ok) {
+        if (!result.silent && result.message) {
+          Alert.alert('Could not join', result.message);
+        }
+        return;
+      }
       if (result.justBecamePair) {
         Alert.alert(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
       }
@@ -254,6 +271,7 @@ const styles = StyleSheet.create({
   cardBody: { padding: 14 },
   cardTitle: { color: D.text, fontSize: 20, fontWeight: '800' },
   meta: { color: D.muted, marginTop: 6 },
+  rowDisclaimer: { alignSelf: 'stretch' },
   detailsRow: {
     marginTop: 10,
     paddingVertical: 8,

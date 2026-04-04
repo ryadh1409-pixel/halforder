@@ -1,7 +1,14 @@
 import { FOOD_CARD_ORDER_MAX_USERS } from '@/constants/adminFoodCards';
 import { ORDER_STATUS } from '@/constants/orderStatus';
+import {
+  isFirestoreCompositeIndexError,
+  logFirestoreIndexError,
+} from '@/lib/joinOrderFirestore';
 import { db } from '@/services/firebase';
-import { normalizeOrderUserIds, planHalfOrderJoin } from '@/services/orders';
+import {
+  normalizeOrderUserIds,
+  planHalfOrderJoin,
+} from '@/services/orders';
 import {
   getPublicUserFields,
   mapRawUserDocument,
@@ -14,7 +21,6 @@ import {
   getDocs,
   limit,
   onSnapshot,
-  orderBy,
   query,
   runTransaction,
   type QueryDocumentSnapshot,
@@ -68,17 +74,33 @@ function filterAndSortJoinableOrders(rows: OrderDocRow[]): OrderDocRow[] {
   });
 }
 
+/** Single-equality query only — no orderBy (avoids composite index). Sort order in memory. */
+const ORDERS_BY_CARD_LIMIT = 50;
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function getDocsOrdersByCardId(cardId: string) {
+  const q = query(
+    collection(db, 'orders'),
+    where('cardId', '==', cardId),
+    limit(ORDERS_BY_CARD_LIMIT),
+  );
+  const fetchOnce = () => getDocs(q);
+  try {
+    return await fetchOnce();
+  } catch (e) {
+    if (!isFirestoreCompositeIndexError(e)) throw e;
+    logFirestoreIndexError('fetchJoinableOrderIdsForCard', e);
+    await sleep(1000);
+    return await fetchOnce();
+  }
+}
+
 export async function fetchJoinableOrderIdsForCard(
   cardId: string,
 ): Promise<string[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, 'orders'),
-      where('cardId', '==', cardId),
-      orderBy('createdAt', 'asc'),
-      limit(40),
-    ),
-  );
+  const snap = await getDocsOrdersByCardId(cardId);
   return filterAndSortJoinableOrders(toOrderRows(snap.docs)).map((r) => r.id);
 }
 
@@ -94,8 +116,7 @@ export function subscribeJoinHintsForFoodCard(
   const q = query(
     collection(db, 'orders'),
     where('cardId', '==', cardId),
-    orderBy('createdAt', 'asc'),
-    limit(40),
+    limit(ORDERS_BY_CARD_LIMIT),
   );
   return onSnapshot(
     q,
@@ -144,16 +165,9 @@ export async function transactionJoinHalfOrderForCard(args: {
   orderId: string;
   cardId: string;
   joinerUid: string;
-  joinerParticipant: Record<string, unknown>;
   hostProfilePrefetch: PublicUserFields | null;
 }): Promise<SlotJoinTransactionResult> {
-  const {
-    orderId,
-    cardId,
-    joinerUid,
-    joinerParticipant,
-    hostProfilePrefetch,
-  } = args;
+  const { orderId, cardId, joinerUid, hostProfilePrefetch } = args;
 
   return runTransaction(db, async (tx) => {
     const oRef = doc(db, 'orders', orderId);
@@ -180,14 +194,13 @@ export async function transactionJoinHalfOrderForCard(args: {
     );
     if (users.length >= maxUsers) return { kind: 'skip' as const };
 
-    const partsLive =
-      Array.isArray(od.participants) ? (od.participants as unknown[]) : [];
+    const partIds = normalizeOrderUserIds(od.participants);
     let hostForPlan: PublicUserFields | null =
-      partsLive.length === 0 && users.length === 1
+      partIds.length === 0 && users.length === 1
         ? hostProfilePrefetch
         : null;
     if (
-      partsLive.length === 0 &&
+      partIds.length === 0 &&
       users.length === 1 &&
       !hostForPlan &&
       users[0]
@@ -205,7 +218,6 @@ export async function transactionJoinHalfOrderForCard(args: {
     const joinPlan = planHalfOrderJoin({
       orderData: od,
       joinerUid,
-      joinerParticipant,
       orderMaxUsers: maxUsers,
       hostProfileIfBootstrapping: hostForPlan,
     });
@@ -238,8 +250,8 @@ export async function loadHostProfileForOrderJoin(
   if (!o.exists()) return null;
   const od = o.data() as Record<string, unknown>;
   const users = normalizeOrderUserIds(od.users);
-  const parts =
-    Array.isArray(od.participants) ? od.participants.length : 0;
-  if (users.length !== 1 || parts !== 0) return null;
+  if (users.length !== 1 || normalizeOrderUserIds(od.participants).length !== 0) {
+    return null;
+  }
   return getPublicUserFields(users[0]);
 }

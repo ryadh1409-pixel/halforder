@@ -5,8 +5,8 @@ import {
   doc,
   getDoc,
   runTransaction,
-  serverTimestamp,
   setDoc,
+  Timestamp,
 } from 'firebase/firestore';
 
 import { isUserBanned } from '@/services/adminGuard';
@@ -19,9 +19,7 @@ import { auth, db } from '@/services/firebase';
 import {
   memberIdsFromOrderData,
   normalizeOrderUserIds,
-  normalizeParticipantRecords,
   planHalfOrderJoin,
-  loadJoiningParticipantPayload,
 } from '@/services/orders';
 import { syncOrderMemberProfilesForOrder } from '@/services/orderMemberProfile';
 import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
@@ -32,7 +30,7 @@ import {
 } from '@/constants/adminFoodCards';
 import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '@/constants/paymentDisclaimer';
 import { applyHalfOrderPairReferralRewards } from '@/services/referralRewards';
-import { getPublicUserFields } from '@/services/users';
+import { getPublicUserFields, mapRawUserDocument } from '@/services/users';
 
 /**
  * Join the current user to `orders/{orderId}`.
@@ -72,13 +70,13 @@ export async function joinOrder(orderId: string): Promise<void> {
 
   await setDoc(
     doc(db, 'orders', trimmedId, 'joins', uid),
-    { userId: uid, joinedAt: serverTimestamp() },
+    { userId: uid },
     { merge: true },
   ).catch(() => {});
 
   await setDoc(
     doc(db, 'users', uid, 'joinedOrders', trimmedId),
-    { orderId: trimmedId, joinedAt: serverTimestamp() },
+    { orderId: trimmedId, joinedAt: Timestamp.now() },
     { merge: true },
   ).catch(() => {});
 
@@ -125,13 +123,12 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
     }
   }
 
-  const joinerParticipant = await loadJoiningParticipantPayload(uid);
-  if (!joinerParticipant) {
+  if (!(await getPublicUserFields(uid))) {
     throw new Error('Could not load your profile to join.');
   }
 
   let hostPrefetch: Awaited<ReturnType<typeof getPublicUserFields>> = null;
-  const ppPre = normalizeParticipantRecords(preData.participants);
+  const ppPre = normalizeOrderUserIds(preData.participants);
   if (ppPre.length === 0 && usersFirst.length === 1) {
     hostPrefetch = await getPublicUserFields(usersFirst[0]);
   }
@@ -148,7 +145,7 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
       ? Math.min(rawMax, FOOD_CARD_ORDER_MAX_USERS)
       : rawMax;
     let hostForPlan = hostPrefetch;
-    const partsLive = normalizeParticipantRecords(d.participants);
+    const partsLive = normalizeOrderUserIds(d.participants);
     if (
       partsLive.length === 0 &&
       users.length === 1 &&
@@ -167,7 +164,6 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
     const plan = planHalfOrderJoin({
       orderData: d,
       joinerUid: uid,
-      joinerParticipant,
       orderMaxUsers: maxPeople,
       hostProfileIfBootstrapping: hostForPlan,
     });
@@ -200,13 +196,13 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
 
   await setDoc(
     doc(db, 'orders', trimmedId, 'joins', uid),
-    { userId: uid, joinedAt: serverTimestamp() },
+    { userId: uid },
     { merge: true },
   ).catch(() => {});
 
   await setDoc(
     doc(db, 'users', uid, 'joinedOrders', trimmedId),
-    { orderId: trimmedId, joinedAt: serverTimestamp() },
+    { orderId: trimmedId, joinedAt: Timestamp.now() },
     { merge: true },
   ).catch(() => {});
 

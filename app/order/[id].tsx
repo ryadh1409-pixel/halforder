@@ -64,7 +64,12 @@ import {
   joinHalfOrderByOrderId,
   joinOrder as joinFirestoreOrder,
 } from '@/services/joinOrder';
-import { joinOrder as joinFoodCardOrder } from '@/services/foodCards';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
+import {
+  formatFoodCardSharingPriceLine,
+  joinOrder as joinFoodCardOrder,
+  parseFoodCardLocationFields,
+} from '@/services/foodCards';
 import { normalizeParticipantsStrings } from '@/services/orderLifecycle';
 import { submitOrderEmailInvite } from '@/services/orderInviteEmail';
 import { claimReferralInboxRewards } from '@/services/referralRewards';
@@ -187,22 +192,30 @@ function mapFoodCardDocument(snap: DocumentSnapshot): OrderDetails {
     typeof d.image === 'string' && d.image.trim()
       ? d.image.trim()
       : PLACEHOLDER_FOOD_IMAGE;
-  const loc =
+  const { venue: venueFromLoc, geo } = parseFoodCardLocationFields(d.location);
+  const restaurant =
     typeof d.restaurantName === 'string' && d.restaurantName.trim()
       ? d.restaurantName.trim()
-      : d.location
-        ? 'Location on file'
-        : 'Nearby';
+      : '';
+  const loc = venueFromLoc || restaurant || (geo ? 'Location on file' : 'Nearby');
   const ownerId = String(d.ownerId ?? '');
   const aiDesc =
     typeof d.aiDescription === 'string' && d.aiDescription.trim()
       ? d.aiDescription.trim()
       : '';
+  const shareN = Number(d.sharingPrice);
+  const splN = Number(d.splitPrice);
+  const pricePer =
+    Number.isFinite(shareN) && shareN > 0
+      ? shareN
+      : Number.isFinite(splN) && splN > 0
+        ? splN
+        : 0;
   return {
     id: snap.id,
     foodName: String(d.title ?? 'Food card'),
     image: img,
-    pricePerPerson: Number(d.splitPrice ?? 0),
+    pricePerPerson: pricePer,
     totalPrice: Number(d.price ?? 0),
     peopleJoined: 0,
     maxPeople: max,
@@ -491,6 +504,15 @@ export default function OrderDetailsScreen() {
     try {
       if (detailSource === 'food_card') {
         const result = await joinFoodCardOrder(order.id, uid);
+        if (!result.ok) {
+          if (!result.silent && result.message) {
+            Alert.alert('Join failed', result.message);
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
+            () => {},
+          );
+          return;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
           () => {},
         );
@@ -730,7 +752,9 @@ export default function OrderDetailsScreen() {
             viewerUserId={viewerUid}
           />
         ) : null}
-        <Text style={styles.price}>${order.pricePerPerson.toFixed(2)} per person</Text>
+        <Text style={styles.price}>
+          {formatFoodCardSharingPriceLine(order.pricePerPerson)}
+        </Text>
         <View style={styles.card}>
           <Text style={styles.meta}>Total: ${order.totalPrice.toFixed(2)}</Text>
           <Text style={styles.meta}>
@@ -748,7 +772,9 @@ export default function OrderDetailsScreen() {
                 ? 'Distance: unknown'
                 : `Distance: ${order.distance.toFixed(1)} km`}
           </Text>
-          <Text style={styles.meta}>Location: {order.location}</Text>
+          <Text style={styles.meta} numberOfLines={4}>
+            Location: {order.location}
+          </Text>
           {detailSource === 'order' && order.usesHalfUsers && order.host ? (
             <View style={styles.hostRow}>
               {order.host.avatar ? (
@@ -780,6 +806,9 @@ export default function OrderDetailsScreen() {
             <Text style={styles.timerValue}>{countdownLabel}</Text>
           </View>
         </View>
+        {detailSource === 'food_card' ? (
+          <FoodCardPaymentDisclaimer style={styles.foodCardInlineDisclaimer} />
+        ) : null}
         {order.usesHalfUsers ? (
           <View style={styles.paymentDisclaimerBox}>
             <Text style={styles.paymentDisclaimerIcon}>💡</Text>
@@ -1162,6 +1191,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '500',
+  },
+  foodCardInlineDisclaimer: {
+    alignSelf: 'stretch',
+    marginTop: 4,
+    paddingHorizontal: 2,
   },
   chatNavButton: {
     backgroundColor: '#1e293b',

@@ -61,6 +61,7 @@ export async function migrateOrdersPopulateUsers(): Promise<void> {
     if (!needsHost && !needsParticipants) continue;
 
     const participants: Record<string, unknown>[] = [];
+    const joinedAtMap: Record<string, unknown> = {};
     let host: ReturnType<typeof publicUserToOrderHost> | null = null;
 
     for (let i = 0; i < userIds.length; i += 1) {
@@ -76,13 +77,13 @@ export async function migrateOrdersPopulateUsers(): Promise<void> {
       if (!uSnap.exists) {
         console.warn('[migrate] missing user', uid, 'for order', docSnap.id);
       }
+      joinedAtMap[uid] = FieldValue.serverTimestamp();
       participants.push({
         userId: row.userId,
         name: row.name,
         avatar: row.avatar,
         phone: row.phone,
         expoPushToken: row.expoPushToken,
-        joinedAt: FieldValue.serverTimestamp(),
         location: row.location,
       });
     }
@@ -92,6 +93,7 @@ export async function migrateOrdersPopulateUsers(): Promise<void> {
     await docSnap.ref.update({
       host,
       participants,
+      joinedAtMap,
     });
     updated += 1;
     console.info('[migrate] updated', docSnap.id);

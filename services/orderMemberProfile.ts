@@ -5,8 +5,8 @@
 import {
   doc,
   getDoc,
-  serverTimestamp,
   setDoc,
+  Timestamp,
 } from 'firebase/firestore';
 
 import { db } from '@/services/firebase';
@@ -138,7 +138,7 @@ export async function syncOrderMemberProfile(
     avatar: resolveAvatar(d),
     phone,
     pushToken,
-    joinedAt: serverTimestamp(),
+    joinedAt: Timestamp.now(),
     location: parseUserLocation(d),
   };
 
