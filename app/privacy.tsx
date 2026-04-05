@@ -1,7 +1,6 @@
-import { LEGAL_URLS } from '@/constants/legalLinks';
 import { theme } from '@/constants/theme';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Linking,
   ScrollView,
@@ -13,10 +12,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
-const LAST_UPDATED = 'March 31, 2026';
+const LAST_UPDATED = 'April 2026';
+
+function Bullets({ items }: { items: string[] }) {
+  return (
+    <>
+      {items.map((line, i) => (
+        <Text key={`${i}-${line}`} style={styles.bullet}>
+          • {line}
+        </Text>
+      ))}
+    </>
+  );
+}
+
+function Hr() {
+  return <View style={styles.hr} />;
+}
 
 export default function PrivacyScreen() {
   const router = useRouter();
+
+  const openMail = useCallback(() => {
+    void Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -33,125 +52,162 @@ export default function PrivacyScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Privacy Policy</Text>
-        <Text style={styles.meta}>HalfOrder · Last updated: {LAST_UPDATED}</Text>
-
-        <Text style={styles.sectionHeading}>Summary</Text>
-        <Text style={styles.bullet}>
-          • The app connects users to share food orders.
-        </Text>
-        <Text style={styles.bullet}>
-          • Payments for meals are handled outside the app between users.
-        </Text>
-        <Text style={styles.bullet}>
-          • WhatsApp or other tools you choose may be used to coordinate pickup.
-        </Text>
-        <Text style={styles.bullet}>
-          • We do not store unrelated sensitive data beyond what is needed to run matching,
-          chat, and safety features described below.
-        </Text>
-
-        <Text style={styles.paragraph}>
-          HalfOrder is a food sharing application that helps users split meals and costs with
-          others. This Privacy Policy explains how we collect, use, store, and share information
-          when you use our apps and related services. The Terms of Service ({LEGAL_URLS.terms})
-          also apply.
-        </Text>
-
-        <Text style={styles.sectionHeading}>1. User responsibilities</Text>
-        <Text style={styles.paragraph}>
-          You are responsible for the accuracy of information you provide (such as your name,
-          contact information, and profile details). You should not upload others&apos; personal
-          data without permission. If you share messages or media that include personal information
-          about someone else, you represent that you have a lawful basis to do so. You must not use
-          HalfOrder to collect or scrape data in violation of our Terms or applicable law.
-        </Text>
-
-        <Text style={styles.sectionHeading}>2. Payments and refunds</Text>
-        <Text style={styles.paragraph}>
-          When you purchase a subscription or other paid feature through the App Store or Google
-          Play, those platforms process payment data in accordance with their own privacy
-          policies. HalfOrder does not receive your full card number from those transactions. If
-          you use optional wallet or peer-to-peer features, we may process limited transactional
-          metadata needed to operate those features.
+        <Text style={styles.title}>Privacy Policy – HalfOrder</Text>
+        <Text style={styles.meta}>
+          <Text style={styles.metaStrong}>Last Updated:</Text> {LAST_UPDATED}
         </Text>
         <Text style={styles.paragraph}>
-          Refund rights, if any, are determined by the applicable app store and local consumer
-          law—not by this Policy alone.
+          HalfOrder (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy and is
+          committed to protecting your personal data. This Privacy Policy explains how
+          we collect, use, and protect your information.
         </Text>
 
-        <Text style={styles.sectionHeading}>3. Privacy and data usage</Text>
-        <Text style={styles.paragraph}>We may collect and use categories of information such as:</Text>
-        <Text style={styles.bullet}>
-          • Account data: email address, display name, authentication identifiers.
+        <Hr />
+
+        <Text style={styles.sectionHeading}>1. Information We Collect</Text>
+        <Text style={styles.paragraph}>
+          We may collect the following types of information:
         </Text>
-        <Text style={styles.bullet}>
-          • Profile and content: photo, phone or messaging handles you choose to add, order
-          descriptions, chats, and reports.
-        </Text>
-        <Text style={styles.bullet}>
-          • Device and usage data: app version, diagnostics, coarse or precise location when you
-          grant permission, and interaction events used to operate maps, proximity, and safety
-          features.
-        </Text>
-        <Text style={styles.paragraph}>We use this information to:</Text>
-        <Text style={styles.bullet}>• Provide, secure, and improve HalfOrder.</Text>
-        <Text style={styles.bullet}>• Match you with nearby orders and enable messaging.</Text>
-        <Text style={styles.bullet}>
-          • Send service announcements, safety notices, and (where permitted) marketing.
-        </Text>
-        <Text style={styles.bullet}>
-          • Detect abuse, enforce our policies, and comply with legal obligations.
+        <Text style={styles.subheading}>a. Personal Information</Text>
+        <Bullets
+          items={['Name', 'Email address', 'Profile photo (if uploaded)']}
+        />
+        <Text style={styles.subheading}>b. Usage Data</Text>
+        <Bullets
+          items={[
+            'App activity (creating/joining orders)',
+            'Messages between users',
+            'Device information (device type, OS)',
+          ]}
+        />
+        <Text style={styles.subheading}>c. Location Data</Text>
+        <Text style={styles.paragraph}>
+          We may collect approximate location to help match users nearby.
         </Text>
         <Text style={styles.paragraph}>
-          We use service providers (for example, cloud hosting and analytics) who process data on
-          our behalf under contractual safeguards. We do not sell your personal information for
-          money. We may share information if required by law, to protect safety, or as part of a
-          merger or asset sale subject to confidentiality commitments.
-        </Text>
-        <Text style={styles.paragraph}>
-          Depending on where you live, you may have rights to access, correct, delete, or export
-          personal data, or to object to certain processing. Contact us using the email below to
-          exercise applicable rights.
+          We do NOT track precise real-time GPS location in the background.
         </Text>
 
-        <Text style={styles.sectionHeading}>4. Liability disclaimer</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>2. How We Use Your Information</Text>
+        <Text style={styles.paragraph}>We use your data to:</Text>
+        <Bullets
+          items={[
+            'Provide and operate the app',
+            'Match users with nearby orders',
+            'Enable messaging between users',
+            'Improve app performance and experience',
+            'Detect fraud or misuse',
+          ]}
+        />
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>3. Photos &amp; Media</Text>
+        <Text style={styles.paragraph}>If you upload images (e.g., food photos):</Text>
+        <Bullets
+          items={[
+            'We only access photos you choose to upload',
+            'We do NOT access your full photo library',
+            'Images are stored securely',
+          ]}
+        />
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>4. Messaging &amp; Content</Text>
+        <Text style={styles.paragraph}>Messages between users are stored to:</Text>
+        <Bullets items={['Enable communication', 'Prevent abuse or harmful behavior']} />
         <Text style={styles.paragraph}>
-          We implement reasonable administrative, technical, and organizational measures to
-          protect personal information. However, no online service can be guaranteed completely
-          secure. TO THE MAXIMUM EXTENT PERMITTED BY LAW, HALFORDER IS NOT LIABLE FOR INDIRECT,
-          INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM UNAUTHORIZED ACCESS
-          TO OR ALTERATION OF YOUR DATA, EXCEPT WHERE LIABILITY CANNOT BE EXCLUDED UNDER
-          APPLICABLE LAW.
+          We do NOT sell or share your messages with third parties.
         </Text>
 
-        <Text style={styles.sectionHeading}>5. Retention and children</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>5. Data Sharing</Text>
+        <Text style={styles.paragraph}>We do NOT sell your personal data.</Text>
+        <Text style={styles.paragraph}>We may share data only in these cases:</Text>
+        <Bullets
+          items={[
+            'With service providers (e.g., Firebase) to run the app',
+            'If required by law',
+            'To protect users or prevent fraud',
+          ]}
+        />
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>6. Payments</Text>
+        <Text style={styles.paragraph}>HalfOrder does NOT process payments.</Text>
         <Text style={styles.paragraph}>
-          We retain information only as long as necessary to provide the Service, comply with law,
-          resolve disputes, and enforce agreements. HalfOrder is not directed at children under 13
-          (or the minimum age required in your region). We do not knowingly collect personal
-          information from children.
+          Any payments happen outside the app directly between users.
+        </Text>
+        <Text style={styles.paragraph}>We do NOT store any financial information.</Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>7. Data Security</Text>
+        <Text style={styles.paragraph}>
+          We use industry-standard security measures to protect your data.
+        </Text>
+        <Text style={styles.paragraph}>However, no system is 100% secure.</Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>8. Your Rights</Text>
+        <Text style={styles.paragraph}>You have the right to:</Text>
+        <Bullets
+          items={[
+            'Access your data',
+            'Request deletion of your account and data',
+            'Update your information',
+          ]}
+        />
+        <Text style={styles.paragraph}>
+          To request this, contact us at:{' '}
+          <Text onPress={openMail} style={styles.link}>
+            {SUPPORT_EMAIL}
+          </Text>
         </Text>
 
-        <Text style={styles.sectionHeading}>6. International transfers</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>9. Data Retention</Text>
         <Text style={styles.paragraph}>
-          Our service providers may process data in countries other than your own. Where required,
-          we rely on appropriate safeguards such as standard contractual clauses.
+          We keep your data only as long as necessary to provide the service.
+        </Text>
+        <Text style={styles.paragraph}>
+          We may retain some data for legal or safety purposes.
         </Text>
 
-        <Text style={styles.sectionHeading}>7. Changes</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>10. Children&apos;s Privacy</Text>
+        <Text style={styles.paragraph}>HalfOrder is not intended for users under 18.</Text>
+        <Text style={styles.paragraph}>We do not knowingly collect data from children.</Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>11. Changes to This Policy</Text>
+        <Text style={styles.paragraph}>We may update this Privacy Policy.</Text>
+        <Text style={styles.paragraph}>We will notify users of major changes.</Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>12. Contact</Text>
         <Text style={styles.paragraph}>
-          We may update this Policy from time to time. We will revise the &quot;Last updated&quot;
-          date and, where appropriate, provide notice through the app.
+          For any questions:{' '}
+          <Text onPress={openMail} style={styles.link}>
+            {SUPPORT_EMAIL}
+          </Text>
         </Text>
 
-        <Text style={styles.sectionHeading}>8. Contact</Text>
-        <Text style={styles.paragraph}>Privacy questions and requests: </Text>
-        <TouchableOpacity
-          onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
-        >
-          <Text style={styles.link}>{SUPPORT_EMAIL}</Text>
-        </TouchableOpacity>
+        <Hr />
+
+        <Text style={styles.footerNote}>
+          By using HalfOrder, you agree to this Privacy Policy.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -182,12 +238,25 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     marginBottom: 20,
   },
+  metaStrong: { fontWeight: '700', color: theme.colors.text },
+  hr: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.border,
+    marginVertical: 16,
+  },
   sectionHeading: {
     fontSize: 18,
     fontWeight: '700',
     color: theme.colors.text,
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 8,
+  },
+  subheading: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginTop: 10,
+    marginBottom: 6,
   },
   paragraph: {
     fontSize: 16,
@@ -207,6 +276,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: theme.colors.accentBlue,
     textDecorationLine: 'underline',
-    marginBottom: 12,
+    fontWeight: '600',
+  },
+  footerNote: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: theme.colors.textMuted,
+    marginTop: 4,
+    paddingTop: 8,
   },
 });

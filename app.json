@@ -23,7 +23,7 @@
         "applinks:www.halforder.app"
       ],
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "HalfOrder uses your photo library so you can upload images of food when creating or joining shared orders with other users.",
+        "NSPhotoLibraryUsageDescription": "We use your photos so you can upload food images when creating or joining an order.",
         "NSPhotoLibraryAddUsageDescription": "HalfOrder may save images you share only when you choose to save them.",
         "NSCameraUsageDescription": "HalfOrder uses your camera so you can take photos of food to share with other users when creating or joining an order.",
         "ITSAppUsesNonExemptEncryption": false,

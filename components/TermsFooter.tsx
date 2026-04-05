@@ -33,11 +33,11 @@ async function openUrl(url: string): Promise<void> {
  * Uses public URLs so Safari / in-app browser matches your marketing site when configured.
  */
 export function TermsFooter({ style }: TermsFooterProps) {
-  const onTerms = useCallback(() => {
-    void openUrl(LEGAL_URLS.terms);
-  }, []);
   const onPrivacy = useCallback(() => {
     void openUrl(LEGAL_URLS.privacy);
+  }, []);
+  const onTerms = useCallback(() => {
+    void openUrl(LEGAL_URLS.terms);
   }, []);
 
   return (
@@ -47,21 +47,21 @@ export function TermsFooter({ style }: TermsFooterProps) {
       </Text>
       <View style={styles.linksRow}>
         <Pressable
-          onPress={onTerms}
-          hitSlop={12}
-          accessibilityRole="link"
-          accessibilityLabel="Terms of Service"
-        >
-          <Text style={styles.linkText}>Terms of Service</Text>
-        </Pressable>
-        <Text style={styles.separator}> | </Text>
-        <Pressable
           onPress={onPrivacy}
           hitSlop={12}
           accessibilityRole="link"
           accessibilityLabel="Privacy Policy. Opens in browser."
         >
           <Text style={styles.linkText}>Privacy Policy</Text>
+        </Pressable>
+        <Text style={styles.separator}> | </Text>
+        <Pressable
+          onPress={onTerms}
+          hitSlop={12}
+          accessibilityRole="link"
+          accessibilityLabel="Terms of Service. Opens in browser."
+        >
+          <Text style={styles.linkText}>Terms of Service</Text>
         </Pressable>
       </View>
     </View>

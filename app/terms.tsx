@@ -1,7 +1,6 @@
-import { LEGAL_URLS } from '@/constants/legalLinks';
 import { theme } from '@/constants/theme';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Linking,
   ScrollView,
@@ -13,20 +12,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
-const LAST_UPDATED = 'March 31, 2026';
+const LAST_UPDATED = 'April 2026';
+
+function Bullets({ items }: { items: string[] }) {
+  return (
+    <>
+      {items.map((line, i) => (
+        <Text key={`${i}-${line}`} style={styles.bullet}>
+          • {line}
+        </Text>
+      ))}
+    </>
+  );
+}
+
+function Hr() {
+  return <View style={styles.hr} />;
+}
 
 export default function TermsScreen() {
   const router = useRouter();
-  const handleOpenMail = async () => {
-    const url = `mailto:${SUPPORT_EMAIL}`;
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) return;
-      await Linking.openURL(url);
-    } catch {
-      // Keep screen stable even if mail client is unavailable.
-    }
-  };
+
+  const openMail = useCallback(() => {
+    void Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -44,114 +53,173 @@ export default function TermsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>Terms of Service – HalfOrder</Text>
-        <Text style={styles.meta}>Last updated: {LAST_UPDATED}</Text>
-
-        <Text style={styles.paragraph}>
-          These Terms of Service (&quot;Terms&quot;) govern your use of HalfOrder
-          (&quot;HalfOrder,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;), a
-          mobile application that helps people share food, split meals, and divide costs with
-          others. By creating an account or using HalfOrder, you agree to these Terms.
-        </Text>
-
-        <Text style={styles.sectionHeading}>1. User responsibilities</Text>
-        <Text style={styles.paragraph}>You agree that you will:</Text>
-        <Text style={styles.bullet}>
-          • Provide accurate profile information and keep your login credentials secure.
-        </Text>
-        <Text style={styles.bullet}>
-          • Use HalfOrder only for lawful purposes and in compliance with applicable regulations.
-        </Text>
-        <Text style={styles.bullet}>
-          • Communicate honestly with other users about shared orders, timing, and payment
-          expectations.
-        </Text>
-        <Text style={styles.bullet}>
-          • Not harass, threaten, defraud, or endanger others; not post unlawful or infringing
-          content.
-        </Text>
-        <Text style={styles.bullet}>
-          • Report objectionable content through in-app tools and cooperate with any reasonable
-          safety review.
+        <Text style={styles.meta}>
+          <Text style={styles.metaStrong}>Last Updated:</Text> {LAST_UPDATED}
         </Text>
         <Text style={styles.paragraph}>
-          You are solely responsible for your interactions with other users and for any meetups
-          or exchanges that you arrange. HalfOrder is a facilitation platform only and does not
-          supervise offline conduct.
+          Welcome to HalfOrder. By using our platform, you agree to the following Terms
+          of Service. Please read them carefully.
         </Text>
 
-        <Text style={styles.sectionHeading}>2. Payments and refunds</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>1. Overview of Service</Text>
         <Text style={styles.paragraph}>
-          HalfOrder may offer optional paid plans or in-app purchases processed by Apple App Store
-          or Google Play. Those stores&apos; payment terms apply to those transactions. Unless
-          required by applicable law or the applicable store policy, all fees are non-refundable,
-          and you are responsible for canceling renewal subscriptions through your store account
-          settings before the next billing date if you do not wish to renew.
+          HalfOrder is a platform that connects users who want to share food orders. The
+          app facilitates coordination between users but does not sell, prepare, or
+          deliver food.
         </Text>
         <Text style={styles.paragraph}>
-          Payments or splits between users for food orders are agreements between you and other
-          users. HalfOrder is not a party to those agreements, is not a bank or money transmitter,
-          and does not guarantee payment performance. Disputes between users should be resolved
-          directly between the parties involved.
+          HalfOrder is not a restaurant, delivery service, or payment processor.
         </Text>
 
-        <Text style={styles.sectionHeading}>3. Privacy and data usage</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>2. User Responsibilities</Text>
+        <Text style={styles.paragraph}>By using HalfOrder, you agree that:</Text>
+        <Bullets
+          items={[
+            'You are at least 18 years old.',
+            'You provide accurate and truthful information.',
+            'You are solely responsible for your interactions with other users.',
+            'You agree to behave respectfully and not engage in fraud, harassment, or illegal activities.',
+          ]}
+        />
+        <Text style={styles.paragraph}>HalfOrder is not responsible for user behavior.</Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>3. Payments Disclaimer</Text>
         <Text style={styles.paragraph}>
-          We process personal data as described in our Privacy Policy ({LEGAL_URLS.privacy}),
-          including account details, profile information, device and usage data, and content you
-          submit (such as messages). By using HalfOrder, you acknowledge this processing and agree
-          to the Privacy Policy.
+          All payments are handled directly between users{' '}
+          <Text style={styles.bold}>outside of the app</Text>.
+        </Text>
+        <Text style={styles.paragraph}>HalfOrder:</Text>
+        <Bullets
+          items={[
+            'Does NOT process payments',
+            'Does NOT hold money',
+            'Does NOT guarantee transactions',
+          ]}
+        />
+        <Text style={styles.paragraph}>
+          You agree that any financial interaction is entirely at your own risk.
         </Text>
 
-        <Text style={styles.sectionHeading}>4. Liability disclaimer</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>4. Food &amp; Safety Disclaimer</Text>
+        <Text style={styles.paragraph}>HalfOrder does not verify:</Text>
+        <Bullets items={['Food quality', 'Food safety', 'Restaurant standards']} />
+        <Text style={styles.paragraph}>Users are responsible for:</Text>
+        <Bullets
+          items={[
+            'Choosing where to order from',
+            'Ensuring food meets their dietary needs',
+          ]}
+        />
         <Text style={styles.paragraph}>
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, HALFORDER AND ITS AFFILIATES, OFFICERS,
-          DIRECTORS, EMPLOYEES, AND AGENTS PROVIDE THE SERVICE &quot;AS IS&quot; AND &quot;AS
-          AVAILABLE,&quot; WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING
-          IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
-          NON-INFRINGEMENT.
-        </Text>
-        <Text style={styles.paragraph}>
-          WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF
-          HARMFUL COMPONENTS. WE ARE NOT RESPONSIBLE FOR FOOD QUALITY, ALLERGENS, DELIVERY ISSUES,
-          PAYMENT DISPUTES BETWEEN USERS, OR ANY LOSS ARISING FROM YOUR RELIANCE ON INFORMATION
-          PROVIDED BY OTHER USERS.
-        </Text>
-        <Text style={styles.paragraph}>
-          TO THE EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY FOR ANY CLAIM ARISING OUT OF THESE
-          TERMS OR THE SERVICE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS YOU PAID TO HALFORDER
-          FOR THE SERVICE IN THE TWELVE (12) MONTHS BEFORE THE CLAIM OR (B) ONE HUNDRED US
-          DOLLARS (US $100). SOME JURISDICTIONS DO NOT ALLOW CERTAIN LIMITATIONS; IN THOSE CASES,
-          OUR LIABILITY WILL BE LIMITED TO THE FULLEST EXTENT PERMITTED BY LAW.
+          HalfOrder is not liable for any health issues, allergies, or damages.
         </Text>
 
-        <Text style={styles.sectionHeading}>5. Content and moderation</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>5. User-Generated Content</Text>
+        <Text style={styles.paragraph}>Users may create content such as:</Text>
+        <Bullets items={['Food orders', 'Messages', 'Photos']} />
+        <Text style={styles.paragraph}>By posting content, you agree that:</Text>
+        <Bullets
+          items={[
+            'You own or have rights to the content',
+            'Content does not violate any laws',
+            'Content is not abusive, misleading, or harmful',
+          ]}
+        />
         <Text style={styles.paragraph}>
-          You retain rights to content you submit, but grant HalfOrder a worldwide, non-exclusive
-          license to host, store, and display that content as needed to operate the Service. We
-          may remove content or restrict accounts that violate these Terms or pose safety risks,
-          at our reasonable discretion.
+          HalfOrder reserves the right to remove any content at any time.
         </Text>
 
-        <Text style={styles.sectionHeading}>6. Termination</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>6. Account Suspension</Text>
         <Text style={styles.paragraph}>
-          You may stop using HalfOrder at any time. We may suspend or terminate access for
-          conduct that violates these Terms, creates risk, or is required by law.
+          We may suspend or terminate accounts if users:
+        </Text>
+        <Bullets
+          items={[
+            'Violate these terms',
+            'Engage in suspicious or harmful behavior',
+            'Abuse the platform',
+          ]}
+        />
+        <Text style={styles.paragraph}>
+          No prior notice is required in serious cases.
         </Text>
 
-        <Text style={styles.sectionHeading}>7. Changes</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>7. Limitation of Liability</Text>
+        <Text style={styles.paragraph}>HalfOrder is provided &quot;as is&quot;.</Text>
+        <Text style={styles.paragraph}>We are NOT responsible for:</Text>
+        <Bullets
+          items={[
+            'Failed meetups between users',
+            'Payment disputes',
+            'Food quality issues',
+            'User misconduct',
+          ]}
+        />
         <Text style={styles.paragraph}>
-          We may update these Terms. We will post the revised Terms in the app and update the
-          &quot;Last updated&quot; date. Continued use after changes become effective constitutes
-          acceptance unless applicable law requires additional consent.
+          To the fullest extent permitted by law, HalfOrder disclaims all liability.
         </Text>
 
-        <Text style={styles.sectionHeading}>8. Contact</Text>
+        <Hr />
+
+        <Text style={styles.sectionHeading}>8. Privacy</Text>
         <Text style={styles.paragraph}>
-          Questions about these Terms:{' '}
+          Your use of the app is also governed by our{' '}
+          <Text onPress={() => router.push('/privacy')} style={styles.link}>
+            Privacy Policy
+          </Text>
+          .
         </Text>
-        <TouchableOpacity onPress={handleOpenMail}>
-          <Text style={styles.link}>{SUPPORT_EMAIL}</Text>
-        </TouchableOpacity>
+        <Text style={styles.paragraph}>
+          We only collect necessary data to operate the platform and improve user
+          experience.
+        </Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>9. Changes to Terms</Text>
+        <Text style={styles.paragraph}>We may update these Terms at any time.</Text>
+        <Text style={styles.paragraph}>
+          Users will be notified of major changes. Continued use of the app means you
+          accept the updated terms.
+        </Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>10. Contact</Text>
+        <Text style={styles.paragraph}>
+          For any questions or concerns:{' '}
+          <Text onPress={openMail} style={styles.link}>
+            {SUPPORT_EMAIL}
+          </Text>
+        </Text>
+
+        <Hr />
+
+        <Text style={styles.sectionHeading}>11. Governing Law</Text>
+        <Text style={styles.paragraph}>
+          These Terms are governed by the laws of Canada.
+        </Text>
+
+        <Hr />
+
+        <Text style={styles.footerNote}>
+          By using HalfOrder, you acknowledge that you understand and agree to these
+          Terms.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -182,11 +250,17 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     marginBottom: 20,
   },
+  metaStrong: { fontWeight: '700', color: theme.colors.text },
+  hr: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.border,
+    marginVertical: 16,
+  },
   sectionHeading: {
     fontSize: 18,
     fontWeight: '700',
     color: theme.colors.text,
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 8,
   },
   paragraph: {
@@ -195,6 +269,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginBottom: 12,
   },
+  bold: { fontWeight: '700' },
   bullet: {
     fontSize: 16,
     lineHeight: 24,
@@ -207,6 +282,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: theme.colors.accentBlue,
     textDecorationLine: 'underline',
-    marginBottom: 12,
+    fontWeight: '600',
+  },
+  footerNote: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: theme.colors.textMuted,
+    marginTop: 4,
+    paddingTop: 8,
   },
 });
