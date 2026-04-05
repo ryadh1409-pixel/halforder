@@ -46,6 +46,7 @@ import {
 } from '@/lib/whatsapp';
 import { AIDescription } from '@/components/AIDescription';
 import { OrderCardView } from '@/components/OrderCardView';
+import ReportUserModal from '@/components/ReportUserModal';
 import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { blockUser } from '@/services/block';
@@ -66,7 +67,6 @@ import {
   type OrderParticipant,
 } from '@/services/orders';
 import { getPublicUserFields } from '@/services/users';
-import { submitUserReport } from '@/services/userSafety';
 import {
   joinHalfOrderByOrderId,
   joinOrder as joinFirestoreOrder,
@@ -253,6 +253,7 @@ export default function OrderDetailsScreen() {
   const [emailInviteOpen, setEmailInviteOpen] = useState(false);
   const [emailInviteInput, setEmailInviteInput] = useState('');
   const [emailInviteSending, setEmailInviteSending] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [participantProfiles, setParticipantProfiles] = useState<
     Record<string, OrderParticipant>
   >({});
@@ -719,39 +720,6 @@ export default function OrderDetailsScreen() {
     }
   };
 
-  const handleReportUser = () => {
-    const uid = auth.currentUser?.uid;
-    const reported = partnerIdForSafety;
-    if (!uid || !order || !reported) return;
-    const reasons = [
-      'Harassment',
-      'Spam or scam',
-      'Inappropriate content',
-      'Other',
-    ];
-    Alert.alert('Report user', 'Why are you reporting?', [
-      ...reasons.map((reason) => ({
-        text: reason,
-        onPress: () => {
-          void (async () => {
-            try {
-              await submitUserReport({
-                reporterId: uid,
-                reportedUserId: reported,
-                orderId: order.id,
-                reason,
-              });
-              Alert.alert('Thanks', 'We received your report.');
-            } catch (e) {
-              Alert.alert('Report failed', friendlyErrorMessage(e));
-            }
-          })();
-        },
-      })),
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
   const handleCompleteOrder = () => {
     if (!order?.usesHalfUsers || !order.id) return;
     Alert.alert('Mark complete?', 'This order will move to Completed.', [
@@ -1084,7 +1052,10 @@ export default function OrderDetailsScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.secondaryActionsRow}>
-              <TouchableOpacity onPress={handleReportUser} disabled={!partnerIdForSafety}>
+              <TouchableOpacity
+                onPress={() => setReportModalOpen(true)}
+                disabled={!partnerIdForSafety}
+              >
                 <Text style={styles.secondaryActionLink}>Report</Text>
               </TouchableOpacity>
               <Text style={styles.secondaryDot}>·</Text>
@@ -1219,6 +1190,16 @@ export default function OrderDetailsScreen() {
           </View>
         </View>
       </Modal>
+      <ReportUserModal
+        visible={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        reporterId={auth.currentUser?.uid ?? ''}
+        reportedUserId={partnerIdForSafety ?? ''}
+        orderId={order?.id ?? null}
+        onSubmitted={() =>
+          Alert.alert('Thanks', 'We received your report.')
+        }
+      />
     </SafeAreaView>
   );
 }

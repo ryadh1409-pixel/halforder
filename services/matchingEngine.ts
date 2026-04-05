@@ -20,6 +20,7 @@ import {
   GROWTH_ORDER_SCAN_LIMIT,
 } from '@/constants/growth';
 import { db } from '@/services/firebase';
+import { isUserFlagged } from '@/services/userModeration';
 import { mapRawUserDocument } from '@/services/users';
 
 /** Input user for `getSmartMatches` (location + food intent). */
@@ -249,6 +250,7 @@ export async function getSmartMatches(
 
         const uid = typeof data.createdBy === 'string' ? data.createdBy : '';
         if (user.uid && uid && uid === user.uid) return null;
+        if (uid && (await isUserFlagged(uid))) return null;
 
         const point = await resolveOrderAnchorPoint(data);
         const dist = distanceMeters(user, point);

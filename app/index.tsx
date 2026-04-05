@@ -1,22 +1,44 @@
+import AppLogo from '@/components/AppLogo';
+import { TERMS_ACCEPTANCE_STORAGE_KEY } from '@/constants/termsAcceptance';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import AppLogo from '@/components/AppLogo';
-
 const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
 
-/** App entry: onboarding gate → `/(tabs)` (not a tab screen; tabs use `(tabs)/index`). */
+type GateState =
+  | { phase: 'loading' }
+  | { phase: 'ready'; onboardingDone: boolean; termsAccepted: boolean };
+
+/** Onboarding → Terms / UEG acceptance → tabs. */
 export default function Index() {
-  const [done, setDone] = useState<boolean | null>(null);
+  const [gate, setGate] = useState<GateState>({ phase: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ob = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
-      if (!cancelled) {
-        setDone(ob === 'true');
+      try {
+        const [obRaw, termsRaw] = await Promise.all([
+          AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY),
+          AsyncStorage.getItem(TERMS_ACCEPTANCE_STORAGE_KEY),
+        ]);
+        if (!cancelled) {
+          setGate({
+            phase: 'ready',
+            onboardingDone: obRaw === 'true',
+            termsAccepted:
+              typeof termsRaw === 'string' && termsRaw.trim().length > 0,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setGate({
+            phase: 'ready',
+            onboardingDone: false,
+            termsAccepted: false,
+          });
+        }
       }
     })();
     return () => {
@@ -24,7 +46,7 @@ export default function Index() {
     };
   }, []);
 
-  if (done === null) {
+  if (gate.phase === 'loading') {
     return (
       <View
         style={{
@@ -40,8 +62,21 @@ export default function Index() {
     );
   }
 
-  if (!done) {
+  if (!gate.onboardingDone) {
     return <Redirect href="/onboarding" />;
   }
+
+  if (!gate.termsAccepted) {
+    return (
+      <Redirect
+        href={
+          '/terms-acceptance?returnTo=/(tabs)' as Parameters<
+            typeof Redirect
+          >[0]['href']
+        }
+      />
+    );
+  }
+
   return <Redirect href="/(tabs)" />;
 }

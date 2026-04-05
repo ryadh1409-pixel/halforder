@@ -666,7 +666,20 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow create: if request.auth != null;
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.auth.uid == request.resource.data.reporterId
+        && request.resource.data.reportedUserId is string
+        && request.resource.data.reportedUserId.size() > 0
+        && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.message is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.timestamp == request.time
+        && (request.resource.data.orderId == null
+          || request.resource.data.orderId is string)
+        && (request.resource.data.chatId == null
+          || request.resource.data.chatId is string);
       allow read, update, delete: if isAdmin();
     }
     match /support_chats/{userId} {
@@ -789,6 +802,23 @@ service cloud.firestore {
       match /fcmToken/{docId} {
         allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
         allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+      /** Block list: doc id = blocked user's uid. */
+      match /blockedUsers/{blockedId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && blockedId is string
+          && blockedId.size() > 8
+          && blockedId != userId
+          && request.resource.data.blockedUserId == blockedId
+          && request.resource.data.keys().hasOnly(['blockedUserId', 'createdAt'])
+          && request.resource.data.createdAt == request.time;
+        allow update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.blockedUserId == resource.data.blockedUserId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
       /** Pending host credit (+2) from a pair-join referral; host claims via client. */
       match /referralInbox/{orderId} {

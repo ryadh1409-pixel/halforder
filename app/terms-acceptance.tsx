@@ -53,8 +53,18 @@ export default function TermsAcceptanceScreen() {
       >
         <Text style={styles.title}>Terms of Use</Text>
         <Text style={styles.p}>
-          You must accept the HalfOrder Terms of Use and Privacy Policy before
-          using the app.
+          You must accept the HalfOrder Terms of Use and our community rules
+          before using the app.
+        </Text>
+        <Text style={styles.rulesHeading}>Community rules</Text>
+        <Text style={styles.ruleItem}>• No abuse, harassment, or hate.</Text>
+        <Text style={styles.ruleItem}>• No spam or misleading content.</Text>
+        <Text style={styles.ruleItem}>
+          • No harmful, illegal, or sexual content involving minors.
+        </Text>
+        <Text style={styles.ruleItemSmall}>
+          You can report users and block them from order and chat screens. We
+          review reports as described in our Terms.
         </Text>
         <TouchableOpacity
           onPress={() => router.push('/terms')}
@@ -68,11 +78,6 @@ export default function TermsAcceptanceScreen() {
         >
           <Text style={styles.linkBtnText}>Read Privacy Policy</Text>
         </TouchableOpacity>
-        <Text style={styles.pSmall}>
-          HalfOrder includes user-generated content. You can report objectionable
-          content and block users from order and chat screens. We review reports as
-          described in our Terms.
-        </Text>
         <Text style={styles.pSmall}>
           Questions:{' '}
           <Text
@@ -114,6 +119,27 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: theme.colors.text,
     marginBottom: 16,
+  },
+  rulesHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  ruleItem: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: theme.colors.text,
+    marginBottom: 6,
+    paddingLeft: 4,
+  },
+  ruleItemSmall: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: theme.colors.textMuted,
+    marginTop: 8,
+    marginBottom: 8,
   },
   pSmall: {
     fontSize: 14,

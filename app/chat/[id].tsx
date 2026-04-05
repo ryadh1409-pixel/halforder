@@ -1,3 +1,4 @@
+import ReportUserModal from '@/components/ReportUserModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc,
@@ -15,6 +16,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -23,8 +25,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { friendlyErrorMessage } from '@/lib/friendlyError';
+import { blockUser } from '@/services/block';
+import { hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
 import { markHalfOrderChatActive } from '@/services/halfOrderLifecycle';
 
@@ -65,6 +70,10 @@ export default function ChatByIdScreen() {
   const [hasSyncedMessages, setHasSyncedMessages] = useState(false);
   const [chatReads, setChatReads] = useState<Record<string, number>>({});
   const [peerUid, setPeerUid] = useState<string | null>(null);
+  const [peerFlagged, setPeerFlagged] = useState(false);
+  const [blockedBetween, setBlockedBetween] = useState(false);
+  const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const bootstrapAttemptedRef = useRef(false);
   const aiInsertAttemptedRef = useRef(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
@@ -127,6 +136,38 @@ export default function ChatByIdScreen() {
     });
     return () => unsub();
   }, [id]);
+
+  useEffect(() => {
+    if (!peerUid) {
+      setPeerFlagged(false);
+      return;
+    }
+    const ref = firestoreDoc(db, 'users', peerUid);
+    const unsub = onSnapshot(ref, (snap) => {
+      setPeerFlagged(snap.exists() ? snap.data()?.flagged === true : false);
+    });
+    return () => unsub();
+  }, [peerUid]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !peerUid) {
+      setBlockedBetween(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const v = await hasBlockBetween(uid, peerUid);
+        if (!cancelled) setBlockedBetween(v);
+      } catch {
+        if (!cancelled) setBlockedBetween(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [peerUid]);
 
   useEffect(() => {
     if (!id || chatExists !== true) return;
@@ -230,13 +271,38 @@ export default function ChatByIdScreen() {
     scrollToEnd();
   }, [messages.length, scrollToEnd]);
 
+  const myUid = auth.currentUser?.uid ?? '';
+
+  const visibleMessages = useMemo(() => {
+    const uid = myUid || undefined;
+    return messages.filter((item) => {
+      const senderId = String(item.senderId ?? '');
+      const isSystem = senderId === 'system' || item['system'] === true;
+      const isAi = item['sender'] === 'ai';
+      if (isSystem || isAi) return true;
+      if (!uid) return true;
+      if (!peerUid) return true;
+      const mine = senderId === uid;
+      if (mine) return true;
+      if (blockedBetween) return false;
+      if (peerFlagged && senderId === peerUid) return false;
+      return true;
+    });
+  }, [messages, peerUid, blockedBetween, peerFlagged, myUid]);
+
   const canSend = useMemo(
-    () => text.trim().length > 0 && !sending && !!id,
-    [text, sending, id],
+    () =>
+      text.trim().length > 0 &&
+      !sending &&
+      !!id &&
+      !blockedBetween &&
+      !!myUid,
+    [text, sending, id, blockedBetween, myUid],
   );
 
   const onSend = async () => {
     if (!canSend) return;
+    if (blockedBetween) return;
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     const payload = text.trim();
@@ -263,6 +329,33 @@ export default function ChatByIdScreen() {
     }
   };
 
+  const openBlockConfirm = () => {
+    setSafetyMenuOpen(false);
+    if (!myUid || !peerUid) return;
+    Alert.alert(
+      'Block user?',
+      'You will not see each other’s messages or orders.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await blockUser(peerUid, myUid);
+                setBlockedBetween(true);
+                Alert.alert('Blocked', 'This user is blocked.');
+              } catch (e) {
+                Alert.alert('Could not block', friendlyErrorMessage(e));
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
@@ -274,8 +367,34 @@ export default function ChatByIdScreen() {
             <Text style={styles.back}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Chat</Text>
-          <View style={{ width: 40 }} />
+          {peerUid ? (
+            <TouchableOpacity
+              onPress={() => setSafetyMenuOpen(true)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Safety options"
+            >
+              <MaterialIcons name="more-vert" size={26} color="#94A3B8" />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 26 }} />
+          )}
         </View>
+
+        {blockedBetween ? (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>
+              You have blocked this user or they blocked you. Messaging is
+              disabled.
+            </Text>
+          </View>
+        ) : null}
+        {peerFlagged && !blockedBetween ? (
+          <View style={styles.bannerMuted}>
+            <Text style={styles.bannerText}>
+              This account was flagged for review. Their messages are hidden.
+            </Text>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.centered}>
@@ -284,7 +403,7 @@ export default function ChatByIdScreen() {
         ) : (
           <FlatList
             ref={listRef}
-            data={messages}
+            data={visibleMessages}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             onContentSizeChange={scrollToEnd}
@@ -339,11 +458,13 @@ export default function ChatByIdScreen() {
           <TextInput
             value={text}
             onChangeText={setText}
-            placeholder="Write a message..."
+            placeholder={
+              blockedBetween ? 'Messaging disabled' : 'Write a message…'
+            }
             placeholderTextColor="#9CA3AF"
             style={styles.input}
             onSubmitEditing={onSend}
-            editable={!sending}
+            editable={!sending && !blockedBetween}
           />
           <TouchableOpacity
             style={[styles.sendBtn, !canSend && styles.disabled]}
@@ -353,6 +474,47 @@ export default function ChatByIdScreen() {
             <Text style={styles.sendText}>{sending ? '…' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
+
+        <Modal
+          visible={safetyMenuOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSafetyMenuOpen(false)}
+        >
+          <TouchableOpacity
+            style={styles.menuBackdrop}
+            activeOpacity={1}
+            onPress={() => setSafetyMenuOpen(false)}
+          >
+            <View style={styles.menuSheet}>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  setSafetyMenuOpen(false);
+                  setReportOpen(true);
+                }}
+              >
+                <Text style={styles.menuRowText}>Report</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuRow} onPress={openBlockConfirm}>
+                <Text style={[styles.menuRowText, styles.menuRowDanger]}>
+                  Block user
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <ReportUserModal
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          reporterId={myUid}
+          reportedUserId={peerUid ?? ''}
+          chatId={id}
+          onSubmitted={() =>
+            Alert.alert('Thanks', 'We received your report.')
+          }
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -371,6 +533,40 @@ const styles = StyleSheet.create({
   },
   back: { color: '#34D399', fontWeight: '700' },
   title: { color: '#F8FAFC', fontWeight: '700', fontSize: 17 },
+  banner: {
+    backgroundColor: 'rgba(248,113,113,0.12)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3F2A2A',
+  },
+  bannerMuted: {
+    backgroundColor: 'rgba(251,191,36,0.1)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3F3829',
+  },
+  bannerText: { color: '#E5E7EB', fontSize: 13, lineHeight: 18 },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  menuSheet: {
+    backgroundColor: '#1A222C',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    paddingBottom: 28,
+  },
+  menuRow: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#2D3748',
+  },
+  menuRowText: { color: '#F8FAFC', fontSize: 16, fontWeight: '600' },
+  menuRowDanger: { color: '#FCA5A5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContent: { padding: 12, paddingBottom: 20 },
   bubble: { maxWidth: '80%', borderRadius: 14, padding: 10, marginBottom: 10 },

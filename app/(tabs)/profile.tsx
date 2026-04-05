@@ -904,7 +904,15 @@ export default function ProfileScreen() {
               style={dynamicStyles.input}
             />
             <View style={styles.reasonRow}>
-              {(['spam', 'inappropriate', 'scam', 'other'] as ReportReason[]).map(
+              {(
+                [
+                  'spam',
+                  'abuse',
+                  'inappropriate',
+                  'scam',
+                  'other',
+                ] as ReportReason[]
+              ).map(
                 (reason) => {
                   const active = reason === reportReason;
                   return (

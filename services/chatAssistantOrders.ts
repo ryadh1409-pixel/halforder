@@ -1,4 +1,5 @@
 import { db } from '@/services/firebase';
+import { isUserFlagged } from '@/services/userModeration';
 import {
   collection,
   getDocs,
@@ -30,6 +31,8 @@ export type AssistantOrderSummary = {
   mealType?: string;
   itemsSummary?: string;
   status?: string;
+  /** Order owner / host for moderation filtering. */
+  hostUserId?: string;
 };
 
 export type TimeOfDayPeriod = 'morning' | 'lunch' | 'evening' | 'late_night';
@@ -241,6 +244,15 @@ export async function fetchActiveJoinableOrdersForContext(
         : typeof data.title === 'string'
           ? data.title
           : undefined;
+    const hostUserId =
+      typeof data.hostId === 'string' && data.hostId.trim()
+        ? data.hostId.trim()
+        : typeof data.createdBy === 'string' && data.createdBy.trim()
+          ? data.createdBy.trim()
+          : undefined;
+    if (hostUserId && (await isUserFlagged(hostUserId))) {
+      continue;
+    }
     summaries.push({
       id: d.id,
       restaurantName:
@@ -251,6 +263,7 @@ export async function fetchActiveJoinableOrdersForContext(
         typeof data.mealType === 'string' ? data.mealType : undefined,
       itemsSummary,
       status: typeof data.status === 'string' ? data.status : undefined,
+      hostUserId,
     });
   }
 

@@ -4,6 +4,7 @@ import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import 'react-native-reanimated';
 
@@ -13,6 +14,10 @@ import 'react-native-reanimated';
  */
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { isAdminUser } from '@/constants/adminUid';
+import {
+  TERMS_ACCEPTANCE_STORAGE_KEY,
+  normalizeReturnPathAfterTerms,
+} from '@/constants/termsAcceptance';
 import {
   PAYMENT_MATCH_ALERT_MESSAGE,
   PAYMENT_MATCH_ALERT_TITLE,
@@ -954,6 +959,28 @@ function RootLayoutNav() {
     pathname && pathname !== '/' && pathname !== ''
       ? `/(auth)/login?redirectTo=${encodeURIComponent(pathname)}`
       : '/(auth)/login';
+
+  /** Deep links must not bypass Terms / UGC acceptance for signed-in users. */
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (inAuthGroup || seg0 === 'onboarding' || seg0 === 'index') return;
+    if (onPublicShellRoutes) return;
+    let cancelled = false;
+    (async () => {
+      const t = await AsyncStorage.getItem(TERMS_ACCEPTANCE_STORAGE_KEY);
+      if (cancelled) return;
+      if (typeof t === 'string' && t.trim().length > 0) return;
+      const ret = normalizeReturnPathAfterTerms(pathname && pathname !== '/' ? pathname : '/(tabs)');
+      router.replace(
+        `/terms-acceptance?returnTo=${encodeURIComponent(ret)}` as Parameters<
+          typeof router.replace
+        >[0],
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, inAuthGroup, seg0, onPublicShellRoutes, pathname, router]);
 
   return (
     <>

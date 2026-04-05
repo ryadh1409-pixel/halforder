@@ -43,6 +43,8 @@ const BADGE_COMMUNICATIVE = '💬 Communicative';
 const BADGE_FOOD_LOVER = '🍕 Food Lover';
 const MAX_CANCELLATIONS_PER_24H = 3;
 const REPORT_RESTRICTION_THRESHOLD = 5;
+/** UGC: surface “flagged” to clients to hide user content (lighter than `restricted`). */
+const REPORT_FLAG_THRESHOLD = 3;
 
 function computeTrustScore({
   averageRating = 0,
@@ -165,6 +167,8 @@ async function refreshUserDerivedFields(db, userId) {
   const suspicious = suspiciousSignals.length > 0;
   const shouldRestrictForReports = reportCount >= REPORT_RESTRICTION_THRESHOLD;
   const alreadyRestricted = userData?.restricted === true;
+  const shouldFlag = reportCount >= REPORT_FLAG_THRESHOLD;
+  const flaggedCurrent = userData?.flagged === true;
 
   const needsUpdate =
     trustScore !== (typeof userData?.trustScore === 'number' ? userData.trustScore : 0) ||
@@ -176,7 +180,8 @@ async function refreshUserDerivedFields(db, userId) {
         : [],
       suspiciousSignals,
     ) ||
-    (shouldRestrictForReports && !alreadyRestricted);
+    (shouldRestrictForReports && !alreadyRestricted) ||
+    shouldFlag !== flaggedCurrent;
 
   if (!needsUpdate) return;
   const updates = {
@@ -184,6 +189,7 @@ async function refreshUserDerivedFields(db, userId) {
     badges,
     suspicious,
     suspiciousSignals,
+    flagged: shouldFlag,
   };
   if (shouldRestrictForReports && !alreadyRestricted) {
     updates.restricted = true;

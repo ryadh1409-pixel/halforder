@@ -1,41 +1,53 @@
 /**
- * Production helpers for reporting users and blocking (Firestore: reports, blocks).
+ * UGC safety: reports (Firestore `reports`) + block list (`users` + subcollection).
  */
-import {
-  addDoc,
-  collection,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/services/firebase';
 import { logError } from '@/utils/errorLogger';
-import { blockUser as blockUserService } from '@/services/block';
+import { blockUser as persistBlock } from '@/services/block';
+import { type ReportReason, submitReport } from '@/services/reports';
 
 export type ReportPayload = {
   reporterId: string;
   reportedUserId: string;
   orderId?: string | null;
+  chatId?: string | null;
   reason?: string;
   context?: string;
 };
 
-/** Creates a reports document (admin review). Does not block. */
+/** Maps legacy / loose strings to `ReportReason`. */
+export function coerceReportReason(raw: string | undefined): ReportReason {
+  const r = (raw ?? 'other').trim().toLowerCase();
+  if (r.includes('spam')) return 'spam';
+  if (r.includes('abuse') || r.includes('harass')) return 'abuse';
+  if (r.includes('inappropriate')) return 'inappropriate';
+  if (r.includes('scam')) return 'scam';
+  return 'other';
+}
+
+/** Creates a `reports` document. Prefer `submitReport` for new UI. */
 export async function submitUserReport(payload: ReportPayload): Promise<void> {
-  await addDoc(collection(db, 'reports'), {
+  const reason = coerceReportReason(payload.reason);
+  const message =
+    [payload.context?.trim(), payload.reason && reason === 'other' ? payload.reason : '']
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+
+  await submitReport({
     reporterId: payload.reporterId,
     reportedUserId: payload.reportedUserId,
+    reason,
+    message: message || '',
     orderId: payload.orderId ?? null,
-    reason: payload.reason?.trim() || 'user_report',
-    context: payload.context?.trim() || null,
-    createdAt: serverTimestamp(),
+    chatId: payload.chatId ?? null,
   });
 }
 
-/** Blocks another user in `blockedUsers` collection. */
 export async function blockUser(
   blockerId: string,
   blockedId: string,
 ): Promise<void> {
-  await blockUserService(blockedId, blockerId);
+  await persistBlock(blockedId, blockerId);
 }
 
 export function handleSafetyError(error: unknown, fallback: string): string {

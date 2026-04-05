@@ -1,7 +1,7 @@
 import { DeviceEventEmitter } from 'react-native';
 
-/** AsyncStorage key — bump version if Terms materially change and re-prompt is required */
-export const TERMS_ACCEPTANCE_STORAGE_KEY = 'halforder_terms_accepted_v2';
+/** Bump when Terms / UGC rules materially change (re-prompt on next launch). */
+export const TERMS_ACCEPTANCE_STORAGE_KEY = 'halforder_terms_accepted_v3';
 
 /** Root layout listens for immediate navigation after accept (AsyncStorage is async on re-read). */
 export const TERMS_ACCEPTED_EVENT = 'halforder_terms_accepted';

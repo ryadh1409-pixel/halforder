@@ -3,20 +3,29 @@ import {
   addDoc,
   collection,
   deleteDoc,
-  doc,
-  getDoc,
   getDocs,
   query,
   serverTimestamp,
   where,
 } from 'firebase/firestore';
+import {
+  blockUser as persistBlock,
+  isUserBlocked,
+  unblockBlockedUser,
+} from '@/services/block';
 
-export async function blockUser(
+/**
+ * @deprecated Prefer `block` service writing only subcollection + array.
+ * Keeps `blocks` collection writes for older clients; new blocks use `blockUser` below.
+ */
+export async function blockUserLegacy(
   blockerId: string,
   blockedUserId: string,
 ): Promise<void> {
   if (!blockerId || !blockedUserId) throw new Error('Invalid user IDs.');
   if (blockerId === blockedUserId) throw new Error('You cannot block yourself.');
+
+  await persistBlock(blockedUserId, blockerId);
 
   const existing = query(
     collection(db, 'blocks'),
@@ -33,48 +42,48 @@ export async function blockUser(
   });
 }
 
+/** Primary API: subcollection `users/{blocker}/blockedUsers/{blocked}` + parent array. */
+export async function blockUser(
+  blockerId: string,
+  blockedUserId: string,
+): Promise<void> {
+  await blockUserLegacy(blockerId, blockedUserId);
+}
+
 export async function hasBlockBetween(
   userA: string,
   userB: string,
 ): Promise<boolean> {
   if (!userA || !userB || userA === userB) return false;
-
-  const [snapA, snapB] = await Promise.all([
-    getDoc(doc(db, 'users', userA)),
-    getDoc(doc(db, 'users', userB)),
-  ]);
-  const aBlocked = snapA.exists() ? snapA.data()?.blockedUsers : [];
-  const bBlocked = snapB.exists() ? snapB.data()?.blockedUsers : [];
-  const listA = Array.isArray(aBlocked) ? aBlocked : [];
-  const listB = Array.isArray(bBlocked) ? bBlocked : [];
-  if (listA.includes(userB) || listB.includes(userA)) return true;
-
-  const q1 = query(
-    collection(db, 'blocks'),
-    where('blockerId', '==', userA),
-    where('blockedUserId', '==', userB),
-  );
-  const q2 = query(
-    collection(db, 'blocks'),
-    where('blockerId', '==', userB),
-    where('blockedUserId', '==', userA),
-  );
-  const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-  return !s1.empty || !s2.empty;
+  return isUserBlocked(userA, userB);
 }
 
 export async function getBlockedUsersByBlocker(
   blockerId: string,
 ): Promise<string[]> {
   if (!blockerId) return [];
-  const q = query(
-    collection(db, 'blocks'),
-    where('blockerId', '==', blockerId),
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => String(d.data()?.blockedUserId ?? ''))
-    .filter(Boolean);
+
+  const [subSnap, legacySnap] = await Promise.all([
+    getDocs(collection(db, 'users', blockerId, 'blockedUsers')),
+    getDocs(
+      query(collection(db, 'blocks'), where('blockerId', '==', blockerId)),
+    ),
+  ]);
+
+  const ids = new Set<string>();
+  subSnap.docs.forEach((d) => {
+    const data = d.data();
+    const id =
+      typeof data?.blockedUserId === 'string' && data.blockedUserId
+        ? data.blockedUserId
+        : d.id;
+    if (id) ids.add(id);
+  });
+  legacySnap.docs.forEach((d) => {
+    const id = String(d.data()?.blockedUserId ?? '');
+    if (id) ids.add(id);
+  });
+  return [...ids];
 }
 
 export async function unblockUser(
@@ -82,11 +91,12 @@ export async function unblockUser(
   blockedUserId: string,
 ): Promise<void> {
   if (!blockerId || !blockedUserId) return;
+  await unblockBlockedUser(blockedUserId, blockerId);
   const q = query(
     collection(db, 'blocks'),
     where('blockerId', '==', blockerId),
     where('blockedUserId', '==', blockedUserId),
   );
   const snap = await getDocs(q);
-  await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, 'blocks', d.id))));
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }
