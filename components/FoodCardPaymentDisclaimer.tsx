@@ -1,15 +1,13 @@
+import { COORDINATION_DISCLAIMER } from '@/constants/paymentDisclaimer';
 import React from 'react';
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
-
-const COPY =
-  'Payments are handled directly between users upon pickup. HalfOrder only facilitates matching between users.';
 
 export function FoodCardPaymentDisclaimer({
   style,
 }: {
   style?: StyleProp<TextStyle>;
 }) {
-  return <Text style={[styles.text, style]}>{COPY}</Text>;
+  return <Text style={[styles.text, style]}>{COORDINATION_DISCLAIMER}</Text>;
 }
 
 const styles = StyleSheet.create({

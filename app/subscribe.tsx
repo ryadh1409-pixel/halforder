@@ -68,7 +68,8 @@ export default function SubscribeScreen() {
           </View>
           <Text style={styles.title}>HalfOrder Plus</Text>
           <Text style={styles.subtitle}>
-            Get more from the food sharing app where you split meals and cost with people nearby.
+            Get more from the food sharing app where you coordinate shared meals with people
+            nearby.
           </Text>
           <Text style={styles.priceLine}>$4.99 / month · Cancel anytime</Text>
         </View>

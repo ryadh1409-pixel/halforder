@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { shadows } from '@/constants/theme';
 import {
   buildSpotLeftLabel,
@@ -112,6 +113,7 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
             Closing in ~{order.closingInMin} min · join while spots last
           </Text>
         </View>
+        <FoodCardPaymentDisclaimer style={styles.coordinationNote} />
       </View>
     </View>
   );
@@ -300,5 +302,9 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
+  },
+  coordinationNote: {
+    marginTop: 6,
+    alignSelf: 'stretch',
   },
 });

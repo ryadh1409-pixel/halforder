@@ -62,19 +62,22 @@ export default function Terms() {
 
       <hr style={hr} />
 
-      <h2 style={legalText.sectionTitle}>3. Payments Disclaimer</h2>
+      <h2 style={legalText.sectionTitle}>3. Coordination &amp; payments</h2>
       <p style={legalText.p}>
-        All payments are handled directly between users{' '}
-        <strong>outside of the app</strong>.
+        HalfOrder is used for coordination only. Any arrangements are made
+        independently between users.
       </p>
       <p style={legalText.p}>HalfOrder:</p>
       <ul style={list}>
         <li style={listItem}>Does NOT process payments</li>
         <li style={listItem}>Does NOT hold money</li>
-        <li style={listItem}>Does NOT guarantee transactions</li>
+        <li style={listItem}>
+          Does NOT guarantee arrangements you make with other users
+        </li>
       </ul>
       <p style={legalText.p}>
-        You agree that any financial interaction is entirely at your own risk.
+        You are solely responsible for any costs or arrangements you agree to
+        with others.
       </p>
 
       <hr style={hr} />
@@ -136,7 +139,7 @@ export default function Terms() {
       <p style={legalText.p}>We are NOT responsible for:</p>
       <ul style={list}>
         <li style={listItem}>Failed meetups between users</li>
-        <li style={listItem}>Payment disputes</li>
+        <li style={listItem}>Disputes over costs or arrangements</li>
         <li style={listItem}>Food quality issues</li>
         <li style={listItem}>User misconduct</li>
       </ul>

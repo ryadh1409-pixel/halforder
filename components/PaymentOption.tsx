@@ -24,7 +24,7 @@ export default function PaymentOption({ value, onChange }: PaymentOptionProps) {
         activeOpacity={0.8}
       >
         <Text style={styles.label}>
-          Pay at restaurant and split the bill together
+          Coordinate at the restaurant and split the bill with your group
         </Text>
       </TouchableOpacity>
     </View>

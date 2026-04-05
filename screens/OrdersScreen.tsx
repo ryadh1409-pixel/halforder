@@ -33,6 +33,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
+
 const TAB_SPINNER = '#34D399';
 
 type OrderItem = {
@@ -386,6 +388,7 @@ export default function OrdersScreen() {
           {disabled ? (
             <Text style={styles.cancelledTag}>Cancelled</Text>
           ) : null}
+          <FoodCardPaymentDisclaimer style={styles.orderCardCoordinationNote} />
           <View style={styles.chevronRow}>
             <Text style={styles.openHint}>Open order</Text>
             <MaterialIcons
@@ -797,6 +800,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     maxWidth: 200,
+  },
+  orderCardCoordinationNote: {
+    marginTop: 12,
+    alignSelf: 'stretch',
   },
   chevronRow: {
     flexDirection: 'row',

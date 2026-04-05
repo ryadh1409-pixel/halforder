@@ -1,4 +1,5 @@
 import AppLogo from '@/components/AppLogo';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { getIosAppStoreUrl, getPlayStoreUrl } from '@/constants/storeLinks';
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
 import { auth, db } from '@/services/firebase';
@@ -232,6 +233,7 @@ export default function JoinInviteScreen() {
               <Text style={styles.cardLabel}>Host: </Text>
               {order.hostName}
             </Text>
+            <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
           </View>
 
           <Text style={styles.inviteMessage}>
@@ -378,6 +380,10 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontWeight: '600',
     color: c.textSlate,
+  },
+  cardCoordinationNote: {
+    marginTop: 8,
+    alignSelf: 'stretch',
   },
   inviteMessage: {
     fontSize: 16,

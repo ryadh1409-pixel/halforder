@@ -141,7 +141,8 @@ export default function PrivacyScreen() {
         <Text style={styles.sectionHeading}>6. Payments</Text>
         <Text style={styles.paragraph}>HalfOrder does NOT process payments.</Text>
         <Text style={styles.paragraph}>
-          Any payments happen outside the app directly between users.
+          HalfOrder is used for coordination only. Any arrangements are made
+          independently between users.
         </Text>
         <Text style={styles.paragraph}>We do NOT store any financial information.</Text>
 

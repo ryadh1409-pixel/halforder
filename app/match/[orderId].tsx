@@ -1,5 +1,6 @@
 import ContactButtons from '@/components/ContactButtons';
 import MatchCheckoutMap, { type MapPoint } from '@/components/MatchCheckoutMap';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import PaymentOption, { type PaymentChoice } from '@/components/PaymentOption';
 import { createAlert } from '@/services/alerts';
 import { auth, db } from '@/services/firebase';
@@ -348,6 +349,7 @@ export default function MatchCheckoutScreen() {
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Payment</Text>
             <PaymentOption value={paymentChoice} onChange={setPaymentChoice} />
+            <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
           </View>
 
           <View style={{ height: 100 }} />
@@ -409,6 +411,10 @@ const styles = StyleSheet.create({
     color: c.textSecondary,
     marginBottom: 12,
     textTransform: 'uppercase',
+  },
+  cardCoordinationNote: {
+    marginTop: 12,
+    alignSelf: 'stretch',
   },
   infoLine: {
     fontSize: 16,

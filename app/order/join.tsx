@@ -34,6 +34,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { shadows, theme } from '@/constants/theme';
 
 type JoinableOrder = {
@@ -339,6 +340,7 @@ export default function JoinOrderScreen() {
           <Text style={styles.joinBtnText}>Join order</Text>
         )}
       </TouchableOpacity>
+      <FoodCardPaymentDisclaimer style={styles.coordinationOnCard} />
     </View>
   );
 
@@ -370,6 +372,7 @@ export default function JoinOrderScreen() {
           )}
         </TouchableOpacity>
       </View>
+      <FoodCardPaymentDisclaimer style={styles.coordinationOnCard} />
     </View>
   );
 
@@ -503,6 +506,10 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.tight,
     borderWidth: 1,
     borderColor: theme.colors.border,
+  },
+  coordinationOnCard: {
+    marginTop: 8,
+    alignSelf: 'stretch',
   },
   cardLabel: {
     fontSize: 12,

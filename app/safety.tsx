@@ -32,7 +32,7 @@ export default function SafetyScreen() {
           <Text style={styles.cardText}>
             • Be respectful to your order partners.{'\n'}• Don’t share personal
             contact or payment details in chat.{'\n'}• Complete orders as agreed
-            (pick up, split, pay).{'\n'}• Report anyone who doesn’t follow these
+            (pick up, coordinate costs).{'\n'}• Report anyone who doesn’t follow these
             guidelines.
           </Text>
         </View>

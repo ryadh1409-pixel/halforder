@@ -117,7 +117,8 @@ export default function Privacy() {
       <h2 style={legalText.sectionTitle}>6. Payments</h2>
       <p style={legalText.p}>HalfOrder does NOT process payments.</p>
       <p style={legalText.p}>
-        Any payments happen outside the app directly between users.
+        HalfOrder is used for coordination only. Any arrangements are made
+        independently between users.
       </p>
       <p style={legalText.p}>We do NOT store any financial information.</p>
 

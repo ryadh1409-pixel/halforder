@@ -89,21 +89,22 @@ export default function TermsScreen() {
 
         <Hr />
 
-        <Text style={styles.sectionHeading}>3. Payments Disclaimer</Text>
+        <Text style={styles.sectionHeading}>3. Coordination &amp; payments</Text>
         <Text style={styles.paragraph}>
-          All payments are handled directly between users{' '}
-          <Text style={styles.bold}>outside of the app</Text>.
+          HalfOrder is used for coordination only. Any arrangements are made
+          independently between users.
         </Text>
         <Text style={styles.paragraph}>HalfOrder:</Text>
         <Bullets
           items={[
             'Does NOT process payments',
             'Does NOT hold money',
-            'Does NOT guarantee transactions',
+            'Does NOT guarantee arrangements you make with other users',
           ]}
         />
         <Text style={styles.paragraph}>
-          You agree that any financial interaction is entirely at your own risk.
+          You are solely responsible for any costs or arrangements you agree to
+          with others.
         </Text>
 
         <Hr />
@@ -164,7 +165,7 @@ export default function TermsScreen() {
         <Bullets
           items={[
             'Failed meetups between users',
-            'Payment disputes',
+            'Disputes over costs or arrangements',
             'Food quality issues',
             'User misconduct',
           ]}
@@ -269,7 +270,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginBottom: 12,
   },
-  bold: { fontWeight: '700' },
   bullet: {
     fontSize: 16,
     lineHeight: 24,

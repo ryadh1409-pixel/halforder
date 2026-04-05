@@ -1,3 +1,4 @@
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import OrderMarker from '@/components/OrderMarker';
 import SafeMap from '@/components/SafeMap';
 import {
@@ -147,6 +148,7 @@ export default function DemandMap({ onJoinOrder, style }: DemandMapProps) {
           </Text>
           <Text style={styles.previewMeal}>{selectedOrder.mealType}</Text>
           <Text style={styles.previewDistance}>{distanceLabel} away</Text>
+          <FoodCardPaymentDisclaimer style={styles.previewCoordinationNote} />
           <TouchableOpacity
             style={styles.joinBtn}
             onPress={() => {
@@ -214,7 +216,11 @@ const styles = StyleSheet.create({
   previewDistance: {
     fontSize: 13,
     color: c.textMuted,
+    marginBottom: 8,
+  },
+  previewCoordinationNote: {
     marginBottom: 12,
+    alignSelf: 'stretch',
   },
   joinBtn: {
     backgroundColor: c.primary,

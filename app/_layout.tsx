@@ -587,7 +587,7 @@ function RootLayoutNav() {
           if (isNewUserIntent) {
             sendSupportMessage(
               api,
-              'OurFood helps you split meal costs by creating or joining shared orders. When another participant joins your order, each person pays their share in the app.',
+              'HalfOrder helps you coordinate shared food orders with people nearby. HalfOrder is used for coordination only — any arrangements are made independently between users.',
             );
             await notifyNewTidioMessage(
               'New user sharing explanation sent.',

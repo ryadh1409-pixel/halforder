@@ -39,6 +39,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { theme } from '@/constants/theme';
 
 const c = theme.colors;
@@ -764,6 +765,9 @@ export default function JoinScreen() {
                 </TouchableOpacity>
               </View>
             ) : null}
+            <FoodCardPaymentDisclaimer
+              style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 2 }}
+            />
             </View>
           );
         }}

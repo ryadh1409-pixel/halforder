@@ -1,4 +1,5 @@
 import AppLogo from '@/components/AppLogo';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import { useNearbyOrders, type NearbyOrder } from '@/hooks/useNearbyOrders';
 import { haversineDistanceKm } from '@/lib/haversine';
@@ -207,6 +208,7 @@ export default function NearbyOrdersScreen() {
                       <Text style={styles.joinButtonText}>Join</Text>
                     )}
                   </TouchableOpacity>
+                  <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
                 </View>
               );
             })
@@ -305,5 +307,9 @@ const styles = StyleSheet.create({
     color: theme.colors.textOnPrimary,
     fontWeight: '600',
     fontSize: 16,
+  },
+  cardCoordinationNote: {
+    marginTop: 10,
+    alignSelf: 'stretch',
   },
 });

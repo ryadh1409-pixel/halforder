@@ -1,4 +1,5 @@
 import AppLogo from '@/components/AppLogo';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { shadows, theme } from '@/constants/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
@@ -38,7 +39,7 @@ export default function OrderSuccessScreen() {
   const totalLabel = totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : '—';
   const savedLabel = saved > 0 ? `$${saved.toFixed(2)}` : '$0.00';
 
-  const shareMessage = `I saved ${savedLabel} with HalfOrder! 🍔 Split meals. Pay half. Try it: https://halforder.app`;
+  const shareMessage = `I saved ${savedLabel} with HalfOrder! 🍔 Coordinate shared meals nearby. Try it: https://halforder.app`;
 
   const handleShare = async () => {
     setSharing(true);
@@ -115,6 +116,7 @@ export default function OrderSuccessScreen() {
             <Text style={styles.cardRestaurant}>{restaurantName}</Text>
             <Text style={styles.cardTotal}>Meal total: {totalLabel}</Text>
             <Text style={styles.cardSaved}>Amount saved: {savedLabel}</Text>
+            <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
           </View>
         </View>
 
@@ -282,6 +284,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: theme.colors.primary,
+  },
+  cardCoordinationNote: {
+    marginTop: 12,
+    alignSelf: 'stretch',
+    textAlign: 'center',
   },
   hint: {
     fontSize: 14,

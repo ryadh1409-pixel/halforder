@@ -856,7 +856,7 @@ export default function OrderRoomScreen() {
     orderId,
     auth.currentUser?.uid ?? undefined,
   );
-  const orderShareMessage = `🍔 Join my order on HalfOrder\n\nSplit the meal. Pay half.\n\nTap to join:\n${orderShareLink}`;
+  const orderShareMessage = `🍔 Join my order on HalfOrder\n\nCoordinate pickup and your share with the group.\n\nTap to join:\n${orderShareLink}`;
 
   const handleInvite = async () => {
     const link = `https://halforder.app/order/${orderId}`;

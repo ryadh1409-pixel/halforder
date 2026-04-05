@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { shadows, theme } from '@/constants/theme';
 
 const c = theme.colors;
@@ -67,6 +68,7 @@ export default function MapScreenWeb() {
                 </Text>
                 <Text style={styles.cardRow}>By: {order.userName}</Text>
                 <Text style={styles.joinLabel}>Tap to join</Text>
+                <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
               </TouchableOpacity>
             ))
           )}
@@ -151,6 +153,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: c.success,
     marginTop: 8,
+  },
+  cardCoordinationNote: {
+    marginTop: 10,
+    alignSelf: 'stretch',
   },
   fab: {
     position: 'absolute',

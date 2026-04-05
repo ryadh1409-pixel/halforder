@@ -273,7 +273,7 @@ function lateNightLocal(): boolean {
 }
 
 function productHelpLine(name: string): string {
-  return `${name}, here’s the gist: browse or swipe an order, join or start one, then use order chat to split cost and meet up. Want pizza 🍕 or burger 🍔?`;
+  return `${name}, here’s the gist: browse or swipe an order, join or start one, then use order chat to coordinate and meet up. Want pizza 🍕 or burger 🍔?`;
 }
 
 function productFeedbackLine(name: string): string {
