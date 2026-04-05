@@ -1,30 +1,36 @@
 import { db } from '@/services/firebase';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
-/** Values stored on `reports` docs (App Store / UGC safety). */
-export type ReportReason =
-  | 'spam'
-  | 'abuse'
-  | 'inappropriate'
-  | 'scam'
-  | 'other';
+/** Stored on each `reports` document (Guideline 1.2). */
+export type ReportReason = 'spam' | 'abuse' | 'inappropriate';
 
 export const UGC_REPORT_REASONS: { id: ReportReason; label: string }[] = [
   { id: 'spam', label: 'Spam' },
-  { id: 'abuse', label: 'Abuse / harassment' },
+  { id: 'abuse', label: 'Abuse' },
   { id: 'inappropriate', label: 'Inappropriate content' },
-  { id: 'scam', label: 'Scam' },
-  { id: 'other', label: 'Other' },
 ];
+
+export function reportContentIdChatMessage(
+  chatId: string,
+  messageId: string,
+): string {
+  return `chat:${chatId}:message:${messageId}`;
+}
+
+export function reportContentIdOrder(orderId: string): string {
+  return `order:${orderId}`;
+}
+
+/** Profile / user screen when no message context. */
+export function reportContentIdUser(reportedUserId: string): string {
+  return `user:${reportedUserId}`;
+}
 
 export async function submitReport(params: {
   reporterId: string;
   reportedUserId: string;
+  contentId: string;
   reason: ReportReason;
-  /** Optional free-text context (message excerpt, notes). */
-  message?: string;
-  orderId?: string | null;
-  chatId?: string | null;
 }): Promise<void> {
   if (!params.reporterId || !params.reportedUserId) {
     throw new Error('Missing reporter or reported user.');
@@ -32,18 +38,16 @@ export async function submitReport(params: {
   if (params.reporterId === params.reportedUserId) {
     throw new Error('You cannot report yourself.');
   }
-
-  const ts = serverTimestamp();
-  const message = params.message?.trim() ?? '';
+  const contentId = params.contentId?.trim() ?? '';
+  if (!contentId) {
+    throw new Error('Missing content reference.');
+  }
 
   await addDoc(collection(db, 'reports'), {
     reporterId: params.reporterId,
     reportedUserId: params.reportedUserId,
-    orderId: params.orderId ?? null,
-    chatId: params.chatId ?? null,
+    contentId,
     reason: params.reason,
-    message,
-    createdAt: ts,
-    timestamp: ts,
+    createdAt: serverTimestamp(),
   });
 }

@@ -16,7 +16,11 @@ import { theme } from '@/constants/theme';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { blockUser } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
-import { submitReport, type ReportReason } from '@/services/reports';
+import {
+  reportContentIdUser,
+  submitReport,
+  type ReportReason,
+} from '@/services/reports';
 
 const c = theme.colors;
 const BADGE_BG = '#1B2230';
@@ -36,9 +40,8 @@ type UserProfileState = {
 
 const REPORT_REASON_OPTIONS: { label: string; value: ReportReason }[] = [
   { label: 'Spam', value: 'spam' },
-  { label: 'Inappropriate behavior', value: 'inappropriate' },
-  { label: 'Scam', value: 'scam' },
-  { label: 'Other', value: 'other' },
+  { label: 'Abuse', value: 'abuse' },
+  { label: 'Inappropriate content', value: 'inappropriate' },
 ];
 
 function toPercent(rate: number): number {
@@ -162,8 +165,8 @@ export default function UserProfileScreen() {
       await submitReport({
         reporterId: currentUserId,
         reportedUserId: userId,
+        contentId: reportContentIdUser(userId),
         reason,
-        message: '',
       });
       Alert.alert('Report submitted', 'Thanks for helping keep HalfOrder safe.');
     } catch (e) {

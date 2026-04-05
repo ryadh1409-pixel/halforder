@@ -672,14 +672,22 @@ service cloud.firestore {
         && request.resource.data.reportedUserId is string
         && request.resource.data.reportedUserId.size() > 0
         && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.contentId is string
+        && request.resource.data.contentId.size() > 0
         && request.resource.data.reason is string
-        && request.resource.data.message is string
+        && (
+          request.resource.data.reason == 'spam'
+          || request.resource.data.reason == 'abuse'
+          || request.resource.data.reason == 'inappropriate'
+        )
         && request.resource.data.createdAt == request.time
-        && request.resource.data.timestamp == request.time
-        && (request.resource.data.orderId == null
-          || request.resource.data.orderId is string)
-        && (request.resource.data.chatId == null
-          || request.resource.data.chatId is string);
+        && request.resource.data.keys().hasOnly([
+          'reporterId',
+          'reportedUserId',
+          'contentId',
+          'reason',
+          'createdAt',
+        ]);
       allow read, update, delete: if isAdmin();
     }
     match /support_chats/{userId} {

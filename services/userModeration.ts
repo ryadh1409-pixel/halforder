@@ -1,12 +1,20 @@
 import { db } from '@/services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
-/** `users/{uid}.flagged` — set server-side after multiple reports (see Cloud Function). */
+function readIsFlagged(data: Record<string, unknown> | undefined): boolean {
+  if (!data) return false;
+  if (data.isFlagged === true) return true;
+  /** Legacy field from earlier builds */
+  if (data.flagged === true) return true;
+  return false;
+}
+
+/** Set server-side when report count ≥ 3 (see Cloud Function `refreshUserDerivedFields`). */
 export async function isUserFlagged(uid: string): Promise<boolean> {
   if (!uid) return false;
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) return false;
-  return snap.data()?.flagged === true;
+  return readIsFlagged(snap.data() as Record<string, unknown>);
 }
 
 export async function filterFlaggedUserIds(

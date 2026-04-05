@@ -9,7 +9,6 @@ import {
   Modal,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -19,8 +18,8 @@ export type ReportUserModalProps = {
   onClose: () => void;
   reporterId: string;
   reportedUserId: string;
-  orderId?: string | null;
-  chatId?: string | null;
+  /** Message id, order id, or other stable reference (see `services/reports`). */
+  contentId: string;
   onSubmitted?: () => void;
 };
 
@@ -29,18 +28,15 @@ export default function ReportUserModal({
   onClose,
   reporterId,
   reportedUserId,
-  orderId,
-  chatId,
+  contentId,
   onSubmitted,
 }: ReportUserModalProps) {
   const [reason, setReason] = useState<ReportReason>('spam');
-  const [detail, setDetail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
     setReason('spam');
-    setDetail('');
     setError(null);
     setBusy(false);
   };
@@ -56,16 +52,18 @@ export default function ReportUserModal({
       setError('Invalid report.');
       return;
     }
+    if (!contentId.trim()) {
+      setError('Missing content reference.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       await submitReport({
         reporterId,
         reportedUserId,
+        contentId: contentId.trim(),
         reason,
-        message: detail.trim(),
-        orderId: orderId ?? null,
-        chatId: chatId ?? null,
       });
       reset();
       onSubmitted?.();
@@ -86,10 +84,8 @@ export default function ReportUserModal({
     >
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
-          <Text style={styles.title}>Report user</Text>
-          <Text style={styles.sub}>
-            Reports are reviewed. False reports may affect your account.
-          </Text>
+          <Text style={styles.title}>Report</Text>
+          <Text style={styles.sub}>Our team reviews every report.</Text>
 
           {UGC_REPORT_REASONS.map(({ id, label }) => {
             const active = id === reason;
@@ -107,16 +103,6 @@ export default function ReportUserModal({
             );
           })}
 
-          <TextInput
-            style={styles.input}
-            placeholder="Optional details"
-            placeholderTextColor="#6B7280"
-            value={detail}
-            onChangeText={setDetail}
-            multiline
-            editable={!busy}
-          />
-
           {error ? <Text style={styles.err}>{error}</Text> : null}
 
           <View style={styles.actions}>
@@ -133,7 +119,7 @@ export default function ReportUserModal({
               disabled={busy}
             >
               {busy ? (
-                <ActivityIndicator color="#052E1A" />
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.primaryTxt}>Submit</Text>
               )}
@@ -148,63 +134,55 @@ export default function ReportUserModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 24,
   },
   sheet: {
-    backgroundColor: '#141A22',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: '#fff',
+    borderRadius: 14,
     padding: 20,
-    paddingBottom: 28,
     gap: 10,
+    maxWidth: 400,
+    alignSelf: 'center',
+    width: '100%',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#F8FAFC',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
   },
-  sub: { fontSize: 13, color: '#94A3B8', lineHeight: 18, marginBottom: 4 },
+  sub: { fontSize: 14, color: '#3C3C43', lineHeight: 20, marginBottom: 4 },
   chip: {
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#C6C6C8',
     borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  chipOn: { borderColor: '#34D399', backgroundColor: 'rgba(52,211,153,0.12)' },
-  chipTxt: { color: '#CBD5E1', fontWeight: '600', fontSize: 14 },
-  chipTxtOn: { color: '#F8FAFC' },
-  input: {
-    minHeight: 72,
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 10,
-    padding: 12,
-    color: '#F8FAFC',
-    textAlignVertical: 'top',
-    marginTop: 4,
-  },
-  err: { color: '#FCA5A5', fontSize: 13, marginTop: 4 },
+  chipOn: { borderColor: '#007AFF', backgroundColor: 'rgba(0,122,255,0.08)' },
+  chipTxt: { color: '#000', fontWeight: '500', fontSize: 16 },
+  chipTxtOn: { color: '#007AFF', fontWeight: '600' },
+  err: { color: '#FF3B30', fontSize: 14, marginTop: 4 },
   actions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 12,
+    marginTop: 16,
     justifyContent: 'flex-end',
   },
   secondaryBtn: {
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
-  secondaryTxt: { color: '#94A3B8', fontWeight: '700' },
+  secondaryTxt: { color: '#007AFF', fontWeight: '600', fontSize: 17 },
   primaryBtn: {
-    backgroundColor: '#34D399',
+    backgroundColor: '#007AFF',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
-    minWidth: 100,
+    minWidth: 88,
     alignItems: 'center',
   },
   primaryBtnOff: { opacity: 0.6 },
-  primaryTxt: { color: '#052E1A', fontWeight: '800' },
+  primaryTxt: { color: '#fff', fontWeight: '600', fontSize: 17 },
 });

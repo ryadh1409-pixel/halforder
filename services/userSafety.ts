@@ -1,45 +1,61 @@
 /**
- * UGC safety: reports (Firestore `reports`) + block list (`users` + subcollection).
+ * UGC safety: Firestore `reports` + `users/.../blockedUsers`.
  */
 import { logError } from '@/utils/errorLogger';
 import { blockUser as persistBlock } from '@/services/block';
-import { type ReportReason, submitReport } from '@/services/reports';
+import {
+  reportContentIdChatMessage,
+  reportContentIdOrder,
+  reportContentIdUser,
+  type ReportReason,
+  submitReport,
+} from '@/services/reports';
 
 export type ReportPayload = {
   reporterId: string;
   reportedUserId: string;
   orderId?: string | null;
   chatId?: string | null;
+  messageId?: string | null;
   reason?: string;
   context?: string;
 };
 
-/** Maps legacy / loose strings to `ReportReason`. */
+/** Maps free-text / legacy menu strings to `ReportReason`. */
 export function coerceReportReason(raw: string | undefined): ReportReason {
-  const r = (raw ?? 'other').trim().toLowerCase();
-  if (r.includes('spam')) return 'spam';
-  if (r.includes('abuse') || r.includes('harass')) return 'abuse';
+  const r = (raw ?? '').trim().toLowerCase();
+  if (r.includes('spam') || r.includes('scam')) return 'spam';
+  if (
+    r.includes('abuse') ||
+    r.includes('harass') ||
+    r.includes('inappropriate behavior')
+  ) {
+    return 'abuse';
+  }
   if (r.includes('inappropriate')) return 'inappropriate';
-  if (r.includes('scam')) return 'scam';
-  return 'other';
+  return 'inappropriate';
 }
 
-/** Creates a `reports` document. Prefer `submitReport` for new UI. */
+function buildContentId(payload: ReportPayload): string {
+  if (payload.chatId && payload.messageId) {
+    return reportContentIdChatMessage(payload.chatId, payload.messageId);
+  }
+  if (payload.orderId?.trim()) {
+    return reportContentIdOrder(payload.orderId.trim());
+  }
+  if (payload.chatId?.trim()) {
+    return `chat:${payload.chatId.trim()}`;
+  }
+  return reportContentIdUser(payload.reportedUserId);
+}
+
 export async function submitUserReport(payload: ReportPayload): Promise<void> {
   const reason = coerceReportReason(payload.reason);
-  const message =
-    [payload.context?.trim(), payload.reason && reason === 'other' ? payload.reason : '']
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-
   await submitReport({
     reporterId: payload.reporterId,
     reportedUserId: payload.reportedUserId,
+    contentId: buildContentId(payload),
     reason,
-    message: message || '',
-    orderId: payload.orderId ?? null,
-    chatId: payload.chatId ?? null,
   });
 }
 

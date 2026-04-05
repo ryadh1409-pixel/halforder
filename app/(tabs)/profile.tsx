@@ -23,7 +23,11 @@ import {
 } from '@/services/deleteUserAccount';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { uploadProfilePhoto } from '@/services/profilePhoto';
-import { submitReport, type ReportReason } from '@/services/reports';
+import {
+  reportContentIdUser,
+  submitReport,
+  type ReportReason,
+} from '@/services/reports';
 import { moderateUserContent } from '@/utils/contentModeration';
 import { logError } from '@/utils/errorLogger';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -222,7 +226,6 @@ export default function ProfileScreen() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [reportUserId, setReportUserId] = useState('');
   const [reportReason, setReportReason] = useState<ReportReason>('spam');
-  const [reportMessage, setReportMessage] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
@@ -508,10 +511,9 @@ export default function ProfileScreen() {
       await submitReport({
         reporterId: uid,
         reportedUserId: target,
+        contentId: reportContentIdUser(target),
         reason: reportReason,
-        message: reportMessage.trim(),
       });
-      setReportMessage('');
       Alert.alert('Report submitted', 'Thanks. We will review this report.');
     } catch (e) {
       Alert.alert(
@@ -904,15 +906,7 @@ export default function ProfileScreen() {
               style={dynamicStyles.input}
             />
             <View style={styles.reasonRow}>
-              {(
-                [
-                  'spam',
-                  'abuse',
-                  'inappropriate',
-                  'scam',
-                  'other',
-                ] as ReportReason[]
-              ).map(
+              {(['spam', 'abuse', 'inappropriate'] as ReportReason[]).map(
                 (reason) => {
                   const active = reason === reportReason;
                   return (
@@ -937,14 +931,6 @@ export default function ProfileScreen() {
                 },
               )}
             </View>
-            <TextInput
-              value={reportMessage}
-              onChangeText={setReportMessage}
-              placeholder="Details (optional)"
-              placeholderTextColor={pal.textTertiary}
-              style={[dynamicStyles.input, styles.inputMultiline]}
-              multiline
-            />
             <TouchableOpacity
               style={[
                 dynamicStyles.primaryButton,

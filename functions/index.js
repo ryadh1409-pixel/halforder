@@ -168,7 +168,8 @@ async function refreshUserDerivedFields(db, userId) {
   const shouldRestrictForReports = reportCount >= REPORT_RESTRICTION_THRESHOLD;
   const alreadyRestricted = userData?.restricted === true;
   const shouldFlag = reportCount >= REPORT_FLAG_THRESHOLD;
-  const flaggedCurrent = userData?.flagged === true;
+  const flaggedCurrent =
+    userData?.isFlagged === true || userData?.flagged === true;
 
   const needsUpdate =
     trustScore !== (typeof userData?.trustScore === 'number' ? userData.trustScore : 0) ||
@@ -189,7 +190,7 @@ async function refreshUserDerivedFields(db, userId) {
     badges,
     suspicious,
     suspiciousSignals,
-    flagged: shouldFlag,
+    isFlagged: shouldFlag,
   };
   if (shouldRestrictForReports && !alreadyRestricted) {
     updates.restricted = true;

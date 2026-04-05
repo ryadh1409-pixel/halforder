@@ -16,6 +16,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -169,6 +170,13 @@ export default function AdminReportDetailScreen() {
   }
 
   const detail = report ? reportDetailText(report as Record<string, unknown>) : null;
+  const contentIdRaw =
+    report && typeof report.contentId === 'string' ? report.contentId.trim() : null;
+  const legacyOrderId =
+    report && typeof report.orderId === 'string' ? report.orderId.trim() : null;
+  const orderForLink =
+    legacyOrderId ||
+    (contentIdRaw?.startsWith('order:') ? contentIdRaw.slice(6) : null);
 
   const uEmail =
     userInfo && typeof userInfo.email === 'string' ? userInfo.email : null;
@@ -204,15 +212,21 @@ export default function AdminReportDetailScreen() {
           ) : (
             <Text style={styles.v}>—</Text>
           )}
-          {typeof report.orderId === 'string' ? (
+          {contentIdRaw ? (
+            <>
+              <Text style={styles.k}>Content ID</Text>
+              <Text style={[styles.v, styles.mono]}>{contentIdRaw}</Text>
+            </>
+          ) : null}
+          {orderForLink ? (
             <>
               <Text style={styles.k}>Order</Text>
               <TouchableOpacity
                 onPress={() =>
-                  router.push(adminRoutes.order(report.orderId as string) as never)
+                  router.push(adminRoutes.order(orderForLink) as never)
                 }
               >
-                <Text style={[styles.v, styles.link]}>{report.orderId}</Text>
+                <Text style={[styles.v, styles.link]}>{orderForLink}</Text>
               </TouchableOpacity>
             </>
           ) : null}
@@ -267,6 +281,7 @@ const styles = StyleSheet.create({
   card: { ...adminCardShell, marginBottom: 14, padding: theme.spacing.md },
   k: { fontSize: 12, color: COLORS.textMuted, marginBottom: 2 },
   v: { fontSize: 15, color: COLORS.text, marginBottom: 8 },
+  mono: { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) },
   link: { color: COLORS.primary, fontWeight: '700' },
   detail: { fontSize: 15, color: COLORS.text, lineHeight: 22 },
   resolved: {

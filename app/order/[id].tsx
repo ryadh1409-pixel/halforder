@@ -47,6 +47,7 @@ import {
 import { AIDescription } from '@/components/AIDescription';
 import { OrderCardView } from '@/components/OrderCardView';
 import ReportUserModal from '@/components/ReportUserModal';
+import { reportContentIdOrder } from '@/services/reports';
 import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 import { blockUser } from '@/services/block';
@@ -1195,7 +1196,7 @@ export default function OrderDetailsScreen() {
         onClose={() => setReportModalOpen(false)}
         reporterId={auth.currentUser?.uid ?? ''}
         reportedUserId={partnerIdForSafety ?? ''}
-        orderId={order?.id ?? null}
+        contentId={order?.id ? reportContentIdOrder(order.id) : ''}
         onSubmitted={() =>
           Alert.alert('Thanks', 'We received your report.')
         }

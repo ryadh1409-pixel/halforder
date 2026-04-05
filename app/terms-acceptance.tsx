@@ -10,7 +10,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,8 +17,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const SUPPORT_EMAIL = 'support@halforder.app';
 
 export default function TermsAcceptanceScreen() {
   const router = useRouter();
@@ -52,54 +49,29 @@ export default function TermsAcceptanceScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>Terms of Use</Text>
-        <Text style={styles.p}>
-          You must accept the HalfOrder Terms of Use and our community rules
-          before using the app.
+        <Text style={styles.intro}>
+          HalfOrder includes user-generated content. By continuing, you agree to
+          follow these rules and our full Terms of Use and Privacy Policy (linked
+          in the app).
         </Text>
-        <Text style={styles.rulesHeading}>Community rules</Text>
-        <Text style={styles.ruleItem}>• No abuse, harassment, or hate.</Text>
-        <Text style={styles.ruleItem}>• No spam or misleading content.</Text>
-        <Text style={styles.ruleItem}>
-          • No harmful, illegal, or sexual content involving minors.
-        </Text>
-        <Text style={styles.ruleItemSmall}>
-          You can report users and block them from order and chat screens. We
-          review reports as described in our Terms.
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.push('/terms')}
-          style={styles.linkBtn}
-        >
-          <Text style={styles.linkBtnText}>Read Terms of Use</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => router.push('/privacy')}
-          style={styles.linkBtn}
-        >
-          <Text style={styles.linkBtnText}>Read Privacy Policy</Text>
-        </TouchableOpacity>
-        <Text style={styles.pSmall}>
-          Questions:{' '}
-          <Text
-            style={styles.mail}
-            onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
-          >
-            {SUPPORT_EMAIL}
-          </Text>
-        </Text>
+        <View style={styles.bullets}>
+          <Text style={styles.bullet}>• No abusive or harmful content</Text>
+          <Text style={styles.bullet}>• No spam</Text>
+          <Text style={styles.bullet}>• Respect other users</Text>
+        </View>
       </ScrollView>
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.primary, loading && styles.primaryDisabled]}
-          onPress={accept}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={theme.colors.textOnPrimary} />
-          ) : (
-            <Text style={styles.primaryText}>I Agree</Text>
-          )}
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.primary, loading && styles.primaryDisabled]}
+        onPress={accept}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color={theme.colors.textOnPrimary} />
+        ) : (
+          <Text style={styles.primaryText}>Agree and Continue</Text>
+        )}
+      </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -109,54 +81,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { padding: 24, paddingBottom: 120 },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '700',
     color: theme.colors.text,
     marginBottom: 16,
   },
-  p: {
+  intro: {
     fontSize: 16,
     lineHeight: 24,
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  rulesHeading: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: theme.colors.text,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  ruleItem: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: theme.colors.text,
-    marginBottom: 6,
-    paddingLeft: 4,
-  },
-  ruleItemSmall: {
-    fontSize: 14,
-    lineHeight: 21,
     color: theme.colors.textMuted,
-    marginTop: 8,
-    marginBottom: 8,
+    marginBottom: 24,
   },
-  pSmall: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: theme.colors.textMuted,
-    marginTop: 16,
+  bullets: { gap: 14 },
+  bullet: {
+    fontSize: 17,
+    lineHeight: 24,
+    color: theme.colors.text,
+    fontWeight: '500',
   },
-  linkBtn: { marginBottom: 8 },
-  linkBtnText: {
-    fontSize: 16,
-    color: theme.colors.accentBlue,
-    fontWeight: '600',
-  },
-  mail: { color: theme.colors.accentBlue, textDecorationLine: 'underline' },
   footer: {
     padding: 20,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },

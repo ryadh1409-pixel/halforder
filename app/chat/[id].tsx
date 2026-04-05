@@ -1,4 +1,5 @@
 import ReportUserModal from '@/components/ReportUserModal';
+import { reportContentIdChatMessage } from '@/services/reports';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc,
@@ -12,11 +13,11 @@ import {
 } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -72,8 +73,7 @@ export default function ChatByIdScreen() {
   const [peerUid, setPeerUid] = useState<string | null>(null);
   const [peerFlagged, setPeerFlagged] = useState(false);
   const [blockedBetween, setBlockedBetween] = useState(false);
-  const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
+  const [reportMessageId, setReportMessageId] = useState<string | null>(null);
   const bootstrapAttemptedRef = useRef(false);
   const aiInsertAttemptedRef = useRef(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
@@ -144,7 +144,12 @@ export default function ChatByIdScreen() {
     }
     const ref = firestoreDoc(db, 'users', peerUid);
     const unsub = onSnapshot(ref, (snap) => {
-      setPeerFlagged(snap.exists() ? snap.data()?.flagged === true : false);
+      const d = snap.data();
+      setPeerFlagged(
+        snap.exists()
+          ? d?.isFlagged === true || d?.flagged === true
+          : false,
+      );
     });
     return () => unsub();
   }, [peerUid]);
@@ -329,8 +334,7 @@ export default function ChatByIdScreen() {
     }
   };
 
-  const openBlockConfirm = () => {
-    setSafetyMenuOpen(false);
+  const confirmBlockPeer = () => {
     if (!myUid || !peerUid) return;
     Alert.alert(
       'Block user?',
@@ -356,6 +360,35 @@ export default function ChatByIdScreen() {
     );
   };
 
+  const openMessageActions = (item: ChatMessage) => {
+    const sid = String(item.senderId ?? '');
+    if (!peerUid || sid !== peerUid || !myUid) return;
+
+    const openReport = () => setReportMessageId(item.id);
+    const doBlock = () => confirmBlockPeer();
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Report', 'Block user'],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 2,
+          userInterfaceStyle: 'dark',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) openReport();
+          if (buttonIndex === 2) doBlock();
+        },
+      );
+    } else {
+      Alert.alert('Message', undefined, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Report', onPress: openReport },
+        { text: 'Block user', style: 'destructive', onPress: doBlock },
+      ]);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
@@ -367,17 +400,7 @@ export default function ChatByIdScreen() {
             <Text style={styles.back}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Chat</Text>
-          {peerUid ? (
-            <TouchableOpacity
-              onPress={() => setSafetyMenuOpen(true)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityLabel="Safety options"
-            >
-              <MaterialIcons name="more-vert" size={26} color="#94A3B8" />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 26 }} />
-          )}
+          <View style={{ width: 48 }} />
         </View>
 
         {blockedBetween ? (
@@ -410,6 +433,7 @@ export default function ChatByIdScreen() {
             renderItem={({ item }) => {
               const senderId = String(item.senderId ?? '');
               const isSystem = senderId === 'system' || item['system'] === true;
+              const isAi = item['sender'] === 'ai';
               const mine = !isSystem && senderId === auth.currentUser?.uid;
               const label = String(item.userName ?? item.sender ?? 'User');
               const body = String(item.text ?? '');
@@ -424,23 +448,54 @@ export default function ChatByIdScreen() {
                 !!peerUid &&
                 ts > 0 &&
                 (chatReads[peerUid] ?? 0) >= ts;
+              const showMessageMenu =
+                !isSystem &&
+                !isAi &&
+                !!peerUid &&
+                !!myUid &&
+                senderId === peerUid &&
+                !blockedBetween;
               return (
                 <View
-                  style={[styles.bubble, mine ? styles.mine : styles.theirs]}
+                  style={[
+                    styles.bubbleRow,
+                    mine ? styles.bubbleRowMine : styles.bubbleRowTheirs,
+                  ]}
                 >
-                  {!isSystem ? (
-                    <Text style={styles.name}>{label}</Text>
-                  ) : null}
-                  <Text style={styles.msg}>{body}</Text>
-                  {!isSystem ? (
-                    <View style={styles.metaRow}>
-                      {timeLabel ? (
-                        <Text style={styles.msgTime}>{timeLabel}</Text>
-                      ) : null}
-                      {showSeen ? (
-                        <Text style={styles.seenLabel}>Seen</Text>
-                      ) : null}
-                    </View>
+                  <View
+                    style={[
+                      styles.bubble,
+                      mine ? styles.mine : styles.theirs,
+                    ]}
+                  >
+                    {!isSystem ? (
+                      <Text style={styles.name}>{label}</Text>
+                    ) : null}
+                    <Text style={styles.msg}>{body}</Text>
+                    {!isSystem ? (
+                      <View style={styles.metaRow}>
+                        {timeLabel ? (
+                          <Text style={styles.msgTime}>{timeLabel}</Text>
+                        ) : null}
+                        {showSeen ? (
+                          <Text style={styles.seenLabel}>Seen</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                  {showMessageMenu ? (
+                    <TouchableOpacity
+                      style={styles.msgOverflowBtn}
+                      onPress={() => openMessageActions(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Message actions"
+                    >
+                      <MaterialIcons
+                        name="more-horiz"
+                        size={22}
+                        color="#94A3B8"
+                      />
+                    </TouchableOpacity>
                   ) : null}
                 </View>
               );
@@ -475,42 +530,16 @@ export default function ChatByIdScreen() {
           </TouchableOpacity>
         </View>
 
-        <Modal
-          visible={safetyMenuOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSafetyMenuOpen(false)}
-        >
-          <TouchableOpacity
-            style={styles.menuBackdrop}
-            activeOpacity={1}
-            onPress={() => setSafetyMenuOpen(false)}
-          >
-            <View style={styles.menuSheet}>
-              <TouchableOpacity
-                style={styles.menuRow}
-                onPress={() => {
-                  setSafetyMenuOpen(false);
-                  setReportOpen(true);
-                }}
-              >
-                <Text style={styles.menuRowText}>Report</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuRow} onPress={openBlockConfirm}>
-                <Text style={[styles.menuRowText, styles.menuRowDanger]}>
-                  Block user
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
         <ReportUserModal
-          visible={reportOpen}
-          onClose={() => setReportOpen(false)}
+          visible={!!reportMessageId && !!peerUid && !!myUid && !!id}
+          onClose={() => setReportMessageId(null)}
           reporterId={myUid}
           reportedUserId={peerUid ?? ''}
-          chatId={id}
+          contentId={
+            reportMessageId && id
+              ? reportContentIdChatMessage(id, reportMessageId)
+              : ''
+          }
           onSubmitted={() =>
             Alert.alert('Thanks', 'We received your report.')
           }
@@ -533,6 +562,23 @@ const styles = StyleSheet.create({
   },
   back: { color: '#34D399', fontWeight: '700' },
   title: { color: '#F8FAFC', fontWeight: '700', fontSize: 17 },
+  bubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    gap: 4,
+    maxWidth: '100%',
+    paddingRight: 4,
+  },
+  bubbleRowMine: {
+    justifyContent: 'flex-end',
+    alignSelf: 'flex-end',
+  },
+  bubbleRowTheirs: {
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
+  },
+  msgOverflowBtn: { padding: 4, marginTop: 4 },
   banner: {
     backgroundColor: 'rgba(248,113,113,0.12)',
     paddingVertical: 10,
@@ -548,28 +594,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#3F3829',
   },
   bannerText: { color: '#E5E7EB', fontSize: 13, lineHeight: 18 },
-  menuBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  menuSheet: {
-    backgroundColor: '#1A222C',
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    paddingBottom: 28,
-  },
-  menuRow: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2D3748',
-  },
-  menuRowText: { color: '#F8FAFC', fontSize: 16, fontWeight: '600' },
-  menuRowDanger: { color: '#FCA5A5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContent: { padding: 12, paddingBottom: 20 },
-  bubble: { maxWidth: '80%', borderRadius: 14, padding: 10, marginBottom: 10 },
+  bubble: { maxWidth: '76%', borderRadius: 14, padding: 10 },
   mine: { alignSelf: 'flex-end', backgroundColor: '#10241D' },
   theirs: { alignSelf: 'flex-start', backgroundColor: '#141922' },
   name: { color: '#6EE7B7', fontSize: 12, fontWeight: '700', marginBottom: 4 },
