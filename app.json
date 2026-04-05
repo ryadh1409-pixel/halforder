@@ -69,6 +69,11 @@
             {
               "scheme": "https",
               "host": "halforder.app",
+              "pathPrefix": "/safety-community-guidelines"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
               "pathPrefix": "/subscribe"
             },
             {
@@ -90,6 +95,11 @@
               "scheme": "https",
               "host": "www.halforder.app",
               "pathPrefix": "/privacy"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/safety-community-guidelines"
             },
             {
               "scheme": "https",

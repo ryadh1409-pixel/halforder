@@ -2,4 +2,6 @@
 export const LEGAL_URLS = {
   terms: 'https://halforder.app/terms',
   privacy: 'https://halforder.app/privacy',
+  safetyCommunityGuidelines:
+    'https://halforder.app/safety-community-guidelines/',
 } as const;

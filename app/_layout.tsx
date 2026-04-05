@@ -70,6 +70,8 @@ export const linking = {
       terms: 'terms',
       privacy: 'privacy',
       subscribe: 'subscribe',
+      safety: 'safety',
+      'safety-community-guidelines': 'safety-community-guidelines',
       order: {
         path: 'order',
         screens: {
@@ -943,7 +945,9 @@ function RootLayoutNav() {
     seg0 === 'terms-acceptance' ||
     seg0 === 'terms' ||
     seg0 === 'privacy' ||
-    seg0 === 'subscribe';
+    seg0 === 'subscribe' ||
+    seg0 === 'safety' ||
+    seg0 === 'safety-community-guidelines';
   const redirectToLogin =
     !user && !inAuthGroup && !onJoinRedirect && !onPublicShellRoutes;
   const redirectToTabs = user && inAuthGroup;
@@ -1070,6 +1074,10 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="safety"
+          options={{ title: 'Safety', headerShown: false }}
+        />
+        <Stack.Screen
+          name="safety-community-guidelines"
           options={{ title: 'Safety', headerShown: false }}
         />
         <Stack.Screen
