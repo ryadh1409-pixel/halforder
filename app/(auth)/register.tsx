@@ -1,5 +1,4 @@
 import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
-import { PickerMediaType } from '@/lib/imagePickerMedia';
 import {
   isCompleteNaProfilePhone,
   isProfilePhoneStorageEmpty,
@@ -7,13 +6,18 @@ import {
   profileWhatsAppOnChangeText,
 } from '@/lib/profileWhatsAppPhone';
 import { useAuth } from '@/services/AuthContext';
+import {
+  ImagePickerPermissionError,
+  pickImageFromLibrary,
+  takePhoto,
+} from '@/services/imagePicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -57,6 +61,7 @@ export default function RegisterScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
 
   const refs = [nameRef, emailRef, whatsappRef, passwordRef, confirmPasswordRef];
   const focusPrev = () => {
@@ -72,64 +77,57 @@ export default function RegisterScreen() {
     }
   };
 
-  const pickFromLibrary = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      showError(
-        'Permission to access photos is required. Enable Photos access for HalfOrder in Settings to add a profile picture.',
-      );
-      return;
-    }
-    let result: Awaited<
-      ReturnType<typeof ImagePicker.launchImageLibraryAsync>
-    >;
+  const handleChooseFromLibrary = async () => {
+    setPickingPhoto(true);
     try {
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: [PickerMediaType.Images],
-        quality: 0.85,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-    } catch {
-      showError('Could not open your photo library. Please try again.');
-      return;
-    }
-    if (!result.canceled && result.assets[0]?.uri) {
-      setPhotoUri(result.assets[0].uri);
+      const uri = await pickImageFromLibrary({ quality: 0.7 });
+      if (uri) {
+        setPhotoUri(uri);
+      }
+    } catch (e) {
+      if (e instanceof ImagePickerPermissionError) {
+        Alert.alert('Photo access needed', e.message);
+      } else if (e instanceof Error && e.message === 'PICKER_LAUNCH_FAILED') {
+        Alert.alert('Error', 'Could not open photo library.');
+      } else {
+        Alert.alert('Error', 'Could not open photo library.');
+      }
+    } finally {
+      setPickingPhoto(false);
     }
   };
 
-  const pickFromCamera = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      showError(
-        'Permission to use the camera is required. Enable Camera access for HalfOrder in Settings.',
-      );
-      return;
-    }
-    let result: Awaited<ReturnType<typeof ImagePicker.launchCameraAsync>>;
+  const handleTakePhoto = async () => {
+    setPickingPhoto(true);
     try {
-      result = await ImagePicker.launchCameraAsync({
-        quality: 0.85,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-    } catch {
-      showError('Could not open the camera. Please try again.');
-      return;
-    }
-    if (!result.canceled && result.assets[0]?.uri) {
-      setPhotoUri(result.assets[0].uri);
+      const uri = await takePhoto({ quality: 0.7 });
+      if (uri) {
+        setPhotoUri(uri);
+      }
+    } catch (e) {
+      if (e instanceof ImagePickerPermissionError) {
+        Alert.alert('Camera access needed', e.message);
+      } else if (e instanceof Error && e.message === 'CAMERA_LAUNCH_FAILED') {
+        Alert.alert('Error', 'Could not open the camera.');
+      } else {
+        Alert.alert('Error', 'Could not open the camera.');
+      }
+    } finally {
+      setPickingPhoto(false);
     }
   };
 
   const openPhotoOptions = () => {
+    if (pickingPhoto || loading) return;
     void systemActionSheet({
       title: 'Profile photo',
       message: 'Choose a source',
       actions: [
-        { label: 'Take photo', onPress: () => void pickFromCamera() },
-        { label: 'Choose from library', onPress: () => void pickFromLibrary() },
+        { label: 'Take photo', onPress: () => void handleTakePhoto() },
+        {
+          label: 'Choose from library',
+          onPress: () => void handleChooseFromLibrary(),
+        },
         ...(photoUri
           ? [
               {
@@ -224,11 +222,15 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   style={styles.photoWrap}
                   onPress={openPhotoOptions}
-                  disabled={loading}
+                  disabled={loading || pickingPhoto}
                   activeOpacity={0.85}
                   accessibilityLabel="Add profile photo"
                 >
-                  {photoUri ? (
+                  {pickingPhoto ? (
+                    <View style={[styles.photoEmpty, styles.photoLoading]}>
+                      <ActivityIndicator size="large" color={c.primary} />
+                    </View>
+                  ) : photoUri ? (
                     <Image source={{ uri: photoUri }} style={styles.photoImage} contentFit="cover" />
                   ) : (
                     <View style={styles.photoEmpty}>
@@ -423,6 +425,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  photoLoading: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   photoCaption: {
     textAlign: 'center',

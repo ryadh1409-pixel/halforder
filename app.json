@@ -25,7 +25,7 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
         "NSPhotoLibraryAddUsageDescription": "HalfOrder may save images you share only when you choose to save them.",
-        "NSCameraUsageDescription": "We need access to your camera so you can take a profile picture.",
+        "NSCameraUsageDescription": "We need access to your camera to take a profile photo.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
@@ -153,7 +153,7 @@
         "expo-image-picker",
         {
           "photosPermission": "We need access to your photos so you can upload a profile picture.",
-          "cameraPermission": "We need access to your camera so you can take a profile picture."
+          "cameraPermission": "We need access to your camera to take a profile photo."
         }
       ],
       "expo-web-browser"

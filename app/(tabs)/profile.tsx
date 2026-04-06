@@ -4,7 +4,6 @@ import { systemConfirm } from '@/components/SystemDialogHost';
 import { isAdminUser } from '@/constants/adminUid';
 import { LEGAL_URLS } from '@/constants/legalLinks';
 import { theme } from '@/constants/theme';
-import { PickerMediaType } from '@/lib/imagePickerMedia';
 import {
   displayFromStoredProfilePhone,
   isCompleteNaProfilePhone,
@@ -21,6 +20,10 @@ import {
 } from '@/services/blocks';
 import { deleteUserAccount } from '@/services/deleteUserAccount';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
+import {
+  ImagePickerPermissionError,
+  pickImageFromLibrary,
+} from '@/services/imagePicker';
 import { uploadProfilePhoto } from '@/services/profilePhoto';
 import {
   reportContentIdUser,
@@ -35,7 +38,6 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { updateProfile, type User } from '@firebase/auth';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -424,31 +426,24 @@ export default function ProfileScreen() {
       showError('Authentication is still initializing.');
       return;
     }
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      showError(
-        'Permission to access photos is required. Enable Photos access for HalfOrder in Settings.',
-      );
-      return;
-    }
-    let result: Awaited<
-      ReturnType<typeof ImagePicker.launchImageLibraryAsync>
-    >;
+    let imageUri: string | null;
     try {
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: [PickerMediaType.Images],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
+      imageUri = await pickImageFromLibrary({ quality: 0.7 });
     } catch (e) {
+      if (e instanceof ImagePickerPermissionError) {
+        showError(e.message);
+        return;
+      }
+      if (e instanceof Error && e.message === 'PICKER_LAUNCH_FAILED') {
+        showError('Could not open your photo library. Please try again.');
+        return;
+      }
       logError(e);
       showError('Could not open your photo library. Please try again.');
       return;
     }
-    if (result.canceled || !result.assets?.[0]?.uri) return;
+    if (!imageUri) return;
 
-    const imageUri = result.assets[0].uri;
     setUploadingPhoto(true);
     try {
       const downloadURL = await uploadProfilePhoto(imageUri);
