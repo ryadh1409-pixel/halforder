@@ -35,7 +35,7 @@ function getToken(data: {
 
 export default function AdminNotificationsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [userEmail, setUserEmail] = useState('');
@@ -45,10 +45,10 @@ export default function AdminNotificationsScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = isAdminUser(user);
+  const isAdmin = isAdminUser(user, firestoreUserRole);
 
   useEffect(() => {
-    if (user && !isAdminUser(user)) {
+    if (user && !isAdminUser(user, firestoreUserRole)) {
       router.replace('/(tabs)');
     }
   }, [user, router]);

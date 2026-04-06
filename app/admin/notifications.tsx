@@ -27,19 +27,19 @@ type NotificationItem = {
 
 export default function AdminNotificationsTrackingScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = isAdminUser(user);
+  const isAdmin = isAdminUser(user, firestoreUserRole);
 
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
-    if (!isAdminUser(user)) {
+    if (!isAdminUser(user, firestoreUserRole)) {
       setLoading(false);
       return;
     }
@@ -102,7 +102,7 @@ export default function AdminNotificationsTrackingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, firestoreUserRole]);
 
   if (!user) {
     return (

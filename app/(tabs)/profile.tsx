@@ -219,7 +219,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const pal = useProfilePalette();
   const isDark = true;
-  const { user, signOutUser, reloadAuthUser } = useAuth();
+  const { user, signOutUser, reloadAuthUser, firestoreUserRole } = useAuth();
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [phone, setPhone] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -718,10 +718,10 @@ export default function ProfileScreen() {
                   </>
                 )}
               </View>
-              {trustScore || isAdminUser(user) ? (
+              {trustScore || isAdminUser(user, firestoreUserRole) ? (
                 <View style={dynamicStyles.trustChip}>
                   <Text style={dynamicStyles.trustChipText}>
-                    {isAdminUser(user) ? 'Admin' : (trustScore?.label ?? '')}
+                    {isAdminUser(user, firestoreUserRole) ? 'Admin' : (trustScore?.label ?? '')}
                   </Text>
                 </View>
               ) : null}
@@ -1079,7 +1079,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {isAdminUser(user) ? (
+          {isAdminUser(user, firestoreUserRole) ? (
             <View style={dynamicStyles.card}>
               <Text style={dynamicStyles.label}>Admin</Text>
               <TouchableOpacity

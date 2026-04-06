@@ -20,7 +20,11 @@ service firebase.storage {
           request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
           || (
             request.auth.token.email is string
-            && request.auth.token.email == 'admin@ourfood.com'
+            && (
+              request.auth.token.email == 'admin@ourfood.com'
+              || request.auth.token.email == 'support@halforder.app'
+              || request.auth.token.email == 'ryadh1409@gmail.com'
+            )
           )
         );
     }

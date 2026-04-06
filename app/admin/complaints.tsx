@@ -34,18 +34,18 @@ function formatDate(ms: number): string {
 
 export default function AdminComplaintsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const isAdmin = isAdminUser(user);
+  const isAdmin = isAdminUser(user, firestoreUserRole);
 
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
-    if (!isAdminUser(user)) {
+    if (!isAdminUser(user, firestoreUserRole)) {
       setLoading(false);
       return;
     }
@@ -80,7 +80,7 @@ export default function AdminComplaintsScreen() {
     );
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, firestoreUserRole]);
 
   if (!user) {
     return (

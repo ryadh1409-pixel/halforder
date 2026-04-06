@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatTorontoTime } from '@/lib/format-toronto-time';
 import { auth, db } from '@/services/firebase';
+import { useAuth } from '@/services/AuthContext';
 import { isAdminUser } from '@/constants/adminUid';
 import { theme } from '@/constants/theme';
 
@@ -32,6 +33,7 @@ type SupportMessage = {
 };
 
 export default function AdminSupportScreen() {
+  const { firestoreUserRole } = useAuth();
   const [userIds, setUserIds] = useState<string[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -40,7 +42,7 @@ export default function AdminSupportScreen() {
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
-  const isAdmin = isAdminUser(auth.currentUser);
+  const isAdmin = isAdminUser(auth.currentUser, firestoreUserRole);
 
   useEffect(() => {
     if (!isAdmin) {

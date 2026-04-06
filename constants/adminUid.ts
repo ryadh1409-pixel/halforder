@@ -1,3 +1,5 @@
+import { isAdminEmail } from '@/utils/admin';
+
 /**
  * Firebase Auth uid for the admin account. Must match `isAdmin()` in
  * `firestore.rules`.
@@ -11,10 +13,20 @@ function normalizeEmail(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase();
 }
 
+/**
+ * Client-side admin gate. Pass `firestoreRole` from `useAuth().firestoreUserRole`
+ * so promoted `role: admin` accounts can open the panel without a whitelist email.
+ */
 export function isAdminUser(
   user: { uid: string; email?: string | null } | null | undefined,
+  firestoreRole?: string | null,
 ): boolean {
   if (!user) return false;
+  if (typeof firestoreRole === 'string' && firestoreRole.trim() === 'admin') {
+    return true;
+  }
   if (user.uid === ADMIN_UID) return true;
-  return normalizeEmail(user.email) === ADMIN_PANEL_EMAIL;
+  if (normalizeEmail(user.email) === ADMIN_PANEL_EMAIL) return true;
+  if (isAdminEmail(user.email)) return true;
+  return false;
 }

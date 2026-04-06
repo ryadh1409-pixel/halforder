@@ -5,7 +5,7 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 export default function AdminLayout() {
-  const { user, loading } = useAuth();
+  const { user, loading, firestoreUserRole } = useAuth();
 
   if (loading) {
     return (
@@ -15,7 +15,7 @@ export default function AdminLayout() {
     );
   }
 
-  if (!isAdminUser(user)) {
+  if (!isAdminUser(user, firestoreUserRole)) {
     return <Redirect href="/(tabs)" />;
   }
 

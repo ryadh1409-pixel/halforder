@@ -52,7 +52,7 @@ export default function SwipeScreen() {
   const SWIPE_TRIGGER = 90;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [cards, setCards] = useState<FoodCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [cardsError, setCardsError] = useState(false);
@@ -118,7 +118,7 @@ export default function SwipeScreen() {
     };
   }, [uid]);
 
-  const adminPreview = isAdminUser(user);
+  const adminPreview = isAdminUser(user, firestoreUserRole);
   const deckCards = useMemo(() => {
     let list = cards;
     if (adminPreview && uid) {

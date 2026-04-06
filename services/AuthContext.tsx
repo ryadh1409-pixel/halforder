@@ -16,6 +16,7 @@ import {
   collection,
   doc,
   getDoc,
+  onSnapshot,
   setDoc,
   serverTimestamp,
   updateDoc,
@@ -40,6 +41,7 @@ import React, {
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { theme } from '@/constants/theme';
 import { auth, db } from '@/services/firebase';
+import { syncUserRoleToFirestore } from '@/utils/admin';
 import { uploadUserProfileImage } from '@/services/profilePhoto';
 import { claimReferralInboxRewards } from '@/services/referralRewards';
 import { subscribeExpoPushTokenRefresh } from '@/services/notifications';
@@ -64,6 +66,8 @@ export type EmailSignUpPayload = {
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
+  /** `users/{uid}.role` from Firestore (for promoted admins). */
+  firestoreUserRole: string | null;
   signUpWithEmail: (payload: EmailSignUpPayload) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithPhone: (phoneNumber: string) => Promise<void>;
@@ -236,6 +240,7 @@ async function ensureUserDocument(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [loading, setLoading] = useState(true);
+  const [firestoreUserRole, setFirestoreUserRole] = useState<string | null>(null);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -279,6 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             () => {},
           );
           void claimReferralInboxRewards(firebaseUser.uid);
+          void syncUserRoleToFirestore(firebaseUser);
         }
         setLoading(false);
         return;
@@ -300,11 +306,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         registerExpoPushTokenAndSyncToFirestore(fresh.uid).catch(() => {});
         void claimReferralInboxRewards(fresh.uid);
+        void syncUserRoleToFirestore(fresh);
       }
       setLoading(false);
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) {
+      setFirestoreUserRole(null);
+      return;
+    }
+    const unsub = onSnapshot(
+      doc(db, 'users', uid),
+      (snap) => {
+        const r = snap.exists() ? snap.data()?.role : undefined;
+        setFirestoreUserRole(typeof r === 'string' ? r.trim() : null);
+      },
+      () => setFirestoreUserRole(null),
+    );
+    return () => unsub();
+  }, [user?.uid]);
 
   /** Re-save Expo token when it rotates (must stay in sync with Firestore). */
   useEffect(() => {
@@ -415,6 +439,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('sendEmailVerification failed (user can resend from settings later):', e);
       }
     }
+
+    void syncUserRoleToFirestore(firebaseUser);
   }, []);
 
   const signInWithEmail = useCallback(
@@ -435,6 +461,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           cred.user.phoneNumber ?? null,
           cred.user.photoURL ?? null,
         );
+        void syncUserRoleToFirestore(cred.user);
       } catch (e) {
         logError(e);
         throw new Error(getUserFriendlyError(e));
@@ -493,6 +520,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         cred.user.phoneNumber ?? null,
         cred.user.photoURL ?? null,
       );
+      void syncUserRoleToFirestore(cred.user);
     } catch (err: unknown) {
       const code =
         err && typeof err === 'object' && 'code' in err
@@ -535,6 +563,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextValue = {
     user,
     loading,
+    firestoreUserRole,
     signUpWithEmail,
     signInWithEmail,
     signInWithPhone,

@@ -33,14 +33,14 @@ import { showError, showSuccess } from '@/utils/toast';
 
 export default function AdminSendNotificationScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [targetMode, setTargetMode] = useState<AdminBroadcastTargetMode>('all');
   const [radiusKmText, setRadiusKmText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const isAdmin = isAdminUser(user);
+  const isAdmin = isAdminUser(user, firestoreUserRole);
 
   const applyTemplate = (t: (typeof ADMIN_BROADCAST_TEMPLATES)[number]) => {
     setTitle(t.title);
@@ -54,7 +54,7 @@ export default function AdminSendNotificationScreen() {
       showError('Please enter a notification message.');
       return;
     }
-    if (!user || !isAdminUser(user)) return;
+    if (!user || !isAdminUser(user, firestoreUserRole)) return;
 
     let radiusKm: number | null = null;
     const rParsed = parseFloat(radiusKmText.replace(',', '.'));

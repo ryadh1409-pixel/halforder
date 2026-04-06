@@ -12,8 +12,13 @@ import {
 } from '@/lib/admin/orderHelpers';
 import { db } from '@/services/firebase';
 import {
+  demoteUserFromAdmin,
+  deleteUserDocumentAsAdmin,
+  promoteUserToAdmin,
+} from '@/services/adminUserActions';
+import { useAuth } from '@/services/AuthContext';
+import {
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -55,6 +60,7 @@ type ReportRow = {
 
 export default function AdminUserDetailScreen() {
   const router = useRouter();
+  const { user: actor, firestoreUserRole } = useAuth();
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const userId = typeof rawId === 'string' ? rawId.trim() : '';
 
@@ -172,6 +178,9 @@ export default function AdminUserDetailScreen() {
   }, [orderList]);
 
   const email = typeof profile?.email === 'string' ? profile.email : null;
+  const targetRole =
+    typeof profile?.role === 'string' ? profile.role.trim() : null;
+  const isTargetAdmin = targetRole === 'admin';
   const displayName =
     typeof profile?.displayName === 'string' ? profile.displayName : '—';
   const banned = profile?.banned === true;
@@ -208,6 +217,51 @@ export default function AdminUserDetailScreen() {
     })();
   };
 
+  const promoteToAdmin = () => {
+    if (!userId) return;
+    void (async () => {
+      const ok = await systemConfirm({
+        title: 'Make admin',
+        message:
+          'Grant this user admin access in the app? They can open the admin panel after their Firestore role updates.',
+        confirmLabel: 'Make admin',
+        destructive: false,
+      });
+      if (!ok) return;
+      setActing(true);
+      try {
+        await promoteUserToAdmin(actor, firestoreUserRole, userId);
+        showSuccess('User promoted to admin.');
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+      } finally {
+        setActing(false);
+      }
+    })();
+  };
+
+  const demoteFromAdmin = () => {
+    if (!userId) return;
+    void (async () => {
+      const ok = await systemConfirm({
+        title: 'Remove admin',
+        message: 'Remove admin role from this user?',
+        confirmLabel: 'Remove admin',
+        destructive: true,
+      });
+      if (!ok) return;
+      setActing(true);
+      try {
+        await demoteUserFromAdmin(actor, firestoreUserRole, userId);
+        showSuccess('Admin access removed.');
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+      } finally {
+        setActing(false);
+      }
+    })();
+  };
+
   const deleteUser = () => {
     if (!userId) return;
     void (async () => {
@@ -221,7 +275,7 @@ export default function AdminUserDetailScreen() {
       if (!ok) return;
       setActing(true);
       try {
-        await deleteDoc(doc(db, 'users', userId));
+        await deleteUserDocumentAsAdmin(actor, firestoreUserRole, userId);
         showSuccess('User document removed.');
         router.replace(adminRoutes.users as never);
       } catch (e) {
@@ -295,6 +349,23 @@ export default function AdminUserDetailScreen() {
                 {banned ? 'Unban user' : 'Ban user'}
               </Text>
             </TouchableOpacity>
+            {!isTargetAdmin ? (
+              <TouchableOpacity
+                style={[styles.btn, styles.btnOk]}
+                onPress={promoteToAdmin}
+                disabled={acting}
+              >
+                <Text style={styles.btnText}>Make admin</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.btn, styles.btnWarn]}
+                onPress={demoteFromAdmin}
+                disabled={acting}
+              >
+                <Text style={styles.btnText}>Remove admin</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.btn, styles.btnDanger]}
               onPress={deleteUser}

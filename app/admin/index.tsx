@@ -52,7 +52,7 @@ function startOfWeekMs(): number {
 
 export default function AdminScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,7 +69,7 @@ export default function AdminScreen() {
     completedOrders: number;
   } | null>(null);
 
-  const isAdmin = isAdminUser(user);
+  const isAdmin = isAdminUser(user, firestoreUserRole);
 
   useEffect(() => {
     if (user && !isAdmin) {

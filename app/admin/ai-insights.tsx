@@ -60,7 +60,7 @@ function MetricCard({
 
 export default function AdminAiInsightsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [insights, setInsights] = useState<AdminAiNotificationInsights | null>(
     null,
   );
@@ -69,7 +69,7 @@ export default function AdminAiInsightsScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = isAdminUser(user);
+  const isAdmin = isAdminUser(user, firestoreUserRole);
 
   const load = useCallback(async () => {
     setError(null);
@@ -96,7 +96,7 @@ export default function AdminAiInsightsScreen() {
   };
 
   const handleSendSmart = async () => {
-    if (!insights || !user || !isAdminUser(user)) return;
+    if (!insights || !user || !isAdminUser(user, firestoreUserRole)) return;
     setSending(true);
     try {
       const usersSnap = await getDocs(collection(db, 'users'));

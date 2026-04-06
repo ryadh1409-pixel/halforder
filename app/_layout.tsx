@@ -97,7 +97,7 @@ export const linking = {
 };
 
 function RootLayoutNav() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, firestoreUserRole } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const currentUserRef = useRef(user);
@@ -969,7 +969,7 @@ function RootLayoutNav() {
   const redirectNonAdminFromAdminRoutes =
     !authLoading &&
     !!user &&
-    !isAdminUser(user) &&
+    !isAdminUser(user, firestoreUserRole) &&
     isAdminPath &&
     !inAuthGroup &&
     !onPublicShellRoutes;

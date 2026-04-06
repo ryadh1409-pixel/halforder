@@ -5,14 +5,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /** Must match constants/adminUid.ts ADMIN_UID and ADMIN_PANEL_EMAIL. */
+    /** Must match constants/adminUid.ts, utils/admin.ts ADMIN_EMAILS, and users.role. */
     function isAdmin() {
       return isSignedIn()
         && (
           request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
           || (
             request.auth.token.email is string
-            && request.auth.token.email == 'admin@ourfood.com'
+            && (
+              request.auth.token.email == 'admin@ourfood.com'
+              || request.auth.token.email == 'support@halforder.app'
+              || request.auth.token.email == 'ryadh1409@gmail.com'
+            )
+          )
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'
           )
         );
     }
