@@ -3,10 +3,9 @@ import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { useAuth } from '@/services/AuthContext';
 import { auth } from '@/services/firebase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -14,6 +13,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,7 +22,22 @@ import { theme } from '@/constants/theme';
 import { logError } from '@/utils/errorLogger';
 
 const LOGIN_INPUTS = 2;
-const ERROR_AUTO_CLEAR_MS = 4500;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const c = theme.colors;
+
+function inputStyle(hasError: boolean): ViewStyle & TextStyle {
+  return {
+    borderWidth: 1,
+    borderColor: hasError ? c.danger : c.borderStrong,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    fontSize: 16,
+    color: c.text,
+    backgroundColor: c.background,
+  };
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,49 +45,13 @@ export default function LoginScreen() {
   const { signInWithEmail } = useAuth();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
-  const shakeX = useRef(new Animated.Value(0)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!formError) return;
-    const t = setTimeout(() => setFormError(null), ERROR_AUTO_CLEAR_MS);
-    return () => clearTimeout(t);
-  }, [formError]);
-
-  const runShake = () => {
-    shakeX.setValue(0);
-    Animated.sequence([
-      Animated.timing(shakeX, {
-        toValue: 8,
-        duration: 45,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeX, {
-        toValue: -8,
-        duration: 45,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeX, {
-        toValue: 6,
-        duration: 45,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeX, {
-        toValue: -6,
-        duration: 45,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeX, {
-        toValue: 0,
-        duration: 45,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  const hasError = error !== '';
 
   const focusPrev = () => {
     if (focusedIndex !== null && focusedIndex > 0) {
@@ -86,14 +66,30 @@ export default function LoginScreen() {
     }
   };
 
-  const handleLogin = async () => {
+  const validateFields = (): boolean => {
     const trimmed = email.trim();
-    if (!trimmed || !password) {
-      setFormError('Please enter email and password.');
-      runShake();
+    if (!trimmed) {
+      setError('Please enter your email.');
+      return false;
+    }
+    if (!EMAIL_RE.test(trimmed)) {
+      setError('Please enter a valid email address.');
+      return false;
+    }
+    if (!password) {
+      setError('Please enter your password.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleLogin = async () => {
+    setError('');
+    if (!validateFields()) {
       return;
     }
-    setFormError(null);
+
+    const trimmed = email.trim();
     setLoading(true);
     try {
       await signInWithEmail(trimmed, password);
@@ -113,14 +109,11 @@ export default function LoginScreen() {
         err instanceof Error && err.message
           ? err.message
           : 'Something went wrong';
-      setFormError(message);
-      runShake();
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
-
-  const busy = loading;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -139,41 +132,39 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>Split meals. Pay half.</Text>
 
           <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
             <TextInput
               ref={emailRef}
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={theme.colors.iconInactive}
+              style={inputStyle(hasError)}
+              placeholder="Email"
+              placeholderTextColor={c.iconInactive}
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
-                setFormError(null);
+                setError('');
               }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!busy}
+              editable={!loading}
               inputAccessoryViewID={
                 Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
               }
               onFocus={() => setFocusedIndex(0)}
             />
-            <Text style={styles.label}>Password</Text>
             <TextInput
               ref={passwordRef}
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={theme.colors.iconInactive}
+              style={[inputStyle(hasError), styles.passwordInput]}
+              placeholder="Password"
+              placeholderTextColor={c.iconInactive}
               value={password}
               onChangeText={(t) => {
                 setPassword(t);
-                setFormError(null);
+                setError('');
               }}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!busy}
+              editable={!loading}
               inputAccessoryViewID={
                 Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
               }
@@ -182,46 +173,41 @@ export default function LoginScreen() {
             <View style={styles.forgotRow}>
               <TouchableOpacity
                 onPress={() => router.push('/(auth)/reset-password')}
-                disabled={busy}
+                disabled={loading}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={styles.forgotLink}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
 
-            <Animated.View
+            {error !== '' ? (
+              <Text style={styles.inlineError}>
+                ⚠️ {error}
+              </Text>
+            ) : null}
+
+            <TouchableOpacity
               style={[
-                styles.actionBlock,
-                { transform: [{ translateX: shakeX }] },
+                styles.primaryBtn,
+                loading && styles.primaryBtnLoading,
               ]}
+              onPress={() => void handleLogin()}
+              disabled={loading}
+              activeOpacity={0.9}
             >
-              {formError ? (
-                <View style={styles.errorRow}>
-                  <Text style={styles.errorIcon} accessibilityLabel="Warning">
-                    ⚠️
-                  </Text>
-                  <Text style={styles.errorText}>{formError}</Text>
-                </View>
-              ) : null}
-              <TouchableOpacity
-                style={[styles.primaryBtn, busy && styles.btnDisabled]}
-                onPress={() => void handleLogin()}
-                disabled={busy}
-              >
-                {loading ? (
-                  <ActivityIndicator color={theme.colors.textOnPrimary} />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Log in</Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
+              {loading ? (
+                <ActivityIndicator color={c.textOnPrimary} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Log in</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>{'Don\'t have an account? '}</Text>
             <TouchableOpacity
               onPress={() => router.push('/register')}
-              disabled={busy}
+              disabled={loading}
             >
               <Text style={styles.link}>Sign up</Text>
             </TouchableOpacity>
@@ -233,7 +219,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: c.background },
   keyboard: { flex: 1 },
   content: {
     flex: 1,
@@ -244,83 +230,58 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: theme.colors.text,
+    color: c.text,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     textAlign: 'center',
     marginTop: 8,
-    marginBottom: 40,
+    marginBottom: 32,
   },
-  form: { gap: 16, width: '100%', maxWidth: 400 },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.textSlateDark,
+  form: { width: '100%', maxWidth: 400 },
+  passwordInput: {
     marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.borderStrong,
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
-    color: theme.colors.text,
-    backgroundColor: theme.colors.background,
   },
   forgotRow: {
     alignSelf: 'flex-end',
-    marginTop: -4,
-    marginBottom: 0,
+    marginBottom: 8,
   },
   forgotLink: {
     fontSize: 14,
-    color: theme.colors.primary,
+    color: c.primary,
     fontWeight: '600',
   },
-  actionBlock: {
-    width: '100%',
-    marginTop: 8,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 12,
-    paddingHorizontal: 2,
-  },
-  errorIcon: {
-    fontSize: 15,
-    lineHeight: 20,
-    marginTop: 1,
-  },
-  errorText: {
-    flex: 1,
+  inlineError: {
+    color: c.danger,
     fontSize: 14,
     lineHeight: 20,
-    color: theme.colors.danger,
     fontWeight: '500',
+    marginBottom: 12,
   },
   primaryBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.button,
+    backgroundColor: c.primary,
     paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
+  },
+  primaryBtnLoading: {
+    backgroundColor: c.iconInactive,
   },
   primaryBtnText: {
-    color: theme.colors.textOnPrimary,
+    color: c.textOnPrimary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  btnDisabled: { opacity: 0.7 },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 40,
   },
-  footerText: { color: theme.colors.textMuted, fontSize: 15 },
-  link: { color: theme.colors.primary, fontSize: 15, fontWeight: '600' },
+  footerText: { color: c.textMuted, fontSize: 15 },
+  link: { color: c.primary, fontSize: 15, fontWeight: '600' },
 });
