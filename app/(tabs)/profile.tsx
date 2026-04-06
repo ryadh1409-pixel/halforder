@@ -50,7 +50,7 @@ import {
   setDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -259,6 +259,36 @@ export default function ProfileScreen() {
 
   const uid = user?.uid ?? null;
   const trustScore = useTrustScore(uid);
+
+  const openTerms = useCallback(() => {
+    void (async () => {
+      const url = LEGAL_URLS.terms;
+      try {
+        if (await Linking.canOpenURL(url)) {
+          await Linking.openURL(url);
+        } else {
+          showNotice('Terms of Service', url);
+        }
+      } catch {
+        showNotice('Terms of Service', url);
+      }
+    })();
+  }, []);
+
+  const openPrivacy = useCallback(() => {
+    void (async () => {
+      const url = LEGAL_URLS.privacy;
+      try {
+        if (await Linking.canOpenURL(url)) {
+          await Linking.openURL(url);
+        } else {
+          showNotice('Privacy Policy', url);
+        }
+      } catch {
+        showNotice('Privacy Policy', url);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!uid) {
@@ -692,15 +722,14 @@ export default function ProfileScreen() {
                 Safety guidelines
               </Text>
             </Text>
-            <View style={styles.legalRow}>
-                <TouchableOpacity onPress={() => router.push('/terms')}>
-                  <Text style={dynamicStyles.legalLink}>Terms</Text>
-                </TouchableOpacity>
-                <Text style={styles.legalSpacer}> · </Text>
-                <TouchableOpacity onPress={() => router.push('/privacy')}>
-                  <Text style={dynamicStyles.legalLink}>Privacy</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.legalLinksRow}>
+              <TouchableOpacity onPress={openTerms} accessibilityRole="link">
+                <Text style={styles.legalLinkWeb}>Terms</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={openPrivacy} accessibilityRole="link">
+                <Text style={styles.legalLinkWeb}>Privacy</Text>
+              </TouchableOpacity>
+            </View>
               <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
               <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
             </View>
@@ -1124,13 +1153,12 @@ export default function ProfileScreen() {
             <Text style={[dynamicStyles.bodyMuted, { textAlign: 'center', marginTop: 4 }]}>
               Users can report inappropriate behavior.
             </Text>
-            <View style={styles.legalRow}>
-              <TouchableOpacity onPress={() => router.push('/terms')}>
-                <Text style={dynamicStyles.legalLink}>Terms</Text>
+            <View style={styles.legalLinksRow}>
+              <TouchableOpacity onPress={openTerms} accessibilityRole="link">
+                <Text style={styles.legalLinkWeb}>Terms</Text>
               </TouchableOpacity>
-              <Text style={styles.legalSpacer}> · </Text>
-              <TouchableOpacity onPress={() => router.push('/privacy')}>
-                <Text style={dynamicStyles.legalLink}>Privacy</Text>
+              <TouchableOpacity onPress={openPrivacy} accessibilityRole="link">
+                <Text style={styles.legalLinkWeb}>Privacy</Text>
               </TouchableOpacity>
             </View>
             <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
@@ -1551,12 +1579,19 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     gap: 4,
   },
-  legalRow: {
+  legalLinksRow: {
     flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
+    flexWrap: 'wrap',
   },
-  legalSpacer: {
-    width: 12,
+  legalLinkWeb: {
+    color: '#9CA3AF',
+    textDecorationLine: 'underline',
+    fontSize: 12,
+    fontWeight: '600',
   },
   reasonRow: {
     flexDirection: 'row',
