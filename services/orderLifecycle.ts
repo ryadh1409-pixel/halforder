@@ -1,4 +1,5 @@
 import {
+  Timestamp,
   arrayRemove,
   arrayUnion,
   deleteField,
@@ -8,8 +9,25 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
-/** 45-minute window after a user joins (`joinedAtMap[uid]`). */
+/** Legacy per-user join window when `orders.expiresAt` is not set (`joinedAtMap[uid]`). */
 export const ORDER_JOIN_WINDOW_MS = 45 * 60 * 1000;
+
+/** Order-level expiry: 60 minutes after the first join (host → first joiner). Stored in `orders.expiresAt`. */
+export const ORDER_EXPIRY_AFTER_FIRST_JOIN_MS = 60 * 60 * 1000;
+
+function orderExpiryUnset(d: Record<string, unknown>): boolean {
+  const exp = d.expiresAt;
+  if (exp == null) return true;
+  if (typeof exp === 'number' && Number.isFinite(exp) && exp > 0) return false;
+  if (
+    typeof exp === 'object' &&
+    exp !== null &&
+    typeof (exp as { toMillis?: () => number }).toMillis === 'function'
+  ) {
+    return false;
+  }
+  return true;
+}
 
 /** Canonical membership: `orders.participants` is `string[]` only. */
 export function normalizeParticipantsStrings(raw: unknown): string[] {
@@ -213,12 +231,23 @@ export async function joinOrderWithParticipantRecord(
     const statusPatch =
       resolved !== undefined ? { status: resolved } : {};
 
-    tx.update(orderRef, {
+    const patch: Record<string, unknown> = {
       participants: arrayUnion(uid),
       [`joinedAtMap.${uid}`]: serverTimestamp(),
       ...extras,
       ...statusPatch,
-    });
+    };
+
+    const isFirstJoinWindow =
+      parts.length <= 1 && orderExpiryUnset(d);
+    if (isFirstJoinWindow) {
+      patch.startedAt = serverTimestamp();
+      patch.expiresAt = Timestamp.fromMillis(
+        Date.now() + ORDER_EXPIRY_AFTER_FIRST_JOIN_MS,
+      );
+    }
+
+    tx.update(orderRef, patch);
   });
 
   console.log('[joinOrderWithParticipantRecord] done', {

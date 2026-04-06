@@ -547,8 +547,8 @@ export default function OrderRoomScreen() {
     const joinedMs = getJoinedAtMsForUser(order.joinedAtMap, uid);
     const updateRemaining = () => {
       const now = Date.now();
-      if (joinedMs != null) {
-        const remaining = ORDER_JOIN_WINDOW_MS - (now - joinedMs);
+      if (order.expiresAtMs != null) {
+        const remaining = order.expiresAtMs - now;
         if (remaining <= 0) {
           setRemainingMs(0);
           if (!hasExpiredRef.current && order.status !== 'expired') {
@@ -562,8 +562,8 @@ export default function OrderRoomScreen() {
         }
         return;
       }
-      if (order.expiresAtMs != null) {
-        const remaining = order.expiresAtMs - now;
+      if (joinedMs != null) {
+        const remaining = ORDER_JOIN_WINDOW_MS - (now - joinedMs);
         if (remaining <= 0) {
           setRemainingMs(0);
           if (!hasExpiredRef.current && order.status !== 'expired') {

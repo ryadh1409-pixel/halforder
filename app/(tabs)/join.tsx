@@ -83,6 +83,27 @@ const FOOD_EMOJI: Record<string, string> = {
   noodles: '🍜',
 };
 
+function joinListTimerLabel(o: OpenOrder, now: number): string {
+  if (o.status === 'expired') return 'Expired';
+  if (o.expiresAt == null) {
+    return o.participants.length < 2
+      ? 'Waiting for first user'
+      : 'Open';
+  }
+  if (o.participants.length < 2) return 'Waiting for first user';
+  const diff = o.expiresAt - now;
+  if (diff <= 0) return 'Expired';
+  const minutes = Math.floor(diff / 60000);
+  const seconds = Math.floor((diff % 60000) / 1000);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function isJoinDisabledByTimer(o: OpenOrder, now: number): boolean {
+  if (o.status === 'expired') return true;
+  if (o.expiresAt != null && o.expiresAt <= now) return true;
+  return false;
+}
+
 async function joinOrderWithTransaction(
   orderId: string,
   user: { uid: string },
@@ -189,7 +210,13 @@ export default function JoinScreen() {
   const [listRetryNonce, setListRetryNonce] = useState(0);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const hiddenUserIds = useHiddenUserIds();
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u ?? null));
@@ -215,7 +242,6 @@ export default function JoinScreen() {
           console.log('Realtime orders update:', snap.docs.length);
         }
         setListError(false);
-        const now = Date.now();
         const list: OpenOrder[] = snap.docs.map((d) => {
           const d2 = d.data();
           const created = d2?.createdAt?.toMillis?.() ?? d2?.createdAt ?? 0;
@@ -266,14 +292,7 @@ export default function JoinScreen() {
             expiresAt: exp,
           };
         });
-        // Only keep orders that are not full and not expired
-        const filtered = list.filter((o) => {
-          if (o.isSuggested === true) return false;
-          const hasRoom = o.participants.length < o.maxPeople;
-          const notExpired = o.expiresAt == null || o.expiresAt > now;
-          return hasRoom && notExpired;
-        });
-        setOrders(filtered);
+        setOrders(list.filter((o) => o.isSuggested !== true));
         setLoading(false);
       },
       () => {
@@ -285,13 +304,18 @@ export default function JoinScreen() {
     return () => unsubscribe();
   }, [listRetryNonce]);
 
-  const displayOrders = useMemo(
-    () =>
-      [...orders]
-        .filter((o) => o.hostId && !hiddenUserIds.has(o.hostId))
-        .sort((a, b) => b.createdAt - a.createdAt),
-    [orders, hiddenUserIds],
-  );
+  const displayOrders = useMemo(() => {
+    const now = nowTick;
+    return [...orders]
+      .filter((o) => {
+        if (o.status === 'expired') return false;
+        const hasRoom = o.participants.length < o.maxPeople;
+        const notExpired = o.expiresAt == null || o.expiresAt > now;
+        return hasRoom && notExpired;
+      })
+      .filter((o) => o.hostId && !hiddenUserIds.has(o.hostId))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [orders, hiddenUserIds, nowTick]);
 
   const handleJoinPress = (orderId: string) => {
     if (!user) {
@@ -317,6 +341,24 @@ export default function JoinScreen() {
     try {
       const orderSnap = await getDoc(doc(db, 'orders', orderId));
       const orderData = orderSnap.data();
+      if (orderSnap.exists() && orderData) {
+        const expRaw = orderData.expiresAt;
+        const expMs =
+          typeof expRaw === 'number'
+            ? expRaw
+            : typeof expRaw?.toMillis === 'function'
+              ? expRaw.toMillis()
+              : null;
+        const ost =
+          typeof orderData.status === 'string' ? orderData.status : 'open';
+        if (
+          ost === 'expired' ||
+          (expMs != null && expMs <= Date.now())
+        ) {
+          showError('This order has expired.');
+          return;
+        }
+      }
       const plist = normalizeParticipantsStrings(orderData?.participants);
       if (
         plist.includes(user.uid) &&
@@ -524,6 +566,9 @@ export default function JoinScreen() {
           const alreadyJoined =
             currentUid !== '' && item.participants.includes(currentUid);
           const joining = joiningId === item.id;
+          const timerLabel = joinListTimerLabel(item, nowTick);
+          const joinBlockedByExpiry =
+            !alreadyJoined && isJoinDisabledByTimer(item, nowTick);
           const foodType = (item.foodType || 'pizza').toLowerCase();
           const foodLabel =
             foodType.charAt(0).toUpperCase() + foodType.slice(1);
@@ -579,6 +624,19 @@ export default function JoinScreen() {
                   {item.orderAtMs != null
                     ? `⏰ ${formatTorontoOrderTime(item.orderAtMs)}`
                     : `⏱ ${item.orderTime || 'Now'}`}
+                </Text>
+                <Text
+                  style={{
+                    color: '#F97316',
+                    fontSize: 14,
+                    fontWeight: '600',
+                    marginTop: 6,
+                  }}
+                >
+                  ⏱{' '}
+                  {timerLabel === 'Open'
+                    ? 'Join window open'
+                    : timerLabel}
                 </Text>
                 <Text
                   style={{ color: c.iconInactive, fontSize: 11, marginTop: 2 }}
@@ -672,19 +730,24 @@ export default function JoinScreen() {
                       ? handleLeave(item.id)
                       : handleJoinPress(item.id)
                   }
-                  disabled={!!joiningId}
+                  disabled={!!joiningId || joinBlockedByExpiry}
                   style={{
                     backgroundColor: alreadyJoined ? c.danger : c.accentBlue,
                     paddingVertical: 8,
                     paddingHorizontal: 16,
                     borderRadius: 8,
+                    opacity: joinBlockedByExpiry && !alreadyJoined ? 0.5 : 1,
                   }}
                 >
                   {joining ? (
                     <ActivityIndicator size="small" color={c.textOnPrimary} />
                   ) : (
                     <Text style={{ color: c.textOnPrimary, fontWeight: '600' }}>
-                      {alreadyJoined ? 'Leave' : 'Join'}
+                      {alreadyJoined
+                        ? 'Leave'
+                        : joinBlockedByExpiry
+                          ? 'Expired'
+                          : 'Join'}
                     </Text>
                   )}
                 </TouchableOpacity>
