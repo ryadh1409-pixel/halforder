@@ -167,7 +167,7 @@ export default function RegisterScreen() {
         whatsappConsent: true,
         localPhotoUri: photoUri,
       });
-      router.replace('/(tabs)');
+      router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
     } catch (error: unknown) {
       logError(error, { alert: false });
       const msg =

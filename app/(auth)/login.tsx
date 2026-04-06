@@ -1,5 +1,7 @@
 import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
+import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { useAuth } from '@/services/AuthContext';
+import { auth } from '@/services/firebase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -53,6 +55,11 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signInWithEmail(trimmed, password);
+      const signedIn = auth.currentUser;
+      if (userNeedsEmailVerification(signedIn)) {
+        router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
+        return;
+      }
       if (redirectTo) {
         router.replace(redirectTo as Parameters<typeof router.replace>[0]);
       } else {

@@ -3,6 +3,8 @@ import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   RecaptchaVerifier,
+  reload,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut as firebaseSignOut,
@@ -62,6 +64,8 @@ type AuthContextValue = {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithPhone: (phoneNumber: string) => Promise<void>;
   confirmPhoneCode: (code: string) => Promise<void>;
+  /** Reload current user from server (e.g. after email verification). */
+  reloadAuthUser: () => Promise<void>;
   signOutUser: () => Promise<void>;
 };
 
@@ -351,6 +355,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.warn('ensureUserDocument failed (non-fatal):', e);
     }
+
+    try {
+      await sendEmailVerification(firebaseUser);
+    } catch (e) {
+      logError(e, { alert: false });
+      console.warn('sendEmailVerification failed (user can resend from settings later):', e);
+    }
   }, []);
 
   const signInWithEmail = useCallback(
@@ -442,6 +453,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const reloadAuthUser = useCallback(async () => {
+    const u = auth.currentUser;
+    if (!u) throw new Error('Not signed in');
+    await reload(u);
+    setUser(auth.currentUser);
+  }, []);
+
   const signOutUser = useCallback(async () => {
     await firebaseSignOut(auth);
   }, []);
@@ -453,6 +471,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithEmail,
     signInWithPhone,
     confirmPhoneCode,
+    reloadAuthUser,
     signOutUser,
   };
 

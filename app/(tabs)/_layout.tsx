@@ -1,9 +1,10 @@
-import { Tabs } from 'expo-router';
+import { HapticTab } from '@/components/haptic-tab';
+import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
+import { useAuth } from '@/services/AuthContext';
+import { Tabs, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-
-import { HapticTab } from '@/components/haptic-tab';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const TAB_ICON_SIZE = 24;
 const TAB_ACTIVE = '#34D399';
@@ -41,6 +42,29 @@ function AITabIcon({
   );
 }
 
+const overlayStyles = StyleSheet.create({
+  verifyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(251, 191, 36, 0.16)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  verifyBannerText: {
+    color: '#FDE68A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  blockLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+});
+
 const styles = StyleSheet.create({
   aiIconWrap: {
     paddingHorizontal: 10,
@@ -57,7 +81,11 @@ const styles = StyleSheet.create({
 });
 
 export default function TabLayout() {
-  return (
+  const { user } = useAuth();
+  const router = useRouter();
+  const emailBlocked = userNeedsEmailVerification(user);
+
+  const tabs = (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: TAB_ACTIVE,
@@ -128,5 +156,32 @@ export default function TabLayout() {
       <Tabs.Screen name="create" options={{ href: null }} />
       <Tabs.Screen name="join" options={{ href: null }} />
     </Tabs>
+  );
+
+  if (!emailBlocked) {
+    return tabs;
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Pressable
+        style={overlayStyles.verifyBanner}
+        onPress={() =>
+          router.push('/verify-email' as Parameters<typeof router.push>[0])
+        }
+      >
+        <MaterialIcons name="mark-email-unread" size={18} color="#FBBF24" />
+        <Text style={overlayStyles.verifyBannerText}>Email not verified · Tap to verify</Text>
+      </Pressable>
+      <View style={{ flex: 1 }} pointerEvents="box-none">
+        {tabs}
+        <Pressable
+          style={overlayStyles.blockLayer}
+          onPress={() =>
+            router.push('/verify-email' as Parameters<typeof router.push>[0])
+          }
+        />
+      </View>
+    </View>
   );
 }

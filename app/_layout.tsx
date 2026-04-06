@@ -23,6 +23,7 @@ import {
   PAYMENT_MATCH_ALERT_TITLE,
 } from '@/constants/paymentDisclaimer';
 import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
+import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
 import { startFoodCardAutomation } from '@/services/foodCards';
@@ -948,9 +949,13 @@ function RootLayoutNav() {
     seg0 === 'subscribe' ||
     seg0 === 'safety' ||
     seg0 === 'safety-community-guidelines';
+  const emailNotVerified =
+    Boolean(user) && userNeedsEmailVerification(user);
   const redirectToLogin =
     !user && !inAuthGroup && !onJoinRedirect && !onPublicShellRoutes;
-  const redirectToTabs = user && inAuthGroup;
+  const redirectToVerifyEmail =
+    emailNotVerified && seg0 !== 'verify-email' && !onPublicShellRoutes;
+  const redirectToTabs = user && inAuthGroup && !emailNotVerified;
   const redirectNonAdminFromAdminRoutes =
     !authLoading &&
     !!user &&
@@ -967,7 +972,13 @@ function RootLayoutNav() {
   /** Deep links must not bypass Terms / UGC acceptance for signed-in users. */
   useEffect(() => {
     if (authLoading || !user) return;
-    if (inAuthGroup || seg0 === 'onboarding' || seg0 === 'index') return;
+    if (
+      inAuthGroup ||
+      seg0 === 'onboarding' ||
+      seg0 === 'index' ||
+      seg0 === 'verify-email'
+    )
+      return;
     if (onPublicShellRoutes) return;
     let cancelled = false;
     (async () => {
@@ -991,6 +1002,11 @@ function RootLayoutNav() {
       {redirectToLogin ? (
         <Redirect href={loginHref as Parameters<typeof Redirect>[0]['href']} />
       ) : null}
+      {redirectToVerifyEmail ? (
+        <Redirect
+          href={'/verify-email' as Parameters<typeof Redirect>[0]['href']}
+        />
+      ) : null}
       {redirectToTabs ? <Redirect href="/(tabs)" /> : null}
       {redirectNonAdminFromAdminRoutes ? <Redirect href="/(tabs)" /> : null}
       <Stack>
@@ -1004,6 +1020,10 @@ function RootLayoutNav() {
         <Stack.Screen
           name="terms-acceptance"
           options={{ headerShown: false, title: 'Terms' }}
+        />
+        <Stack.Screen
+          name="verify-email"
+          options={{ headerShown: false, title: 'Verify email' }}
         />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen
