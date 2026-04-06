@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -18,7 +19,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
 import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError } from '@/utils/toast';
+import { errorHaptic, successHaptic } from '@/utils/haptics';
+import { showError, showSuccess } from '@/utils/toast';
 
 const LOGIN_INPUTS = 2;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -31,6 +33,7 @@ export default function LoginScreen() {
   const { signInWithEmail } = useAuth();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const scale = useRef(new Animated.Value(1)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,6 +69,21 @@ export default function LoginScreen() {
     return true;
   };
 
+  const animatePress = () => {
+    Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   const handleLogin = async () => {
     if (!validateFields()) {
       return;
@@ -75,6 +93,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signInWithEmail(trimmed, password);
+      successHaptic();
+      showSuccess('Welcome back 👋');
       const signedIn = auth.currentUser;
       if (userNeedsEmailVerification(signedIn)) {
         router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
@@ -86,7 +106,9 @@ export default function LoginScreen() {
         router.replace('/(tabs)');
       }
     } catch (err: unknown) {
-      showError(getUserFriendlyError(err));
+      const message = getUserFriendlyError(err);
+      errorHaptic();
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -151,18 +173,25 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
-              onPress={() => void handleLogin()}
-              disabled={loading}
-              activeOpacity={0.9}
+            <Animated.View
+              style={[styles.primaryBtnAnimated, { transform: [{ scale }] }]}
             >
-              {loading ? (
-                <ActivityIndicator color={c.textOnPrimary} />
-              ) : (
-                <Text style={styles.primaryBtnText}>Log in</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
+                onPress={() => {
+                  animatePress();
+                  void handleLogin();
+                }}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                {loading ? (
+                  <ActivityIndicator color={c.textOnPrimary} />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Log in</Text>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           </View>
 
           <View style={styles.footer}>
@@ -225,6 +254,10 @@ const styles = StyleSheet.create({
     color: c.primary,
     fontWeight: '600',
   },
+  primaryBtnAnimated: {
+    width: '100%',
+    marginTop: 8,
+  },
   primaryBtn: {
     backgroundColor: c.primary,
     paddingVertical: 16,
@@ -232,7 +265,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 54,
-    marginTop: 8,
   },
   primaryBtnLoading: {
     backgroundColor: c.iconInactive,
