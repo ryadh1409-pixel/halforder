@@ -19,15 +19,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 const c = theme.colors;
+const COOLDOWN_SEC = 30;
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
-  const { user, loading, reloadAuthUser, signOutUser } = useAuth();
-  const [verifyBusy, setVerifyBusy] = useState(false);
-  const [resendBusy, setResendBusy] = useState(false);
+  const { user, loading: authLoading, reloadAuthUser, signOutUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [message, setMessage] = useState('');
+  const [messageIsSuccess, setMessageIsSuccess] = useState(true);
 
   useEffect(() => {
-    if (loading) return;
+    if (authLoading) return;
     if (!user) {
       router.replace('/(auth)/login' as Parameters<typeof router.replace>[0]);
       return;
@@ -35,10 +39,17 @@ export default function VerifyEmailScreen() {
     if (!userNeedsEmailVerification(user)) {
       router.replace('/(tabs)' as Parameters<typeof router.replace>[0]);
     }
-  }, [loading, user, router]);
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((prev) => prev - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   const onVerified = async () => {
-    setVerifyBusy(true);
+    setLoading(true);
+    setMessage('');
     try {
       await reloadAuthUser();
       const u = auth.currentUser;
@@ -51,31 +62,46 @@ export default function VerifyEmailScreen() {
       logError(e, { alert: false });
       Alert.alert('Error', 'Could not refresh your account. Try again.');
     } finally {
-      setVerifyBusy(false);
+      setLoading(false);
     }
   };
 
-  const onResend = async () => {
+  const handleResend = async () => {
+    if (cooldown > 0) return;
+
     const u = auth.currentUser;
-    if (!u || !u.email) {
-      Alert.alert('Error', 'No email on file.');
+    if (!u?.email) {
+      setMessageIsSuccess(false);
+      setMessage('Something went wrong. Try again.');
       return;
     }
-    setResendBusy(true);
+
     try {
+      setResendLoading(true);
+      setMessage('');
       await sendEmailVerification(u);
-      Alert.alert('Email sent', 'Check your inbox for a new verification link.');
-    } catch (e) {
-      logError(e, { alert: false });
-      Alert.alert('Error', 'Could not resend the email. Try again later.');
+      setMessageIsSuccess(true);
+      setMessage('Verification email sent again 📩');
+      setCooldown(COOLDOWN_SEC);
+    } catch (error) {
+      logError(error, { alert: false });
+      setMessageIsSuccess(false);
+      setMessage('Something went wrong. Try again.');
     } finally {
-      setResendBusy(false);
+      setResendLoading(false);
     }
   };
 
-  const anyBusy = verifyBusy || resendBusy;
+  const resendDisabled = resendLoading || cooldown > 0 || loading;
+  const resendLabel = resendLoading
+    ? 'Sending...'
+    : cooldown > 0
+      ? `Resend in ${cooldown}s`
+      : 'Resend Email';
 
-  if (loading || !user) {
+  const anyBusy = loading || resendLoading;
+
+  if (authLoading || !user) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <View style={styles.loadingWrap}>
@@ -100,12 +126,12 @@ export default function VerifyEmailScreen() {
         </Text>
 
         <TouchableOpacity
-          style={[styles.primaryBtn, verifyBusy && styles.btnBusy]}
+          style={[styles.primaryBtn, loading && styles.btnBusy]}
           onPress={() => void onVerified()}
           disabled={anyBusy}
           activeOpacity={0.9}
         >
-          {verifyBusy ? (
+          {loading ? (
             <ActivityIndicator color={c.textOnPrimary} />
           ) : (
             <Text style={styles.primaryBtnText}>I verified</Text>
@@ -113,20 +139,52 @@ export default function VerifyEmailScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.secondaryBtn, resendBusy && styles.secondaryBtnBusy]}
-          onPress={() => void onResend()}
-          disabled={anyBusy}
+          style={[
+            styles.secondaryBtn,
+            resendDisabled && styles.secondaryBtnDisabled,
+          ]}
+          onPress={() => void handleResend()}
+          disabled={resendDisabled}
           activeOpacity={0.85}
         >
-          {resendBusy ? (
-            <ActivityIndicator color={c.primary} />
+          {resendLoading ? (
+            <View style={styles.resendRow}>
+              <ActivityIndicator color={c.primary} size="small" style={styles.resendSpinner} />
+              <Text style={[styles.secondaryBtnText, styles.secondaryBtnTextMuted]}>
+                Sending...
+              </Text>
+            </View>
           ) : (
-            <>
-              <MaterialIcons name="refresh" size={20} color={c.primary} style={styles.resendIcon} />
-              <Text style={styles.secondaryBtnText}>Resend email</Text>
-            </>
+            <View style={styles.resendRow}>
+              <MaterialIcons
+                name="refresh"
+                size={20}
+                color={cooldown > 0 ? c.iconInactive : c.primary}
+                style={styles.resendIcon}
+              />
+              <Text
+                style={[
+                  styles.secondaryBtnText,
+                  cooldown > 0 && styles.secondaryBtnTextMuted,
+                ]}
+              >
+                {resendLabel}
+              </Text>
+            </View>
           )}
         </TouchableOpacity>
+
+        {message !== '' ? (
+          <Text
+            style={[
+              styles.feedbackText,
+              messageIsSuccess ? styles.feedbackSuccess : styles.feedbackError,
+            ]}
+            accessibilityLiveRegion="polite"
+          >
+            {message}
+          </Text>
+        ) : null}
 
         <TouchableOpacity
           style={styles.footerLinkWrap}
@@ -204,26 +262,49 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-    paddingVertical: 12,
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
     backgroundColor: 'rgba(255,255,255,0.04)',
+    justifyContent: 'center',
   },
-  secondaryBtnBusy: {
-    opacity: 0.8,
+  secondaryBtnDisabled: {
+    opacity: 0.55,
+  },
+  resendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   resendIcon: {
     marginRight: 8,
+  },
+  resendSpinner: {
+    marginRight: 10,
   },
   secondaryBtnText: {
     fontSize: 16,
     fontWeight: '600',
     color: c.primary,
+  },
+  secondaryBtnTextMuted: {
+    color: c.textSecondary,
+  },
+  feedbackText: {
+    marginTop: 14,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  feedbackSuccess: {
+    color: c.success,
+  },
+  feedbackError: {
+    color: c.danger,
   },
   footerLinkWrap: {
     marginTop: 28,
