@@ -2,6 +2,7 @@ import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/Keyboa
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { systemConfirm } from '@/components/SystemDialogHost';
 import { isAdminUser } from '@/constants/adminUid';
+import { LEGAL_URLS } from '@/constants/legalLinks';
 import { theme } from '@/constants/theme';
 import {
   displayFromStoredProfilePhone,
@@ -622,15 +623,26 @@ export default function ProfileScreen() {
             <View style={styles.footer}>
               <Text style={dynamicStyles.footerMuted}>❤️ Made with love in Toronto</Text>
               <Text style={dynamicStyles.footerMuted}>v1.0</Text>
-              <View style={styles.legalRow}>
+              <Text style={[dynamicStyles.bodyMuted, { marginTop: 12 }]}>
+              Users can report inappropriate behavior.{' '}
+              <Text
+                onPress={() => void Linking.openURL(LEGAL_URLS.safetyCommunityGuidelines)}
+                style={dynamicStyles.link}
+              >
+                Safety guidelines
+              </Text>
+            </Text>
+            <View style={styles.legalRow}>
                 <TouchableOpacity onPress={() => router.push('/terms')}>
                   <Text style={dynamicStyles.legalLink}>Terms</Text>
                 </TouchableOpacity>
-                <Text style={styles.legalSpacer}> </Text>
+                <Text style={styles.legalSpacer}> · </Text>
                 <TouchableOpacity onPress={() => router.push('/privacy')}>
                   <Text style={dynamicStyles.legalLink}>Privacy</Text>
                 </TouchableOpacity>
               </View>
+              <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
+              <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
             </View>
           </View>
         </ScrollView>
@@ -863,15 +875,29 @@ export default function ProfileScreen() {
                 style={dynamicStyles.outlineBtn}
                 onPress={() => router.push('/terms')}
               >
-                <Text style={dynamicStyles.outlineBtnText}>Terms of Use</Text>
+                <Text style={dynamicStyles.outlineBtnText}>Terms of Use (in app)</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={dynamicStyles.outlineBtn}
                 onPress={() => router.push('/privacy')}
               >
-                <Text style={dynamicStyles.outlineBtnText}>Privacy Policy</Text>
+                <Text style={dynamicStyles.outlineBtnText}>Privacy (in app)</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              style={[dynamicStyles.outlineBtn, { marginTop: 10 }]}
+              onPress={() => void Linking.openURL(LEGAL_URLS.terms)}
+            >
+              <Text style={dynamicStyles.outlineBtnText}>Terms of Service (website)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={dynamicStyles.outlineBtn}
+              onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}
+            >
+              <Text style={dynamicStyles.outlineBtnText}>Privacy Policy (website)</Text>
+            </TouchableOpacity>
+            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
+            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
             <TouchableOpacity
               style={[dynamicStyles.primaryButton, { marginTop: 14 }]}
               onPress={() => router.push('/complaint')}
@@ -882,8 +908,47 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
+          <Text style={dynamicStyles.sectionHeading}>Trust &amp; safety</Text>
+          <View style={dynamicStyles.card}>
+            <Text style={dynamicStyles.bodyMuted}>
+              Users can report inappropriate behavior.
+            </Text>
+            <Text style={[dynamicStyles.bodyMuted, { marginTop: 10 }]}>
+              To block someone, use the menu in an order chat or on the Join tab. Blocked people cannot match or join orders with you. Unblock anytime below.
+            </Text>
+            <TouchableOpacity
+              style={[dynamicStyles.outlineBtn, { marginTop: 12 }]}
+              onPress={() => router.push('/safety')}
+            >
+              <Text style={dynamicStyles.outlineBtnText}>Community guidelines</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={dynamicStyles.outlineBtn}
+              onPress={() => router.push('/help')}
+            >
+              <Text style={dynamicStyles.outlineBtnText}>Help — report from an order</Text>
+            </TouchableOpacity>
+          </View>
+
           <Text style={dynamicStyles.sectionHeading}>Report a user</Text>
           <View style={dynamicStyles.card}>
+            <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
+              Submit a report by user ID, or use Report in any order or direct message chat.
+            </Text>
+            <TouchableOpacity
+              style={[
+                dynamicStyles.primaryButton,
+                { flexDirection: 'row', justifyContent: 'center', gap: 8 },
+              ]}
+              onPress={() => router.push('/help')}
+              accessibilityRole="button"
+              accessibilityLabel="Open help to report from an order"
+            >
+              <MaterialIcons name="flag" size={20} color={pal.onPrimary} />
+              <Text style={dynamicStyles.primaryButtonText}>
+                Report from Help &amp; past orders
+              </Text>
+            </TouchableOpacity>
             <TextInput
               value={reportUserId}
               onChangeText={setReportUserId}
@@ -961,8 +1026,9 @@ export default function ProfileScreen() {
 
           <View style={dynamicStyles.card}>
             <Text style={dynamicStyles.bodyMuted}>
-              To report or block from an order, open the chat or Safety section on
-              Join. See Terms for how we handle reports.
+              Users can report inappropriate behavior. To report or block someone you
+              interacted with, open the order chat, Join tab, or Help. See Terms for
+              how we handle reports.
             </Text>
             <TouchableOpacity
               style={[dynamicStyles.dangerButton, deletingAccount && dynamicStyles.buttonDisabled]}
@@ -995,15 +1061,20 @@ export default function ProfileScreen() {
           <View style={styles.footer}>
             <Text style={dynamicStyles.footerMuted}>❤️ Made with love in Toronto</Text>
             <Text style={dynamicStyles.footerMuted}>v1.0</Text>
+            <Text style={[dynamicStyles.bodyMuted, { textAlign: 'center', marginTop: 4 }]}>
+              Users can report inappropriate behavior.
+            </Text>
             <View style={styles.legalRow}>
               <TouchableOpacity onPress={() => router.push('/terms')}>
                 <Text style={dynamicStyles.legalLink}>Terms</Text>
               </TouchableOpacity>
-              <Text style={styles.legalSpacer}> </Text>
+              <Text style={styles.legalSpacer}> · </Text>
               <TouchableOpacity onPress={() => router.push('/privacy')}>
                 <Text style={dynamicStyles.legalLink}>Privacy</Text>
               </TouchableOpacity>
             </View>
+            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
+            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
           </View>
         </View>
       </ScrollView>
@@ -1401,6 +1472,11 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       fontSize: 12,
       color: pal.textSecondary,
       textDecorationLine: 'underline',
+    },
+    legalUrlHint: {
+      fontSize: 11,
+      color: pal.textTertiary,
+      marginTop: 4,
     },
   });
 }

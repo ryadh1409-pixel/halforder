@@ -144,6 +144,10 @@ export default function SafetyScreen() {
 
         <Text style={styles.sectionHeading}>6. Reporting & Enforcement</Text>
         <Text style={styles.paragraph}>
+          Users can report inappropriate behavior in the app from Profile, order
+          chats, direct messages, and Help.
+        </Text>
+        <Text style={styles.paragraph}>
           If you encounter unsafe behavior, report to:{' '}
           <Text onPress={openMail} style={styles.link}>
             {SUPPORT_EMAIL}

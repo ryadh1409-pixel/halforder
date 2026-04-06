@@ -1,3 +1,5 @@
+import { systemActionSheet } from '@/components/SystemDialogHost';
+import { LEGAL_URLS } from '@/constants/legalLinks';
 import { useAIChat } from '@/hooks/useAIChat';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { buildProductAssistantIntro } from '@/services/ai';
@@ -19,9 +21,12 @@ import {
   SUGGESTED_ORDER_BOT_COPY,
   generateSuggestedOrder,
 } from '@/services/suggestedOrder';
-import { showNotice } from '@/utils/toast';
+import { moderateChatMessage } from '@/utils/contentModeration';
+import { showError, showNotice } from '@/utils/toast';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -69,6 +74,9 @@ function toMessageOrders(rows: AssistantOrderSummary[]): MessageOrderRef[] {
 const ASSISTANT_INTRO_MESSAGE_ID = 'assistant-intro-suggestion';
 const PRODUCT_INTRO_MESSAGE_ID = 'halforder-product-assistant-intro';
 const PRODUCT_INTRO_SEEN_KEY = 'halforder_product_assistant_intro_seen_v1';
+
+const ASSISTANT_CHAT_MAX_CHARS = 500;
+const ASSISTANT_SEND_COOLDOWN_MS = 2000;
 
 const QUICK_ACTIONS = [
   { label: '🍕 Pizza', message: 'Pizza 🍕' },
@@ -127,6 +135,7 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList<Message> | null>(null);
   const inputRef = useRef<TextInput | null>(null);
   const assistantInFlightRef = useRef(false);
+  const lastAssistantSendAtRef = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -281,10 +290,55 @@ export default function ChatScreen() {
     router.push({ pathname: '/(tabs)/create' } as never);
   };
 
+  const openSafetyAndReportingMenu = useCallback(() => {
+    void systemActionSheet({
+      title: 'Safety & reporting',
+      message:
+        'Block someone from an order chat or the Join tab. Manage blocked users on your Profile.',
+      actions: [
+        {
+          label: 'Report a user — open Profile',
+          onPress: () => router.push('/(tabs)/profile' as never),
+        },
+        {
+          label: 'Community guidelines',
+          onPress: () => router.push('/safety' as never),
+        },
+        {
+          label: 'Terms of Service',
+          onPress: () => void Linking.openURL(LEGAL_URLS.terms),
+        },
+        {
+          label: 'Privacy Policy',
+          onPress: () => void Linking.openURL(LEGAL_URLS.privacy),
+        },
+        {
+          label: 'Submit a complaint',
+          onPress: () => router.push('/complaint' as never),
+        },
+      ],
+    });
+  }, [router]);
+
   const submitAssistantText = useCallback(
     async (outgoingRaw: string, options?: { clearInput?: boolean }) => {
-      const outgoingText = outgoingRaw.trim();
-      if (!outgoingText || assistantInFlightRef.current) return;
+      if (!outgoingRaw.trim() || assistantInFlightRef.current) return;
+
+      const mod = moderateChatMessage(outgoingRaw, {
+        maxLength: ASSISTANT_CHAT_MAX_CHARS,
+      });
+      if (!mod.ok) {
+        showError(mod.reason);
+        return;
+      }
+      const outgoingText = mod.text;
+
+      const now = Date.now();
+      if (now - lastAssistantSendAtRef.current < ASSISTANT_SEND_COOLDOWN_MS) {
+        showError('Please wait a moment before sending another message.');
+        return;
+      }
+      lastAssistantSendAtRef.current = now;
 
       setError('');
       if (options?.clearInput !== false) {
@@ -478,9 +532,24 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.screenHeader}>
-          <Text style={styles.screenTitle}>AI Assistant</Text>
-          <Text style={styles.screenSubtitle}>
-            Tell me what you want to eat 🍕
+          <View style={styles.screenHeaderTop}>
+            <View style={styles.screenHeaderTextCol}>
+              <Text style={styles.screenTitle}>AI Assistant</Text>
+              <Text style={styles.screenSubtitle}>
+                Tell me what you want to eat 🍕
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={openSafetyAndReportingMenu}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Safety, report, and legal"
+            >
+              <MaterialIcons name="more-vert" size={26} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.ugcNotice}>
+            Users can report inappropriate behavior.
           </Text>
         </View>
         <FlatList
@@ -655,6 +724,23 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(110, 231, 183, 0.12)',
+  },
+  screenHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  screenHeaderTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  ugcNotice: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(248, 250, 252, 0.55)',
+    fontWeight: '500',
   },
   screenTitle: {
     color: '#F8FAFC',
