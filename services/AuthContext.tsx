@@ -49,6 +49,8 @@ export type EmailSignUpPayload = {
   password: string;
   fullName: string;
   whatsapp: string;
+  /** User accepted WhatsApp coordination consent on the sign-up form */
+  whatsappConsent: boolean;
   /** Local file URI from ImagePicker; uploaded to `users/{uid}/profile.jpg` */
   localPhotoUri?: string | null;
 };
@@ -271,6 +273,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!trimmed || !pwd || !nameTrim || !waTrim) {
       throw new Error('Please fill in all required fields.');
     }
+    if (!payload.whatsappConsent) {
+      throw new Error('Please accept WhatsApp usage to continue.');
+    }
     if (pwd.length < 6) {
       throw new Error('Password must be at least 6 characters.');
     }
@@ -328,6 +333,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           reviewsCount: 0,
           averageRating: 5,
           totalRatings: 0,
+          whatsappConsent: true,
           createdAt: serverTimestamp(),
           trustScore: 0,
           totalOrdersCompleted: 0,

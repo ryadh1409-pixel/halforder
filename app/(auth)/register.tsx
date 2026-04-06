@@ -54,6 +54,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const refs = [fullNameRef, emailRef, whatsappRef, passwordRef, confirmPasswordRef];
@@ -142,6 +143,10 @@ export default function RegisterScreen() {
       );
       return;
     }
+    if (!whatsappCoordinationConsent) {
+      Alert.alert('WhatsApp usage', 'Please accept WhatsApp usage to continue.');
+      return;
+    }
     if (!password || password.length < 6) {
       Alert.alert('Password', 'Password must be at least 6 characters.');
       return;
@@ -159,6 +164,7 @@ export default function RegisterScreen() {
         password,
         fullName: nameTrim,
         whatsapp: profilePhoneForFirestore(whatsapp),
+        whatsappConsent: true,
         localPhotoUri: photoUri,
       });
       router.replace('/(tabs)');
@@ -262,6 +268,31 @@ export default function RegisterScreen() {
                   }
                   onFocus={() => setFocusedIndex(2)}
                 />
+
+                <Text style={styles.fieldHelper}>
+                  This number is used only to coordinate pickup with other users. It will not be shared
+                  publicly.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.consentRow}
+                  onPress={() => setWhatsappCoordinationConsent((v) => !v)}
+                  disabled={loading}
+                  activeOpacity={0.75}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: whatsappCoordinationConsent }}
+                  accessibilityLabel="I agree to use my WhatsApp number for coordination"
+                >
+                  <MaterialIcons
+                    name={whatsappCoordinationConsent ? 'check-box' : 'check-box-outline-blank'}
+                    size={22}
+                    color={whatsappCoordinationConsent ? c.primary : placeholderColor}
+                    style={styles.consentIcon}
+                  />
+                  <Text style={styles.consentLabel}>
+                    I agree to use my WhatsApp number for coordination.
+                  </Text>
+                </TouchableOpacity>
 
                 <TextInput
                   ref={passwordRef}
@@ -386,6 +417,29 @@ const styles = StyleSheet.create({
   fields: {
     gap: FIELD_GAP,
     marginTop: 16,
+  },
+  fieldHelper: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: c.textSecondary,
+    marginTop: -6,
+    marginBottom: 2,
+  },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 4,
+  },
+  consentIcon: {
+    marginTop: 1,
+  },
+  consentLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,255,255,0.88)',
+    fontWeight: '500',
   },
   input: {
     backgroundColor: 'rgba(255,255,255,0.06)',
