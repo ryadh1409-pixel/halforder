@@ -24,6 +24,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAlert } from '@/services/alerts';
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
+import { mapFirebaseLoginError } from '@/lib/mapFirebaseLoginError';
 import { logError } from '@/utils/errorLogger';
 import React, {
   createContext,
@@ -367,23 +368,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
       const trimmed = email.trim();
+      let cred;
       try {
-        const cred = await signInWithEmailAndPassword(auth, trimmed, password);
-        try {
-          await ensureUserDocument(
-            cred.user.uid,
-            cred.user.displayName ?? null,
-            cred.user.email ?? null,
-            cred.user.phoneNumber ?? null,
-            cred.user.photoURL ?? null,
-          );
-        } catch (e) {
-          logError(e);
-          throw e;
-        }
+        cred = await signInWithEmailAndPassword(auth, trimmed, password);
       } catch (err: unknown) {
-        logError(err);
-        throw err;
+        logError(err, { alert: false });
+        throw new Error(mapFirebaseLoginError(err));
+      }
+      try {
+        await ensureUserDocument(
+          cred.user.uid,
+          cred.user.displayName ?? null,
+          cred.user.email ?? null,
+          cred.user.phoneNumber ?? null,
+          cred.user.photoURL ?? null,
+        );
+      } catch (e) {
+        logError(e, { alert: false });
+        throw new Error('Something went wrong. Please try again.');
       }
     },
     [],

@@ -3,10 +3,10 @@ import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { useAuth } from '@/services/AuthContext';
 import { auth } from '@/services/firebase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -21,6 +21,7 @@ import { theme } from '@/constants/theme';
 import { logError } from '@/utils/errorLogger';
 
 const LOGIN_INPUTS = 2;
+const ERROR_AUTO_CLEAR_MS = 4500;
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -28,10 +29,49 @@ export default function LoginScreen() {
   const { signInWithEmail } = useAuth();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const shakeX = useRef(new Animated.Value(0)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!formError) return;
+    const t = setTimeout(() => setFormError(null), ERROR_AUTO_CLEAR_MS);
+    return () => clearTimeout(t);
+  }, [formError]);
+
+  const runShake = () => {
+    shakeX.setValue(0);
+    Animated.sequence([
+      Animated.timing(shakeX, {
+        toValue: 8,
+        duration: 45,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: -8,
+        duration: 45,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: 6,
+        duration: 45,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: -6,
+        duration: 45,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: 0,
+        duration: 45,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   const focusPrev = () => {
     if (focusedIndex !== null && focusedIndex > 0) {
@@ -49,9 +89,11 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     const trimmed = email.trim();
     if (!trimmed || !password) {
-      Alert.alert('Error', 'Please enter email and password.');
+      setFormError('Please enter email and password.');
+      runShake();
       return;
     }
+    setFormError(null);
     setLoading(true);
     try {
       await signInWithEmail(trimmed, password);
@@ -67,28 +109,12 @@ export default function LoginScreen() {
       }
     } catch (err: unknown) {
       logError(err, { alert: false });
-      const code =
-        err && typeof err === 'object' && 'code' in err
-          ? String((err as { code: string }).code)
-          : '';
-      const msg =
-        err && typeof err === 'object' && 'message' in err
-          ? String((err as { message: string }).message)
-          : 'Login failed';
-      if (code === 'auth/invalid-email') {
-        Alert.alert('Error', 'Please enter a valid email address.');
-      } else if (
-        code === 'auth/user-not-found' ||
-        code === 'auth/wrong-password'
-      ) {
-        Alert.alert('Error', 'Invalid email or password.');
-      } else if (code === 'auth/invalid-credential') {
-        Alert.alert('Error', 'Invalid email or password.');
-      } else if (code === 'auth/too-many-requests') {
-        Alert.alert('Error', 'Too many attempts. Please try again later.');
-      } else {
-        Alert.alert('Error', msg);
-      }
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Something went wrong';
+      setFormError(message);
+      runShake();
     } finally {
       setLoading(false);
     }
@@ -120,7 +146,10 @@ export default function LoginScreen() {
               placeholder="you@example.com"
               placeholderTextColor={theme.colors.iconInactive}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(t) => {
+                setEmail(t);
+                setFormError(null);
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -137,7 +166,10 @@ export default function LoginScreen() {
               placeholder="••••••••"
               placeholderTextColor={theme.colors.iconInactive}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(t) => {
+                setPassword(t);
+                setFormError(null);
+              }}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
@@ -157,17 +189,32 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, busy && styles.btnDisabled]}
-              onPress={handleLogin}
-              disabled={busy}
+            <Animated.View
+              style={[
+                styles.actionBlock,
+                { transform: [{ translateX: shakeX }] },
+              ]}
             >
-              {loading ? (
-                <ActivityIndicator color={theme.colors.textOnPrimary} />
-              ) : (
-                <Text style={styles.primaryBtnText}>Log in</Text>
-              )}
-            </TouchableOpacity>
+              {formError ? (
+                <View style={styles.errorRow}>
+                  <Text style={styles.errorIcon} accessibilityLabel="Warning">
+                    ⚠️
+                  </Text>
+                  <Text style={styles.errorText}>{formError}</Text>
+                </View>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.primaryBtn, busy && styles.btnDisabled]}
+                onPress={() => void handleLogin()}
+                disabled={busy}
+              >
+                {loading ? (
+                  <ActivityIndicator color={theme.colors.textOnPrimary} />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Log in</Text>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           </View>
 
           <View style={styles.footer}>
@@ -233,12 +280,34 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600',
   },
+  actionBlock: {
+    width: '100%',
+    marginTop: 8,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  errorIcon: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 1,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.colors.danger,
+    fontWeight: '500',
+  },
   primaryBtn: {
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.button,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 8,
   },
   primaryBtnText: {
     color: theme.colors.textOnPrimary,
