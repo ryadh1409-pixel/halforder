@@ -1,8 +1,7 @@
-import AppLogo from '@/components/AppLogo';
 import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/KeyboardToolbar';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { isAdminUser } from '@/constants/adminUid';
-import { shadows, theme } from '@/constants/theme';
+import { theme } from '@/constants/theme';
 import {
   displayFromStoredProfilePhone,
   isCompleteNaProfilePhone,
@@ -181,20 +180,20 @@ type Palette = {
 function useProfilePalette(): Palette {
   return useMemo(
     () => ({
-      bg: '#0B0D10',
-      surface: '#141A22',
-      surfaceMuted: '#1B222C',
-      text: '#F8FAFC',
-      textSecondary: 'rgba(248,250,252,0.68)',
-      textTertiary: 'rgba(248,250,252,0.45)',
-      border: 'rgba(255,255,255,0.1)',
-      inputBg: '#0F1319',
-      chipBg: 'rgba(255,255,255,0.06)',
+      bg: '#000000',
+      surface: '#1C1C1E',
+      surfaceMuted: '#2C2C2E',
+      text: '#FFFFFF',
+      textSecondary: 'rgba(255,255,255,0.65)',
+      textTertiary: 'rgba(255,255,255,0.42)',
+      border: 'rgba(255,255,255,0.12)',
+      inputBg: '#141414',
+      chipBg: 'rgba(255,255,255,0.08)',
       primary: '#FF7A00',
       onPrimary: '#FFFFFF',
       danger: '#F87171',
       success: '#34D399',
-      star: '#FBBF24',
+      star: '#FFD60A',
     }),
     [],
   );
@@ -671,60 +670,61 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.profileBody}>
-          <View style={dynamicStyles.headerRow}>
-            <View>
-              <Text style={dynamicStyles.screenTitle}>Profile</Text>
-              <Text style={dynamicStyles.headerSubtitle} numberOfLines={1}>
+          <View style={dynamicStyles.profileHeader}>
+            <View style={dynamicStyles.profileHeaderTextCol}>
+              <Text style={dynamicStyles.profileNameTitle} numberOfLines={2}>
+                {displayName}
+              </Text>
+              <Text
+                style={dynamicStyles.profileEmailLine}
+                numberOfLines={1}
+              >
                 {emailLabel}
               </Text>
-            </View>
-            <AppLogo size={40} marginTop={0} />
-          </View>
-
-          <View style={dynamicStyles.hero}>
-            <TouchableOpacity
-              style={dynamicStyles.avatarRing}
-              onPress={handlePickProfilePhoto}
-              activeOpacity={0.85}
-              disabled={uploadingPhoto}
-              accessibilityLabel="Change profile photo"
-            >
-              {uploadingPhoto ? (
-                <ActivityIndicator size="large" color={pal.primary} />
-              ) : photoURL ? (
-                <Image
-                  source={{ uri: photoURL }}
-                  style={dynamicStyles.avatarImage}
-                  contentFit="cover"
-                  transition={200}
-                />
-              ) : (
-                <Text style={dynamicStyles.avatarLetter}>{initialLetter}</Text>
-              )}
-            </TouchableOpacity>
-            <Text style={dynamicStyles.photoHint}>Tap photo to change</Text>
-            <Text style={dynamicStyles.heroName} numberOfLines={1}>
-              {displayName}
-            </Text>
-
-            <View style={dynamicStyles.ratingRow}>
-              <MaterialIcons name="star" size={22} color={pal.star} />
-              <Text style={dynamicStyles.ratingNumber}>
-                {ratingValue != null ? ratingValue.toFixed(1) : '—'}
-              </Text>
-              <Text style={dynamicStyles.reviewCount}>
-                {reviewCount > 0
-                  ? `· ${reviewCount} review${reviewCount === 1 ? '' : 's'}`
-                  : '· No reviews yet'}
-              </Text>
-            </View>
-            {trustScore || isAdminUser(user) ? (
-              <View style={dynamicStyles.trustChip}>
-                <Text style={dynamicStyles.trustChipText}>
-                  {isAdminUser(user) ? 'Admin' : (trustScore?.label ?? '')}
+              <View style={dynamicStyles.profileRatingRow}>
+                <MaterialIcons name="star" size={20} color={pal.star} />
+                <Text style={dynamicStyles.profileRatingValue}>
+                  {ratingValue != null ? ratingValue.toFixed(2) : '—'}
+                </Text>
+                <Text style={dynamicStyles.profileReviewMeta}>
+                  {reviewCount > 0
+                    ? ` · ${reviewCount} review${reviewCount === 1 ? '' : 's'}`
+                    : ratingValue != null
+                      ? ''
+                      : ' · No ratings yet'}
                 </Text>
               </View>
-            ) : null}
+              {trustScore || isAdminUser(user) ? (
+                <View style={dynamicStyles.trustChip}>
+                  <Text style={dynamicStyles.trustChipText}>
+                    {isAdminUser(user) ? 'Admin' : (trustScore?.label ?? '')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={dynamicStyles.profilePhotoCol}>
+              <TouchableOpacity
+                style={dynamicStyles.profileAvatarWrap}
+                onPress={handlePickProfilePhoto}
+                activeOpacity={0.85}
+                disabled={uploadingPhoto}
+                accessibilityLabel="Change profile photo"
+              >
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="large" color={pal.primary} />
+                ) : photoURL ? (
+                  <Image
+                    source={{ uri: photoURL }}
+                    style={dynamicStyles.profileAvatarImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <Text style={dynamicStyles.profileAvatarLetter}>{initialLetter}</Text>
+                )}
+              </TouchableOpacity>
+              <Text style={dynamicStyles.profilePhotoHint}>Tap to change</Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -732,8 +732,11 @@ export default function ProfileScreen() {
             onPress={() => router.push('/help')}
             activeOpacity={0.85}
           >
-            <MaterialIcons name="help-outline" size={24} color={pal.primary} />
-            <Text style={dynamicStyles.quickActionText}>Help & support guides</Text>
+            <MaterialIcons name="help-outline" size={22} color={pal.primary} />
+            <View style={dynamicStyles.quickActionTextCol}>
+              <Text style={dynamicStyles.quickActionText}>Help &amp; Support</Text>
+              <Text style={dynamicStyles.quickActionSub}>Guides and FAQs</Text>
+            </View>
             <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
           </TouchableOpacity>
 
@@ -742,8 +745,11 @@ export default function ProfileScreen() {
             onPress={() => router.push('/privacy')}
             activeOpacity={0.85}
           >
-            <MaterialIcons name="privacy-tip" size={24} color={pal.primary} />
-            <Text style={dynamicStyles.quickActionText}>Privacy Policy</Text>
+            <MaterialIcons name="privacy-tip" size={22} color={pal.primary} />
+            <View style={dynamicStyles.quickActionTextCol}>
+              <Text style={dynamicStyles.quickActionText}>Privacy Policy</Text>
+              <Text style={dynamicStyles.quickActionSub}>How we use your data</Text>
+            </View>
             <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
           </TouchableOpacity>
 
@@ -793,7 +799,7 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity
               style={[
-                dynamicStyles.primaryButton,
+                dynamicStyles.saveNameButton,
                 nameSaved && { backgroundColor: pal.success },
                 !canSaveName && !nameSaved && dynamicStyles.buttonDisabled,
               ]}
@@ -805,7 +811,7 @@ export default function ProfileScreen() {
               {savingName ? (
                 <ActivityIndicator size="small" color={pal.onPrimary} />
               ) : (
-                <Text style={dynamicStyles.primaryButtonText}>
+                <Text style={dynamicStyles.saveNameButtonText}>
                   {saveButtonLabel}
                 </Text>
               )}
@@ -1035,84 +1041,87 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    screenTitle: {
-      fontSize: 28,
-      fontWeight: '800',
-      color: pal.text,
-      letterSpacing: -0.5,
-    },
-    headerSubtitle: {
-      marginTop: 4,
-      fontSize: 14,
-      color: pal.textSecondary,
-      maxWidth: '88%',
-    },
-    headerRow: {
+    profileHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: 20,
+      justifyContent: 'space-between',
+      paddingVertical: 20,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.1)',
     },
-    hero: {
-      alignItems: 'center',
-      marginBottom: 18,
-      paddingVertical: 8,
+    profileHeaderTextCol: {
+      flex: 1,
+      paddingRight: 16,
+      minWidth: 0,
     },
-    avatarRing: {
-      width: 92,
-      height: 92,
-      borderRadius: 46,
-      backgroundColor: pal.surfaceMuted,
-      borderWidth: 2,
-      borderColor: pal.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 6,
-      overflow: 'hidden',
-      ...shadows.card,
-    },
-    avatarImage: {
-      width: 86,
-      height: 86,
-      borderRadius: 43,
-    },
-    avatarLetter: {
-      fontSize: 36,
+    profileNameTitle: {
+      fontSize: 32,
       fontWeight: '800',
       color: pal.text,
+      letterSpacing: -1,
+      lineHeight: 38,
     },
-    photoHint: {
-      fontSize: 12,
+    profileEmailLine: {
+      marginTop: 8,
+      fontSize: 14,
+      fontWeight: '500',
+      color: pal.textSecondary,
+    },
+    profileRatingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      marginTop: 14,
+    },
+    profileRatingValue: {
+      marginLeft: 6,
+      fontSize: 20,
+      fontWeight: '800',
+      color: pal.text,
+      letterSpacing: -0.3,
+    },
+    profileReviewMeta: {
+      fontSize: 15,
       fontWeight: '600',
       color: pal.textTertiary,
-      marginBottom: 8,
     },
-    heroName: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: pal.text,
-      marginBottom: 8,
+    profilePhotoCol: {
+      alignItems: 'flex-end',
     },
-    ratingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      flexWrap: 'wrap',
+    profileAvatarWrap: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: pal.surfaceMuted,
+      borderWidth: 2,
+      borderColor: 'rgba(255,255,255,0.18)',
       justifyContent: 'center',
+      alignItems: 'center',
+      overflow: 'hidden',
     },
-    ratingNumber: {
-      fontSize: 18,
+    profileAvatarImage: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+    },
+    profileAvatarLetter: {
+      fontSize: 32,
       fontWeight: '800',
       color: pal.text,
     },
-    reviewCount: {
-      fontSize: 15,
-      color: pal.textSecondary,
+    profilePhotoHint: {
+      marginTop: 8,
+      fontSize: 11,
       fontWeight: '600',
+      color: pal.textTertiary,
+      textAlign: 'right',
     },
     trustChip: {
-      marginTop: 10,
-      paddingHorizontal: 14,
+      alignSelf: 'flex-start',
+      marginTop: 12,
+      paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
       backgroundColor: pal.chipBg,
@@ -1120,45 +1129,55 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       borderColor: pal.border,
     },
     trustChipText: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '700',
       color: pal.text,
+      letterSpacing: 0.2,
     },
     quickAction: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      padding: 16,
-      borderRadius: theme.radius.lg,
+      gap: 14,
+      paddingVertical: 18,
+      paddingHorizontal: 18,
+      borderRadius: 16,
       backgroundColor: pal.surface,
       borderWidth: 1,
       borderColor: pal.border,
-      marginBottom: 22,
-      ...shadows.card,
+      marginBottom: 12,
+    },
+    quickActionTextCol: {
+      flex: 1,
+      minWidth: 0,
     },
     quickActionText: {
-      flex: 1,
       fontSize: 16,
-      fontWeight: '600',
+      fontWeight: '700',
       color: pal.text,
+      letterSpacing: -0.2,
+    },
+    quickActionSub: {
+      marginTop: 3,
+      fontSize: 13,
+      fontWeight: '500',
+      color: pal.textTertiary,
     },
     sectionHeading: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '800',
       color: pal.textTertiary,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      marginBottom: 8,
-      marginTop: 4,
+      letterSpacing: 1,
+      marginBottom: 10,
+      marginTop: 16,
     },
     card: {
       backgroundColor: pal.surface,
-      borderRadius: theme.radius.lg,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: pal.border,
-      padding: theme.spacing.section,
-      marginBottom: theme.spacing.md,
-      ...shadows.card,
+      padding: 20,
+      marginBottom: 12,
     },
     label: {
       fontSize: 14,
@@ -1218,15 +1237,34 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     },
     primaryButton: {
       backgroundColor: pal.primary,
-      borderRadius: theme.radius.button,
-      paddingVertical: 14,
+      borderRadius: 14,
+      paddingVertical: 16,
       alignItems: 'center',
       marginBottom: 8,
+      minHeight: 52,
     },
     primaryButtonText: {
       color: pal.onPrimary,
       fontSize: 16,
-      fontWeight: '700',
+      fontWeight: '800',
+      letterSpacing: -0.2,
+    },
+    saveNameButton: {
+      backgroundColor: pal.primary,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+      minHeight: 54,
+      width: '100%',
+      alignSelf: 'stretch',
+    },
+    saveNameButtonText: {
+      color: pal.onPrimary,
+      fontSize: 16,
+      fontWeight: '800',
+      letterSpacing: -0.2,
     },
     buttonDisabled: {
       opacity: 0.55,
@@ -1393,8 +1431,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   profileBody: {
-    paddingHorizontal: theme.spacing.section,
-    paddingTop: 8,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   footer: {
     alignItems: 'center',
