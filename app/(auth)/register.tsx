@@ -24,12 +24,12 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
-  type TextStyle,
-  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { getUserFriendlyError } from '@/utils/errorHandler';
+import { logError } from '@/utils/errorLogger';
+import { showError, showSuccess } from '@/utils/toast';
 
 const c = theme.colors;
 
@@ -39,19 +39,6 @@ const PHOTO_SIZE = 92;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const placeholderColor = 'rgba(255,255,255,0.42)';
-
-function inputStyle(hasError: boolean): ViewStyle & TextStyle {
-  return {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: hasError ? c.danger : 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    fontSize: 16,
-    color: c.white,
-  };
-}
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -69,10 +56,7 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const hasError = error !== '';
 
   const refs = [nameRef, emailRef, whatsappRef, passwordRef, confirmPasswordRef];
   const focusPrev = () => {
@@ -156,19 +140,16 @@ export default function RegisterScreen() {
     return '';
   };
 
-  const clearError = () => setError('');
-
   const handleSignup = async () => {
     const validationError = validate();
     if (validationError) {
-      setError(validationError);
+      showError(validationError);
       return;
     }
 
     const nameTrim = name.trim();
     const emailTrim = email.trim();
 
-    setError('');
     Keyboard.dismiss();
     setLoading(true);
     try {
@@ -180,9 +161,11 @@ export default function RegisterScreen() {
         whatsappConsent: true,
         localPhotoUri: photoUri,
       });
+      showSuccess('Account created successfully 🎉');
       router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
     } catch (err: unknown) {
-      setError(getUserFriendlyError(err));
+      logError(err);
+      showError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -232,14 +215,11 @@ export default function RegisterScreen() {
                 <View style={styles.fields}>
                   <TextInput
                     ref={nameRef}
-                    style={inputStyle(hasError)}
+                    style={styles.fieldInput}
                     placeholder="Full name"
                     placeholderTextColor={placeholderColor}
                     value={name}
-                    onChangeText={(t) => {
-                      setName(t);
-                      clearError();
-                    }}
+                    onChangeText={setName}
                     autoCapitalize="words"
                     editable={!loading}
                     inputAccessoryViewID={
@@ -250,14 +230,11 @@ export default function RegisterScreen() {
 
                   <TextInput
                     ref={emailRef}
-                    style={inputStyle(hasError)}
+                    style={styles.fieldInput}
                     placeholder="Email"
                     placeholderTextColor={placeholderColor}
                     value={email}
-                    onChangeText={(t) => {
-                      setEmail(t);
-                      clearError();
-                    }}
+                    onChangeText={setEmail}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -270,14 +247,11 @@ export default function RegisterScreen() {
 
                   <TextInput
                     ref={whatsappRef}
-                    style={inputStyle(hasError)}
+                    style={styles.fieldInput}
                     placeholder="WhatsApp number"
                     placeholderTextColor={placeholderColor}
                     value={whatsapp}
-                    onChangeText={(t) => {
-                      setWhatsapp(profileWhatsAppOnChangeText(t));
-                      clearError();
-                    }}
+                    onChangeText={(t) => setWhatsapp(profileWhatsAppOnChangeText(t))}
                     keyboardType="phone-pad"
                     editable={!loading}
                     inputAccessoryViewID={
@@ -293,10 +267,7 @@ export default function RegisterScreen() {
 
                   <TouchableOpacity
                     style={styles.consentRow}
-                    onPress={() => {
-                      setWhatsappCoordinationConsent((v) => !v);
-                      clearError();
-                    }}
+                    onPress={() => setWhatsappCoordinationConsent((v) => !v)}
                     disabled={loading}
                     activeOpacity={0.75}
                     accessibilityRole="checkbox"
@@ -316,14 +287,11 @@ export default function RegisterScreen() {
 
                   <TextInput
                     ref={passwordRef}
-                    style={inputStyle(hasError)}
+                    style={styles.fieldInput}
                     placeholder="Password"
                     placeholderTextColor={placeholderColor}
                     value={password}
-                    onChangeText={(t) => {
-                      setPassword(t);
-                      clearError();
-                    }}
+                    onChangeText={setPassword}
                     secureTextEntry
                     editable={!loading}
                     inputAccessoryViewID={
@@ -334,14 +302,11 @@ export default function RegisterScreen() {
 
                   <TextInput
                     ref={confirmPasswordRef}
-                    style={[inputStyle(hasError), styles.lastField]}
+                    style={[styles.fieldInput, styles.lastField]}
                     placeholder="Confirm password"
                     placeholderTextColor={placeholderColor}
                     value={confirmPassword}
-                    onChangeText={(t) => {
-                      setConfirmPassword(t);
-                      clearError();
-                    }}
+                    onChangeText={setConfirmPassword}
                     secureTextEntry
                     editable={!loading}
                     inputAccessoryViewID={
@@ -350,12 +315,6 @@ export default function RegisterScreen() {
                     onFocus={() => setFocusedIndex(4)}
                   />
                 </View>
-
-                {error !== '' ? (
-                  <Text style={styles.inlineError} accessibilityLiveRegion="polite">
-                    ⚠️ {error}
-                  </Text>
-                ) : null}
 
                 <TouchableOpacity
                   style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
@@ -449,6 +408,16 @@ const styles = StyleSheet.create({
   fields: {
     marginTop: 0,
   },
+  fieldInput: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    fontSize: 16,
+    color: c.white,
+  },
   fieldHelper: {
     fontSize: 13,
     lineHeight: 18,
@@ -474,14 +443,6 @@ const styles = StyleSheet.create({
   },
   lastField: {
     marginBottom: 8,
-  },
-  inlineError: {
-    color: c.danger,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-    marginBottom: 10,
-    marginTop: 4,
   },
   primaryBtn: {
     backgroundColor: c.primary,

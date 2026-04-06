@@ -4,6 +4,7 @@ import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { Alert, LogBox, Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import 'react-native-reanimated';
@@ -1123,7 +1124,10 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider value={DarkTheme}>
         <AuthProvider>
-          <RootLayoutNav />
+          <>
+            <RootLayoutNav />
+            <Toast />
+          </>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

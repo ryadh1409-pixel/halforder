@@ -13,32 +13,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  type TextStyle,
-  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
+import { showError } from '@/utils/toast';
 
 const LOGIN_INPUTS = 2;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const c = theme.colors;
-
-function inputStyle(hasError: boolean): ViewStyle & TextStyle {
-  return {
-    borderWidth: 1,
-    borderColor: hasError ? c.danger : c.borderStrong,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    fontSize: 16,
-    color: c.text,
-    backgroundColor: c.background,
-  };
-}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -49,10 +35,7 @@ export default function LoginScreen() {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const hasError = error !== '';
 
   const focusPrev = () => {
     if (focusedIndex !== null && focusedIndex > 0) {
@@ -70,22 +53,21 @@ export default function LoginScreen() {
   const validateFields = (): boolean => {
     const trimmed = email.trim();
     if (!trimmed) {
-      setError('Please enter your email.');
+      showError('Please enter your email.');
       return false;
     }
     if (!EMAIL_RE.test(trimmed)) {
-      setError('Please enter a valid email address.');
+      showError('Please enter a valid email address.');
       return false;
     }
     if (!password) {
-      setError('Please enter your password.');
+      showError('Please enter your password.');
       return false;
     }
     return true;
   };
 
   const handleLogin = async () => {
-    setError('');
     if (!validateFields()) {
       return;
     }
@@ -106,7 +88,7 @@ export default function LoginScreen() {
       }
     } catch (err: unknown) {
       logError(err);
-      setError(getUserFriendlyError(err));
+      showError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -131,14 +113,11 @@ export default function LoginScreen() {
           <View style={styles.form}>
             <TextInput
               ref={emailRef}
-              style={inputStyle(hasError)}
+              style={styles.input}
               placeholder="Email"
               placeholderTextColor={c.iconInactive}
               value={email}
-              onChangeText={(t) => {
-                setEmail(t);
-                setError('');
-              }}
+              onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -150,14 +129,11 @@ export default function LoginScreen() {
             />
             <TextInput
               ref={passwordRef}
-              style={[inputStyle(hasError), styles.passwordInput]}
+              style={[styles.input, styles.passwordInput]}
               placeholder="Password"
               placeholderTextColor={c.iconInactive}
               value={password}
-              onChangeText={(t) => {
-                setPassword(t);
-                setError('');
-              }}
+              onChangeText={setPassword}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
@@ -177,17 +153,8 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {error !== '' ? (
-              <Text style={styles.inlineError}>
-                ⚠️ {error}
-              </Text>
-            ) : null}
-
             <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                loading && styles.primaryBtnLoading,
-              ]}
+              style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
               onPress={() => void handleLogin()}
               disabled={loading}
               activeOpacity={0.9}
@@ -238,6 +205,16 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   form: { width: '100%', maxWidth: 400 },
+  input: {
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    fontSize: 16,
+    color: c.text,
+    backgroundColor: c.background,
+  },
   passwordInput: {
     marginBottom: 4,
   },
@@ -250,13 +227,6 @@ const styles = StyleSheet.create({
     color: c.primary,
     fontWeight: '600',
   },
-  inlineError: {
-    color: c.danger,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-    marginBottom: 10,
-  },
   primaryBtn: {
     backgroundColor: c.primary,
     paddingVertical: 16,
@@ -264,6 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 54,
+    marginTop: 8,
   },
   primaryBtnLoading: {
     backgroundColor: c.iconInactive,
