@@ -6,7 +6,7 @@ import { logError } from '@/utils/errorLogger';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { sendEmailVerification } from 'firebase/auth';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -21,8 +21,7 @@ import { theme } from '@/constants/theme';
 
 const c = theme.colors;
 const COOLDOWN_SEC = 30;
-const POLL_MS = 3000;
-const NAV_DELAY_MS = 850;
+const POLL_MS = 2000;
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
@@ -37,7 +36,18 @@ export default function VerifyEmailScreen() {
   const [actionError, setActionError] = useState('');
 
   const successScale = useRef(new Animated.Value(0)).current;
-  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const goHome = useCallback(() => {
+    router.replace('/(tabs)' as Parameters<typeof router.replace>[0]);
+  }, [router]);
+
+  const clearPoll = useCallback(() => {
+    if (pollIntervalRef.current != null) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -73,25 +83,18 @@ export default function VerifyEmailScreen() {
     if (!session?.uid || !userNeedsEmailVerification(session)) return;
 
     let cancelled = false;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const tick = async () => {
       if (cancelled) return;
+      if (!auth.currentUser) return;
       try {
+        // reload() on current user + syncs AuthContext (same as Firebase reload)
         await reloadAuthUser();
-        const u = auth.currentUser;
-        if (u?.emailVerified) {
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
-          }
+        if (auth.currentUser?.emailVerified) {
+          clearPoll();
           setVerified(true);
           setChecking(false);
-          if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
-          navigateTimerRef.current = setTimeout(() => {
-            router.replace('/(tabs)' as Parameters<typeof router.replace>[0]);
-          }, NAV_DELAY_MS);
-          return;
+          goHome();
         }
       } catch (error) {
         logError(error);
@@ -101,33 +104,32 @@ export default function VerifyEmailScreen() {
     };
 
     void tick();
-    intervalId = setInterval(() => void tick(), POLL_MS);
+    pollIntervalRef.current = setInterval(() => void tick(), POLL_MS);
 
     return () => {
       cancelled = true;
-      if (intervalId) clearInterval(intervalId);
-      if (navigateTimerRef.current) {
-        clearTimeout(navigateTimerRef.current);
-        navigateTimerRef.current = null;
-      }
+      clearPoll();
     };
-  }, [authLoading, verified, reloadAuthUser, router]);
+  }, [authLoading, verified, reloadAuthUser, clearPoll, goHome]);
 
   const onVerified = async () => {
     setLoading(true);
     setMessage('');
     setActionError('');
     try {
+      if (!auth.currentUser) {
+        setActionError('You are not signed in. Please log in again.');
+        return;
+      }
       await reloadAuthUser();
-      const u = auth.currentUser;
-      if (u?.emailVerified) {
+      if (auth.currentUser?.emailVerified) {
+        clearPoll();
         setVerified(true);
-        if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
-        navigateTimerRef.current = setTimeout(() => {
-          router.replace('/(tabs)' as Parameters<typeof router.replace>[0]);
-        }, NAV_DELAY_MS);
+        goHome();
       } else {
-        setActionError('Please verify your email first. Open the link we sent, then try again.');
+        setActionError(
+          'Your email is not verified yet. Open the link we sent, then tap I verified again.',
+        );
       }
     } catch (e) {
       logError(e);
