@@ -55,7 +55,7 @@ function messageFromAuthCode(
       return 'This sign-in method is not available.';
 
     case 'auth/requires-recent-login':
-      return 'For security, please sign out, sign in again, then try again.';
+      return 'For security, please log in again, then try again.';
 
     case 'auth/invalid-verification-code':
     case 'auth/invalid-verification-id':

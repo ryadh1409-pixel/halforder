@@ -488,6 +488,7 @@ export default function ProfileScreen() {
         message:
           'Are you sure you want to delete your account? This action cannot be undone.',
         confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
         destructive: true,
       });
       if (ok) void confirmDeleteAccount();
@@ -540,11 +541,26 @@ export default function ProfileScreen() {
     setDeletingAccount(true);
     try {
       await deleteUserAccount(user);
-      showSuccess('Your account has been permanently removed.');
+      showSuccess('Your account has been deleted successfully');
       router.replace('/(auth)/login');
     } catch (err: unknown) {
       logError(err);
-      showError(getUserFriendlyError(err));
+      const code =
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        typeof (err as { code: unknown }).code === 'string'
+          ? (err as { code: string }).code
+          : null;
+      if (code === 'auth/requires-recent-login') {
+        showNotice(
+          'Sign in required',
+          'For security, please log in again before deleting your account.',
+        );
+        router.replace('/(auth)/login');
+      } else {
+        showError(getUserFriendlyError(err));
+      }
     } finally {
       setDeletingAccount(false);
     }
