@@ -30,19 +30,26 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
 import { systemActionSheet } from '@/components/SystemDialogHost';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { showError, showSuccess } from '@/utils/toast';
-
-const c = theme.colors;
 
 const REGISTER_INPUTS = 5;
 const PHOTO_SIZE = 92;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const placeholderColor = 'rgba(255,255,255,0.42)';
+/** Auth stack dark theme — aligned with login / onboarding */
+const AUTH = {
+  bg: '#0B0F14',
+  card: '#111827',
+  text: '#FFFFFF',
+  textMuted: 'rgba(255,255,255,0.72)',
+  inputBg: '#1F2937',
+  inputBorder: '#374151',
+  placeholder: '#9CA3AF',
+  primary: '#F97316',
+} as const;
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -196,7 +203,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <KeyboardToolbar
         onFocusPrevious={focusPrev}
         onFocusNext={focusNext}
@@ -204,7 +211,7 @@ export default function RegisterScreen() {
         totalInputs={REGISTER_INPUTS}
       />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboard}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -228,13 +235,13 @@ export default function RegisterScreen() {
                 >
                   {pickingPhoto ? (
                     <View style={[styles.photoEmpty, styles.photoLoading]}>
-                      <ActivityIndicator size="large" color={c.primary} />
+                      <ActivityIndicator size="large" color={AUTH.primary} />
                     </View>
                   ) : photoUri ? (
                     <Image source={{ uri: photoUri }} style={styles.photoImage} contentFit="cover" />
                   ) : (
                     <View style={styles.photoEmpty}>
-                      <MaterialIcons name="add-a-photo" size={36} color={placeholderColor} />
+                      <MaterialIcons name="add-a-photo" size={36} color={AUTH.placeholder} />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -245,7 +252,7 @@ export default function RegisterScreen() {
                     ref={nameRef}
                     style={styles.fieldInput}
                     placeholder="Full name"
-                    placeholderTextColor={placeholderColor}
+                    placeholderTextColor={AUTH.placeholder}
                     value={name}
                     onChangeText={setName}
                     autoCapitalize="words"
@@ -260,7 +267,7 @@ export default function RegisterScreen() {
                     ref={emailRef}
                     style={styles.fieldInput}
                     placeholder="Email"
-                    placeholderTextColor={placeholderColor}
+                    placeholderTextColor={AUTH.placeholder}
                     value={email}
                     onChangeText={setEmail}
                     keyboardType="email-address"
@@ -277,7 +284,7 @@ export default function RegisterScreen() {
                     ref={whatsappRef}
                     style={styles.fieldInput}
                     placeholder="WhatsApp number"
-                    placeholderTextColor={placeholderColor}
+                    placeholderTextColor={AUTH.placeholder}
                     value={whatsapp}
                     onChangeText={(t) => setWhatsapp(profileWhatsAppOnChangeText(t))}
                     keyboardType="phone-pad"
@@ -305,7 +312,7 @@ export default function RegisterScreen() {
                     <MaterialIcons
                       name={whatsappCoordinationConsent ? 'check-box' : 'check-box-outline-blank'}
                       size={22}
-                      color={whatsappCoordinationConsent ? c.primary : placeholderColor}
+                      color={whatsappCoordinationConsent ? AUTH.primary : AUTH.placeholder}
                       style={styles.consentIcon}
                     />
                     <Text style={styles.consentLabel}>
@@ -317,7 +324,7 @@ export default function RegisterScreen() {
                     ref={passwordRef}
                     style={styles.fieldInput}
                     placeholder="Password"
-                    placeholderTextColor={placeholderColor}
+                    placeholderTextColor={AUTH.placeholder}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
@@ -332,7 +339,7 @@ export default function RegisterScreen() {
                     ref={confirmPasswordRef}
                     style={[styles.fieldInput, styles.lastField]}
                     placeholder="Confirm password"
-                    placeholderTextColor={placeholderColor}
+                    placeholderTextColor={AUTH.placeholder}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry
@@ -351,7 +358,7 @@ export default function RegisterScreen() {
                   activeOpacity={0.9}
                 >
                   {loading ? (
-                    <ActivityIndicator color={c.textOnPrimary} />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.primaryBtnText}>Create Account</Text>
                   )}
@@ -375,7 +382,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: c.sheetDark,
+    backgroundColor: AUTH.bg,
   },
   keyboard: { flex: 1 },
   scrollHost: { flex: 1 },
@@ -383,25 +390,25 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 36,
+    paddingBottom: 48,
   },
   card: {
-    backgroundColor: c.surfaceDark,
+    backgroundColor: AUTH.card,
     borderRadius: 20,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(55,65,81,0.6)',
   },
   cardTitle: {
     fontSize: 26,
     fontWeight: '700',
-    color: c.white,
+    color: AUTH.text,
     letterSpacing: -0.4,
     textAlign: 'center',
   },
   cardSubtitle: {
     fontSize: 15,
-    color: c.textSecondary,
+    color: AUTH.textMuted,
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 8,
@@ -412,10 +419,10 @@ const styles = StyleSheet.create({
     height: PHOTO_SIZE,
     borderRadius: PHOTO_SIZE / 2,
     marginTop: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: AUTH.inputBorder,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: AUTH.inputBg,
   },
   photoImage: {
     width: '100%',
@@ -427,12 +434,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoLoading: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: AUTH.inputBg,
   },
   photoCaption: {
     textAlign: 'center',
     fontSize: 14,
-    color: c.textSecondary,
+    color: AUTH.textMuted,
     marginTop: 10,
     marginBottom: 16,
   },
@@ -440,19 +447,20 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   fieldInput: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: AUTH.inputBg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: AUTH.inputBorder,
     borderRadius: 12,
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     marginBottom: 12,
     fontSize: 16,
-    color: c.white,
+    color: AUTH.text,
   },
   fieldHelper: {
     fontSize: 13,
     lineHeight: 18,
-    color: c.textSecondary,
+    color: AUTH.textMuted,
     marginTop: -4,
     marginBottom: 10,
   },
@@ -469,25 +477,25 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255,255,255,0.88)',
+    color: AUTH.text,
     fontWeight: '500',
   },
   lastField: {
     marginBottom: 8,
   },
   primaryBtn: {
-    backgroundColor: c.primary,
+    backgroundColor: AUTH.primary,
     borderRadius: 14,
-    height: 54,
+    height: 55,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
   },
   primaryBtnLoading: {
-    backgroundColor: c.iconInactive,
+    backgroundColor: '#9CA3AF',
   },
   primaryBtnText: {
-    color: c.textOnPrimary,
+    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '700',
   },
@@ -499,11 +507,11 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   footerMuted: {
-    color: c.textSecondary,
+    color: AUTH.textMuted,
     fontSize: 15,
   },
   footerLink: {
-    color: c.primary,
+    color: AUTH.primary,
     fontSize: 15,
     fontWeight: '700',
   },

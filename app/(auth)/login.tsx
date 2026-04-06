@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { theme } from '@/constants/theme';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { errorHaptic, successHaptic } from '@/utils/haptics';
 import { showError, showSuccess } from '@/utils/toast';
@@ -25,7 +24,17 @@ import { showError, showSuccess } from '@/utils/toast';
 const LOGIN_INPUTS = 2;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const c = theme.colors;
+/** Auth stack dark theme — aligned with onboarding / app chrome */
+const AUTH = {
+  bg: '#0B0F14',
+  card: '#111827',
+  text: '#FFFFFF',
+  textMuted: 'rgba(255,255,255,0.72)',
+  inputBg: '#1F2937',
+  inputBorder: '#374151',
+  placeholder: '#9CA3AF',
+  primary: '#F97316',
+} as const;
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -115,7 +124,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardToolbar
         onFocusPrevious={focusPrev}
         onFocusNext={focusNext}
@@ -123,19 +132,21 @@ export default function LoginScreen() {
         totalInputs={LOGIN_INPUTS}
       />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboard}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>HalfOrder</Text>
-          <Text style={styles.subtitle}>Split meals. Pay half.</Text>
+          <View style={styles.card}>
+            <Text style={styles.title}>HalfOrder</Text>
+            <Text style={styles.subtitle}>Split meals. Pay half.</Text>
 
-          <View style={styles.form}>
+            <View style={styles.form}>
             <TextInput
               ref={emailRef}
               style={styles.input}
               placeholder="Email"
-              placeholderTextColor={c.iconInactive}
+              placeholderTextColor={AUTH.placeholder}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -151,7 +162,7 @@ export default function LoginScreen() {
               ref={passwordRef}
               style={[styles.input, styles.passwordInput]}
               placeholder="Password"
-              placeholderTextColor={c.iconInactive}
+              placeholderTextColor={AUTH.placeholder}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -186,12 +197,13 @@ export default function LoginScreen() {
                 activeOpacity={0.9}
               >
                 {loading ? (
-                  <ActivityIndicator color={c.textOnPrimary} />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryBtnText}>Log in</Text>
                 )}
               </TouchableOpacity>
             </Animated.View>
+          </View>
           </View>
 
           <View style={styles.footer}>
@@ -210,37 +222,50 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.background },
+  container: { flex: 1, backgroundColor: AUTH.bg },
   keyboard: { flex: 1 },
   content: {
     flex: 1,
-    paddingHorizontal: theme.spacing.screen,
-    paddingTop: 48,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 32,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: AUTH.card,
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(55,65,81,0.6)',
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: c.text,
+    color: AUTH.text,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: c.textMuted,
+    color: AUTH.textMuted,
     textAlign: 'center',
     marginTop: 8,
-    marginBottom: 32,
+    marginBottom: 28,
   },
-  form: { width: '100%', maxWidth: 400 },
+  form: { width: '100%' },
   input: {
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: AUTH.inputBorder,
     borderRadius: 12,
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     marginBottom: 12,
     fontSize: 16,
-    color: c.text,
-    backgroundColor: c.background,
+    color: AUTH.text,
+    backgroundColor: AUTH.inputBg,
   },
   passwordInput: {
     marginBottom: 4,
@@ -251,7 +276,7 @@ const styles = StyleSheet.create({
   },
   forgotLink: {
     fontSize: 14,
-    color: c.primary,
+    color: AUTH.primary,
     fontWeight: '600',
   },
   primaryBtnAnimated: {
@@ -259,18 +284,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryBtn: {
-    backgroundColor: c.primary,
-    paddingVertical: 16,
+    backgroundColor: AUTH.primary,
     borderRadius: 14,
+    height: 55,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 54,
   },
   primaryBtnLoading: {
-    backgroundColor: c.iconInactive,
+    backgroundColor: '#9CA3AF',
   },
   primaryBtnText: {
-    color: c.textOnPrimary,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -278,8 +302,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 28,
+    paddingBottom: 8,
+    flexWrap: 'wrap',
   },
-  footerText: { color: c.textMuted, fontSize: 15 },
-  link: { color: c.primary, fontSize: 15, fontWeight: '600' },
+  footerText: { color: AUTH.textMuted, fontSize: 15 },
+  link: { color: AUTH.primary, fontSize: 15, fontWeight: '600' },
 });
