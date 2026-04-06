@@ -1,16 +1,11 @@
 /**
- * Logs errors for developers only. Never shows alerts, toasts, or other UI.
- * Call sites must surface friendly copy (inline Text, dedicated banners, etc.).
- *
- * The second argument is kept for API compatibility; it is ignored.
+ * Developer logging only. Never shows alerts or other UI.
  */
 export function logError(
   error: unknown,
   _options?: { alert?: boolean },
 ): void {
   if (__DEV__) {
-    console.error('HalfOrder Error:', error);
+    console.error('DEV ERROR:', error);
   }
-
-  // DO NOT show alert to user — removed intentionally for production UX
 }

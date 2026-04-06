@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 
 const LOGIN_INPUTS = 2;
@@ -105,11 +106,7 @@ export default function LoginScreen() {
       }
     } catch (err: unknown) {
       logError(err);
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : 'Something went wrong';
-      setError(message);
+      setError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }

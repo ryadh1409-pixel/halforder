@@ -1,6 +1,7 @@
 import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { useAuth } from '@/services/AuthContext';
 import { auth } from '@/services/firebase';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { sendEmailVerification } from 'firebase/auth';
@@ -130,7 +131,7 @@ export default function VerifyEmailScreen() {
       }
     } catch (e) {
       logError(e);
-      setActionError('Something went wrong. Try again.');
+      setActionError(getUserFriendlyError(e));
     } finally {
       setLoading(false);
     }
@@ -142,7 +143,7 @@ export default function VerifyEmailScreen() {
     const u = auth.currentUser;
     if (!u?.email) {
       setMessageIsSuccess(false);
-      setMessage('Something went wrong. Try again.');
+      setMessage('Something went wrong');
       return;
     }
 
@@ -157,7 +158,7 @@ export default function VerifyEmailScreen() {
     } catch (error) {
       logError(error);
       setMessageIsSuccess(false);
-      setMessage('Something went wrong. Try again.');
+      setMessage(getUserFriendlyError(error));
     } finally {
       setResendLoading(false);
     }

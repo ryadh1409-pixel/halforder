@@ -1,9 +1,7 @@
-import { theme } from '@/constants/theme';
-import { logError } from '@/utils/errorLogger';
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-const c = theme.colors;
+import { logError } from '@/utils/errorLogger';
 
 interface Props {
   children: ReactNode;
@@ -12,24 +10,23 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
 }
 
+/**
+ * Catches render errors. Never shows stack traces or technical details to users.
+ */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-    };
+    this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    logError(error, { alert: false });
+    logError(error);
     if (__DEV__) {
       console.error('ErrorBoundary errorInfo:', errorInfo);
     }
@@ -42,15 +39,9 @@ export class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>
-            {'We\'re sorry. The app encountered an error. Please try again or restart the app.'}
+            Something went wrong. Please restart the app.
           </Text>
-          {__DEV__ && this.state.error && (
-            <Text style={styles.debug} numberOfLines={5}>
-              {this.state.error.message}
-            </Text>
-          )}
         </View>
       );
     }
@@ -64,22 +55,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: c.background,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: c.text,
+    backgroundColor: '#fff',
   },
   message: {
     fontSize: 16,
-    color: c.textMuted,
     textAlign: 'center',
-  },
-  debug: {
-    marginTop: 16,
-    fontSize: 12,
-    color: c.textSecondary,
+    color: '#334155',
   },
 });

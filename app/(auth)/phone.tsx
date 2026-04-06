@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '@/services/firebase';
 import { theme } from '@/constants/theme';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 const c = theme.colors;
 
@@ -40,10 +41,7 @@ export default function PhoneLoginScreen() {
       await signInWithPhone(phoneNumber);
       setStep('code');
     } catch (err) {
-      Alert.alert(
-        'Error',
-        err instanceof Error ? err.message : 'Failed to send code',
-      );
+      Alert.alert('Error', getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -60,7 +58,7 @@ export default function PhoneLoginScreen() {
       await confirmPhoneCode(trimmed);
       router.replace('/(tabs)');
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Invalid code');
+      Alert.alert('Error', getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }

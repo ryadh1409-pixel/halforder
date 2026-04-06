@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -36,21 +37,7 @@ export default function ResetPasswordScreen() {
       await sendPasswordResetEmail(auth, trimmed);
       setMessage('Check your email to reset your password.');
     } catch (err: unknown) {
-      const code =
-        err && typeof err === 'object' && 'code' in err
-          ? String((err as { code: string }).code)
-          : '';
-      const msg =
-        err && typeof err === 'object' && 'message' in err
-          ? String((err as { message: string }).message)
-          : 'Something went wrong.';
-      if (code === 'auth/invalid-email') {
-        setError('Please enter a valid email address.');
-      } else if (code === 'auth/user-not-found') {
-        setError('No account found with this email.');
-      } else {
-        setError(msg);
-      }
+      setError(getUserFriendlyError(err, 'passwordReset'));
     } finally {
       setLoading(false);
     }

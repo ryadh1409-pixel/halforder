@@ -4,10 +4,6 @@ import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { Alert, LogBox, Platform } from 'react-native';
-
-if (!__DEV__) {
-  LogBox.ignoreAllLogs(true);
-}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import 'react-native-reanimated';
@@ -55,6 +51,10 @@ import {
   type DocumentChange,
   type DocumentData,
 } from 'firebase/firestore';
+
+if (!__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
 
 const NEARBY_MATCH_DATA_TYPE = 'nearby_match';
 

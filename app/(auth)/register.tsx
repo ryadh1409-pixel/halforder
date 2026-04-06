@@ -29,6 +29,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 const c = theme.colors;
 
@@ -181,9 +182,7 @@ export default function RegisterScreen() {
       });
       router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error && err.message ? err.message : 'Something went wrong';
-      setError(message);
+      setError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }

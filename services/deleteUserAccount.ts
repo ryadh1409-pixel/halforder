@@ -120,14 +120,3 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
 
   return { authDeleted: true };
 }
-
-export function getDeleteAccountAuthErrorMessage(code: string): string {
-  switch (code) {
-    case 'auth/requires-recent-login':
-      return 'For security, please sign out, sign in again, then delete your account.';
-    case 'auth/network-request-failed':
-      return 'Network error. Check your connection and try again.';
-    default:
-      return 'Could not delete your account. Please try again or contact support.';
-  }
-}

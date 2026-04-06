@@ -24,8 +24,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAlert } from '@/services/alerts';
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
-import { mapFirebaseLoginError } from '@/lib/mapFirebaseLoginError';
-import { mapFirebaseSignUpError } from '@/lib/mapFirebaseSignUpError';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 import React, {
   createContext,
@@ -294,8 +293,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pwd,
       );
     } catch (err: unknown) {
-      logError(err, { alert: false });
-      throw new Error(mapFirebaseSignUpError(err));
+      logError(err);
+      throw new Error(getUserFriendlyError(err));
     }
 
     const firebaseUser = userCredential.user;
@@ -306,8 +305,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         photoURL = await uploadUserProfileImage(uid, payload.localPhotoUri.trim());
       } catch (e) {
-        logError(e, { alert: false });
-        console.warn('Profile image upload failed (continuing without photo):', e);
+        logError(e);
+        if (__DEV__) {
+          console.warn('Profile image upload failed (continuing without photo):', e);
+        }
       }
     }
 
@@ -317,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...(photoURL ? { photoURL } : {}),
       });
     } catch (e) {
-      logError(e, { alert: false });
+      logError(e);
     }
 
     try {
@@ -345,20 +346,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { merge: true },
       );
     } catch (e) {
-      logError(e, { alert: false });
+      logError(e);
     }
 
     try {
       await ensureUserDocument(uid, nameTrim, trimmed, waTrim, photoURL);
     } catch (e) {
-      console.warn('ensureUserDocument failed (non-fatal):', e);
+      if (__DEV__) {
+        console.warn('ensureUserDocument failed (non-fatal):', e);
+      }
     }
 
     try {
       await sendEmailVerification(firebaseUser);
     } catch (e) {
-      logError(e, { alert: false });
-      console.warn('sendEmailVerification failed (user can resend from settings later):', e);
+      logError(e);
+      if (__DEV__) {
+        console.warn('sendEmailVerification failed (user can resend from settings later):', e);
+      }
     }
   }, []);
 
@@ -369,8 +374,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         cred = await signInWithEmailAndPassword(auth, trimmed, password);
       } catch (err: unknown) {
-        logError(err, { alert: false });
-        throw new Error(mapFirebaseLoginError(err));
+        logError(err);
+        throw new Error(getUserFriendlyError(err));
       }
       try {
         await ensureUserDocument(
@@ -381,8 +386,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           cred.user.photoURL ?? null,
         );
       } catch (e) {
-        logError(e, { alert: false });
-        throw new Error('Something went wrong. Please try again.');
+        logError(e);
+        throw new Error(getUserFriendlyError(e));
       }
     },
     [],

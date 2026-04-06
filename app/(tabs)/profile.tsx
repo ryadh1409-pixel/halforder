@@ -16,10 +16,7 @@ import {
   getBlockedUsersByBlocker,
   unblockUser,
 } from '@/services/blocks';
-import {
-  deleteUserAccount,
-  getDeleteAccountAuthErrorMessage,
-} from '@/services/deleteUserAccount';
+import { deleteUserAccount } from '@/services/deleteUserAccount';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { uploadProfilePhoto } from '@/services/profilePhoto';
 import {
@@ -28,6 +25,7 @@ import {
   type ReportReason,
 } from '@/services/reports';
 import { moderateUserContent } from '@/utils/contentModeration';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -401,9 +399,8 @@ export default function ProfileScreen() {
         nameFeedbackClearRef.current = null;
       }, 2000);
     } catch (err) {
-      logError(err, { alert: false });
-      const msg =
-        err instanceof Error ? err.message : 'Something went wrong, try again';
+      logError(err);
+      const msg = getUserFriendlyError(err);
       setNameErrorMessage(msg);
       Alert.alert('Could not save', msg);
       nameFeedbackClearRef.current = setTimeout(() => {
@@ -454,10 +451,8 @@ export default function ProfileScreen() {
       setPhotoURL(downloadURL);
       Alert.alert('Photo updated', 'Your profile picture has been saved.');
     } catch (e) {
-      logError(e, { alert: false });
-      console.error('UPLOAD ERROR:', e);
-      const msg =
-        e instanceof Error ? e.message : 'Could not upload image. Try again.';
+      logError(e);
+      const msg = getUserFriendlyError(e);
       Alert.alert('Upload failed', msg);
     } finally {
       setUploadingPhoto(false);
@@ -471,7 +466,7 @@ export default function ProfileScreen() {
       const userRef = doc(db, 'users', uid);
       await setDoc(userRef, { notificationsEnabled: value }, { merge: true });
     } catch (e) {
-      logError(e, { alert: false });
+      logError(e);
       setNotificationsEnabled(!value);
     }
   };
@@ -480,9 +475,8 @@ export default function ProfileScreen() {
     try {
       await signOutUser();
     } catch (err) {
-      logError(err, { alert: false });
-      const message = err instanceof Error ? err.message : 'Failed to sign out';
-      Alert.alert('Error', message);
+      logError(err);
+      Alert.alert('Error', getUserFriendlyError(err));
       return;
     }
     router.replace('/(auth)/login');
@@ -527,10 +521,7 @@ export default function ProfileScreen() {
       });
       Alert.alert('Report submitted', 'Thanks. We will review this report.');
     } catch (e) {
-      Alert.alert(
-        'Report failed',
-        e instanceof Error ? e.message : 'Please try again.',
-      );
+      Alert.alert('Report failed', getUserFriendlyError(e));
     } finally {
       setSubmittingReport(false);
     }
@@ -544,10 +535,7 @@ export default function ProfileScreen() {
       setBlockedUsers((prev) => prev.filter((id) => id !== blockedUserId));
       Alert.alert('Unblocked', 'User has been unblocked.');
     } catch (e) {
-      Alert.alert(
-        'Unblock failed',
-        e instanceof Error ? e.message : 'Please try again.',
-      );
+      Alert.alert('Unblock failed', getUserFriendlyError(e));
     } finally {
       setUnblockingId(null);
     }
@@ -569,17 +557,8 @@ export default function ProfileScreen() {
         ],
       );
     } catch (err: unknown) {
-      logError(err, { alert: false });
-      const code =
-        err && typeof err === 'object' && 'code' in err
-          ? String((err as { code: string }).code)
-          : '';
-      const message = code
-        ? getDeleteAccountAuthErrorMessage(code)
-        : err instanceof Error
-          ? err.message
-          : 'Something went wrong.';
-      Alert.alert('Could not delete account', message);
+      logError(err);
+      Alert.alert('Could not delete account', getUserFriendlyError(err));
     } finally {
       setDeletingAccount(false);
     }

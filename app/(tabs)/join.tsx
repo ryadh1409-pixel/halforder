@@ -343,7 +343,7 @@ export default function JoinScreen() {
       });
       router.push(`/order/${orderId}` as never);
     } catch (e) {
-      logError(e, { alert: false });
+      logError(e);
       const msg = e instanceof Error ? e.message : 'Failed to join';
       Alert.alert('Error', msg);
     } finally {
@@ -363,7 +363,7 @@ export default function JoinScreen() {
       await leaveOrderWithTransaction(orderId, user);
       Alert.alert('Success', 'You left the order');
     } catch (e) {
-      logError(e, { alert: false });
+      logError(e);
       const msg = e instanceof Error ? e.message : 'Failed to leave';
       if (msg === 'Not in order') {
         Alert.alert('Error', 'You are not in this order');
@@ -459,7 +459,7 @@ export default function JoinScreen() {
     try {
       await confirmParticipation(orderId, user);
     } catch (e) {
-      logError(e, { alert: false });
+      logError(e);
       const msg = e instanceof Error ? e.message : 'Failed to confirm';
       Alert.alert('Error', msg);
     }

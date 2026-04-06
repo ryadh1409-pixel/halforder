@@ -67,7 +67,7 @@ export async function blockUser(
 }
 
 export function handleSafetyError(error: unknown, fallback: string): string {
-  logError(error, { alert: false });
+  logError(error);
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
