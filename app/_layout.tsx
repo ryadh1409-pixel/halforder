@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef } from 'react';
 import { Alert, LogBox, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
+
+import { toastConfig } from '@/utils/toast';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import 'react-native-reanimated';
@@ -1126,7 +1128,7 @@ export default function RootLayout() {
         <AuthProvider>
           <>
             <RootLayoutNav />
-            <Toast />
+            <Toast config={toastConfig} />
           </>
         </AuthProvider>
       </ThemeProvider>
