@@ -1,6 +1,7 @@
 /**
  * Pick an image from the library and upload to Firebase Storage.
  */
+import { PickerMediaType } from '@/lib/imagePickerMedia';
 import * as ImagePicker from 'expo-image-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
@@ -32,7 +33,7 @@ export async function pickAndUploadImage(
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
+    mediaTypes: [PickerMediaType.Images],
     allowsEditing: true,
     aspect: [4, 3],
     quality: options.quality ?? 0.85,

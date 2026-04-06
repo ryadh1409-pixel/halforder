@@ -1,4 +1,5 @@
 import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
+import { PickerMediaType } from '@/lib/imagePickerMedia';
 import {
   isCompleteNaProfilePhone,
   isProfilePhoneStorageEmpty,
@@ -84,7 +85,7 @@ export default function RegisterScreen() {
     >;
     try {
       result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: [PickerMediaType.Images],
         quality: 0.85,
         allowsEditing: true,
         aspect: [1, 1],

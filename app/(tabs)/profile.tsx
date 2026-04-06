@@ -4,6 +4,7 @@ import { systemConfirm } from '@/components/SystemDialogHost';
 import { isAdminUser } from '@/constants/adminUid';
 import { LEGAL_URLS } from '@/constants/legalLinks';
 import { theme } from '@/constants/theme';
+import { PickerMediaType } from '@/lib/imagePickerMedia';
 import {
   displayFromStoredProfilePhone,
   isCompleteNaProfilePhone,
@@ -435,7 +436,7 @@ export default function ProfileScreen() {
     >;
     try {
       result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: [PickerMediaType.Images],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,

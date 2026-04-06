@@ -6,6 +6,7 @@ import {
   ADMIN_FOOD_CARD_SLOT_COUNT,
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
+import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { auth, storage } from '@/services/firebase';
 import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
 import {
@@ -124,7 +125,7 @@ export function AdminCardsDashboard() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: [PickerMediaType.Images],
       allowsEditing: true,
       quality: 0.82,
     });
