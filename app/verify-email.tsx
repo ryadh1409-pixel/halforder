@@ -1,7 +1,10 @@
 import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { useAuth } from '@/services/AuthContext';
 import { auth } from '@/services/firebase';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import {
+  getUserFriendlyError,
+  isFirebaseAuthUserInvalidated,
+} from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 import {
   VERIFY_EMAIL_HOME_HREF,
@@ -138,6 +141,9 @@ export default function VerifyEmailScreen() {
         return;
       }
       const ok = await attemptRefreshAndRedirect();
+      if (!auth.currentUser) {
+        return;
+      }
       if (!ok && !hasNavigatedRef.current) {
         showError(
           'Please verify your email first. Open the link we sent, then tap I verified again.',
@@ -145,6 +151,10 @@ export default function VerifyEmailScreen() {
       }
     } catch (e) {
       logError(e);
+      if (isFirebaseAuthUserInvalidated(e)) {
+        await signOutUser();
+        return;
+      }
       setActionError(getUserFriendlyError(e));
     } finally {
       setLoading(false);
@@ -171,6 +181,10 @@ export default function VerifyEmailScreen() {
       setCooldown(COOLDOWN_SEC);
     } catch (error) {
       logError(error);
+      if (isFirebaseAuthUserInvalidated(error)) {
+        await signOutUser();
+        return;
+      }
       setMessageIsSuccess(false);
       setMessage(getUserFriendlyError(error));
     } finally {

@@ -24,7 +24,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAlert } from '@/services/alerts';
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import {
+  getUserFriendlyError,
+  isFirebaseAuthUserInvalidated,
+} from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 import React, {
   createContext,
@@ -238,23 +241,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser && !firebaseUser.isAnonymous) {
+      if (!firebaseUser) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await reload(firebaseUser);
+      } catch (e) {
+        logError(e);
+        if (isFirebaseAuthUserInvalidated(e)) {
+          try {
+            await firebaseSignOut(auth);
+          } catch (so) {
+            logError(so);
+          }
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        // Network / transient: keep local session; user can retry when online.
+        setUser(firebaseUser);
+        if (!firebaseUser.isAnonymous) {
+          try {
+            await ensureUserDocument(
+              firebaseUser.uid,
+              firebaseUser.displayName ?? null,
+              firebaseUser.email ?? null,
+              firebaseUser.phoneNumber ?? null,
+              firebaseUser.photoURL ?? null,
+            );
+          } catch {
+            // non-fatal
+          }
+          registerExpoPushTokenAndSyncToFirestore(firebaseUser.uid).catch(
+            () => {},
+          );
+          void claimReferralInboxRewards(firebaseUser.uid);
+        }
+        setLoading(false);
+        return;
+      }
+
+      const fresh = auth.currentUser;
+      setUser(fresh);
+      if (fresh && !fresh.isAnonymous) {
         try {
           await ensureUserDocument(
-            firebaseUser.uid,
-            firebaseUser.displayName ?? null,
-            firebaseUser.email ?? null,
-            firebaseUser.phoneNumber ?? null,
-            firebaseUser.photoURL ?? null,
+            fresh.uid,
+            fresh.displayName ?? null,
+            fresh.email ?? null,
+            fresh.phoneNumber ?? null,
+            fresh.photoURL ?? null,
           );
         } catch {
           // non-fatal
         }
-        registerExpoPushTokenAndSyncToFirestore(firebaseUser.uid).catch(
-          () => {},
-        );
-        void claimReferralInboxRewards(firebaseUser.uid);
+        registerExpoPushTokenAndSyncToFirestore(fresh.uid).catch(() => {});
+        void claimReferralInboxRewards(fresh.uid);
       }
       setLoading(false);
     });
@@ -465,8 +510,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const reloadAuthUser = useCallback(async () => {
     const u = auth.currentUser;
     if (!u) throw new Error('Not signed in');
-    await reload(u);
-    setUser(auth.currentUser);
+    try {
+      await reload(u);
+      setUser(auth.currentUser);
+    } catch (e) {
+      if (isFirebaseAuthUserInvalidated(e)) {
+        logError(e);
+        try {
+          await firebaseSignOut(auth);
+        } catch (so) {
+          logError(so);
+        }
+        setUser(null);
+        return;
+      }
+      throw e;
+    }
   }, []);
 
   const signOutUser = useCallback(async () => {

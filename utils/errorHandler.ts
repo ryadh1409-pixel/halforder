@@ -5,6 +5,31 @@
 
 export type FriendlyErrorContext = 'default' | 'passwordReset';
 
+/**
+ * True when the server rejected the current session (deleted user, revoked token, etc.).
+ * Do not sign out on `auth/network-request-failed` or similar transients.
+ */
+export function isFirebaseAuthUserInvalidated(error: unknown): boolean {
+  if (
+    !error ||
+    typeof error !== 'object' ||
+    !('code' in error) ||
+    typeof (error as { code: unknown }).code !== 'string'
+  ) {
+    return false;
+  }
+  switch ((error as { code: string }).code) {
+    case 'auth/user-not-found':
+    case 'auth/user-disabled':
+    case 'auth/user-token-expired':
+    case 'auth/invalid-user-token':
+    case 'auth/id-token-revoked':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function isSafeAppMessage(message: string): boolean {
   const m = message.trim();
   if (!m || m.length > 200) return false;
