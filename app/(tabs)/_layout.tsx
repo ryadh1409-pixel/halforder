@@ -104,19 +104,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="browse"
-        options={{
-          title: 'Browse',
-          tabBarIcon: ({ color }) => (
-            <MaterialIcons
-              name="grid-view"
-              size={TAB_ICON_SIZE}
-              color={color}
-            />
-          ),
-        }}
-      />
+      <Tabs.Screen name="browse" options={{ href: null }} />
       <Tabs.Screen
         name="chat"
         options={{
