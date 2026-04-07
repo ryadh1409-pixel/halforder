@@ -6,16 +6,20 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-const TAB_ICON_SIZE = 24;
-const TAB_ACTIVE = '#34D399';
-const TAB_INACTIVE = 'rgba(255,255,255,0.45)';
-const AI_TAB_ACTIVE = '#6EE7B7';
+const TAB_ICON_SIZE = 26;
+const TAB_ACTIVE = '#FFFFFF';
+const TAB_INACTIVE = '#B0B0B0';
 
 const tabBarDark = {
-  backgroundColor: '#0B0E14',
-  borderTopColor: 'rgba(255,255,255,0.08)',
-  paddingTop: 6,
-  height: 58,
+  backgroundColor: '#0A0A0A',
+  borderTopColor: 'rgba(255,255,255,0.1)',
+  paddingTop: 8,
+  height: 62,
+};
+
+const tabBarLabelStyle = {
+  fontSize: 13,
+  fontWeight: '600' as const,
 };
 
 function AITabIcon({
@@ -35,8 +39,8 @@ function AITabIcon({
     >
       <MaterialIcons
         name="auto-awesome"
-        size={TAB_ICON_SIZE - 1}
-        color={focused ? AI_TAB_ACTIVE : inactiveColor}
+        size={TAB_ICON_SIZE}
+        color={focused ? TAB_ACTIVE : inactiveColor}
       />
     </View>
   );
@@ -67,16 +71,16 @@ const overlayStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   aiIconWrap: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 14,
   },
   aiIconWrapFocused: {
-    backgroundColor: 'rgba(52, 211, 153, 0.18)',
-    shadowColor: '#34D399',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
   },
 });
 
@@ -91,6 +95,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: TAB_ACTIVE,
         tabBarInactiveTintColor: TAB_INACTIVE,
         tabBarStyle: tabBarDark,
+        tabBarLabelStyle: tabBarLabelStyle,
         headerShown: false,
         tabBarButton: HapticTab,
       }}
@@ -109,9 +114,8 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: 'AI',
-          tabBarActiveTintColor: AI_TAB_ACTIVE,
           tabBarIcon: ({ focused, color }) => (
-            <AITabIcon focused={focused} color={color} />
+            <AITabIcon focused={focused} inactiveColor={color} />
           ),
         }}
       />
