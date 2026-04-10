@@ -13,8 +13,8 @@ import {
   profilePhoneForFirestore,
   profileWhatsAppOnChangeText,
 } from '@/lib/profileWhatsAppPhone';
-import { useBlock } from '@/hooks/useBlock';
-import { useBlockedUserLabels } from '@/hooks/useBlockedUserLabels';
+import { BlockedUsersList } from '@/components/BlockedUsersList';
+import { useBlockedUsers } from '@/hooks/useBlockedUsers';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { useAuth } from '@/services/AuthContext';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
@@ -256,8 +256,12 @@ export default function ProfileScreen() {
 
   const uid = user?.uid ?? null;
   const trustScore = useTrustScore(uid);
-  const { blockedByMeIds, unblockUser: unblockPeer } = useBlock();
-  const blockedUserLabels = useBlockedUserLabels(blockedByMeIds);
+  const {
+    blockedUsers,
+    blockedUserIds,
+    loadingProfiles,
+    unblockUser: unblockBlockedAccount,
+  } = useBlockedUsers();
 
   const openTerms = useCallback(() => {
     void (async () => {
@@ -586,8 +590,8 @@ export default function ProfileScreen() {
     if (!uid) return;
     setUnblockingId(blockedUserId);
     try {
-      await unblockPeer(blockedUserId);
-      showSuccess('User has been unblocked.');
+      await unblockBlockedAccount(blockedUserId);
+      showSuccess('User unblocked');
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {
@@ -1041,51 +1045,29 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={dynamicStyles.sectionHeading}>Blocked users</Text>
+          <Text style={dynamicStyles.sectionHeading}>Blocked Users</Text>
           <View style={dynamicStyles.card}>
-            <TouchableOpacity
-              style={dynamicStyles.manageBlockedRow}
-              onPress={() => router.push('/blocked-users' as never)}
-              activeOpacity={0.85}
-            >
-              <Text style={dynamicStyles.manageBlockedText}>
-                Manage blocked users
-              </Text>
-              <Text style={dynamicStyles.manageBlockedChevron}>›</Text>
-            </TouchableOpacity>
-            {blockedByMeIds.length === 0 ? (
-              <Text style={[dynamicStyles.bodyMuted, { marginTop: 8 }]}>
-                No blocked users
-              </Text>
-            ) : (
-              blockedByMeIds.slice(0, 5).map((id) => (
-                <View key={id} style={dynamicStyles.blockedRow}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={dynamicStyles.blockedName} numberOfLines={1}>
-                      {blockedUserLabels[id] ?? '…'}
-                    </Text>
-                    <Text style={dynamicStyles.blockedId} numberOfLines={1}>
-                      {id}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={dynamicStyles.smallPrimaryBtn}
-                    onPress={() => handleUnblockUser(id)}
-                    disabled={unblockingId === id}
-                  >
-                    {unblockingId === id ? (
-                      <ActivityIndicator size="small" color={pal.onPrimary} />
-                    ) : (
-                      <Text style={dynamicStyles.smallPrimaryBtnText}>Unblock</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-            {blockedByMeIds.length > 5 ? (
-              <Text style={[dynamicStyles.bodyMuted, { marginTop: 8 }]}>
-                +{blockedByMeIds.length - 5} more — tap Manage to see all
-              </Text>
+            <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
+              Accounts you block cannot see your activity or contact you. You can
+              unblock them anytime.
+            </Text>
+            <BlockedUsersList
+              blockedUsers={blockedUsers}
+              onUnblock={(id) => void handleUnblockUser(id)}
+              unblockingId={unblockingId}
+              loading={loadingProfiles && blockedUserIds.length > 0}
+              emptyMessage="No blocked users"
+            />
+            {blockedUserIds.length > 8 ? (
+              <TouchableOpacity
+                style={dynamicStyles.blockedSeeAllBtn}
+                onPress={() => router.push('/blocked-users' as never)}
+                activeOpacity={0.85}
+              >
+                <Text style={dynamicStyles.blockedSeeAllText}>
+                  View all blocked users
+                </Text>
+              </TouchableOpacity>
             ) : null}
           </View>
 
@@ -1469,58 +1451,15 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     chipTextActive: {
       color: pal.text,
     },
-    manageBlockedRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: pal.border,
+    blockedSeeAllBtn: {
+      marginTop: 14,
+      alignSelf: 'center',
+      paddingVertical: 8,
     },
-    manageBlockedText: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: pal.primary,
-    },
-    manageBlockedChevron: {
-      fontSize: 22,
-      fontWeight: '300',
-      color: pal.textSecondary,
-    },
-    blockedRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      borderWidth: 1,
-      borderColor: pal.border,
-      borderRadius: 12,
-      padding: 10,
-      marginTop: 8,
-      backgroundColor: pal.inputBg,
-    },
-    blockedName: {
+    blockedSeeAllText: {
       fontSize: 15,
       fontWeight: '700',
-      color: pal.text,
-    },
-    blockedId: {
-      fontSize: 11,
-      color: pal.textSecondary,
-      marginTop: 4,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    },
-    smallPrimaryBtn: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 10,
-      backgroundColor: pal.primary,
-      minWidth: 80,
-      alignItems: 'center',
-    },
-    smallPrimaryBtnText: {
-      color: pal.onPrimary,
-      fontWeight: '800',
-      fontSize: 12,
+      color: pal.primary,
     },
     dangerButton: {
       backgroundColor: pal.danger,

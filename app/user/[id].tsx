@@ -234,9 +234,13 @@ export default function UserProfileScreen() {
             <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarFallbackText}>?</Text>
             </View>
-            <Text style={styles.name}>User unavailable</Text>
+            <Text style={styles.name}>
+              {iBlockedThem(userId) ? 'User is blocked' : 'User unavailable'}
+            </Text>
             <Text style={styles.mutedText}>
-              You cannot view this profile or contact this user.
+              {iBlockedThem(userId)
+                ? 'Unblock to view their profile and interact again.'
+                : 'You cannot view this profile or contact this user.'}
             </Text>
           </View>
           {currentUserId && userId && iBlockedThem(userId) ? (

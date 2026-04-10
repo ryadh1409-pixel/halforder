@@ -1,11 +1,9 @@
-import { theme } from '@/constants/theme';
-import { useBlock } from '@/hooks/useBlock';
-import { useBlockedUserLabels } from '@/hooks/useBlockedUserLabels';
+import { BlockedUsersList } from '@/components/BlockedUsersList';
+import { useBlockedUsers } from '@/hooks/useBlockedUsers';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,12 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { showError, showSuccess } from '@/utils/toast';
 
-const tc = theme.colors;
+const BG = '#000000';
 
 export default function BlockedUsersScreen() {
   const router = useRouter();
-  const { uid, blockedByMeIds, unblockUser } = useBlock();
-  const labels = useBlockedUserLabels(blockedByMeIds);
+  const { uid, blockedUsers, blockedUserIds, loadingProfiles, unblockUser } =
+    useBlockedUsers();
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
 
   const handleUnblock = async (targetUserId: string) => {
@@ -29,7 +27,7 @@ export default function BlockedUsersScreen() {
     setUnblockingId(targetUserId);
     try {
       await unblockUser(targetUserId);
-      showSuccess('User unblocked.');
+      showSuccess('User unblocked');
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {
@@ -44,10 +42,10 @@ export default function BlockedUsersScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
             <Text style={styles.backLink}>Back</Text>
           </TouchableOpacity>
-          <Text style={styles.screenTitle}>Blocked users</Text>
+          <Text style={styles.screenTitle}>Blocked Users</Text>
         </View>
         <View style={styles.center}>
-          <Text style={styles.muted}>Sign in to manage blocked users.</Text>
+          <Text style={styles.muted}>Sign in to manage blocked accounts.</Text>
         </View>
       </SafeAreaView>
     );
@@ -59,51 +57,30 @@ export default function BlockedUsersScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.backLink}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.screenTitle}>Blocked users</Text>
+        <Text style={styles.screenTitle}>Blocked Users</Text>
       </View>
-      <Text style={styles.hint}>
-        People you block cannot message you or appear in your matches and orders.
-        Unblocking restores that instantly.
-      </Text>
-      <FlatList
-        data={blockedByMeIds}
-        keyExtractor={(id) => id}
-        contentContainerStyle={
-          blockedByMeIds.length === 0 ? styles.emptyList : styles.list
-        }
-        ListEmptyComponent={
-          <Text style={styles.muted}>You have not blocked anyone.</Text>
-        }
-        renderItem={({ item: id }) => (
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.name} numberOfLines={1}>
-                {labels[id] ?? '…'}
-              </Text>
-              <Text style={styles.idHint} numberOfLines={1}>
-                {id}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.unblockBtn}
-              onPress={() => void handleUnblock(id)}
-              disabled={unblockingId === id}
-            >
-              {unblockingId === id ? (
-                <ActivityIndicator size="small" color={tc.textOnPrimary} />
-              ) : (
-                <Text style={styles.unblockText}>Unblock</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.hint}>
+          People you block cannot message you or appear in your matches and orders.
+          Unblocking restores access instantly.
+        </Text>
+        <BlockedUsersList
+          blockedUsers={blockedUsers}
+          onUnblock={(id) => void handleUnblock(id)}
+          unblockingId={unblockingId}
+          loading={loadingProfiles && blockedUserIds.length > 0}
+          emptyMessage="No blocked users"
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: tc.background },
+  screen: { flex: 1, backgroundColor: BG },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -111,38 +88,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
-  backLink: { color: tc.primary, fontSize: 16, fontWeight: '600' },
-  screenTitle: { fontSize: 20, fontWeight: '800', color: tc.text, flex: 1 },
+  backLink: { color: '#FF7A00', fontSize: 16, fontWeight: '600' },
+  screenTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  muted: { color: 'rgba(255,255,255,0.55)', fontSize: 15, textAlign: 'center' },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+  },
   hint: {
-    color: tc.textMuted,
+    color: 'rgba(255,255,255,0.55)',
     fontSize: 14,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
     lineHeight: 20,
+    marginBottom: 16,
   },
-  list: { paddingHorizontal: 16, paddingBottom: 32, gap: 0 },
-  emptyList: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  muted: { color: tc.textMuted, fontSize: 15, textAlign: 'center' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: tc.border,
-    gap: 12,
-  },
-  rowText: { flex: 1, minWidth: 0 },
-  name: { color: tc.text, fontSize: 16, fontWeight: '600' },
-  idHint: { color: tc.textMuted, fontSize: 11, marginTop: 4 },
-  unblockBtn: {
-    backgroundColor: tc.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  unblockText: { color: tc.textOnPrimary, fontWeight: '700', fontSize: 15 },
 });

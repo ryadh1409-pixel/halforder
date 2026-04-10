@@ -1,8 +1,11 @@
 /**
- * Production block API — consistent argument order:
- * `blockUser(currentUserId, targetUserId)` = signed-in user blocks `targetUserId`.
+ * Block / unblock service (production).
  *
- * Persists `users/{currentUserId}.blockedUsers` (array + subcollection) and legacy `blocks` docs.
+ * - **Block:** `users/{currentUserId}.blockedUsers` via `arrayUnion` + mirror subdoc
+ *   `users/{currentUserId}/blockedUsers/{targetUserId}`.
+ * - **Unblock:** `arrayRemove` on that array + subdoc delete + legacy `blocks` cleanup.
+ *
+ * `blockUser(currentUserId, targetUserId)` — current user blocks target.
  */
 import { isUserBlocked as isUserBlockedFirestore } from '@/services/block';
 import type { BlockFilterCurrentUser } from '@/utils/filter';

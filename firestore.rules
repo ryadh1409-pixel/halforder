@@ -822,6 +822,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    /** Client: subscribe only to `users/{request.auth.uid}` for private fields (e.g. blockedUsers). */
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create, update: if (request.auth != null && request.auth.uid == userId) || isAdmin();
