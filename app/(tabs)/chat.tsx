@@ -200,7 +200,12 @@ export default function ChatScreen() {
       }
       try {
         const ctx = detectTimeContext();
-        const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
+        const fetched = await fetchActiveJoinableOrdersForContext(
+          ctx,
+          3,
+          48,
+          authUser?.uid,
+        );
         if (cancelled) return;
         setIntroFetchFailed(false);
         const intro = buildIntroSuggestionMessage(ctx, fetched);
@@ -383,7 +388,12 @@ export default function ChatScreen() {
       setLoading(true);
       try {
         const ctx = detectTimeContext();
-        const fetched = await fetchActiveJoinableOrdersForContext(ctx, 3);
+        const fetched = await fetchActiveJoinableOrdersForContext(
+          ctx,
+          3,
+          48,
+          authUser?.uid,
+        );
         const awaitingPartnerAlone = await userHasSoloWaitingHalfOrder(uid);
         const dn =
           profile?.name || authUser.displayName || 'Friend';

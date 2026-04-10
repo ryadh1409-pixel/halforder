@@ -55,3 +55,11 @@ export function useHiddenUserIds(): Set<string> {
     [blockedIds, blockerIds],
   );
 }
+
+/**
+ * Real-time: true if this peer is hidden (you blocked them or they blocked you).
+ */
+export function useIsPeerHidden(peerId: string | null | undefined): boolean {
+  const hidden = useHiddenUserIds();
+  return Boolean(peerId && hidden.has(peerId));
+}

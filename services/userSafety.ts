@@ -2,7 +2,7 @@
  * UGC safety: Firestore `reports` + `users/.../blockedUsers`.
  */
 import { logError } from '@/utils/errorLogger';
-import { blockUser as persistBlock } from '@/services/block';
+import { blockUser as persistBlock } from '@/services/blockService';
 import {
   reportContentIdChatMessage,
   reportContentIdOrder,

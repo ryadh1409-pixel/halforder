@@ -48,10 +48,7 @@ import {
   systemConfirm,
 } from '@/components/SystemDialogHost';
 import { getRatedUserIdsForOrder } from '@/services/ratings';
-import {
-  isBlockedByAny,
-  reportAndBlock,
-} from '@/services/report-block';
+import { reportAndBlock } from '@/services/report-block';
 import { blockUser, submitUserReport } from '@/services/userSafety';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
@@ -65,7 +62,6 @@ import { generateInviteLink, generateOrderShareLink } from '@/lib/invite-link';
 import { isMessageSafe, reportBlockedMessage } from '@/services/chatSecurity';
 import { checkTaxGift } from '@/services/taxGift';
 import { auth, db } from '@/services/firebase';
-import { isUserBlocked } from '@/services/block';
 import { trackOrderJoined } from '@/services/analytics';
 import { ensureOrderChatInitialized } from '@/services/chat';
 import {
@@ -149,7 +145,6 @@ export default function OrderRoomScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [typingUids, setTypingUids] = useState<Record<string, boolean>>({});
-  const [isBlocked, setIsBlocked] = useState(false);
   const [hostName, setHostName] = useState<string>('');
   const [hostPhone, setHostPhone] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
@@ -192,6 +187,9 @@ export default function OrderRoomScreen() {
     participants.length >= 2
       ? (participants.find((id) => id !== auth.currentUser?.uid) ?? null)
       : null;
+  const isBlocked = Boolean(
+    otherParticipantId && hiddenUserIds.has(otherParticipantId),
+  );
   const otherTrustScore = useTrustScore(otherParticipantId);
   const isClosed = order?.status === 'closed';
   const isWaiting = participants.length === 1;
@@ -476,13 +474,6 @@ export default function OrderRoomScreen() {
     }
   }, [messages]);
 
-  useEffect(() => {
-    const uid = auth.currentUser?.uid ?? '';
-    if (!uid || participants.length === 0) return;
-    const others = participants.filter((u) => u !== uid);
-    isBlockedByAny(uid, others).then(setIsBlocked);
-  }, [participants.join(',')]);
-
   // Incoming voice call listener
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -707,9 +698,8 @@ export default function OrderRoomScreen() {
 
     const uid = auth.currentUser?.uid ?? '';
     if (!uid) return;
-    if (otherParticipantId && (await isUserBlocked(uid, otherParticipantId))) {
-      setIsBlocked(true);
-      showError('You cannot send messages to this user.');
+    if (isBlocked) {
+      showError('You cannot chat with this user.');
       return;
     }
 
@@ -1194,6 +1184,12 @@ export default function OrderRoomScreen() {
   const youPayLabel = `$${youPayAmount.toFixed(2)}`;
   const hostLabel = hostName || order?.userName || 'Host';
   const hostUserId = order?.hostId || order?.userId || null;
+  const hostIsUnavailable = Boolean(
+    hostUserId &&
+      currentUser?.uid &&
+      hostUserId !== currentUser.uid &&
+      hiddenUserIds.has(hostUserId),
+  );
   const maxPeople = order.maxPeople ?? 2;
   const isReady = participantsCount >= maxPeople;
   const statusForBadge = order.status.toLowerCase();
@@ -1405,7 +1401,6 @@ export default function OrderRoomScreen() {
       try {
         await blockUser(uid, otherParticipantId);
         showSuccess('This user has been blocked.');
-        setIsBlocked(true);
       } catch (e) {
         showError(getUserFriendlyError(e));
       }
@@ -1427,7 +1422,6 @@ export default function OrderRoomScreen() {
       try {
         await reportAndBlock(uid, otherParticipantId, orderId);
         showSuccess('We received your report and blocked this user.');
-        setIsBlocked(true);
       } catch (e) {
         showError(getUserFriendlyError(e));
       }
@@ -1516,7 +1510,9 @@ export default function OrderRoomScreen() {
 
           {/* Order details card */}
           <View style={styles.orderMetaCard}>
-            {hostUserId ? (
+            {hostIsUnavailable ? (
+              <Text style={styles.orderMetaText}>Host: User unavailable</Text>
+            ) : hostUserId ? (
               <TouchableOpacity
                 onPress={() =>
                   router.push(
@@ -1535,7 +1531,9 @@ export default function OrderRoomScreen() {
             ) : (
               <Text style={styles.orderMetaText}>Host: {hostLabel}</Text>
             )}
-            {otherTrustScore && otherTrustScore.count > 0 ? (
+            {!isBlocked &&
+            otherTrustScore &&
+            otherTrustScore.count > 0 ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
                 <TrustScoreLabel
                   average={otherTrustScore.average}
@@ -1544,6 +1542,13 @@ export default function OrderRoomScreen() {
                   compact
                 />
               </View>
+            ) : null}
+            {isBlocked ? (
+              <Text
+                style={[styles.orderMetaSubtext, { marginTop: 6, color: c.dangerText }]}
+              >
+                User unavailable
+              </Text>
             ) : null}
             <Text style={styles.orderMetaSubtext}>
               Meal Type: {order.mealType ?? '—'}
@@ -1617,7 +1622,7 @@ export default function OrderRoomScreen() {
             {participantsCount >= maxPeople ? (
               <Text style={styles.readyMessage}>Order is ready 🎉</Text>
             ) : null}
-            {otherParticipantId && auth.currentUser?.uid ? (
+            {otherParticipantId && auth.currentUser?.uid && !isBlocked ? (
               <View style={styles.safetyActions}>
                 <Text style={styles.safetyLabel}>Safety</Text>
                 <View style={styles.safetyRow}>
@@ -1662,110 +1667,122 @@ export default function OrderRoomScreen() {
           ) : null}
 
           {/* Buttons: Chat (yellow), Call (gray), WhatsApp (green) */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <TouchableOpacity
-              onPress={handlePressChat}
-              disabled={!canChat}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 10,
-                backgroundColor: canChat ? c.primary : c.border,
-                alignItems: 'center',
-              }}
-            >
-              <Text
+          {isBlocked ? (
+            <View style={{ marginBottom: 16, padding: 12, borderRadius: 10, backgroundColor: c.dangerBackground }}>
+              <Text style={{ color: c.dangerText, textAlign: 'center', fontWeight: '600' }}>
+                User unavailable
+              </Text>
+              <Text style={{ color: c.textMuted, textAlign: 'center', marginTop: 6, fontSize: 13 }}>
+                You cannot chat with this user.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View
                 style={{
-                  color: canChat ? c.textOnPrimary : c.textMuted,
-                  fontWeight: '600',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 12,
                 }}
               >
-                Chat
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handlePressCall}
-              disabled={!canChat && !hostPhone}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 10,
-                backgroundColor:
-                  canChat || hostPhone ? c.textMuted : c.border,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <MaterialIcons
-                name="call"
-                size={18}
-                color={
-                  canChat || hostPhone ? c.textOnPrimary : c.text
-                }
-              />
-              <Text
-                style={{
-                  color:
-                    canChat || hostPhone ? c.textOnPrimary : c.text,
-                  fontWeight: '600',
-                }}
-              >
-                Call
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handlePressWhatsApp}
-              disabled={!hasWhatsApp}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 10,
-                backgroundColor: hasWhatsApp ? c.whatsapp : c.border,
-                alignItems: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  color: hasWhatsApp ? c.textOnPrimary : c.text,
-                  fontWeight: '600',
-                }}
-              >
-                WhatsApp
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity
+                  onPress={handlePressChat}
+                  disabled={!canChat}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: canChat ? c.primary : c.border,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: canChat ? c.textOnPrimary : c.textMuted,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Chat
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handlePressCall}
+                  disabled={!canChat && !hostPhone}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor:
+                      canChat || hostPhone ? c.textMuted : c.border,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <MaterialIcons
+                    name="call"
+                    size={18}
+                    color={
+                      canChat || hostPhone ? c.textOnPrimary : c.text
+                    }
+                  />
+                  <Text
+                    style={{
+                      color:
+                        canChat || hostPhone ? c.textOnPrimary : c.text,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Call
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handlePressWhatsApp}
+                  disabled={!hasWhatsApp}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: hasWhatsApp ? c.whatsapp : c.border,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: hasWhatsApp ? c.textOnPrimary : c.text,
+                      fontWeight: '600',
+                    }}
+                  >
+                    WhatsApp
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-          {/* Large Invite via WhatsApp button (matches screenshot) */}
-          <TouchableOpacity
-            onPress={handleInviteViaWhatsApp}
-            style={{
-              marginBottom: 24,
-              paddingVertical: 14,
-              borderRadius: 10,
-              backgroundColor: c.whatsapp,
-              alignItems: 'center',
-              width: '100%',
-            }}
-          >
-            <Text
-              style={{
-                color: c.textOnPrimary,
-                fontWeight: '600',
-                fontSize: 16,
-              }}
-            >
-              Invite via WhatsApp
-            </Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleInviteViaWhatsApp}
+                style={{
+                  marginBottom: 24,
+                  paddingVertical: 14,
+                  borderRadius: 10,
+                  backgroundColor: c.whatsapp,
+                  alignItems: 'center',
+                  width: '100%',
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.textOnPrimary,
+                    fontWeight: '600',
+                    fontSize: 16,
+                  }}
+                >
+                  Invite via WhatsApp
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
 
         </ScrollView>
 
@@ -1834,7 +1851,7 @@ export default function OrderRoomScreen() {
               textAlign: 'center',
             }}
           >
-            You cannot send messages
+            You cannot chat with this user
           </Text>
         </View>
       ) : null}
@@ -1870,7 +1887,7 @@ export default function OrderRoomScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {otherParticipantId && auth.currentUser?.uid && canChat ? (
+        {otherParticipantId && auth.currentUser?.uid && canChat && !isBlocked ? (
           <View
             style={[
               styles.chatSafetyBar,

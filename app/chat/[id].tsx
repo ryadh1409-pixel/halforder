@@ -30,8 +30,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { showError, showSuccess } from '@/utils/toast';
-import { blockUser } from '@/services/block';
-import { hasBlockBetween } from '@/services/blocks';
+import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
+import { blockUser } from '@/services/blockService';
 import { auth, db } from '@/services/firebase';
 import { markHalfOrderChatActive } from '@/services/halfOrderLifecycle';
 
@@ -73,8 +73,8 @@ export default function ChatByIdScreen() {
   const [chatReads, setChatReads] = useState<Record<string, number>>({});
   const [peerUid, setPeerUid] = useState<string | null>(null);
   const [peerFlagged, setPeerFlagged] = useState(false);
-  const [blockedBetween, setBlockedBetween] = useState(false);
   const [reportMessageId, setReportMessageId] = useState<string | null>(null);
+  const hiddenUserIds = useHiddenUserIds();
   const bootstrapAttemptedRef = useRef(false);
   const aiInsertAttemptedRef = useRef(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
@@ -153,26 +153,6 @@ export default function ChatByIdScreen() {
       );
     });
     return () => unsub();
-  }, [peerUid]);
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    if (!uid || !peerUid) {
-      setBlockedBetween(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const v = await hasBlockBetween(uid, peerUid);
-        if (!cancelled) setBlockedBetween(v);
-      } catch {
-        if (!cancelled) setBlockedBetween(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [peerUid]);
 
   useEffect(() => {
@@ -278,6 +258,7 @@ export default function ChatByIdScreen() {
   }, [messages.length, scrollToEnd]);
 
   const myUid = auth.currentUser?.uid ?? '';
+  const blockedBetween = Boolean(peerUid && hiddenUserIds.has(peerUid));
 
   const visibleMessages = useMemo(() => {
     const uid = myUid || undefined;
@@ -346,8 +327,7 @@ export default function ChatByIdScreen() {
       });
       if (!ok) return;
       try {
-        await blockUser(peerUid, myUid);
-        setBlockedBetween(true);
+        await blockUser(myUid, peerUid);
         showSuccess('This user is blocked.');
       } catch (e) {
         showError(getUserFriendlyError(e));
@@ -403,8 +383,7 @@ export default function ChatByIdScreen() {
         {blockedBetween ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
-              You have blocked this user or they blocked you. Messaging is
-              disabled.
+              You cannot chat with this user.
             </Text>
           </View>
         ) : null}
@@ -511,7 +490,9 @@ export default function ChatByIdScreen() {
             value={text}
             onChangeText={setText}
             placeholder={
-              blockedBetween ? 'Messaging disabled' : 'Write a message…'
+              blockedBetween
+                ? 'You cannot chat with this user'
+                : 'Write a message…'
             }
             placeholderTextColor="#9CA3AF"
             style={styles.input}

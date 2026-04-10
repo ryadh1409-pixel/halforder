@@ -15,6 +15,7 @@ import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost'
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { logError } from '@/utils/errorLogger';
 import { showError, showSuccess } from '@/utils/toast';
+import { filterBlockedUsers } from '@/utils/filterBlocked';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import type { User } from '@firebase/auth';
@@ -306,14 +307,14 @@ export default function JoinScreen() {
 
   const displayOrders = useMemo(() => {
     const now = nowTick;
-    return [...orders]
-      .filter((o) => {
-        if (o.status === 'expired') return false;
-        const hasRoom = o.participants.length < o.maxPeople;
-        const notExpired = o.expiresAt == null || o.expiresAt > now;
-        return hasRoom && notExpired;
-      })
-      .filter((o) => o.hostId && !hiddenUserIds.has(o.hostId))
+    const open = [...orders].filter((o) => {
+      if (o.status === 'expired') return false;
+      const hasRoom = o.participants.length < o.maxPeople;
+      const notExpired = o.expiresAt == null || o.expiresAt > now;
+      return hasRoom && notExpired;
+    });
+    return filterBlockedUsers(open, hiddenUserIds, (o) => o.hostId)
+      .filter((o) => Boolean(o.hostId))
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [orders, hiddenUserIds, nowTick]);
 

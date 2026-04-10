@@ -7,7 +7,7 @@ import {
 import { safeAlertBody, USER_ERROR_JOIN } from '@/lib/userFacingErrors';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/services/AuthContext';
-import { getHiddenUserIds } from '@/services/block';
+import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import {
   formatFoodCardSharingPriceLine,
@@ -59,7 +59,7 @@ export default function SwipeScreen() {
   const [cardsRetryKey, setCardsRetryKey] = useState(0);
   const [tick, setTick] = useState(0);
   const [joining, setJoining] = useState(false);
-  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const hiddenUserIds = useHiddenUserIds();
   const [foodTemplates, setFoodTemplates] = useState<FoodTemplate[]>([]);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const pan = useRef(new Animated.ValueXY()).current;
@@ -99,24 +99,6 @@ export default function SwipeScreen() {
   }, []);
 
   const uid = user?.uid;
-
-  useEffect(() => {
-    if (!uid) {
-      setHiddenUserIds(new Set());
-      return;
-    }
-    let cancelled = false;
-    getHiddenUserIds(uid)
-      .then((s) => {
-        if (!cancelled) setHiddenUserIds(s);
-      })
-      .catch(() => {
-        if (!cancelled) setHiddenUserIds(new Set());
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [uid]);
 
   const adminPreview = isAdminUser(user, firestoreUserRole);
   const deckCards = useMemo(() => {

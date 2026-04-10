@@ -1,3 +1,4 @@
+import { getHiddenUserIds } from '@/services/block';
 import { db } from '@/services/firebase';
 import { isUserFlagged } from '@/services/userModeration';
 import {
@@ -221,6 +222,7 @@ export async function fetchActiveJoinableOrdersForContext(
   ctx: TimeContext,
   maxResults: number,
   scanLimit: number = 48,
+  viewerUid?: string | null,
 ): Promise<AssistantOrderSummary[]> {
   const q = query(
     collection(db, 'orders'),
@@ -230,6 +232,10 @@ export async function fetchActiveJoinableOrdersForContext(
   const snap = await getDocs(q);
   const now = Date.now();
   const summaries: AssistantOrderSummary[] = [];
+  const hidden =
+    viewerUid && viewerUid.trim()
+      ? await getHiddenUserIds(viewerUid.trim())
+      : null;
 
   for (const d of snap.docs) {
     const data = d.data() as Record<string, unknown>;
@@ -250,6 +256,9 @@ export async function fetchActiveJoinableOrdersForContext(
         : typeof data.createdBy === 'string' && data.createdBy.trim()
           ? data.createdBy.trim()
           : undefined;
+    if (hostUserId && hidden?.has(hostUserId)) {
+      continue;
+    }
     if (hostUserId && (await isUserFlagged(hostUserId))) {
       continue;
     }

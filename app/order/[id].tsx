@@ -29,6 +29,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import {
   PAYMENT_MATCH_ALERT_MESSAGE,
   PAYMENT_MATCH_ALERT_TITLE,
@@ -47,8 +48,7 @@ import { reportContentIdOrder } from '@/services/reports';
 import { ScreenFadeIn } from '@/components/ScreenFadeIn';
 import { systemConfirm } from '@/components/SystemDialogHost';
 import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
-import { blockUser } from '@/services/block';
-import { hasBlockBetween } from '@/services/blocks';
+import { blockUser } from '@/services/blockService';
 import { cancelHalfOrder } from '@/services/halfOrderCancel';
 import { completeHalfOrder } from '@/services/halfOrderLifecycle';
 import { auth, db } from '@/services/firebase';
@@ -249,7 +249,6 @@ export default function OrderDetailsScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [countdownSec, setCountdownSec] = useState(0);
-  const [isBlocked, setIsBlocked] = useState(false);
   const [emailInviteOpen, setEmailInviteOpen] = useState(false);
   const [emailInviteInput, setEmailInviteInput] = useState('');
   const [emailInviteSending, setEmailInviteSending] = useState(false);
@@ -435,28 +434,47 @@ export default function OrderDetailsScreen() {
   }, [detailSource, order?.id, memberIdsKey, order?.usesHalfUsers]);
 
   const { uid: viewerUid, profile: viewerProfile } = useCurrentUser();
+  const hiddenUserIds = useHiddenUserIds();
 
   const displayParticipants = useMemo((): OrderParticipant[] => {
     if (!order) return [];
+    const mask = (p: OrderParticipant): OrderParticipant => {
+      if (
+        !viewerUid ||
+        !p.userId ||
+        p.userId === viewerUid ||
+        !hiddenUserIds.has(p.userId)
+      ) {
+        return p;
+      }
+      return {
+        ...p,
+        name: 'User unavailable',
+        avatar: null,
+        phone: null,
+        location: null,
+      };
+    };
     if (!order.usesHalfUsers || !order.memberIds?.length) {
-      return order.participants;
+      return order.participants.map(mask);
     }
     return order.memberIds.map((uid) => {
       const cached = participantProfiles[uid];
-      if (cached) return cached;
       const fromOrder = order.participants.find((p) => p.userId === uid);
-      return (
-        fromOrder ?? {
+      const base =
+        cached ??
+        fromOrder ??
+        ({
           userId: uid,
           name: 'Member',
           avatar: null,
           phone: null,
           expoPushToken: null,
           location: null,
-        }
-      );
+        } as OrderParticipant);
+      return mask(base);
     });
-  }, [order, participantProfiles]);
+  }, [order, participantProfiles, viewerUid, hiddenUserIds]);
 
   useFocusEffect(
     useCallback(() => {
@@ -491,6 +509,19 @@ export default function OrderDetailsScreen() {
     if (!viewerUid || (order?.memberIds?.length ?? 0) < 2) return null;
     return order!.memberIds!.find((x) => x !== viewerUid) ?? null;
   }, [otherUser?.userId, viewerUid, order?.memberIds]);
+
+  const isBlocked = Boolean(
+    partnerIdForSafety && hiddenUserIds.has(partnerIdForSafety),
+  );
+
+  const hostUserIdForMask =
+    order?.host?.userId ?? order?.hostId ?? undefined;
+  const hostIsUnavailable = Boolean(
+    hostUserIdForMask &&
+      viewerUid &&
+      hostUserIdForMask !== viewerUid &&
+      hiddenUserIds.has(hostUserIdForMask),
+  );
 
   const partnerDistanceKm = useMemo(() => {
     if (!otherUser?.location || !viewerProfile?.location) return null;
@@ -532,26 +563,6 @@ export default function OrderDetailsScreen() {
     detailSource,
     order?.usesHalfUsers,
   ]);
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    const other = partnerIdForSafety;
-    if (!uid || !other) {
-      setIsBlocked(false);
-      return;
-    }
-    let cancelled = false;
-    hasBlockBetween(uid, other)
-      .then((v) => {
-        if (!cancelled) setIsBlocked(v);
-      })
-      .catch(() => {
-        if (!cancelled) setIsBlocked(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [partnerIdForSafety]);
 
   useEffect(() => {
     if (countdownSec <= 0) return;
@@ -650,8 +661,7 @@ export default function OrderDetailsScreen() {
       if (!ok) return;
       setBlocking(true);
       try {
-        await blockUser(target, uid);
-        setIsBlocked(true);
+        await blockUser(uid, target);
         showSuccess('User has been blocked.');
       } catch (e) {
         showError(getUserFriendlyError(e));
@@ -839,28 +849,40 @@ export default function OrderDetailsScreen() {
           </Text>
           {detailSource === 'order' && order.usesHalfUsers && order.host ? (
             <View style={styles.hostRow}>
-              {order.host.avatar ? (
-                <Image source={{ uri: order.host.avatar }} style={styles.hostAvatar} />
+              {hostIsUnavailable ? (
+                <>
+                  <View style={[styles.hostAvatar, styles.hostAvatarPlaceholder]} />
+                  <View style={styles.hostTextCol}>
+                    <Text style={styles.hostLabel}>Host</Text>
+                    <Text style={styles.hostName}>User unavailable</Text>
+                  </View>
+                </>
               ) : (
-                <View style={[styles.hostAvatar, styles.hostAvatarPlaceholder]} />
+                <>
+                  {order.host.avatar ? (
+                    <Image source={{ uri: order.host.avatar }} style={styles.hostAvatar} />
+                  ) : (
+                    <View style={[styles.hostAvatar, styles.hostAvatarPlaceholder]} />
+                  )}
+                  <View style={styles.hostTextCol}>
+                    <Text style={styles.hostLabel}>Host</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        order.host?.userId
+                          ? router.push({
+                              pathname: '/user/[id]',
+                              params: { id: order.host.userId },
+                            } as never)
+                          : undefined
+                      }
+                      disabled={!order.host?.userId}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.hostName}>{order.host.name}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
               )}
-              <View style={styles.hostTextCol}>
-                <Text style={styles.hostLabel}>Host</Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    order.host?.userId
-                      ? router.push({
-                          pathname: '/user/[id]',
-                          params: { id: order.host.userId },
-                        } as never)
-                      : undefined
-                  }
-                  disabled={!order.host?.userId}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.hostName}>{order.host.name}</Text>
-                </TouchableOpacity>
-              </View>
             </View>
           ) : null}
           <View style={styles.timerRow}>
@@ -980,46 +1002,54 @@ export default function OrderDetailsScreen() {
               </View>
             </View>
             <Text style={styles.partnerMeta}>
-              {partnerDistanceKm != null
-                ? `${formatDistanceKm(partnerDistanceKm, 1)} away`
-                : 'Distance unavailable'}
+              {isBlocked
+                ? 'User unavailable'
+                : partnerDistanceKm != null
+                  ? `${formatDistanceKm(partnerDistanceKm, 1)} away`
+                  : 'Distance unavailable'}
             </Text>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => router.push(`/chat/${order.id}` as never)}
-              style={styles.partnerChatCtaWrap}
-            >
-              <LinearGradient
-                colors={['#34D399', '#059669']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.partnerChatCta}
+            {!isBlocked ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => router.push(`/chat/${order.id}` as never)}
+                style={styles.partnerChatCtaWrap}
               >
-                <Text style={styles.partnerChatCtaText}>Open chat</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={['#34D399', '#059669']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.partnerChatCta}
+                >
+                  <Text style={styles.partnerChatCtaText}>Open chat</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : null}
             <Text style={styles.inviteMoreHint}>
-              Coordinate pickup, then complete the order when you’re done.
+              {isBlocked
+                ? 'You cannot chat with this user.'
+                : 'Coordinate pickup, then complete the order when you’re done.'}
             </Text>
-            <View style={styles.primaryActionsRow}>
-              <TouchableOpacity
-                style={styles.primaryActionBtn}
-                onPress={openWhatsApp}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryActionBtnText}>WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryActionBtn, styles.primaryActionBtnDanger]}
-                onPress={handleBlockUser}
-                disabled={blocking || !partnerIdForSafety}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryActionBtnDangerText}>
-                  {blocking ? '…' : 'Block'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {!isBlocked ? (
+              <View style={styles.primaryActionsRow}>
+                <TouchableOpacity
+                  style={styles.primaryActionBtn}
+                  onPress={openWhatsApp}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryActionBtnText}>WhatsApp</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryActionBtn, styles.primaryActionBtnDanger]}
+                  onPress={handleBlockUser}
+                  disabled={blocking || !partnerIdForSafety}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryActionBtnDangerText}>
+                    {blocking ? '…' : 'Block'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <View style={styles.secondaryActionsRow}>
               <TouchableOpacity
                 onPress={() => setReportModalOpen(true)}
@@ -1052,6 +1082,7 @@ export default function OrderDetailsScreen() {
         {detailSource === 'order' &&
         order.usesHalfUsers &&
         !isHalfCancelled &&
+        !isBlocked &&
         !(alreadyMember && halfParticipantCount >= 2) ? (
           <TouchableOpacity
             style={styles.chatNavButton}

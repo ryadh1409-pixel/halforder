@@ -19,6 +19,7 @@ import {
   GROWTH_MATCH_RADIUS_KM,
   GROWTH_ORDER_SCAN_LIMIT,
 } from '@/constants/growth';
+import { getHiddenUserIds } from '@/services/block';
 import { db } from '@/services/firebase';
 import { isUserFlagged } from '@/services/userModeration';
 import { mapRawUserDocument } from '@/services/users';
@@ -232,6 +233,9 @@ export async function getSmartMatches(
     const snap = await getDocs(q);
     const now = Date.now();
     const radiusM = GROWTH_MATCH_RADIUS_KM * 1000;
+    const hiddenHostIds = user.uid
+      ? await getHiddenUserIds(user.uid)
+      : new Set<string>();
 
     type Row = SmartMatchOrder & {
       haystack: string;
@@ -250,6 +254,7 @@ export async function getSmartMatches(
 
         const uid = typeof data.createdBy === 'string' ? data.createdBy : '';
         if (user.uid && uid && uid === user.uid) return null;
+        if (uid && hiddenHostIds.has(uid)) return null;
         if (uid && (await isUserFlagged(uid))) return null;
 
         const point = await resolveOrderAnchorPoint(data);

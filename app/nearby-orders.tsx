@@ -31,6 +31,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { shadows, theme } from '@/constants/theme';
 import { getUserFriendlyError } from '@/utils/errorHandler';
+import { filterBlockedUsers } from '@/utils/filterBlocked';
 import { showError } from '@/utils/toast';
 
 const NEARBY_RADIUS_KM = 1;
@@ -43,12 +44,16 @@ export default function NearbyOrdersScreen() {
   const hiddenUserIds = useHiddenUserIds();
 
   const ordersWithDistance = useMemo(() => {
-    const visibleOrders = orders.filter((o) => {
+    const notSelf = orders.filter((o) => {
       const ownerId = String(o.creatorId ?? '');
       if (!ownerId) return false;
-      if (ownerId === auth.currentUser?.uid) return false;
-      return !hiddenUserIds.has(ownerId);
+      return ownerId !== auth.currentUser?.uid;
     });
+    const visibleOrders = filterBlockedUsers(
+      notSelf,
+      hiddenUserIds,
+      (o) => String(o.creatorId ?? '') || undefined,
+    );
     if (!userLocation) return visibleOrders;
     return [...visibleOrders].sort((a, b) => {
       const distA = Math.hypot(
