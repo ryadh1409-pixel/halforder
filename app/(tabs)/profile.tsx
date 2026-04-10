@@ -13,12 +13,10 @@ import {
   profilePhoneForFirestore,
   profileWhatsAppOnChangeText,
 } from '@/lib/profileWhatsAppPhone';
+import { useBlock } from '@/hooks/useBlock';
+import { useBlockedUserLabels } from '@/hooks/useBlockedUserLabels';
 import { useTrustScore } from '@/hooks/useTrustScore';
 import { useAuth } from '@/services/AuthContext';
-import {
-  getBlockedUsersByBlocker,
-  unblockUser,
-} from '@/services/blocks';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import {
   ImagePickerPermissionError,
@@ -251,7 +249,6 @@ export default function ProfileScreen() {
   const [reportUserId, setReportUserId] = useState('');
   const [reportReason, setReportReason] = useState<ReportReason>('spam');
   const [submittingReport, setSubmittingReport] = useState(false);
-  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(null);
   const displayNameInputRef = useRef<TextInput>(null);
@@ -259,6 +256,8 @@ export default function ProfileScreen() {
 
   const uid = user?.uid ?? null;
   const trustScore = useTrustScore(uid);
+  const { blockedByMeIds, unblockUser: unblockPeer } = useBlock();
+  const blockedUserLabels = useBlockedUserLabels(blockedByMeIds);
 
   const openTerms = useCallback(() => {
     void (async () => {
@@ -354,24 +353,6 @@ export default function ProfileScreen() {
     return () => {
       cancelled = true;
       unsubscribe();
-    };
-  }, [uid]);
-
-  useEffect(() => {
-    if (!uid) {
-      setBlockedUsers([]);
-      return;
-    }
-    let cancelled = false;
-    getBlockedUsersByBlocker(uid)
-      .then((ids) => {
-        if (!cancelled) setBlockedUsers(ids);
-      })
-      .catch(() => {
-        if (!cancelled) setBlockedUsers([]);
-      });
-    return () => {
-      cancelled = true;
     };
   }, [uid]);
 
@@ -605,8 +586,7 @@ export default function ProfileScreen() {
     if (!uid) return;
     setUnblockingId(blockedUserId);
     try {
-      await unblockUser(uid, blockedUserId);
-      setBlockedUsers((prev) => prev.filter((id) => id !== blockedUserId));
+      await unblockPeer(blockedUserId);
       showSuccess('User has been unblocked.');
     } catch (e) {
       showError(getUserFriendlyError(e));
@@ -1063,14 +1043,31 @@ export default function ProfileScreen() {
 
           <Text style={dynamicStyles.sectionHeading}>Blocked users</Text>
           <View style={dynamicStyles.card}>
-            {blockedUsers.length === 0 ? (
-              <Text style={dynamicStyles.bodyMuted}>No blocked users</Text>
+            <TouchableOpacity
+              style={dynamicStyles.manageBlockedRow}
+              onPress={() => router.push('/blocked-users' as never)}
+              activeOpacity={0.85}
+            >
+              <Text style={dynamicStyles.manageBlockedText}>
+                Manage blocked users
+              </Text>
+              <Text style={dynamicStyles.manageBlockedChevron}>›</Text>
+            </TouchableOpacity>
+            {blockedByMeIds.length === 0 ? (
+              <Text style={[dynamicStyles.bodyMuted, { marginTop: 8 }]}>
+                No blocked users
+              </Text>
             ) : (
-              blockedUsers.map((id) => (
+              blockedByMeIds.slice(0, 5).map((id) => (
                 <View key={id} style={dynamicStyles.blockedRow}>
-                  <Text style={dynamicStyles.blockedId} numberOfLines={1}>
-                    {id}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={dynamicStyles.blockedName} numberOfLines={1}>
+                      {blockedUserLabels[id] ?? '…'}
+                    </Text>
+                    <Text style={dynamicStyles.blockedId} numberOfLines={1}>
+                      {id}
+                    </Text>
+                  </View>
                   <TouchableOpacity
                     style={dynamicStyles.smallPrimaryBtn}
                     onPress={() => handleUnblockUser(id)}
@@ -1085,6 +1082,11 @@ export default function ProfileScreen() {
                 </View>
               ))
             )}
+            {blockedByMeIds.length > 5 ? (
+              <Text style={[dynamicStyles.bodyMuted, { marginTop: 8 }]}>
+                +{blockedByMeIds.length - 5} more — tap Manage to see all
+              </Text>
+            ) : null}
           </View>
 
           <View style={dynamicStyles.card}>
@@ -1467,6 +1469,24 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     chipTextActive: {
       color: pal.text,
     },
+    manageBlockedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: pal.border,
+    },
+    manageBlockedText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: pal.primary,
+    },
+    manageBlockedChevron: {
+      fontSize: 22,
+      fontWeight: '300',
+      color: pal.textSecondary,
+    },
     blockedRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1478,11 +1498,15 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       marginTop: 8,
       backgroundColor: pal.inputBg,
     },
-    blockedId: {
-      flex: 1,
-      fontSize: 13,
+    blockedName: {
+      fontSize: 15,
+      fontWeight: '700',
       color: pal.text,
-      marginRight: 10,
+    },
+    blockedId: {
+      fontSize: 11,
+      color: pal.textSecondary,
+      marginTop: 4,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
     smallPrimaryBtn: {

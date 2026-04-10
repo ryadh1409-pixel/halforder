@@ -1057,6 +1057,10 @@ function RootLayoutNav() {
           options={{ title: 'Nearby Orders' }}
         />
         <Stack.Screen
+          name="blocked-users"
+          options={{ headerShown: false, title: 'Blocked users' }}
+        />
+        <Stack.Screen
           name="admin-users"
           options={{ title: 'Users Management' }}
         />

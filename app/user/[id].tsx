@@ -15,8 +15,8 @@ import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost'
 import { theme } from '@/constants/theme';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { showError, showSuccess } from '@/utils/toast';
+import { useBlock } from '@/hooks/useBlock';
 import { useTrustScore } from '@/hooks/useTrustScore';
-import { blockUser } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
 import {
   reportContentIdUser,
@@ -56,6 +56,7 @@ export default function UserProfileScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const userId = String(params.id ?? '');
   const currentUserId = auth.currentUser?.uid ?? null;
+  const { iBlockedThem, isHiddenFromMe, blockUser, unblockUser } = useBlock();
   const trust = useTrustScore(userId || null);
 
   const [profile, setProfile] = useState<UserProfileState | null>(null);
@@ -146,9 +147,23 @@ export default function UserProfileScreen() {
       if (!ok) return;
       setBlocking(true);
       try {
-        await blockUser(currentUserId, userId);
+        await blockUser(userId);
         showSuccess('User blocked successfully.');
-        router.back();
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+      } finally {
+        setBlocking(false);
+      }
+    })();
+  };
+
+  const handleUnblockUser = () => {
+    if (!currentUserId || !userId || currentUserId === userId || blocking) return;
+    void (async () => {
+      setBlocking(true);
+      try {
+        await unblockUser(userId);
+        showSuccess('User unblocked.');
       } catch (e) {
         showError(getUserFriendlyError(e));
       } finally {
@@ -203,6 +218,41 @@ export default function UserProfileScreen() {
         <View style={styles.center}>
           <Text style={styles.mutedText}>User not found.</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  const peerHidden = Boolean(
+    currentUserId && userId && isHiddenFromMe(userId),
+  );
+
+  if (peerHidden) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.header}>
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarFallbackText}>?</Text>
+            </View>
+            <Text style={styles.name}>User unavailable</Text>
+            <Text style={styles.mutedText}>
+              You cannot view this profile or contact this user.
+            </Text>
+          </View>
+          {currentUserId && userId && iBlockedThem(userId) ? (
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.unblockBtn]}
+                onPress={handleUnblockUser}
+                disabled={blocking}
+              >
+                <Text style={styles.actionBtnText}>
+                  {blocking ? '…' : 'Unblock user'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -324,6 +374,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   blockBtn: { backgroundColor: c.danger },
+  unblockBtn: { backgroundColor: c.primary },
   reportBtn: { backgroundColor: c.warning },
   actionBtnText: { color: c.textOnPrimary, fontSize: 16, fontWeight: '700' },
 });
