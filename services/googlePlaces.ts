@@ -36,15 +36,20 @@ type GeocodeResult = {
   status: string;
 };
 
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1594007654729-407eedc4fe24?auto=format&fit=crop&w=800&q=80';
+/** Unsplash fallback when Places has no photo (always show an image). */
+export const PLACE_IMAGE_FALLBACK =
+  'https://images.unsplash.com/photo-1594007654729-407eedc4fe24';
 
-function getPlacePhotoUrl(
-  photos: NearbySearchResult['results'][0]['photos'] | undefined,
+/**
+ * Maps Place Photo API URL, or the canonical fallback image (spec).
+ * `photos[0].photo_reference` from Nearby Search results.
+ */
+export function getPlacePhoto(
+  photos: { photo_reference: string }[] | undefined | null,
 ): string {
   const key = GOOGLE_API_KEY.trim();
   if (!photos?.length || !key) {
-    return FALLBACK_IMAGE;
+    return PLACE_IMAGE_FALLBACK;
   }
   const ref = photos[0].photo_reference;
   return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${encodeURIComponent(ref)}&key=${encodeURIComponent(key)}`;
@@ -94,7 +99,7 @@ async function nearbyFromCoords(
     id: place.place_id,
     name: place.name,
     rating: typeof place.rating === 'number' ? place.rating : 4.0,
-    image: getPlacePhotoUrl(place.photos),
+    image: getPlacePhoto(place.photos),
   }));
 }
 

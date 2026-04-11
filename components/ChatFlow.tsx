@@ -64,13 +64,14 @@ export type GuidedOrderContext = {
   restaurant: PlaceRestaurant | null;
 };
 
-/** Primary guided steps (spec) + post-pick flow */
+/** Core guided steps from product spec */
+export type CoreFlowStep = 'chat' | 'pizzaType' | 'restaurants';
+
+/** Core steps + location, loading, menu, checkout, WhatsApp */
 export type FlowStep =
   | 'need_location'
-  | 'chat'
-  | 'pizzaType'
+  | CoreFlowStep
   | 'loading_rests'
-  | 'restaurants'
   | 'menu'
   | 'pick_action'
   | 'share_whatsapp'
