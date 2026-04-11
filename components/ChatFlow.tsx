@@ -219,6 +219,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
     const text = 'Join my order on HalfOrder';
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     void Linking.openURL(url);
+    pushAssistant('Shared — when you’re ready, finish with Order now 🛒');
   };
 
   const dismissNudge = () => {
@@ -367,14 +368,23 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         ) : null}
 
         {phase === 'share_whatsapp' ? (
-          <TouchableOpacity
-            style={styles.waBtn}
-            onPress={openWhatsAppInvite}
-            activeOpacity={0.9}
-          >
-            <FontAwesome name="whatsapp" size={22} color="#fff" />
-            <Text style={styles.waBtnText}>Share via WhatsApp</Text>
-          </TouchableOpacity>
+          <View style={styles.shareActions}>
+            <TouchableOpacity
+              style={styles.waBtn}
+              onPress={openWhatsAppInvite}
+              activeOpacity={0.9}
+            >
+              <FontAwesome name="whatsapp" size={22} color="#fff" />
+              <Text style={styles.waBtnText}>Share via WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionSecondary]}
+              onPress={handleOrderNow}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.actionSecondaryText}>Order now 🛒</Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
 
         {nudgeVisible && phase !== 'need_location' && phase !== 'order_cta' ? (
@@ -557,12 +567,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  shareActions: {
+    marginTop: 12,
+    gap: 10,
+  },
   waBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    marginTop: 12,
     paddingVertical: 16,
     borderRadius: 14,
     backgroundColor: '#25D366',
