@@ -16,10 +16,11 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -35,6 +36,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AppLogo from '@/components/AppLogo';
 import SafeMap, { Marker } from '@/components/SafeMap';
@@ -59,6 +61,10 @@ import {
   formatTorontoTimeHHMM,
 } from '@/lib/format-toronto-time';
 import { generateInviteLink, generateOrderShareLink } from '@/lib/invite-link';
+import {
+  buildOrderInviteWhatsAppMessage,
+  openWhatsAppWithText,
+} from '@/lib/orderWhatsAppInvite';
 import { isMessageSafe, reportBlockedMessage } from '@/services/chatSecurity';
 import { checkTaxGift } from '@/services/taxGift';
 import { auth, db } from '@/services/firebase';
@@ -115,6 +121,9 @@ type OrderState = {
   location: { latitude: number; longitude: number } | null;
   maxPeople: number;
   expiresAtMs: number | null;
+  /** Denormalized join count when present (else use participants.length). */
+  joined?: number | null;
+  pricePerPerson?: number | null;
 } | null;
 
 export default function OrderRoomScreen() {
@@ -179,6 +188,7 @@ export default function OrderRoomScreen() {
   const [endingCall, setEndingCall] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const hasExpiredRef = useRef(false);
+  const inviteFadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     hasExpiredRef.current = false;
   }, [orderId]);
@@ -187,6 +197,32 @@ export default function OrderRoomScreen() {
   const CHAT_THROTTLE_MS = 2000;
   const hiddenUserIds = useHiddenUserIds();
   const currentUid = auth.currentUser?.uid ?? '';
+
+  const showPostJoinWhatsAppInvite = useMemo(() => {
+    if (!order || loading) return false;
+    const pc = order.participants?.length ?? 0;
+    const spots = order.spots ?? order.maxPeople ?? 2;
+    if (order.status.toLowerCase() === 'expired') return false;
+    if (order.expiresAtMs != null && Date.now() > order.expiresAtMs) {
+      return false;
+    }
+    if (pc >= spots) return false;
+    /** `joined === 1` & `spots > 1` (Firestore) — live participants is source of truth. */
+    return pc === 1 && spots > 1;
+  }, [order, loading]);
+
+  useEffect(() => {
+    if (showPostJoinWhatsAppInvite) {
+      inviteFadeAnim.setValue(0);
+      Animated.timing(inviteFadeAnim, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      inviteFadeAnim.setValue(0);
+    }
+  }, [showPostJoinWhatsAppInvite, inviteFadeAnim]);
 
   const participants = order?.participants ?? [];
   const otherParticipantId =
@@ -322,6 +358,14 @@ export default function OrderRoomScreen() {
             : null;
         const spots =
           typeof d?.spots === 'number' && d.spots >= 1 ? d.spots : maxPeople;
+        const joinedCountField =
+          typeof d?.joined === 'number' && Number.isFinite(d.joined)
+            ? d.joined
+            : ids.length;
+        const pricePerPersonRaw =
+          typeof d?.pricePerPerson === 'number' && Number.isFinite(d.pricePerPerson)
+            ? d.pricePerPerson
+            : null;
         const expRaw = d?.expiresAt;
         const expiresAtMs =
           typeof expRaw === 'number'
@@ -359,6 +403,8 @@ export default function OrderRoomScreen() {
           location,
           maxPeople,
           expiresAtMs,
+          joined: joinedCountField,
+          pricePerPerson: pricePerPersonRaw,
         });
         setTypingUids(
           typeof typing === 'object' && typing !== null
@@ -1288,6 +1334,43 @@ export default function OrderRoomScreen() {
     : isExpired
       ? 'This order has expired.'
       : timerMessageUnderCardJoin;
+
+  const handlePostJoinInviteWhatsApp = () => {
+    const ft =
+      order.foodType ??
+      (order.mealType?.includes('·')
+        ? order.mealType.split('·')[0]?.trim()
+        : order.mealType) ??
+      'meal';
+    const sz = order.foodSize ?? '—';
+    const rest = order.restaurantName ?? 'Restaurant';
+    const ppRaw =
+      order.pricePerPerson ??
+      (order.totalPrice != null ? order.totalPrice / 2 : foodShare);
+    const pp = Number.isFinite(Number(ppRaw)) ? Number(ppRaw) : 0;
+    const timeLabel =
+      expiryLabel ?? timerMessageUnderCardJoin ?? 'Limited time';
+    const msg = buildOrderInviteWhatsAppMessage({
+      orderId,
+      foodType: ft,
+      size: sz,
+      restaurant: rest,
+      pricePerPerson: pp,
+      timeRemaining: timeLabel,
+    });
+    const url = openWhatsAppWithText(msg);
+    if (Platform.OS === 'web') {
+      (window as unknown as { open: (u: string) => void }).open(
+        url,
+        '_blank',
+      );
+      return;
+    }
+    void Linking.openURL(url).catch(() =>
+      showError('Could not open WhatsApp.'),
+    );
+  };
+
   const handleCancelOrder = async () => {
     if (!orderId || !showCancel || cancellingOrder) return;
     const ok = await systemConfirm({
@@ -1750,6 +1833,79 @@ export default function OrderRoomScreen() {
             </View>
           ) : (
             <>
+              {showPostJoinWhatsAppInvite ? (
+                <Animated.View
+                  style={{
+                    opacity: inviteFadeAnim,
+                    marginBottom: 16,
+                    width: '100%',
+                  }}
+                >
+                  <View
+                    style={{
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(251, 191, 36, 0.12)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(251, 191, 36, 0.45)',
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: '#FDE68A',
+                        fontSize: 16,
+                        fontWeight: '800',
+                        textAlign: 'center',
+                      }}
+                    >
+                      ⚡ Invite a friend to complete your order faster
+                    </Text>
+                    <Text
+                      style={{
+                        color: c.textMuted,
+                        fontSize: 13,
+                        textAlign: 'center',
+                        marginTop: 6,
+                        fontWeight: '500',
+                      }}
+                    >
+                      Invite a friend to finish this order instantly
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handlePostJoinInviteWhatsApp}
+                    activeOpacity={0.85}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 10,
+                      width: '100%',
+                      paddingVertical: 16,
+                      paddingHorizontal: 16,
+                      borderRadius: 14,
+                      backgroundColor: '#25D366',
+                      marginBottom: 16,
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Invite via WhatsApp"
+                  >
+                    <FontAwesome name="whatsapp" size={22} color="#fff" />
+                    <Text
+                      style={{
+                        color: '#fff',
+                        fontWeight: '800',
+                        fontSize: 16,
+                      }}
+                    >
+                      Invite via WhatsApp
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              ) : null}
+
               <View
                 style={{
                   flexDirection: 'row',
@@ -1832,27 +1988,29 @@ export default function OrderRoomScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                onPress={handleInviteViaWhatsApp}
-                style={{
-                  marginBottom: 24,
-                  paddingVertical: 14,
-                  borderRadius: 10,
-                  backgroundColor: c.whatsapp,
-                  alignItems: 'center',
-                  width: '100%',
-                }}
-              >
-                <Text
+              {isWaiting && !showPostJoinWhatsAppInvite ? (
+                <TouchableOpacity
+                  onPress={handleInviteViaWhatsApp}
                   style={{
-                    color: c.textOnPrimary,
-                    fontWeight: '600',
-                    fontSize: 16,
+                    marginBottom: 24,
+                    paddingVertical: 14,
+                    borderRadius: 10,
+                    backgroundColor: c.whatsapp,
+                    alignItems: 'center',
+                    width: '100%',
                   }}
                 >
-                  Invite via WhatsApp
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={{
+                      color: c.textOnPrimary,
+                      fontWeight: '600',
+                      fontSize: 16,
+                    }}
+                  >
+                    Invite via WhatsApp
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </>
           )}
 
