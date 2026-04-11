@@ -1,4 +1,7 @@
+require('dotenv').config();
+
 const express = require('express');
+const fetch = require('node-fetch');
 
 const app = express();
 
@@ -10,10 +13,51 @@ app.get('/', (req, res) => {
   res.send('Server works');
 });
 
-// TEST CHAT ROUTE
-app.post('/chat', (req, res) => {
-  console.log('POST /chat hit', req.body);
-  res.json({ ok: true });
+// CHAT — OpenAI Responses API
+app.post('/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'No message' });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not set');
+      return res.status(500).json({
+        error: 'OPENAI_API_KEY is not set. Add it to .env (see .env.example).',
+      });
+    }
+
+    console.log('User:', message);
+
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        input: message,
+      }),
+    });
+
+    const data = await response.json();
+
+    console.log('AI:', data);
+
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+
+    return res.json(data);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 });
 
 // START SERVER
