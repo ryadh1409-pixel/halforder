@@ -114,9 +114,9 @@ export async function findMatch(
 
   snapshot.forEach((d) => {
     const uid = d.id;
-    if (uid === currentUser.id) return;
-
     const data = d.data() as Record<string, unknown>;
+    const dataId = typeof data.id === 'string' ? data.id : uid;
+    if (uid === currentUser.id || dataId === currentUser.id) return;
     const loc = parseUserLocation(data);
     if (!loc) return;
 
@@ -154,6 +154,7 @@ export async function setUserLookingToSplit(
   await setDoc(
     doc(db, 'users', uid),
     {
+      id: uid,
       isLookingToSplit: true,
       preferredFood: food,
       lastActive: serverTimestamp(),
