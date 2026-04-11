@@ -23,6 +23,14 @@
         { "fieldPath": "isLookingToSplit", "order": "ASCENDING" },
         { "fieldPath": "preferredFood", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "foodType", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

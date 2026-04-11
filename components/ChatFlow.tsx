@@ -19,20 +19,18 @@ import {
   type PlaceRestaurant,
 } from '@/services/googlePlaces';
 import { POPULAR_PIZZAS, type LatLng } from '@/services/api';
-import { auth } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 import {
-  clearUserSplitMatching,
-  findMatch,
-  formatSplitDistance,
-  pokePeerClearSplitMatch,
-  setUserLookingToSplit,
-  type SplitMatchCandidate,
-} from '@/services/matching';
+  findOrCreateGroup,
+  groupDocFromSnapshot,
+  leaveGroup,
+  markGroupOrdered,
+  type GroupDoc,
+} from '@/services/groupMatching';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
 import React, {
   useCallback,
   useEffect,
@@ -40,6 +38,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import {
   ActivityIndicator,
   FlatList,
@@ -63,6 +62,8 @@ const PIZZA_TYPES = [
 ] as const;
 
 const FALLBACK_LOC: LatLng = { lat: 43.6532, lng: -79.3832 };
+
+const GROUP_WAIT_MS = 60_000;
 
 export type ChatFlowLocation = {
   lat: number;
@@ -108,7 +109,6 @@ export type ChatFlowProps = {
 };
 
 export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
-  const router = useRouter();
   const [step, setStep] = useState<FlowStep>('need_location');
   const [savedLoc, setSavedLoc] = useState<LatLng | null>(null);
   const [locationLabel, setLocationLabel] = useState('');
@@ -125,12 +125,15 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
   const [aiInput, setAiInput] = useState('');
   const [aiSending, setAiSending] = useState(false);
   const [recommended, setRecommended] = useState<RecommendedPick | null>(null);
-  const [splitMatch, setSplitMatch] = useState<SplitMatchCandidate | null>(null);
-  const [showNoMatchInvite, setShowNoMatchInvite] = useState(false);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [groupLive, setGroupLive] = useState<GroupDoc | null>(null);
+  const [groupTimedOut, setGroupTimedOut] = useState(false);
 
   const lastInteractRef = useRef(Date.now());
   const nudgeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const didStartFromProfileLoc = useRef(false);
+  const groupWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const groupJoinStartedAtRef = useRef<number | null>(null);
 
   const aiChatUrl = getAiChatUrl();
 
@@ -205,8 +208,14 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         'Toronto';
 
       setShowSplit(false);
-      setSplitMatch(null);
-      setShowNoMatchInvite(false);
+      setActiveGroupId(null);
+      setGroupLive(null);
+      setGroupTimedOut(false);
+      groupJoinStartedAtRef.current = null;
+      if (groupWaitTimerRef.current) {
+        clearTimeout(groupWaitTimerRef.current);
+        groupWaitTimerRef.current = null;
+      }
       setLoadingRests(true);
       setStep('loading_rests');
 
@@ -251,20 +260,17 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         const uid = auth.currentUser?.uid;
         if (uid) {
           try {
-            await setUserLookingToSplit(uid, 'pizza', locForMatch);
-            const peer = await findMatch({
+            const gid = await findOrCreateGroup({
               id: uid,
               preferredFood: 'pizza',
               location: locForMatch,
             });
-            setSplitMatch(peer);
-            setShowNoMatchInvite(!peer);
+            setActiveGroupId(gid);
+            groupJoinStartedAtRef.current = Date.now();
+            setGroupTimedOut(false);
           } catch {
-            setSplitMatch(null);
-            setShowNoMatchInvite(true);
+            setActiveGroupId(null);
           }
-        } else {
-          setShowNoMatchInvite(true);
         }
 
         setStep('recommended');
@@ -356,6 +362,43 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
       if (nudgeTimerRef.current) clearInterval(nudgeTimerRef.current);
     };
   }, [step]);
+
+  useEffect(() => {
+    if (!activeGroupId) {
+      setGroupLive(null);
+      return;
+    }
+    const ref = doc(db, 'groups', activeGroupId);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) {
+        setGroupLive(null);
+        setActiveGroupId(null);
+        const u = auth.currentUser?.uid;
+        if (u) {
+          void setDoc(doc(db, 'users', u), { groupId: null }, { merge: true });
+        }
+        return;
+      }
+      setGroupLive(
+        groupDocFromSnapshot(snap.id, snap.data() as Record<string, unknown>),
+      );
+    });
+    return () => unsub();
+  }, [activeGroupId]);
+
+  useEffect(() => {
+    if (!activeGroupId || step !== 'recommended') return;
+    if (groupLive && (groupLive.members.length >= 4 || groupLive.status === 'full')) {
+      setGroupTimedOut(false);
+      return;
+    }
+    const started = groupJoinStartedAtRef.current;
+    if (started == null) return;
+    const elapsed = Date.now() - started;
+    const remaining = Math.max(0, GROUP_WAIT_MS - elapsed);
+    const t = setTimeout(() => setGroupTimedOut(true), remaining);
+    return () => clearTimeout(t);
+  }, [activeGroupId, step, groupLive]);
 
   const handleManualLocation = () => {
     const label = manualArea.trim() || 'Your area';
@@ -451,26 +494,42 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
     void Linking.openURL('https://wa.me/?text=Join%20my%20order%20on%20HalfOrder');
   };
 
-  const handleJoinSplitMatch = useCallback(async () => {
-    if (!splitMatch) return;
+  const handleLeaveGroup = useCallback(async () => {
     const me = auth.currentUser?.uid;
-    if (!me) return;
+    if (!me || !activeGroupId) return;
     bumpInteraction();
     try {
-      await clearUserSplitMatching(me);
-      await pokePeerClearSplitMatch(splitMatch.id, me);
+      await leaveGroup(me, activeGroupId);
     } catch {
-      /* still proceed */
+      /* ignore */
     }
-    pushUser('Join now 🤝');
-    setSplitMatch(null);
-    router.push({ pathname: '/(tabs)/join' } as never);
-  }, [bumpInteraction, pushUser, router, splitMatch]);
+    setActiveGroupId(null);
+    setGroupLive(null);
+    setGroupTimedOut(false);
+  }, [activeGroupId, bumpInteraction]);
 
-  const handleIgnoreSplitMatch = useCallback(() => {
+  const handleGroupReadyOrder = () => {
+    if (activeGroupId) {
+      void markGroupOrdered(activeGroupId).catch(() => {});
+    }
+    handleOrderNow();
+  };
+
+  const handleTimeoutOrderAlone = async () => {
+    const me = auth.currentUser?.uid;
     bumpInteraction();
-    setSplitMatch(null);
-  }, [bumpInteraction]);
+    if (me && activeGroupId) {
+      try {
+        await leaveGroup(me, activeGroupId);
+      } catch {
+        /* ignore */
+      }
+    }
+    setActiveGroupId(null);
+    setGroupLive(null);
+    setGroupTimedOut(false);
+    handleOrderNow();
+  };
 
   const suggestPopularPizza = () => {
     bumpInteraction();
@@ -640,48 +699,74 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
           </View>
         ) : null}
 
-        {step === 'recommended' && splitMatch ? (
-          <View style={styles.hotMatchWrap}>
-            <View style={styles.hotMatchCard}>
-              <Text style={styles.hotMatchTitle}>
-                🔥 Someone nearby wants to split!
-              </Text>
-              <Text style={styles.hotMatchName}>{splitMatch.name}</Text>
-              <Text style={styles.hotMatchMeta}>
-                {recommended?.food ?? splitMatch.preferredFood} ·{' '}
-                {formatSplitDistance(splitMatch.distanceMeters)} away
-              </Text>
-              <View style={styles.hotMatchRow}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionPrimary]}
-                  onPress={() => void handleJoinSplitMatch()}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.actionPrimaryText}>Join now 🤝</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionSecondary]}
-                  onPress={handleIgnoreSplitMatch}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.actionSecondaryText}>Ignore</Text>
-                </TouchableOpacity>
+        {step === 'recommended' && activeGroupId ? (
+          <View style={styles.groupWrap}>
+            {!groupLive ? (
+              <View style={styles.groupBuilding}>
+                <ActivityIndicator color="#6EE7B7" size="small" />
+                <Text style={styles.groupBuildingText}>
+                  🍕 Building your group...
+                </Text>
               </View>
-            </View>
-          </View>
-        ) : null}
-
-        {step === 'recommended' && !splitMatch && showNoMatchInvite ? (
-          <View style={styles.noMatchWrap}>
-            <Text style={styles.noMatchText}>Invite a friend via WhatsApp</Text>
-            <TouchableOpacity
-              style={styles.splitWa}
-              onPress={openSplitBannerWhatsApp}
-              activeOpacity={0.9}
-            >
-              <FontAwesome name="whatsapp" size={18} color="#fff" />
-              <Text style={styles.splitWaText}>Share via WhatsApp</Text>
-            </TouchableOpacity>
+            ) : groupLive.members.length >= 4 || groupLive.status === 'full' ? (
+              <View style={styles.groupReadyCard}>
+                <Text style={styles.groupReadyTitle}>🔥 Group ready!</Text>
+                <Text style={styles.groupProgress}>
+                  {groupLive.members.length}/4 people
+                </Text>
+                <View style={styles.groupRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionPrimary]}
+                    onPress={handleGroupReadyOrder}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.actionPrimaryText}>Order now 🛒</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionSecondary]}
+                    onPress={() => void handleLeaveGroup()}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.actionSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : groupTimedOut ? (
+              <View style={styles.groupTimeoutCard}>
+                <Text style={styles.groupTimeoutTitle}>Not enough people yet</Text>
+                <View style={styles.groupRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionPrimary]}
+                    onPress={() => void handleTimeoutOrderAlone()}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.actionPrimaryText}>Order alone 🛒</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionSecondary]}
+                    onPress={openSplitBannerWhatsApp}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.actionSecondaryText}>Invite friends</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.groupLiveCard}>
+                <Text style={styles.groupLiveTitle}>🍕 Building your group...</Text>
+                <Text style={styles.groupProgress}>
+                  {groupLive.members.length}/4 people joined
+                </Text>
+                <View style={styles.groupProgressTrack}>
+                  <View
+                    style={[
+                      styles.groupProgressFill,
+                      { width: `${Math.min(100, (groupLive.members.length / 4) * 100)}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+            )}
           </View>
         ) : null}
 
@@ -1039,51 +1124,86 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   recommendedActions: { gap: 10, marginTop: 4 },
-  hotMatchWrap: { marginTop: 14 },
-  hotMatchCard: {
-    borderRadius: 16,
+  groupWrap: { marginTop: 14 },
+  groupBuilding: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     padding: 14,
-    backgroundColor: 'rgba(249, 115, 22, 0.12)',
-    borderWidth: 2,
-    borderColor: 'rgba(251, 146, 60, 0.85)',
-    gap: 8,
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(110, 231, 183, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(110, 231, 183, 0.35)',
   },
-  hotMatchTitle: {
-    color: '#FDBA74',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  hotMatchName: {
-    color: '#F8FAFC',
-    fontSize: 17,
+  groupBuildingText: {
+    color: '#A7F3D0',
+    fontSize: 15,
     fontWeight: '800',
   },
-  hotMatchMeta: {
-    color: 'rgba(248,250,252,0.8)',
-    fontSize: 14,
-    fontWeight: '600',
+  groupLiveCard: {
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(110, 231, 183, 0.28)',
+    gap: 10,
   },
-  hotMatchRow: {
+  groupLiveTitle: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  groupProgress: {
+    color: 'rgba(248,250,252,0.85)',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  groupProgressTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  groupProgressFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#6EE7B7',
+  },
+  groupReadyCard: {
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(251, 146, 60, 0.9)',
+    gap: 10,
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  groupReadyTitle: {
+    color: '#FDBA74',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  groupTimeoutCard: {
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
+    gap: 10,
+  },
+  groupTimeoutTitle: {
+    color: '#FDE68A',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  groupRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 8,
     flexWrap: 'wrap',
-  },
-  noMatchWrap: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    gap: 10,
-  },
-  noMatchText: {
-    color: 'rgba(248,250,252,0.85)',
-    fontSize: 14,
-    fontWeight: '700',
+    marginTop: 4,
   },
 });
