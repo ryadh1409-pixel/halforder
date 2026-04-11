@@ -17,6 +17,7 @@
     "migrate:food-cards-waiting-to-active": "node --experimental-strip-types scripts/migrate-food-cards-waiting-to-active.ts",
     "migrate:orders-users": "node --experimental-strip-types scripts/migrate-orders-populate-users.ts",
     "server": "node server.js",
+    "server:index": "node server/index.js",
     "legal:dev": "vite --config vite.legal.config.ts",
     "legal:build": "vite build --config vite.legal.config.ts && node -e \"require('fs').renameSync('dist-legal/index.vite.html','dist-legal/index.html')\"",
     "legal:preview": "vite preview --config vite.legal.config.ts"
