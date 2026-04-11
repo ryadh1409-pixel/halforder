@@ -21,10 +21,10 @@ import {
 import { POPULAR_PIZZAS, type LatLng } from '@/services/api';
 import { auth, db } from '@/services/firebase';
 import {
-  findOrCreateGroup,
   groupDocFromSnapshot,
   leaveGroup,
   markGroupOrdered,
+  smartMatch,
   type GroupDoc,
 } from '@/services/groupMatching';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -41,6 +41,8 @@ import React, {
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
   type ListRenderItemInfo,
   ScrollView,
@@ -134,6 +136,9 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
   const didStartFromProfileLoc = useRef(false);
   const groupWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const groupJoinStartedAtRef = useRef<number | null>(null);
+  const groupWelcomePrevCountRef = useRef(-1);
+  const groupAlmostFullPushedRef = useRef(false);
+  const groupPulse = useRef(new Animated.Value(1)).current;
 
   const aiChatUrl = getAiChatUrl();
 
@@ -260,7 +265,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         const uid = auth.currentUser?.uid;
         if (uid) {
           try {
-            const gid = await findOrCreateGroup({
+            const gid = await smartMatch({
               id: uid,
               preferredFood: 'pizza',
               location: locForMatch,
@@ -385,6 +390,74 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
     });
     return () => unsub();
   }, [activeGroupId]);
+
+  useEffect(() => {
+    groupWelcomePrevCountRef.current = -1;
+    groupAlmostFullPushedRef.current = false;
+  }, [activeGroupId]);
+
+  useEffect(() => {
+    if (step !== 'recommended' || !activeGroupId || !groupLive) return;
+    const m = groupLive.members.length;
+    const prev = groupWelcomePrevCountRef.current;
+    if (m === prev) return;
+    if (prev === -1) {
+      if (m === 1) {
+        pushAssistant('🍕 Starting a new group...');
+      } else {
+        pushAssistant('🔥 Fast group found — almost ready!');
+      }
+      groupWelcomePrevCountRef.current = m;
+      return;
+    }
+    if (prev === 1 && m >= 2) {
+      pushAssistant('🔥 Fast group found — almost ready!');
+    }
+    groupWelcomePrevCountRef.current = m;
+  }, [step, activeGroupId, groupLive, pushAssistant]);
+
+  useEffect(() => {
+    if (step !== 'recommended' || !groupLive || !activeGroupId) return;
+    const m = groupLive.members.length;
+    if (m === 3 && !groupAlmostFullPushedRef.current) {
+      groupAlmostFullPushedRef.current = true;
+      pushAssistant('⚡ Almost full — don’t miss it!');
+    }
+    if (m !== 3) groupAlmostFullPushedRef.current = false;
+  }, [step, activeGroupId, groupLive, pushAssistant]);
+
+  useEffect(() => {
+    if (step !== 'recommended' || !groupLive) return;
+    if (
+      groupLive.members.length >= 4 ||
+      groupLive.status === 'full' ||
+      groupTimedOut
+    ) {
+      groupPulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(groupPulse, {
+          toValue: 0.72,
+          duration: 850,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(groupPulse, {
+          toValue: 1,
+          duration: 850,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      groupPulse.setValue(1);
+    };
+  }, [step, groupLive, groupTimedOut, groupPulse]);
 
   useEffect(() => {
     if (!activeGroupId || step !== 'recommended') return;
@@ -752,8 +825,17 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
                 </View>
               </View>
             ) : (
-              <View style={styles.groupLiveCard}>
-                <Text style={styles.groupLiveTitle}>🍕 Building your group...</Text>
+              <Animated.View
+                style={[styles.groupLiveCard, { opacity: groupPulse }]}
+              >
+                <View style={styles.groupLiveHeaderRow}>
+                  <ActivityIndicator color="#6EE7B7" size="small" />
+                  <Text style={styles.groupLiveTitle}>
+                    {groupLive.members.length >= 2
+                      ? '🔥 Fast group found — almost ready!'
+                      : '🍕 Starting a new group...'}
+                  </Text>
+                </View>
                 <Text style={styles.groupProgress}>
                   {groupLive.members.length}/4 people joined
                 </Text>
@@ -761,11 +843,20 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
                   <View
                     style={[
                       styles.groupProgressFill,
-                      { width: `${Math.min(100, (groupLive.members.length / 4) * 100)}%` },
+                      {
+                        width: `${Math.min(100, (groupLive.members.length / 4) * 100)}%`,
+                      },
                     ]}
                   />
                 </View>
-              </View>
+                {groupLive.members.length === 3 ? (
+                  <View style={styles.groupAlmostFullBanner}>
+                    <Text style={styles.groupAlmostFullText}>
+                      ⚡ Almost full — don’t miss it!
+                    </Text>
+                  </View>
+                ) : null}
+              </Animated.View>
             )}
           </View>
         ) : null}
@@ -1148,10 +1239,32 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(110, 231, 183, 0.28)',
     gap: 10,
   },
+  groupLiveHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
   groupLiveTitle: {
     color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '800',
+    flex: 1,
+  },
+  groupAlmostFullBanner: {
+    marginTop: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(250, 204, 21, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(250, 204, 21, 0.45)',
+  },
+  groupAlmostFullText: {
+    color: '#FDE68A',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   groupProgress: {
     color: 'rgba(248,250,252,0.85)',
