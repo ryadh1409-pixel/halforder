@@ -1,12 +1,12 @@
 /**
- * OpenAI Responses API proxy (ESM).
+ * OpenAI Responses API proxy (CommonJS).
  * Run: npm run server:index
  *
  * Set OPENAI_API_KEY in .env (never commit real keys).
  */
-import express from 'express';
-import fetch from 'node-fetch';
-import 'dotenv/config';
+require('dotenv').config();
+
+const express = require('express');
 
 const app = express();
 
@@ -57,6 +57,12 @@ app.get('/', (req, res) => {
   res.send('Server works');
 });
 
+/** Health / babysit check — confirms logging pipeline */
+app.get('/babysit', (req, res) => {
+  console.log('GET /babysit hit');
+  res.send('babysit ok');
+});
+
 app.post('/chat', async (req, res) => {
   try {
     console.log('Incoming message:', req.body);
@@ -93,9 +99,12 @@ app.post('/chat', async (req, res) => {
         signal: controller.signal,
       });
     } catch (error) {
-      const name = error && typeof error === 'object' && 'name' in error ? error.name : '';
+      const name =
+        error && typeof error === 'object' && 'name' in error ? error.name : '';
       if (name === 'AbortError') {
-        console.error(`[chat] OpenAI request aborted after ${OPENAI_FETCH_TIMEOUT_MS}ms`);
+        console.error(
+          `[chat] OpenAI request aborted after ${OPENAI_FETCH_TIMEOUT_MS}ms`,
+        );
         return res.status(504).json({
           error: 'OpenAI request timed out',
           details: `No response within ${OPENAI_FETCH_TIMEOUT_MS / 1000}s`,
@@ -141,6 +150,7 @@ app.post('/chat', async (req, res) => {
 });
 
 const PORT = Number(process.env.PORT) || 3000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
