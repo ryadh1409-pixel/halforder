@@ -1,7 +1,50 @@
 require('dotenv').config();
 
+const axios = require('axios');
 const express = require('express');
 const fetch = require('node-fetch');
+
+/**
+ * Google Places Text Search — up to 5 results with photo URLs.
+ */
+async function searchPlaces(query) {
+  const key = process.env.GOOGLE_API_KEY;
+  if (!key || !query || !String(query).trim()) {
+    return [];
+  }
+
+  const url = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
+
+  try {
+    const res = await axios.get(url, {
+      params: {
+        query: String(query).trim(),
+        key,
+      },
+    });
+
+    const data = res.data;
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      console.error('Places API:', data.status, data.error_message || '');
+      return [];
+    }
+
+    const results = Array.isArray(data.results) ? data.results : [];
+
+    return results.slice(0, 5).map((place) => ({
+      name: place.name,
+      address: place.formatted_address,
+      rating: place.rating,
+      location: place.geometry?.location ?? null,
+      photo: place.photos?.[0]
+        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${place.photos[0].photo_reference}&key=${key}`
+        : null,
+    }));
+  } catch (err) {
+    console.error('searchPlaces:', err instanceof Error ? err.message : err);
+    return [];
+  }
+}
 
 const app = express();
 
@@ -106,7 +149,26 @@ User message: ${message}
       };
     }
 
-    return res.json(parsed);
+    const base =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed
+        : {
+            food: String(text),
+            category: 'unknown',
+            searchQuery: `${text} near me`,
+          };
+
+    const q =
+      typeof base.searchQuery === 'string'
+        ? base.searchQuery
+        : String(base.searchQuery ?? '');
+
+    const places = await searchPlaces(q);
+
+    return res.json({
+      ...base,
+      places,
+    });
   } catch (err) {
     console.error(err);
     const errMsg = err instanceof Error ? err.message : String(err);
