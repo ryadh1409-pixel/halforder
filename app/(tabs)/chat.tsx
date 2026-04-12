@@ -17,6 +17,7 @@ import {
   type AssistantOrderSummary,
   type TimeContext,
 } from '@/services/chatAssistantOrders';
+import { runFoodPlaceAssist } from '@/services/chatFoodAssist';
 import { saveAssistantChatFeedback } from '@/services/chatService';
 import {
   getSmartMatches,
@@ -86,6 +87,18 @@ function extractPlacesFromChatData(data: unknown): unknown[] {
 function formatPlaceLine(place: unknown): string {
   if (!place || typeof place !== 'object') return 'Place';
   const o = place as Record<string, unknown>;
+  if (typeof o.name === 'string' && typeof o.rating === 'number') {
+    const plRaw = o.priceLevel ?? o.price_level;
+    const pl =
+      typeof plRaw === 'number' && Number.isFinite(plRaw) ? plRaw : null;
+    const price =
+      pl == null ? 'Price n/a' : pl === 0 ? 'Free' : '$'.repeat(Math.min(pl, 4));
+    const addr =
+      typeof o.address === 'string' && o.address.trim()
+        ? o.address.trim()
+        : '';
+    return `${o.name.trim()} · ★${o.rating.toFixed(1)} · ${price}${addr ? `\n   ${addr}` : ''}`;
+  }
   if (typeof o.name === 'string' && o.name.trim()) return o.name.trim();
   if (o.displayName && typeof o.displayName === 'object') {
     const t = (o.displayName as { text?: unknown }).text;
@@ -540,6 +553,38 @@ export default function ChatScreen() {
           setMessages((prev) => [...prev, ...botMessages]);
 
           handleAIDecision(aiResult.decision, { fromBackendChat: true });
+          return;
+        }
+
+        const assist = await runFoodPlaceAssist(
+          outgoingText,
+          profile?.location ?? null,
+        );
+        if (assist.kind === 'need_location') {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `${Date.now()}-food-loc`,
+              text: `You're looking for ${assist.foodKeyword} — which area should I search? Try: "${assist.foodKeyword} in North York" — or set your location in Profile for results near you.`,
+              sender: 'bot',
+              createdAt: Date.now(),
+              action: 'none',
+            },
+          ]);
+          return;
+        }
+        if (assist.kind === 'found') {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `${Date.now()}-food-res`,
+              text: assist.intro,
+              sender: 'bot',
+              createdAt: Date.now(),
+              action: 'none',
+              places: assist.picks.length > 0 ? assist.picks : undefined,
+            },
+          ]);
           return;
         }
 

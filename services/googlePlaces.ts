@@ -24,9 +24,20 @@ type NearbySearchResult = {
     place_id: string;
     name: string;
     rating?: number;
+    price_level?: number;
+    vicinity?: string;
+    formatted_address?: string;
     photos?: { photo_reference: string }[];
   }[];
   status: string;
+};
+
+/** Chat assistant: ranked pick with price level for sorting / UI */
+export type ChatRestaurantPick = {
+  name: string;
+  rating: number;
+  priceLevel: number | null;
+  address: string;
 };
 
 type GeocodeResult = {
@@ -184,4 +195,47 @@ export function matchPlaceRestaurantByName(
     if (hit) return hit;
   }
   return places[0];
+}
+
+/**
+ * Nearby restaurant search for chat: sorts by lowest `price_level` first (Google 0–4),
+ * then rating. Returns up to `limit` rows (default 3).
+ */
+export async function fetchTopCheapestNearbyForChat(
+  lat: number,
+  lng: number,
+  keyword: string,
+  limit = 3,
+): Promise<ChatRestaurantPick[]> {
+  const key = GOOGLE_API_KEY.trim();
+  if (!key || !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=2500&type=restaurant&keyword=${encodeURIComponent(keyword.trim())}&key=${encodeURIComponent(key)}`;
+
+  try {
+    const res = await fetch(url);
+    const data = (await res.json()) as NearbySearchResult;
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      return [];
+    }
+
+    const rows = data.results ?? [];
+    const sorted = [...rows].sort((a, b) => {
+      const pa = typeof a.price_level === 'number' ? a.price_level : 99;
+      const pb = typeof b.price_level === 'number' ? b.price_level : 99;
+      if (pa !== pb) return pa - pb;
+      return (b.rating ?? 0) - (a.rating ?? 0);
+    });
+
+    return sorted.slice(0, limit).map((p) => ({
+      name: p.name,
+      rating: typeof p.rating === 'number' ? p.rating : 0,
+      priceLevel: typeof p.price_level === 'number' ? p.price_level : null,
+      address:
+        (p.formatted_address || p.vicinity || '').trim() ||
+        'Address unavailable',
+    }));
+  } catch {
+    return [];
+  }
 }
