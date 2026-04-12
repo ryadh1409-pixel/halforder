@@ -182,6 +182,7 @@ function buildIntroSuggestionMessage(
 }
 
 export default function ChatScreen() {
+  console.log("GOOGLE:", process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
   const router = useRouter();
   const { user: authUser } = useAuth();
   const { profile } = useCurrentUser();
