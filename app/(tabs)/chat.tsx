@@ -182,36 +182,26 @@ function buildIntroSuggestionMessage(
   };
 }
 
-type PlacesTextSearchRow = {
-  name: string;
+/** Places API (New) — `places:searchText` response (partial). */
+type PlacesSearchTextPlace = {
+  displayName?: { text?: string };
   rating?: number;
-  price_level?: number;
-  formatted_address?: string;
+  formattedAddress?: string;
 };
 
-type PlacesTextSearchJson = {
-  results?: PlacesTextSearchRow[];
-  status: string;
-  error_message?: string;
+type PlacesSearchTextResponse = {
+  places?: PlacesSearchTextPlace[];
+  error?: { code?: number; message?: string; status?: string };
 };
 
-function priceLevelToDollarString(level: number | null | undefined): string {
-  if (level == null || !Number.isFinite(level)) return 'n/a';
-  if (level <= 0) return 'Free';
-  return '$'.repeat(Math.min(Math.max(0, level), 4));
-}
-
-function sortPlacesByPriceThenRating(rows: PlacesTextSearchRow[]): PlacesTextSearchRow[] {
-  return [...rows].sort((a, b) => {
-    const pa = typeof a.price_level === 'number' ? a.price_level : 99;
-    const pb = typeof b.price_level === 'number' ? b.price_level : 99;
-    if (pa !== pb) return pa - pb;
-    return (b.rating ?? 0) - (a.rating ?? 0);
-  });
+function placeDisplayName(p: PlacesSearchTextPlace): string {
+  const t = p.displayName?.text;
+  return typeof t === 'string' && t.trim() ? t.trim() : 'Unknown';
 }
 
 /**
- * Google Places Text Search for chat: `query=keyword in location`, optional location bias.
+ * Google Places API (New) — Text Search (`places:searchText`).
+ * https://developers.google.com/maps/documentation/places/web-service/text-search
  */
 async function placesTextSearchChatMessage(input: {
   keyword: string;
@@ -226,71 +216,86 @@ async function placesTextSearchChatMessage(input: {
     return 'Could not search places (missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY).';
   }
 
-  const q =
+  const textQuery =
     input.location === 'near me'
       ? input.keyword.trim()
       : `${input.keyword.trim()} in ${input.location.trim()}`;
-  let url =
-    `https://maps.googleapis.com/maps/api/place/textsearch/json` +
-    `?query=${encodeURIComponent(q)}` +
-    `&key=${encodeURIComponent(keyTrim)}`;
+
+  console.log('[Places API New] textQuery sent', textQuery);
+
+  const url = 'https://places.googleapis.com/v1/places:searchText';
+
+  const body: {
+    textQuery: string;
+    locationBias?: {
+      circle: {
+        center: { latitude: number; longitude: number };
+        radius: number;
+      };
+    };
+  } = { textQuery };
 
   if (
     input.bias &&
     Number.isFinite(input.bias.lat) &&
     Number.isFinite(input.bias.lng)
   ) {
-    url +=
-      `&location=${encodeURIComponent(`${input.bias.lat},${input.bias.lng}`)}` +
-      `&radius=3000`;
+    body.locationBias = {
+      circle: {
+        center: { latitude: input.bias.lat, longitude: input.bias.lng },
+        radius: 3000,
+      },
+    };
   }
-
-  console.log('[Places URL]', url);
 
   let res: Response;
   try {
-    res = await fetch(url);
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': keyTrim,
+        'X-Goog-FieldMask':
+          'places.displayName,places.formattedAddress,places.rating',
+      },
+      body: JSON.stringify(body),
+    });
   } catch (e) {
-    if (__DEV__) console.warn('[Places textsearch] network error', e);
+    if (__DEV__) console.warn('[Places API New] network error', e);
     return 'Could not reach Google Places. Check your connection.';
   }
 
-  let data: PlacesTextSearchJson;
+  let data: PlacesSearchTextResponse;
   try {
-    data = (await res.json()) as PlacesTextSearchJson;
+    data = (await res.json()) as PlacesSearchTextResponse;
   } catch {
     return 'Invalid response from Google Places.';
   }
 
-  console.log('[Places textsearch] response', data);
+  console.log('[Places API New] full API response', data);
 
   if (!res.ok) {
-    return `Places request failed (HTTP ${res.status}).`;
+    const msg = data.error?.message ?? res.statusText;
+    return `Places search failed (${res.status}): ${msg}`;
   }
 
-  const rows = Array.isArray(data.results) ? data.results : [];
-
-  if (data.status === 'ZERO_RESULTS' || rows.length === 0) {
-    return `No results found for ${input.keyword}. Try another area or cuisine.`;
+  const places = Array.isArray(data.places) ? data.places : [];
+  if (places.length === 0) {
+    return `No results found for ${input.keyword.trim()}. Try another area or cuisine.`;
   }
 
-  if (data.status !== 'OK') {
-    const msg = data.error_message ?? data.status;
-    if (__DEV__) console.warn('[Places textsearch] status', data.status, msg);
-    return `Places search failed: ${msg}`;
-  }
-
-  const top = sortPlacesByPriceThenRating(rows).slice(0, 3);
+  const top = places.slice(0, 3);
   const nearLabel =
     input.location === 'near me' ? 'you' : input.location.trim();
   const head = `Top cheap ${input.keyword.trim()} near ${nearLabel}:\n`;
-  const lines = top.map((r, i) => {
+  const lines = top.map((p, i) => {
+    const name = placeDisplayName(p);
     const stars =
-      typeof r.rating === 'number' && Number.isFinite(r.rating)
-        ? r.rating.toFixed(1)
+      typeof p.rating === 'number' && Number.isFinite(p.rating)
+        ? p.rating.toFixed(1)
         : 'N/A';
-    const dollars = priceLevelToDollarString(r.price_level);
-    return `${i + 1}. ${r.name} ⭐${stars} - ${dollars}`;
+    const addr = (p.formattedAddress ?? '').trim() || 'Address unavailable';
+    return `${i + 1}. ${name} ⭐${stars} - ${addr}`;
   });
   return head + lines.join('\n');
 }
