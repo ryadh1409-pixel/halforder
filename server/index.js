@@ -3,63 +3,50 @@ require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 
-const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-
 /**
- * Google Places API (New) — searchText. Up to 5 results; errors → [].
+ * Google Places API (New) — searchText. Returns raw `places` or [] on failure.
  */
 async function searchPlaces(query) {
-  if (!GOOGLE_API_KEY || !query || !String(query).trim()) {
-    if (!GOOGLE_API_KEY) {
-      console.warn('GOOGLE_MAPS_API_KEY is not set; skipping Places search.');
-    }
+  if (!query || !String(query).trim()) {
     return [];
   }
 
-  const url = 'https://places.googleapis.com/v1/places:searchText';
+  if (!process.env.GOOGLE_MAPS_API_KEY) {
+    console.warn('GOOGLE_MAPS_API_KEY is not set; skipping Places search.');
+    return [];
+  }
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_API_KEY,
-        'X-Goog-FieldMask':
-          'places.displayName,places.formattedAddress',
+    const res = await fetch(
+      'https://places.googleapis.com/v1/places:searchText',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': process.env.GOOGLE_MAPS_API_KEY,
+          'X-Goog-FieldMask':
+            'places.displayName,places.formattedAddress',
+        },
+        body: JSON.stringify({
+          textQuery: String(query).trim(),
+        }),
       },
-      body: JSON.stringify({
-        textQuery: String(query).trim(),
-      }),
-    });
+    );
 
-    const data = await response.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({}));
 
-    if (!response.ok) {
+    if (!res.ok) {
       console.error(
         'Places API (New) error:',
-        response.status,
+        res.status,
         data?.error?.message || JSON.stringify(data).slice(0, 300),
       );
       return [];
     }
 
-    const raw = Array.isArray(data.places) ? data.places : [];
-
-    return raw.slice(0, 5).map((place) => ({
-      name:
-        place.displayName && typeof place.displayName === 'object'
-          ? String(place.displayName.text ?? '')
-          : '',
-      address:
-        typeof place.formattedAddress === 'string'
-          ? place.formattedAddress
-          : '',
-    }));
+    return data.places || [];
   } catch (err) {
-    console.error(
-      'searchPlaces:',
-      err instanceof Error ? err.message : String(err),
-    );
+    console.error('searchPlaces:', err instanceof Error ? err.message : err);
     return [];
   }
 }
@@ -154,11 +141,36 @@ User message: ${userMessage}
 
     console.log('Clean AI:', aiText);
 
-    const places = (await searchPlaces(userMessage)).slice(0, 5);
+    let parsed;
+    try {
+      parsed = JSON.parse(aiText);
+    } catch {
+      parsed = {
+        food: aiText,
+        category: 'unknown',
+        searchQuery: userMessage,
+      };
+    }
+
+    const base =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed
+        : {
+            food: String(aiText),
+            category: 'unknown',
+            searchQuery: userMessage,
+          };
+
+    const sq =
+      typeof base.searchQuery === 'string'
+        ? base.searchQuery.trim()
+        : '';
+    const query = sq || userMessage;
+    const placesRaw = await searchPlaces(query);
 
     return res.json({
       reply: aiText,
-      places,
+      places: placesRaw.slice(0, 5),
     });
   } catch (err) {
     console.error(err);
