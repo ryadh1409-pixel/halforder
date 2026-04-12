@@ -1,6 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import {
@@ -18,11 +19,9 @@ import React, {
 import {
   ActivityIndicator,
   Image,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -78,7 +77,6 @@ import {
 import { normalizeParticipantsStrings } from '@/services/orderLifecycle';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
-import { submitOrderEmailInvite } from '@/services/orderInviteEmail';
 import { claimReferralInboxRewards } from '@/services/referralRewards';
 
 const PLACEHOLDER_FOOD_IMAGE =
@@ -249,9 +247,6 @@ export default function OrderDetailsScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [countdownSec, setCountdownSec] = useState(0);
-  const [emailInviteOpen, setEmailInviteOpen] = useState(false);
-  const [emailInviteInput, setEmailInviteInput] = useState('');
-  const [emailInviteSending, setEmailInviteSending] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [participantProfiles, setParticipantProfiles] = useState<
     Record<string, OrderParticipant>
@@ -694,33 +689,6 @@ export default function OrderDetailsScreen() {
     });
   };
 
-  const inviterDisplayName =
-    viewerProfile?.name?.trim() ||
-    auth.currentUser?.displayName?.trim() ||
-    auth.currentUser?.email?.split('@')[0] ||
-    'Friend';
-
-  const submitEmailInvite = async () => {
-    if (!order?.id) return;
-    setEmailInviteSending(true);
-    try {
-      await submitOrderEmailInvite({
-        email: emailInviteInput,
-        orderId: order.id,
-        inviterName: inviterDisplayName,
-      });
-      setEmailInviteOpen(false);
-      setEmailInviteInput('');
-      showSuccess(
-        'If email is configured, they will get a link in their inbox.',
-      );
-    } catch (e) {
-      showError(getUserFriendlyError(e));
-    } finally {
-      setEmailInviteSending(false);
-    }
-  };
-
   const handleCompleteOrder = () => {
     if (!order?.usesHalfUsers || !order.id) return;
     void (async () => {
@@ -916,22 +884,19 @@ export default function OrderDetailsScreen() {
               <Text style={styles.waitingEmoji}>✨</Text>
               <Text style={styles.waitingTitle}>Almost there</Text>
               <Text style={styles.waitingCentered}>
-                Share this order so someone can join your half — you’ll match in
-                chat as soon as they hop in.
+                Invite a friend on WhatsApp to complete your order faster ⚡
               </Text>
               <TouchableOpacity
                 style={styles.invitePrimaryBtn}
                 onPress={handleWhatsAppOrderInvite}
                 activeOpacity={0.88}
               >
-                <Text style={styles.invitePrimaryBtnText}>Invite via WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.inviteSecondaryBtn}
-                onPress={() => setEmailInviteOpen(true)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.inviteSecondaryBtnText}>Invite by email</Text>
+                <View style={styles.invitePrimaryBtnRow}>
+                  <FontAwesome name="whatsapp" size={22} color="#FFFFFF" />
+                  <Text style={styles.invitePrimaryBtnText}>
+                    Invite via WhatsApp
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </LinearGradient>
@@ -1143,53 +1108,6 @@ export default function OrderDetailsScreen() {
         </TouchableOpacity>
       </ScrollView>
       </ScreenFadeIn>
-      <Modal
-        visible={emailInviteOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEmailInviteOpen(false)}
-      >
-        <View style={styles.emailModalBackdrop}>
-          <View style={styles.emailModalCard}>
-            <Text style={styles.emailModalTitle}>Email invite</Text>
-            <Text style={styles.emailModalHint}>
-              We’ll email them a link to this order (requires mail setup in Firebase).
-            </Text>
-            <TextInput
-              style={styles.emailModalInput}
-              placeholder="friend@example.com"
-              placeholderTextColor="#64748B"
-              value={emailInviteInput}
-              onChangeText={setEmailInviteInput}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <View style={styles.emailModalActions}>
-              <TouchableOpacity
-                style={styles.emailModalCancel}
-                onPress={() => {
-                  setEmailInviteOpen(false);
-                  setEmailInviteInput('');
-                }}
-              >
-                <Text style={styles.emailModalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.emailModalSend,
-                  emailInviteSending && styles.emailModalSendDisabled,
-                ]}
-                disabled={emailInviteSending}
-                onPress={() => void submitEmailInvite()}
-              >
-                <Text style={styles.emailModalSendText}>
-                  {emailInviteSending ? 'Sending…' : 'Send'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
       <ReportUserModal
         visible={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
@@ -1357,83 +1275,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 20,
+    marginBottom: 8,
   },
   invitePrimaryBtn: {
+    alignSelf: 'stretch',
     width: '100%',
+    marginTop: 16,
     backgroundColor: '#25D366',
     borderRadius: 14,
     paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  invitePrimaryBtnRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   invitePrimaryBtnText: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 16,
   },
-  inviteSecondaryBtn: {
-    marginTop: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  inviteSecondaryBtnText: {
-    color: '#7dd3fc',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  emailModalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  emailModalCard: {
-    backgroundColor: '#141922',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#232A35',
-  },
-  emailModalTitle: {
-    color: '#F8FAFC',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  emailModalHint: {
-    color: '#94A3B8',
-    fontSize: 13,
-    marginBottom: 14,
-    lineHeight: 18,
-  },
-  emailModalInput: {
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#F8FAFC',
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  emailModalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-  },
-  emailModalCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  emailModalCancelText: { color: '#94A3B8', fontWeight: '700' },
-  emailModalSend: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-  },
-  emailModalSendDisabled: { opacity: 0.6 },
-  emailModalSendText: { color: '#FFFFFF', fontWeight: '800' },
   partnerCard: {
     marginTop: 20,
     padding: 20,
