@@ -89,7 +89,7 @@ export function formatFoodAssistMessage(
   picks: ChatRestaurantPick[],
 ): string {
   if (picks.length === 0) {
-    return 'No real results from Google.';
+    return 'No places found';
   }
   const head = `Top ${picks.length} ${foodKeyword} near ${locationLabel}:\n`;
   const lines = picks.map((p, i) => {

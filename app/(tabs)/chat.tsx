@@ -182,31 +182,117 @@ function buildIntroSuggestionMessage(
   };
 }
 
-/** North York + food flow (Places Text Search). */
-async function getNearbyRestaurants(food: string): Promise<string> {
-  const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
-  const query = encodeURIComponent(`${food.trim()} in North York`);
-  const res = await fetch(
-    `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${encodeURIComponent(API_KEY)}`,
-  );
-  const data = (await res.json()) as {
-    results?: {
-      name: string;
-      rating?: number;
-      vicinity?: string;
-      formatted_address?: string;
-    }[];
-  };
-  if (!data.results || data.results.length === 0) {
-    return 'No real results from Google.';
+type PlacesTextSearchRow = {
+  name: string;
+  rating?: number;
+  price_level?: number;
+  formatted_address?: string;
+};
+
+type PlacesTextSearchJson = {
+  results?: PlacesTextSearchRow[];
+  status: string;
+  error_message?: string;
+};
+
+function priceLevelToDollarString(level: number | null | undefined): string {
+  if (level == null || !Number.isFinite(level)) return 'n/a';
+  if (level <= 0) return 'Free';
+  return '$'.repeat(Math.min(Math.max(0, level), 4));
+}
+
+function sortPlacesByPriceThenRating(rows: PlacesTextSearchRow[]): PlacesTextSearchRow[] {
+  return [...rows].sort((a, b) => {
+    const pa = typeof a.price_level === 'number' ? a.price_level : 99;
+    const pb = typeof b.price_level === 'number' ? b.price_level : 99;
+    if (pa !== pb) return pa - pb;
+    return (b.rating ?? 0) - (a.rating ?? 0);
+  });
+}
+
+/**
+ * Google Places Text Search for chat: `query=keyword in location`, optional location bias.
+ */
+async function placesTextSearchChatMessage(input: {
+  keyword: string;
+  location: string;
+  bias?: { lat: number; lng: number } | null;
+}): Promise<string> {
+  const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const keyTrim =
+    typeof API_KEY === 'string' ? API_KEY.trim() : '';
+  if (!keyTrim) {
+    console.error('Missing Google Maps API key');
+    return 'Could not search places (missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY).';
   }
-  return data.results
-    .slice(0, 3)
-    .map((r) => {
-      const addr = (r.vicinity || r.formatted_address || '').trim();
-      return `${r.name} ⭐ ${r.rating != null ? String(r.rating) : 'N/A'} 📍 ${addr}`;
-    })
-    .join('\n\n');
+
+  const q =
+    input.location === 'near me'
+      ? input.keyword.trim()
+      : `${input.keyword.trim()} in ${input.location.trim()}`;
+  let url =
+    `https://maps.googleapis.com/maps/api/place/textsearch/json` +
+    `?query=${encodeURIComponent(q)}` +
+    `&key=${encodeURIComponent(keyTrim)}`;
+
+  if (
+    input.bias &&
+    Number.isFinite(input.bias.lat) &&
+    Number.isFinite(input.bias.lng)
+  ) {
+    url +=
+      `&location=${encodeURIComponent(`${input.bias.lat},${input.bias.lng}`)}` +
+      `&radius=3000`;
+  }
+
+  console.log('[Places URL]', url);
+
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    if (__DEV__) console.warn('[Places textsearch] network error', e);
+    return 'Could not reach Google Places. Check your connection.';
+  }
+
+  let data: PlacesTextSearchJson;
+  try {
+    data = (await res.json()) as PlacesTextSearchJson;
+  } catch {
+    return 'Invalid response from Google Places.';
+  }
+
+  console.log('[Places textsearch] response', data);
+
+  if (!res.ok) {
+    return `Places request failed (HTTP ${res.status}).`;
+  }
+
+  const rows = Array.isArray(data.results) ? data.results : [];
+
+  if (data.status === 'ZERO_RESULTS' || rows.length === 0) {
+    return `No results found for ${input.keyword}. Try another area or cuisine.`;
+  }
+
+  if (data.status !== 'OK') {
+    const msg = data.error_message ?? data.status;
+    if (__DEV__) console.warn('[Places textsearch] status', data.status, msg);
+    return `Places search failed: ${msg}`;
+  }
+
+  const top = sortPlacesByPriceThenRating(rows).slice(0, 3);
+  const nearLabel =
+    input.location === 'near me' ? 'you' : input.location.trim();
+  const head = `Top cheap ${input.keyword.trim()} near ${nearLabel}:\n`;
+  const lines = top.map((r, i) => {
+    const stars =
+      typeof r.rating === 'number' && Number.isFinite(r.rating)
+        ? r.rating.toFixed(1)
+        : 'N/A';
+    const dollars = priceLevelToDollarString(r.price_level);
+    return `${i + 1}. ${r.name} ⭐${stars} - ${dollars}`;
+  });
+  return head + lines.join('\n');
 }
 
 function detectNorthYorkChatFood(
@@ -631,7 +717,19 @@ export default function ChatScreen() {
             typeof profile.location.lat === 'number' &&
             typeof profile.location.lng === 'number';
 
-          if (ny && !anyAssistFood && !simpleFood) {
+          const foodKeyword =
+            anyAssistFood ||
+            (simpleFood
+              ? simpleFood === 'other'
+                ? 'restaurant'
+                : simpleFood
+              : null);
+          const locationLabel =
+            explicitLoc ??
+            (simpleFood && ny ? 'North York' : null) ??
+            (profile?.location ? 'near me' : 'North York');
+
+          if (ny && !foodKeyword) {
             setMessages((prev) => [
               ...prev,
               {
@@ -645,34 +743,25 @@ export default function ChatScreen() {
             return;
           }
 
-          if (
-            simpleFood &&
-            !ny &&
-            !explicitLoc &&
-            !profileHasCoords
-          ) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `${Date.now()}-ask-loc-simple`,
-                text: 'Which area should I search? Try something like “pizza in North York”.',
-                sender: 'bot',
-                createdAt: Date.now(),
-                action: 'none',
-              },
-            ]);
-            return;
-          }
-
-          if (simpleFood && ny) {
-            const foodKey = simpleFood === 'other' ? 'restaurant' : simpleFood;
-            const results = await getNearbyRestaurants(foodKey);
+          if (foodKeyword && locationLabel) {
+            const bias =
+              profileHasCoords && profile?.location
+                ? {
+                    lat: profile.location.lat as number,
+                    lng: profile.location.lng as number,
+                  }
+                : null;
+            const results = await placesTextSearchChatMessage({
+              keyword: foodKeyword,
+              location: locationLabel,
+              bias,
+            });
             foodLocationPendingRef.current = null;
             setMessages((prev) => [
               ...prev,
               {
-                id: `${Date.now()}-places-ny`,
-                text: `North York · ${simpleFood}\n\n${results}`,
+                id: `${Date.now()}-places-ts`,
+                text: results,
                 sender: 'bot',
                 createdAt: Date.now(),
                 action: 'none',
