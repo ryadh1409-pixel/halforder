@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 /**
- * Places API (New) — Text Search. Returns up to 5 normalized place objects.
+ * Google Places API (New) — searchText. Up to 5 results; errors → [].
  */
 async function searchPlaces(query) {
   if (!GOOGLE_API_KEY || !query || !String(query).trim()) {
@@ -25,7 +25,7 @@ async function searchPlaces(query) {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_API_KEY,
         'X-Goog-FieldMask':
-          'places.displayName,places.formattedAddress,places.location',
+          'places.displayName,places.formattedAddress',
       },
       body: JSON.stringify({
         textQuery: String(query).trim(),
@@ -45,25 +45,16 @@ async function searchPlaces(query) {
 
     const raw = Array.isArray(data.places) ? data.places : [];
 
-    return raw.slice(0, 5).map((place) => {
-      const name =
+    return raw.slice(0, 5).map((place) => ({
+      name:
         place.displayName && typeof place.displayName === 'object'
           ? String(place.displayName.text ?? '')
-          : '';
-      const address =
+          : '',
+      address:
         typeof place.formattedAddress === 'string'
           ? place.formattedAddress
-          : '';
-      let location = null;
-      if (place.location && typeof place.location === 'object') {
-        const lat = place.location.latitude;
-        const lng = place.location.longitude;
-        if (typeof lat === 'number' && typeof lng === 'number') {
-          location = { lat, lng };
-        }
-      }
-      return { name, address, location };
-    });
+          : '',
+    }));
   } catch (err) {
     console.error(
       'searchPlaces:',
@@ -163,7 +154,7 @@ User message: ${userMessage}
 
     console.log('Clean AI:', aiText);
 
-    const places = await searchPlaces(userMessage);
+    const places = (await searchPlaces(userMessage)).slice(0, 5);
 
     return res.json({
       reply: aiText,
