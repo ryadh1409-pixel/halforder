@@ -23,7 +23,10 @@ export function AdminHeader({
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 12) }]}>
       {backTo ? (
-        <TouchableOpacity onPress={() => router.push(backTo as never)} hitSlop={12}>
+        <TouchableOpacity
+          onPress={() => router.push(backTo as never)}
+          hitSlop={12}
+        >
           <Text style={styles.back}>← {backLabel}</Text>
         </TouchableOpacity>
       ) : (

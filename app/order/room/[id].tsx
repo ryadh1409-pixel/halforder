@@ -4,7 +4,10 @@
  */
 import { theme } from '@/constants/theme';
 import { auth, db } from '@/services/firebase';
-import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '@/utils/contentModeration';
+import {
+  CONTENT_NOT_ALLOWED,
+  moderateChatMessage,
+} from '@/utils/contentModeration';
 import { showError } from '@/utils/toast';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,6 +17,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  onSnapshot,
 } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -29,7 +33,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { onSnapshot } from 'firebase/firestore';
 
 /** Align with `OrderRoomScreen` / `chatSecurity` order chat limits. */
 const ORDER_ROOM_CHAT_MAX = 200;
@@ -131,9 +134,10 @@ export default function OrderChatScreen() {
         text: mod.text,
         senderId: uid,
         senderName:
-          typeof currentUser?.displayName === 'string' && currentUser.displayName.trim()
+          typeof currentUser?.displayName === 'string' &&
+          currentUser.displayName.trim()
             ? currentUser.displayName
-            : currentUser?.email?.split('@')[0] ?? 'User',
+            : (currentUser?.email?.split('@')[0] ?? 'User'),
         createdAt: serverTimestamp(),
       });
       setInput('');
@@ -152,7 +156,9 @@ export default function OrderChatScreen() {
       <View style={[styles.row, mine ? styles.rowRight : styles.rowLeft]}>
         <View style={[styles.bubble, bubbleStyle]}>
           {!mine && item.senderName ? (
-            <Text style={[styles.senderName, styles.textMuted]}>{item.senderName}</Text>
+            <Text style={[styles.senderName, styles.textMuted]}>
+              {item.senderName}
+            </Text>
           ) : null}
           <Text style={[styles.text, textStyle]}>{item.text ?? ''}</Text>
         </View>
@@ -163,7 +169,11 @@ export default function OrderChatScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={12}
+        >
           <MaterialIcons name="arrow-back" size={22} color="#F8FAFC" />
         </Pressable>
         <Text style={styles.headerTitle}>Order Chat</Text>
@@ -339,4 +349,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

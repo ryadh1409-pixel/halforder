@@ -33,7 +33,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError } from '@/utils/toast';
 
 const TAB_SPINNER = '#34D399';
@@ -126,7 +126,8 @@ export default function OrdersScreen() {
         rawCreated &&
         typeof rawCreated === 'object' &&
         'toMillis' in rawCreated &&
-        typeof (rawCreated as { toMillis: () => number }).toMillis === 'function'
+        typeof (rawCreated as { toMillis: () => number }).toMillis ===
+          'function'
       ) {
         createdAt = (rawCreated as { toMillis: () => number }).toMillis();
       } else if (typeof rawCreated === 'number') {
@@ -223,11 +224,7 @@ export default function OrdersScreen() {
   const statusLower = (s: string) => s.trim().toLowerCase();
   const activeOrders = orders.filter((order) => {
     const s = statusLower(order.status);
-    return (
-      s !== 'cancelled' &&
-      s !== 'completed' &&
-      s !== 'expired'
-    );
+    return s !== 'cancelled' && s !== 'completed' && s !== 'expired';
   });
   const completedOrders = orders.filter(
     (order) => statusLower(order.status) === 'completed',
@@ -292,7 +289,9 @@ export default function OrdersScreen() {
 
   const renderOrderCard = (item: OrderItem, disabled = false) => {
     const u = uid ?? '';
-    const lifecycleParticipants = item.usesHalf ? item.halfUsers : item.participants;
+    const lifecycleParticipants = item.usesHalf
+      ? item.halfUsers
+      : item.participants;
     const { lifecycle, remainingMs } = deriveLifecycleForViewer({
       uid: u,
       createdBy: item.createdBy,
@@ -313,7 +312,9 @@ export default function OrdersScreen() {
               : lifecycle === 'expired'
                 ? 'expired'
                 : 'active';
-    const userCount = item.usesHalf ? item.halfUsers.length : item.participants.length;
+    const userCount = item.usesHalf
+      ? item.halfUsers.length
+      : item.participants.length;
     const countdownLabel =
       lifecycleParticipants.includes(u) &&
       remainingMs != null &&
@@ -328,7 +329,9 @@ export default function OrdersScreen() {
       !(item.usesHalf && item.createdBy !== u);
 
     return (
-      <View style={[styles.orderCardWrap, disabled && styles.orderCardDisabled]}>
+      <View
+        style={[styles.orderCardWrap, disabled && styles.orderCardDisabled]}
+      >
         <Pressable
           style={({ pressed }) => [
             styles.orderCard,
@@ -384,9 +387,7 @@ export default function OrdersScreen() {
           {countdownLabel ? (
             <Text style={styles.countdownText}>{countdownLabel}</Text>
           ) : null}
-          {disabled ? (
-            <Text style={styles.cancelledTag}>Cancelled</Text>
-          ) : null}
+          {disabled ? <Text style={styles.cancelledTag}>Cancelled</Text> : null}
           <FoodCardPaymentDisclaimer style={styles.orderCardCoordinationNote} />
           <View style={styles.chevronRow}>
             <Text style={styles.openHint}>Open order</Text>
@@ -540,7 +541,8 @@ export default function OrdersScreen() {
             ))
           ) : (
             <Text style={styles.emptySectionText}>
-              No active orders — waiting, matched, or in-progress chats appear here
+              No active orders — waiting, matched, or in-progress chats appear
+              here
             </Text>
           )}
 

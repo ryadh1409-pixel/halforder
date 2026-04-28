@@ -52,8 +52,7 @@ import {
 import { getRatedUserIdsForOrder } from '@/services/ratings';
 import { reportAndBlock } from '@/services/report-block';
 import { blockUser, submitUserReport } from '@/services/userSafety';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import {
   formatTorontoDate,
@@ -165,7 +164,9 @@ export default function OrderRoomScreen() {
   const [completing, setCompleting] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingToUserId, setRatingToUserId] = useState<string | null>(null);
-  const [pendingRatingUserIds, setPendingRatingUserIds] = useState<string[]>([]);
+  const [pendingRatingUserIds, setPendingRatingUserIds] = useState<string[]>(
+    [],
+  );
   const [didAutoPromptRating, setDidAutoPromptRating] = useState(false);
   const [firstOrderCompleted, setFirstOrderCompleted] = useState<
     boolean | null
@@ -363,7 +364,8 @@ export default function OrderRoomScreen() {
             ? d.joined
             : ids.length;
         const pricePerPersonRaw =
-          typeof d?.pricePerPerson === 'number' && Number.isFinite(d.pricePerPerson)
+          typeof d?.pricePerPerson === 'number' &&
+          Number.isFinite(d.pricePerPerson)
             ? d.pricePerPerson
             : null;
         const expRaw = d?.expiresAt;
@@ -659,10 +661,7 @@ export default function OrderRoomScreen() {
     ) {
       return;
     }
-    if (
-      uid === order.createdBy &&
-      order.participants.length === 1
-    ) {
+    if (uid === order.createdBy && order.participants.length === 1) {
       return;
     }
     if (getJoinedAtMsForUser(order.joinedAtMap, uid) != null) return;
@@ -746,7 +745,12 @@ export default function OrderRoomScreen() {
       setRatingToUserId(pendingRatingUserIds[0]);
       setShowRatingModal(true);
     }
-  }, [order?.status, pendingRatingUserIds, showRatingModal, didAutoPromptRating]);
+  }, [
+    order?.status,
+    pendingRatingUserIds,
+    showRatingModal,
+    didAutoPromptRating,
+  ]);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -838,10 +842,7 @@ export default function OrderRoomScreen() {
           createdAt: serverTimestamp(),
         });
         setOutgoingCallId(callRef.id);
-        showNotice(
-          'Calling',
-          'Waiting for the other person to accept…',
-        );
+        showNotice('Calling', 'Waiting for the other person to accept…');
       } catch (e) {
         showError(getUserFriendlyError(e));
       }
@@ -914,7 +915,10 @@ export default function OrderRoomScreen() {
     const message = `Join my HalfOrder and split this meal 🍕 ${link}`;
     try {
       if (Platform.OS === 'web') {
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        if (
+          typeof navigator !== 'undefined' &&
+          navigator.clipboard?.writeText
+        ) {
           await navigator.clipboard.writeText(message);
           showSuccess('Invite message copied to clipboard. Share it anywhere!');
         } else {
@@ -1255,9 +1259,9 @@ export default function OrderRoomScreen() {
   const hostUserId = order?.hostId || order?.userId || null;
   const hostIsUnavailable = Boolean(
     hostUserId &&
-      currentUser?.uid &&
-      hostUserId !== currentUser.uid &&
-      hiddenUserIds.has(hostUserId),
+    currentUser?.uid &&
+    hostUserId !== currentUser.uid &&
+    hiddenUserIds.has(hostUserId),
   );
   const maxPeople = order.maxPeople ?? 2;
   const isReady = participantsCount >= maxPeople;
@@ -1326,9 +1330,7 @@ export default function OrderRoomScreen() {
   const isExpiryUrgent =
     urgentMs != null && !isExpired && urgentMs < 5 * 60 * 1000;
   const timerMessageUnderCardJoin =
-    orderExpiresInLabel != null
-      ? `Time left: ${orderExpiresInLabel}`
-      : null;
+    orderExpiresInLabel != null ? `Time left: ${orderExpiresInLabel}` : null;
   const timerMessageUnderCard = isReady
     ? null
     : isExpired
@@ -1360,10 +1362,7 @@ export default function OrderRoomScreen() {
     });
     const url = openWhatsAppWithText(msg);
     if (Platform.OS === 'web') {
-      (window as unknown as { open: (u: string) => void }).open(
-        url,
-        '_blank',
-      );
+      (window as unknown as { open: (u: string) => void }).open(url, '_blank');
       return;
     }
     void Linking.openURL(url).catch(() =>
@@ -1404,9 +1403,7 @@ export default function OrderRoomScreen() {
       return;
     }
     if (await isUserBanned(uid)) {
-      showError(
-        'Your account has been restricted. You cannot join orders.',
-      );
+      showError('Your account has been restricted. You cannot join orders.');
       return;
     }
     if (isExpired) {
@@ -1416,9 +1413,7 @@ export default function OrderRoomScreen() {
     const memberIds = order?.participants ?? [];
     const maxPeople = order?.maxPeople ?? 2;
     if (memberIds.length >= maxPeople) {
-      showError(
-        'This order already has the maximum number of participants.',
-      );
+      showError('This order already has the maximum number of participants.');
       return;
     }
     if (memberIds.includes(uid)) {
@@ -1430,16 +1425,11 @@ export default function OrderRoomScreen() {
         auth.currentUser?.displayName ||
         auth.currentUser?.email?.split('@')[0] ||
         'User';
-      await joinOrderWithParticipantRecord(
-        db,
-        orderId,
-        uid,
-        {
-          status: 'matched',
-          user2Id: uid,
-          user2Name: displayName,
-        },
-      );
+      await joinOrderWithParticipantRecord(db, orderId, uid, {
+        status: 'matched',
+        user2Id: uid,
+        user2Name: displayName,
+      });
       // Order chat is stored under `orders/{orderId}/messages` (no `chats` doc).
       const { createAlert } = await import('@/services/alerts');
       await createAlert('order_matched', 'Order matched');
@@ -1467,7 +1457,12 @@ export default function OrderRoomScreen() {
   const handleReportOtherUser = () => {
     const uid = auth.currentUser?.uid;
     if (!otherParticipantId || !uid || !orderId) return;
-    const reasons = ['Spam', 'Inappropriate behavior', 'Scam', 'Other'] as const;
+    const reasons = [
+      'Spam',
+      'Inappropriate behavior',
+      'Scam',
+      'Other',
+    ] as const;
     void systemActionSheet({
       title: 'Report user',
       message: 'Select a reason',
@@ -1554,14 +1549,22 @@ export default function OrderRoomScreen() {
 
   const builderTimeLabel =
     expiryLabel ??
-    (timerMessageUnderCardJoin ? `Time left: ${timerMessageUnderCardJoin}` : null);
+    (timerMessageUnderCardJoin
+      ? `Time left: ${timerMessageUnderCardJoin}`
+      : null);
 
   return (
     <SafeAreaView
       style={[styles.safeArea, Platform.OS === 'web' && styles.safeAreaWeb]}
       edges={['bottom']}
     >
-      <View style={Platform.OS === 'web' ? styles.cardWrapperWeb : styles.cardWrapperNative}>
+      <View
+        style={
+          Platform.OS === 'web'
+            ? styles.cardWrapperWeb
+            : styles.cardWrapperNative
+        }
+      >
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
@@ -1670,12 +1673,10 @@ export default function OrderRoomScreen() {
             ) : hostUserId ? (
               <TouchableOpacity
                 onPress={() =>
-                  router.push(
-                    {
-                      pathname: '/user/[id]',
-                      params: { id: hostUserId },
-                    } as never,
-                  )
+                  router.push({
+                    pathname: '/user/[id]',
+                    params: { id: hostUserId },
+                  } as never)
                 }
                 activeOpacity={0.8}
               >
@@ -1686,10 +1687,15 @@ export default function OrderRoomScreen() {
             ) : (
               <Text style={styles.orderMetaText}>Host: {hostLabel}</Text>
             )}
-            {!isBlocked &&
-            otherTrustScore &&
-            otherTrustScore.count > 0 ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            {!isBlocked && otherTrustScore && otherTrustScore.count > 0 ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginTop: 4,
+                }}
+              >
                 <TrustScoreLabel
                   average={otherTrustScore.average}
                   count={otherTrustScore.count}
@@ -1700,7 +1706,10 @@ export default function OrderRoomScreen() {
             ) : null}
             {isBlocked ? (
               <Text
-                style={[styles.orderMetaSubtext, { marginTop: 6, color: c.dangerText }]}
+                style={[
+                  styles.orderMetaSubtext,
+                  { marginTop: 6, color: c.dangerText },
+                ]}
               >
                 User unavailable
               </Text>
@@ -1734,7 +1743,9 @@ export default function OrderRoomScreen() {
             ) : null}
             {order.status === 'matched' && qualifiesForTaxGift ? (
               <View style={styles.taxGiftBanner}>
-                <Text style={styles.taxGiftBannerTitle}>🎉 Congratulations</Text>
+                <Text style={styles.taxGiftBannerTitle}>
+                  🎉 Congratulations
+                </Text>
                 <Text style={styles.taxGiftBannerText}>
                   HalfOrder paid your tax on this order.
                 </Text>
@@ -1761,10 +1772,7 @@ export default function OrderRoomScreen() {
             {/* Status indicator: green pill when ready with white text */}
             <View style={[styles.statusBadge, statusBadgeStyle]}>
               <Text
-                style={[
-                  styles.statusText,
-                  isReady && styles.statusTextReady,
-                ]}
+                style={[styles.statusText, isReady && styles.statusTextReady]}
               >
                 {isReady ? 'Order is ready' : statusBadgeText}
               </Text>
@@ -1823,11 +1831,31 @@ export default function OrderRoomScreen() {
 
           {/* Buttons: Chat (yellow), Call (gray), WhatsApp (green) */}
           {isBlocked ? (
-            <View style={{ marginBottom: 16, padding: 12, borderRadius: 10, backgroundColor: c.dangerBackground }}>
-              <Text style={{ color: c.dangerText, textAlign: 'center', fontWeight: '600' }}>
+            <View
+              style={{
+                marginBottom: 16,
+                padding: 12,
+                borderRadius: 10,
+                backgroundColor: c.dangerBackground,
+              }}
+            >
+              <Text
+                style={{
+                  color: c.dangerText,
+                  textAlign: 'center',
+                  fontWeight: '600',
+                }}
+              >
                 User unavailable
               </Text>
-              <Text style={{ color: c.textMuted, textAlign: 'center', marginTop: 6, fontSize: 13 }}>
+              <Text
+                style={{
+                  color: c.textMuted,
+                  textAlign: 'center',
+                  marginTop: 6,
+                  fontSize: 13,
+                }}
+              >
                 You cannot chat with this user.
               </Text>
             </View>
@@ -1952,14 +1980,11 @@ export default function OrderRoomScreen() {
                   <MaterialIcons
                     name="call"
                     size={18}
-                    color={
-                      canChat || hostPhone ? c.textOnPrimary : c.text
-                    }
+                    color={canChat || hostPhone ? c.textOnPrimary : c.text}
                   />
                   <Text
                     style={{
-                      color:
-                        canChat || hostPhone ? c.textOnPrimary : c.text,
+                      color: canChat || hostPhone ? c.textOnPrimary : c.text,
                       fontWeight: '600',
                     }}
                   >
@@ -2013,309 +2038,344 @@ export default function OrderRoomScreen() {
               ) : null}
             </>
           )}
-
         </ScrollView>
 
-      {order.status === 'matched' ? (
-        <View style={[styles.orderStatusSection, Platform.OS === 'web' && { marginHorizontal: 16 }]}>
-          <Text style={styles.orderStatusTitle}>Order Status</Text>
-          <View style={styles.orderStatusButtons}>
-            <TouchableOpacity
-              style={[
-                styles.orderSharedButton,
-                completing && styles.buttonDisabled,
-              ]}
-              onPress={confirmOrderShared}
-              disabled={completing}
-            >
-              <Text style={styles.orderStatusButtonText}>Order Shared</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.notSharedButton,
-                completing && styles.buttonDisabled,
-              ]}
-              onPress={handleNotShared}
-              disabled={completing}
-            >
-              <Text style={styles.orderStatusButtonText}>Not Shared</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
-
-      {order?.status === 'completed' &&
-      completedOrderAlreadyRated === false &&
-      pendingRatingUserIds.length > 0 ? (
-        <View style={[styles.orderStatusSection, Platform.OS === 'web' && { marginHorizontal: 16 }]}>
-          <Text style={styles.orderStatusTitle}>Rate other participants</Text>
-          <TouchableOpacity
-            style={styles.ratePartnerButton}
-            onPress={() => {
-              setRatingToUserId(pendingRatingUserIds[0]);
-              setShowRatingModal(true);
-            }}
-          >
-            <Text style={styles.ratePartnerButtonText}>⭐ Continue rating</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {isWaiting ? (
-        <TouchableOpacity
-          style={styles.waitingBanner}
-          onPress={handleInvite}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.waitingBannerText}>
-            Invite someone to split the order 🍔
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-      {isBlocked ? (
-        <View style={{ padding: 12, backgroundColor: c.dangerBackground }}>
-          <Text
-            style={{
-              fontSize: 14,
-              color: c.dangerText,
-              textAlign: 'center',
-            }}
-          >
-            You cannot chat with this user
-          </Text>
-        </View>
-      ) : null}
-      {isClosed ? (
-        <View style={{ padding: 12, backgroundColor: c.dangerBackground }}>
-          <Text
-            style={{
-              fontSize: 14,
-              color: c.dangerText,
-              textAlign: 'center',
-            }}
-          >
-            Chat closed
-          </Text>
-        </View>
-      ) : null}
-      <View
-        style={[
-          {
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            backgroundColor: c.chromeWash,
-          },
-          Platform.OS === 'web' && { alignSelf: 'center', width: '100%', maxWidth: 420 },
-        ]}
-      >
-        <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'center' }}>
-          For your safety do not share personal information or external links.
-        </Text>
-      </View>
-      <KeyboardAvoidingView
-        style={[{ flex: 1 }, Platform.OS === 'web' && { maxWidth: 420, alignSelf: 'center', width: '100%' }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {otherParticipantId && auth.currentUser?.uid && canChat && !isBlocked ? (
+        {order.status === 'matched' ? (
           <View
             style={[
-              styles.chatSafetyBar,
-              Platform.OS === 'web' && { alignSelf: 'center', maxWidth: 420, width: '100%' },
+              styles.orderStatusSection,
+              Platform.OS === 'web' && { marginHorizontal: 16 },
             ]}
           >
+            <Text style={styles.orderStatusTitle}>Order Status</Text>
+            <View style={styles.orderStatusButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.orderSharedButton,
+                  completing && styles.buttonDisabled,
+                ]}
+                onPress={confirmOrderShared}
+                disabled={completing}
+              >
+                <Text style={styles.orderStatusButtonText}>Order Shared</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.notSharedButton,
+                  completing && styles.buttonDisabled,
+                ]}
+                onPress={handleNotShared}
+                disabled={completing}
+              >
+                <Text style={styles.orderStatusButtonText}>Not Shared</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
+        {order?.status === 'completed' &&
+        completedOrderAlreadyRated === false &&
+        pendingRatingUserIds.length > 0 ? (
+          <View
+            style={[
+              styles.orderStatusSection,
+              Platform.OS === 'web' && { marginHorizontal: 16 },
+            ]}
+          >
+            <Text style={styles.orderStatusTitle}>Rate other participants</Text>
             <TouchableOpacity
-              style={styles.chatSafetyBtn}
-              onPress={handleReportOtherUser}
-              accessibilityRole="button"
-              accessibilityLabel="Report this user"
+              style={styles.ratePartnerButton}
+              onPress={() => {
+                setRatingToUserId(pendingRatingUserIds[0]);
+                setShowRatingModal(true);
+              }}
             >
-              <MaterialIcons name="flag" size={18} color={c.textSlate} />
-              <Text style={styles.chatSafetyBtnText}>Report</Text>
-            </TouchableOpacity>
-            <View style={styles.chatSafetyDivider} />
-            <TouchableOpacity
-              style={styles.chatSafetyBtn}
-              onPress={handleBlockOtherUser}
-              accessibilityRole="button"
-              accessibilityLabel="Block this user"
-            >
-              <MaterialIcons name="block" size={18} color={c.dangerText} />
-              <Text style={styles.chatSafetyBtnTextDanger}>Block</Text>
+              <Text style={styles.ratePartnerButtonText}>
+                ⭐ Continue rating
+              </Text>
             </TouchableOpacity>
           </View>
         ) : null}
-        <FlatList
-          ref={flatListRef}
-          key={`chat-${orderId}`}
-          data={messages}
-          extraData={messages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-          ListEmptyComponent={
+
+        {isWaiting ? (
+          <TouchableOpacity
+            style={styles.waitingBanner}
+            onPress={handleInvite}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.waitingBannerText}>
+              Invite someone to split the order 🍔
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {isBlocked ? (
+          <View style={{ padding: 12, backgroundColor: c.dangerBackground }}>
             <Text
               style={{
-                color: c.iconInactive,
                 fontSize: 14,
+                color: c.dangerText,
                 textAlign: 'center',
-                marginTop: 24,
               }}
             >
-              No messages yet. Say hi!
+              You cannot chat with this user
             </Text>
-          }
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: true })
-          }
-          renderItem={({ item }) => {
-            const msgDate = formatTorontoDate(item.createdAt);
-            const msgTime = formatTorontoTimeHHMM(item.createdAt);
-            if (item.type === 'system') {
+          </View>
+        ) : null}
+        {isClosed ? (
+          <View style={{ padding: 12, backgroundColor: c.dangerBackground }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: c.dangerText,
+                textAlign: 'center',
+              }}
+            >
+              Chat closed
+            </Text>
+          </View>
+        ) : null}
+        <View
+          style={[
+            {
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              backgroundColor: c.chromeWash,
+            },
+            Platform.OS === 'web' && {
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 420,
+            },
+          ]}
+        >
+          <Text
+            style={{ fontSize: 12, color: c.textMuted, textAlign: 'center' }}
+          >
+            For your safety do not share personal information or external links.
+          </Text>
+        </View>
+        <KeyboardAvoidingView
+          style={[
+            { flex: 1 },
+            Platform.OS === 'web' && {
+              maxWidth: 420,
+              alignSelf: 'center',
+              width: '100%',
+            },
+          ]}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          {otherParticipantId &&
+          auth.currentUser?.uid &&
+          canChat &&
+          !isBlocked ? (
+            <View
+              style={[
+                styles.chatSafetyBar,
+                Platform.OS === 'web' && {
+                  alignSelf: 'center',
+                  maxWidth: 420,
+                  width: '100%',
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.chatSafetyBtn}
+                onPress={handleReportOtherUser}
+                accessibilityRole="button"
+                accessibilityLabel="Report this user"
+              >
+                <MaterialIcons name="flag" size={18} color={c.textSlate} />
+                <Text style={styles.chatSafetyBtnText}>Report</Text>
+              </TouchableOpacity>
+              <View style={styles.chatSafetyDivider} />
+              <TouchableOpacity
+                style={styles.chatSafetyBtn}
+                onPress={handleBlockOtherUser}
+                accessibilityRole="button"
+                accessibilityLabel="Block this user"
+              >
+                <MaterialIcons name="block" size={18} color={c.dangerText} />
+                <Text style={styles.chatSafetyBtnTextDanger}>Block</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <FlatList
+            ref={flatListRef}
+            key={`chat-${orderId}`}
+            data={messages}
+            extraData={messages}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+            ListEmptyComponent={
+              <Text
+                style={{
+                  color: c.iconInactive,
+                  fontSize: 14,
+                  textAlign: 'center',
+                  marginTop: 24,
+                }}
+              >
+                No messages yet. Say hi!
+              </Text>
+            }
+            onContentSizeChange={() =>
+              flatListRef.current?.scrollToEnd({ animated: true })
+            }
+            renderItem={({ item }) => {
+              const msgDate = formatTorontoDate(item.createdAt);
+              const msgTime = formatTorontoTimeHHMM(item.createdAt);
+              if (item.type === 'system') {
+                return (
+                  <View style={{ width: '100%' }}>
+                    <View
+                      style={{
+                        alignSelf: 'center',
+                        marginVertical: 8,
+                        paddingHorizontal: 8,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, color: c.textMuted }}>
+                        {item.text}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: c.textSecondary,
+                          marginTop: 2,
+                        }}
+                      >
+                        {msgDate} {msgTime}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+              const isMine = item.senderId === auth.currentUser?.uid;
+              const isLast = item.id === messages[messages.length - 1]?.id;
+              const showSeen = isLast && item.seenBy.length > 0;
               return (
                 <View style={{ width: '100%' }}>
                   <View
                     style={{
-                      alignSelf: 'center',
-                      marginVertical: 8,
+                      alignSelf: isMine ? 'flex-end' : 'flex-start',
+                      maxWidth: '75%',
                       paddingHorizontal: 8,
+                      marginBottom: 8,
                     }}
                   >
-                    <Text style={{ fontSize: 13, color: c.textMuted }}>
-                      {item.text}
-                    </Text>
-                    <Text
+                    {item.userName ? (
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '600',
+                          color: c.text,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {item.userName}
+                      </Text>
+                    ) : null}
+                    <View
                       style={{
-                        fontSize: 11,
-                        color: c.textSecondary,
-                        marginTop: 2,
+                        backgroundColor: isMine ? c.chatBubbleMine : c.surface,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: c.border,
                       }}
                     >
-                      {msgDate} {msgTime}
-                    </Text>
-                  </View>
-                </View>
-              );
-            }
-            const isMine = item.senderId === auth.currentUser?.uid;
-            const isLast = item.id === messages[messages.length - 1]?.id;
-            const showSeen = isLast && item.seenBy.length > 0;
-            return (
-              <View style={{ width: '100%' }}>
-                <View
-                  style={{
-                    alignSelf: isMine ? 'flex-end' : 'flex-start',
-                    maxWidth: '75%',
-                    paddingHorizontal: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  {item.userName ? (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: '600',
-                        color: c.text,
-                        marginBottom: 2,
-                      }}
-                    >
-                      {item.userName}
-                    </Text>
-                  ) : null}
-                  <View
-                    style={{
-                      backgroundColor: isMine ? c.chatBubbleMine : c.surface,
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: c.border,
-                    }}
-                  >
-                    <Text style={{ color: c.text, fontSize: 14 }}>
-                      {item.text}
-                    </Text>
-                    <Text
-                      style={{
-                        color: isMine ? c.textSlateDark : c.textMuted,
-                        fontSize: 11,
-                        marginTop: 2,
-                      }}
-                    >
-                      {msgDate} {msgTime}
-                    </Text>
-                    {showSeen ? (
+                      <Text style={{ color: c.text, fontSize: 14 }}>
+                        {item.text}
+                      </Text>
                       <Text
                         style={{
                           color: isMine ? c.textSlateDark : c.textMuted,
                           fontSize: 11,
                           marginTop: 2,
-                          opacity: 0.9,
                         }}
                       >
-                        Seen
+                        {msgDate} {msgTime}
                       </Text>
-                    ) : null}
+                      {showSeen ? (
+                        <Text
+                          style={{
+                            color: isMine ? c.textSlateDark : c.textMuted,
+                            fontSize: 11,
+                            marginTop: 2,
+                            opacity: 0.9,
+                          }}
+                        >
+                          Seen
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          }}
-        />
-
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            borderTopWidth: 1,
-            borderTopColor: c.border,
-            backgroundColor: c.background,
-          }}
-        >
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            onFocus={() => setTyping(true)}
-            onBlur={() => setTyping(false)}
-            placeholder="Type a message..."
-            placeholderTextColor={c.iconInactive}
-            selectionColor={c.accentBlue}
-            maxLength={200}
-            style={{
-              flex: 1,
-              borderWidth: 1,
-              borderColor: c.border,
-              borderRadius: 24,
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              fontSize: 15,
-              color: c.textSlateDark,
+              );
             }}
-            editable={!sending && !isClosed && !isBlocked && !isWaiting}
           />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={
-              !text.trim() || sending || isClosed || isBlocked || isWaiting
-            }
+
+          <View
             style={{
-              marginLeft: 8,
-              backgroundColor:
-                text.trim() && !sending && !isClosed && !isBlocked && !isWaiting
-                  ? c.accentBlue
-                  : c.borderStrong,
-              paddingVertical: 10,
-              paddingHorizontal: 20,
-              borderRadius: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderTopWidth: 1,
+              borderTopColor: c.border,
+              backgroundColor: c.background,
             }}
           >
-            <Text style={{ color: c.textOnPrimary, fontWeight: '600' }}>
-              Send
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              onFocus={() => setTyping(true)}
+              onBlur={() => setTyping(false)}
+              placeholder="Type a message..."
+              placeholderTextColor={c.iconInactive}
+              selectionColor={c.accentBlue}
+              maxLength={200}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 24,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                fontSize: 15,
+                color: c.textSlateDark,
+              }}
+              editable={!sending && !isClosed && !isBlocked && !isWaiting}
+            />
+            <TouchableOpacity
+              onPress={handleSend}
+              disabled={
+                !text.trim() || sending || isClosed || isBlocked || isWaiting
+              }
+              style={{
+                marginLeft: 8,
+                backgroundColor:
+                  text.trim() &&
+                  !sending &&
+                  !isClosed &&
+                  !isBlocked &&
+                  !isWaiting
+                    ? c.accentBlue
+                    : c.borderStrong,
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                borderRadius: 24,
+              }}
+            >
+              <Text style={{ color: c.textOnPrimary, fontWeight: '600' }}>
+                Send
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </View>
 
       <Modal
@@ -2333,7 +2393,11 @@ export default function OrderRoomScreen() {
                 style={[styles.incomingCallBtn, { backgroundColor: c.danger }]}
                 onPress={handleDeclineCall}
               >
-                <MaterialIcons name="call-end" size={28} color={c.textOnPrimary} />
+                <MaterialIcons
+                  name="call-end"
+                  size={28}
+                  color={c.textOnPrimary}
+                />
                 <Text style={styles.incomingCallBtnText}>Decline</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -2367,7 +2431,11 @@ export default function OrderRoomScreen() {
               onPress={handleEndCall}
               disabled={endingCall}
             >
-              <MaterialIcons name="call-end" size={28} color={c.textOnPrimary} />
+              <MaterialIcons
+                name="call-end"
+                size={28}
+                color={c.textOnPrimary}
+              />
               <Text style={styles.incomingCallBtnText}>
                 {endingCall ? 'Ending…' : 'End call'}
               </Text>

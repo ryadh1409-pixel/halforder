@@ -17,15 +17,15 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 
+// Configure these values in your local `.env` file (see `.env.example`).
 const firebaseConfig = {
-  apiKey: 'AIzaSyDbXyGYAVJU818J7mpiJXOOexAbOQuLJvo',
-  authDomain: 'halforfer.firebaseapp.com',
-  projectId: 'halforfer',
-  // Use the modern bucket domain format for Firebase Storage endpoints.
-  storageBucket: 'halforfer.firebasestorage.app',
-  messagingSenderId: '297728229596',
-  appId: '1:297728229596:web:1921b79403d9e2d11db419',
-  measurementId: 'G-JC37LM61J6',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 function getOrCreateApp(): FirebaseApp {

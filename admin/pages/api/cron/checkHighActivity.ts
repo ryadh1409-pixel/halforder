@@ -47,14 +47,12 @@ export default async function handler(
     const count = countSnap.data().count;
 
     if (count < HIGH_ACTIVITY_THRESHOLD) {
-      return res
-        .status(200)
-        .json({
-          checked: true,
-          count,
-          alertCreated: false,
-          reason: 'below_threshold',
-        });
+      return res.status(200).json({
+        checked: true,
+        count,
+        alertCreated: false,
+        reason: 'below_threshold',
+      });
     }
 
     const alertsRef = collection(db, 'alerts');

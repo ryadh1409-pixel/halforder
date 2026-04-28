@@ -36,9 +36,7 @@ export function KeyboardToolbar({
   const canGoPrev =
     focusedIndex !== null && totalInputs > 0 && focusedIndex > 0;
   const canGoNext =
-    focusedIndex !== null &&
-    totalInputs > 0 &&
-    focusedIndex < totalInputs - 1;
+    focusedIndex !== null && totalInputs > 0 && focusedIndex < totalInputs - 1;
 
   return (
     <InputAccessoryView nativeID={KEYBOARD_TOOLBAR_NATIVE_ID}>

@@ -1,4 +1,7 @@
-import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/KeyboardToolbar';
+import {
+  KEYBOARD_TOOLBAR_NATIVE_ID,
+  KeyboardToolbar,
+} from '@/components/KeyboardToolbar';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { isAdminUser } from '@/constants/adminUid';
@@ -29,8 +32,7 @@ import {
   type ReportReason,
 } from '@/services/reports';
 import { moderateUserContent } from '@/utils/contentModeration';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -47,7 +49,13 @@ import {
   setDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -95,7 +103,10 @@ function pickRatingCount(data: DocumentData): number {
   ) {
     return Math.max(0, Math.round(data.reviewsCount));
   }
-  if (typeof data.ratingCount === 'number' && Number.isFinite(data.ratingCount)) {
+  if (
+    typeof data.ratingCount === 'number' &&
+    Number.isFinite(data.ratingCount)
+  ) {
     return Math.max(0, Math.round(data.ratingCount));
   }
   if (
@@ -156,8 +167,7 @@ function mapUsersCollectionToProfile(
     };
   }
 
-  const nameFromDoc =
-    typeof data.name === 'string' ? data.name.trim() : '';
+  const nameFromDoc = typeof data.name === 'string' ? data.name.trim() : '';
   const fromDoc =
     typeof data.displayName === 'string' ? data.displayName.trim() : '';
   const emailRaw = data.email;
@@ -250,9 +260,13 @@ export default function ProfileScreen() {
   const [reportReason, setReportReason] = useState<ReportReason>('spam');
   const [submittingReport, setSubmittingReport] = useState(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
-  const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(null);
+  const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(
+    null,
+  );
   const displayNameInputRef = useRef<TextInput>(null);
-  const nameFeedbackClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameFeedbackClearRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const uid = user?.uid ?? null;
   const trustScore = useTrustScore(uid);
@@ -345,9 +359,7 @@ export default function ProfileScreen() {
       userRef,
       (snap) => {
         if (cancelled) return;
-        applyUserDoc(
-          snap.exists() ? (snap.data() as DocumentData) : undefined,
-        );
+        applyUserDoc(snap.exists() ? (snap.data() as DocumentData) : undefined);
       },
       () => {
         if (cancelled) return;
@@ -425,7 +437,7 @@ export default function ProfileScreen() {
       const userRef = doc(db, 'users', uid);
       await updateProfile(currentUser, { displayName: mod.text });
       await currentUser.reload();
-        await setDoc(
+      await setDoc(
         userRef,
         {
           displayName: mod.text,
@@ -613,18 +625,21 @@ export default function ProfileScreen() {
     }
   };
 
-  const emailLabel =
-    emailFromFirestore ?? user?.email ?? 'Not set';
+  const emailLabel = emailFromFirestore ?? user?.email ?? 'Not set';
   const displayName = displayNameInput.trim() || 'User';
   const canSaveName =
     !savingName &&
     displayNameInput.trim().length > 0 &&
     (displayNameInput.trim() !== initialDisplayName.trim() ||
       phone.trim() !== initialPhone.trim());
-  const saveButtonLabel = savingName ? 'Saving…' : nameSaved ? 'Saved ✓' : 'Save name';
+  const saveButtonLabel = savingName
+    ? 'Saving…'
+    : nameSaved
+      ? 'Saved ✓'
+      : 'Save name';
 
   const reviewCount =
-    totalRatings > 0 ? totalRatings : trustScore?.count ?? 0;
+    totalRatings > 0 ? totalRatings : (trustScore?.count ?? 0);
   const ratingValue =
     totalRatings > 0
       ? averageRating
@@ -669,27 +684,36 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.footer}>
-              <Text style={dynamicStyles.footerMuted}>❤️ Made with love in Toronto</Text>
+              <Text style={dynamicStyles.footerMuted}>
+                ❤️ Made with love in Toronto
+              </Text>
               <Text style={dynamicStyles.footerMuted}>v1.0</Text>
               <Text style={[dynamicStyles.bodyMuted, { marginTop: 12 }]}>
-              Users can report inappropriate behavior.{' '}
-              <Text
-                onPress={() => void Linking.openURL(LEGAL_URLS.safetyCommunityGuidelines)}
-                style={dynamicStyles.link}
-              >
-                Safety guidelines
+                Users can report inappropriate behavior.{' '}
+                <Text
+                  onPress={() =>
+                    void Linking.openURL(LEGAL_URLS.safetyCommunityGuidelines)
+                  }
+                  style={dynamicStyles.link}
+                >
+                  Safety guidelines
+                </Text>
               </Text>
-            </Text>
-            <View style={styles.legalLinksRow}>
-              <TouchableOpacity onPress={openTerms} accessibilityRole="link">
-                <Text style={styles.legalLinkWeb}>Terms</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={openPrivacy} accessibilityRole="link">
-                <Text style={styles.legalLinkWeb}>Privacy</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.legalLinksRow}>
+                <TouchableOpacity onPress={openTerms} accessibilityRole="link">
+                  <Text style={styles.legalLinkWeb}>Terms</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openPrivacy}
+                  accessibilityRole="link"
+                >
+                  <Text style={styles.legalLinkWeb}>Privacy</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
-              <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
+              <Text style={dynamicStyles.legalUrlHint}>
+                {LEGAL_URLS.privacy}
+              </Text>
             </View>
           </View>
         </ScrollView>
@@ -711,16 +735,15 @@ export default function ProfileScreen() {
               <Text style={dynamicStyles.profileNameTitle} numberOfLines={2}>
                 {displayName}
               </Text>
-              <Text
-                style={dynamicStyles.profileEmailLine}
-                numberOfLines={1}
-              >
+              <Text style={dynamicStyles.profileEmailLine} numberOfLines={1}>
                 {emailLabel}
               </Text>
               <View style={dynamicStyles.profileRatingRow}>
                 <MaterialIcons name="star" size={20} color={pal.star} />
                 {showNewUserBadge ? (
-                  <Text style={dynamicStyles.profileNewUserLabel}>New user</Text>
+                  <Text style={dynamicStyles.profileNewUserLabel}>
+                    New user
+                  </Text>
                 ) : (
                   <>
                     <Text style={dynamicStyles.profileRatingValue}>
@@ -737,7 +760,9 @@ export default function ProfileScreen() {
               {trustScore || isAdminUser(user, firestoreUserRole) ? (
                 <View style={dynamicStyles.trustChip}>
                   <Text style={dynamicStyles.trustChipText}>
-                    {isAdminUser(user, firestoreUserRole) ? 'Admin' : (trustScore?.label ?? '')}
+                    {isAdminUser(user, firestoreUserRole)
+                      ? 'Admin'
+                      : (trustScore?.label ?? '')}
                   </Text>
                 </View>
               ) : null}
@@ -773,10 +798,16 @@ export default function ProfileScreen() {
           >
             <MaterialIcons name="help-outline" size={22} color={pal.primary} />
             <View style={dynamicStyles.quickActionTextCol}>
-              <Text style={dynamicStyles.quickActionText}>Help &amp; Support</Text>
+              <Text style={dynamicStyles.quickActionText}>
+                Help &amp; Support
+              </Text>
               <Text style={dynamicStyles.quickActionSub}>Guides and FAQs</Text>
             </View>
-            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={pal.textTertiary}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -787,9 +818,15 @@ export default function ProfileScreen() {
             <MaterialIcons name="privacy-tip" size={22} color={pal.primary} />
             <View style={dynamicStyles.quickActionTextCol}>
               <Text style={dynamicStyles.quickActionText}>Privacy Policy</Text>
-              <Text style={dynamicStyles.quickActionSub}>How we use your data</Text>
+              <Text style={dynamicStyles.quickActionSub}>
+                How we use your data
+              </Text>
             </View>
-            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={pal.textTertiary}
+            />
           </TouchableOpacity>
 
           <Text style={dynamicStyles.sectionHeading}>Account</Text>
@@ -866,14 +903,24 @@ export default function ProfileScreen() {
 
             <View style={dynamicStyles.readonlyRow}>
               <View style={dynamicStyles.readonlyIcon}>
-                <MaterialIcons name="mail-outline" size={20} color={pal.textSecondary} />
+                <MaterialIcons
+                  name="mail-outline"
+                  size={20}
+                  color={pal.textSecondary}
+                />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={dynamicStyles.label}>Email</Text>
                 <Text style={dynamicStyles.readOnlyValue}>{emailLabel}</Text>
                 <View style={dynamicStyles.readonlyHintRow}>
-                  <MaterialIcons name="lock" size={14} color={pal.textTertiary} />
-                  <Text style={dynamicStyles.hint}>Read-only — managed by your login</Text>
+                  <MaterialIcons
+                    name="lock"
+                    size={14}
+                    color={pal.textTertiary}
+                  />
+                  <Text style={dynamicStyles.hint}>
+                    Read-only — managed by your login
+                  </Text>
                 </View>
               </View>
             </View>
@@ -922,26 +969,34 @@ export default function ProfileScreen() {
                 style={dynamicStyles.outlineBtn}
                 onPress={() => router.push('/terms')}
               >
-                <Text style={dynamicStyles.outlineBtnText}>Terms of Use (in app)</Text>
+                <Text style={dynamicStyles.outlineBtnText}>
+                  Terms of Use (in app)
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={dynamicStyles.outlineBtn}
                 onPress={() => router.push('/privacy')}
               >
-                <Text style={dynamicStyles.outlineBtnText}>Privacy (in app)</Text>
+                <Text style={dynamicStyles.outlineBtnText}>
+                  Privacy (in app)
+                </Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity
               style={[dynamicStyles.outlineBtn, { marginTop: 10 }]}
               onPress={() => void Linking.openURL(LEGAL_URLS.terms)}
             >
-              <Text style={dynamicStyles.outlineBtnText}>Terms of Service (website)</Text>
+              <Text style={dynamicStyles.outlineBtnText}>
+                Terms of Service (website)
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={dynamicStyles.outlineBtn}
               onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}
             >
-              <Text style={dynamicStyles.outlineBtnText}>Privacy Policy (website)</Text>
+              <Text style={dynamicStyles.outlineBtnText}>
+                Privacy Policy (website)
+              </Text>
             </TouchableOpacity>
             <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
             <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
@@ -961,26 +1016,33 @@ export default function ProfileScreen() {
               Users can report inappropriate behavior.
             </Text>
             <Text style={[dynamicStyles.bodyMuted, { marginTop: 10 }]}>
-              To block someone, use the menu in an order chat or on the Join tab. Blocked people cannot match or join orders with you. Unblock anytime below.
+              To block someone, use the menu in an order chat or on the Join
+              tab. Blocked people cannot match or join orders with you. Unblock
+              anytime below.
             </Text>
             <TouchableOpacity
               style={[dynamicStyles.outlineBtn, { marginTop: 12 }]}
               onPress={() => router.push('/safety')}
             >
-              <Text style={dynamicStyles.outlineBtnText}>Community guidelines</Text>
+              <Text style={dynamicStyles.outlineBtnText}>
+                Community guidelines
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={dynamicStyles.outlineBtn}
               onPress={() => router.push('/help')}
             >
-              <Text style={dynamicStyles.outlineBtnText}>Help — report from an order</Text>
+              <Text style={dynamicStyles.outlineBtnText}>
+                Help — report from an order
+              </Text>
             </TouchableOpacity>
           </View>
 
           <Text style={dynamicStyles.sectionHeading}>Report a user</Text>
           <View style={dynamicStyles.card}>
             <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
-              Submit a report by user ID, or use Report in any order or direct message chat.
+              Submit a report by user ID, or use Report in any order or direct
+              message chat.
             </Text>
             <TouchableOpacity
               style={[
@@ -1040,7 +1102,9 @@ export default function ProfileScreen() {
               {submittingReport ? (
                 <ActivityIndicator size="small" color={pal.onPrimary} />
               ) : (
-                <Text style={dynamicStyles.primaryButtonText}>Submit report</Text>
+                <Text style={dynamicStyles.primaryButtonText}>
+                  Submit report
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1048,8 +1112,8 @@ export default function ProfileScreen() {
           <Text style={dynamicStyles.sectionHeading}>Blocked Users</Text>
           <View style={dynamicStyles.card}>
             <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
-              Accounts you block cannot see your activity or contact you. You can
-              unblock them anytime.
+              Accounts you block cannot see your activity or contact you. You
+              can unblock them anytime.
             </Text>
             <BlockedUsersList
               blockedUsers={blockedUsers}
@@ -1073,9 +1137,9 @@ export default function ProfileScreen() {
 
           <View style={dynamicStyles.card}>
             <Text style={dynamicStyles.bodyMuted}>
-              Users can report inappropriate behavior. To report or block someone you
-              interacted with, open the order chat, Join tab, or Help. See Terms for
-              how we handle reports.
+              Users can report inappropriate behavior. To report or block
+              someone you interacted with, open the order chat, Join tab, or
+              Help. See Terms for how we handle reports.
             </Text>
             <TouchableOpacity
               style={dynamicStyles.dangerButton}
@@ -1083,7 +1147,10 @@ export default function ProfileScreen() {
             >
               <Text style={dynamicStyles.dangerButtonText}>Delete account</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={dynamicStyles.signOutRow} onPress={handleSignOut}>
+            <TouchableOpacity
+              style={dynamicStyles.signOutRow}
+              onPress={handleSignOut}
+            >
               <Text style={dynamicStyles.signOutText}>Sign out</Text>
             </TouchableOpacity>
           </View>
@@ -1095,15 +1162,24 @@ export default function ProfileScreen() {
                 style={dynamicStyles.primaryButton}
                 onPress={() => router.push('/admin')}
               >
-                <Text style={dynamicStyles.primaryButtonText}>Open admin panel</Text>
+                <Text style={dynamicStyles.primaryButtonText}>
+                  Open admin panel
+                </Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
           <View style={styles.footer}>
-            <Text style={dynamicStyles.footerMuted}>❤️ Made with love in Toronto</Text>
+            <Text style={dynamicStyles.footerMuted}>
+              ❤️ Made with love in Toronto
+            </Text>
             <Text style={dynamicStyles.footerMuted}>v1.0</Text>
-            <Text style={[dynamicStyles.bodyMuted, { textAlign: 'center', marginTop: 4 }]}>
+            <Text
+              style={[
+                dynamicStyles.bodyMuted,
+                { textAlign: 'center', marginTop: 4 },
+              ]}
+            >
               Users can report inappropriate behavior.
             </Text>
             <View style={styles.legalLinksRow}>

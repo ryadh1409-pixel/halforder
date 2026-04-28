@@ -42,7 +42,10 @@ export function TermsFooter({ style }: TermsFooterProps) {
 
   return (
     <View style={[styles.wrap, style]} accessibilityRole="text">
-      <Text style={styles.renewalText} accessibilityLabel="Monthly subscription renews automatically.">
+      <Text
+        style={styles.renewalText}
+        accessibilityLabel="Monthly subscription renews automatically."
+      >
         Monthly subscription renews automatically.
       </Text>
       <View style={styles.linksRow}>

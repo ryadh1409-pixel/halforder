@@ -1,4 +1,7 @@
-import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
+import {
+  KeyboardToolbar,
+  KEYBOARD_TOOLBAR_NATIVE_ID,
+} from '@/components/KeyboardToolbar';
 import {
   isCompleteNaProfilePhone,
   isProfilePhoneStorageEmpty,
@@ -31,7 +34,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { systemActionSheet } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 const REGISTER_INPUTS = 5;
@@ -66,11 +69,18 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] = useState(false);
+  const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] =
+    useState(false);
   const [loading, setLoading] = useState(false);
   const [pickingPhoto, setPickingPhoto] = useState(false);
 
-  const refs = [nameRef, emailRef, whatsappRef, passwordRef, confirmPasswordRef];
+  const refs = [
+    nameRef,
+    emailRef,
+    whatsappRef,
+    passwordRef,
+    confirmPasswordRef,
+  ];
   const focusPrev = () => {
     if (focusedIndex !== null && focusedIndex > 0) {
       refs[focusedIndex - 1].current?.focus();
@@ -219,12 +229,16 @@ export default function RegisterScreen() {
             <ScrollView
               contentContainerStyle={styles.scroll}
               keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardDismissMode={
+                Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+              }
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Create account</Text>
-                <Text style={styles.cardSubtitle}>Add your details to get started</Text>
+                <Text style={styles.cardSubtitle}>
+                  Add your details to get started
+                </Text>
 
                 <TouchableOpacity
                   style={styles.photoWrap}
@@ -238,14 +252,24 @@ export default function RegisterScreen() {
                       <ActivityIndicator size="large" color={AUTH.primary} />
                     </View>
                   ) : photoUri ? (
-                    <Image source={{ uri: photoUri }} style={styles.photoImage} contentFit="cover" />
+                    <Image
+                      source={{ uri: photoUri }}
+                      style={styles.photoImage}
+                      contentFit="cover"
+                    />
                   ) : (
                     <View style={styles.photoEmpty}>
-                      <MaterialIcons name="add-a-photo" size={36} color={AUTH.placeholder} />
+                      <MaterialIcons
+                        name="add-a-photo"
+                        size={36}
+                        color={AUTH.placeholder}
+                      />
                     </View>
                   )}
                 </TouchableOpacity>
-                <Text style={styles.photoCaption}>Add profile photo (optional)</Text>
+                <Text style={styles.photoCaption}>
+                  Add profile photo (optional)
+                </Text>
 
                 <View style={styles.fields}>
                   <TextInput
@@ -258,7 +282,9 @@ export default function RegisterScreen() {
                     autoCapitalize="words"
                     editable={!loading}
                     inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+                      Platform.OS === 'ios'
+                        ? KEYBOARD_TOOLBAR_NATIVE_ID
+                        : undefined
                     }
                     onFocus={() => setFocusedIndex(0)}
                   />
@@ -275,7 +301,9 @@ export default function RegisterScreen() {
                     autoCorrect={false}
                     editable={!loading}
                     inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+                      Platform.OS === 'ios'
+                        ? KEYBOARD_TOOLBAR_NATIVE_ID
+                        : undefined
                     }
                     onFocus={() => setFocusedIndex(1)}
                   />
@@ -286,18 +314,22 @@ export default function RegisterScreen() {
                     placeholder="WhatsApp number"
                     placeholderTextColor={AUTH.placeholder}
                     value={whatsapp}
-                    onChangeText={(t) => setWhatsapp(profileWhatsAppOnChangeText(t))}
+                    onChangeText={(t) =>
+                      setWhatsapp(profileWhatsAppOnChangeText(t))
+                    }
                     keyboardType="phone-pad"
                     editable={!loading}
                     inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+                      Platform.OS === 'ios'
+                        ? KEYBOARD_TOOLBAR_NATIVE_ID
+                        : undefined
                     }
                     onFocus={() => setFocusedIndex(2)}
                   />
 
                   <Text style={styles.fieldHelper}>
-                    This number is used only to coordinate pickup with other users. It will not be
-                    shared publicly.
+                    This number is used only to coordinate pickup with other
+                    users. It will not be shared publicly.
                   </Text>
 
                   <TouchableOpacity
@@ -306,13 +338,23 @@ export default function RegisterScreen() {
                     disabled={loading}
                     activeOpacity={0.75}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: whatsappCoordinationConsent }}
+                    accessibilityState={{
+                      checked: whatsappCoordinationConsent,
+                    }}
                     accessibilityLabel="I agree to use my WhatsApp number for coordination"
                   >
                     <MaterialIcons
-                      name={whatsappCoordinationConsent ? 'check-box' : 'check-box-outline-blank'}
+                      name={
+                        whatsappCoordinationConsent
+                          ? 'check-box'
+                          : 'check-box-outline-blank'
+                      }
                       size={22}
-                      color={whatsappCoordinationConsent ? AUTH.primary : AUTH.placeholder}
+                      color={
+                        whatsappCoordinationConsent
+                          ? AUTH.primary
+                          : AUTH.placeholder
+                      }
                       style={styles.consentIcon}
                     />
                     <Text style={styles.consentLabel}>
@@ -330,7 +372,9 @@ export default function RegisterScreen() {
                     secureTextEntry
                     editable={!loading}
                     inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+                      Platform.OS === 'ios'
+                        ? KEYBOARD_TOOLBAR_NATIVE_ID
+                        : undefined
                     }
                     onFocus={() => setFocusedIndex(3)}
                   />
@@ -345,14 +389,19 @@ export default function RegisterScreen() {
                     secureTextEntry
                     editable={!loading}
                     inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
+                      Platform.OS === 'ios'
+                        ? KEYBOARD_TOOLBAR_NATIVE_ID
+                        : undefined
                     }
                     onFocus={() => setFocusedIndex(4)}
                   />
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
+                  style={[
+                    styles.primaryBtn,
+                    loading && styles.primaryBtnLoading,
+                  ]}
                   onPress={() => void handleSignup()}
                   disabled={loading}
                   activeOpacity={0.9}
@@ -366,8 +415,14 @@ export default function RegisterScreen() {
               </View>
 
               <View style={styles.footer}>
-                <Text style={styles.footerMuted}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => router.back()} disabled={loading} hitSlop={8}>
+                <Text style={styles.footerMuted}>
+                  Already have an account?{' '}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  disabled={loading}
+                  hitSlop={8}
+                >
                   <Text style={styles.footerLink}>Log in</Text>
                 </TouchableOpacity>
               </View>

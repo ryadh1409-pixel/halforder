@@ -31,8 +31,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 function MetricCard({
@@ -275,9 +274,7 @@ export default function AdminAiInsightsScreen() {
               style={styles.secondaryBtn}
               onPress={() => router.push(adminRoutes.sendNotification as never)}
             >
-              <Text style={styles.secondaryBtnText}>
-                Custom broadcast →
-              </Text>
+              <Text style={styles.secondaryBtnText}>Custom broadcast →</Text>
             </TouchableOpacity>
 
             <View style={styles.footerNote}>

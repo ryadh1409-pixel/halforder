@@ -8,8 +8,10 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 
-import { HALF_ORDER_MATCH_WAIT_MS } from '@/constants/orderStatus';
-import { ORDER_STATUS } from '@/constants/orderStatus';
+import {
+  HALF_ORDER_MATCH_WAIT_MS,
+  ORDER_STATUS,
+} from '@/constants/orderStatus';
 import { autoInvite } from '@/services/autoInvite';
 import { db } from '@/services/firebase';
 import { ensureHalfOrderChat } from '@/services/halfOrderChat';
@@ -119,7 +121,9 @@ export async function createAiPlaceFoodCardAndOrder(
   await batch.commit();
 
   await ensureHalfOrderChat(orderRef.id, [input.uid]);
-  await syncOrderMemberProfilesForOrder(orderRef.id, [input.uid]).catch(() => {});
+  await syncOrderMemberProfilesForOrder(orderRef.id, [input.uid]).catch(
+    () => {},
+  );
 
   void autoInvite({
     id: orderRef.id,

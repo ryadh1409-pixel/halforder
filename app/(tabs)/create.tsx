@@ -218,8 +218,8 @@ export default function CreateTabDisabledScreen() {
             lineHeight: 22,
           }}
         >
-          This is a suggestion — not another user’s order. Open Swipe to join real
-          food cards; others can join after you start.
+          This is a suggestion — not another user’s order. Open Swipe to join
+          real food cards; others can join after you start.
         </Text>
       </View>
     );

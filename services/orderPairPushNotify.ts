@@ -62,8 +62,7 @@ async function fetchJoinerDisplayName(joinerUid: string): Promise<string> {
       ? d.displayName.trim()
       : '');
   const email = typeof d.email === 'string' ? d.email.trim() : '';
-  const local =
-    email.includes('@') ? (email.split('@')[0]?.trim() ?? '') : '';
+  const local = email.includes('@') ? (email.split('@')[0]?.trim() ?? '') : '';
   return fromName || local || 'Someone';
 }
 

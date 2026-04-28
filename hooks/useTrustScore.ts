@@ -1,4 +1,7 @@
-import { getTrustScoreProfile, type TrustScoreProfile } from '@/services/ratings';
+import {
+  getTrustScoreProfile,
+  type TrustScoreProfile,
+} from '@/services/ratings';
 import { useEffect, useState } from 'react';
 
 export function useTrustScore(userId: string | null): TrustScoreProfile | null {

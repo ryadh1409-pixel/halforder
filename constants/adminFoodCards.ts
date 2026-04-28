@@ -12,11 +12,9 @@ export const ADMIN_FOOD_CARD_SLOT_IDS = [
   '10',
 ] as const;
 
-export type AdminFoodCardSlotId =
-  (typeof ADMIN_FOOD_CARD_SLOT_IDS)[number];
+export type AdminFoodCardSlotId = (typeof ADMIN_FOOD_CARD_SLOT_IDS)[number];
 
-export const ADMIN_FOOD_CARD_SLOT_COUNT =
-  ADMIN_FOOD_CARD_SLOT_IDS.length;
+export const ADMIN_FOOD_CARD_SLOT_COUNT = ADMIN_FOOD_CARD_SLOT_IDS.length;
 
 /** Half-order member cap for admin catalog / food-card flow (enforced client-side). */
 export const FOOD_CARD_ORDER_MAX_USERS = 2;

@@ -19,12 +19,10 @@ export function isLikelyExpoPushToken(raw: string): boolean {
   return t.startsWith('ExponentPushToken[') || t.startsWith('ExpoPushToken[');
 }
 
-export function expoTokenFromUserFields(data: Record<string, unknown>): string | null {
-  const candidates = [
-    data.expoPushToken,
-    data.pushToken,
-    data.fcmToken,
-  ];
+export function expoTokenFromUserFields(
+  data: Record<string, unknown>,
+): string | null {
+  const candidates = [data.expoPushToken, data.pushToken, data.fcmToken];
   for (const c of candidates) {
     if (typeof c === 'string' && isLikelyExpoPushToken(c)) return c.trim();
   }
@@ -37,16 +35,15 @@ export function lastActiveMs(data: Record<string, unknown>): number | null {
     const ms = (la as { toMillis?: () => number }).toMillis?.();
     if (typeof ms === 'number' && Number.isFinite(ms)) return ms;
   }
-  if (
-    typeof data.lastActive === 'number' &&
-    Number.isFinite(data.lastActive)
-  ) {
+  if (typeof data.lastActive === 'number' && Number.isFinite(data.lastActive)) {
     return data.lastActive;
   }
   return null;
 }
 
-export function userLatLngFromDoc(data: Record<string, unknown>): LatLng | null {
+export function userLatLngFromDoc(
+  data: Record<string, unknown>,
+): LatLng | null {
   const latRaw =
     typeof data.latitude === 'number'
       ? data.latitude

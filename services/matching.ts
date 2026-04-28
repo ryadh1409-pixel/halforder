@@ -85,9 +85,7 @@ function resolveName(data: Record<string, unknown>): string {
     (typeof data.displayName === 'string' && data.displayName.trim()
       ? data.displayName.trim()
       : '') ||
-    (typeof data.name === 'string' && data.name.trim()
-      ? data.name.trim()
-      : '');
+    (typeof data.name === 'string' && data.name.trim() ? data.name.trim() : '');
   return n || 'Someone nearby';
 }
 

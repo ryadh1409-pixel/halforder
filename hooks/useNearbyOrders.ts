@@ -82,7 +82,9 @@ export function useNearbyOrders(radiusKm: number = DEFAULT_RADIUS_KM) {
           );
           if (distance <= radiusKm) {
             const plist = Array.isArray(data?.participants)
-              ? data.participants.filter((x): x is string => typeof x === 'string')
+              ? data.participants.filter(
+                  (x): x is string => typeof x === 'string',
+                )
               : [];
             list.push({
               id: d.id,
@@ -200,7 +202,9 @@ export function useNearbyOrdersRealtime(
             );
             if (distance > radiusKm) return;
             const plist = Array.isArray(data?.participants)
-              ? data.participants.filter((x): x is string => typeof x === 'string')
+              ? data.participants.filter(
+                  (x): x is string => typeof x === 'string',
+                )
               : [];
             list.push({
               id: d.id,

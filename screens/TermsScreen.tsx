@@ -72,7 +72,8 @@ export default function TermsScreen({
     }, []),
   );
 
-  const canPress = scrolledToBottom && !submitting && !pageLoading && !loadError;
+  const canPress =
+    scrolledToBottom && !submitting && !pageLoading && !loadError;
   const buttonDisabled = !canPress;
 
   const handleAgree = async () => {
@@ -181,7 +182,8 @@ export default function TermsScreen({
           )}
         </Pressable>
         <Text style={styles.hint}>
-          You must read to the end before you can continue. This applies once per account.
+          You must read to the end before you can continue. This applies once
+          per account.
         </Text>
       </View>
     </SafeAreaView>

@@ -33,7 +33,7 @@ export default function JoinOrderScreen({
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.content}>
         <AppLogo size={88} marginTop={0} />
-        <Text style={styles.title}>{'You\'re invited'}</Text>
+        <Text style={styles.title}>{"You're invited"}</Text>
         <Text style={styles.restaurant}>{restaurantName || 'This order'}</Text>
         <Text style={styles.subtitle}>Want to split the order?</Text>
         {expired ? (

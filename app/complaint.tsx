@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 const c = theme.colors;

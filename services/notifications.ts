@@ -90,7 +90,9 @@ export function configureForegroundNotificationHandler(): void {
  * Request notification permission, ensure Android channel, return Expo push token string.
  * @returns Token, or `null` on web, denied permission, or failure.
  */
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
+export async function registerForPushNotificationsAsync(): Promise<
+  string | null
+> {
   if (Platform.OS === 'web') {
     return null;
   }

@@ -72,9 +72,7 @@ function BrowseFoodCardRow({
         joinHint?.anyOpenOrderMemberIds ?? null,
       ));
   const detailPath = card.id;
-  const alreadyIn = !!(
-    uid && joinHint?.anyOpenOrderMemberIds.includes(uid)
-  );
+  const alreadyIn = !!(uid && joinHint?.anyOpenOrderMemberIds.includes(uid));
   let joinLabel = '❤️ Join';
   if (!uid) joinLabel = 'Sign in to join';
   else if (alreadyIn) joinLabel = 'Joined';
@@ -147,10 +145,8 @@ export default function BrowseScreen() {
 
   const visibleCards = useMemo(() => {
     if (!user?.uid || hiddenUserIds.size === 0) return cards;
-    return filterBlockedUsers(
-      cards,
-      { uid: user.uid, hiddenUserIds },
-      (c) => (typeof c.ownerId === 'string' ? c.ownerId : undefined),
+    return filterBlockedUsers(cards, { uid: user.uid, hiddenUserIds }, (c) =>
+      typeof c.ownerId === 'string' ? c.ownerId : undefined,
     );
   }, [cards, hiddenUserIds, user?.uid]);
 
@@ -228,7 +224,9 @@ export default function BrowseScreen() {
           </View>
         ) : (
           <View style={styles.centered}>
-            <Text style={styles.empty}>No active food cards yet. Check back soon.</Text>
+            <Text style={styles.empty}>
+              No active food cards yet. Check back soon.
+            </Text>
           </View>
         )
       ) : (
@@ -257,7 +255,12 @@ const styles = StyleSheet.create({
   title: { color: D.text, fontSize: 24, fontWeight: '800' },
   subtitle: { color: D.muted, marginTop: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingHint: { marginTop: 12, color: D.muted, fontSize: 14, fontWeight: '600' },
+  loadingHint: {
+    marginTop: 12,
+    color: D.muted,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   content: { padding: theme.spacing.screen, paddingBottom: 32 },
   emptyWrap: { marginTop: 30, alignItems: 'center' },
   empty: { color: D.muted, textAlign: 'center', lineHeight: 22 },

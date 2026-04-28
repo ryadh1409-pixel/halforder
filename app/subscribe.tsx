@@ -65,12 +65,16 @@ export default function SubscribeScreen() {
       >
         <View style={styles.heroCard}>
           <View style={styles.iconBadge}>
-            <MaterialIcons name="workspace-premium" size={36} color={c.primary} />
+            <MaterialIcons
+              name="workspace-premium"
+              size={36}
+              color={c.primary}
+            />
           </View>
           <Text style={styles.title}>HalfOrder Plus</Text>
           <Text style={styles.subtitle}>
-            Get more from the food sharing app where you coordinate shared meals with people
-            nearby.
+            Get more from the food sharing app where you coordinate shared meals
+            with people nearby.
           </Text>
           <Text style={styles.priceLine}>$4.99 / month · Cancel anytime</Text>
         </View>
@@ -104,9 +108,9 @@ export default function SubscribeScreen() {
         </Pressable>
 
         <Text style={styles.finePrint}>
-          Payment will be charged to your App Store or Google Play account at confirmation of
-          purchase. Subscription renews monthly unless canceled at least 24 hours before the end of
-          the current period.
+          Payment will be charged to your App Store or Google Play account at
+          confirmation of purchase. Subscription renews monthly unless canceled
+          at least 24 hours before the end of the current period.
         </Text>
 
         <TermsFooter style={{ marginTop: theme.spacing.xs }} />

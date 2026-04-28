@@ -1,11 +1,7 @@
 /**
  * Assistant chat: persist user messages to Firestore for product feedback & analytics.
  */
-import {
-  addDoc,
-  collection,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '@/services/firebase';
 
@@ -57,7 +53,11 @@ export async function saveAssistantChatFeedback(
       userEmail: input.email?.trim() || null,
       createdAt: serverTimestamp(),
     });
-    console.log('[chatService] feedback saved', { uid, sentiment, len: msg.length });
+    console.log('[chatService] feedback saved', {
+      uid,
+      sentiment,
+      len: msg.length,
+    });
   } catch (e) {
     console.warn('[chatService] saveAssistantChatFeedback failed', e);
   }

@@ -1,11 +1,5 @@
 import { auth, db } from '@/services/firebase';
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  where,
-} from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 /**
@@ -38,9 +32,7 @@ export function useHiddenUserIds(): Set<string> {
     const unsub2 = onSnapshot(
       q2,
       (snap) => {
-        setBlockerIds(
-          snap.docs.map((d) => String(d.id ?? '')).filter(Boolean),
-        );
+        setBlockerIds(snap.docs.map((d) => String(d.id ?? '')).filter(Boolean));
       },
       () => setBlockerIds([]),
     );

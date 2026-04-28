@@ -118,7 +118,12 @@ export function normalizeParticipantRecords(raw: unknown): OrderParticipant[] {
       const o = loc as Record<string, unknown>;
       const la = typeof o.lat === 'number' ? o.lat : null;
       const lo = typeof o.lng === 'number' ? o.lng : null;
-      if (la != null && lo != null && Number.isFinite(la) && Number.isFinite(lo)) {
+      if (
+        la != null &&
+        lo != null &&
+        Number.isFinite(la) &&
+        Number.isFinite(lo)
+      ) {
         location = { lat: la, lng: lo };
       }
     }
@@ -253,7 +258,8 @@ export function parseOrderHost(raw: unknown): OrderHost | null {
     name: typeof h.name === 'string' && h.name.trim() ? h.name.trim() : 'Host',
     avatar:
       typeof h.avatar === 'string' && h.avatar.trim() ? h.avatar.trim() : null,
-    phone: typeof h.phone === 'string' && h.phone.trim() ? h.phone.trim() : null,
+    phone:
+      typeof h.phone === 'string' && h.phone.trim() ? h.phone.trim() : null,
     expoPushToken:
       typeof h.expoPushToken === 'string' && h.expoPushToken.trim()
         ? h.expoPushToken.trim()

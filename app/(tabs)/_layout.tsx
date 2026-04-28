@@ -4,7 +4,7 @@ import { useAuth } from '@/services/AuthContext';
 import { Tabs, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 const TAB_ICON_SIZE = 26;
 const TAB_ACTIVE = '#FFFFFF';
@@ -21,30 +21,6 @@ const tabBarLabelStyle = {
   fontSize: 13,
   fontWeight: '600' as const,
 };
-
-function AITabIcon({
-  focused,
-  inactiveColor,
-}: {
-  focused: boolean;
-  inactiveColor: string;
-}) {
-  return (
-    <View
-      style={[
-        styles.aiIconWrap,
-        focused && styles.aiIconWrapFocused,
-        Platform.OS === 'android' && focused ? { elevation: 6 } : null,
-      ]}
-    >
-      <MaterialIcons
-        name="auto-awesome"
-        size={TAB_ICON_SIZE}
-        color={focused ? TAB_ACTIVE : inactiveColor}
-      />
-    </View>
-  );
-}
 
 const overlayStyles = StyleSheet.create({
   verifyBanner: {
@@ -69,21 +45,6 @@ const overlayStyles = StyleSheet.create({
   },
 });
 
-const styles = StyleSheet.create({
-  aiIconWrap: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  aiIconWrapFocused: {
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-  },
-});
-
 export default function TabLayout() {
   const { user } = useAuth();
   const router = useRouter();
@@ -103,48 +64,46 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Swipe',
+          title: 'Home',
           tabBarIcon: ({ color }) => (
-            <MaterialIcons name="style" size={TAB_ICON_SIZE} color={color} />
+            <MaterialIcons
+              name="home-filled"
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="deals"
+        options={{
+          title: 'Deals',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons
+              name="local-offer"
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="food-trucks"
+        options={{
+          title: 'Food Trucks',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons
+              name="local-shipping"
+              size={TAB_ICON_SIZE}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen name="browse" options={{ href: null }} />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: 'AI',
-          tabBarIcon: ({ focused, color }) => (
-            <AITabIcon focused={focused} inactiveColor={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="orders"
-        options={{
-          title: 'Orders',
-          tabBarIcon: ({ color }) => (
-            <MaterialIcons
-              name="receipt-long"
-              size={TAB_ICON_SIZE}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <MaterialIcons
-              name="person-outline"
-              size={TAB_ICON_SIZE}
-              color={color}
-            />
-          ),
-        }}
-      />
+      <Tabs.Screen name="chat" options={{ href: null }} />
+      <Tabs.Screen name="orders" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="create" options={{ href: null }} />
       <Tabs.Screen name="join" options={{ href: null }} />
     </Tabs>
@@ -163,7 +122,9 @@ export default function TabLayout() {
         }
       >
         <MaterialIcons name="mark-email-unread" size={18} color="#FBBF24" />
-        <Text style={overlayStyles.verifyBannerText}>Email not verified · Tap to verify</Text>
+        <Text style={overlayStyles.verifyBannerText}>
+          Email not verified · Tap to verify
+        </Text>
       </Pressable>
       <View style={{ flex: 1 }} pointerEvents="box-none">
         {tabs}

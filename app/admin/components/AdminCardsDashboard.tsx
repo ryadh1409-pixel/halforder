@@ -1,7 +1,4 @@
-import {
-  adminCardShell,
-  adminColors as COLORS,
-} from '@/constants/adminTheme';
+import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
   ADMIN_FOOD_CARD_SLOT_COUNT,
   type AdminFoodCardSlotId,
@@ -28,7 +25,7 @@ import {
   View,
 } from 'react-native';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 
 type Draft = {
@@ -73,8 +70,7 @@ export function AdminCardsDashboard() {
               title: r.title,
               image: r.image,
               price: r.price > 0 ? String(r.price) : '',
-              sharingPrice:
-                r.sharingPrice > 0 ? String(r.sharingPrice) : '',
+              sharingPrice: r.sharingPrice > 0 ? String(r.sharingPrice) : '',
               venueLocation: r.venueLocation,
               active: r.active,
               aiDescription: r.aiDescription,
@@ -88,13 +84,9 @@ export function AdminCardsDashboard() {
     return unsub;
   }, []);
 
-  const ensureDraft = (docId: string): Draft =>
-    drafts[docId] ?? emptyDraft();
+  const ensureDraft = (docId: string): Draft => drafts[docId] ?? emptyDraft();
 
-  const setField = (
-    docId: AdminFoodCardSlotId,
-    patch: Partial<Draft>,
-  ) => {
+  const setField = (docId: AdminFoodCardSlotId, patch: Partial<Draft>) => {
     setDrafts((prev) => ({
       ...prev,
       [docId]: { ...ensureDraft(docId), ...patch },
@@ -108,8 +100,7 @@ export function AdminCardsDashboard() {
         title: r.title,
         image: r.image,
         price: r.price > 0 ? String(r.price) : '',
-        sharingPrice:
-          r.sharingPrice > 0 ? String(r.sharingPrice) : '',
+        sharingPrice: r.sharingPrice > 0 ? String(r.sharingPrice) : '',
         venueLocation: r.venueLocation,
         active: r.active,
         aiDescription: r.aiDescription,
@@ -219,10 +210,12 @@ export function AdminCardsDashboard() {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.headTitle}>Food cards (fixed {ADMIN_FOOD_CARD_SLOT_COUNT} slots)</Text>
+      <Text style={styles.headTitle}>
+        Food cards (fixed {ADMIN_FOOD_CARD_SLOT_COUNT} slots)
+      </Text>
       <Text style={styles.headSub}>
-        Only active slots appear in the app. Each slot uses document id 1–10. New
-        joins reuse the same card.
+        Only active slots appear in the app. Each slot uses document id 1–10.
+        New joins reuse the same card.
       </Text>
       {remote.map((slot) => {
         const docId = slot.docId;
@@ -302,7 +295,10 @@ export function AdminCardsDashboard() {
               multiline
             />
             <TouchableOpacity
-              style={[styles.secondaryBtn, aiBusyId === docId && styles.btnDisabled]}
+              style={[
+                styles.secondaryBtn,
+                aiBusyId === docId && styles.btnDisabled,
+              ]}
               disabled={aiBusyId === docId}
               onPress={() => onGenerateAi(slot)}
             >
@@ -318,7 +314,10 @@ export function AdminCardsDashboard() {
                 <Text style={styles.ghostBtnText}>Reset</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.saveBtn, savingId === docId && styles.btnDisabled]}
+                style={[
+                  styles.saveBtn,
+                  savingId === docId && styles.btnDisabled,
+                ]}
                 disabled={savingId === docId}
                 onPress={() => onSave(slot)}
               >
@@ -332,7 +331,9 @@ export function AdminCardsDashboard() {
           </View>
         );
       })}
-      <Text style={styles.footerId}>Signed in: {auth.currentUser?.uid ?? '—'}</Text>
+      <Text style={styles.footerId}>
+        Signed in: {auth.currentUser?.uid ?? '—'}
+      </Text>
     </View>
   );
 }

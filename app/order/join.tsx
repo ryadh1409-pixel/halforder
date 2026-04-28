@@ -36,7 +36,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { systemConfirm } from '@/components/SystemDialogHost';
 import { shadows, theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 type JoinableOrder = {
@@ -66,7 +66,9 @@ function docToJoinable(
   if (status !== 'open' && status !== 'waiting') return null;
 
   const users = Array.isArray(data.users)
-    ? data.users.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    ? data.users.filter(
+        (x): x is string => typeof x === 'string' && x.length > 0,
+      )
     : [];
   const usesHalf = users.length > 0;
   const members = memberIdsFromOrderData(data);
@@ -96,7 +98,7 @@ function docToJoinable(
       ? data.hostId.trim()
       : typeof data.createdBy === 'string' && data.createdBy.trim()
         ? data.createdBy.trim()
-        : members[0] ?? '—';
+        : (members[0] ?? '—');
 
   return {
     id,
@@ -131,7 +133,9 @@ function docToMySpot(
   }
 
   const users = Array.isArray(data.users)
-    ? data.users.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    ? data.users.filter(
+        (x): x is string => typeof x === 'string' && x.length > 0,
+      )
     : [];
   const usesHalf = users.length > 0;
 
@@ -144,8 +148,7 @@ function docToMySpot(
 
   const joinedAtMap = data.joinedAtMap as Record<string, unknown> | undefined;
   const joinedMs = parseJoinedAtMs(joinedAtMap?.[uid]);
-  const rem =
-    joinedMs != null ? remainingMsAfterJoin(joinedMs, now) : null;
+  const rem = joinedMs != null ? remainingMsAfterJoin(joinedMs, now) : null;
   const remainingLabel =
     rem != null && rem > 0
       ? formatOrderCountdown(rem)
@@ -231,9 +234,7 @@ export default function JoinOrderScreen() {
       return;
     }
     if (await isUserBanned(u)) {
-      showError(
-        'Your account has been restricted. You cannot join orders.',
-      );
+      showError('Your account has been restricted. You cannot join orders.');
       return;
     }
     setJoiningId(orderId);
@@ -256,9 +257,15 @@ export default function JoinOrderScreen() {
           return;
         }
       } else {
-        await joinOrderWithParticipantRecord(db, orderId, u, {}, {
-          requireOpenForJoin: true,
-        });
+        await joinOrderWithParticipantRecord(
+          db,
+          orderId,
+          u,
+          {},
+          {
+            requireOpenForJoin: true,
+          },
+        );
         await addDoc(collection(db, 'orders', orderId, 'messages'), {
           type: 'system',
           text: 'A participant joined',
@@ -296,7 +303,8 @@ export default function JoinOrderScreen() {
         if (spot.usesHalf) {
           await cancelHalfOrder(spot.id);
         } else {
-          const { leaveOrderParticipant } = await import('@/services/orderLifecycle');
+          const { leaveOrderParticipant } =
+            await import('@/services/orderLifecycle');
           await leaveOrderParticipant(db, spot.id, u);
         }
         showSuccess('You left the order.');
@@ -322,10 +330,7 @@ export default function JoinOrderScreen() {
         disabled={joiningId === item.id}
       >
         {joiningId === item.id ? (
-          <ActivityIndicator
-            size="small"
-            color={theme.colors.textOnPrimary}
-          />
+          <ActivityIndicator size="small" color={theme.colors.textOnPrimary} />
         ) : (
           <Text style={styles.joinBtnText}>Join order</Text>
         )}

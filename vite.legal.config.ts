@@ -6,7 +6,11 @@ const LEGAL_HTML = 'index.vite.html';
 
 function legalSpaFallbackPath(pathname: string): boolean {
   if (pathname === '/') return true;
-  if (pathname.startsWith('/@') || pathname.startsWith('/node_modules') || pathname.startsWith('/src/')) {
+  if (
+    pathname.startsWith('/@') ||
+    pathname.startsWith('/node_modules') ||
+    pathname.startsWith('/src/')
+  ) {
     return false;
   }
   if (pathname.match(/\.[a-zA-Z0-9]+$/)) return false;
@@ -29,7 +33,8 @@ function legalSpaFallback(): Plugin {
             next();
             return;
           }
-          req.url = query !== undefined ? `/${LEGAL_HTML}?${query}` : `/${LEGAL_HTML}`;
+          req.url =
+            query !== undefined ? `/${LEGAL_HTML}?${query}` : `/${LEGAL_HTML}`;
           next();
         });
       };

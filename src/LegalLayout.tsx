@@ -18,7 +18,8 @@ const styles = {
     padding: 'clamp(20px, 5vw, 36px)',
     background: '#fff',
     borderRadius: 16,
-    boxShadow: '0 4px 24px rgba(0, 90, 200, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06)',
+    boxShadow:
+      '0 4px 24px rgba(0, 90, 200, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06)',
   } as const,
   title: {
     margin: '0 0 20px',

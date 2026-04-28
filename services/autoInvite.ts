@@ -88,10 +88,8 @@ export async function autoInvite(input: AutoInviteOrderInput): Promise<void> {
   if (!oid || shouldDedupe(oid)) return;
 
   let food = input.foodName?.trim() || '';
-  let lat =
-    typeof input.latitude === 'number' ? input.latitude : null;
-  let lng =
-    typeof input.longitude === 'number' ? input.longitude : null;
+  let lat = typeof input.latitude === 'number' ? input.latitude : null;
+  let lng = typeof input.longitude === 'number' ? input.longitude : null;
   let creator = input.creatorUid?.trim() || '';
 
   try {

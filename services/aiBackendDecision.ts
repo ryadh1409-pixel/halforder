@@ -31,15 +31,10 @@ function extractModelText(data: unknown): string | null {
   if (typeof d.reply === 'string' && d.reply.trim()) return d.reply;
 
   /** Structured extractor from food assistant proxy */
-  if (
-    'food' in d ||
-    'category' in d ||
-    'searchQuery' in d
-  ) {
+  if ('food' in d || 'category' in d || 'searchQuery' in d) {
     const food = typeof d.food === 'string' ? d.food : '';
     const category = typeof d.category === 'string' ? d.category : 'unknown';
-    const searchQuery =
-      typeof d.searchQuery === 'string' ? d.searchQuery : '';
+    const searchQuery = typeof d.searchQuery === 'string' ? d.searchQuery : '';
     return JSON.stringify({
       intent: 'recommend_order',
       food,
@@ -55,7 +50,11 @@ function extractModelText(data: unknown): string | null {
   if (Array.isArray(out) && out[0] && typeof out[0] === 'object') {
     const first = out[0] as Record<string, unknown>;
     const content = first.content;
-    if (Array.isArray(content) && content[0] && typeof content[0] === 'object') {
+    if (
+      Array.isArray(content) &&
+      content[0] &&
+      typeof content[0] === 'object'
+    ) {
       const block = content[0] as Record<string, unknown>;
       const text = block.text;
       if (typeof text === 'string') return text;
@@ -75,12 +74,16 @@ function extractModelText(data: unknown): string | null {
   return null;
 }
 
-export function parseDecisionFromChatResponse(
-  data: unknown,
-): { decision: AiDecision; rawText: string | null } {
+export function parseDecisionFromChatResponse(data: unknown): {
+  decision: AiDecision;
+  rawText: string | null;
+} {
   const raw = extractModelText(data);
   if (!raw || !raw.trim()) {
-    return { decision: { intent: 'fallback', message: 'No response from AI.' }, rawText: raw };
+    return {
+      decision: { intent: 'fallback', message: 'No response from AI.' },
+      rawText: raw,
+    };
   }
 
   const trimmed = stripJsonFence(raw.trim());

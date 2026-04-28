@@ -39,8 +39,7 @@ export function AIDescription({
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
 
-  const stored =
-    typeof description === 'string' ? description.trim() : '';
+  const stored = typeof description === 'string' ? description.trim() : '';
   const fallbackText = useMemo(() => {
     if (stored) return '';
     return foodDescriptionFallback(
@@ -59,11 +58,7 @@ export function AIDescription({
   return (
     <>
       <View
-        style={[
-          styles.wrap,
-          compact && styles.wrapCompact,
-          containerStyle,
-        ]}
+        style={[styles.wrap, compact && styles.wrapCompact, containerStyle]}
       >
         <Text style={styles.body}>{displayText}</Text>
         {showAiDisclaimer ? (

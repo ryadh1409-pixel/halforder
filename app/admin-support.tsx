@@ -148,7 +148,9 @@ export default function AdminSupportScreen() {
 
   if (!selectedUserId) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.background, padding: 16 }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: c.background, padding: 16 }}
+      >
         <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 16 }}>
           Support chats
         </Text>

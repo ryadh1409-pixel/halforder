@@ -25,12 +25,15 @@ export function TrustScoreLabel({
   const suffix = compact
     ? ` ${numStr}`
     : ` ${numStr} (${count} review${count === 1 ? '' : 's'})`;
-  const statusText = tierLabel ?? (showTrusted && count >= 1 ? 'Trusted User 🔥' : null);
+  const statusText =
+    tierLabel ?? (showTrusted && count >= 1 ? 'Trusted User 🔥' : null);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       {count > 0 ? (
         <>
-          <Text style={{ color: STAR_COLOR, fontSize: compact ? 13 : 14 }}>★</Text>
+          <Text style={{ color: STAR_COLOR, fontSize: compact ? 13 : 14 }}>
+            ★
+          </Text>
           <Text
             style={{
               color: TEXT_COLOR,

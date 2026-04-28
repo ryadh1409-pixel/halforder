@@ -27,8 +27,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 export default function AdminSendNotificationScreen() {
@@ -93,9 +92,9 @@ export default function AdminSendNotificationScreen() {
 
       if (tokens.length === 0) {
         showError(
-          'No users with valid Expo push tokens matched your filters. Skipped without token: '
-            + skippedNoToken
-            + (skippedFilter ? ` · Filtered out: ${skippedFilter}` : ''),
+          'No users with valid Expo push tokens matched your filters. Skipped without token: ' +
+            skippedNoToken +
+            (skippedFilter ? ` · Filtered out: ${skippedFilter}` : ''),
         );
         setSending(false);
         return;

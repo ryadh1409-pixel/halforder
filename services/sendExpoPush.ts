@@ -43,11 +43,11 @@ export async function sendExpoPush(
         body: JSON.stringify(chunk),
       });
       const json = (await res.json()) as {
-        data?: Array<{ status?: string; message?: string; details?: ExpoTicketErr }>;
+        data?: { status?: string; message?: string; details?: ExpoTicketErr }[];
       };
       const results = Array.isArray(json?.data) ? json.data : [];
       results.forEach((r, idx) => {
-      if (r?.status === 'ok') {
+        if (r?.status === 'ok') {
           sent += 1;
         } else {
           failed += 1;

@@ -35,16 +35,16 @@ export function ShimmerSkeleton({
   });
 
   return (
-    <View
-      style={[
-        styles.base,
-        { width, height, borderRadius },
-        style,
-      ]}
-    >
-      <Animated.View style={[styles.shimmerWrap, { transform: [{ translateX: shimmerX }] }]}>
+    <View style={[styles.base, { width, height, borderRadius }, style]}>
+      <Animated.View
+        style={[styles.shimmerWrap, { transform: [{ translateX: shimmerX }] }]}
+      >
         <LinearGradient
-          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.18)', 'rgba(255,255,255,0)']}
+          colors={[
+            'rgba(255,255,255,0)',
+            'rgba(255,255,255,0.18)',
+            'rgba(255,255,255,0)',
+          ]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={styles.shimmer}

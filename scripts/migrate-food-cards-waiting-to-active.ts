@@ -34,7 +34,9 @@ async function main(): Promise<void> {
     .get();
 
   if (snap.empty) {
-    console.log('No food_cards documents with status == "waiting". Nothing to do.');
+    console.log(
+      'No food_cards documents with status == "waiting". Nothing to do.',
+    );
     return;
   }
 

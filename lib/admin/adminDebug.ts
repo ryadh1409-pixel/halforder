@@ -7,6 +7,10 @@ export function adminLog(scope: string, message: string, data?: unknown): void {
   }
 }
 
-export function adminError(scope: string, message: string, err?: unknown): void {
+export function adminError(
+  scope: string,
+  message: string,
+  err?: unknown,
+): void {
   console.error(`[admin:${scope}] ${message}`, err);
 }

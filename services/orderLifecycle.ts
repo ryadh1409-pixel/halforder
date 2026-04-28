@@ -228,8 +228,7 @@ export async function joinOrderWithParticipantRecord(
     }
 
     const resolved = options.resolveStatus?.(parts.length + 1, maxPeople);
-    const statusPatch =
-      resolved !== undefined ? { status: resolved } : {};
+    const statusPatch = resolved !== undefined ? { status: resolved } : {};
 
     const patch: Record<string, unknown> = {
       participants: arrayUnion(uid),
@@ -238,8 +237,7 @@ export async function joinOrderWithParticipantRecord(
       ...statusPatch,
     };
 
-    const isFirstJoinWindow =
-      parts.length <= 1 && orderExpiryUnset(d);
+    const isFirstJoinWindow = parts.length <= 1 && orderExpiryUnset(d);
     if (isFirstJoinWindow) {
       patch.startedAt = serverTimestamp();
       patch.expiresAt = Timestamp.fromMillis(

@@ -5,10 +5,7 @@ import {
   logFirestoreIndexError,
 } from '@/lib/joinOrderFirestore';
 import { db } from '@/services/firebase';
-import {
-  normalizeOrderUserIds,
-  planHalfOrderJoin,
-} from '@/services/orders';
+import { normalizeOrderUserIds, planHalfOrderJoin } from '@/services/orders';
 import {
   getPublicUserFields,
   mapRawUserDocument,
@@ -34,17 +31,20 @@ type OrderDocRow = {
   data: Record<string, unknown>;
 };
 
-function toOrderRows(
-  docs: QueryDocumentSnapshot[],
-): OrderDocRow[] {
-  return docs.map((d) => ({ id: d.id, data: d.data() as Record<string, unknown> }));
+function toOrderRows(docs: QueryDocumentSnapshot[]): OrderDocRow[] {
+  return docs.map((d) => ({
+    id: d.id,
+    data: d.data() as Record<string, unknown>,
+  }));
 }
 
 function filterAndSortJoinableOrders(rows: OrderDocRow[]): OrderDocRow[] {
   const filtered = rows.filter(({ data }) => {
     const st = data.status;
     if (typeof st !== 'string') return false;
-    if (!OPEN_ORDER_STATUSES.includes(st as (typeof OPEN_ORDER_STATUSES)[number])) {
+    if (
+      !OPEN_ORDER_STATUSES.includes(st as (typeof OPEN_ORDER_STATUSES)[number])
+    ) {
       return false;
     }
     const users = normalizeOrderUserIds(data.users);
@@ -124,9 +124,7 @@ export function subscribeJoinHintsForFoodCard(
       const rows = toOrderRows(snap.docs);
       const openFormation = rows.filter(({ data }) => {
         const st = data.status;
-        return (
-          st === ORDER_STATUS.WAITING || st === ORDER_STATUS.ACTIVE
-        );
+        return st === ORDER_STATUS.WAITING || st === ORDER_STATUS.ACTIVE;
       });
       const anyOpenOrderMemberIds = new Set<string>();
       openFormation.forEach(({ data }) => {
@@ -179,9 +177,7 @@ export async function transactionJoinHalfOrderForCard(args: {
     const st = od.status;
     if (
       typeof st !== 'string' ||
-      !OPEN_ORDER_STATUSES.includes(
-        st as (typeof OPEN_ORDER_STATUSES)[number],
-      )
+      !OPEN_ORDER_STATUSES.includes(st as (typeof OPEN_ORDER_STATUSES)[number])
     ) {
       return { kind: 'skip' as const };
     }
@@ -196,9 +192,7 @@ export async function transactionJoinHalfOrderForCard(args: {
 
     const partIds = normalizeOrderUserIds(od.participants);
     let hostForPlan: PublicUserFields | null =
-      partIds.length === 0 && users.length === 1
-        ? hostProfilePrefetch
-        : null;
+      partIds.length === 0 && users.length === 1 ? hostProfilePrefetch : null;
     if (
       partIds.length === 0 &&
       users.length === 1 &&
@@ -250,7 +244,10 @@ export async function loadHostProfileForOrderJoin(
   if (!o.exists()) return null;
   const od = o.data() as Record<string, unknown>;
   const users = normalizeOrderUserIds(od.users);
-  if (users.length !== 1 || normalizeOrderUserIds(od.participants).length !== 0) {
+  if (
+    users.length !== 1 ||
+    normalizeOrderUserIds(od.participants).length !== 0
+  ) {
     return null;
   }
   return getPublicUserFields(users[0]);

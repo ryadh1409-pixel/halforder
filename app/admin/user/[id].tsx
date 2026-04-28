@@ -38,7 +38,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 type OrderRow = {
@@ -83,7 +83,7 @@ export default function AdminUserDetailScreen() {
           exists: snap.exists(),
           id: userId,
         });
-        setProfile(snap.exists() ? snap.data() ?? {} : {});
+        setProfile(snap.exists() ? (snap.data() ?? {}) : {});
         setProfileLoading(false);
       },
       (err) => {
@@ -96,11 +96,16 @@ export default function AdminUserDetailScreen() {
 
   useEffect(() => {
     if (!userId) return;
-    adminLog('user-detail', 'subscribe orders (filter client-side)', { userId });
+    adminLog('user-detail', 'subscribe orders (filter client-side)', {
+      userId,
+    });
     const unsub = onSnapshot(
       collection(db, 'orders'),
       (snap) => {
-        adminLog('user-detail', `orders snapshot for user: ${snap.size} total docs`);
+        adminLog(
+          'user-detail',
+          `orders snapshot for user: ${snap.size} total docs`,
+        );
         const next = new Map<string, OrderRow>();
         snap.docs.forEach((d) => {
           const data = d.data() as Record<string, unknown>;
@@ -109,7 +114,9 @@ export default function AdminUserDetailScreen() {
           const creator = orderCreatorUid(data);
           const title =
             (typeof data.foodName === 'string' ? data.foodName : null) ??
-            (typeof data.restaurantName === 'string' ? data.restaurantName : null) ??
+            (typeof data.restaurantName === 'string'
+              ? data.restaurantName
+              : null) ??
             d.id.slice(0, 8);
           next.set(d.id, {
             id: d.id,
@@ -119,9 +126,9 @@ export default function AdminUserDetailScreen() {
             createdAt: formatFirestoreTime(data.createdAt),
           });
         });
-      adminLog('user-detail', `user linked orders: ${next.size}`);
-      setOrdersMap(next);
-    },
+        adminLog('user-detail', `user linked orders: ${next.size}`);
+        setOrdersMap(next);
+      },
       (err) => adminError('user-detail', 'orders listener error', err),
     );
     return () => unsub();
@@ -321,7 +328,9 @@ export default function AdminUserDetailScreen() {
             <Text style={styles.k}>User id</Text>
             <Text style={styles.mono}>{userId}</Text>
             <Text style={styles.k}>Member since</Text>
-            <Text style={styles.v}>{formatFirestoreTime(profile?.createdAt)}</Text>
+            <Text style={styles.v}>
+              {formatFirestoreTime(profile?.createdAt)}
+            </Text>
           </View>
 
           <View style={styles.rowStats}>

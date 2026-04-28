@@ -20,8 +20,7 @@ const PLACES_WEB_KEY = (
 /** Nearby Search for chat: prefer the Maps-named env var (Expo embeds at build time). */
 function nearbySearchApiKey(): string {
   return (
-    (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim() ||
-    PLACES_WEB_KEY
+    (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim() || PLACES_WEB_KEY
   );
 }
 
@@ -108,7 +107,10 @@ export async function resolveLocationCoordsForFoodChat(
   const q = locationLabel.trim();
   if (!q) return null;
   if (/\bnorth\s+york\b/i.test(q)) {
-    return { lat: NORTH_YORK_FIXED_COORDS.lat, lng: NORTH_YORK_FIXED_COORDS.lng };
+    return {
+      lat: NORTH_YORK_FIXED_COORDS.lat,
+      lng: NORTH_YORK_FIXED_COORDS.lng,
+    };
   }
   return getCoordinates(q);
 }
@@ -194,11 +196,7 @@ export function matchPlaceRestaurantByName(
   if (!raw) return places[0];
 
   const normalize = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[''`]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    s.toLowerCase().replace(/[''`]/g, '').replace(/\s+/g, ' ').trim();
 
   const nn = normalize(raw);
 
@@ -212,7 +210,9 @@ export function matchPlaceRestaurantByName(
   const firstWord = nn.split(' ')[0];
   if (firstWord.length > 2) {
     const hit = places.find((p) =>
-      normalize(p.name).split(' ').some((w) => w.startsWith(firstWord)),
+      normalize(p.name)
+        .split(' ')
+        .some((w) => w.startsWith(firstWord)),
     );
     if (hit) return hit;
   }
@@ -253,9 +253,7 @@ async function textSearchForChat(
     }
 
     const rows = data.results ?? [];
-    const sorted = [...rows].sort(
-      (a, b) => (b.rating ?? 0) - (a.rating ?? 0),
-    );
+    const sorted = [...rows].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
 
     return sorted.slice(0, limit).map((p) => ({
       name: p.name,
@@ -294,9 +292,7 @@ async function textSearchFoodInLocation(
       return [];
     }
     const rows = data.results ?? [];
-    const sorted = [...rows].sort(
-      (a, b) => (b.rating ?? 0) - (a.rating ?? 0),
-    );
+    const sorted = [...rows].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     return sorted.slice(0, limit).map((p) => ({
       name: p.name,
       rating: typeof p.rating === 'number' ? p.rating : 0,

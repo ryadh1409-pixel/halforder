@@ -45,7 +45,9 @@ export function useBlock(): UseBlockResult {
       (snap) => {
         const raw = snap.data()?.blockedUsers;
         const list = Array.isArray(raw)
-          ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0)
+          ? raw.filter(
+              (x): x is string => typeof x === 'string' && x.length > 0,
+            )
           : [];
         setBlockedByMeIds(list);
       },

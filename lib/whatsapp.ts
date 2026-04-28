@@ -9,7 +9,9 @@ export const WHATSAPP_MATCH_DEFAULT_MESSAGE =
   "Hey, we matched on HalfOrder. Let's coordinate pickup.";
 
 /** Strip everything except digits (removes +, spaces, dashes). */
-export function sanitizeWhatsAppDigits(phone: string | null | undefined): string {
+export function sanitizeWhatsAppDigits(
+  phone: string | null | undefined,
+): string {
   if (!phone) return '';
   return phone.replace(/\D/g, '');
 }
@@ -21,7 +23,9 @@ export function buildWhatsAppMeUrl(
   const d = sanitizeWhatsAppDigits(phoneDigits);
   if (!d) return '';
   const q =
-    message.trim().length > 0 ? `?text=${encodeURIComponent(message.trim())}` : '';
+    message.trim().length > 0
+      ? `?text=${encodeURIComponent(message.trim())}`
+      : '';
   return `https://wa.me/${d}${q}`;
 }
 

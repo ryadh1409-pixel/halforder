@@ -78,9 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, ready, isAdmin, signInAdmin, logout, authError],
   );
 
-  return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

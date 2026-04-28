@@ -85,7 +85,9 @@ export default function JoinInviteScreen() {
           ? d.participants.filter((x): x is string => typeof x === 'string')
           : [];
         const maxPeople =
-          typeof d?.maxPeople === 'number' && d.maxPeople >= 1 ? d.maxPeople : 2;
+          typeof d?.maxPeople === 'number' && d.maxPeople >= 1
+            ? d.maxPeople
+            : 2;
         const expRaw = d?.expiresAt;
         const expiresAtMs =
           typeof expRaw === 'number'
@@ -97,8 +99,7 @@ export default function JoinInviteScreen() {
           restaurantName:
             typeof d?.restaurantName === 'string' ? d.restaurantName : '—',
           mealType: typeof d?.mealType === 'string' ? d.mealType : '—',
-          sharePrice:
-            typeof d?.sharePrice === 'number' ? d.sharePrice : 0,
+          sharePrice: typeof d?.sharePrice === 'number' ? d.sharePrice : 0,
           hostName:
             typeof d?.userName === 'string'
               ? d.userName
@@ -132,8 +133,7 @@ export default function JoinInviteScreen() {
     order != null &&
     (order.status === 'expired' ||
       (order.expiresAtMs != null && order.expiresAtMs <= Date.now()));
-  const isFull =
-    order != null && order.participants.length >= order.maxPeople;
+  const isFull = order != null && order.participants.length >= order.maxPeople;
 
   const handleJoinOrder = () => {
     if (!orderId) return;
@@ -258,9 +258,7 @@ export default function JoinInviteScreen() {
           ) : isExpired ? (
             <>
               <View style={styles.statusBox}>
-                <Text style={styles.statusError}>
-                  This order has expired.
-                </Text>
+                <Text style={styles.statusError}>This order has expired.</Text>
               </View>
               <TouchableOpacity
                 style={styles.secondaryButton}

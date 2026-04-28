@@ -24,8 +24,7 @@ async function searchPlaces(query) {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': process.env.GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask':
-            'places.displayName,places.formattedAddress',
+          'X-Goog-FieldMask': 'places.displayName,places.formattedAddress',
         },
         body: JSON.stringify({
           textQuery: String(query).trim(),
@@ -88,8 +87,7 @@ app.post('/chat', async (req, res) => {
     } else if (!process.env.OPENAI_API_KEY) {
       console.error('OPENAI_API_KEY is not set');
       httpStatus = 500;
-      aiText =
-        'OPENAI_API_KEY is not set. Add it to .env (see .env.example).';
+      aiText = 'OPENAI_API_KEY is not set. Add it to .env (see .env.example).';
       placesOut = [];
     } else {
       console.log('User:', message);
@@ -138,8 +136,7 @@ User message: ${message}
         aiText = errText;
         placesOut = [];
       } else {
-        aiText =
-          data?.output?.[0]?.content?.[0]?.text || 'No response';
+        aiText = data?.output?.[0]?.content?.[0]?.text || 'No response';
 
         console.log('Clean AI:', aiText);
 

@@ -4,7 +4,9 @@
 import { getPublicUserFields } from '@/services/users';
 import { useEffect, useState } from 'react';
 
-export function useBlockedUserLabels(userIds: readonly string[]): Record<string, string> {
+export function useBlockedUserLabels(
+  userIds: readonly string[],
+): Record<string, string> {
   const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {

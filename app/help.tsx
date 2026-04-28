@@ -14,9 +14,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
+import {
+  systemActionSheet,
+  systemConfirm,
+} from '@/components/SystemDialogHost';
 import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 const c = theme.colors;
@@ -69,8 +72,7 @@ export default function HelpScreen() {
           : [];
         const hostId =
           typeof data?.hostId === 'string' && data.hostId ? data.hostId : null;
-        let otherUserId =
-          plist.find((pid) => pid !== uid) ?? null;
+        let otherUserId = plist.find((pid) => pid !== uid) ?? null;
         if (!otherUserId && hostId && hostId !== uid) {
           otherUserId = hostId;
         }

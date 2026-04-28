@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 
-import { logError } from '@/utils/errorLogger';
+import { logError } from '@/utils/errors';
 
 export class ImagePickerPermissionError extends Error {
   override readonly name = 'ImagePickerPermissionError';
@@ -34,9 +34,7 @@ export async function pickImageFromLibrary(
     );
   }
 
-  let result: Awaited<
-    ReturnType<typeof ImagePicker.launchImageLibraryAsync>
-  >;
+  let result: Awaited<ReturnType<typeof ImagePicker.launchImageLibraryAsync>>;
   try {
     result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],

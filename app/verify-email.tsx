@@ -4,8 +4,8 @@ import { auth } from '@/services/firebase';
 import {
   getUserFriendlyError,
   isFirebaseAuthUserInvalidated,
-} from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+  logError,
+} from '@/utils/errors';
 import {
   VERIFY_EMAIL_HOME_HREF,
   checkEmailVerifiedAndRedirect,
@@ -58,7 +58,9 @@ export default function VerifyEmailScreen() {
     hasNavigatedRef.current = true;
     clearPollInterval();
     showSuccess('Email verified successfully');
-    router.replace(VERIFY_EMAIL_HOME_HREF as Parameters<typeof router.replace>[0]);
+    router.replace(
+      VERIFY_EMAIL_HOME_HREF as Parameters<typeof router.replace>[0],
+    );
   }, [router, clearPollInterval]);
 
   const attemptRefreshAndRedirect = useCallback(async (): Promise<boolean> => {
@@ -90,7 +92,9 @@ export default function VerifyEmailScreen() {
       if (hasNavigatedRef.current) return;
       hasNavigatedRef.current = true;
       clearPollInterval();
-      router.replace(VERIFY_EMAIL_HOME_HREF as Parameters<typeof router.replace>[0]);
+      router.replace(
+        VERIFY_EMAIL_HOME_HREF as Parameters<typeof router.replace>[0],
+      );
     }
   }, [authLoading, user, router, clearPollInterval]);
 
@@ -234,11 +238,13 @@ export default function VerifyEmailScreen() {
         <View style={styles.waitingBlock}>
           <ActivityIndicator size="large" color={c.primary} />
           <Text style={styles.waitingText}>
-            {checking ? 'Checking verification status…' : 'Waiting for verification…'}
+            {checking
+              ? 'Checking verification status…'
+              : 'Waiting for verification…'}
           </Text>
           <Text style={styles.waitingHint}>
-            We check automatically every few seconds. After you tap the link, you can
-            also press I verified.
+            We check automatically every few seconds. After you tap the link,
+            you can also press I verified.
           </Text>
         </View>
 
@@ -262,15 +268,24 @@ export default function VerifyEmailScreen() {
         ) : null}
 
         <TouchableOpacity
-          style={[styles.secondaryBtn, resendDisabled && styles.secondaryBtnDisabled]}
+          style={[
+            styles.secondaryBtn,
+            resendDisabled && styles.secondaryBtnDisabled,
+          ]}
           onPress={() => void handleResend()}
           disabled={resendDisabled}
           activeOpacity={0.85}
         >
           {resendLoading ? (
             <View style={styles.resendRow}>
-              <ActivityIndicator color={c.primary} size="small" style={styles.resendSpinner} />
-              <Text style={[styles.secondaryBtnText, styles.secondaryBtnTextMuted]}>
+              <ActivityIndicator
+                color={c.primary}
+                size="small"
+                style={styles.resendSpinner}
+              />
+              <Text
+                style={[styles.secondaryBtnText, styles.secondaryBtnTextMuted]}
+              >
                 Sending...
               </Text>
             </View>

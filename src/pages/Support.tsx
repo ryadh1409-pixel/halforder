@@ -8,13 +8,14 @@ export default function Support() {
       </p>
       <p style={legalText.p}>
         Email:{' '}
-        <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: '#007aff', fontWeight: 600 }}>
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
+          style={{ color: '#007aff', fontWeight: 600 }}
+        >
           {SUPPORT_EMAIL}
         </a>
       </p>
-      <p style={legalText.footerNote}>
-        We usually respond within 24 hours.
-      </p>
+      <p style={legalText.footerNote}>We usually respond within 24 hours.</p>
     </LegalLayout>
   );
 }

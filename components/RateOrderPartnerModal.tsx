@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError } from '@/utils/toast';
 
 const C = theme.colors;

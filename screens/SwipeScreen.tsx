@@ -6,7 +6,13 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Animated as RNAnimated,
   Dimensions,
@@ -17,10 +23,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showError } from '@/utils/toast';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -58,7 +67,10 @@ import { haversineDistanceKm } from '@/lib/haversine';
 import { acceptFoodSwipe } from '@/services/foodSwipeMatch';
 import { ensureOrderChatInitialized } from '@/services/chat';
 import { auth, db } from '@/services/firebase';
-import { getCityFromCoordinates, getUserLocationSafe } from '@/services/location';
+import {
+  getCityFromCoordinates,
+  getUserLocationSafe,
+} from '@/services/location';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_RADIUS = 26;
@@ -136,7 +148,9 @@ function SuccessBurst({ burstKey }: { burstKey: number }) {
       pointerEvents="none"
       style={[styles.successBurstWrap, { opacity }]}
     >
-      <RNAnimated.Text style={[styles.successHeart, { transform: [{ scale }] }]}>
+      <RNAnimated.Text
+        style={[styles.successHeart, { transform: [{ scale }] }]}
+      >
         ❤️
       </RNAnimated.Text>
       <Text style={styles.successNice}>Nice!</Text>
@@ -145,7 +159,13 @@ function SuccessBurst({ burstKey }: { burstKey: number }) {
   );
 }
 
-function GlassBar({ children, style }: { children: React.ReactNode; style?: object }) {
+function GlassBar({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: object;
+}) {
   if (Platform.OS === 'ios') {
     return (
       <BlurView intensity={55} tint="dark" style={[styles.glass, style]}>
@@ -222,14 +242,13 @@ function FoodCardFace({ card }: { card: SwipeCard }) {
                 📍 {card.distanceLabel || 'Distance unavailable'}
               </Text>
             </View>
-            {card.isOwner ? <Text style={styles.ownerTag}>Your order</Text> : null}
+            {card.isOwner ? (
+              <Text style={styles.ownerTag}>Your order</Text>
+            ) : null}
           </View>
           <Text style={styles.joinedLine}>{joinedLabel}</Text>
           <Text
-            style={[
-              styles.spotsLine,
-              spotsLeft <= 0 && styles.spotsLineMuted,
-            ]}
+            style={[styles.spotsLine, spotsLeft <= 0 && styles.spotsLineMuted]}
           >
             {spotsLabel}
           </Text>
@@ -286,7 +305,9 @@ function ScalePress({
       onPressOut={pressOut}
       disabled={disabled}
     >
-      <RNAnimated.View style={{ transform: [{ scale }] }}>{children}</RNAnimated.View>
+      <RNAnimated.View style={{ transform: [{ scale }] }}>
+        {children}
+      </RNAnimated.View>
     </Pressable>
   );
 }
@@ -359,7 +380,8 @@ function SwipeScreenInner() {
           return {
             id: d.id,
             title:
-              typeof data?.restaurantName === 'string' && data.restaurantName.trim()
+              typeof data?.restaurantName === 'string' &&
+              data.restaurantName.trim()
                 ? data.restaurantName
                 : 'Restaurant',
             type,
@@ -380,14 +402,16 @@ function SwipeScreenInner() {
                 ? data.userName
                 : typeof data?.name === 'string' && data.name.trim()
                   ? data.name
-                : 'User',
+                  : 'User',
             userAvatar:
               typeof data?.userAvatar === 'string' && data.userAvatar.trim()
                 ? data.userAvatar
                 : typeof data?.avatar === 'string' && data.avatar.trim()
                   ? data.avatar
-                : null,
-            isOwner: currentUid !== '' && (data?.createdBy === currentUid || data?.userId === currentUid),
+                  : null,
+            isOwner:
+              currentUid !== '' &&
+              (data?.createdBy === currentUid || data?.userId === currentUid),
             distanceLabel: (() => {
               const lat = data?.location?.latitude ?? data?.latitude;
               const lng = data?.location?.longitude ?? data?.longitude;
@@ -446,7 +470,11 @@ function SwipeScreenInner() {
 
       setJoiningOrderId(order.id);
       try {
-        const swipeResult = await acceptFoodSwipe(db, order.id, currentUser.uid);
+        const swipeResult = await acceptFoodSwipe(
+          db,
+          order.id,
+          currentUser.uid,
+        );
         if (!swipeResult.ok) {
           throw new Error(swipeResult.error);
         }
@@ -469,7 +497,9 @@ function SwipeScreenInner() {
           trigger: null,
         }).catch(() => {});
         setBurstKey((k) => k + 1);
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
         router.push(`/order/${order.id}` as const);
         setIndex((i) => i + 1);
       } catch (error) {
@@ -585,9 +615,13 @@ function SwipeScreenInner() {
       commitSwipeRight();
       return;
     }
-    translateX.value = withTiming(-SWIPE_OUT, { duration: REJECT_MS }, (done) => {
-      if (done) runOnJS(commitSwipeLeft)();
-    });
+    translateX.value = withTiming(
+      -SWIPE_OUT,
+      { duration: REJECT_MS },
+      (done) => {
+        if (done) runOnJS(commitSwipeLeft)();
+      },
+    );
     translateY.value = withTiming(0, { duration: REJECT_MS });
   };
 
@@ -619,7 +653,9 @@ function SwipeScreenInner() {
                   onPress={() => setTab(t.key)}
                   style={[styles.tabChip, active && styles.tabChipActive]}
                 >
-                  <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                  <Text
+                    style={[styles.tabLabel, active && styles.tabLabelActive]}
+                  >
                     {t.label}
                   </Text>
                 </Pressable>
@@ -633,8 +669,8 @@ function SwipeScreenInner() {
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No more cards right now</Text>
               <Text style={styles.emptySub}>
-                No active orders to show — start one and others can join, or replay
-                this list.
+                No active orders to show — start one and others can join, or
+                replay this list.
               </Text>
               <Pressable style={styles.resetBtn} onPress={resetDeck}>
                 <Text style={styles.resetBtnText}>Show cards again</Text>
@@ -643,7 +679,13 @@ function SwipeScreenInner() {
           ) : (
             <>
               {next ? (
-                <View style={[styles.cardShell, styles.cardBehind, { maxHeight: cardMaxH }]}>
+                <View
+                  style={[
+                    styles.cardShell,
+                    styles.cardBehind,
+                    { maxHeight: cardMaxH },
+                  ]}
+                >
                   <FoodCardFace card={next} />
                 </View>
               ) : null}
@@ -658,10 +700,16 @@ function SwipeScreenInner() {
                   ]}
                 >
                   <FoodCardFace card={current} />
-                  <Animated.View style={[styles.stamp, styles.stampLike, likeStamp]} pointerEvents="none">
+                  <Animated.View
+                    style={[styles.stamp, styles.stampLike, likeStamp]}
+                    pointerEvents="none"
+                  >
                     <Text style={styles.stampLikeText}>LIKE</Text>
                   </Animated.View>
-                  <Animated.View style={[styles.stamp, styles.stampNope, nopeStamp]} pointerEvents="none">
+                  <Animated.View
+                    style={[styles.stamp, styles.stampNope, nopeStamp]}
+                    pointerEvents="none"
+                  >
                     <Text style={styles.stampNopeText}>NOPE</Text>
                   </Animated.View>
                 </Animated.View>
@@ -676,7 +724,10 @@ function SwipeScreenInner() {
               <Text style={styles.circleEmoji}>❌</Text>
             </View>
           </ScalePress>
-          <ScalePress onPress={() => fly('right')} disabled={!current || !!joiningOrderId}>
+          <ScalePress
+            onPress={() => fly('right')}
+            disabled={!current || !!joiningOrderId}
+          >
             <View style={[styles.circleBtn, styles.acceptCircle]}>
               <Text style={styles.circleEmoji}>❤️</Text>
             </View>

@@ -32,11 +32,11 @@ function coerceSlot(
   raw?: Record<string, unknown>,
 ): AdminFoodCardSlot {
   const idNum =
-    raw && typeof raw.id === 'number' ? raw.id : Number.parseInt(docId, 10) || 1;
-  const price =
-    typeof raw?.price === 'number' && raw.price > 0 ? raw.price : 0;
-  const splitFallback =
-    price > 0 ? Number((price / 2).toFixed(2)) : 0;
+    raw && typeof raw.id === 'number'
+      ? raw.id
+      : Number.parseInt(docId, 10) || 1;
+  const price = typeof raw?.price === 'number' && raw.price > 0 ? raw.price : 0;
+  const splitFallback = price > 0 ? Number((price / 2).toFixed(2)) : 0;
   const sharing =
     typeof raw?.sharingPrice === 'number' && raw.sharingPrice > 0
       ? raw.sharingPrice
@@ -142,8 +142,7 @@ export async function saveAdminFoodCardSlot(
       active: input.active === true,
       maxUsers: 2,
       restaurantName:
-        typeof input.restaurantName === 'string' &&
-        input.restaurantName.trim()
+        typeof input.restaurantName === 'string' && input.restaurantName.trim()
           ? input.restaurantName.trim()
           : 'HalfOrder',
       createdAt: serverTimestamp(),

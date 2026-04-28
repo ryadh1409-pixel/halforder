@@ -31,7 +31,9 @@ export async function getTermsAcceptedAsync(): Promise<boolean> {
 }
 
 /** Persist acceptance; writes both keys so older code paths stay consistent. */
-export async function setTermsAcceptedAsync(isoTimestamp: string): Promise<void> {
+export async function setTermsAcceptedAsync(
+  isoTimestamp: string,
+): Promise<void> {
   const v = isoTimestamp.trim();
   await AsyncStorage.multiSet([
     [ACCEPTED_TERMS_KEY, v],

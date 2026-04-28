@@ -57,17 +57,17 @@ export default function TermsScreen() {
           <Text style={styles.metaStrong}>Last Updated:</Text> {LAST_UPDATED}
         </Text>
         <Text style={styles.paragraph}>
-          Welcome to HalfOrder. By using our platform, you agree to the following Terms
-          of Service. Please read them carefully.
+          Welcome to HalfOrder. By using our platform, you agree to the
+          following Terms of Service. Please read them carefully.
         </Text>
 
         <Hr />
 
         <Text style={styles.sectionHeading}>1. Overview of Service</Text>
         <Text style={styles.paragraph}>
-          HalfOrder is a platform that connects users who want to share food orders. The
-          app facilitates coordination between users but does not sell, prepare, or
-          deliver food.
+          HalfOrder is a platform that connects users who want to share food
+          orders. The app facilitates coordination between users but does not
+          sell, prepare, or deliver food.
         </Text>
         <Text style={styles.paragraph}>
           HalfOrder is not a restaurant, delivery service, or payment processor.
@@ -76,7 +76,9 @@ export default function TermsScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>2. User Responsibilities</Text>
-        <Text style={styles.paragraph}>By using HalfOrder, you agree that:</Text>
+        <Text style={styles.paragraph}>
+          By using HalfOrder, you agree that:
+        </Text>
         <Bullets
           items={[
             'You are at least 18 years old.',
@@ -85,11 +87,15 @@ export default function TermsScreen() {
             'You agree to behave respectfully and not engage in fraud, harassment, or illegal activities.',
           ]}
         />
-        <Text style={styles.paragraph}>HalfOrder is not responsible for user behavior.</Text>
+        <Text style={styles.paragraph}>
+          HalfOrder is not responsible for user behavior.
+        </Text>
 
         <Hr />
 
-        <Text style={styles.sectionHeading}>3. Coordination &amp; payments</Text>
+        <Text style={styles.sectionHeading}>
+          3. Coordination &amp; payments
+        </Text>
         <Text style={styles.paragraph}>
           HalfOrder is used for coordination only. Any arrangements are made
           independently between users.
@@ -109,9 +115,13 @@ export default function TermsScreen() {
 
         <Hr />
 
-        <Text style={styles.sectionHeading}>4. Food &amp; Safety Disclaimer</Text>
+        <Text style={styles.sectionHeading}>
+          4. Food &amp; Safety Disclaimer
+        </Text>
         <Text style={styles.paragraph}>HalfOrder does not verify:</Text>
-        <Bullets items={['Food quality', 'Food safety', 'Restaurant standards']} />
+        <Bullets
+          items={['Food quality', 'Food safety', 'Restaurant standards']}
+        />
         <Text style={styles.paragraph}>Users are responsible for:</Text>
         <Bullets
           items={[
@@ -128,7 +138,9 @@ export default function TermsScreen() {
         <Text style={styles.sectionHeading}>5. User-Generated Content</Text>
         <Text style={styles.paragraph}>Users may create content such as:</Text>
         <Bullets items={['Food orders', 'Messages', 'Photos']} />
-        <Text style={styles.paragraph}>By posting content, you agree that:</Text>
+        <Text style={styles.paragraph}>
+          By posting content, you agree that:
+        </Text>
         <Bullets
           items={[
             'You own or have rights to the content',
@@ -160,7 +172,9 @@ export default function TermsScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>7. Limitation of Liability</Text>
-        <Text style={styles.paragraph}>HalfOrder is provided &quot;as is&quot;.</Text>
+        <Text style={styles.paragraph}>
+          HalfOrder is provided &quot;as is&quot;.
+        </Text>
         <Text style={styles.paragraph}>We are NOT responsible for:</Text>
         <Bullets
           items={[
@@ -171,7 +185,8 @@ export default function TermsScreen() {
           ]}
         />
         <Text style={styles.paragraph}>
-          To the fullest extent permitted by law, HalfOrder disclaims all liability.
+          To the fullest extent permitted by law, HalfOrder disclaims all
+          liability.
         </Text>
 
         <Hr />
@@ -185,17 +200,19 @@ export default function TermsScreen() {
           .
         </Text>
         <Text style={styles.paragraph}>
-          We only collect necessary data to operate the platform and improve user
-          experience.
+          We only collect necessary data to operate the platform and improve
+          user experience.
         </Text>
 
         <Hr />
 
         <Text style={styles.sectionHeading}>9. Changes to Terms</Text>
-        <Text style={styles.paragraph}>We may update these Terms at any time.</Text>
         <Text style={styles.paragraph}>
-          Users will be notified of major changes. Continued use of the app means you
-          accept the updated terms.
+          We may update these Terms at any time.
+        </Text>
+        <Text style={styles.paragraph}>
+          Users will be notified of major changes. Continued use of the app
+          means you accept the updated terms.
         </Text>
 
         <Hr />
@@ -218,8 +235,8 @@ export default function TermsScreen() {
         <Hr />
 
         <Text style={styles.footerNote}>
-          By using HalfOrder, you acknowledge that you understand and agree to these
-          Terms.
+          By using HalfOrder, you acknowledge that you understand and agree to
+          these Terms.
         </Text>
       </ScrollView>
     </SafeAreaView>

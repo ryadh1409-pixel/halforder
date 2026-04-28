@@ -75,7 +75,11 @@ export function validateOrderForCreate(order: {
   if (!order.restaurant?.trim()) return false;
   if (!order.foodType?.trim()) return false;
   if (!order.size?.trim()) return false;
-  if (order.totalPrice == null || !Number.isFinite(order.totalPrice) || order.totalPrice <= 0)
+  if (
+    order.totalPrice == null ||
+    !Number.isFinite(order.totalPrice) ||
+    order.totalPrice <= 0
+  )
     return false;
   if (
     !order.location ||
@@ -151,11 +155,7 @@ export function mealCategoryFromText(text: string): MealCategory | null {
     t.includes('bowl')
   )
     return 'healthy';
-  if (
-    t.includes('other meal') ||
-    t.includes('🍽') ||
-    /\bother\b/.test(t)
-  ) {
+  if (t.includes('other meal') || t.includes('🍽') || /\bother\b/.test(t)) {
     return 'other';
   }
   return null;
@@ -191,7 +191,10 @@ function parseTypeChoice(text: string, options: string[]): string | null {
   const low = norm(text);
   for (const o of options) {
     const on = norm(o);
-    if (low.includes(on) || on.split(' ').every((w) => w.length > 2 && low.includes(w))) {
+    if (
+      low.includes(on) ||
+      on.split(' ').every((w) => w.length > 2 && low.includes(w))
+    ) {
       return o;
     }
   }
@@ -216,8 +219,14 @@ function parseSize(text: string): 'small' | 'medium' | 'large' | null {
   return null;
 }
 
-function priceFor(category: MealCategory, size: 'small' | 'medium' | 'large'): number {
-  const table: Record<MealCategory, Record<'small' | 'medium' | 'large', number>> = {
+function priceFor(
+  category: MealCategory,
+  size: 'small' | 'medium' | 'large',
+): number {
+  const table: Record<
+    MealCategory,
+    Record<'small' | 'medium' | 'large', number>
+  > = {
     pizza: { small: 16, medium: 22, large: 28 },
     burger: { small: 15, medium: 20, large: 26 },
     healthy: { small: 14, medium: 19, large: 24 },
@@ -397,8 +406,7 @@ export async function processOrderBuilderTurn(input: {
       .map((o, i) => `${i + 1}. ${o.name} (${o.distanceKm.toFixed(1)} km)`)
       .join('\n');
     push({
-      text:
-        `Here are nearby ${cat === 'pizza' ? 'pizza' : cat === 'burger' ? 'burger' : cat === 'healthy' ? 'healthy' : ''} places:\n\n${lines}\n\nPick one (1–3 or name).`,
+      text: `Here are nearby ${cat === 'pizza' ? 'pizza' : cat === 'burger' ? 'burger' : cat === 'healthy' ? 'healthy' : ''} places:\n\n${lines}\n\nPick one (1–3 or name).`,
       action: 'none',
     });
     return { session, messages };

@@ -92,7 +92,10 @@ export default function AdminUsersScreen() {
       (snap) => {
         adminLog('users', `orders snapshot: ${snap.size} documents`);
         setOrders(
-          snap.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, unknown> })),
+          snap.docs.map((d) => ({
+            id: d.id,
+            data: d.data() as Record<string, unknown>,
+          })),
         );
         setOrdersReady(true);
       },
@@ -150,7 +153,9 @@ export default function AdminUsersScreen() {
                 {item.email ?? 'No email'}
               </Text>
               <View style={styles.metaRow}>
-                <Text style={styles.meta}>Orders: {item.totalOrderTouches}</Text>
+                <Text style={styles.meta}>
+                  Orders: {item.totalOrderTouches}
+                </Text>
                 <Text style={styles.meta}> · Joined {item.createdAt}</Text>
               </View>
               {item.banned ? (

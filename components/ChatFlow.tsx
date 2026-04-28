@@ -203,13 +203,16 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
   const applyRecommendOrder = useCallback(
     async (decision: AiDecision) => {
       const aiRest =
-        typeof decision.restaurant === 'string' ? decision.restaurant.trim() : '';
+        typeof decision.restaurant === 'string'
+          ? decision.restaurant.trim()
+          : '';
       const food =
         typeof decision.food === 'string' && decision.food.trim()
           ? decision.food.trim()
           : 'Chef’s pick';
       const price =
-        typeof decision.estimated_price === 'number' && !Number.isNaN(decision.estimated_price)
+        typeof decision.estimated_price === 'number' &&
+        !Number.isNaN(decision.estimated_price)
           ? decision.estimated_price
           : 18.99;
 
@@ -233,10 +236,8 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
       setStep('loading_rests');
 
       try {
-        const { restaurants: rows, coords } = await getNearbyRestaurantsWithCoords(
-          locText,
-          'pizza',
-        );
+        const { restaurants: rows, coords } =
+          await getNearbyRestaurantsWithCoords(locText, 'pizza');
         setRestaurants(rows);
         if (coords) setSavedLoc(coords);
         else setSavedLoc(FALLBACK_LOC);
@@ -283,13 +284,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         setLoadingRests(false);
       }
     },
-    [
-      addMessage,
-      locationLabel,
-      manualArea,
-      pushAssistant,
-      selectedLocation,
-    ],
+    [addMessage, locationLabel, manualArea, pushAssistant, selectedLocation],
   );
 
   const sendMessageToAI = useCallback(
@@ -318,7 +313,13 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         setAiSending(false);
       }
     },
-    [applyRecommendOrder, bumpInteraction, handleDecision, pushAssistant, pushUser],
+    [
+      applyRecommendOrder,
+      bumpInteraction,
+      handleDecision,
+      pushAssistant,
+      pushUser,
+    ],
   );
 
   const startAfterLocation = useCallback(
@@ -330,7 +331,9 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
       pushAssistant(`Got it 📍 ${label}. Let’s get you some pizza 🍕`);
       if (aiChatUrl) {
         setStep('chat');
-        pushAssistant('Tell me what you want — I’ll guide you to real spots nearby.');
+        pushAssistant(
+          'Tell me what you want — I’ll guide you to real spots nearby.',
+        );
       } else {
         setStep('pizzaType');
       }
@@ -466,7 +469,10 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
 
   useEffect(() => {
     if (!activeGroupId || step !== 'recommended') return;
-    if (groupLive && (groupLive.members.length >= 4 || groupLive.status === 'full')) {
+    if (
+      groupLive &&
+      (groupLive.members.length >= 4 || groupLive.status === 'full')
+    ) {
       setGroupTimedOut(false);
       return;
     }
@@ -499,14 +505,14 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
     setShowSplit(false);
     pushAssistant('Finding real spots near you with photos…');
     try {
-      const { restaurants: rows, coords } = await getNearbyRestaurantsWithCoords(
-        locText,
-        'pizza',
-      );
+      const { restaurants: rows, coords } =
+        await getNearbyRestaurantsWithCoords(locText, 'pizza');
       setRestaurants(rows);
       if (coords) setSavedLoc(coords);
       if (rows.length === 0) {
-        pushAssistant('No places found — try a different area in your profile or above.');
+        pushAssistant(
+          'No places found — try a different area in your profile or above.',
+        );
         setStep('pizzaType');
       } else {
         pushAssistant('Here’s what’s close — tap a restaurant.');
@@ -561,15 +567,15 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
   const openWhatsAppInvite = () => {
     bumpInteraction();
     const text = 'Join my order on HalfOrder';
-    void Linking.openURL(
-      `https://wa.me/?text=${encodeURIComponent(text)}`,
-    );
+    void Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
     pushAssistant('Shared — finish with Order now 🛒 when you’re ready.');
   };
 
   const openSplitBannerWhatsApp = () => {
     bumpInteraction();
-    void Linking.openURL('https://wa.me/?text=Join%20my%20order%20on%20HalfOrder');
+    void Linking.openURL(
+      'https://wa.me/?text=Join%20my%20order%20on%20HalfOrder',
+    );
   };
 
   const handleLeaveGroup = useCallback(async () => {
@@ -673,146 +679,326 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
 
   return (
     <>
-    <View style={styles.wrap}>
-      <View style={styles.headerRow}>
-        <MaterialIcons name="restaurant" size={20} color="#6EE7B7" />
-        <Text style={styles.headerTitle}>Guided order</Text>
-      </View>
+      <View style={styles.wrap}>
+        <View style={styles.headerRow}>
+          <MaterialIcons name="restaurant" size={20} color="#6EE7B7" />
+          <Text style={styles.headerTitle}>Guided order</Text>
+        </View>
 
-      <ScrollView
-        style={styles.thread}
-        contentContainerStyle={styles.threadContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-      >
-        {thread.map((line) => (
-          <View
-            key={line.id}
-            style={[
-              styles.bubbleRow,
-              line.kind === 'user' ? styles.bubbleRowUser : styles.bubbleRowBot,
-            ]}
-          >
+        <ScrollView
+          style={styles.thread}
+          contentContainerStyle={styles.threadContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          {thread.map((line) => (
             <View
+              key={line.id}
               style={[
-                styles.bubble,
-                line.kind === 'user' ? styles.bubbleUser : styles.bubbleBot,
+                styles.bubbleRow,
+                line.kind === 'user'
+                  ? styles.bubbleRowUser
+                  : styles.bubbleRowBot,
               ]}
             >
-              <Text
-                style={
-                  line.kind === 'user' ? styles.bubbleTextUser : styles.bubbleTextBot
-                }
+              <View
+                style={[
+                  styles.bubble,
+                  line.kind === 'user' ? styles.bubbleUser : styles.bubbleBot,
+                ]}
               >
-                {line.text}
-              </Text>
-            </View>
-          </View>
-        ))}
-
-        {step === 'need_location' && !userLocation ? (
-          <View style={styles.panel}>
-            <Text style={styles.panelText}>
-              Add your area so we can search nearby — or enable profile location.
-            </Text>
-            <TextInput
-              value={manualArea}
-              onChangeText={setManualArea}
-              placeholder="e.g. Downtown Toronto"
-              placeholderTextColor="rgba(248,250,252,0.4)"
-              style={styles.input}
-              onFocus={bumpInteraction}
-            />
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={handleManualLocation}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.primaryBtnText}>Use this area</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {aiChatUrl &&
-        (step === 'chat' || step === 'pizzaType' || step === 'recommended') ? (
-          <View style={styles.aiBar}>
-            <TextInput
-              value={aiInput}
-              onChangeText={setAiInput}
-              placeholder="Ask the assistant…"
-              placeholderTextColor="rgba(248,250,252,0.4)"
-              style={styles.aiInput}
-              onSubmitEditing={() => void sendMessageToAI(aiInput)}
-              editable={!aiSending}
-            />
-            <TouchableOpacity
-              style={[styles.aiSend, aiSending && styles.aiSendDisabled]}
-              onPress={() => void sendMessageToAI(aiInput)}
-              disabled={aiSending || !aiInput.trim()}
-            >
-              <Text style={styles.aiSendText}>Send</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {step === 'pizzaType' && step !== 'need_location' ? (
-          <View style={styles.chipWrap}>
-            {PIZZA_TYPES.map((t) => (
-              <TouchableOpacity
-                key={t.id}
-                style={styles.typeChip}
-                onPress={() => void handlePickPizzaType(t.id, t.label)}
-                activeOpacity={0.85}
-                disabled={loadingRests}
-              >
-                <Text style={styles.typeChipText}>{t.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : null}
-
-        {(step === 'loading_rests' || loadingRests) && step !== 'recommended' ? (
-          <View style={styles.loaderRow}>
-            <ActivityIndicator color="#6EE7B7" />
-            <Text style={styles.loaderText}>
-              {step === 'loading_rests' ? 'Finding your pick…' : 'Loading…'}
-            </Text>
-          </View>
-        ) : null}
-
-        {step === 'recommended' && recommended ? (
-          <View style={styles.recommendedBlock}>
-            <Text style={styles.recommendedLead}>I picked this for you 😎</Text>
-            <View style={styles.recommendedCard}>
-              <Image
-                source={{ uri: recommended.image }}
-                style={styles.recommendedImg}
-                contentFit="cover"
-                transition={200}
-              />
-              <View style={styles.recommendedCardBody}>
-                <Text style={styles.recommendedRestName} numberOfLines={2}>
-                  {recommended.name}
-                </Text>
-                <Text style={styles.recommendedFood} numberOfLines={2}>
-                  {recommended.food}
-                </Text>
-                <Text style={styles.recommendedPrice}>
-                  ${recommended.price.toFixed(2)}
+                <Text
+                  style={
+                    line.kind === 'user'
+                      ? styles.bubbleTextUser
+                      : styles.bubbleTextBot
+                  }
+                >
+                  {line.text}
                 </Text>
               </View>
             </View>
-            <View style={styles.recommendedActions}>
-              {showJoinGroupCta ? (
+          ))}
+
+          {step === 'need_location' && !userLocation ? (
+            <View style={styles.panel}>
+              <Text style={styles.panelText}>
+                Add your area so we can search nearby — or enable profile
+                location.
+              </Text>
+              <TextInput
+                value={manualArea}
+                onChangeText={setManualArea}
+                placeholder="e.g. Downtown Toronto"
+                placeholderTextColor="rgba(248,250,252,0.4)"
+                style={styles.input}
+                onFocus={bumpInteraction}
+              />
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleManualLocation}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.primaryBtnText}>Use this area</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {aiChatUrl &&
+          (step === 'chat' ||
+            step === 'pizzaType' ||
+            step === 'recommended') ? (
+            <View style={styles.aiBar}>
+              <TextInput
+                value={aiInput}
+                onChangeText={setAiInput}
+                placeholder="Ask the assistant…"
+                placeholderTextColor="rgba(248,250,252,0.4)"
+                style={styles.aiInput}
+                onSubmitEditing={() => void sendMessageToAI(aiInput)}
+                editable={!aiSending}
+              />
+              <TouchableOpacity
+                style={[styles.aiSend, aiSending && styles.aiSendDisabled]}
+                onPress={() => void sendMessageToAI(aiInput)}
+                disabled={aiSending || !aiInput.trim()}
+              >
+                <Text style={styles.aiSendText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {step === 'pizzaType' && step !== 'need_location' ? (
+            <View style={styles.chipWrap}>
+              {PIZZA_TYPES.map((t) => (
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionJoinGroup]}
-                  onPress={handlePressJoinGroup}
+                  key={t.id}
+                  style={styles.typeChip}
+                  onPress={() => void handlePickPizzaType(t.id, t.label)}
+                  activeOpacity={0.85}
+                  disabled={loadingRests}
+                >
+                  <Text style={styles.typeChipText}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {(step === 'loading_rests' || loadingRests) &&
+          step !== 'recommended' ? (
+            <View style={styles.loaderRow}>
+              <ActivityIndicator color="#6EE7B7" />
+              <Text style={styles.loaderText}>
+                {step === 'loading_rests' ? 'Finding your pick…' : 'Loading…'}
+              </Text>
+            </View>
+          ) : null}
+
+          {step === 'recommended' && recommended ? (
+            <View style={styles.recommendedBlock}>
+              <Text style={styles.recommendedLead}>
+                I picked this for you 😎
+              </Text>
+              <View style={styles.recommendedCard}>
+                <Image
+                  source={{ uri: recommended.image }}
+                  style={styles.recommendedImg}
+                  contentFit="cover"
+                  transition={200}
+                />
+                <View style={styles.recommendedCardBody}>
+                  <Text style={styles.recommendedRestName} numberOfLines={2}>
+                    {recommended.name}
+                  </Text>
+                  <Text style={styles.recommendedFood} numberOfLines={2}>
+                    {recommended.food}
+                  </Text>
+                  <Text style={styles.recommendedPrice}>
+                    ${recommended.price.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.recommendedActions}>
+                {showJoinGroupCta ? (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionJoinGroup]}
+                    onPress={handlePressJoinGroup}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.actionJoinGroupText}>Join group</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionPrimary]}
+                  onPress={handleOrderNow}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.actionJoinGroupText}>Join group</Text>
+                  <Text style={styles.actionPrimaryText}>Order now 🛒</Text>
                 </TouchableOpacity>
-              ) : null}
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionSecondary]}
+                  onPress={handleShareSplit}
+                  activeOpacity={0.9}
+                >
+                  <Text style={styles.actionSecondaryText}>
+                    Split with friend 🤝
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          {step === 'recommended' && activeGroupId ? (
+            <View style={styles.groupWrap}>
+              <View style={styles.groupDisclaimerBanner}>
+                <Text style={styles.groupDisclaimerText}>
+                  ⚠️ Payment happens outside the app. First arrival collects the
+                  order.
+                </Text>
+              </View>
+              {!groupLive ? (
+                <View style={styles.groupBuilding}>
+                  <ActivityIndicator color="#6EE7B7" size="small" />
+                  <Text style={styles.groupBuildingText}>
+                    🍕 Building your group...
+                  </Text>
+                </View>
+              ) : groupLive.members.length >= 4 ||
+                groupLive.status === 'full' ? (
+                <View style={styles.groupReadyCard}>
+                  <Text style={styles.groupReadyTitle}>
+                    Your group is ready 🎉
+                  </Text>
+                  <Text style={styles.groupReadySubtitle}>
+                    Make sure someone is ready to pay and pick up the order.
+                  </Text>
+                  <Text style={styles.groupProgress}>
+                    {groupLive.members.length}/4 people
+                  </Text>
+                  <View style={styles.groupRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionPrimary]}
+                      onPress={handleGroupReadyOrder}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.actionPrimaryText}>Order now 🛒</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionSecondary]}
+                      onPress={() => void handleLeaveGroup()}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.actionSecondaryText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : groupTimedOut ? (
+                <View style={styles.groupTimeoutCard}>
+                  <Text style={styles.groupTimeoutTitle}>
+                    Not enough people yet
+                  </Text>
+                  <View style={styles.groupRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionPrimary]}
+                      onPress={() => void handleTimeoutOrderAlone()}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.actionPrimaryText}>
+                        Order alone 🛒
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionSecondary]}
+                      onPress={openSplitBannerWhatsApp}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.actionSecondaryText}>
+                        Invite friends
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <Animated.View
+                  style={[styles.groupLiveCard, { opacity: groupPulse }]}
+                >
+                  <View style={styles.groupLiveHeaderRow}>
+                    <ActivityIndicator color="#6EE7B7" size="small" />
+                    <Text style={styles.groupLiveTitle}>
+                      {groupLive.members.length >= 2
+                        ? '🔥 Fast group found — almost ready!'
+                        : '🍕 Starting a new group...'}
+                    </Text>
+                  </View>
+                  <Text style={styles.groupProgress}>
+                    {groupLive.members.length}/4 people joined
+                  </Text>
+                  <View style={styles.groupProgressTrack}>
+                    <View
+                      style={[
+                        styles.groupProgressFill,
+                        {
+                          width: `${Math.min(100, (groupLive.members.length / 4) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  {groupLive.members.length === 3 ? (
+                    <View style={styles.groupAlmostFullBanner}>
+                      <Text style={styles.groupAlmostFullText}>
+                        ⚡ Almost full — don’t miss it!
+                      </Text>
+                    </View>
+                  ) : null}
+                </Animated.View>
+              )}
+            </View>
+          ) : null}
+
+          {step === 'restaurants' && restaurants.length > 0 ? (
+            <View style={styles.listSection}>
+              <FlatList
+                horizontal
+                nestedScrollEnabled
+                data={restaurants}
+                keyExtractor={restaurantCardKeyExtractor}
+                renderItem={renderRestaurant}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.hList}
+              />
+            </View>
+          ) : null}
+
+          {step === 'menu' ||
+          step === 'pick_action' ||
+          step === 'share_whatsapp' ||
+          step === 'order_cta' ? (
+            <View style={styles.menuBlock}>
+              {POPULAR_PIZZAS.map((p) => (
+                <PizzaItem key={p.id} item={p} />
+              ))}
+            </View>
+          ) : null}
+
+          {showSplit ? (
+            <View style={styles.splitBanner}>
+              <Text style={styles.splitBannerText}>
+                Split this order with a friend ⚡
+              </Text>
+              <TouchableOpacity
+                style={styles.splitWa}
+                onPress={openSplitBannerWhatsApp}
+                activeOpacity={0.9}
+              >
+                <FontAwesome name="whatsapp" size={18} color="#fff" />
+                <Text style={styles.splitWaText}>Share via WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {step === 'pick_action' ? (
+            <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[styles.actionBtn, styles.actionPrimary]}
                 onPress={handleOrderNow}
@@ -825,251 +1011,92 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
                 onPress={handleShareSplit}
                 activeOpacity={0.9}
               >
-                <Text style={styles.actionSecondaryText}>
-                  Split with friend 🤝
-                </Text>
+                <Text style={styles.actionSecondaryText}>Share & split 🤝</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {step === 'share_whatsapp' ? (
+            <View style={styles.shareActions}>
+              <TouchableOpacity
+                style={styles.waBtn}
+                onPress={openWhatsAppInvite}
+                activeOpacity={0.9}
+              >
+                <FontAwesome name="whatsapp" size={22} color="#fff" />
+                <Text style={styles.waBtnText}>Share via WhatsApp</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionSecondary]}
+                onPress={handleOrderNow}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.actionSecondaryText}>Order now 🛒</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {nudgeVisible &&
+          step !== 'need_location' &&
+          step !== 'order_cta' &&
+          step !== 'recommended' &&
+          !loadingRests ? (
+            <TouchableOpacity
+              style={styles.nudge}
+              onPress={suggestPopularPizza}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.nudgeText}>
+                Want me to pick a popular pizza for you? 🍕
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </ScrollView>
+      </View>
+
+      <Modal
+        visible={groupJoinModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!groupJoining) setGroupJoinModalVisible(false);
+        }}
+      >
+        <View style={styles.groupModalBackdrop}>
+          <View style={styles.groupModalCard}>
+            <Text style={styles.groupModalTitle}>Before you continue ⚠️</Text>
+            <Text style={styles.groupModalBody}>
+              • Payment is handled outside the app between users{'\n'}• The
+              first person to arrive will collect the order{'\n'}• Please
+              coordinate with your group
+            </Text>
+            <View style={styles.groupModalActions}>
+              <TouchableOpacity
+                style={[styles.groupModalBtn, styles.groupModalBtnPrimary]}
+                onPress={() => void handleConfirmGroupJoin()}
+                disabled={groupJoining}
+                activeOpacity={0.9}
+              >
+                {groupJoining ? (
+                  <ActivityIndicator color="#0f172a" />
+                ) : (
+                  <Text style={styles.groupModalBtnPrimaryText}>
+                    I agree ✅
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.groupModalBtn, styles.groupModalBtnSecondary]}
+                onPress={() => !groupJoining && setGroupJoinModalVisible(false)}
+                disabled={groupJoining}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.groupModalBtnSecondaryText}>Cancel ❌</Text>
               </TouchableOpacity>
             </View>
           </View>
-        ) : null}
-
-        {step === 'recommended' && activeGroupId ? (
-          <View style={styles.groupWrap}>
-            <View style={styles.groupDisclaimerBanner}>
-              <Text style={styles.groupDisclaimerText}>
-                ⚠️ Payment happens outside the app. First arrival collects the
-                order.
-              </Text>
-            </View>
-            {!groupLive ? (
-              <View style={styles.groupBuilding}>
-                <ActivityIndicator color="#6EE7B7" size="small" />
-                <Text style={styles.groupBuildingText}>
-                  🍕 Building your group...
-                </Text>
-              </View>
-            ) : groupLive.members.length >= 4 || groupLive.status === 'full' ? (
-              <View style={styles.groupReadyCard}>
-                <Text style={styles.groupReadyTitle}>Your group is ready 🎉</Text>
-                <Text style={styles.groupReadySubtitle}>
-                  Make sure someone is ready to pay and pick up the order.
-                </Text>
-                <Text style={styles.groupProgress}>
-                  {groupLive.members.length}/4 people
-                </Text>
-                <View style={styles.groupRow}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionPrimary]}
-                    onPress={handleGroupReadyOrder}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.actionPrimaryText}>Order now 🛒</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionSecondary]}
-                    onPress={() => void handleLeaveGroup()}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.actionSecondaryText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : groupTimedOut ? (
-              <View style={styles.groupTimeoutCard}>
-                <Text style={styles.groupTimeoutTitle}>Not enough people yet</Text>
-                <View style={styles.groupRow}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionPrimary]}
-                    onPress={() => void handleTimeoutOrderAlone()}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.actionPrimaryText}>Order alone 🛒</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionSecondary]}
-                    onPress={openSplitBannerWhatsApp}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.actionSecondaryText}>Invite friends</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <Animated.View
-                style={[styles.groupLiveCard, { opacity: groupPulse }]}
-              >
-                <View style={styles.groupLiveHeaderRow}>
-                  <ActivityIndicator color="#6EE7B7" size="small" />
-                  <Text style={styles.groupLiveTitle}>
-                    {groupLive.members.length >= 2
-                      ? '🔥 Fast group found — almost ready!'
-                      : '🍕 Starting a new group...'}
-                  </Text>
-                </View>
-                <Text style={styles.groupProgress}>
-                  {groupLive.members.length}/4 people joined
-                </Text>
-                <View style={styles.groupProgressTrack}>
-                  <View
-                    style={[
-                      styles.groupProgressFill,
-                      {
-                        width: `${Math.min(100, (groupLive.members.length / 4) * 100)}%`,
-                      },
-                    ]}
-                  />
-                </View>
-                {groupLive.members.length === 3 ? (
-                  <View style={styles.groupAlmostFullBanner}>
-                    <Text style={styles.groupAlmostFullText}>
-                      ⚡ Almost full — don’t miss it!
-                    </Text>
-                  </View>
-                ) : null}
-              </Animated.View>
-            )}
-          </View>
-        ) : null}
-
-        {step === 'restaurants' && restaurants.length > 0 ? (
-          <View style={styles.listSection}>
-            <FlatList
-              horizontal
-              nestedScrollEnabled
-              data={restaurants}
-              keyExtractor={restaurantCardKeyExtractor}
-              renderItem={renderRestaurant}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.hList}
-            />
-          </View>
-        ) : null}
-
-        {step === 'menu' ||
-        step === 'pick_action' ||
-        step === 'share_whatsapp' ||
-        step === 'order_cta' ? (
-          <View style={styles.menuBlock}>
-            {POPULAR_PIZZAS.map((p) => (
-              <PizzaItem key={p.id} item={p} />
-            ))}
-          </View>
-        ) : null}
-
-        {showSplit ? (
-          <View style={styles.splitBanner}>
-            <Text style={styles.splitBannerText}>
-              Split this order with a friend ⚡
-            </Text>
-            <TouchableOpacity
-              style={styles.splitWa}
-              onPress={openSplitBannerWhatsApp}
-              activeOpacity={0.9}
-            >
-              <FontAwesome name="whatsapp" size={18} color="#fff" />
-              <Text style={styles.splitWaText}>Share via WhatsApp</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {step === 'pick_action' ? (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionPrimary]}
-              onPress={handleOrderNow}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.actionPrimaryText}>Order now 🛒</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionSecondary]}
-              onPress={handleShareSplit}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.actionSecondaryText}>Share & split 🤝</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {step === 'share_whatsapp' ? (
-          <View style={styles.shareActions}>
-            <TouchableOpacity
-              style={styles.waBtn}
-              onPress={openWhatsAppInvite}
-              activeOpacity={0.9}
-            >
-              <FontAwesome name="whatsapp" size={22} color="#fff" />
-              <Text style={styles.waBtnText}>Share via WhatsApp</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionSecondary]}
-              onPress={handleOrderNow}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.actionSecondaryText}>Order now 🛒</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {nudgeVisible &&
-        step !== 'need_location' &&
-        step !== 'order_cta' &&
-        step !== 'recommended' &&
-        !loadingRests ? (
-          <TouchableOpacity
-            style={styles.nudge}
-            onPress={suggestPopularPizza}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.nudgeText}>
-              Want me to pick a popular pizza for you? 🍕
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-      </ScrollView>
-    </View>
-
-    <Modal
-      visible={groupJoinModalVisible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => {
-        if (!groupJoining) setGroupJoinModalVisible(false);
-      }}
-    >
-      <View style={styles.groupModalBackdrop}>
-        <View style={styles.groupModalCard}>
-          <Text style={styles.groupModalTitle}>Before you continue ⚠️</Text>
-          <Text style={styles.groupModalBody}>
-            • Payment is handled outside the app between users{'\n'}
-            • The first person to arrive will collect the order{'\n'}
-            • Please coordinate with your group
-          </Text>
-          <View style={styles.groupModalActions}>
-            <TouchableOpacity
-              style={[styles.groupModalBtn, styles.groupModalBtnPrimary]}
-              onPress={() => void handleConfirmGroupJoin()}
-              disabled={groupJoining}
-              activeOpacity={0.9}
-            >
-              {groupJoining ? (
-                <ActivityIndicator color="#0f172a" />
-              ) : (
-                <Text style={styles.groupModalBtnPrimaryText}>I agree ✅</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.groupModalBtn, styles.groupModalBtnSecondary]}
-              onPress={() => !groupJoining && setGroupJoinModalVisible(false)}
-              disabled={groupJoining}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.groupModalBtnSecondaryText}>Cancel ❌</Text>
-            </TouchableOpacity>
-          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
     </>
   );
 }

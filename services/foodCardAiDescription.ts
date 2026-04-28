@@ -6,7 +6,9 @@ function openAiApiKey(): string | undefined {
     typeof process !== 'undefined'
       ? process.env?.EXPO_PUBLIC_OPENAI_API_KEY
       : undefined;
-  const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
+  const extra = Constants.expoConfig?.extra as
+    | Record<string, unknown>
+    | undefined;
   const fromExtra =
     typeof extra?.openaiApiKey === 'string' ? extra.openaiApiKey : '';
   return (fromEnv || fromExtra || '').trim() || undefined;

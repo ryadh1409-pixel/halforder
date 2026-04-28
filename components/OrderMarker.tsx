@@ -2,9 +2,9 @@ import type { NearbyOrder } from '@/hooks/useNearbyOrders';
 import { Marker } from '@/components/SafeMap';
 import { theme } from '@/constants/theme';
 import React from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 const c = theme.colors;
-import { Platform, StyleSheet, Text, View } from 'react-native';
 
 const MEAL_ICONS: Record<string, string> = {
   pizza: '🍕',

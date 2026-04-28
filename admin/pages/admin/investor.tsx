@@ -200,8 +200,7 @@ export default function InvestorPage() {
       const k = new Date(createdAt).toISOString().slice(0, 10);
       if (matchByDay[k]) {
         matchByDay[k].total += 1;
-        if (getOrderParticipants(order).length >= 2)
-          matchByDay[k].matched += 1;
+        if (getOrderParticipants(order).length >= 2) matchByDay[k].matched += 1;
       }
     });
 

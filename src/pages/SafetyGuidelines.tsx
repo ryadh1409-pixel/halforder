@@ -104,7 +104,10 @@ export default function SafetyGuidelines() {
       <h2 style={legalText.sectionTitle}>6. Reporting &amp; Enforcement</h2>
       <p style={legalText.p}>
         If you encounter unsafe behavior, report to:{' '}
-        <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: '#007aff', fontWeight: 600 }}>
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
+          style={{ color: '#007aff', fontWeight: 600 }}
+        >
           {SUPPORT_EMAIL}
         </a>
       </p>

@@ -15,7 +15,9 @@ function normalizeAdminEmail(email?: string | null): string {
 
 export function isAdminEmail(email?: string | null): boolean {
   if (!email?.trim()) return false;
-  return (ADMIN_EMAILS as readonly string[]).includes(normalizeAdminEmail(email));
+  return (ADMIN_EMAILS as readonly string[]).includes(
+    normalizeAdminEmail(email),
+  );
 }
 
 /**

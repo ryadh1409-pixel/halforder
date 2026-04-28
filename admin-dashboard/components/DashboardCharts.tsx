@@ -29,7 +29,11 @@ export function DashboardCharts({
             <LineChart data={ordersPerDay} margin={{ left: 0, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 11 }}
+                stroke="#94a3b8"
+              />
               <Tooltip
                 contentStyle={{
                   borderRadius: 8,
@@ -50,14 +54,22 @@ export function DashboardCharts({
         </div>
       </div>
       <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900">New users per day</h3>
-        <p className="text-xs text-slate-500">By account createdAt (UTC date)</p>
+        <h3 className="text-sm font-semibold text-slate-900">
+          New users per day
+        </h3>
+        <p className="text-xs text-slate-500">
+          By account createdAt (UTC date)
+        </p>
         <div className="mt-4 h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={usersPerDay} margin={{ left: 0, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 11 }}
+                stroke="#94a3b8"
+              />
               <Tooltip
                 contentStyle={{
                   borderRadius: 8,

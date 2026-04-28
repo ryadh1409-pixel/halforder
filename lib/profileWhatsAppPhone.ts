@@ -48,7 +48,9 @@ export function isIncompleteNaProfilePhone(display: string): boolean {
   return d.length > 1 && d.length < FULL_LEN;
 }
 
-export function displayFromStoredProfilePhone(stored: string | undefined | null): string {
+export function displayFromStoredProfilePhone(
+  stored: string | undefined | null,
+): string {
   if (!stored || !stored.trim()) return '+1 ';
   return formatProfileWhatsAppDisplay(stored);
 }

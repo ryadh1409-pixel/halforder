@@ -13,9 +13,7 @@ export function StatCard({
       <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
         {value}
       </p>
-      {hint ? (
-        <p className="mt-1 text-xs text-slate-400">{hint}</p>
-      ) : null}
+      {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
     </div>
   );
 }

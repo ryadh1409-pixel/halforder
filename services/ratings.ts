@@ -23,7 +23,11 @@ export async function saveRating(
   if (fromUserId === toUserId) {
     throw new Error('You cannot rate yourself.');
   }
-  const alreadyRated = await hasRatedOrderForUser(orderId, fromUserId, toUserId);
+  const alreadyRated = await hasRatedOrderForUser(
+    orderId,
+    fromUserId,
+    toUserId,
+  );
   if (alreadyRated) {
     throw new Error('You already rated this participant.');
   }
@@ -115,13 +119,17 @@ export function calculateTrustScoreProfile(input: {
   cancellationRate: number;
   reportCount: number;
 }): TrustScoreProfile {
-  const average = Number.isFinite(input.averageRating) ? input.averageRating : 0;
+  const average = Number.isFinite(input.averageRating)
+    ? input.averageRating
+    : 0;
   const count = Number.isFinite(input.totalRatings) ? input.totalRatings : 0;
   const totalOrdersCompleted = Number.isFinite(input.totalOrdersCompleted)
     ? input.totalOrdersCompleted
     : 0;
   const cancellationRate = normalizeCancellationRate(input.cancellationRate);
-  const reportCount = Number.isFinite(input.reportCount) ? input.reportCount : 0;
+  const reportCount = Number.isFinite(input.reportCount)
+    ? input.reportCount
+    : 0;
 
   // Formula requested by product:
   // trustScore = (averageRating * 0.5) + (completedOrders * 0.3) - (cancellations * 0.1) - (reports * 0.1)

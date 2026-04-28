@@ -3,9 +3,7 @@ import type { Timestamp } from 'firebase/firestore';
 /**
  * Normalizes Firestore `users.dateOfBirth` to `YYYY-MM-DD` for inputs.
  */
-export function normalizeDateOfBirthFromFirestore(
-  raw: unknown,
-): string {
+export function normalizeDateOfBirthFromFirestore(raw: unknown): string {
   if (typeof raw === 'string') {
     const s = raw.trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
@@ -41,7 +39,12 @@ export function formatUserDateOfBirthLong(value: unknown): string | null {
       });
     }
   }
-  if (value && typeof value === 'object' && value !== null && 'toDate' in value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value
+  ) {
     const fn = (value as Timestamp).toDate;
     if (typeof fn === 'function') {
       const t = fn.call(value);

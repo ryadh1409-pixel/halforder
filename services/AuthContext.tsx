@@ -29,8 +29,8 @@ import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
 import {
   getUserFriendlyError,
   isFirebaseAuthUserInvalidated,
-} from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+  logError,
+} from '@/utils/errors';
 import React, {
   createContext,
   useCallback,
@@ -96,8 +96,10 @@ async function ensureUserDocument(
   if (snap.exists()) {
     const data = snap.data();
     const updates: Record<string, unknown> = {};
-    if (typeof data?.displayName !== 'string') updates.displayName = displayName ?? '';
-    if (typeof data?.name !== 'string' && displayName) updates.name = displayName;
+    if (typeof data?.displayName !== 'string')
+      updates.displayName = displayName ?? '';
+    if (typeof data?.name !== 'string' && displayName)
+      updates.name = displayName;
     if (data?.email == null) updates.email = email ?? null;
     if (
       typeof data?.phone !== 'string' &&
@@ -143,11 +145,13 @@ async function ensureUserDocument(
     if (data?.activeOrderId === undefined) updates.activeOrderId = null;
     if (data?.credits === undefined) updates.credits = 0;
     if (data?.role === undefined) updates.role = 'user';
-    if (data?.notificationsEnabled === undefined) updates.notificationsEnabled = true;
+    if (data?.notificationsEnabled === undefined)
+      updates.notificationsEnabled = true;
     if (data?.ordersCount === undefined) updates.ordersCount = 0;
     if (data?.averageRating === undefined) updates.averageRating = 0;
     if (data?.totalRatings === undefined) updates.totalRatings = 0;
-    if (data?.totalOrdersCompleted === undefined) updates.totalOrdersCompleted = 0;
+    if (data?.totalOrdersCompleted === undefined)
+      updates.totalOrdersCompleted = 0;
     if (data?.cancellationRate === undefined) updates.cancellationRate = 0;
     if (data?.reportCount === undefined) updates.reportCount = 0;
     if (data?.trustScore === undefined) updates.trustScore = 0;
@@ -157,7 +161,8 @@ async function ensureUserDocument(
     if (data?.ordersJoined === undefined) updates.ordersJoined = 0;
     if (data?.activeOrderCount === undefined) updates.activeOrderCount = 0;
     if (data?.cancelledOrders === undefined) updates.cancelledOrders = 0;
-    if (data?.cancellationCount24h === undefined) updates.cancellationCount24h = 0;
+    if (data?.cancellationCount24h === undefined)
+      updates.cancellationCount24h = 0;
     if (data?.cancellationWindowStartMs === undefined)
       updates.cancellationWindowStartMs = 0;
     if (data?.restricted === undefined) updates.restricted = false;
@@ -266,7 +271,9 @@ async function ensureUserDocument(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [loading, setLoading] = useState(true);
-  const [firestoreUserRole, setFirestoreUserRole] = useState<string | null>(null);
+  const [firestoreUserRole, setFirestoreUserRole] = useState<string | null>(
+    null,
+  );
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -369,7 +376,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.uid, user?.isAnonymous]);
 
   const signUpWithEmail = useCallback(async (payload: EmailSignUpPayload) => {
-    const trimmed = typeof payload.email === 'string' ? payload.email.trim() : '';
+    const trimmed =
+      typeof payload.email === 'string' ? payload.email.trim() : '';
     const nameTrim = payload.fullName.trim();
     const waDigits = profilePhoneDigitsOnly(payload.whatsapp);
     const phoneFormatted = formatProfileWhatsAppDisplay(waDigits);
@@ -387,11 +395,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let userCredential;
     try {
-      userCredential = await createUserWithEmailAndPassword(
-        auth,
-        trimmed,
-        pwd,
-      );
+      userCredential = await createUserWithEmailAndPassword(auth, trimmed, pwd);
     } catch (err: unknown) {
       logError(err);
       throw new Error(getUserFriendlyError(err));
@@ -403,14 +407,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (payload.localPhotoUri?.trim()) {
       try {
-        photoURL = await uploadImageAsync(
-          payload.localPhotoUri.trim(),
-          uid,
-        );
+        photoURL = await uploadImageAsync(payload.localPhotoUri.trim(), uid);
       } catch (e) {
         logError(e);
         if (__DEV__) {
-          console.warn('Profile image upload failed (continuing without photo):', e);
+          console.warn(
+            'Profile image upload failed (continuing without photo):',
+            e,
+          );
         }
       }
     }
@@ -456,7 +460,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      await ensureUserDocument(uid, nameTrim, trimmed, phoneFormatted, photoURL);
+      await ensureUserDocument(
+        uid,
+        nameTrim,
+        trimmed,
+        phoneFormatted,
+        photoURL,
+      );
     } catch (e) {
       if (__DEV__) {
         console.warn('ensureUserDocument failed (non-fatal):', e);
@@ -468,7 +478,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       logError(e);
       if (__DEV__) {
-        console.warn('sendEmailVerification failed (user can resend from settings later):', e);
+        console.warn(
+          'sendEmailVerification failed (user can resend from settings later):',
+          e,
+        );
       }
     }
 

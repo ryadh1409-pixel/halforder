@@ -78,9 +78,7 @@ function haversineKm(a, b) {
   const dLon = toRad(b.lng - a.lng);
   const s1 = Math.sin(dLat / 2) ** 2;
   const s2 =
-    Math.cos(toRad(a.lat)) *
-    Math.cos(toRad(b.lat)) *
-    Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(s1 + s2), Math.sqrt(1 - s1 - s2));
   return R * c;
 }
@@ -92,7 +90,10 @@ function parseLatLng(data) {
     return { lat: directLat, lng: directLng };
   }
   const location =
-    data && typeof data === 'object' && data.location && typeof data.location === 'object'
+    data &&
+    typeof data === 'object' &&
+    data.location &&
+    typeof data.location === 'object'
       ? data.location
       : null;
   if (
@@ -186,30 +187,38 @@ async function getNearbyOrders(uid) {
   }
 }
 
-async function requestChatCompletion(appSystemMessage, userContext, userMessage, useIpRoute) {
+async function requestChatCompletion(
+  appSystemMessage,
+  userContext,
+  userMessage,
+  useIpRoute,
+) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(useIpRoute ? OPENAI_IP_URL : OPENAI_FALLBACK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        ...(useIpRoute ? { Host: 'api.openai.com' } : {}),
+    const response = await fetch(
+      useIpRoute ? OPENAI_IP_URL : OPENAI_FALLBACK_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          ...(useIpRoute ? { Host: 'api.openai.com' } : {}),
+        },
+        body: JSON.stringify({
+          model: 'gpt-4.1-mini',
+          messages: [
+            {
+              role: 'system',
+              content: appSystemMessage,
+            },
+            { role: 'system', content: userContext },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+        signal: controller.signal,
       },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        messages: [
-          {
-            role: 'system',
-            content: appSystemMessage,
-          },
-          { role: 'system', content: userContext },
-          { role: 'user', content: userMessage },
-        ],
-      }),
-      signal: controller.signal,
-    });
+    );
     const payload = await response.json();
     return { response, payload };
   } finally {
@@ -249,7 +258,11 @@ async function runFoodCardsMaintenanceOnce() {
   const now = Date.now();
 
   const [expiredSnap, matchedSnap] = await Promise.all([
-    db.collection('food_cards').where('status', '==', 'waiting').where('expiresAt', '<=', now).get(),
+    db
+      .collection('food_cards')
+      .where('status', '==', 'waiting')
+      .where('expiresAt', '<=', now)
+      .get(),
     db.collection('food_cards').where('status', '==', 'matched').get(),
   ]);
 
@@ -260,7 +273,9 @@ async function runFoodCardsMaintenanceOnce() {
       (async () => {
         await duplicateFoodCardDoc(d, 'expired');
         await db.collection('food_cards').doc(d.id).delete();
-        console.log(`Expired card regenerated: ${String(d.data()?.title ?? d.id)}`);
+        console.log(
+          `Expired card regenerated: ${String(d.data()?.title ?? d.id)}`,
+        );
       })(),
     );
   });
@@ -271,10 +286,13 @@ async function runFoodCardsMaintenanceOnce() {
     jobs.push(
       (async () => {
         await duplicateFoodCardDoc(d, 'matched');
-        await db.collection('food_cards').doc(d.id).set(
-          { regeneratedAt: admin.firestore.FieldValue.serverTimestamp() },
-          { merge: true },
-        );
+        await db
+          .collection('food_cards')
+          .doc(d.id)
+          .set(
+            { regeneratedAt: admin.firestore.FieldValue.serverTimestamp() },
+            { merge: true },
+          );
         console.log(`Match completed for ${String(data?.title ?? d.id)}`);
       })(),
     );
@@ -288,11 +306,13 @@ async function runFoodCardsMaintenanceOnce() {
 router.post('/match-event', async (req, res) => {
   try {
     const cardId = typeof req.body?.cardId === 'string' ? req.body.cardId : '';
-    if (!cardId) return res.status(400).json({ ok: false, error: 'cardId required' });
+    if (!cardId)
+      return res.status(400).json({ ok: false, error: 'cardId required' });
     const db = getFirestoreDb();
     const docRef = db.collection('food_cards').doc(cardId);
     const snap = await docRef.get();
-    if (!snap.exists) return res.status(404).json({ ok: false, error: 'Card not found' });
+    if (!snap.exists)
+      return res.status(404).json({ ok: false, error: 'Card not found' });
     await duplicateFoodCardDoc(snap, 'matched');
     await docRef.set(
       {
@@ -331,9 +351,7 @@ router.post('/', async (req, res) => {
   try {
     const { message, user } = req.body;
     const prompt =
-      typeof message === 'string' && message.trim()
-        ? message.trim()
-        : '';
+      typeof message === 'string' && message.trim() ? message.trim() : '';
     if (!prompt) {
       return res.json({
         ok: true,
@@ -347,29 +365,31 @@ router.post('/', async (req, res) => {
     // FINAL FIX TEST MODE: force pizza to join_order and skip OpenAI.
     if (prompt.toLowerCase().includes('pizza')) {
       return res.json({
-        reply: 'There\u2019s a pizza order nearby \ud83c\udf55\u2014opening it now.',
+        reply:
+          'There\u2019s a pizza order nearby \ud83c\udf55\u2014opening it now.',
         action: 'join_order',
         data: { orderId: 'test123' },
       });
     }
-    const uid = user && typeof user === 'object' && typeof user.uid === 'string'
-      ? user.uid
-      : '';
-    const name = user && typeof user === 'object' && typeof user.name === 'string'
-      ? user.name
-      : 'User';
-    const email = user && typeof user === 'object' && typeof user.email === 'string'
-      ? user.email
-      : 'noemail@example.com';
+    const uid =
+      user && typeof user === 'object' && typeof user.uid === 'string'
+        ? user.uid
+        : '';
+    const name =
+      user && typeof user === 'object' && typeof user.name === 'string'
+        ? user.name
+        : 'User';
+    const email =
+      user && typeof user === 'object' && typeof user.email === 'string'
+        ? user.email
+        : 'noemail@example.com';
 
     const recentOrders = await getRecentOrdersForUser(uid);
     const nearbyActiveOrders = await getNearbyOrders(uid);
     const ordersText =
       recentOrders.length > 0
         ? recentOrders
-            .map(
-              (order) => `- ${order.items} (${order.status})`,
-            )
+            .map((order) => `- ${order.items} (${order.status})`)
             .join('\n')
         : 'You don’t have any active orders yet';
     const nearbyText =
@@ -408,10 +428,20 @@ router.post('/', async (req, res) => {
     let response;
     let payload;
     try {
-      ({ response, payload } = await requestChatCompletion(appSystemMessage, userContext, prompt, true));
+      ({ response, payload } = await requestChatCompletion(
+        appSystemMessage,
+        userContext,
+        prompt,
+        true,
+      ));
     } catch (primaryErr) {
       console.error('FULL ERROR: primary IP route failed', primaryErr);
-      ({ response, payload } = await requestChatCompletion(appSystemMessage, userContext, prompt, false));
+      ({ response, payload } = await requestChatCompletion(
+        appSystemMessage,
+        userContext,
+        prompt,
+        false,
+      ));
     }
     if (!response.ok) {
       const apiError =
@@ -459,9 +489,7 @@ router.post('/', async (req, res) => {
         ? parsed.reply.trim()
         : aiText.trim() || 'No response generated';
     const safeActionRaw =
-      parsed &&
-      typeof parsed === 'object' &&
-      typeof parsed.action === 'string'
+      parsed && typeof parsed === 'object' && typeof parsed.action === 'string'
         ? parsed.action
         : 'none';
     const safeAction =
@@ -469,7 +497,10 @@ router.post('/', async (req, res) => {
         ? safeActionRaw
         : 'none';
     const parsedData =
-      parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed.data &&
+      typeof parsed.data === 'object'
         ? parsed.data
         : {};
     const safeData = {
@@ -499,10 +530,8 @@ router.post('/', async (req, res) => {
     return res.json(safeParsed);
   } catch (err) {
     const errObj = err && typeof err === 'object' ? err : null;
-    const code =
-      errObj && 'code' in errObj ? String(errObj.code) : 'unknown';
-    const name =
-      errObj && 'name' in errObj ? String(errObj.name) : 'Error';
+    const code = errObj && 'code' in errObj ? String(errObj.code) : 'unknown';
+    const name = errObj && 'name' in errObj ? String(errObj.name) : 'Error';
     const message =
       errObj && 'message' in errObj ? String(errObj.message) : 'Unknown error';
     console.error('FULL ERROR:', {

@@ -22,12 +22,12 @@ Only `admin@ourfood.com` is accepted; any other email is rejected before Firebas
 
 ## Where data comes from
 
-| Page | Firestore | Updates |
-|------|-----------|---------|
-| Dashboard | `users`, `orders` | `onSnapshot` |
-| Food Cards | `foodTemplates` | `onSnapshot` |
-| Orders | `orders` | `onSnapshot` |
-| Users | `users` | `onSnapshot` |
+| Page       | Firestore         | Updates      |
+| ---------- | ----------------- | ------------ |
+| Dashboard  | `users`, `orders` | `onSnapshot` |
+| Food Cards | `foodTemplates`   | `onSnapshot` |
+| Orders     | `orders`          | `onSnapshot` |
+| Users      | `users`           | `onSnapshot` |
 
 Firebase config lives in **`lib/firebase.ts`** and matches the mobile app project (`halforfer`).
 

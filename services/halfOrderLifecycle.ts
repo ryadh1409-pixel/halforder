@@ -1,9 +1,4 @@
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 import { ORDER_STATUS } from '@/constants/orderStatus';
 import { auth, db } from '@/services/firebase';

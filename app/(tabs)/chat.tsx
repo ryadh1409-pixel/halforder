@@ -10,6 +10,7 @@ import {
   sendMessageToAI,
   type AiDecision,
 } from '@/services/aiBackendDecision';
+import { createAiPlaceFoodCardAndOrder } from '@/services/aiChatFoodOrder';
 import { useAuth } from '@/services/AuthContext';
 import {
   buildSmartMatchIntroText,
@@ -26,7 +27,6 @@ import {
   runFoodPlaceAssist,
 } from '@/services/chatFoodAssist';
 import { detectLocalAssistantIntent } from '@/services/chatLocalIntent';
-import { createAiPlaceFoodCardAndOrder } from '@/services/aiChatFoodOrder';
 import { saveAssistantChatFeedback } from '@/services/chatService';
 import {
   getSmartMatches,
@@ -105,11 +105,13 @@ function formatPlaceLine(place: unknown): string {
     const pl =
       typeof plRaw === 'number' && Number.isFinite(plRaw) ? plRaw : null;
     const price =
-      pl == null ? 'Price n/a' : pl === 0 ? 'Free' : '$'.repeat(Math.min(pl, 4));
+      pl == null
+        ? 'Price n/a'
+        : pl === 0
+          ? 'Free'
+          : '$'.repeat(Math.min(pl, 4));
     const addr =
-      typeof o.address === 'string' && o.address.trim()
-        ? o.address.trim()
-        : '';
+      typeof o.address === 'string' && o.address.trim() ? o.address.trim() : '';
     return `${o.name.trim()} · ★${o.rating.toFixed(1)} · ${price}${addr ? `\n   ${addr}` : ''}`;
   }
   if (typeof o.name === 'string' && o.name.trim()) return o.name.trim();
@@ -130,8 +132,7 @@ function toMessageOrders(rows: AssistantOrderSummary[]): MessageOrderRef[] {
   return rows.map((r) => ({
     id: r.id,
     title:
-      [r.restaurantName, r.mealType].filter(Boolean).join(' · ') ||
-      'Order',
+      [r.restaurantName, r.mealType].filter(Boolean).join(' · ') || 'Order',
   }));
 }
 
@@ -218,8 +219,7 @@ async function placesTextSearchChatMessage(input: {
   bias?: { lat: number; lng: number } | null;
 }): Promise<PlacesTextSearchResult> {
   const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const keyTrim =
-    typeof API_KEY === 'string' ? API_KEY.trim() : '';
+  const keyTrim = typeof API_KEY === 'string' ? API_KEY.trim() : '';
   if (!keyTrim) {
     console.error('Missing Google Maps API key');
     return {
@@ -412,10 +412,7 @@ export default function ChatScreen() {
         try {
           const seen = await AsyncStorage.getItem(PRODUCT_INTRO_SEEN_KEY);
           if (!seen && !cancelled) {
-            const dn =
-              profile?.name ||
-              authUser.displayName ||
-              'there';
+            const dn = profile?.name || authUser.displayName || 'there';
             productIntro = {
               id: PRODUCT_INTRO_MESSAGE_ID,
               text: buildProductAssistantIntro(dn),
@@ -454,7 +451,10 @@ export default function ChatScreen() {
       } catch {
         if (cancelled) return;
         setIntroFetchFailed(true);
-        const fallbackIntro = buildIntroSuggestionMessage(detectTimeContext(), []);
+        const fallbackIntro = buildIntroSuggestionMessage(
+          detectTimeContext(),
+          [],
+        );
         if (fallbackIntro.orders?.[0]?.isSuggested === true) {
           markIntroSuggestedTemplate();
         }
@@ -540,10 +540,7 @@ export default function ChatScreen() {
   }, []);
 
   const handleAIDecision = useCallback(
-    (
-      decision: AiDecision,
-      options?: { fromBackendChat?: boolean },
-    ) => {
+    (decision: AiDecision, options?: { fromBackendChat?: boolean }) => {
       if (decision.reason === 'price_high') {
         addMessage('This is a bit expensive 👀 want to split it?');
         setShowSplit(true);
@@ -677,10 +674,7 @@ export default function ChatScreen() {
 
       void saveAssistantChatFeedback({
         userId: uid,
-        userName:
-          profile?.name ||
-          authUser.displayName ||
-          'User',
+        userName: profile?.name || authUser.displayName || 'User',
         message: outgoingText,
         email: profile?.email ?? authUser.email ?? null,
       });
@@ -862,8 +856,7 @@ export default function ChatScreen() {
                   assist.picks.length > 0
                     ? assist.picks.map((p) => ({
                         placeName: p.name.trim() || 'Restaurant',
-                        address:
-                          p.address.trim() || 'Address unavailable',
+                        address: p.address.trim() || 'Address unavailable',
                       }))
                     : undefined,
               },
@@ -879,8 +872,7 @@ export default function ChatScreen() {
             ...prev,
             {
               id: `${Date.now()}-loc-tip`,
-              text:
-                'Set your map pin in Profile for “near you” searches and ~2 km order matching. For a one-off, say something like “sushi in Midtown”.',
+              text: 'Set your map pin in Profile for “near you” searches and ~2 km order matching. For a one-off, say something like “sushi in Midtown”.',
               sender: 'bot',
               createdAt: Date.now(),
               action: 'none',
@@ -895,8 +887,7 @@ export default function ChatScreen() {
           48,
           authUser?.uid,
         );
-        const dn =
-          profile?.name || authUser.displayName || 'Friend';
+        const dn = profile?.name || authUser.displayName || 'Friend';
         const loc = profile?.location;
         const result = await runUserTurn({
           text: outgoingText,
@@ -989,13 +980,6 @@ export default function ChatScreen() {
     void submitAssistantText(message, { clearInput: true });
   };
 
-  const handleMicPress = () => {
-    showNotice(
-      'Voice input',
-      'Please type your message for now. Voice input is not available in this version.',
-    );
-  };
-
   const openSplitWhatsApp = useCallback(() => {
     void Linking.openURL(
       openWhatsAppWithText(
@@ -1013,11 +997,7 @@ export default function ChatScreen() {
   }, []);
 
   const handleStartOrderFromPick = useCallback(
-    async (
-      messageId: string,
-      pickIndex: number,
-      pick: MessageAiPlacePick,
-    ) => {
+    async (messageId: string, pickIndex: number, pick: MessageAiPlacePick) => {
       const uid = authUser?.uid;
       if (!uid) {
         showError('Sign in to start a shared order.');
@@ -1027,19 +1007,13 @@ export default function ChatScreen() {
       setStartingPlaceKey(rowKey);
       try {
         const displayName =
-          profile?.name?.trim() ||
-          authUser?.displayName?.trim() ||
-          'Host';
+          profile?.name?.trim() || authUser?.displayName?.trim() || 'Host';
         const photoUrl =
           profile?.avatar ??
-          (typeof authUser?.photoURL === 'string'
-            ? authUser.photoURL
-            : null);
+          (typeof authUser?.photoURL === 'string' ? authUser.photoURL : null);
         const loc = profile?.location;
-        const lat =
-          loc && typeof loc.lat === 'number' ? loc.lat : undefined;
-        const lng =
-          loc && typeof loc.lng === 'number' ? loc.lng : undefined;
+        const lat = loc && typeof loc.lat === 'number' ? loc.lat : undefined;
+        const lng = loc && typeof loc.lng === 'number' ? loc.lng : undefined;
         await createAiPlaceFoodCardAndOrder({
           uid,
           placeName: pick.placeName,
@@ -1070,10 +1044,8 @@ export default function ChatScreen() {
 
   const renderItem = ({ item }: { item: Message }) => {
     const isUser = item.sender === 'user';
-    const joinable =
-      !isUser && item.action === 'join_order';
-    const creatable =
-      !isUser && item.action === 'create_order';
+    const joinable = !isUser && item.action === 'join_order';
+    const creatable = !isUser && item.action === 'create_order';
     const primaryOrder = item.orders?.[0];
     const isSuggestedCard = primaryOrder?.isSuggested === true;
 
@@ -1089,7 +1061,9 @@ export default function ChatScreen() {
             {isSuggestedCard && primaryOrder ? (
               <View style={styles.suggestedOrderCard}>
                 <Text style={styles.suggestedBadge}>Suggested order</Text>
-                <Text style={styles.suggestedOrderTitle}>{primaryOrder.title}</Text>
+                <Text style={styles.suggestedOrderTitle}>
+                  {primaryOrder.title}
+                </Text>
                 <Text style={styles.suggestedOrderMeta}>
                   Example share: {primaryOrder.priceSplit ?? ''}
                 </Text>
@@ -1118,9 +1092,7 @@ export default function ChatScreen() {
         ) : (
           <Text style={styles.text}>{item.text}</Text>
         )}
-        {!isUser &&
-        item.aiPlacePicks &&
-        item.aiPlacePicks.length > 0 ? (
+        {!isUser && item.aiPlacePicks && item.aiPlacePicks.length > 0 ? (
           <View style={styles.aiPickBlock}>
             {item.aiPlacePicks.map((pick, idx) => {
               const rowKey = `${item.id}:${idx}`;
@@ -1167,9 +1139,7 @@ export default function ChatScreen() {
     );
 
     return (
-      <View
-        style={[styles.message, isUser ? styles.user : styles.bot]}
-      >
+      <View style={[styles.message, isUser ? styles.user : styles.bot]}>
         {body}
       </View>
     );
@@ -1243,13 +1213,16 @@ export default function ChatScreen() {
               ) : null}
               {!profile?.location ? (
                 <Text style={styles.growthHint}>
-                  Enable location on your profile for AI + nearby order matches (2km).
+                  Enable location on your profile for AI + nearby order matches
+                  (2km).
                 </Text>
               ) : null}
               {smartLoading ? (
                 <View style={styles.growthCard}>
                   <ActivityIndicator size="small" color="#6EE7B7" />
-                  <Text style={styles.growthSubtitle}>Finding smart matches…</Text>
+                  <Text style={styles.growthSubtitle}>
+                    Finding smart matches…
+                  </Text>
                 </View>
               ) : null}
               {!smartLoading &&
@@ -1286,7 +1259,9 @@ export default function ChatScreen() {
                       ))}
                     </ScrollView>
                   ) : (
-                    <Text style={styles.growthEmpty}>No orders in 2km right now.</Text>
+                    <Text style={styles.growthEmpty}>
+                      No orders in 2km right now.
+                    </Text>
                   )}
                 </View>
               ) : null}
@@ -1302,9 +1277,7 @@ export default function ChatScreen() {
           onContentSizeChange={() =>
             flatListRef.current?.scrollToEnd({ animated: true })
           }
-          onLayout={() =>
-            flatListRef.current?.scrollToEnd({ animated: false })
-          }
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
 
         {showIdeaChips ? (
@@ -1374,7 +1347,9 @@ export default function ChatScreen() {
                   style={styles.guidedChip}
                   activeOpacity={0.85}
                   disabled={loading}
-                  onPress={() => void submitAssistantText(label, { clearInput: true })}
+                  onPress={() =>
+                    void submitAssistantText(label, { clearInput: true })
+                  }
                 >
                   <Text style={styles.guidedChipText}>{label}</Text>
                 </TouchableOpacity>
@@ -1402,7 +1377,8 @@ export default function ChatScreen() {
         {showPartnerInvite && authUser?.uid ? (
           <View style={styles.partnerInvitePanel}>
             <Text style={styles.partnerInviteText}>
-              You have a half-order waiting. Nudge your partner on WhatsApp with an app link.
+              You have a half-order waiting. Nudge your partner on WhatsApp with
+              an app link.
             </Text>
             <TouchableOpacity
               style={styles.splitWaBtn}
@@ -1416,9 +1392,6 @@ export default function ChatScreen() {
         ) : null}
 
         <View style={styles.inputContainer}>
-          <TouchableOpacity onPress={handleMicPress} style={styles.micButton}>
-            <Text style={styles.micText}>🎤</Text>
-          </TouchableOpacity>
           <TextInput
             ref={inputRef}
             value={input}
@@ -1438,7 +1411,7 @@ export default function ChatScreen() {
             ]}
             disabled={loading || !input.trim()}
           >
-            <Text style={{ color: '#fff' }}>Send</Text>
+            <Text style={styles.buttonText}>Send</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -1669,38 +1642,39 @@ const styles = StyleSheet.create({
 
   inputContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     padding: 10,
     borderTopWidth: 1,
     borderColor: '#222',
   },
-  micButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#2A2A2A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  micText: { fontSize: 16 },
-
   input: {
     flex: 1,
     backgroundColor: '#222',
     color: '#fff',
     padding: 10,
     borderRadius: 8,
-    marginRight: 10,
+    marginRight: 8,
   },
 
   button: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 15,
+    height: 48,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
     justifyContent: 'center',
-    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 16,
   },
   introPlaceholder: {
     paddingVertical: 24,

@@ -1,7 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { logError } from '@/utils/errorLogger';
+import { logError } from '@/utils/errors';
 
 interface Props {
   children: ReactNode;

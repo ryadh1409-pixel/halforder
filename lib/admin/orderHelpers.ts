@@ -31,9 +31,12 @@ export function formatParticipantPreview(ids: string[], maxShow = 3): string {
 
 /** Report body text — prefers `details`, then `message`, `context`. */
 export function reportDetailText(data: Record<string, unknown>): string | null {
-  if (typeof data.details === 'string' && data.details.trim()) return data.details.trim();
-  if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
-  if (typeof data.context === 'string' && data.context.trim()) return data.context.trim();
+  if (typeof data.details === 'string' && data.details.trim())
+    return data.details.trim();
+  if (typeof data.message === 'string' && data.message.trim())
+    return data.message.trim();
+  if (typeof data.context === 'string' && data.context.trim())
+    return data.context.trim();
   return null;
 }
 
@@ -90,7 +93,9 @@ export function orderDisplayTitle(
       ? data.foodName.trim()
       : '';
   const title =
-    typeof data.title === 'string' && data.title.trim() ? data.title.trim() : '';
+    typeof data.title === 'string' && data.title.trim()
+      ? data.title.trim()
+      : '';
   const rest =
     typeof data.restaurantName === 'string' && data.restaurantName.trim()
       ? data.restaurantName.trim()

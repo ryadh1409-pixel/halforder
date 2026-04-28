@@ -30,7 +30,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { shadows, theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { filterBlockedUsers } from '@/utils/filter';
 import { showError } from '@/utils/toast';
 
@@ -75,9 +75,7 @@ export default function NearbyOrdersScreen() {
       return;
     }
     if (await isUserBanned(uid)) {
-      showError(
-        'Your account has been restricted. You cannot join orders.',
-      );
+      showError('Your account has been restricted. You cannot join orders.');
       return;
     }
     if (order.participants.includes(uid)) {
@@ -85,9 +83,7 @@ export default function NearbyOrdersScreen() {
       return;
     }
     if (order.participants.length >= order.maxParticipants) {
-      showError(
-        'This order already has the maximum number of participants.',
-      );
+      showError('This order already has the maximum number of participants.');
       return;
     }
     setJoiningId(order.id);
@@ -179,8 +175,8 @@ export default function NearbyOrdersScreen() {
         >
           {ordersWithDistance.length === 0 ? (
             <Text style={styles.emptyText}>
-              No active orders within {NEARBY_RADIUS_KM} km — start one and others
-              can join.
+              No active orders within {NEARBY_RADIUS_KM} km — start one and
+              others can join.
             </Text>
           ) : (
             ordersWithDistance.map((order) => {
@@ -214,7 +210,9 @@ export default function NearbyOrdersScreen() {
                       <Text style={styles.joinButtonText}>Join</Text>
                     )}
                   </TouchableOpacity>
-                  <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
+                  <FoodCardPaymentDisclaimer
+                    style={styles.cardCoordinationNote}
+                  />
                 </View>
               );
             })

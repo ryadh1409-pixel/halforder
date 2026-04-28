@@ -101,7 +101,10 @@ export default function AdminAnalyticsScreen() {
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retry} onPress={() => void load()}>
+              <TouchableOpacity
+                style={styles.retry}
+                onPress={() => void load()}
+              >
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>
@@ -136,9 +139,13 @@ export default function AdminAnalyticsScreen() {
                 <Text style={styles.cta}>Orders hub →</Text>
               </TouchableOpacity>
               <View style={styles.card}>
-                <Text style={styles.label}>Total matches (food_cards · matched)</Text>
+                <Text style={styles.label}>
+                  Total matches (food_cards · matched)
+                </Text>
                 <Text style={styles.value}>{data.foodMatched}</Text>
-                <Text style={styles.hintSmall}>Pull down to refresh counts</Text>
+                <Text style={styles.hintSmall}>
+                  Pull down to refresh counts
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.card}

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 const BG = '#000000';
@@ -64,8 +64,8 @@ export default function BlockedUsersScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.hint}>
-          People you block cannot message you or appear in your matches and orders.
-          Unblocking restores access instantly.
+          People you block cannot message you or appear in your matches and
+          orders. Unblocking restores access instantly.
         </Text>
         <BlockedUsersList
           blockedUsers={blockedUsers}
@@ -90,7 +90,12 @@ const styles = StyleSheet.create({
   },
   backLink: { color: '#FF7A00', fontSize: 16, fontWeight: '600' },
   screenTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
   muted: { color: 'rgba(255,255,255,0.55)', fontSize: 15, textAlign: 'center' },
   scrollContent: {
     paddingHorizontal: 16,

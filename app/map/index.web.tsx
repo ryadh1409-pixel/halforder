@@ -56,9 +56,7 @@ export default function MapScreenWeb() {
               <TouchableOpacity
                 key={order.id}
                 style={styles.card}
-                onPress={() =>
-                  router.push(`/order/${order.id}` as const)
-                }
+                onPress={() => router.push(`/order/${order.id}` as const)}
               >
                 <Text style={styles.cardTitle}>{order.restaurantName}</Text>
                 <Text style={styles.cardRow}>Meal: {order.mealType}</Text>
@@ -68,7 +66,9 @@ export default function MapScreenWeb() {
                 </Text>
                 <Text style={styles.cardRow}>By: {order.userName}</Text>
                 <Text style={styles.joinLabel}>Tap to join</Text>
-                <FoodCardPaymentDisclaimer style={styles.cardCoordinationNote} />
+                <FoodCardPaymentDisclaimer
+                  style={styles.cardCoordinationNote}
+                />
               </TouchableOpacity>
             ))
           )}

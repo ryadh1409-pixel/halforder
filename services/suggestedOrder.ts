@@ -1,4 +1,7 @@
-import type { TimeContext, TimeOfDayPeriod } from '@/services/chatAssistantOrders';
+import type {
+  TimeContext,
+  TimeOfDayPeriod,
+} from '@/services/chatAssistantOrders';
 
 /**
  * In-app template only — not a Firestore document, not other users’ activity.
@@ -22,7 +25,9 @@ const SUGGESTED_TITLE_BY_PERIOD: Record<TimeOfDayPeriod, string> = {
 /**
  * Chat-only suggestion (never written to Firestore). `isSuggested: true` everywhere it appears.
  */
-export function generateSuggestedOrder(ctx: TimeContext): SuggestedMessageOrder {
+export function generateSuggestedOrder(
+  ctx: TimeContext,
+): SuggestedMessageOrder {
   const ts = Date.now();
   return {
     id: `suggested_${ts}`,

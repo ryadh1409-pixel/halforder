@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 
 import { isUserBanned } from '@/services/adminGuard';
-import { hasBlockBetween } from '@/services/blocks';
+import { hasBlockBetween } from '@/services/blockService';
 import {
   ensureHalfOrderChat,
   postHalfOrderChatSystemMessage,
@@ -49,7 +49,9 @@ export async function joinOrder(orderId: string): Promise<void> {
   const uid = user.uid;
 
   if (await isUserBanned(uid)) {
-    throw new Error('Your account has been restricted. You cannot join orders.');
+    throw new Error(
+      'Your account has been restricted. You cannot join orders.',
+    );
   }
 
   const orderRef = doc(db, 'orders', trimmedId);
@@ -64,9 +66,15 @@ export async function joinOrder(orderId: string): Promise<void> {
     }
   }
 
-  await joinOrderWithParticipantRecord(db, trimmedId, uid, {}, {
-    requireOpenForJoin: false,
-  });
+  await joinOrderWithParticipantRecord(
+    db,
+    trimmedId,
+    uid,
+    {},
+    {
+      requireOpenForJoin: false,
+    },
+  );
 
   await setDoc(
     doc(db, 'orders', trimmedId, 'joins', uid),
@@ -102,7 +110,9 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
   const uid = user.uid;
 
   if (await isUserBanned(uid)) {
-    throw new Error('Your account has been restricted. You cannot join orders.');
+    throw new Error(
+      'Your account has been restricted. You cannot join orders.',
+    );
   }
 
   const orderRef = doc(db, 'orders', trimmedId);
@@ -180,7 +190,11 @@ export async function joinHalfOrderByOrderId(orderId: string): Promise<{
   await syncOrderMemberProfilesForOrder(trimmedId, finalUsers);
 
   let justBecamePair = false;
-  if (txResult.tag === 'added' && txResult.priorCount === 1 && finalUsers.length >= 2) {
+  if (
+    txResult.tag === 'added' &&
+    txResult.priorCount === 1 &&
+    finalUsers.length >= 2
+  ) {
     justBecamePair = true;
     await postHalfOrderChatSystemMessage(
       trimmedId,

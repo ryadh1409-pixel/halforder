@@ -11,9 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
+import {
+  systemActionSheet,
+  systemConfirm,
+} from '@/components/SystemDialogHost';
 import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { useBlock } from '@/hooks/useBlock';
 import { useTrustScore } from '@/hooks/useTrustScore';
@@ -85,7 +88,8 @@ export default function UserProfileScreen() {
           'User';
         const imageUrl =
           (typeof d?.photoURL === 'string' && d.photoURL.trim()) ||
-          (typeof d?.profileImageUrl === 'string' && d.profileImageUrl.trim()) ||
+          (typeof d?.profileImageUrl === 'string' &&
+            d.profileImageUrl.trim()) ||
           (typeof d?.avatarUrl === 'string' && d.avatarUrl.trim()) ||
           null;
         const totalOrdersCompleted =
@@ -119,7 +123,10 @@ export default function UserProfileScreen() {
   const badges = useMemo(() => {
     const computed: string[] = [];
     if (trust?.label === 'Trusted User 🔥') computed.push(BADGE_TRUSTED);
-    if ((profile?.totalOrdersCompleted ?? 0) >= 5 && toPercent(profile?.cancellationRate ?? 0) <= 10) {
+    if (
+      (profile?.totalOrdersCompleted ?? 0) >= 5 &&
+      toPercent(profile?.cancellationRate ?? 0) <= 10
+    ) {
       computed.push(BADGE_FAST_JOINER);
     }
     if ((trust?.average ?? 0) >= 4.5 && (trust?.count ?? 0) >= 3) {
@@ -133,10 +140,18 @@ export default function UserProfileScreen() {
       if (!computed.includes(b)) computed.push(b);
     }
     return computed;
-  }, [profile?.badges, profile?.cancellationRate, profile?.totalOrdersCompleted, trust?.average, trust?.count, trust?.label]);
+  }, [
+    profile?.badges,
+    profile?.cancellationRate,
+    profile?.totalOrdersCompleted,
+    trust?.average,
+    trust?.count,
+    trust?.label,
+  ]);
 
   const handleBlockUser = () => {
-    if (!currentUserId || !userId || currentUserId === userId || blocking) return;
+    if (!currentUserId || !userId || currentUserId === userId || blocking)
+      return;
     void (async () => {
       const ok = await systemConfirm({
         title: 'Block user',
@@ -158,7 +173,8 @@ export default function UserProfileScreen() {
   };
 
   const handleUnblockUser = () => {
-    if (!currentUserId || !userId || currentUserId === userId || blocking) return;
+    if (!currentUserId || !userId || currentUserId === userId || blocking)
+      return;
     void (async () => {
       setBlocking(true);
       try {
@@ -173,7 +189,8 @@ export default function UserProfileScreen() {
   };
 
   const submitReportWithReason = async (reason: ReportReason) => {
-    if (!currentUserId || !userId || currentUserId === userId || reporting) return;
+    if (!currentUserId || !userId || currentUserId === userId || reporting)
+      return;
     setReporting(true);
     try {
       await submitReport({
@@ -191,7 +208,8 @@ export default function UserProfileScreen() {
   };
 
   const handleReportUser = () => {
-    if (!currentUserId || !userId || currentUserId === userId || reporting) return;
+    if (!currentUserId || !userId || currentUserId === userId || reporting)
+      return;
     void systemActionSheet({
       title: 'Report user',
       message: 'Choose a reason',
@@ -222,9 +240,7 @@ export default function UserProfileScreen() {
     );
   }
 
-  const peerHidden = Boolean(
-    currentUserId && userId && isHiddenFromMe(userId),
-  );
+  const peerHidden = Boolean(currentUserId && userId && isHiddenFromMe(userId));
 
   if (peerHidden) {
     return (

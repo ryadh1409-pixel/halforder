@@ -33,15 +33,18 @@ export default function Privacy() {
         <strong>Last Updated:</strong> April 2026
       </p>
       <p style={legalText.p}>
-        HalfOrder (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy and is
-        committed to protecting your personal data. This Privacy Policy explains
-        how we collect, use, and protect your information.
+        HalfOrder (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects
+        your privacy and is committed to protecting your personal data. This
+        Privacy Policy explains how we collect, use, and protect your
+        information.
       </p>
 
       <hr style={hr} />
 
       <h2 style={legalText.sectionTitle}>1. Information We Collect</h2>
-      <p style={legalText.p}>We may collect the following types of information:</p>
+      <p style={legalText.p}>
+        We may collect the following types of information:
+      </p>
 
       <h3 style={subheading}>a. Personal Information</h3>
       <ul style={list}>
@@ -141,7 +144,10 @@ export default function Privacy() {
       </ul>
       <p style={legalText.p}>
         To request this, contact us at:{' '}
-        <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: '#007aff', fontWeight: 600 }}>
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
+          style={{ color: '#007aff', fontWeight: 600 }}
+        >
           {SUPPORT_EMAIL}
         </a>
       </p>
@@ -173,7 +179,10 @@ export default function Privacy() {
       <h2 style={legalText.sectionTitle}>12. Contact</h2>
       <p style={legalText.p}>
         For any questions:{' '}
-        <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: '#007aff', fontWeight: 600 }}>
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
+          style={{ color: '#007aff', fontWeight: 600 }}
+        >
           {SUPPORT_EMAIL}
         </a>
       </p>

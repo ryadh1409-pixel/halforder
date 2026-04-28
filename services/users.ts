@@ -16,7 +16,9 @@ export type PublicUserFields = {
   location: { lat: number; lng: number } | null;
 };
 
-function parseLocation(d: Record<string, unknown>): { lat: number; lng: number } | null {
+function parseLocation(
+  d: Record<string, unknown>,
+): { lat: number; lng: number } | null {
   const loc = d.location;
   if (loc && typeof loc === 'object' && loc !== null) {
     const o = loc as Record<string, unknown>;
@@ -32,7 +34,12 @@ function parseLocation(d: Record<string, unknown>): { lat: number; lng: number }
         : typeof o.longitude === 'number'
           ? o.longitude
           : null;
-    if (lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)) {
+    if (
+      lat != null &&
+      lng != null &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng)
+    ) {
       return { lat, lng };
     }
   }
@@ -54,7 +61,9 @@ function resolveAvatar(d: Record<string, unknown>): string | null {
   const a =
     (typeof d.photo === 'string' && d.photo.trim() ? d.photo.trim() : '') ||
     (typeof d.avatar === 'string' && d.avatar.trim() ? d.avatar.trim() : '') ||
-    (typeof d.photoURL === 'string' && d.photoURL.trim() ? d.photoURL.trim() : '');
+    (typeof d.photoURL === 'string' && d.photoURL.trim()
+      ? d.photoURL.trim()
+      : '');
   if (/^https?:\/\//i.test(a) && a.length < 2000) return a;
   return null;
 }

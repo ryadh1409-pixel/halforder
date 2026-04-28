@@ -4,7 +4,10 @@
  */
 import { detectFoodIntent } from '@/services/chatAssistantOrders';
 import type { TimeContext } from '@/services/chatAssistantOrders';
-import { generateSuggestedOrder, SUGGESTED_ORDER_BOT_COPY } from '@/services/suggestedOrder';
+import {
+  generateSuggestedOrder,
+  SUGGESTED_ORDER_BOT_COPY,
+} from '@/services/suggestedOrder';
 import {
   initialAiSessionState,
   locationPromptForCategory,
@@ -47,13 +50,18 @@ export type AiBotMessage = {
 };
 
 export { ORDER_BUILDER_SYSTEM_PROMPT } from '@/services/aiOrderBuilder';
-export { validateOrderForCreate, validateOrder } from '@/services/aiOrderBuilder';
+export {
+  validateOrderForCreate,
+  validateOrder,
+} from '@/services/aiOrderBuilder';
 
 function norm(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-export function assistantFirstName(ctx: AssistantUserContext | undefined): string {
+export function assistantFirstName(
+  ctx: AssistantUserContext | undefined,
+): string {
   const raw = (ctx?.displayName ?? '').trim();
   if (!raw) return 'there';
   return raw.split(/\s+/)[0] ?? 'there';
@@ -193,10 +201,7 @@ function productFeedbackLine(name: string): string {
   return `Thanks ${name} — that helps. What feels most confusing, and what should we improve next?`;
 }
 
-function productDefaultLine(
-  name: string,
-  nearbyJoinableCount: number,
-): string {
+function productDefaultLine(name: string, nearbyJoinableCount: number): string {
   if (lateNightLocal()) {
     return `${name}, 🌙 Late night? Say pizza, burger, healthy, or other meal — I’ll walk you through it.`;
   }

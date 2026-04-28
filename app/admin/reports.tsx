@@ -3,9 +3,18 @@ import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
 import { adminError, adminLog } from '@/lib/admin/adminDebug';
-import { formatFirestoreTime, reportDetailText } from '@/lib/admin/orderHelpers';
+import {
+  formatFirestoreTime,
+  reportDetailText,
+} from '@/lib/admin/orderHelpers';
 import { db } from '@/services/firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+} from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -34,7 +43,10 @@ export default function AdminReportsListScreen() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    adminLog('reports', 'subscribe reports query orderBy createdAt desc limit 120');
+    adminLog(
+      'reports',
+      'subscribe reports query orderBy createdAt desc limit 120',
+    );
     const q = query(
       collection(db, 'reports'),
       orderBy('createdAt', 'desc'),

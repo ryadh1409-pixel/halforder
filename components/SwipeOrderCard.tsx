@@ -1,13 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import {
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
 import { shadows } from '@/constants/theme';
@@ -40,7 +34,9 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
         <View style={styles.heroTopRow}>
           {order.savingsPercent > 0 ? (
             <View style={styles.pillGreen}>
-              <Text style={styles.pillGreenText}>Save {order.savingsPercent}%</Text>
+              <Text style={styles.pillGreenText}>
+                Save {order.savingsPercent}%
+              </Text>
             </View>
           ) : (
             <View />
@@ -68,7 +64,9 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
       <View style={styles.panel}>
         <View style={styles.priceRow}>
           <Text style={styles.priceLabel}>Price per person</Text>
-          <Text style={styles.priceValue}>{formatSplitPrice(order.splitPriceCents)}</Text>
+          <Text style={styles.priceValue}>
+            {formatSplitPrice(order.splitPriceCents)}
+          </Text>
         </View>
 
         <View style={styles.statsRow}>
@@ -84,7 +82,9 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
             <MaterialIcons name="near-me" size={20} color="#60A5FA" />
             <View>
               <Text style={styles.statLabel}>Distance</Text>
-              <Text style={styles.statValue}>{order.distanceKm.toFixed(1)} km</Text>
+              <Text style={styles.statValue}>
+                {order.distanceKm.toFixed(1)} km
+              </Text>
             </View>
           </View>
         </View>
@@ -108,7 +108,11 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
         </View>
 
         <View style={styles.urgencyFoot}>
-          <MaterialIcons name="local-fire-department" size={16} color="#FB923C" />
+          <MaterialIcons
+            name="local-fire-department"
+            size={16}
+            color="#FB923C"
+          />
           <Text style={styles.urgencyFootText}>
             Closing in ~{order.closingInMin} min · join while spots last
           </Text>

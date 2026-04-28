@@ -49,9 +49,7 @@ export default function ShareOrderButton({
     if (Platform.OS === 'web') {
       (window as unknown as { open: (u: string) => void }).open(url, '_blank');
     } else {
-      Linking.openURL(url).catch(() =>
-        showError('Could not open WhatsApp.'),
-      );
+      Linking.openURL(url).catch(() => showError('Could not open WhatsApp.'));
     }
   };
 

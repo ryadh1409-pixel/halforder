@@ -9,7 +9,11 @@ import {
 } from 'firebase/firestore';
 
 /** Deterministic match doc id: `{orderId}_{smallerUid}_{largerUid}` */
-export function foodMatchDocId(orderId: string, uidA: string, uidB: string): string {
+export function foodMatchDocId(
+  orderId: string,
+  uidA: string,
+  uidB: string,
+): string {
   const [a, b] = [uidA, uidB].sort();
   return `${orderId}_${a}_${b}`;
 }

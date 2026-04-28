@@ -67,5 +67,5 @@ This runs the production iOS build and, when it finishes, submits it to TestFlig
 
 `ios.bundleIdentifier` is set to `com.halforder.app`. If your Apple Developer / App Store Connect app still uses `com.anonymous.ourfoodclean`, either:
 
-- Create a new App Store Connect app with `com.halforder.app`, or  
+- Create a new App Store Connect app with `com.halforder.app`, or
 - Set `ios.bundleIdentifier` back to `com.anonymous.ourfoodclean` in app.json so it matches the existing app.

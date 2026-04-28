@@ -30,7 +30,10 @@ export default function LoginPage() {
         err && typeof err === 'object' && 'code' in err
           ? String((err as { code: string }).code)
           : '';
-      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      if (
+        code === 'auth/wrong-password' ||
+        code === 'auth/invalid-credential'
+      ) {
         setLocalError('Invalid email or password.');
       } else if (code === 'auth/too-many-requests') {
         setLocalError('Too many attempts. Try again later.');
@@ -56,11 +59,15 @@ export default function LoginPage() {
           Sign in
         </h1>
         <p className="mt-2 text-center text-sm text-slate-500">
-          Restricted to <span className="font-mono text-slate-700">{ADMIN_EMAIL}</span>
+          Restricted to{' '}
+          <span className="font-mono text-slate-700">{ADMIN_EMAIL}</span>
         </p>
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-slate-700"
+            >
               Email
             </label>
             <input
@@ -73,7 +80,10 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-slate-700"
+            >
               Password
             </label>
             <input

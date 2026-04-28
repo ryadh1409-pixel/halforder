@@ -79,9 +79,7 @@ export default function MatchCheckoutScreen() {
           : [];
         const uid = auth.currentUser?.uid ?? '';
         const otherId =
-          plist.find((id) => id !== uid) ??
-          (d?.user2Id as string) ??
-          '';
+          plist.find((id) => id !== uid) ?? (d?.user2Id as string) ?? '';
 
         setRestaurantName(
           typeof d?.restaurantName === 'string' && d.restaurantName.trim()

@@ -35,7 +35,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 type Msg = { id: string; text: string; at: string; atMs: number };
@@ -61,7 +61,7 @@ export default function AdminOrderDetailScreen() {
         orderId,
         exists: snap.exists(),
       });
-      setData(snap.exists() ? snap.data() ?? {} : {});
+      setData(snap.exists() ? (snap.data() ?? {}) : {});
       setLoading(false);
     });
     const u2 = onSnapshot(
@@ -111,7 +111,10 @@ export default function AdminOrderDetailScreen() {
       if (!ok) return;
       setSaving(true);
       try {
-        adminLog('order-detail', 'updateDoc order status', { orderId, status: next });
+        adminLog('order-detail', 'updateDoc order status', {
+          orderId,
+          status: next,
+        });
         await updateDoc(doc(db, 'orders', orderId), {
           status: next,
           adminStatusUpdatedAt: serverTimestamp(),
@@ -171,7 +174,11 @@ export default function AdminOrderDetailScreen() {
   if (!data || Object.keys(data).length === 0) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <AdminHeader title="Order" backTo={adminRoutes.orders()} backLabel="Orders" />
+        <AdminHeader
+          title="Order"
+          backTo={adminRoutes.orders()}
+          backLabel="Orders"
+        />
         <Text style={styles.muted}>Not found</Text>
       </SafeAreaView>
     );
@@ -257,10 +264,16 @@ export default function AdminOrderDetailScreen() {
               style={[styles.btn, styles.danger]}
               disabled={saving}
               onPress={() =>
-                setStatus('cancelled', 'Cancel order', 'Mark this order as cancelled?')
+                setStatus(
+                  'cancelled',
+                  'Cancel order',
+                  'Mark this order as cancelled?',
+                )
               }
             >
-              <Text style={styles.dangerT}>{saving ? '…' : 'Cancel order'}</Text>
+              <Text style={styles.dangerT}>
+                {saving ? '…' : 'Cancel order'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.ok]}
@@ -277,7 +290,9 @@ export default function AdminOrderDetailScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <Text style={styles.muted}>Terminal status — cancel/complete disabled.</Text>
+          <Text style={styles.muted}>
+            Terminal status — cancel/complete disabled.
+          </Text>
         )}
 
         <View style={styles.actions}>
@@ -286,7 +301,9 @@ export default function AdminOrderDetailScreen() {
             disabled={saving}
             onPress={confirmDelete}
           >
-            <Text style={styles.deleteT}>{saving ? '…' : 'Delete order (Firestore)'}</Text>
+            <Text style={styles.deleteT}>
+              {saving ? '…' : 'Delete order (Firestore)'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -301,7 +318,12 @@ const styles = StyleSheet.create({
   card: { ...adminCardShell, marginBottom: 16, padding: theme.spacing.md },
   k: { fontSize: 12, color: COLORS.textMuted, marginBottom: 2 },
   v: { fontSize: 15, color: COLORS.text, marginBottom: 8 },
-  mono: { fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontFamily: 'Menlo' },
+  mono: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 10,
+    fontFamily: 'Menlo',
+  },
   link: { textDecorationLine: 'underline', color: COLORS.primary },
   part: {
     fontSize: 14,

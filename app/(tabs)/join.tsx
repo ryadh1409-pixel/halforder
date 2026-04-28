@@ -11,9 +11,11 @@ import {
 } from '@/services/orderLifecycle';
 import { hasBlockConflict } from '@/services/report-block';
 import { blockUser, submitUserReport } from '@/services/userSafety';
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import {
+  systemActionSheet,
+  systemConfirm,
+} from '@/components/SystemDialogHost';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { filterBlockedUsers } from '@/utils/filter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -87,9 +89,7 @@ const FOOD_EMOJI: Record<string, string> = {
 function joinListTimerLabel(o: OpenOrder, now: number): string {
   if (o.status === 'expired') return 'Expired';
   if (o.expiresAt == null) {
-    return o.participants.length < 2
-      ? 'Waiting for first user'
-      : 'Open';
+    return o.participants.length < 2 ? 'Waiting for first user' : 'Open';
   }
   if (o.participants.length < 2) return 'Waiting for first user';
   const diff = o.expiresAt - now;
@@ -333,9 +333,7 @@ export default function JoinScreen() {
   const doJoinOrder = async (orderId: string) => {
     if (!user) return;
     if (await isUserBanned(user.uid)) {
-      showError(
-        'Your account has been restricted. You cannot join orders.',
-      );
+      showError('Your account has been restricted. You cannot join orders.');
       return;
     }
     setJoiningId(orderId);
@@ -352,10 +350,7 @@ export default function JoinScreen() {
               : null;
         const ost =
           typeof orderData.status === 'string' ? orderData.status : 'open';
-        if (
-          ost === 'expired' ||
-          (expMs != null && expMs <= Date.now())
-        ) {
+        if (ost === 'expired' || (expMs != null && expMs <= Date.now())) {
           showError('This order has expired.');
           return;
         }
@@ -423,7 +418,12 @@ export default function JoinScreen() {
       });
       return;
     }
-    const reasons = ['Spam', 'Inappropriate behavior', 'Scam', 'Other'] as const;
+    const reasons = [
+      'Spam',
+      'Inappropriate behavior',
+      'Scam',
+      'Other',
+    ] as const;
     void systemActionSheet({
       title: 'Report host',
       message: 'Select a reason',
@@ -460,8 +460,7 @@ export default function JoinScreen() {
     void (async () => {
       const ok = await systemConfirm({
         title: 'Block host',
-        message:
-          'You will not see orders from this host in your join list.',
+        message: 'You will not see orders from this host in your join list.',
         confirmLabel: 'Block',
         destructive: true,
       });
@@ -589,231 +588,250 @@ export default function JoinScreen() {
 
           return (
             <View style={{ marginBottom: 14 }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingVertical: 16,
-                paddingHorizontal: 18,
-                borderWidth: 1,
-                borderColor: c.border,
-                borderLeftWidth: 6,
-                borderLeftColor: accentColor,
-                borderRadius: 10,
-              }}
-            >
-              <View>
-                <Text
-                  style={{
-                    color: c.textSlateDark,
-                    fontSize: 26,
-                    fontWeight: '700',
-                  }}
-                >
-                  {(FOOD_EMOJI[foodType] ?? '🍽️') + ' ' + foodLabel}
-                </Text>
-                <Text style={{ color: c.textMuted, fontSize: 14 }}>
-                  {restaurantLabel}
-                </Text>
-                {item.restaurantLocation ? (
-                  <Text style={{ color: c.textMuted, fontSize: 13 }}>
-                    📍 {item.restaurantLocation}
-                  </Text>
-                ) : null}
-                <Text style={{ color: c.textMuted, fontSize: 13 }}>
-                  {item.orderAtMs != null
-                    ? `⏰ ${formatTorontoOrderTime(item.orderAtMs)}`
-                    : `⏱ ${item.orderTime || 'Now'}`}
-                </Text>
-                <Text
-                  style={{
-                    color: '#F97316',
-                    fontSize: 14,
-                    fontWeight: '600',
-                    marginTop: 6,
-                  }}
-                >
-                  ⏱{' '}
-                  {timerLabel === 'Open'
-                    ? 'Join window open'
-                    : timerLabel}
-                </Text>
-                <Text
-                  style={{ color: c.iconInactive, fontSize: 11, marginTop: 2 }}
-                >
-                  Please be ready 5 minutes before order time
-                </Text>
-                <Text style={{ color: c.textMuted, fontSize: 14 }}>
-                  Participants: {item.participants.length} / {item.maxPeople}
-                </Text>
-                <Text
-                  style={{ color: c.textSlateDark, fontSize: 14, marginTop: 2 }}
-                >
-                  Total: ${item.totalPrice.toFixed(2)}
-                </Text>
-                <Text style={{ color: c.success, fontSize: 14, marginTop: 2 }}>
-                  Per person: $
-                  {item.participants.length > 0
-                    ? (item.totalPrice / item.participants.length).toFixed(2)
-                    : item.totalPrice.toFixed(2)}
-                </Text>
-                {item.paidBy ? (
-                  <Text
-                    style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}
-                  >
-                    {item.paidBy === currentUid
-                      ? 'You are paying'
-                      : 'Paid by creator'}
-                  </Text>
-                ) : null}
-                {almostFull ? (
-                  <Text
-                    style={{
-                      color: c.textMuted,
-                      fontSize: 12,
-                      fontWeight: '600',
-                      marginTop: 4,
-                    }}
-                  >
-                    One spot left
-                  </Text>
-                ) : null}
-                <Text
-                  style={{ color: c.iconInactive, fontSize: 12, marginTop: 4 }}
-                >
-                  {item.id}
-                </Text>
-              </View>
-              {item.status === 'ready_to_pay' ? (
-                <Text
-                  style={{
-                    color: c.successTextDark,
-                    fontSize: 12,
-                    fontWeight: '600',
-                  }}
-                >
-                  All confirmed. Ready to pay.
-                </Text>
-              ) : item.status === 'locked' ? (
-                alreadyJoined ? (
-                  <TouchableOpacity
-                    onPress={() => handleConfirm(item.id)}
-                    disabled={!!joiningId}
-                    style={{
-                      backgroundColor: c.success,
-                      paddingVertical: 8,
-                      paddingHorizontal: 16,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text style={{ color: c.textOnPrimary, fontWeight: '600' }}>
-                      {!item.confirmations || !item.confirmations[currentUid]
-                        ? 'Confirm Participation'
-                        : 'Confirmed'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text
-                    style={{
-                      color: c.danger,
-                      fontSize: 12,
-                      fontWeight: '600',
-                    }}
-                  >
-                    Locked for payment
-                  </Text>
-                )
-              ) : (
-                <TouchableOpacity
-                  onPress={() =>
-                    alreadyJoined
-                      ? handleLeave(item.id)
-                      : handleJoinPress(item.id)
-                  }
-                  disabled={!!joiningId || joinBlockedByExpiry}
-                  style={{
-                    backgroundColor: alreadyJoined ? c.danger : c.accentBlue,
-                    paddingVertical: 8,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    opacity: joinBlockedByExpiry && !alreadyJoined ? 0.5 : 1,
-                  }}
-                >
-                  {joining ? (
-                    <ActivityIndicator size="small" color={c.textOnPrimary} />
-                  ) : (
-                    <Text style={{ color: c.textOnPrimary, fontWeight: '600' }}>
-                      {alreadyJoined
-                        ? 'Leave'
-                        : joinBlockedByExpiry
-                          ? 'Expired'
-                          : 'Join'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-            {currentUid &&
-            item.hostId &&
-            item.hostId !== currentUid &&
-            item.status === 'open' ? (
               <View
                 style={{
                   flexDirection: 'row',
-                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 16,
                   paddingHorizontal: 18,
-                  paddingTop: 10,
-                  gap: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  borderLeftWidth: 6,
+                  borderLeftColor: accentColor,
+                  borderRadius: 10,
                 }}
               >
-                <TouchableOpacity
-                  onPress={() => handleReportHost(item.hostId, item.id)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: c.borderStrong,
-                    backgroundColor: c.chromeWash,
-                  }}
-                >
+                <View>
                   <Text
                     style={{
-                      fontSize: 13,
-                      fontWeight: '600',
-                      color: c.textSlate,
+                      color: c.textSlateDark,
+                      fontSize: 26,
+                      fontWeight: '700',
                     }}
                   >
-                    Report host
+                    {(FOOD_EMOJI[foodType] ?? '🍽️') + ' ' + foodLabel}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleBlockHost(item.hostId)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 8,
-                    backgroundColor: c.dangerBackground,
-                    borderWidth: 1,
-                    borderColor: c.dangerBorder,
-                  }}
-                >
+                  <Text style={{ color: c.textMuted, fontSize: 14 }}>
+                    {restaurantLabel}
+                  </Text>
+                  {item.restaurantLocation ? (
+                    <Text style={{ color: c.textMuted, fontSize: 13 }}>
+                      📍 {item.restaurantLocation}
+                    </Text>
+                  ) : null}
+                  <Text style={{ color: c.textMuted, fontSize: 13 }}>
+                    {item.orderAtMs != null
+                      ? `⏰ ${formatTorontoOrderTime(item.orderAtMs)}`
+                      : `⏱ ${item.orderTime || 'Now'}`}
+                  </Text>
                   <Text
                     style={{
-                      fontSize: 13,
+                      color: '#F97316',
+                      fontSize: 14,
                       fontWeight: '600',
-                      color: c.dangerText,
+                      marginTop: 6,
                     }}
                   >
-                    Block host
+                    ⏱ {timerLabel === 'Open' ? 'Join window open' : timerLabel}
                   </Text>
-                </TouchableOpacity>
+                  <Text
+                    style={{
+                      color: c.iconInactive,
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    Please be ready 5 minutes before order time
+                  </Text>
+                  <Text style={{ color: c.textMuted, fontSize: 14 }}>
+                    Participants: {item.participants.length} / {item.maxPeople}
+                  </Text>
+                  <Text
+                    style={{
+                      color: c.textSlateDark,
+                      fontSize: 14,
+                      marginTop: 2,
+                    }}
+                  >
+                    Total: ${item.totalPrice.toFixed(2)}
+                  </Text>
+                  <Text
+                    style={{ color: c.success, fontSize: 14, marginTop: 2 }}
+                  >
+                    Per person: $
+                    {item.participants.length > 0
+                      ? (item.totalPrice / item.participants.length).toFixed(2)
+                      : item.totalPrice.toFixed(2)}
+                  </Text>
+                  {item.paidBy ? (
+                    <Text
+                      style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}
+                    >
+                      {item.paidBy === currentUid
+                        ? 'You are paying'
+                        : 'Paid by creator'}
+                    </Text>
+                  ) : null}
+                  {almostFull ? (
+                    <Text
+                      style={{
+                        color: c.textMuted,
+                        fontSize: 12,
+                        fontWeight: '600',
+                        marginTop: 4,
+                      }}
+                    >
+                      One spot left
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={{
+                      color: c.iconInactive,
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    {item.id}
+                  </Text>
+                </View>
+                {item.status === 'ready_to_pay' ? (
+                  <Text
+                    style={{
+                      color: c.successTextDark,
+                      fontSize: 12,
+                      fontWeight: '600',
+                    }}
+                  >
+                    All confirmed. Ready to pay.
+                  </Text>
+                ) : item.status === 'locked' ? (
+                  alreadyJoined ? (
+                    <TouchableOpacity
+                      onPress={() => handleConfirm(item.id)}
+                      disabled={!!joiningId}
+                      style={{
+                        backgroundColor: c.success,
+                        paddingVertical: 8,
+                        paddingHorizontal: 16,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text
+                        style={{ color: c.textOnPrimary, fontWeight: '600' }}
+                      >
+                        {!item.confirmations || !item.confirmations[currentUid]
+                          ? 'Confirm Participation'
+                          : 'Confirmed'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text
+                      style={{
+                        color: c.danger,
+                        fontSize: 12,
+                        fontWeight: '600',
+                      }}
+                    >
+                      Locked for payment
+                    </Text>
+                  )
+                ) : (
+                  <TouchableOpacity
+                    onPress={() =>
+                      alreadyJoined
+                        ? handleLeave(item.id)
+                        : handleJoinPress(item.id)
+                    }
+                    disabled={!!joiningId || joinBlockedByExpiry}
+                    style={{
+                      backgroundColor: alreadyJoined ? c.danger : c.accentBlue,
+                      paddingVertical: 8,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      opacity: joinBlockedByExpiry && !alreadyJoined ? 0.5 : 1,
+                    }}
+                  >
+                    {joining ? (
+                      <ActivityIndicator size="small" color={c.textOnPrimary} />
+                    ) : (
+                      <Text
+                        style={{ color: c.textOnPrimary, fontWeight: '600' }}
+                      >
+                        {alreadyJoined
+                          ? 'Leave'
+                          : joinBlockedByExpiry
+                            ? 'Expired'
+                            : 'Join'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
-            ) : null}
-            <FoodCardPaymentDisclaimer
-              style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 2 }}
-            />
+              {currentUid &&
+              item.hostId &&
+              item.hostId !== currentUid &&
+              item.status === 'open' ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    paddingHorizontal: 18,
+                    paddingTop: 10,
+                    gap: 10,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => handleReportHost(item.hostId, item.id)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: c.borderStrong,
+                      backgroundColor: c.chromeWash,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: c.textSlate,
+                      }}
+                    >
+                      Report host
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleBlockHost(item.hostId)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      backgroundColor: c.dangerBackground,
+                      borderWidth: 1,
+                      borderColor: c.dangerBorder,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: c.dangerText,
+                      }}
+                    >
+                      Block host
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <FoodCardPaymentDisclaimer
+                style={{
+                  paddingHorizontal: 18,
+                  paddingTop: 8,
+                  paddingBottom: 2,
+                }}
+              />
             </View>
           );
         }}

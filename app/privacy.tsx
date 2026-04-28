@@ -57,9 +57,10 @@ export default function PrivacyScreen() {
           <Text style={styles.metaStrong}>Last Updated:</Text> {LAST_UPDATED}
         </Text>
         <Text style={styles.paragraph}>
-          HalfOrder (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy and is
-          committed to protecting your personal data. This Privacy Policy explains how
-          we collect, use, and protect your information.
+          HalfOrder (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;)
+          respects your privacy and is committed to protecting your personal
+          data. This Privacy Policy explains how we collect, use, and protect
+          your information.
         </Text>
 
         <Hr />
@@ -90,7 +91,9 @@ export default function PrivacyScreen() {
 
         <Hr />
 
-        <Text style={styles.sectionHeading}>2. How We Use Your Information</Text>
+        <Text style={styles.sectionHeading}>
+          2. How We Use Your Information
+        </Text>
         <Text style={styles.paragraph}>We use your data to:</Text>
         <Bullets
           items={[
@@ -105,7 +108,9 @@ export default function PrivacyScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>3. Photos &amp; Media</Text>
-        <Text style={styles.paragraph}>If you upload images (e.g., food photos):</Text>
+        <Text style={styles.paragraph}>
+          If you upload images (e.g., food photos):
+        </Text>
         <Bullets
           items={[
             'We only access photos you choose to upload',
@@ -117,8 +122,12 @@ export default function PrivacyScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>4. Messaging &amp; Content</Text>
-        <Text style={styles.paragraph}>Messages between users are stored to:</Text>
-        <Bullets items={['Enable communication', 'Prevent abuse or harmful behavior']} />
+        <Text style={styles.paragraph}>
+          Messages between users are stored to:
+        </Text>
+        <Bullets
+          items={['Enable communication', 'Prevent abuse or harmful behavior']}
+        />
         <Text style={styles.paragraph}>
           We do NOT sell or share your messages with third parties.
         </Text>
@@ -127,7 +136,9 @@ export default function PrivacyScreen() {
 
         <Text style={styles.sectionHeading}>5. Data Sharing</Text>
         <Text style={styles.paragraph}>We do NOT sell your personal data.</Text>
-        <Text style={styles.paragraph}>We may share data only in these cases:</Text>
+        <Text style={styles.paragraph}>
+          We may share data only in these cases:
+        </Text>
         <Bullets
           items={[
             'With service providers (e.g., Firebase) to run the app',
@@ -139,12 +150,16 @@ export default function PrivacyScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>6. Payments</Text>
-        <Text style={styles.paragraph}>HalfOrder does NOT process payments.</Text>
+        <Text style={styles.paragraph}>
+          HalfOrder does NOT process payments.
+        </Text>
         <Text style={styles.paragraph}>
           HalfOrder is used for coordination only. Any arrangements are made
           independently between users.
         </Text>
-        <Text style={styles.paragraph}>We do NOT store any financial information.</Text>
+        <Text style={styles.paragraph}>
+          We do NOT store any financial information.
+        </Text>
 
         <Hr />
 
@@ -185,14 +200,20 @@ export default function PrivacyScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>10. Children&apos;s Privacy</Text>
-        <Text style={styles.paragraph}>HalfOrder is not intended for users under 18.</Text>
-        <Text style={styles.paragraph}>We do not knowingly collect data from children.</Text>
+        <Text style={styles.paragraph}>
+          HalfOrder is not intended for users under 18.
+        </Text>
+        <Text style={styles.paragraph}>
+          We do not knowingly collect data from children.
+        </Text>
 
         <Hr />
 
         <Text style={styles.sectionHeading}>11. Changes to This Policy</Text>
         <Text style={styles.paragraph}>We may update this Privacy Policy.</Text>
-        <Text style={styles.paragraph}>We will notify users of major changes.</Text>
+        <Text style={styles.paragraph}>
+          We will notify users of major changes.
+        </Text>
 
         <Hr />
 

@@ -47,9 +47,7 @@ export function BlockedUsersList({
   }
 
   if (blockedUsers.length === 0) {
-    return (
-      <Text style={styles.emptyText}>{emptyMessage}</Text>
-    );
+    return <Text style={styles.emptyText}>{emptyMessage}</Text>;
   }
 
   return (

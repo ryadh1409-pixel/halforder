@@ -11,7 +11,13 @@ import {
   query,
   updateDoc,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActionSheetIOS,
   ActivityIndicator,
@@ -27,9 +33,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '@/utils/contentModeration';
+import {
+  systemActionSheet,
+  systemConfirm,
+} from '@/components/SystemDialogHost';
+import { getUserFriendlyError } from '@/utils/errors';
+import {
+  CONTENT_NOT_ALLOWED,
+  moderateChatMessage,
+} from '@/utils/contentModeration';
 import { showError, showSuccess } from '@/utils/toast';
 import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
 import { blockUser } from '@/services/blockService';
@@ -126,13 +138,17 @@ export default function ChatByIdScreen() {
         );
         const uid = auth.currentUser?.uid;
         const users = Array.isArray(d?.users)
-          ? (d.users as unknown[]).filter((x): x is string => typeof x === 'string')
+          ? (d.users as unknown[]).filter(
+              (x): x is string => typeof x === 'string',
+            )
           : [];
         const part = Array.isArray(d?.participants)
-          ? (d.participants as unknown[]).filter((x): x is string => typeof x === 'string')
+          ? (d.participants as unknown[]).filter(
+              (x): x is string => typeof x === 'string',
+            )
           : [];
         const list = users.length > 0 ? users : part;
-        const other = uid ? list.find((x) => x !== uid) ?? null : null;
+        const other = uid ? (list.find((x) => x !== uid) ?? null) : null;
         setPeerUid(other);
       }
     });
@@ -148,9 +164,7 @@ export default function ChatByIdScreen() {
     const unsub = onSnapshot(ref, (snap) => {
       const d = snap.data();
       setPeerFlagged(
-        snap.exists()
-          ? d?.isFlagged === true || d?.flagged === true
-          : false,
+        snap.exists() ? d?.isFlagged === true || d?.flagged === true : false,
       );
     });
     return () => unsub();
@@ -208,7 +222,13 @@ export default function ChatByIdScreen() {
   }, [id, chatExists, hasSyncedMessages, messages.length]);
 
   useEffect(() => {
-    if (!id || chatExists !== true || !hasSyncedMessages || messages.length > 0 || bootstrapAttemptedRef.current) {
+    if (
+      !id ||
+      chatExists !== true ||
+      !hasSyncedMessages ||
+      messages.length > 0 ||
+      bootstrapAttemptedRef.current
+    ) {
       return;
     }
     bootstrapAttemptedRef.current = true;
@@ -280,11 +300,7 @@ export default function ChatByIdScreen() {
 
   const canSend = useMemo(
     () =>
-      text.trim().length > 0 &&
-      !sending &&
-      !!id &&
-      !blockedBetween &&
-      !!myUid,
+      text.trim().length > 0 && !sending && !!id && !blockedBetween && !!myUid,
     [text, sending, id, blockedBetween, myUid],
   );
 
@@ -298,7 +314,9 @@ export default function ChatByIdScreen() {
     const payload = text.trim();
     const mod = moderateChatMessage(payload, { maxLength: CHAT_MESSAGE_MAX });
     if (!mod.ok) {
-      showError(mod.reason === CONTENT_NOT_ALLOWED ? CONTENT_NOT_ALLOWED : mod.reason);
+      showError(
+        mod.reason === CONTENT_NOT_ALLOWED ? CONTENT_NOT_ALLOWED : mod.reason,
+      );
       return;
     }
     const safeText = mod.text;
@@ -429,10 +447,7 @@ export default function ChatByIdScreen() {
                   ? createdAt
                   : 0;
               const showSeen =
-                mine &&
-                !!peerUid &&
-                ts > 0 &&
-                (chatReads[peerUid] ?? 0) >= ts;
+                mine && !!peerUid && ts > 0 && (chatReads[peerUid] ?? 0) >= ts;
               const showMessageMenu =
                 !isSystem &&
                 !isAi &&
@@ -448,10 +463,7 @@ export default function ChatByIdScreen() {
                   ]}
                 >
                   <View
-                    style={[
-                      styles.bubble,
-                      mine ? styles.mine : styles.theirs,
-                    ]}
+                    style={[styles.bubble, mine ? styles.mine : styles.theirs]}
                   >
                     {!isSystem ? (
                       <Text style={styles.name}>{label}</Text>

@@ -20,7 +20,9 @@ export const ORDER_TERMINAL_STATUSES = new Set([
   ORDER_STATUS.EXPIRED,
 ]);
 
-export function isTerminalOrderStatus(status: string | undefined | null): boolean {
+export function isTerminalOrderStatus(
+  status: string | undefined | null,
+): boolean {
   if (!status) return false;
   return ORDER_TERMINAL_STATUSES.has(status as OrderStatusValue);
 }

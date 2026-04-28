@@ -19,7 +19,7 @@ import {
   GROWTH_MATCH_RADIUS_KM,
   GROWTH_ORDER_SCAN_LIMIT,
 } from '@/constants/growth';
-import { getHiddenUserIds } from '@/services/block';
+import { getHiddenUserIds } from '@/services/blockService';
 import { db } from '@/services/firebase';
 import { isUserFlagged } from '@/services/userModeration';
 import { mapRawUserDocument } from '@/services/users';
@@ -65,7 +65,9 @@ function openAiApiKey(): string | undefined {
     typeof process !== 'undefined'
       ? process.env?.EXPO_PUBLIC_OPENAI_API_KEY
       : undefined;
-  const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
+  const extra = Constants.expoConfig?.extra as
+    | Record<string, unknown>
+    | undefined;
   const fromExtra =
     typeof extra?.openaiApiKey === 'string' ? extra.openaiApiKey : '';
   return (fromEnv || fromExtra || '').trim() || undefined;
@@ -245,8 +247,7 @@ export async function getSmartMatches(
     const rows = await Promise.all(
       snap.docs.map(async (d): Promise<Row | null> => {
         const data = d.data() as Record<string, unknown>;
-        const exp =
-          typeof data.expiresAt === 'number' ? data.expiresAt : null;
+        const exp = typeof data.expiresAt === 'number' ? data.expiresAt : null;
         if (exp != null && exp <= now) return null;
 
         const haystack = orderFoodHaystack(data);
@@ -297,7 +298,9 @@ export async function getSmartMatches(
     const candidates = rows.filter((x): x is Row => x != null);
 
     candidates.sort((a, b) => b.score - a.score);
-    const top = candidates.slice(0, 12).map(({ haystack: _h, point: _p, ...rest }) => rest);
+    const top = candidates
+      .slice(0, 12)
+      .map(({ haystack: _h, point: _p, ...rest }) => rest);
     const aiText = await generateAiSuggestion(user.food, top);
     return { aiText, nearbyOrders: top };
   } catch (e) {

@@ -111,9 +111,7 @@ export default function Terms() {
       <ul style={list}>
         <li style={listItem}>You own or have rights to the content</li>
         <li style={listItem}>Content does not violate any laws</li>
-        <li style={listItem}>
-          Content is not abusive, misleading, or harmful
-        </li>
+        <li style={listItem}>Content is not abusive, misleading, or harmful</li>
       </ul>
       <p style={legalText.p}>
         HalfOrder reserves the right to remove any content at any time.
@@ -128,9 +126,7 @@ export default function Terms() {
         <li style={listItem}>Engage in suspicious or harmful behavior</li>
         <li style={listItem}>Abuse the platform</li>
       </ul>
-      <p style={legalText.p}>
-        No prior notice is required in serious cases.
-      </p>
+      <p style={legalText.p}>No prior notice is required in serious cases.</p>
 
       <hr style={hr} />
 
@@ -177,7 +173,10 @@ export default function Terms() {
       <h2 style={legalText.sectionTitle}>10. Contact</h2>
       <p style={legalText.p}>
         For any questions or concerns:{' '}
-        <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: '#007aff', fontWeight: 600 }}>
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
+          style={{ color: '#007aff', fontWeight: 600 }}
+        >
           {SUPPORT_EMAIL}
         </a>
       </p>
@@ -185,9 +184,7 @@ export default function Terms() {
       <hr style={hr} />
 
       <h2 style={legalText.sectionTitle}>11. Governing Law</h2>
-      <p style={legalText.p}>
-        These Terms are governed by the laws of Canada.
-      </p>
+      <p style={legalText.p}>These Terms are governed by the laws of Canada.</p>
 
       <hr style={hr} />
 

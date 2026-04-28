@@ -15,7 +15,10 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/services/firebase';
-import { haversineDistanceMeters, SPLIT_MAX_DISTANCE_M } from '@/services/matching';
+import {
+  haversineDistanceMeters,
+  SPLIT_MAX_DISTANCE_M,
+} from '@/services/matching';
 
 export type GroupStatus = 'waiting' | 'full' | 'ordered';
 
@@ -36,9 +39,7 @@ export type GroupUserInput = {
   location: { lat: number; lng: number };
 };
 
-function parseLatLng(
-  obj: unknown,
-): { lat: number; lng: number } | null {
+function parseLatLng(obj: unknown): { lat: number; lng: number } | null {
   if (!obj || typeof obj !== 'object') return null;
   const o = obj as Record<string, unknown>;
   const lat = typeof o.lat === 'number' ? o.lat : null;
@@ -114,7 +115,11 @@ export function scoreGroup(
  */
 export async function findBestGroup(
   currentUser: GroupUserInput,
-): Promise<{ id: string; data: Record<string, unknown>; score: number } | null> {
+): Promise<{
+  id: string;
+  data: Record<string, unknown>;
+  score: number;
+} | null> {
   const food = currentUser.preferredFood.trim().toLowerCase();
   if (!food || !currentUser.id) return null;
 
@@ -125,8 +130,11 @@ export async function findBestGroup(
   );
   const snap = await getDocs(qRef);
 
-  let best: { id: string; data: Record<string, unknown>; score: number } | null =
-    null;
+  let best: {
+    id: string;
+    data: Record<string, unknown>;
+    score: number;
+  } | null = null;
 
   snap.forEach((d) => {
     const data = d.data() as Record<string, unknown>;
@@ -223,11 +231,7 @@ export async function smartMatch(currentUser: GroupUserInput): Promise<string> {
     centerLocation: loc,
     anchorLocation: loc,
   });
-  await setDoc(
-    userRef,
-    { id: currentUser.id, groupId: gid },
-    { merge: true },
-  );
+  await setDoc(userRef, { id: currentUser.id, groupId: gid }, { merge: true });
   return gid;
 }
 
@@ -244,7 +248,10 @@ export async function markGroupOrdered(groupId: string): Promise<void> {
   });
 }
 
-export async function leaveGroup(userId: string, groupId: string): Promise<void> {
+export async function leaveGroup(
+  userId: string,
+  groupId: string,
+): Promise<void> {
   const groupRef = doc(db, 'groups', groupId);
   const userRef = doc(db, 'users', userId);
 
@@ -252,7 +259,9 @@ export async function leaveGroup(userId: string, groupId: string): Promise<void>
     const gSnap = await transaction.get(groupRef);
     if (!gSnap.exists()) return;
     const data = gSnap.data() as Record<string, unknown>;
-    const members = ((data.members as string[]) ?? []).filter((id) => id !== userId);
+    const members = ((data.members as string[]) ?? []).filter(
+      (id) => id !== userId,
+    );
     if (members.length === 0) {
       transaction.delete(groupRef);
     } else {
@@ -278,7 +287,8 @@ export function groupDocFromSnapshot(
     foodType: typeof data.foodType === 'string' ? data.foodType : '',
     maxSize: typeof data.maxSize === 'number' ? data.maxSize : 4,
     status: (data.status as GroupStatus) ?? 'waiting',
-    anchorLocation: parseLatLng(data.anchorLocation) ?? center ?? { lat: 0, lng: 0 },
+    anchorLocation: parseLatLng(data.anchorLocation) ??
+      center ?? { lat: 0, lng: 0 },
     centerLocation: center ?? undefined,
     createdAt: data.createdAt,
   };

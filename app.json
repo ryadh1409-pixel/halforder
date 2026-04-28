@@ -17,6 +17,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.halforder.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "buildNumber": "2",
       "associatedDomains": [
         "applinks:halforder.app",
@@ -41,6 +42,7 @@
       }
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -116,7 +118,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.ourfoodclean"
+      "package": "com.halforder.app"
     },
     "web": {
       "output": "static",
@@ -156,7 +158,14 @@
           "cameraPermission": "We need access to your camera to take a profile photo."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.halforder.app",
+          "enableGooglePay": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

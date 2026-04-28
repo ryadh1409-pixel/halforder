@@ -12,7 +12,10 @@ export function lastNDayKeys(n: number): string[] {
   return keys;
 }
 
-export function bucketCountsByDay(msList: number[], days: number): { day: string; count: number }[] {
+export function bucketCountsByDay(
+  msList: number[],
+  days: number,
+): { day: string; count: number }[] {
   const keys = lastNDayKeys(days);
   const map = new Map<string, number>();
   keys.forEach((k) => map.set(k, 0));

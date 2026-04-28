@@ -87,7 +87,9 @@ async function main() {
   const full = svgFull();
   const fg = svgForeground();
 
-  await pngFromSvg(full, 1024, join(assetsRoot, 'icon.png'), { flattenHex: BG });
+  await pngFromSvg(full, 1024, join(assetsRoot, 'icon.png'), {
+    flattenHex: BG,
+  });
   console.log('Wrote assets/icon.png (1024 × 1024, opaque)');
 
   await pngFromSvg(full, 1024, join(assetsImages, 'icon.png'), {

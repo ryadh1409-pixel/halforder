@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -54,7 +54,9 @@ export default function ResetPasswordScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Reset your password</Text>
           <Text style={styles.subtitle}>
-            {'Enter your email and we\'ll send you a link to reset your password.'}
+            {
+              "Enter your email and we'll send you a link to reset your password."
+            }
           </Text>
 
           <View style={styles.form}>

@@ -3,7 +3,13 @@
  * Clear `isLookingToSplit` locally and remove the poke doc.
  */
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  setDoc,
+} from 'firebase/firestore';
 import { useEffect } from 'react';
 
 import { auth, db } from '@/services/firebase';

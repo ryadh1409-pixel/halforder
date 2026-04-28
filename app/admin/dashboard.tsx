@@ -81,17 +81,24 @@ export default function AdminDashboardScreen() {
           )
           .filter((x): x is string => x != null);
         if (fetchErrors.length > 0) {
-          adminError('dashboard', 'partial fetch failures', fetchErrors.join('; '));
+          adminError(
+            'dashboard',
+            'partial fetch failures',
+            fetchErrors.join('; '),
+          );
           setError(fetchErrors.join('; '));
         } else {
           setError(null);
         }
 
-        const usersSnap = settled[0].status === 'fulfilled' ? settled[0].value : null;
-        const ordersSnap = settled[1].status === 'fulfilled' ? settled[1].value : null;
+        const usersSnap =
+          settled[0].status === 'fulfilled' ? settled[0].value : null;
+        const ordersSnap =
+          settled[1].status === 'fulfilled' ? settled[1].value : null;
         const complaintsSnap =
           settled[2].status === 'fulfilled' ? settled[2].value : null;
-        const reportsSnap = settled[3].status === 'fulfilled' ? settled[3].value : null;
+        const reportsSnap =
+          settled[3].status === 'fulfilled' ? settled[3].value : null;
 
         const totalUsers = usersSnap?.size ?? 0;
         const totalOrders = ordersSnap?.size ?? 0;

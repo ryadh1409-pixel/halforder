@@ -33,8 +33,7 @@ export default function OrdersPage() {
           return {
             id: d.id,
             food: orderFoodLabel(data),
-            status:
-              typeof data.status === 'string' ? data.status : '—',
+            status: typeof data.status === 'string' ? data.status : '—',
             createdMs,
             userId: orderCreatorUid(data) || '—',
           };
@@ -133,9 +132,7 @@ export default function OrdersPage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                        {r.createdMs
-                          ? formatDateTime(r.createdMs)
-                          : '—'}
+                        {r.createdMs ? formatDateTime(r.createdMs) : '—'}
                       </td>
                       <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs text-slate-600">
                         {r.userId}

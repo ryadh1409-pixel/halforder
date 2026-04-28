@@ -21,7 +21,9 @@ export default function TermsAcceptanceScreen() {
   const { user, loading: authLoading } = useAuth();
 
   const resolvedReturn =
-    typeof returnTo === 'string' && returnTo.trim() ? returnTo.trim() : '/(tabs)';
+    typeof returnTo === 'string' && returnTo.trim()
+      ? returnTo.trim()
+      : '/(tabs)';
   const loginRedirectPath = `/terms-acceptance?returnTo=${encodeURIComponent(resolvedReturn)}`;
 
   if (authLoading) {

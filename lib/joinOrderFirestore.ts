@@ -50,17 +50,17 @@ export function isFirestoreCompositeIndexError(error: unknown): boolean {
 /**
  * Developer-only: short console line + optional index URL. Never pass to Alert/UI.
  */
-export function logFirestoreIndexError(
-  context: string,
-  error: unknown,
-): void {
+export function logFirestoreIndexError(context: string, error: unknown): void {
   const msg =
     error instanceof Error
       ? error.message.split('\n')[0]
       : typeof error === 'string'
         ? error
         : 'Unknown error';
-  console.warn(`[${context}] Firestore query issue (will retry if applicable):`, msg);
+  console.warn(
+    `[${context}] Firestore query issue (will retry if applicable):`,
+    msg,
+  );
   const urlMatch = msg.match(/https:\/\/[^\s)'"]+/);
   if (urlMatch) {
     console.warn(`[${context}] Index console link (devs only):`, urlMatch[0]);
@@ -95,7 +95,6 @@ export const JOIN_ORDER_USER_FACING_MESSAGES = new Set([
 
 export function isJoinOrderUserFacingError(error: unknown): boolean {
   return (
-    error instanceof Error &&
-    JOIN_ORDER_USER_FACING_MESSAGES.has(error.message)
+    error instanceof Error && JOIN_ORDER_USER_FACING_MESSAGES.has(error.message)
   );
 }

@@ -23,10 +23,7 @@ import { useEffect, useState } from 'react';
 const COL = 'foodTemplates';
 const MAX = 10;
 
-function mapDoc(
-  id: string,
-  data: Record<string, unknown>,
-): FoodTemplate {
+function mapDoc(id: string, data: Record<string, unknown>): FoodTemplate {
   const createdAt = data.createdAt as Timestamp | undefined;
   return {
     id,

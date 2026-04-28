@@ -3,7 +3,10 @@ import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
 import { adminError, adminLog } from '@/lib/admin/adminDebug';
-import { formatFirestoreTime, reportDetailText } from '@/lib/admin/orderHelpers';
+import {
+  formatFirestoreTime,
+  reportDetailText,
+} from '@/lib/admin/orderHelpers';
 import { db } from '@/services/firebase';
 import {
   doc,
@@ -25,7 +28,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 export default function AdminReportDetailScreen() {
@@ -34,7 +37,9 @@ export default function AdminReportDetailScreen() {
   const reportId = typeof rawId === 'string' ? rawId.trim() : '';
 
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
-  const [userInfo, setUserInfo] = useState<Record<string, unknown> | null>(null);
+  const [userInfo, setUserInfo] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
 
@@ -51,7 +56,7 @@ export default function AdminReportDetailScreen() {
           reportId,
           exists: snap.exists(),
         });
-        setReport(snap.exists() ? snap.data() ?? {} : {});
+        setReport(snap.exists() ? (snap.data() ?? {}) : {});
         setLoading(false);
       },
       (err) => {
@@ -76,12 +81,16 @@ export default function AdminReportDetailScreen() {
       setUserInfo(null);
       return;
     }
-    adminLog('report-detail', 'subscribe reported user doc', { reportedUserId });
+    adminLog('report-detail', 'subscribe reported user doc', {
+      reportedUserId,
+    });
     const u = onSnapshot(
       doc(db, 'users', reportedUserId),
       (snap) => {
-        adminLog('report-detail', 'reported user snapshot', { exists: snap.exists() });
-        setUserInfo(snap.exists() ? snap.data() ?? {} : {});
+        adminLog('report-detail', 'reported user snapshot', {
+          exists: snap.exists(),
+        });
+        setUserInfo(snap.exists() ? (snap.data() ?? {}) : {});
       },
       (err) => adminError('report-detail', 'reported user listener error', err),
     );
@@ -163,15 +172,23 @@ export default function AdminReportDetailScreen() {
   if (!report || Object.keys(report).length === 0) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <AdminHeader title="Report" backTo={adminRoutes.reports} backLabel="Reports" />
+        <AdminHeader
+          title="Report"
+          backTo={adminRoutes.reports}
+          backLabel="Reports"
+        />
         <Text style={styles.muted}>Not found</Text>
       </SafeAreaView>
     );
   }
 
-  const detail = report ? reportDetailText(report as Record<string, unknown>) : null;
+  const detail = report
+    ? reportDetailText(report as Record<string, unknown>)
+    : null;
   const contentIdRaw =
-    report && typeof report.contentId === 'string' ? report.contentId.trim() : null;
+    report && typeof report.contentId === 'string'
+      ? report.contentId.trim()
+      : null;
   const legacyOrderId =
     report && typeof report.orderId === 'string' ? report.orderId.trim() : null;
   const orderForLink =
@@ -187,7 +204,11 @@ export default function AdminReportDetailScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <AdminHeader title="Report detail" backTo={adminRoutes.reports} backLabel="Reports" />
+      <AdminHeader
+        title="Report detail"
+        backTo={adminRoutes.reports}
+        backLabel="Reports"
+      />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <Text style={styles.k}>Created</Text>

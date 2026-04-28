@@ -1,6 +1,5 @@
 import { deleteUserAccount } from '@/services/deleteUserAccount';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+import { getUserFriendlyError, logError } from '@/utils/errors';
 import { showNotice } from '@/utils/toast';
 import type { User } from '@firebase/auth';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -103,7 +102,15 @@ export function DeleteAccountModal({
       return;
     }
     runEnterAnimation();
-  }, [visible, runEnterAnimation, backdropOpacity, sheetOpacity, sheetTranslate, successOpacity, successScale]);
+  }, [
+    visible,
+    runEnterAnimation,
+    backdropOpacity,
+    sheetOpacity,
+    sheetTranslate,
+    successOpacity,
+    successScale,
+  ]);
 
   useEffect(() => {
     if (phase !== 'success' || !visible) return;
@@ -186,14 +193,21 @@ export function DeleteAccountModal({
       statusBarTranslucent
       onRequestClose={handleCancel}
     >
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.root,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+      >
         <Animated.View
           pointerEvents="none"
           style={[styles.backdrop, { opacity: backdropOpacity }]}
         />
         <Pressable
           style={StyleSheet.absoluteFill}
-          onPress={phase === 'confirm' && !submitting ? handleCancel : undefined}
+          onPress={
+            phase === 'confirm' && !submitting ? handleCancel : undefined
+          }
           accessibilityLabel="Close"
         />
         {phase === 'confirm' ? (
@@ -229,7 +243,10 @@ export function DeleteAccountModal({
                 <Text style={styles.secondaryLabel}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.destructiveBtn, submitting && styles.destructiveBtnDisabled]}
+                style={[
+                  styles.destructiveBtn,
+                  submitting && styles.destructiveBtnDisabled,
+                ]}
                 onPress={() => void handleDelete()}
                 disabled={submitting}
                 activeOpacity={0.88}
@@ -259,7 +276,9 @@ export function DeleteAccountModal({
               />
             </View>
             <Text style={styles.successTitle}>Account deleted</Text>
-            <Text style={styles.successSubtitle}>We’re sorry to see you go.</Text>
+            <Text style={styles.successSubtitle}>
+              We’re sorry to see you go.
+            </Text>
           </Animated.View>
         )}
       </View>

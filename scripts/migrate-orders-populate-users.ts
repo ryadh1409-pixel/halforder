@@ -24,7 +24,9 @@ function initAdmin(): void {
 
 function normalizeUserIds(users: unknown): string[] {
   if (!Array.isArray(users)) return [];
-  return users.filter((x): x is string => typeof x === 'string' && x.length > 0);
+  return users.filter(
+    (x): x is string => typeof x === 'string' && x.length > 0,
+  );
 }
 
 /**

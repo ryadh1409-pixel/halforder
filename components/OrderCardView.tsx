@@ -47,7 +47,11 @@ function AvatarFace({
             Platform.OS === 'ios' ? styles.avatarEmptyIos : null,
           ]}
         >
-          <MaterialIcons name="person-add-alt-1" size={28} color="rgba(148,163,184,0.9)" />
+          <MaterialIcons
+            name="person-add-alt-1"
+            size={28}
+            color="rgba(148,163,184,0.9)"
+          />
         </View>
         <Text style={styles.emptyLabel}>Open</Text>
       </View>
@@ -90,12 +94,9 @@ export function OrderCardView({
 }: Props) {
   const cap = Math.min(Math.max(maxUsers, 1), 2);
   const isMatched =
-    participants.length >= cap ||
-    status === 'matched' ||
-    status === 'active';
+    participants.length >= cap || status === 'matched' || status === 'active';
   const waiting =
-    !isMatched &&
-    (status === 'waiting' || status === 'active' || !status);
+    !isMatched && (status === 'waiting' || status === 'active' || !status);
 
   const ordered = useMemo(() => {
     const list = [...participants];
@@ -143,7 +144,9 @@ export function OrderCardView({
                 participant={first}
                 empty={!first}
                 isViewer={
-                  !!first && viewerUserId != null && first.userId === viewerUserId
+                  !!first &&
+                  viewerUserId != null &&
+                  first.userId === viewerUserId
                 }
               />
             </View>

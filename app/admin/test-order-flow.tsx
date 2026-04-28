@@ -5,7 +5,13 @@
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { Redirect, useRouter } from 'expo-router';
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,

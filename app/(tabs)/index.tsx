@@ -1,917 +1,182 @@
-import { isAdminFoodCardSlotId } from '@/constants/adminFoodCards';
-import { isAdminUser } from '@/constants/adminUid';
+import { CountdownBadge } from '@/components/halforder/CountdownBadge';
 import {
-  PAYMENT_MATCH_ALERT_MESSAGE,
-  PAYMENT_MATCH_ALERT_TITLE,
-} from '@/constants/paymentDisclaimer';
-import { safeAlertBody, USER_ERROR_JOIN } from '@/lib/userFacingErrors';
-import { theme } from '@/constants/theme';
-import { useAuth } from '@/services/AuthContext';
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import {
-  formatFoodCardSharingPriceLine,
-  isFoodCardJoinDisabled,
-  joinOrder,
-  skipFoodCard,
-  subscribeActiveFoodCards,
-  subscribeAiChatFoodCards,
-  type FoodCard,
-} from '@/services/foodCards';
-import { subscribeJoinHintsForFoodCard } from '@/services/foodCardSlotOrders';
-import { subscribeActiveFoodTemplates } from '@/services/foodTemplates';
-import type { FoodTemplate } from '@/types/food';
-import { AIDescription } from '@/components/AIDescription';
-import { showError, showNotice } from '@/utils/toast';
-import { BlurView } from 'expo-blur';
-import * as Linking from 'expo-linking';
+  halfOrderColors,
+  halfOrderStyles,
+} from '@/components/halforder/HalfOrderStyles';
+import { HALFORDER_ACTIVE_ORDERS } from '@/constants/halforderMockData';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Image,
-  PanResponder,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-function formatTimer(expiresAt: number): string {
-  const left = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-  const m = Math.floor(left / 60);
-  const s = left % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-export default function SwipeScreen() {
-  const SWIPE_TRIGGER = 90;
-  const insets = useSafeAreaInsets();
+export default function HomeScreen() {
   const router = useRouter();
-  const { user, firestoreUserRole } = useAuth();
-  const [catalogCards, setCatalogCards] = useState<FoodCard[]>([]);
-  const [aiDeckCards, setAiDeckCards] = useState<FoodCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cardsError, setCardsError] = useState(false);
-  const [cardsRetryKey, setCardsRetryKey] = useState(0);
-  const [tick, setTick] = useState(0);
-  const [joining, setJoining] = useState(false);
-  const hiddenUserIds = useHiddenUserIds();
-  const [foodTemplates, setFoodTemplates] = useState<FoodTemplate[]>([]);
-  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
-  const pan = useRef(new Animated.ValueXY()).current;
-  const swipeInFlightRef = useRef(false);
-
-  useEffect(() => {
-    setLoading(true);
-    setCardsError(false);
-    const unsubCatalog = subscribeActiveFoodCards(
-      (rows) => {
-        console.log(
-          `[swipe] catalog deck count=${rows.length} (food_cards · admin slots)`,
-        );
-        setCardsError(false);
-        setCatalogCards(rows);
-        setLoading(false);
-      },
-      () => setCardsError(true),
-    );
-    const unsubAi = subscribeAiChatFoodCards(
-      (rows) => {
-        console.log(`[swipe] AI deck count=${rows.length}`);
-        setAiDeckCards(rows);
-      },
-      () => setAiDeckCards([]),
-    );
-    return () => {
-      unsubCatalog();
-      unsubAi();
-    };
-  }, [cardsRetryKey]);
-
-  const cards = useMemo(() => {
-    const seen = new Set<string>();
-    const out: FoodCard[] = [];
-    for (const c of [...aiDeckCards, ...catalogCards]) {
-      if (seen.has(c.id)) continue;
-      seen.add(c.id);
-      out.push(c);
-    }
-    return out;
-  }, [aiDeckCards, catalogCards]);
-
-  useEffect(() => {
-    const unsub = subscribeActiveFoodTemplates(
-      (rows) => setFoodTemplates(rows),
-      () => setFoodTemplates([]),
-    );
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const uid = user?.uid;
-
-  const adminPreview = isAdminUser(user, firestoreUserRole);
-  const deckCards = useMemo(() => {
-    let list = cards;
-    if (adminPreview && uid) {
-      list = list.filter(
-        (c) => typeof c.ownerId !== 'string' || c.ownerId !== uid,
-      );
-    }
-    if (uid && hiddenUserIds.size > 0) {
-      list = list.filter(
-        (c) =>
-          typeof c.ownerId !== 'string' || !hiddenUserIds.has(c.ownerId),
-      );
-    }
-    return list;
-  }, [cards, adminPreview, uid, hiddenUserIds]);
-  const topCard = deckCards[0] ?? null;
-  const secondCard = deckCards[1] ?? null;
-
-  const [topJoinHint, setTopJoinHint] = useState<{
-    primaryOpenUsers: string[];
-    anyOpenOrderMemberIds: string[];
-  } | null>(null);
-
-  const isOwnAiListing =
-    !!uid &&
-    !!topCard &&
-    !isAdminFoodCardSlotId(topCard.id) &&
-    typeof topCard.ownerId === 'string' &&
-    topCard.ownerId === uid;
-
-  const participantCount =
-    topJoinHint?.anyOpenOrderMemberIds?.length ??
-    (topCard?.user1 ? 1 : 0);
-
-  const openWhatsAppInvite = () => {
-    if (!topCard) return;
-    const loc =
-      topCard.venueLocation?.trim() ||
-      (topCard.location ? 'See app for location' : 'Location in app');
-    const inviteText = `Join my order on HalfOrder 🍕
-${topCard.title}
-Location: ${loc}
-Join here: https://halforder.app/order/${topCard.orderId ?? topCard.id}`;
-    void Linking.openURL(
-      `https://wa.me/?text=${encodeURIComponent(inviteText)}`,
-    );
-  };
-
-  useEffect(() => {
-    if (!topCard?.id) {
-      setTopJoinHint(null);
-      return;
-    }
-    return subscribeJoinHintsForFoodCard(topCard.id, setTopJoinHint);
-  }, [topCard?.id]);
-
-  /** Block swipe / primary join when signed in but cannot join this card (already in, full, admin, own card, etc.). */
-  const joinBlockedForUser =
-    !!uid &&
-    !!topCard &&
-    isFoodCardJoinDisabled(
-      topCard,
-      uid,
-      topJoinHint?.anyOpenOrderMemberIds ?? null,
-    );
-  const joinPrimaryDisabled =
-    !topCard || joining || (!!uid && joinBlockedForUser);
-
-  const matchDeckHint = useMemo(() => {
-    if (!uid || !topJoinHint) return null;
-    if (topJoinHint.anyOpenOrderMemberIds.includes(uid)) return 'joined' as const;
-    if (topJoinHint.primaryOpenUsers.length >= 1) return 'waiting' as const;
-    return 'open' as const;
-  }, [uid, topJoinHint]);
-
-  const removeCardById = (cardId: string) => {
-    setCatalogCards((prev) => prev.filter((c: FoodCard) => c.id !== cardId));
-    setAiDeckCards((prev) => prev.filter((c: FoodCard) => c.id !== cardId));
-  };
-
-  const onLike = async (cardId?: string) => {
-    const targetId = cardId ?? topCard?.id;
-    if (!targetId || joining) return;
-    const joinUid = user?.uid;
-    if (!joinUid) {
-      showError('Sign in to join a food card.');
-      router.push('/(auth)/login' as never);
-      return;
-    }
-    const card = cards.find((c) => c.id === targetId) ?? topCard;
-    const hint =
-      card && topCard && card.id === topCard.id
-        ? topJoinHint?.anyOpenOrderMemberIds ?? null
-        : null;
-    if (!card || isFoodCardJoinDisabled(card, joinUid, hint)) return;
-    setJoining(true);
-    try {
-      const result = await joinOrder(targetId, joinUid);
-      if (!result.ok) {
-        if (!result.silent) {
-          showError(safeAlertBody(result.message, USER_ERROR_JOIN));
-        }
-        return;
-      }
-      if (result.justBecamePair) {
-        showNotice(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
-      }
-      router.push(`/order/${result.orderId}` as never);
-    } catch (e) {
-      showError(USER_ERROR_JOIN);
-    } finally {
-      setJoining(false);
-    }
-  };
-
-  const onSkip = async (cardId?: string) => {
-    const targetId = cardId ?? topCard?.id;
-    if (!targetId) return;
-    await skipFoodCard(targetId);
-    removeCardById(targetId);
-  };
-
-  const swipe = (dx: number, cardId: string) => {
-    if (swipeInFlightRef.current) return;
-    swipeInFlightRef.current = true;
-    Animated.timing(pan, {
-      toValue: { x: dx > 0 ? 420 : -420, y: 0 },
-      duration: 180,
-      useNativeDriver: false,
-    }).start(() => {
-      pan.setValue({ x: 0, y: 0 });
-      setSwipeDirection(null);
-      const action = dx > 0 ? onLike(cardId) : onSkip(cardId);
-      Promise.resolve(action).finally(() => {
-        swipeInFlightRef.current = false;
-      });
-    });
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (_, g) => {
-          pan.setValue({ x: g.dx, y: g.dy });
-          if (g.dx > 8) setSwipeDirection('right');
-          else if (g.dx < -8) setSwipeDirection('left');
-          else setSwipeDirection(null);
-        },
-        onPanResponderRelease: (_, g) => {
-          if (!topCard || joining || swipeInFlightRef.current) {
-            setSwipeDirection(null);
-            Animated.spring(pan, {
-              toValue: { x: 0, y: 0 },
-              useNativeDriver: false,
-            }).start();
-            return;
-          }
-          if (g.dx > SWIPE_TRIGGER) {
-            if (joinBlockedForUser) {
-              setSwipeDirection(null);
-              Animated.spring(pan, {
-                toValue: { x: 0, y: 0 },
-                useNativeDriver: false,
-              }).start();
-              return;
-            }
-            swipe(1, topCard.id);
-          } else if (g.dx < -SWIPE_TRIGGER) {
-            swipe(-1, topCard.id);
-          } else {
-            setSwipeDirection(null);
-            Animated.spring(pan, {
-              toValue: { x: 0, y: 0 },
-              useNativeDriver: false,
-            }).start();
-          }
-        },
-      }),
-    [pan, topCard, joining, joinBlockedForUser],
-  );
-
-  const rotate = pan.x.interpolate({
-    inputRange: [-180, 0, 180],
-    outputRange: ['-12deg', '0deg', '12deg'],
-  });
-  const topStyle = { transform: [...pan.getTranslateTransform(), { rotate }] };
-  const joinOpacity = pan.x.interpolate({
-    inputRange: [20, 120],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const nopeOpacity = pan.x.interpolate({
-    inputRange: [-120, -20],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  const emojiOpacity = pan.x.interpolate({
-    inputRange: [-120, -20, 0, 20, 120],
-    outputRange: [1, 0.25, 0, 0.25, 1],
-    extrapolate: 'clamp',
-  });
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Swipe Food</Text>
-        <Text style={styles.subtitle}>
-          {adminPreview
-            ? 'Admin preview · Join disabled · Skip to browse cards'
-            : 'Right = Join · Left = Skip'}
+    <SafeAreaView style={halfOrderStyles.screen} edges={['top']}>
+      <ScrollView contentContainerStyle={halfOrderStyles.content}>
+        <Text style={halfOrderStyles.pageTitle}>HalfOrder</Text>
+        <Text style={halfOrderStyles.pageSubtitle}>
+          Active orders nearby - split delivery and save now.
         </Text>
-        {adminPreview ? (
-          <View style={styles.adminBanner}>
-            <Text style={styles.adminBannerText}>
-              Admin account — swipe deck is view-only for joins (your cards are excluded).
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      {foodTemplates.length > 0 ? (
-        <View style={styles.templateSection}>
-          <Text style={styles.templateSectionTitle}>Order from menu</Text>
-          <Text style={styles.templateSectionSub}>
-            Tap to start an order with name, price, and photo filled in
+
+        <View style={styles.heroCard}>
+          <Text style={styles.heroEyebrow}>Someone near you is ordering</Text>
+          <Text style={styles.heroTitle}>Save up to $5 on delivery</Text>
+          <Text style={styles.heroSubtitle}>
+            Join a nearby order before it expires.
           </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.templateStrip}
+          <Pressable
+            style={halfOrderStyles.ctaButton}
+            onPress={() => router.push('/deals' as never)}
           >
-            {foodTemplates.map((t) => (
-              <TouchableOpacity
-                key={t.id}
-                activeOpacity={0.88}
-                style={styles.templateCard}
-                onPress={() =>
-                  router.push({
-                    pathname: '/(tabs)/create',
-                    params: {
-                      fromFoodTemplate: '1',
-                      prefillTitle: t.name,
-                      prefillPriceSplit: `$${t.price.toFixed(2)}`,
-                      prefillImageUrl: t.imageUrl,
-                      prefillDescription: t.description,
-                      templateId: t.id,
-                    },
-                  } as never)
-                }
-              >
-                {t.imageUrl ? (
-                  <Image
-                    source={{ uri: t.imageUrl }}
-                    style={styles.templateImage}
-                  />
-                ) : (
-                  <View style={[styles.templateImage, styles.templateImagePh]} />
-                )}
-                <View style={styles.templateCardBody}>
-                  <Text style={styles.templateName} numberOfLines={2}>
-                    {t.name}
-                  </Text>
-                  <Text style={styles.templatePrice}>
-                    ${t.price.toFixed(2)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+            <Text style={halfOrderStyles.ctaButtonText}>See Deals</Text>
+          </Pressable>
         </View>
-      ) : null}
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color="#34D399" />
-          <Text style={styles.loadingHint}>Loading food cards…</Text>
-        </View>
-      ) : !topCard ? (
-        <View style={styles.centered}>
-          {cardsError ? (
-            <>
-              <Text style={styles.empty}>
-                Could not load food cards. Check your connection.
-              </Text>
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={() => {
-                  setCardsError(false);
-                  setCardsRetryKey((k) => k + 1);
-                }}
-              >
-                <Text style={styles.retryBtnText}>Try again</Text>
-              </TouchableOpacity>
-            </>
-          ) : adminPreview && cards.length > 0 ? (
-            <Text style={styles.empty}>
-              No cards from other users to preview. Your admin listings are hidden here.
-            </Text>
-          ) : (
-            <Text style={styles.empty}>
-              No active food cards yet. Check back soon.
-            </Text>
-          )}
-        </View>
-      ) : (
-        <View style={styles.deckWithActions}>
-        <View style={styles.deck}>
-          {secondCard ? (
-            <View style={[styles.card, styles.cardUnder]}>
-              <Image source={{ uri: secondCard.image }} style={styles.image} />
-            </View>
-          ) : null}
-          <Animated.View
-            style={[
-              styles.card,
-              isOwnAiListing && styles.cardOwnAi,
-              topStyle,
-            ]}
-            {...panResponder.panHandlers}
+
+        <View style={styles.navRow}>
+          <Pressable
+            style={[halfOrderStyles.card, styles.navCard]}
+            onPress={() => router.push('/deals' as never)}
           >
-            <Image source={{ uri: topCard.image }} style={styles.image} />
-            <Animated.View style={[styles.swipeBadgeLeft, { opacity: nopeOpacity }]}>
-              <Text style={styles.swipeBadgeTextLeft}>NOPE ❌</Text>
-            </Animated.View>
-            <Animated.View style={[styles.swipeBadgeRight, { opacity: joinOpacity }]}>
-              <Text style={styles.swipeBadgeTextRight}>JOIN ❤️</Text>
-            </Animated.View>
-            {swipeDirection ? (
-              <Animated.View style={[styles.emojiOverlay, { opacity: emojiOpacity }]}>
-                <Text style={styles.emojiOverlayText}>
-                  {swipeDirection === 'right' ? '❤️' : '❌'}
+            <Text style={styles.navTitle}>Deals</Text>
+            <Text style={styles.navSubtitle}>
+              Limited spots, bigger savings
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[halfOrderStyles.card, styles.navCard]}
+            onPress={() => router.push('/food-trucks' as never)}
+          >
+            <Text style={styles.navTitle}>Food Trucks</Text>
+            <Text style={styles.navSubtitle}>Nearby trucks and groups</Text>
+          </Pressable>
+        </View>
+
+        {HALFORDER_ACTIVE_ORDERS.map((order) => {
+          const saving = order.originalDelivery - order.sharedDelivery;
+          return (
+            <View key={order.id} style={halfOrderStyles.card}>
+              <Text style={styles.orderTitle}>{order.title}</Text>
+              <Text style={styles.orderHost}>{order.hostLabel}</Text>
+              <View style={halfOrderStyles.savingsChip}>
+                <Text style={halfOrderStyles.savingsChipText}>
+                  {order.savingsText}
                 </Text>
-              </Animated.View>
-            ) : null}
-            <View style={styles.info}>
-              {isOwnAiListing ? (
-                <View style={styles.createdByYouBadge}>
-                  <Text style={styles.createdByYouText}>Created by you</Text>
-                </View>
-              ) : null}
-              <Text style={styles.cardTitle}>{topCard.title}</Text>
-              <Text style={styles.participantCount}>
-                {participantCount} participant
-                {participantCount === 1 ? '' : 's'}
-              </Text>
-              <AIDescription
-                description={topCard.aiDescription}
-                title={topCard.title}
-                compact
-              />
-              <Text style={styles.meta}>
-                {formatFoodCardSharingPriceLine(topCard.sharingPrice)}
-              </Text>
-              <Text style={styles.meta}>{topCard.restaurantName}</Text>
-              <Text style={styles.meta} numberOfLines={3}>
-                {topCard.venueLocation.trim()
-                  ? `Location: ${topCard.venueLocation.trim()}`
-                  : topCard.location
-                    ? 'Location included on this card'
-                    : 'Location not listed on this card'}
-              </Text>
-              <FoodCardPaymentDisclaimer style={styles.cardDisclaimer} />
-              {isAdminFoodCardSlotId(topCard.id) ||
-              topCard.expiresAt > 1e15 ? null : (
-                <Text style={styles.timer}>
-                  Ends in {formatTimer(topCard.expiresAt + tick * 0)}
+              </View>
+              <View style={styles.orderMetaRow}>
+                <Text style={styles.metaText}>
+                  👤 {order.waitingCount} person waiting
                 </Text>
-              )}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={() =>
-                  router.push(
-                    `/order/${topCard.orderId ?? topCard.id}` as never,
-                  )
-                }
-                style={styles.detailsBtn}
-              >
-                <Text style={styles.detailsBtnText}>View details →</Text>
-              </TouchableOpacity>
-              {isOwnAiListing ? (
-                <Text style={styles.yourOrderLabel}>Your order</Text>
-              ) : null}
-              {isOwnAiListing ? (
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={openWhatsAppInvite}
-                  style={styles.inviteWaBtn}
+                <Text style={styles.metaText}>
+                  💸 Delivery: ${order.originalDelivery} to $
+                  {order.sharedDelivery}
+                </Text>
+              </View>
+              <View style={styles.orderFooter}>
+                <CountdownBadge minutesLeft={order.endsInMinutes} />
+                <Pressable
+                  style={styles.joinButton}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/shared-order/[orderId]',
+                      params: {
+                        orderId: order.id,
+                        title: order.title,
+                        waitingCount: String(order.waitingCount),
+                        originalDelivery: String(order.originalDelivery),
+                        sharedDelivery: String(order.sharedDelivery),
+                        endsInMinutes: String(order.endsInMinutes),
+                        savings: String(saving),
+                      },
+                    } as never)
+                  }
                 >
-                  <Text style={styles.inviteWaBtnText}>Invite via WhatsApp</Text>
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={joinPrimaryDisabled}
-                onPress={() => onLike(topCard.id)}
-                style={[
-                  styles.inlineJoinBtn,
-                  joinPrimaryDisabled && styles.inlineJoinBtnDisabled,
-                ]}
-              >
-                {joining ? (
-                  <ActivityIndicator color="#07241A" />
-                ) : (
-                  <Text style={styles.inlineJoinText}>
-                    {!uid
-                      ? 'Sign in to join'
-                      : topJoinHint?.anyOpenOrderMemberIds.includes(uid)
-                        ? 'Joined'
-                        : '❤️ Join order'}
+                  <Text style={styles.joinButtonText}>
+                    Join & Save ${saving}
                   </Text>
-                )}
-              </TouchableOpacity>
-              {!uid ? (
-                <Text style={styles.waitingText}>
-                  Sign in to join this share and get matched with a partner.
-                </Text>
-              ) : matchDeckHint === 'joined' ? (
-                <View style={[styles.matchPill, styles.matchPillJoined]}>
-                  <Text style={styles.matchPillText}>
-                    You’re in — open details for your order
-                  </Text>
-                </View>
-              ) : matchDeckHint === 'waiting' ? (
-                <View style={[styles.matchPill, styles.matchPillWaiting]}>
-                  <Text style={styles.matchPillText}>
-                    Someone’s waiting — join to complete the pair
-                  </Text>
-                </View>
-              ) : matchDeckHint === 'open' ? (
-                <View style={styles.matchPill}>
-                  <Text style={styles.matchPillText}>
-                    Be the first to join this share
-                  </Text>
-                </View>
-              ) : topCard.user1 ? (
-                <View style={styles.hostRow}>
-                  {topCard.user1.photo ? (
-                    <Image source={{ uri: topCard.user1.photo }} style={styles.avatar} />
-                  ) : (
-                    <View style={[styles.avatar, styles.avatarPlaceholder]} />
-                  )}
-                  <Text style={styles.hostName}>{topCard.user1.name}</Text>
-                </View>
-              ) : (
-                <Text style={styles.waitingText}>
-                  Join to create an order and get matched.
-                </Text>
-              )}
+                </Pressable>
+              </View>
             </View>
-          </Animated.View>
-        </View>
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.actionsBarWrap,
-            { bottom: Math.max(20, 10 + insets.bottom) },
-          ]}
-        >
-          <BlurView intensity={48} tint="dark" style={styles.actionsBlur}>
-            <View style={styles.actionsInner}>
-              <TouchableOpacity
-                disabled={joining}
-                onPress={() => onSkip()}
-                style={[styles.skipBarBtn, joining && styles.barBtnDisabled]}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.skipBarText}>Skip</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={joinPrimaryDisabled}
-                onPress={() => onLike()}
-                style={[
-                  styles.joinBarBtn,
-                  joinPrimaryDisabled && styles.barBtnDisabled,
-                ]}
-                activeOpacity={0.88}
-              >
-                {joining ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.joinBarText}>
-                    {!uid
-                      ? 'Sign in'
-                      : topJoinHint?.anyOpenOrderMemberIds.includes(uid)
-                        ? 'Joined'
-                        : 'Join'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </BlurView>
-        </View>
-        </View>
-      )}
+          );
+        })}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#070A0F' },
-  header: { paddingHorizontal: theme.spacing.screen, paddingVertical: 12 },
-  templateSection: {
-    paddingLeft: theme.spacing.screen,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+  heroCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 20,
+    padding: 18,
   },
-  templateSectionTitle: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: '800',
+  heroEyebrow: {
+    color: '#86EFAC',
+    fontWeight: '700',
+    fontSize: 13,
   },
-  templateSectionSub: {
-    color: 'rgba(248,250,252,0.5)',
-    fontSize: 12,
-    marginTop: 4,
-    marginBottom: 10,
-    paddingRight: theme.spacing.screen,
-  },
-  templateStrip: { paddingRight: theme.spacing.screen },
-  templateCard: {
-    width: 148,
-    marginRight: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#11161F',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  templateImage: { width: '100%', height: 104, backgroundColor: '#1a1f28' },
-  templateImagePh: { alignItems: 'center', justifyContent: 'center' },
-  templateCardBody: { padding: 10 },
-  templateName: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  templatePrice: {
-    color: '#34D399',
-    fontSize: 15,
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: 27,
     fontWeight: '800',
     marginTop: 6,
   },
-  title: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
-  subtitle: { color: 'rgba(248,250,252,0.6)', marginTop: 4 },
-  adminBanner: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.45)',
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.78)',
+    marginTop: 6,
+    fontSize: 14,
   },
-  adminBannerText: {
-    color: '#FDE68A',
-    fontWeight: '700',
+  navRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  navCard: {
+    flex: 1,
+  },
+  navTitle: {
+    color: halfOrderColors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  navSubtitle: {
+    color: halfOrderColors.textSecondary,
+    marginTop: 5,
     fontSize: 13,
-    lineHeight: 18,
   },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  loadingHint: {
-    marginTop: 12,
-    color: 'rgba(248,250,252,0.55)',
+  orderTitle: {
+    color: halfOrderColors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  orderHost: {
+    color: halfOrderColors.textSecondary,
+    marginTop: 6,
+    fontSize: 14,
+  },
+  orderMetaRow: {
+    marginTop: 10,
+    gap: 4,
+  },
+  metaText: {
+    color: halfOrderColors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
-  empty: {
-    color: 'rgba(248,250,252,0.65)',
-    textAlign: 'center',
-    lineHeight: 22,
+  orderFooter: {
+    marginTop: 12,
+    gap: 12,
   },
-  retryBtn: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(52, 211, 153, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
-  },
-  retryBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 15 },
-  deckWithActions: { flex: 1, position: 'relative' },
-  deck: {
-    flex: 1,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    paddingBottom: 96,
-  },
-  actionsBarWrap: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 20,
-  },
-  actionsBlur: {
+  joinButton: {
+    height: 48,
     borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(15, 23, 32, 0.65)',
-  },
-  actionsInner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  skipBarBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.38)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: halfOrderColors.savings,
   },
-  joinBarBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(45, 212, 191, 0.88)',
-  },
-  barBtnDisabled: { opacity: 0.45 },
-  skipBarText: {
-    color: 'rgba(203, 213, 225, 0.95)',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  joinBarText: {
+  joinButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
-  },
-  card: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#11161F',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  cardUnder: { position: 'absolute', left: 26, right: 26, top: 90, opacity: 0.35 },
-  image: { width: '100%', height: 350, backgroundColor: '#222' },
-  info: { padding: 14 },
-  cardTitle: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
-  meta: { color: 'rgba(248,250,252,0.7)', marginTop: 5 },
-  cardDisclaimer: { alignSelf: 'stretch' },
-  timer: { color: '#34D399', marginTop: 8, fontWeight: '700' },
-  detailsBtn: {
-    marginTop: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
-    backgroundColor: 'rgba(52, 211, 153, 0.08)',
-  },
-  detailsBtnText: { color: '#6EE7B7', fontWeight: '800', fontSize: 15 },
-  hostRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1f2937' },
-  avatarPlaceholder: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
-  hostName: { color: '#D1FAE5', fontWeight: '700' },
-  matchPill: {
-    marginTop: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(148,163,184,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.22)',
-  },
-  matchPillWaiting: {
-    backgroundColor: 'rgba(251,191,36,0.12)',
-    borderColor: 'rgba(251,191,36,0.35)',
-  },
-  matchPillJoined: {
-    backgroundColor: 'rgba(52,211,153,0.14)',
-    borderColor: 'rgba(52,211,153,0.35)',
-  },
-  matchPillText: {
-    color: 'rgba(248,250,252,0.92)',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  waitingText: { color: 'rgba(248,250,252,0.72)', marginTop: 8, fontWeight: '600' },
-  inlineJoinBtn: {
-    marginTop: 12,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#34D399',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inlineJoinBtnDisabled: { opacity: 0.45 },
-  inlineJoinText: { color: '#07241A', fontWeight: '800', fontSize: 15 },
-  swipeBadgeLeft: {
-    position: 'absolute',
-    left: 18,
-    top: 18,
-    borderWidth: 2,
-    borderColor: '#f87171',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    zIndex: 10,
-  },
-  swipeBadgeRight: {
-    position: 'absolute',
-    right: 18,
-    top: 18,
-    borderWidth: 2,
-    borderColor: '#34D399',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    zIndex: 10,
-  },
-  swipeBadgeTextLeft: { color: '#fda4af', fontWeight: '900', letterSpacing: 1.2 },
-  swipeBadgeTextRight: { color: '#6ee7b7', fontWeight: '900', letterSpacing: 1.2 },
-  emojiOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 9,
-    pointerEvents: 'none',
-  },
-  emojiOverlayText: {
-    fontSize: 96,
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 8,
-  },
-  cardOwnAi: {
-    borderColor: 'rgba(52, 211, 153, 0.45)',
-    borderWidth: 1.5,
-    shadowColor: '#34D399',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  createdByYouBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(52, 211, 153, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.4)',
-  },
-  createdByYouText: {
-    color: '#6EE7B7',
-    fontSize: 12,
     fontWeight: '800',
-  },
-  participantCount: {
-    marginTop: 6,
-    color: 'rgba(248, 250, 252, 0.65)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  yourOrderLabel: {
-    marginTop: 10,
-    color: '#A7F3D0',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  inviteWaBtn: {
-    marginTop: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(37, 211, 102, 0.55)',
-    backgroundColor: 'rgba(37, 211, 102, 0.12)',
-  },
-  inviteWaBtnText: {
-    color: '#86EFAC',
-    fontWeight: '800',
-    fontSize: 14,
   },
 });

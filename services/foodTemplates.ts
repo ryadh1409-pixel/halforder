@@ -27,15 +27,11 @@ function mapTemplateDoc(
   data: Record<string, unknown>,
 ): FoodTemplate {
   const createdAt = data.createdAt as Timestamp | undefined;
-  const active =
-    data.active === false
-      ? false
-      : true;
+  const active = data.active === false ? false : true;
   return {
     id,
     name: typeof data.name === 'string' ? data.name : '',
-    description:
-      typeof data.description === 'string' ? data.description : '',
+    description: typeof data.description === 'string' ? data.description : '',
     price:
       typeof data.price === 'number' && Number.isFinite(data.price)
         ? data.price
@@ -87,9 +83,7 @@ export function subscribeActiveFoodTemplates(
     q,
     (snap) => {
       const rows = snap.docs
-        .map((d) =>
-          mapTemplateDoc(d.id, d.data() as Record<string, unknown>),
-        )
+        .map((d) => mapTemplateDoc(d.id, d.data() as Record<string, unknown>))
         .filter((t) => t.active);
       onUpdate(rows);
     },

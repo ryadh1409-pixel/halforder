@@ -28,13 +28,7 @@ export const BANNED_WORDS = [
   'whatsapp.com/phone',
 ] as const;
 
-const LINKISH = [
-  'http://',
-  'https://',
-  'www.',
-  '.tk/',
-  '.ru/',
-] as const;
+const LINKISH = ['http://', 'https://', 'www.', '.tk/', '.ru/'] as const;
 
 export type ModerationResult =
   | { ok: true; text: string }

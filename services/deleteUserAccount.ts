@@ -56,7 +56,9 @@ export type DeleteUserAccountResult = {
  * Deletes Firestore data for `user` then deletes the Auth account.
  * @throws FirebaseError or Error on failure (e.g. auth/requires-recent-login)
  */
-export async function deleteUserAccount(user: User): Promise<DeleteUserAccountResult> {
+export async function deleteUserAccount(
+  user: User,
+): Promise<DeleteUserAccountResult> {
   const uid = user.uid;
 
   // 1) User inbox subcollection: users/{uid}/messages
@@ -78,7 +80,10 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
 
   // 3) Orders where user is a participant (not host) — remove uid from participants + joinedAtMap
   const participantSnap = await getDocs(
-    query(collection(db, 'orders'), where('participants', 'array-contains', uid)),
+    query(
+      collection(db, 'orders'),
+      where('participants', 'array-contains', uid),
+    ),
   );
   for (const orderDoc of participantSnap.docs) {
     try {
@@ -93,7 +98,10 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
 
   // 4) Remove this user from other users' blockedUsers arrays
   const blockedInOtherUsers = await getDocs(
-    query(collection(db, 'users'), where('blockedUsers', 'array-contains', uid)),
+    query(
+      collection(db, 'users'),
+      where('blockedUsers', 'array-contains', uid),
+    ),
   );
   for (const userDoc of blockedInOtherUsers.docs) {
     if (userDoc.id === uid) continue;

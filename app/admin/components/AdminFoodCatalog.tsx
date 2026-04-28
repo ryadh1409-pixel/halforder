@@ -34,7 +34,7 @@ import {
 } from 'react-native';
 
 import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 function parsePrice(raw: string): number | null {
@@ -250,10 +250,7 @@ export function AdminFoodCatalogProvider({
               )}
             </TouchableOpacity>
             {imageUrl ? (
-              <Image
-                source={{ uri: imageUrl }}
-                style={modalStyles.preview}
-              />
+              <Image source={{ uri: imageUrl }} style={modalStyles.preview} />
             ) : null}
             <TextInput
               style={modalStyles.input}

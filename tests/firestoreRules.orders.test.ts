@@ -256,7 +256,13 @@ describe('firestore rules: HalfOrder pair-join notified ack', () => {
     return {
       cardId: 'fc1',
       users: ['u1', 'u2'],
-      host: { userId: 'u1', name: 'User One', avatar: null, phone: null, expoPushToken: null },
+      host: {
+        userId: 'u1',
+        name: 'User One',
+        avatar: null,
+        phone: null,
+        expoPushToken: null,
+      },
       participants: ['u1', 'u2'],
       joinedAtMap: { u1: ts, u2: ts },
       status: 'active' as const,
@@ -322,7 +328,13 @@ describe('firestore rules: HalfOrder cancel + order_members', () => {
     return {
       cardId: 'fc2',
       users: ['u1', 'u2'],
-      host: { userId: 'u1', name: 'User One', avatar: null, phone: null, expoPushToken: null },
+      host: {
+        userId: 'u1',
+        name: 'User One',
+        avatar: null,
+        phone: null,
+        expoPushToken: null,
+      },
       participants: ['u1', 'u2'],
       joinedAtMap: { u1: ts, u2: ts },
       status: 'active' as const,
@@ -340,7 +352,10 @@ describe('firestore rules: HalfOrder cancel + order_members', () => {
 
   it('allows a member to cancel a HalfOrder with cancelledBy + cancelledAt', async () => {
     await te().withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'orders', 'ho2'), halfOrderActivePair());
+      await setDoc(
+        doc(ctx.firestore(), 'orders', 'ho2'),
+        halfOrderActivePair(),
+      );
     });
     const dbU2 = te().authenticatedContext('u2').firestore();
     await assertSucceeds(
@@ -354,7 +369,10 @@ describe('firestore rules: HalfOrder cancel + order_members', () => {
 
   it('denies cancel when cancelledBy does not match caller', async () => {
     await te().withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'orders', 'ho3'), halfOrderActivePair());
+      await setDoc(
+        doc(ctx.firestore(), 'orders', 'ho3'),
+        halfOrderActivePair(),
+      );
     });
     const dbU3 = te().authenticatedContext('u3').firestore();
     await assertFails(

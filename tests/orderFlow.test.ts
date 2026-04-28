@@ -120,8 +120,7 @@ describe('order flow integration', () => {
         ]);
         orderId = ref.id;
       } catch (e) {
-        const msg =
-          e instanceof Error ? e.message : 'Failed to create order';
+        const msg = e instanceof Error ? e.message : 'Failed to create order';
         if (msg.includes('emulator')) throw e;
         throw new Error(
           `${msg}. (Ensure emulator is running: firebase emulators:start --only firestore)`,

@@ -137,10 +137,7 @@ export async function registerExpoPushTokenAndSyncToFirestore(
     return;
   }
 
-  if (
-    lastExpoPushSynced?.uid === uid &&
-    lastExpoPushSynced?.token === token
-  ) {
+  if (lastExpoPushSynced?.uid === uid && lastExpoPushSynced?.token === token) {
     return;
   }
 

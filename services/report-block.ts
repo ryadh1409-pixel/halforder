@@ -1,13 +1,9 @@
-import {
-  addDoc,
-  collection,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import {
   blockUser as blockUserService,
   isUserBlocked as isUserBlockedService,
-} from './block';
+} from './blockService';
 
 export async function reportAndBlock(
   reporterUid: string,
@@ -20,7 +16,7 @@ export async function reportAndBlock(
     orderId,
     createdAt: serverTimestamp(),
   });
-  await blockUserService(reportedUid, reporterUid);
+  await blockUserService(reporterUid, reportedUid);
 }
 
 export async function isBlockedByAny(

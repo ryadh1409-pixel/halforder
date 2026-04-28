@@ -42,7 +42,7 @@ function peakLocalHourFromTimestamps(timestampsMs: number[]): {
 }
 
 function countNearbyClusterUsers(
-  locatedActive: Array<{ id: string; ll: LatLng }>,
+  locatedActive: { id: string; ll: LatLng }[],
 ): number {
   if (locatedActive.length < 2) return 0;
   const inCluster = new Set<string>();
@@ -102,7 +102,7 @@ export function computeAdminAiNotificationInsights(
   let activeUsersCount = 0;
   let usersWithPushTokenCount = 0;
   let activeWithTokenCount = 0;
-  const locatedActive: Array<{ id: string; ll: LatLng }> = [];
+  const locatedActive: { id: string; ll: LatLng }[] = [];
 
   for (const snap of userSnaps) {
     const raw = snap.data() as Record<string, unknown>;

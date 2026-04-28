@@ -1,4 +1,7 @@
-import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
+import {
+  KeyboardToolbar,
+  KEYBOARD_TOOLBAR_NATIVE_ID,
+} from '@/components/KeyboardToolbar';
 import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { useAuth } from '@/services/AuthContext';
 import { auth } from '@/services/firebase';
@@ -18,7 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { getUserFriendlyError } from '@/utils/errors';
 import { errorHaptic, successHaptic } from '@/utils/haptics';
 import { showError, showSuccess } from '@/utils/toast';
 
@@ -139,89 +142,101 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardDismissMode={
+            Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+          }
           showsVerticalScrollIndicator={false}
         >
-        <View style={styles.content}>
-          <View style={styles.card}>
-            <Text style={styles.title}>HalfOrder</Text>
-            <Text style={styles.subtitle}>Split meals. Pay half.</Text>
+          <View style={styles.content}>
+            <View style={styles.card}>
+              <Text style={styles.title}>HalfOrder</Text>
+              <Text style={styles.subtitle}>Split meals. Pay half.</Text>
 
-            <View style={styles.form}>
-            <TextInput
-              ref={emailRef}
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={AUTH.placeholder}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-              inputAccessoryViewID={
-                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-              }
-              onFocus={() => setFocusedIndex(0)}
-            />
-            <TextInput
-              ref={passwordRef}
-              style={[styles.input, styles.passwordInput]}
-              placeholder="Password"
-              placeholderTextColor={AUTH.placeholder}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-              inputAccessoryViewID={
-                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-              }
-              onFocus={() => setFocusedIndex(1)}
-            />
-            <View style={styles.forgotRow}>
-              <TouchableOpacity
-                onPress={() => router.push('/(auth)/reset-password')}
-                disabled={loading}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.forgotLink}>Forgot Password?</Text>
-              </TouchableOpacity>
+              <View style={styles.form}>
+                <TextInput
+                  ref={emailRef}
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor={AUTH.placeholder}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                  inputAccessoryViewID={
+                    Platform.OS === 'ios'
+                      ? KEYBOARD_TOOLBAR_NATIVE_ID
+                      : undefined
+                  }
+                  onFocus={() => setFocusedIndex(0)}
+                />
+                <TextInput
+                  ref={passwordRef}
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Password"
+                  placeholderTextColor={AUTH.placeholder}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                  inputAccessoryViewID={
+                    Platform.OS === 'ios'
+                      ? KEYBOARD_TOOLBAR_NATIVE_ID
+                      : undefined
+                  }
+                  onFocus={() => setFocusedIndex(1)}
+                />
+                <View style={styles.forgotRow}>
+                  <TouchableOpacity
+                    onPress={() => router.push('/(auth)/reset-password')}
+                    disabled={loading}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.forgotLink}>Forgot Password?</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Animated.View
+                  style={[
+                    styles.primaryBtnAnimated,
+                    { transform: [{ scale }] },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryBtn,
+                      loading && styles.primaryBtnLoading,
+                    ]}
+                    onPress={() => {
+                      animatePress();
+                      void handleLogin();
+                    }}
+                    disabled={loading}
+                    activeOpacity={0.9}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>Log in</Text>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
             </View>
 
-            <Animated.View
-              style={[styles.primaryBtnAnimated, { transform: [{ scale }] }]}
-            >
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>{"Don't have an account? "}</Text>
               <TouchableOpacity
-                style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
-                onPress={() => {
-                  animatePress();
-                  void handleLogin();
-                }}
+                onPress={() => router.push('/register')}
                 disabled={loading}
-                activeOpacity={0.9}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Log in</Text>
-                )}
+                <Text style={styles.link}>Sign up</Text>
               </TouchableOpacity>
-            </Animated.View>
+            </View>
           </View>
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>{'Don\'t have an account? '}</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/register')}
-              disabled={loading}
-            >
-              <Text style={styles.link}>Sign up</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,13 +1,7 @@
-import { getHiddenUserIds } from '@/services/block';
+import { getHiddenUserIds } from '@/services/blockService';
 import { db } from '@/services/firebase';
 import { isUserFlagged } from '@/services/userModeration';
-import {
-  collection,
-  getDocs,
-  limit,
-  query,
-  where,
-} from 'firebase/firestore';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 
 /** Order statuses considered “active” / joinable for the assistant. */
 const ACTIVE_ORDER_STATUSES = ['open', 'active', 'waiting'] as const;
@@ -163,11 +157,7 @@ export function detectFoodIntent(text: string): boolean {
 }
 
 function orderHaystack(order: AssistantOrderSummary): string {
-  return [
-    order.restaurantName,
-    order.mealType ?? '',
-    order.itemsSummary ?? '',
-  ]
+  return [order.restaurantName, order.mealType ?? '', order.itemsSummary ?? '']
     .join(' ')
     .toLowerCase();
 }
@@ -184,9 +174,7 @@ export function filterOrdersByTimeContext(
   orders: AssistantOrderSummary[],
   ctx: TimeContext,
 ): AssistantOrderSummary[] {
-  return orders.filter((o) =>
-    orderMatchesTimeKeywords(o, ctx.matchKeywords),
-  );
+  return orders.filter((o) => orderMatchesTimeKeywords(o, ctx.matchKeywords));
 }
 
 /** First keyword from context that appears in any order text (for intro copy). */
@@ -242,8 +230,7 @@ export async function fetchActiveJoinableOrdersForContext(
 
   for (const d of snap.docs) {
     const data = d.data() as Record<string, unknown>;
-    const exp =
-      typeof data.expiresAt === 'number' ? data.expiresAt : null;
+    const exp = typeof data.expiresAt === 'number' ? data.expiresAt : null;
     if (exp != null && exp <= now) {
       continue;
     }
@@ -271,8 +258,7 @@ export async function fetchActiveJoinableOrdersForContext(
         typeof data.restaurantName === 'string' && data.restaurantName.trim()
           ? data.restaurantName.trim()
           : 'Order',
-      mealType:
-        typeof data.mealType === 'string' ? data.mealType : undefined,
+      mealType: typeof data.mealType === 'string' ? data.mealType : undefined,
       itemsSummary,
       status: typeof data.status === 'string' ? data.status : undefined,
       hostUserId,

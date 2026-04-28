@@ -24,9 +24,9 @@ export function foodDescriptionFallback(
   if (/\bsushi\b|maki|sashimi|roll\b.*tuna|poke\b/.test(blob)) {
     return 'Fresh, balanced bites with clean flavors and great texture.';
   }
-  if (/\bpasta\b|spaghetti|carbonara|ravioli|lasagna|penne|fettuccine/.test(
-    blob,
-  )) {
+  if (
+    /\bpasta\b|spaghetti|carbonara|ravioli|lasagna|penne|fettuccine/.test(blob)
+  ) {
     return 'Comforting pasta with a rich, savory sauce.';
   }
   if (/\btaco\b|burrito|quesadilla|enchilada|nachos/.test(blob)) {

@@ -37,10 +37,22 @@ export function ScreenHeader({
     return (
       <View style={styles.wrap}>
         <BrandGradientBar height={3} />
-        <View style={[styles.inner, styles.innerHero, centered && styles.innerCentered]}>
+        <View
+          style={[
+            styles.inner,
+            styles.innerHero,
+            centered && styles.innerCentered,
+          ]}
+        >
           <AppLogo variant="hero" marginTop={0} style={styles.logoHero} />
           {title ? (
-            <Text style={[titleStyle, centered && styles.textCenter, styles.titleBelowLogo]}>
+            <Text
+              style={[
+                titleStyle,
+                centered && styles.textCenter,
+                styles.titleBelowLogo,
+              ]}
+            >
               {title}
             </Text>
           ) : null}
@@ -89,7 +101,9 @@ export function ScreenHeader({
       <BrandGradientBar height={3} />
       <View style={[styles.inner, centered && styles.innerCentered]}>
         {title ? (
-          <Text style={[titleStyle, centered && styles.textCenter]}>{title}</Text>
+          <Text style={[titleStyle, centered && styles.textCenter]}>
+            {title}
+          </Text>
         ) : null}
         {subtitle ? (
           <Text
@@ -158,4 +172,3 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
 });
-

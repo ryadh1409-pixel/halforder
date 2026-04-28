@@ -2,12 +2,7 @@
  * Denormalized HalfOrder member profiles: `orders/{orderId}/order_members/{userId}`.
  * Order doc keeps `users: string[]` for rules; rich fields live here only.
  */
-import {
-  doc,
-  getDoc,
-  setDoc,
-  Timestamp,
-} from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 
 import { db } from '@/services/firebase';
 
@@ -23,7 +18,9 @@ export type OrderMemberProfileDoc = {
   location: OrderMemberLocation | null;
 };
 
-function parseUserLocation(d: Record<string, unknown>): OrderMemberLocation | null {
+function parseUserLocation(
+  d: Record<string, unknown>,
+): OrderMemberLocation | null {
   const loc = d.location;
   if (loc && typeof loc === 'object' && loc !== null) {
     const o = loc as Record<string, unknown>;
@@ -79,7 +76,8 @@ function resolveAvatar(d: Record<string, unknown>): string | null {
     (typeof d.photoURL === 'string' && d.photoURL.trim()
       ? d.photoURL.trim()
       : '');
-  if (/^https?:\/\//i.test(avatarRaw) && avatarRaw.length < 2000) return avatarRaw;
+  if (/^https?:\/\//i.test(avatarRaw) && avatarRaw.length < 2000)
+    return avatarRaw;
   return null;
 }
 
@@ -166,16 +164,29 @@ export function mapOrderMemberSnap(
     const o = locRaw as Record<string, unknown>;
     const la = typeof o.lat === 'number' ? o.lat : null;
     const lo = typeof o.lng === 'number' ? o.lng : null;
-    if (la != null && lo != null && Number.isFinite(la) && Number.isFinite(lo)) {
+    if (
+      la != null &&
+      lo != null &&
+      Number.isFinite(la) &&
+      Number.isFinite(lo)
+    ) {
       location = { lat: la, lng: lo };
     }
   }
   return {
     userId: typeof data.userId === 'string' && data.userId ? data.userId : id,
-    name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'Someone',
+    name:
+      typeof data.name === 'string' && data.name.trim()
+        ? data.name.trim()
+        : 'Someone',
     avatar:
-      typeof data.avatar === 'string' && data.avatar.trim() ? data.avatar.trim() : null,
-    phone: typeof data.phone === 'string' && data.phone.trim() ? data.phone.trim() : null,
+      typeof data.avatar === 'string' && data.avatar.trim()
+        ? data.avatar.trim()
+        : null,
+    phone:
+      typeof data.phone === 'string' && data.phone.trim()
+        ? data.phone.trim()
+        : null,
     pushToken:
       typeof data.pushToken === 'string' && data.pushToken.trim()
         ? data.pushToken.trim()

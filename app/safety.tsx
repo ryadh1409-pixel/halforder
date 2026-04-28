@@ -53,7 +53,9 @@ export default function SafetyScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Safety & Community Guidelines – HalfOrder</Text>
+        <Text style={styles.title}>
+          Safety & Community Guidelines – HalfOrder
+        </Text>
         <TouchableOpacity onPress={openCanonical} activeOpacity={0.7}>
           <Text style={styles.canonicalLink}>View on halforder.app</Text>
         </TouchableOpacity>
@@ -110,7 +112,9 @@ export default function SafetyScreen() {
             'Use your judgment before meeting someone',
           ]}
         />
-        <Text style={styles.paragraph}>You are responsible for your personal safety.</Text>
+        <Text style={styles.paragraph}>
+          You are responsible for your personal safety.
+        </Text>
 
         <Hr />
 
@@ -130,7 +134,9 @@ export default function SafetyScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>5. Prohibited Content</Text>
-        <Text style={styles.paragraph}>The following is strictly prohibited:</Text>
+        <Text style={styles.paragraph}>
+          The following is strictly prohibited:
+        </Text>
         <Bullets
           items={[
             'Fake orders',
@@ -165,7 +171,9 @@ export default function SafetyScreen() {
         <Hr />
 
         <Text style={styles.sectionHeading}>7. Our Role</Text>
-        <Text style={styles.paragraph}>HalfOrder is a coordination platform only.</Text>
+        <Text style={styles.paragraph}>
+          HalfOrder is a coordination platform only.
+        </Text>
         <Text style={styles.paragraph}>We do not:</Text>
         <Bullets
           items={[

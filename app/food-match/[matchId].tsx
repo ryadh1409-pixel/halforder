@@ -64,7 +64,9 @@ export default function FoodMatchScreen() {
           return;
         }
         const o = orderSnap.data();
-        setFoodName(typeof o?.foodName === 'string' ? o.foodName : 'Shared food');
+        setFoodName(
+          typeof o?.foodName === 'string' ? o.foodName : 'Shared food',
+        );
         setImageUrl(typeof o?.image === 'string' ? o.image : null);
 
         const metas: UserMini[] = [];
@@ -78,7 +80,7 @@ export default function FoodMatchScreen() {
                 typeof d?.displayName === 'string' && d.displayName.trim()
                   ? d.displayName
                   : typeof d?.email === 'string'
-                    ? d.email.split('@')[0] ?? 'User'
+                    ? (d.email.split('@')[0] ?? 'User')
                     : 'User',
               photoURL: typeof d?.photoURL === 'string' ? d.photoURL : null,
             });
@@ -89,7 +91,8 @@ export default function FoodMatchScreen() {
         if (!cancelled) setUsers(metas);
       } catch (e) {
         console.error('[FoodMatchScreen]', e);
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load.');
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : 'Failed to load.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -125,12 +128,19 @@ export default function FoodMatchScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.pad} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.pad}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.celebrate}>🎉 Match found!</Text>
         <Text style={styles.title}>You both want the same food</Text>
 
         {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.hero} contentFit="cover" />
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.hero}
+            contentFit="cover"
+          />
         ) : (
           <View style={[styles.hero, styles.heroPlaceholder]} />
         )}
@@ -157,17 +167,21 @@ export default function FoodMatchScreen() {
           return (
             <View key={u.uid} style={styles.userRow}>
               {u.photoURL ? (
-                <Image source={{ uri: u.photoURL }} style={styles.avatar} contentFit="cover" />
+                <Image
+                  source={{ uri: u.photoURL }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                />
               ) : (
                 <View style={[styles.avatar, styles.avatarPh]}>
-                  <Text style={styles.avatarLetter}>{u.displayName.charAt(0).toUpperCase()}</Text>
+                  <Text style={styles.avatarLetter}>
+                    {u.displayName.charAt(0).toUpperCase()}
+                  </Text>
                 </View>
               )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{u.displayName}</Text>
-                {myUid === u.uid ? (
-                  <Text style={styles.you}>You</Text>
-                ) : null}
+                {myUid === u.uid ? <Text style={styles.you}>You</Text> : null}
               </View>
             </View>
           );
@@ -188,7 +202,12 @@ export default function FoodMatchScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: c.sheetDark },
   pad: { padding: 20, paddingBottom: 40 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
   hint: { color: c.textSecondary, fontSize: 14 },
   title: {
     fontSize: 22,

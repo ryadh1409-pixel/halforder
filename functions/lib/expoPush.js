@@ -24,7 +24,10 @@ async function sendPush(token, title, body, data) {
   };
   if (data && typeof data === 'object') {
     payload.data = Object.fromEntries(
-      Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? v : String(v)]),
+      Object.entries(data).map(([k, v]) => [
+        k,
+        typeof v === 'string' ? v : String(v),
+      ]),
     );
   }
   try {
@@ -66,7 +69,10 @@ async function getExpoTokenForUser(db, uid) {
     if (a) return a;
     if (b) return b;
   }
-  const subPaths = [`users/${uid}/pushToken/default`, `users/${uid}/fcmToken/default`];
+  const subPaths = [
+    `users/${uid}/pushToken/default`,
+    `users/${uid}/fcmToken/default`,
+  ];
   for (const p of subPaths) {
     const s = await db.doc(p).get();
     const tok = s.exists ? s.data()?.token : null;
@@ -83,7 +89,9 @@ async function getExpoTokenForUser(db, uid) {
  * @param {Record<string, string>} [data]
  */
 async function notifyUsersExpo(db, userIds, title, body, data) {
-  const unique = [...new Set(userIds.filter((id) => typeof id === 'string' && id))];
+  const unique = [
+    ...new Set(userIds.filter((id) => typeof id === 'string' && id)),
+  ];
   for (const uid of unique) {
     const token = await getExpoTokenForUser(db, uid);
     if (!token) continue;

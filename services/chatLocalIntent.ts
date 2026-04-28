@@ -35,11 +35,12 @@ export function detectLocationHelpIntent(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (!t || detectFoodKeyword(text)) return false;
 
-  if (
-    /\b(set|update|change)\s+(my\s+)?(home\s+)?(location|address)\b/.test(t)
-  )
+  if (/\b(set|update|change)\s+(my\s+)?(home\s+)?(location|address)\b/.test(t))
     return true;
-  if (/\bwhere (do|can) i (set|add|update)\b/.test(t) && /\b(location|address)\b/.test(t))
+  if (
+    /\bwhere (do|can) i (set|add|update)\b/.test(t) &&
+    /\b(location|address)\b/.test(t)
+  )
     return true;
   if (/\b(how|where)\b.*\b(location|gps|address)\b/.test(t)) return true;
   if (/\bprofile\b/.test(t) && /\b(location|address|map)\b/.test(t))

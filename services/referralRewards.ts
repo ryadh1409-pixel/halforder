@@ -93,7 +93,9 @@ export async function claimReferralInboxRewards(uid: string): Promise<void> {
     if (snap.empty) return;
     for (const d of snap.docs) {
       const amt =
-        typeof d.data().credits === 'number' ? d.data().credits : REFER_CREDITS_INBOX;
+        typeof d.data().credits === 'number'
+          ? d.data().credits
+          : REFER_CREDITS_INBOX;
       const batch = writeBatch(db);
       batch.update(doc(db, 'users', u), { credits: increment(amt) });
       batch.delete(d.ref);
@@ -105,7 +107,9 @@ export async function claimReferralInboxRewards(uid: string): Promise<void> {
 }
 
 /** User is alone on a waiting half-order (for assistant copy). */
-export async function userHasSoloWaitingHalfOrder(uid: string): Promise<boolean> {
+export async function userHasSoloWaitingHalfOrder(
+  uid: string,
+): Promise<boolean> {
   const u = uid?.trim();
   if (!u) return false;
   try {

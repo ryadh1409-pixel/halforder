@@ -172,7 +172,8 @@ export default function AdminOrdersScreen() {
                 Status: <Text style={styles.em}>{item.status}</Text>
               </Text>
               <Text style={styles.meta}>
-                Participants ({item.participantCount}): {item.participantPreview}
+                Participants ({item.participantCount}):{' '}
+                {item.participantPreview}
               </Text>
               <Text style={styles.meta}>{item.createdAt}</Text>
               <Text style={styles.cta}>Details →</Text>
