@@ -29,6 +29,7 @@ import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
 import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
+import { CartProvider } from '@/services/CartContext';
 import { startFoodCardAutomation } from '@/services/foodCards';
 import { db, ensureAuthReady } from '@/services/firebase';
 import {
@@ -968,6 +969,9 @@ function RootLayoutNav() {
   const isRestaurantDashboardPath =
     (seg0 === '(restaurant)' && segments[1] === 'dashboard') ||
     (seg0 === 'restaurant' && segments[1] === 'dashboard');
+  const isRestaurantOnboardingPath =
+    (seg0 === '(restaurant)' && segments[1] === 'onboarding') ||
+    (seg0 === 'restaurant' && segments[1] === 'onboarding');
   const onPublicShellRoutes =
     seg0 === 'terms-acceptance' ||
     seg0 === 'terms' ||
@@ -1009,7 +1013,8 @@ function RootLayoutNav() {
     !inAuthGroup &&
     !onPublicShellRoutes &&
     seg0 !== 'verify-email' &&
-    !isRestaurantDashboardPath;
+    !isRestaurantDashboardPath &&
+    !isRestaurantOnboardingPath;
   const redirectAdminToUsers =
     !authLoading &&
     !!user &&
@@ -1174,6 +1179,14 @@ function RootLayoutNav() {
           options={{ title: 'Food Truck Menu', headerShown: false }}
         />
         <Stack.Screen
+          name="restaurant-menu/[restaurantId]"
+          options={{ title: 'Restaurant Menu', headerShown: false }}
+        />
+        <Stack.Screen
+          name="restaurant-menu/cart"
+          options={{ title: 'Cart', headerShown: false }}
+        />
+        <Stack.Screen
           name="order/tracking/[id]"
           options={{ title: 'Order Tracking', headerShown: false }}
         />
@@ -1220,11 +1233,13 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider value={DarkTheme}>
         <AuthProvider>
-          <>
-            <RootLayoutNav />
-            <SystemDialogHost />
-            <Toast config={toastConfig} />
-          </>
+          <CartProvider>
+            <>
+              <RootLayoutNav />
+              <SystemDialogHost />
+              <Toast config={toastConfig} />
+            </>
+          </CartProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

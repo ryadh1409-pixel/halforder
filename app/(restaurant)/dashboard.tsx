@@ -1,35 +1,34 @@
 import { AssignDriverModal } from '@/components/AssignDriverModal';
-import { MenuItemCard } from '@/components/restaurant/MenuItemCard';
-import { OrderCard } from '@/components/restaurant/OrderCard';
 import { StatCard } from '@/components/restaurant/StatCard';
 import { useDrivers } from '@/hooks/useDrivers';
 import { useMenu } from '@/hooks/useMenu';
 import { useRestaurantOrders } from '@/hooks/useOrders';
-import { pickAndUploadImage } from '@/services/uploadImage';
-import { db } from '@/services/firebase';
+import { useAuth } from '@/services/AuthContext';
 import { assignDriverToOrder } from '@/services/driverService';
-import {
-  addMenuItem,
-  deleteMenuItem,
-  markOrderReady,
-  updateMenuItem,
-  updateRestaurantOpen,
-  type MenuItemDoc,
-} from '@/services/restaurantDashboard';
+import { addFoodItem, deleteFoodItem, updateFoodItem, type FoodItem } from '@/services/foodService';
+import { db } from '@/services/firebase';
+import { updateOrderStatus } from '@/services/orderService';
+import { pickAndUploadImage } from '@/services/uploadImage';
+import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { requireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
-import { useAuth } from '@/services/AuthContext';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { Redirect } from 'expo-router';
+import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +36,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 type RestaurantView = {
   id: string;
   name: string;
+  logo: string | null;
+  location: string;
   isOpen: boolean;
+  profileCompleted: boolean;
 };
 
 export default function RestaurantDashboardScreen() {
@@ -51,11 +53,13 @@ export default function RestaurantDashboardScreen() {
   const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [assignDriverModalOpen, setAssignDriverModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<MenuItemDoc | null>(null);
+  const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
   const [itemImage, setItemImage] = useState<string | null>(null);
   const [itemAvailable, setItemAvailable] = useState(true);
+  const [itemDescription, setItemDescription] = useState('');
+  const [itemCategory, setItemCategory] = useState('');
   const [savingItem, setSavingItem] = useState(false);
 
   useEffect(() => {
@@ -66,30 +70,36 @@ export default function RestaurantDashboardScreen() {
     }
     setRestaurantLoading(true);
     const unsub = onSnapshot(
-      query(collection(db, 'restaurants'), where('ownerId', '==', user.uid)),
+      doc(db, 'restaurants', user.uid),
       (snap) => {
-        if (snap.empty) {
+        console.log('[restaurant-dashboard] fetching restaurant for', user.uid);
+        if (!snap.exists()) {
           setRestaurant(null);
           setRestaurantLoading(false);
           return;
         }
-        const d = snap.docs[0];
-        const data = d.data();
+        const data = snap.data();
         setRestaurant({
-          id: d.id,
+          id: user.uid,
           name: typeof data.name === 'string' ? data.name : 'Restaurant',
+          logo: typeof data.logo === 'string' ? data.logo : null,
+          location: typeof data.location === 'string' ? data.location : '',
           isOpen: data.isOpen !== false,
+          profileCompleted: data.profileCompleted === true,
         });
         setRestaurantLoading(false);
       },
-      () => setRestaurantLoading(false),
+      (error) => {
+        console.log('[restaurant-dashboard] failed to fetch restaurant', error);
+        setRestaurantLoading(false);
+      },
     );
     return () => unsub();
   }, [user?.uid]);
 
-  const completedOrders = orders.filter((o) => o.status === 'picked_up').length;
-  const activeOrders = orders.filter((o) => o.status !== 'picked_up').length;
-  const revenue = orders.reduce((sum, o) => sum + o.total, 0);
+  const completedOrders = orders.filter((o) => o.status === 'delivered').length;
+  const activeOrders = orders.filter((o) => o.status !== 'delivered').length;
+  const revenue = orders.reduce((sum, o) => sum + o.totalPrice, 0);
 
   const stats = useMemo(
     () => [
@@ -105,15 +115,20 @@ export default function RestaurantDashboardScreen() {
     if (!restaurant?.id) return;
     try {
       await updateRestaurantOpen(restaurant.id, value);
-    } catch {
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to toggle open status', error);
       showError('Failed to update restaurant status.');
     }
   }
 
-  async function handleMarkReady(orderId: string) {
+  async function handleOrderStatus(
+    orderId: string,
+    status: 'accepted' | 'on_the_way' | 'delivered',
+  ) {
     try {
-      await markOrderReady(orderId);
-    } catch {
+      await updateOrderStatus(orderId, status);
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to update order status', error);
       showError('Unable to update order.');
     }
   }
@@ -135,12 +150,13 @@ export default function RestaurantDashboardScreen() {
           phone: driver.phone,
           isOnline: driver.isOnline,
         },
-        order?.status ?? 'preparing',
+        order?.status ?? 'pending',
       );
       showSuccess('Driver assigned');
       setAssignDriverModalOpen(false);
       setSelectedOrderId(null);
-    } catch {
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to assign driver', error);
       showError('Could not assign driver.');
     }
   }
@@ -151,15 +167,19 @@ export default function RestaurantDashboardScreen() {
     setItemPrice('');
     setItemImage(null);
     setItemAvailable(true);
+    setItemDescription('');
+    setItemCategory('');
     setMenuModalOpen(true);
   }
 
-  function openEditItemModal(item: MenuItemDoc) {
+  function openEditItemModal(item: FoodItem) {
     setEditingItem(item);
     setItemName(item.name);
     setItemPrice(String(item.price));
     setItemImage(item.image);
-    setItemAvailable(item.isAvailable);
+    setItemAvailable(item.available);
+    setItemDescription(item.description ?? '');
+    setItemCategory(item.category ?? '');
     setMenuModalOpen(true);
   }
 
@@ -170,6 +190,7 @@ export default function RestaurantDashboardScreen() {
       folder: 'menu-items',
     });
     if (result.error) {
+      console.log('[restaurant-dashboard] image upload error', result.error);
       showError(result.error);
       return;
     }
@@ -193,24 +214,29 @@ export default function RestaurantDashboardScreen() {
     setSavingItem(true);
     try {
       if (editingItem) {
-        await updateMenuItem(editingItem.id, {
+        await updateFoodItem(restaurant.id, editingItem.id, {
           name: trimmedName,
           price: parsedPrice,
           image: itemImage,
-          isAvailable: itemAvailable,
+          available: itemAvailable,
+          description: itemDescription.trim(),
+          category: itemCategory.trim(),
         });
       } else {
-        await addMenuItem({
+        await addFoodItem({
           restaurantId: restaurant.id,
           name: trimmedName,
           price: parsedPrice,
           image: itemImage,
-          isAvailable: itemAvailable,
+          available: itemAvailable,
+          description: itemDescription.trim(),
+          category: itemCategory.trim(),
         });
       }
       setMenuModalOpen(false);
       showSuccess('Menu item saved');
-    } catch {
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to save menu item', error);
       showError('Could not save menu item.');
     } finally {
       setSavingItem(false);
@@ -218,10 +244,12 @@ export default function RestaurantDashboardScreen() {
   }
 
   async function handleDeleteItem(itemId: string) {
+    if (!restaurant?.id) return;
     try {
-      await deleteMenuItem(itemId);
+      await deleteFoodItem(restaurant.id, itemId);
       showSuccess('Menu item deleted');
-    } catch {
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to delete menu item', error);
       showError('Could not delete menu item.');
     }
   }
@@ -242,23 +270,19 @@ export default function RestaurantDashboardScreen() {
     );
   }
 
-  if (!restaurant) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.centered}>
-          <Text style={styles.sectionTitle}>No restaurant profile found.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  if (!restaurant) return <Redirect href="/(restaurant)/onboarding" />;
+  if (!restaurant.profileCompleted) return <Redirect href="/(restaurant)/onboarding" />;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={{ flex: 1 }}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.restaurantName}>
-            {restaurant.name || user?.displayName?.trim() || 'Restaurant Dashboard'}
-          </Text>
+          <Text style={styles.restaurantName}>{restaurant.name || user?.displayName?.trim() || 'Restaurant Dashboard'}</Text>
+          {restaurant.logo ? <Image source={{ uri: restaurant.logo }} style={styles.logoThumb} /> : null}
+          <Text style={styles.locationText}>{restaurant.location || 'No location set'}</Text>
           <Text style={styles.earnings}>Today: ${revenue.toFixed(2)}</Text>
         </View>
         <View style={styles.openToggleWrap}>
@@ -272,96 +296,146 @@ export default function RestaurantDashboardScreen() {
             <StatCard key={stat.label} label={stat.label} value={stat.value} />
           ))}
         </ScrollView>
-        <Text style={styles.sectionTitle}>Active Orders</Text>
-        {orders.length === 0 ? (
+        <Text style={styles.sectionTitle}>Incoming Orders</Text>
+        {orders.filter((order) => order.status === 'pending' || order.status === 'accepted').length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No active orders</Text>
-            <Text style={styles.emptySub}>New orders will appear here in real-time.</Text>
+            <Text style={styles.emptyTitle}>No orders yet</Text>
+            <Text style={styles.emptySub}>Be the first to order.</Text>
           </View>
         ) : (
-          orders.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={{
-                id: order.id,
-                items: order.items.join(', ') || 'Order items',
-                totalPrice: order.total,
-                timeAgo: order.createdAtLabel,
-                status: order.status,
-              }}
-              onMarkReady={handleMarkReady}
-              onAssignDriver={openAssignDriverModal}
-            />
+          orders
+            .filter((order) => order.status === 'pending' || order.status === 'accepted')
+            .map((order) => (
+            <View key={order.id} style={styles.orderCard}>
+              <View style={styles.orderRow}>
+                <Text style={styles.orderId}>Order #{order.id}</Text>
+                <Text style={styles.orderStatus}>{order.status}</Text>
+              </View>
+              <Text style={styles.orderMeta}>
+                {order.items.map((x) => `${x.qty}x ${x.name}`).join(', ') || 'No items'}
+              </Text>
+              <Text style={styles.orderMeta}>
+                Total: ${order.totalPrice.toFixed(2)} · User: {order.userId}
+              </Text>
+              <Text style={styles.orderMeta}>Created: {order.createdAtLabel}</Text>
+              <View style={styles.orderActions}>
+                {order.status === 'pending' ? (
+                  <Pressable style={styles.acceptButton} onPress={() => handleOrderStatus(order.id, 'accepted')}>
+                    <Text style={styles.acceptButtonText}>Accept Order</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.acceptedNote}>Order already accepted</Text>
+                )}
+              </View>
+            </View>
           ))
         )}
         <Text style={styles.sectionTitle}>Menu Management</Text>
-        {menu.map((item) => (
-          <View key={item.id}>
-            <MenuItemCard
-              item={item}
-              onToggleAvailability={(id, value) =>
-                updateMenuItem(id, { isAvailable: value }).catch(() =>
-                  showError('Could not update availability.'),
-                )
-              }
-              onEdit={() => openEditItemModal(item)}
-            />
-            <Pressable style={styles.deleteButton} onPress={() => handleDeleteItem(item.id)}>
-              <Text style={styles.deleteButtonText}>Delete Item</Text>
-            </Pressable>
+        {menu.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No menu yet</Text>
+            <Text style={styles.emptySub}>Add your first item to start receiving orders.</Text>
           </View>
-        ))}
+        ) : (
+          menu.map((item) => (
+            <View key={item.id} style={styles.menuCard}>
+              {item.image ? <Image source={{ uri: item.image }} style={styles.menuThumb} /> : <View style={styles.menuThumbPlaceholder} />}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuName}>{item.name}</Text>
+                <Text style={styles.menuPrice}>${item.price.toFixed(2)}</Text>
+                {!!item.category ? <Text style={styles.menuMeta}>{item.category}</Text> : null}
+              </View>
+              <View style={{ gap: 8 }}>
+                <Switch
+                  value={item.available}
+                  onValueChange={(value) =>
+                    updateFoodItem(restaurant.id, item.id, { available: value }).catch(() =>
+                      showError('Could not update availability.'),
+                    )
+                  }
+                />
+                <Pressable style={styles.smallButton} onPress={() => openEditItemModal(item)}>
+                  <Text style={styles.smallButtonText}>Edit</Text>
+                </Pressable>
+                <Pressable style={styles.deleteButton} onPress={() => handleDeleteItem(item.id)}>
+                  <Text style={styles.deleteButtonText}>Delete</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
       <Pressable style={styles.fab} onPress={openAddItemModal}>
         <Text style={styles.fabText}>+ Add Item</Text>
       </Pressable>
 
       <Modal visible={menuModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={itemName}
-              onChangeText={setItemName}
-              placeholder="Item name"
-            />
-            <TextInput
-              style={styles.input}
-              value={itemPrice}
-              onChangeText={setItemPrice}
-              placeholder="Price"
-              keyboardType="decimal-pad"
-            />
-            <View style={styles.row}>
-              <Text style={styles.label}>Available</Text>
-              <Switch value={itemAvailable} onValueChange={setItemAvailable} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalTitle}>
+                  {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={itemName}
+                  onChangeText={setItemName}
+                  placeholder="Item name"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={itemPrice}
+                  onChangeText={setItemPrice}
+                  placeholder="Price"
+                  keyboardType="decimal-pad"
+                />
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={itemDescription}
+                  onChangeText={setItemDescription}
+                  placeholder="Description"
+                  multiline
+                />
+                <TextInput
+                  style={styles.input}
+                  value={itemCategory}
+                  onChangeText={setItemCategory}
+                  placeholder="Category (e.g. Burgers)"
+                />
+                <View style={styles.row}>
+                  <Text style={styles.label}>Available</Text>
+                  <Switch value={itemAvailable} onValueChange={setItemAvailable} />
+                </View>
+                <Pressable style={styles.secondaryButton} onPress={handlePickImage}>
+                  <Text style={styles.secondaryButtonText}>
+                    {itemImage ? 'Change Image' : 'Upload Image'}
+                  </Text>
+                </Pressable>
+                {itemImage ? <Image source={{ uri: itemImage }} style={styles.logoPreview} /> : null}
+                <Pressable
+                  style={styles.primaryButton}
+                  onPress={saveMenuItem}
+                  disabled={savingItem}
+                >
+                  {savingItem ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Item</Text>}
+                </Pressable>
+                <Pressable
+                  style={styles.cancelButton}
+                  onPress={() => setMenuModalOpen(false)}
+                  disabled={savingItem}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </Pressable>
+                </ScrollView>
+              </View>
             </View>
-            <Pressable style={styles.secondaryButton} onPress={handlePickImage}>
-              <Text style={styles.secondaryButtonText}>
-                {itemImage ? 'Change Image' : 'Upload Image'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.primaryButton}
-              onPress={saveMenuItem}
-              disabled={savingItem}
-            >
-              <Text style={styles.primaryButtonText}>
-                {savingItem ? 'Saving...' : 'Save Item'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.cancelButton}
-              onPress={() => setMenuModalOpen(false)}
-              disabled={savingItem}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       <AssignDriverModal
@@ -371,6 +445,9 @@ export default function RestaurantDashboardScreen() {
         onClose={() => setAssignDriverModalOpen(false)}
         onSelectDriver={handleAssignDriver}
       />
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -378,6 +455,14 @@ export default function RestaurantDashboardScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  logoPreview: {
+    width: 92,
+    height: 92,
+    borderRadius: 12,
+    marginTop: 10,
+    marginBottom: 2,
+    backgroundColor: '#E2E8F0',
+  },
   primaryButton: {
     marginTop: 10,
     backgroundColor: '#16a34a',
@@ -399,6 +484,8 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: '#334155', fontWeight: '700' },
   header: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   restaurantName: { color: '#0F172A', fontSize: 26, fontWeight: '800' },
+  logoThumb: { width: 44, height: 44, borderRadius: 10, marginTop: 6, backgroundColor: '#E2E8F0' },
+  locationText: { color: '#64748B', marginTop: 6, fontWeight: '600' },
   earnings: { color: '#16a34a', marginTop: 4, fontWeight: '700' },
   openToggleWrap: { alignItems: 'center' },
   openLabel: { color: '#334155', fontWeight: '700', marginBottom: 2 },
@@ -408,11 +495,42 @@ const styles = StyleSheet.create({
   emptyCard: { borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', padding: 16, marginBottom: 10 },
   emptyTitle: { color: '#0F172A', fontWeight: '800', fontSize: 16 },
   emptySub: { marginTop: 6, color: '#64748B', fontWeight: '600' },
+  orderCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    marginBottom: 10,
+  },
+  orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  orderId: { color: '#0F172A', fontWeight: '800' },
+  orderStatus: { color: '#1D4ED8', fontWeight: '700', textTransform: 'capitalize' },
+  orderMeta: { marginTop: 4, color: '#475569', fontWeight: '600' },
+  orderActions: { marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  actionChipText: { color: '#334155', fontWeight: '700', fontSize: 12 },
+  acceptButton: {
+    marginTop: 4,
+    height: 36,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  acceptButtonText: { color: '#FFFFFF', fontWeight: '800' },
+  acceptedNote: { color: '#16a34a', fontWeight: '700', marginTop: 8 },
   deleteButton: {
-    marginTop: -4,
-    marginBottom: 8,
     alignSelf: 'flex-start',
-    height: 30,
+    height: 28,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
@@ -444,6 +562,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
     padding: 16,
+    maxHeight: '88%',
   },
   modalTitle: { color: '#0F172A', fontSize: 20, fontWeight: '800', marginBottom: 12 },
   input: {
@@ -453,6 +572,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     marginBottom: 10,
+  },
+  textArea: {
+    minHeight: 90,
+    textAlignVertical: 'top',
+    paddingTop: 10,
   },
   row: {
     marginBottom: 10,
@@ -468,4 +592,31 @@ const styles = StyleSheet.create({
     height: 36,
   },
   cancelText: { color: '#64748B', fontWeight: '700' },
+  disabledButton: { opacity: 0.5 },
+  menuCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  menuThumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#E2E8F0' },
+  menuThumbPlaceholder: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#E2E8F0' },
+  menuName: { color: '#0F172A', fontWeight: '800', fontSize: 15 },
+  menuPrice: { color: '#16a34a', marginTop: 4, fontWeight: '700' },
+  menuMeta: { color: '#64748B', marginTop: 3, fontWeight: '600' },
+  smallButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  smallButtonText: { color: '#334155', fontWeight: '700', fontSize: 12 },
 });

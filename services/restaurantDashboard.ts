@@ -74,16 +74,15 @@ export function subscribeRestaurantByOwner(
   onData: (restaurant: RestaurantDoc | null) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(collection(db, 'restaurants'), where('ownerId', '==', ownerId)),
+    doc(db, 'restaurants', ownerId),
     (snap) => {
-      if (snap.empty) {
+      if (!snap.exists()) {
         onData(null);
         return;
       }
-      const first = snap.docs[0];
-      const data = first.data();
+      const data = snap.data();
       onData({
-        id: first.id,
+        id: ownerId,
         name: typeof data.name === 'string' ? data.name : 'My Restaurant',
         logo: typeof data.logo === 'string' ? data.logo : null,
         location: typeof data.location === 'string' ? data.location : '',
@@ -101,7 +100,7 @@ export async function createRestaurantProfile(payload: {
   logo: string | null;
   location: string;
 }): Promise<string> {
-  const ref = doc(collection(db, 'restaurants'));
+  const ref = doc(db, 'restaurants', payload.ownerId);
   await setDoc(ref, {
     name: payload.name.trim(),
     logo: payload.logo ?? null,
@@ -110,8 +109,8 @@ export async function createRestaurantProfile(payload: {
     ownerId: payload.ownerId,
     createdAt: serverTimestamp(),
   });
-  await updateDoc(doc(db, 'users', payload.ownerId), { restaurantId: ref.id });
-  return ref.id;
+  await updateDoc(doc(db, 'users', payload.ownerId), { restaurantId: payload.ownerId });
+  return payload.ownerId;
 }
 
 export function subscribeRestaurantOrders(

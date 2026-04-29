@@ -1,7 +1,8 @@
-import { Map, MapMarker } from '@/components/Map';
+import { useAvailableOrders } from '@/hooks/useAvailableOrders';
 import { useDriverOrders } from '@/hooks/useDriverOrders';
-import { updateDriverOnlineStatus, markPickedUp } from '@/services/driverService';
+import { updateDriverOnlineStatus, acceptDeliveryOrder, acceptGroupDelivery } from '@/services/driverService';
 import { useAuth } from '@/services/AuthContext';
+import { updateOrderStatus } from '@/services/orderService';
 import { requireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
 import React, { useEffect, useState } from 'react';
@@ -12,6 +13,7 @@ export default function DriverDashboardScreen() {
   const { authorized, loading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const { orders, loading: ordersLoading } = useDriverOrders(user?.uid);
+  const { orders: availableOrders, loading: availableLoading } = useAvailableOrders();
   const [isOnline, setIsOnline] = useState(false);
 
   useEffect(() => {
@@ -19,16 +21,62 @@ export default function DriverDashboardScreen() {
     updateDriverOnlineStatus(user.uid, isOnline).catch(() => {});
   }, [isOnline, user?.uid]);
 
-  async function handlePickedUp(orderId: string) {
+  const groupedAvailableOrders = availableOrders.reduce<
+    Array<{ groupId: string; orderId: string; orderCount: number; total: number; restaurantName: string }>
+  >((acc, order) => {
+    const key = order.groupId ?? order.id;
+    const found = acc.find((row) => row.groupId === key);
+    if (found) {
+      found.orderCount += 1;
+      found.total += order.total;
+      return acc;
+    }
+    acc.push({
+      groupId: key,
+      orderId: order.id,
+      orderCount: 1,
+      total: order.total,
+      restaurantName: order.restaurantName,
+    });
+    return acc;
+  }, []);
+
+  async function handleAcceptDelivery(groupId: string, orderId: string) {
+    if (!user?.uid) return;
     try {
-      await markPickedUp(orderId);
-      showSuccess('Order marked as picked up');
+      await acceptGroupDelivery(groupId, {
+        id: user.uid,
+        name: user.displayName?.trim() || 'Driver',
+        phone: user.phoneNumber ?? null,
+        isOnline,
+      });
+      showSuccess('Group delivery accepted');
     } catch {
-      showError('Failed to update order.');
+      // Fallback for legacy orders that do not have groupId yet
+      try {
+        await acceptDeliveryOrder(orderId, {
+          id: user.uid,
+          name: user.displayName?.trim() || 'Driver',
+          phone: user.phoneNumber ?? null,
+          isOnline,
+        });
+        showSuccess('Delivery accepted');
+      } catch {
+        showError('Failed to accept delivery.');
+      }
     }
   }
 
-  if (loading || !authorized || ordersLoading) {
+  async function handleComplete(orderId: string) {
+    try {
+      await updateOrderStatus(orderId, 'delivered');
+      showSuccess('Delivery completed');
+    } catch {
+      showError('Failed to complete delivery.');
+    }
+  }
+
+  if (loading || !authorized || ordersLoading || availableLoading) {
     return (
       <SafeAreaView style={styles.centered}>
         <Text style={styles.subtitle}>Loading driver dashboard...</Text>
@@ -47,6 +95,26 @@ export default function DriverDashboardScreen() {
           </View>
         </View>
 
+        <Text style={styles.sectionTitle}>Available Group Deliveries</Text>
+        {groupedAvailableOrders.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.meta}>No group deliveries right now.</Text>
+          </View>
+        ) : (
+          groupedAvailableOrders.map((group) => (
+            <View key={group.groupId} style={styles.card}>
+              <Text style={styles.orderId}>Group #{group.groupId}</Text>
+              <Text style={styles.meta}>Restaurant: {group.restaurantName}</Text>
+              <Text style={styles.meta}>{group.orderCount} orders from same area</Text>
+              <Text style={styles.meta}>Total earnings: ${group.total.toFixed(2)}</Text>
+              <Pressable style={styles.primaryButton} onPress={() => handleAcceptDelivery(group.groupId, group.orderId)}>
+                <Text style={styles.primaryText}>Accept Group Delivery</Text>
+              </Pressable>
+            </View>
+          ))
+        )}
+
+        <Text style={styles.sectionTitle}>My Deliveries</Text>
         {orders.length === 0 ? (
           <View style={styles.card}>
             <Text style={styles.meta}>No assigned orders.</Text>
@@ -66,29 +134,25 @@ export default function DriverDashboardScreen() {
                 Phone: {order.customerPhone ?? 'Unavailable'}
               </Text>
 
-              <View style={styles.mapWrap}>
-                <Map
-                  style={styles.map}
-                  initialRegion={{
-                    latitude: 43.6532,
-                    longitude: -79.3832,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                  }}
-                >
-                  <MapMarker
-                    coordinate={{ latitude: 43.6532, longitude: -79.3832 }}
-                    title="Customer"
-                  />
-                </Map>
-              </View>
-
               <Pressable
-                style={[styles.primaryButton, order.status === 'picked_up' ? styles.disabled : null]}
-                disabled={order.status === 'picked_up'}
-                onPress={() => handlePickedUp(order.id)}
+                style={[
+                  styles.primaryButton,
+                  (order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted') && styles.disabled,
+                ]}
+                disabled={order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted'}
+                onPress={() => updateOrderStatus(order.id, 'on_the_way')}
               >
-                <Text style={styles.primaryText}>Picked Up</Text>
+                <Text style={styles.primaryText}>Start Delivery</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.secondaryButton,
+                  (order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted') && styles.disabled,
+                ]}
+                disabled={order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted'}
+                onPress={() => handleComplete(order.id)}
+              >
+                <Text style={styles.secondaryText}>Complete Delivery</Text>
               </Pressable>
               {order.customerPhone ? (
                 <Pressable
@@ -113,6 +177,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   title: { color: '#0F172A', fontSize: 28, fontWeight: '800' },
   subtitle: { color: '#64748B', fontWeight: '600' },
+  sectionTitle: { color: '#0F172A', fontSize: 20, fontWeight: '800', marginBottom: 10, marginTop: 8 },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   onlineLabel: { color: '#334155', fontWeight: '700' },
   card: {
@@ -126,8 +191,6 @@ const styles = StyleSheet.create({
   orderId: { color: '#0F172A', fontWeight: '800', fontSize: 18, marginBottom: 2 },
   meta: { color: '#475569', marginTop: 4, fontWeight: '600' },
   status: { color: '#1D4ED8', marginTop: 6, fontWeight: '800' },
-  mapWrap: { marginTop: 10, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' },
-  map: { width: '100%', height: 120 },
   primaryButton: { marginTop: 10, height: 42, borderRadius: 10, backgroundColor: '#16A34A', alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#FFFFFF', fontWeight: '800' },
   secondaryButton: { marginTop: 8, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },

@@ -1,38 +1,63 @@
-import { Map, MapMarker } from '@/components/Map';
-import { Redirect, useLocalSearchParams } from 'expo-router';
-import { getOrderById, useMockDeliveryOrders } from '@/services/mockDeliveryStore';
-import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { subscribeOrderById, type RestaurantOrder } from '@/services/orderService';
+import { showNotice } from '@/utils/toast';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const STATUS_STEPS = ['Preparing', 'On the way', 'Delivered'] as const;
+const STATUS_STEPS = ['Restaurant preparing', 'Order accepted', 'Driver on the way', 'Delivered'] as const;
 
 export default function OrderTrackingScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  useMockDeliveryOrders();
-  const order = useMemo(
-    () => (id ? getOrderById(id) : null),
-    [id],
-  );
-  const driver = order?.driver ?? {
-    name: 'Ahmed',
-    car: 'Toyota Corolla',
-    phone: '+1 647 xxx',
-    location: { latitude: 43.6532, longitude: -79.3832 },
-  };
-  const statusLabel =
-    order?.status === 'pending'
-      ? 'Preparing'
-      : order?.status === 'accepted' || order?.status === 'delivering'
-        ? 'On the way'
-        : 'Delivered';
+  const [order, setOrder] = useState<RestaurantOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const lastStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    const unsub = subscribeOrderById(id, (next) => {
+      setOrder(next);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [id]);
+
+  const statusLabel = useMemo(() => {
+    if (!order) return 'Restaurant preparing';
+    if (order.status === 'pending') return 'Restaurant preparing';
+    if (order.status === 'accepted') return 'Order accepted';
+    if (order.status === 'on_the_way') return 'Driver on the way';
+    return 'Delivered';
+  }, [order]);
   const activeStepIndex = useMemo(
     () => STATUS_STEPS.findIndex((step) => step === statusLabel),
     [statusLabel],
   );
 
-  if (id && order && order.paymentStatus !== 'paid') {
-    return <Redirect href={`/review-order/${id}` as never} />;
+  useEffect(() => {
+    if (!order?.status) return;
+    const prev = lastStatusRef.current;
+    if (prev === order.status) return;
+    if (order.status === 'accepted') {
+      showNotice('Order Update', 'Your order was accepted by the restaurant.');
+    }
+    if (order.status === 'on_the_way') {
+      showNotice('Order Update', 'Your driver is on the way.');
+    }
+    lastStatusRef.current = order.status;
+  }, [order?.status]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#16A34A" />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -40,42 +65,33 @@ export default function OrderTrackingScreen() {
       <View style={styles.content}>
         <Text style={styles.orderId}>Order #{id ?? 'demo-order'}</Text>
         <Text style={styles.statusTitle}>{statusLabel}</Text>
-
-        <View style={styles.mapCard}>
-          <Map
-            style={styles.map}
-            initialRegion={{
-              latitude: driver.location.latitude,
-              longitude: driver.location.longitude,
-              latitudeDelta: 0.02,
-              longitudeDelta: 0.02,
-            }}
-          >
-            <MapMarker
-              coordinate={{
-                latitude: driver.location.latitude,
-                longitude: driver.location.longitude,
-              }}
-              title="Driver"
-              description={driver.name}
-            />
-            {order ? (
-              <MapMarker
-                coordinate={{
-                  latitude: order.destination.latitude,
-                  longitude: order.destination.longitude,
-                }}
-                title="Destination"
-                description={order.dropoffLocation}
-              />
-            ) : null}
-          </Map>
-        </View>
+        {order?.estimatedDeliveryTime ? (
+          <View style={styles.fastBadge}>
+            <Text style={styles.fastBadgeText}>Fast delivery badge · ETA {order.estimatedDeliveryTime} min</Text>
+          </View>
+        ) : null}
 
         {order ? (
           <View style={styles.orderMetaCard}>
-            <Text style={styles.orderMetaText}>Restaurant: {order.restaurantName}</Text>
-            <Text style={styles.orderMetaText}>Dropoff: {order.dropoffLocation}</Text>
+            {order.groupId ? (
+              <View style={styles.groupBanner}>
+                <Text style={styles.groupTitle}>Your order is grouped for faster delivery 🚀</Text>
+                <Text style={styles.groupSub}>Grouped delivery = cheaper</Text>
+                <Text style={styles.groupSub}>Original delivery fee: $5.00</Text>
+                <Text style={styles.groupDiscount}>New: $2.50</Text>
+              </View>
+            ) : null}
+            <Text style={styles.orderMetaText}>Driver: {order.driverName ?? 'Waiting for driver assignment'}</Text>
+            <Text style={styles.orderMetaText}>Restaurant: {order.restaurantId}</Text>
+            <Text style={styles.orderMetaText}>Total: ${order.totalPrice.toFixed(2)}</Text>
+            <Text style={styles.orderMetaText}>Estimated delivery: {order.estimatedDeliveryTime} min</Text>
+            <Text style={styles.orderMetaText}>Delivery: {order.deliveryLocation?.address ?? 'No address yet'}</Text>
+            <Text style={styles.orderMetaText}>Items:</Text>
+            {order.items.map((item) => (
+              <Text key={`${item.id}-${item.name}`} style={styles.orderMetaText}>
+                {item.qty}x {item.name} - ${item.price.toFixed(2)}
+              </Text>
+            ))}
           </View>
         ) : null}
 
@@ -91,19 +107,6 @@ export default function OrderTrackingScreen() {
           })}
         </View>
 
-        <View style={styles.driverCard}>
-          <Text style={styles.driverTitle}>Driver</Text>
-          <Text style={styles.driverMeta}>{driver.name}</Text>
-          <Text style={styles.driverMeta}>{driver.car}</Text>
-          <Text style={styles.driverMeta}>{driver.phone}</Text>
-
-          <Pressable
-            style={styles.callButton}
-            onPress={() => console.log('Call Driver', driver.phone)}
-          >
-            <Text style={styles.callButtonText}>Call Driver</Text>
-          </Pressable>
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -112,19 +115,20 @@ export default function OrderTrackingScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F8FAFC' },
   content: { flex: 1, padding: 16 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   orderId: { color: '#64748B', fontWeight: '600' },
   statusTitle: { marginTop: 4, color: '#0F172A', fontSize: 30, fontWeight: '800' },
-  mapCard: {
-    marginTop: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+  fastBadge: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  map: { width: '100%', height: 210 },
+  fastBadgeText: { color: '#1E3A8A', fontWeight: '800', fontSize: 12 },
   orderMetaCard: {
-    marginTop: 12,
+    marginTop: 14,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -132,6 +136,17 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   orderMetaText: { color: '#334155', fontWeight: '600', marginBottom: 4 },
+  groupBanner: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    backgroundColor: '#F0FDF4',
+    padding: 10,
+    marginBottom: 10,
+  },
+  groupTitle: { color: '#166534', fontWeight: '800', marginBottom: 4 },
+  groupSub: { color: '#15803D', fontWeight: '600' },
+  groupDiscount: { color: '#166534', fontWeight: '800', marginTop: 2 },
   stepsWrap: {
     marginTop: 14,
     borderRadius: 14,
@@ -152,23 +167,4 @@ const styles = StyleSheet.create({
   stepDotActive: { backgroundColor: '#2563EB' },
   stepText: { color: '#64748B', fontWeight: '600' },
   stepTextActive: { color: '#0F172A', fontWeight: '800' },
-  driverCard: {
-    marginTop: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-  },
-  driverTitle: { color: '#0F172A', fontSize: 18, fontWeight: '800', marginBottom: 8 },
-  driverMeta: { color: '#334155', fontWeight: '600', marginBottom: 3 },
-  callButton: {
-    marginTop: 12,
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: '#16A34A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  callButtonText: { color: '#FFFFFF', fontWeight: '800' },
 });

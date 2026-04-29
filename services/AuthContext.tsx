@@ -54,6 +54,7 @@ import {
   registerExpoPushTokenAndSyncToFirestore,
 } from '@/services/pushNotifications';
 import { useUserRole } from '@/hooks/useUserRole';
+import { createRestaurant } from '@/services/restaurantService';
 import type { UserRole } from '@/services/userService';
 
 const REFERRAL_CREDIT = 2;
@@ -282,12 +283,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const firestoreUserRole = firestoreRole ?? null;
 
   useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) return;
+    if (firestoreRole !== 'restaurant') return;
+
+    const ensureRestaurantProfile = async () => {
+      try {
+        const restaurantRef = doc(db, 'restaurants', uid);
+        const snap = await getDoc(restaurantRef);
+        if (snap.exists()) return;
+        await createRestaurant({
+          userId: uid,
+          name: user?.displayName?.trim() || 'My Restaurant',
+          logo: null,
+          location: '',
+        });
+      } catch (error) {
+        console.log('[auth] ensure restaurant profile failed', error);
+      }
+    };
+
+    void ensureRestaurantProfile();
+  }, [user?.uid, user?.displayName, firestoreRole]);
+
+  useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setUser(null);
         setLoading(false);
         return;
       }
+      console.log('[auth] user signed in', firebaseUser.uid);
 
       try {
         await reload(firebaseUser);
