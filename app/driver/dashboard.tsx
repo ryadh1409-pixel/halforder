@@ -59,9 +59,9 @@ export default function DriverDashboardScreen() {
               <Pressable
                 style={[
                   styles.button,
-                  order.status !== 'pending' && styles.buttonDisabled,
+                  !['pending', 'preparing'].includes(order.status) && styles.buttonDisabled,
                 ]}
-                disabled={order.status !== 'pending'}
+                disabled={!['pending', 'preparing'].includes(order.status)}
                 onPress={() => acceptOrder(order.id)}
               >
                 <Text style={styles.buttonText}>Accept Order</Text>

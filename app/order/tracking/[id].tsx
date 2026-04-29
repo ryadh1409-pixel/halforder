@@ -1,5 +1,5 @@
 import { Map, MapMarker } from '@/components/Map';
-import { useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import { getOrderById, useMockDeliveryOrders } from '@/services/mockDeliveryStore';
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -30,6 +30,10 @@ export default function OrderTrackingScreen() {
     () => STATUS_STEPS.findIndex((step) => step === statusLabel),
     [statusLabel],
   );
+
+  if (id && order && order.paymentStatus !== 'paid') {
+    return <Redirect href={`/review-order/${id}` as never} />;
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>

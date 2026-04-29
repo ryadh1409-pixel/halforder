@@ -1141,6 +1141,10 @@ function RootLayoutNav() {
           options={{ title: 'Order Tracking', headerShown: false }}
         />
         <Stack.Screen
+          name="review-order/[id]"
+          options={{ title: 'Review Order', headerShown: false }}
+        />
+        <Stack.Screen
           name="host/add-food"
           options={{ title: 'Host Food Truck', headerShown: false }}
         />

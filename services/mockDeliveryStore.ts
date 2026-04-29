@@ -1,6 +1,11 @@
 import { useSyncExternalStore } from 'react';
 
-export type DeliveryStatus = 'pending' | 'accepted' | 'delivering' | 'completed';
+export type DeliveryStatus =
+  | 'pending'
+  | 'preparing'
+  | 'accepted'
+  | 'delivering'
+  | 'completed';
 
 export type MockDriver = {
   name: string;
@@ -16,6 +21,12 @@ export type MockDeliveryOrder = {
   dropoffLocation: string;
   destination: { latitude: number; longitude: number };
   status: DeliveryStatus;
+  paymentStatus: 'unpaid' | 'paid';
+  itemName: string;
+  totalPrice: number;
+  deliveryFee: number;
+  splitSavings: number;
+  usersCount: number;
   driver: MockDriver | null;
 };
 
@@ -39,6 +50,12 @@ let state: DeliveryStore = {
       dropoffLocation: 'Queen St W & Spadina',
       destination: { latitude: 43.6481, longitude: -79.3974 },
       status: 'pending',
+      paymentStatus: 'unpaid',
+      itemName: 'Beef Tacos',
+      totalPrice: 24.99,
+      deliveryFee: 3.49,
+      splitSavings: 4.0,
+      usersCount: 2,
       driver: null,
     },
   ],
@@ -74,6 +91,11 @@ export function useMockDeliveryOrders(): MockDeliveryOrder[] {
 
 export function createMockOrder(input: {
   restaurantName: string;
+  itemName: string;
+  totalPrice: number;
+  deliveryFee?: number;
+  splitSavings?: number;
+  usersCount?: number;
   pickupLocation: string;
   dropoffLocation: string;
   destination: { latitude: number; longitude: number };
@@ -86,6 +108,12 @@ export function createMockOrder(input: {
     dropoffLocation: input.dropoffLocation,
     destination: input.destination,
     status: 'pending',
+    paymentStatus: 'unpaid',
+    itemName: input.itemName,
+    totalPrice: input.totalPrice,
+    deliveryFee: input.deliveryFee ?? 3.49,
+    splitSavings: input.splitSavings ?? 0,
+    usersCount: input.usersCount ?? 1,
     driver: null,
   };
   setState({ orders: [order, ...state.orders] });
@@ -105,6 +133,16 @@ export function acceptOrder(orderId: string): void {
             status: 'accepted',
             driver: DEFAULT_DRIVER,
           }
+        : order,
+    ),
+  });
+}
+
+export function markOrderPaid(orderId: string): void {
+  setState({
+    orders: state.orders.map((order) =>
+      order.id === orderId
+        ? { ...order, paymentStatus: 'paid', status: 'preparing' }
         : order,
     ),
   });

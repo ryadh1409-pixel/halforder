@@ -1,7 +1,9 @@
 require('dotenv').config();
 
 const express = require('express');
+const cors = require('cors');
 const fetch = require('node-fetch');
+const Stripe = require('stripe');
 
 /**
  * Google Places API (New) — searchText. Returns raw `places` or [] on failure.
@@ -53,11 +55,90 @@ async function searchPlaces(query) {
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+console.log(
+  'Stripe key loaded:',
+  process.env.STRIPE_SECRET_KEY ? 'YES' : 'NO',
+);
 
 app.get('/', (req, res) => {
   console.log('GET / hit');
   res.send('Server works');
+});
+
+app.post('/create-checkout-session', async (req, res) => {
+  try {
+    const { amount, orderId } = req.body || {};
+    const parsedAmount = Number(amount);
+    console.log('[stripe] request body:', { amount, orderId });
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    if (!orderId || typeof orderId !== 'string') {
+      return res.status(400).json({ error: 'Invalid orderId' });
+    }
+    if (!stripe) {
+      return res.status(500).json({ error: 'Stripe server not configured' });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'cad',
+            product_data: {
+              name: 'HalfOrder Payment',
+            },
+            unit_amount: Math.round(parsedAmount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: 'https://example.com/success',
+      cancel_url: 'https://example.com/cancel',
+      metadata: { orderId },
+    });
+
+    console.log('[stripe] session created:', {
+      id: session.id,
+      hasUrl: Boolean(session.url),
+      orderId,
+    });
+    return res.json({ url: session.url });
+  } catch (error) {
+    console.error('[stripe] create-checkout-session error:', error);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+app.post('/create-payment-intent', async (req, res) => {
+  try {
+    const { amount } = req.body || {};
+    console.log('[stripe] create-payment-intent request:', { amount });
+
+    if (!amount) {
+      return res.status(400).json({ error: 'Amount is required' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: 'cad',
+      automatic_payment_methods: { enabled: true },
+    });
+
+    return res.json({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (error) {
+    console.error('Stripe error:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'Stripe failed' });
+  }
 });
 
 function replyFromOpenAiError(data) {

@@ -68,12 +68,14 @@ export default function FoodTruckMenuScreen() {
     console.log('Solo order placed');
     const created = createMockOrder({
       restaurantName: truck.name,
+      itemName: mealName,
+      totalPrice: 24.99,
       pickupLocation: `${truck.name} Pickup Spot`,
       dropoffLocation: 'Customer Destination',
       destination: { latitude: 43.6481, longitude: -79.3974 },
     });
     Alert.alert('Solo order confirmed', `Your order for ${mealName} has been placed.`);
-    router.push(`/order/tracking/${created.id}` as never);
+    router.push(`/review-order/${created.id}` as never);
   }
 
   function handleOpenChat() {
