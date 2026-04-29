@@ -225,7 +225,14 @@ export default function ProfileScreen() {
   const router = useRouter();
   const pal = useProfilePalette();
   const isDark = true;
-  const { user, signOutUser, reloadAuthUser, firestoreUserRole } = useAuth();
+  const {
+    user,
+    signOutUser,
+    reloadAuthUser,
+    firestoreUserRole,
+    appRole,
+    setTestingRole,
+  } = useAuth();
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [phone, setPhone] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -791,6 +798,35 @@ export default function ProfileScreen() {
             </View>
             <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
           </TouchableOpacity>
+
+          <Text style={dynamicStyles.sectionHeading}>Role Testing</Text>
+          <View style={dynamicStyles.card}>
+            <Text style={dynamicStyles.bodyMuted}>
+              Current role: {appRole}
+            </Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                style={[
+                  dynamicStyles.outlineBtn,
+                  styles.roleButton,
+                  appRole === 'user' ? dynamicStyles.chipActive : null,
+                ]}
+                onPress={() => setTestingRole('user')}
+              >
+                <Text style={dynamicStyles.outlineBtnText}>Switch to User</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  dynamicStyles.outlineBtn,
+                  styles.roleButton,
+                  appRole === 'driver' ? dynamicStyles.chipActive : null,
+                ]}
+                onPress={() => setTestingRole('driver')}
+              >
+                <Text style={dynamicStyles.outlineBtnText}>Switch to Driver</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           <Text style={dynamicStyles.sectionHeading}>Account</Text>
           <View style={dynamicStyles.card}>
@@ -1536,6 +1572,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  roleButton: {
+    flex: 1,
   },
   inputMultiline: {
     minHeight: 88,

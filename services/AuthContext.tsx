@@ -73,6 +73,10 @@ type AuthContextValue = {
   loading: boolean;
   /** `users/{uid}.role` from Firestore (for promoted admins). */
   firestoreUserRole: string | null;
+  /** Global app role used by routing guards. */
+  appRole: 'user' | 'driver';
+  appUser: { uid: string; role: 'user' | 'driver' } | null;
+  setTestingRole: (role: 'user' | 'driver') => void;
   signUpWithEmail: (payload: EmailSignUpPayload) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithPhone: (phoneNumber: string) => Promise<void>;
@@ -267,6 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [loading, setLoading] = useState(true);
   const [firestoreUserRole, setFirestoreUserRole] = useState<string | null>(null);
+  const [testingRole, setTestingRole] = useState<'user' | 'driver' | null>(null);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -601,6 +606,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     firestoreUserRole,
+    appRole:
+      testingRole ?? (firestoreUserRole === 'driver' ? 'driver' : 'user'),
+    appUser: user
+      ? {
+          uid: user.uid,
+          role:
+            testingRole ?? (firestoreUserRole === 'driver' ? 'driver' : 'user'),
+        }
+      : null,
+    setTestingRole,
     signUpWithEmail,
     signInWithEmail,
     signInWithPhone,

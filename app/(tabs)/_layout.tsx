@@ -133,6 +133,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="food-trucks"
+        options={{
+          title: 'Trucks',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="local-shipping" size={TAB_ICON_SIZE} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

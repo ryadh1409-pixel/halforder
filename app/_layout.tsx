@@ -97,7 +97,7 @@ export const linking = {
 
 function RootLayoutNav() {
   useSplitPokeListener();
-  const { user, loading: authLoading, firestoreUserRole } = useAuth();
+  const { user, loading: authLoading, firestoreUserRole, appRole } = useAuth();
   const sessionUser = user;
   const { ready: termsFirestoreReady, accepted: hasAcceptedTermsFs } =
     useUserTermsStatus(user?.uid);
@@ -962,6 +962,7 @@ function RootLayoutNav() {
 
   const inAuthGroup = seg0 === '(auth)';
   const onJoinRedirect = seg0 === 'join';
+  const isDriverDashboardPath = seg0 === 'driver' && segments[1] === 'dashboard';
   const onPublicShellRoutes =
     seg0 === 'terms-acceptance' ||
     seg0 === 'terms' ||
@@ -983,6 +984,14 @@ function RootLayoutNav() {
     isAdminPath &&
     !inAuthGroup &&
     !onPublicShellRoutes;
+  const redirectDriverToDashboard =
+    !authLoading &&
+    !!user &&
+    appRole === 'driver' &&
+    !inAuthGroup &&
+    !onPublicShellRoutes &&
+    seg0 !== 'verify-email' &&
+    !isDriverDashboardPath;
   const pathname = segments.length > 0 ? `/${segments.join('/')}` : '';
   const loginHref =
     pathname && pathname !== '/' && pathname !== ''
@@ -1034,6 +1043,7 @@ function RootLayoutNav() {
       ) : null}
       {redirectToTabs ? <Redirect href="/(tabs)" /> : null}
       {redirectNonAdminFromAdminRoutes ? <Redirect href="/(tabs)" /> : null}
+      {redirectDriverToDashboard ? <Redirect href="/driver/dashboard" /> : null}
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ title: 'Terms of Use' }} />
@@ -1121,6 +1131,22 @@ function RootLayoutNav() {
         <Stack.Screen
           name="chat/[id]"
           options={{ title: 'Chat', headerShown: false }}
+        />
+        <Stack.Screen
+          name="food-truck/[id]"
+          options={{ title: 'Food Truck Menu', headerShown: false }}
+        />
+        <Stack.Screen
+          name="order/tracking/[id]"
+          options={{ title: 'Order Tracking', headerShown: false }}
+        />
+        <Stack.Screen
+          name="host/add-food"
+          options={{ title: 'Host Food Truck', headerShown: false }}
+        />
+        <Stack.Screen
+          name="driver/dashboard"
+          options={{ title: 'Driver Dashboard', headerShown: false }}
         />
         <Stack.Screen
           name="help"

@@ -1,5 +1,5 @@
 import { signInWithApple } from '@/services/auth/appleSignIn';
-import { signInWithGoogle } from '@/services/auth/googleSignIn';
+import { useGoogleAuth } from '@/services/googleAuth';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 type Provider = 'google' | 'apple' | null;
 
 export default function AuthScreen() {
+  const { signInWithGoogle, loading: googleLoading, error: googleError, requestReady } =
+    useGoogleAuth();
   const [loadingProvider, setLoadingProvider] = useState<Provider>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -50,9 +52,9 @@ export default function AuthScreen() {
         <Pressable
           style={[styles.button, styles.googleButton]}
           onPress={() => void handleGoogle()}
-          disabled={loadingProvider !== null}
+          disabled={loadingProvider !== null || !requestReady}
         >
-          {loadingProvider === 'google' ? (
+          {loadingProvider === 'google' || googleLoading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.buttonText}>Continue with Google</Text>
@@ -73,7 +75,9 @@ export default function AuthScreen() {
           </Pressable>
         ) : null}
 
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+        {errorText || googleError ? (
+          <Text style={styles.errorText}>{errorText ?? googleError}</Text>
+        ) : null}
       </View>
     </SafeAreaView>
   );
