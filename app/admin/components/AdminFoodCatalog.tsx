@@ -606,3 +606,5 @@ const modalStyles = StyleSheet.create({
   },
   saveText: { color: '#07241A', fontWeight: '800', fontSize: 16 },
 });
+
+export default AdminFoodCatalogList;

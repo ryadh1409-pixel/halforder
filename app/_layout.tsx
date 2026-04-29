@@ -98,6 +98,7 @@ export const linking = {
 function RootLayoutNav() {
   useSplitPokeListener();
   const { user, loading: authLoading, firestoreUserRole } = useAuth();
+  const sessionUser = user;
   const { ready: termsFirestoreReady, accepted: hasAcceptedTermsFs } =
     useUserTermsStatus(user?.uid);
   const router = useRouter();
@@ -120,6 +121,11 @@ function RootLayoutNav() {
   const tidioOrderEventSentRef = useRef<Set<string>>(new Set());
 
   const seg0 = segments[0] as string | undefined;
+
+  if (authLoading && !sessionUser) {
+    console.log('No user yet, skipping...');
+    return null;
+  }
 
   const isAdminPath =
     seg0 === 'admin' ||
@@ -221,6 +227,7 @@ function RootLayoutNav() {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (typeof window === 'undefined') return;
+    if (!user) return;
     const uid = user?.uid;
     if (!uid) return;
 
@@ -764,6 +771,7 @@ function RootLayoutNav() {
       if (!api?.setVisitorData) return false;
 
       const sessionUser = currentUserRef.current;
+      if (!sessionUser) return false;
       api.setVisitorData({
         distinct_id: sessionUser?.uid ?? 'guest',
         userId: sessionUser?.uid ?? 'guest',
@@ -772,9 +780,9 @@ function RootLayoutNav() {
       });
 
       console.log('[Tidio] visitor data set', {
-        userId: sessionUser.uid,
-        email: sessionUser.email ?? null,
-        name: sessionUser.displayName ?? null,
+        userId: sessionUser?.uid ?? 'guest',
+        email: sessionUser?.email ?? null,
+        name: sessionUser?.displayName ?? 'Guest',
       });
       return true;
     };
