@@ -287,6 +287,13 @@ export default function SwipeScreen() {
             ? 'Admin preview · Join disabled · Skip to browse cards'
             : 'Right = Join · Left = Skip'}
         </Text>
+        <TouchableOpacity
+          activeOpacity={0.88}
+          style={styles.dashboardBtn}
+          onPress={() => router.push('/(restaurant)/dashboard' as never)}
+        >
+          <Text style={styles.dashboardBtnText}>Open Restaurant Dashboard</Text>
+        </TouchableOpacity>
         {adminPreview ? (
           <View style={styles.adminBanner}>
             <Text style={styles.adminBannerText}>
@@ -592,6 +599,21 @@ const styles = StyleSheet.create({
   },
   title: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
   subtitle: { color: 'rgba(248,250,252,0.6)', marginTop: 4 },
+  dashboardBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(52, 211, 153, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.45)',
+  },
+  dashboardBtnText: {
+    color: '#A7F3D0',
+    fontSize: 13,
+    fontWeight: '800',
+  },
   adminBanner: {
     marginTop: 10,
     padding: 10,

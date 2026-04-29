@@ -1,11 +1,10 @@
-import { isAdminUser } from '@/constants/adminUid';
-import { useAuth } from '@/services/AuthContext';
+import { requireRole } from '@/utils/requireRole';
 import { Redirect, Stack } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 export default function AdminLayout() {
-  const { user, loading, firestoreUserRole } = useAuth();
+  const { loading, authorized } = requireRole(['admin']);
 
   if (loading) {
     return (
@@ -15,7 +14,7 @@ export default function AdminLayout() {
     );
   }
 
-  if (!isAdminUser(user, firestoreUserRole)) {
+  if (!authorized) {
     return <Redirect href="/(tabs)" />;
   }
 

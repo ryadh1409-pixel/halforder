@@ -17,7 +17,6 @@ import {
   doc,
   getDoc,
   getDocFromServer,
-  onSnapshot,
   setDoc,
   serverTimestamp,
   updateDoc,
@@ -54,6 +53,8 @@ import {
   persistUserPushTokens,
   registerExpoPushTokenAndSyncToFirestore,
 } from '@/services/pushNotifications';
+import { useUserRole } from '@/hooks/useUserRole';
+import type { UserRole } from '@/services/userService';
 
 const REFERRAL_CREDIT = 2;
 
@@ -71,6 +72,7 @@ export type EmailSignUpPayload = {
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
+  role: UserRole | null;
   /** `users/{uid}.role` from Firestore (for promoted admins). */
   firestoreUserRole: string | null;
   /** Global app role used by routing guards. */
@@ -147,7 +149,9 @@ async function ensureUserDocument(
     if (data?.activeOrderId === undefined) updates.activeOrderId = null;
     if (data?.credits === undefined) updates.credits = 0;
     if (data?.role === undefined) updates.role = 'user';
+    if (data?.createdAt === undefined) updates.createdAt = serverTimestamp();
     if (data?.notificationsEnabled === undefined) updates.notificationsEnabled = true;
+    if (data?.restaurantId === undefined) updates.restaurantId = null;
     if (data?.ordersCount === undefined) updates.ordersCount = 0;
     if (data?.averageRating === undefined) updates.averageRating = 0;
     if (data?.totalRatings === undefined) updates.totalRatings = 0;
@@ -204,6 +208,7 @@ async function ensureUserDocument(
     credits: referredBy ? REFERRAL_CREDIT : 0,
     referredBy: referredBy ?? null,
     role: 'user',
+    restaurantId: null,
     notificationsEnabled: true,
     ordersCount: 0,
     averageRating: 0,
@@ -270,10 +275,11 @@ async function ensureUserDocument(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [loading, setLoading] = useState(true);
-  const [firestoreUserRole, setFirestoreUserRole] = useState<string | null>(null);
   const [testingRole, setTestingRole] = useState<'user' | 'driver' | null>(null);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+  const { role: firestoreRole, loading: roleLoading } = useUserRole(user?.uid);
+  const firestoreUserRole = firestoreRole ?? null;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -343,23 +349,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    const uid = user?.uid;
-    if (!uid) {
-      setFirestoreUserRole(null);
-      return;
-    }
-    const unsub = onSnapshot(
-      doc(db, 'users', uid),
-      (snap) => {
-        const r = snap.exists() ? snap.data()?.role : undefined;
-        setFirestoreUserRole(typeof r === 'string' ? r.trim() : null);
-      },
-      () => setFirestoreUserRole(null),
-    );
-    return () => unsub();
-  }, [user?.uid]);
 
   /** Re-save Expo token when it rotates (must stay in sync with Firestore). */
   useEffect(() => {
@@ -604,7 +593,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthContextValue = {
     user,
-    loading,
+    loading: loading || roleLoading,
+    role: firestoreRole,
     firestoreUserRole,
     appRole:
       testingRole ?? (firestoreUserRole === 'driver' ? 'driver' : 'user'),

@@ -97,7 +97,7 @@ export const linking = {
 
 function RootLayoutNav() {
   useSplitPokeListener();
-  const { user, loading: authLoading, firestoreUserRole, appRole } = useAuth();
+  const { user, loading: authLoading, firestoreUserRole, role } = useAuth();
   const sessionUser = user;
   const { ready: termsFirestoreReady, accepted: hasAcceptedTermsFs } =
     useUserTermsStatus(user?.uid);
@@ -962,7 +962,12 @@ function RootLayoutNav() {
 
   const inAuthGroup = seg0 === '(auth)';
   const onJoinRedirect = seg0 === 'join';
-  const isDriverDashboardPath = seg0 === 'driver' && segments[1] === 'dashboard';
+  const isDriverDashboardPath =
+    (seg0 === 'driver' && segments[1] === 'dashboard') ||
+    (seg0 === '(driver)' && segments[1] === 'dashboard');
+  const isRestaurantDashboardPath =
+    (seg0 === '(restaurant)' && segments[1] === 'dashboard') ||
+    (seg0 === 'restaurant' && segments[1] === 'dashboard');
   const onPublicShellRoutes =
     seg0 === 'terms-acceptance' ||
     seg0 === 'terms' ||
@@ -976,7 +981,12 @@ function RootLayoutNav() {
     !user && !inAuthGroup && !onJoinRedirect && !onPublicShellRoutes;
   const redirectToVerifyEmail =
     emailNotVerified && seg0 !== 'verify-email' && !onPublicShellRoutes;
-  const redirectToTabs = user && inAuthGroup && !emailNotVerified;
+  const redirectToTabs =
+    user && inAuthGroup && !emailNotVerified && role !== 'driver' && role !== 'restaurant';
+  const redirectToDriverFromAuth = user && inAuthGroup && !emailNotVerified && role === 'driver';
+  const redirectToRestaurantFromAuth =
+    user && inAuthGroup && !emailNotVerified && role === 'restaurant';
+  const redirectToAdminFromAuth = user && inAuthGroup && !emailNotVerified && role === 'admin';
   const redirectNonAdminFromAdminRoutes =
     !authLoading &&
     !!user &&
@@ -987,11 +997,27 @@ function RootLayoutNav() {
   const redirectDriverToDashboard =
     !authLoading &&
     !!user &&
-    appRole === 'driver' &&
+    role === 'driver' &&
     !inAuthGroup &&
     !onPublicShellRoutes &&
     seg0 !== 'verify-email' &&
     !isDriverDashboardPath;
+  const redirectRestaurantToDashboard =
+    !authLoading &&
+    !!user &&
+    role === 'restaurant' &&
+    !inAuthGroup &&
+    !onPublicShellRoutes &&
+    seg0 !== 'verify-email' &&
+    !isRestaurantDashboardPath;
+  const redirectAdminToUsers =
+    !authLoading &&
+    !!user &&
+    role === 'admin' &&
+    !inAuthGroup &&
+    !onPublicShellRoutes &&
+    seg0 !== 'verify-email' &&
+    !isAdminPath;
   const pathname = segments.length > 0 ? `/${segments.join('/')}` : '';
   const loginHref =
     pathname && pathname !== '/' && pathname !== ''
@@ -1042,8 +1068,17 @@ function RootLayoutNav() {
         />
       ) : null}
       {redirectToTabs ? <Redirect href="/(tabs)" /> : null}
+      {redirectToDriverFromAuth ? <Redirect href="/(driver)/dashboard" /> : null}
+      {redirectToRestaurantFromAuth ? (
+        <Redirect href="/(restaurant)/dashboard" />
+      ) : null}
+      {redirectToAdminFromAuth ? <Redirect href="/admin/users" /> : null}
       {redirectNonAdminFromAdminRoutes ? <Redirect href="/(tabs)" /> : null}
-      {redirectDriverToDashboard ? <Redirect href="/driver/dashboard" /> : null}
+      {redirectDriverToDashboard ? <Redirect href="/(driver)/dashboard" /> : null}
+      {redirectRestaurantToDashboard ? (
+        <Redirect href="/(restaurant)/dashboard" />
+      ) : null}
+      {redirectAdminToUsers ? <Redirect href="/admin/users" /> : null}
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ title: 'Terms of Use' }} />
@@ -1077,6 +1112,8 @@ function RootLayoutNav() {
         />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(driver)" options={{ headerShown: false }} />
+        <Stack.Screen name="(restaurant)" options={{ headerShown: false }} />
         <Stack.Screen name="user/[id]" options={{ title: 'User Profile' }} />
         <Stack.Screen name="match/[orderId]" options={{ headerShown: false }} />
         <Stack.Screen

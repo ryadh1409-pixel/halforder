@@ -1,164 +1,109 @@
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
+import { requireRole } from '@/utils/requireRole';
 import {
-  formatFirestoreTime,
-  orderParticipantUids,
-} from '@/lib/admin/orderHelpers';
-import { db } from '@/services/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+  subscribeUsersForAdmin,
+  updateUserRole,
+  type UserProfileDoc,
+  type UserRole,
+} from '@/services/userService';
+import { showNotice } from '@/utils/toast';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type UserDoc = {
-  id: string;
-  email: string | null;
-  displayName: string;
-  createdAt: string;
-  createdMs: number;
-  banned: boolean;
-};
-
-type OrderLite = { id: string; data: Record<string, unknown> };
-
-function mergeTouches(orders: OrderLite[]): Record<string, number> {
-  const touches: Record<string, number> = {};
-  orders.forEach(({ data }) => {
-    orderParticipantUids(data).forEach((uid) => {
-      touches[uid] = (touches[uid] ?? 0) + 1;
-    });
-  });
-  return touches;
-}
-
 export default function AdminUsersScreen() {
-  const router = useRouter();
-  const [users, setUsers] = useState<UserDoc[]>([]);
-  const [orders, setOrders] = useState<OrderLite[]>([]);
-  const [usersReady, setUsersReady] = useState(false);
-  const [ordersReady, setOrdersReady] = useState(false);
+  const { authorized, loading: roleLoading } = requireRole(['admin']);
+  const [users, setUsers] = useState<UserProfileDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [draftRoles, setDraftRoles] = useState<Record<string, UserRole>>({});
 
   useEffect(() => {
-    adminLog('users', 'subscribe users collection');
-    const u = onSnapshot(
-      collection(db, 'users'),
-      (snap) => {
-        adminLog('users', `users snapshot: ${snap.size} documents`);
-        const list: UserDoc[] = snap.docs.map((d) => {
-          const data = d.data();
-          const c = data.createdAt;
-          let ms = 0;
-          if (c && typeof c === 'object' && 'toMillis' in c) {
-            const fn = (c as { toMillis: () => number }).toMillis;
-            if (typeof fn === 'function') ms = fn.call(c);
-          }
-          return {
-            id: d.id,
-            email: typeof data.email === 'string' ? data.email : null,
-            displayName:
-              typeof data.displayName === 'string' ? data.displayName : '—',
-            createdAt: formatFirestoreTime(data.createdAt),
-            createdMs: ms,
-            banned: data.banned === true,
-          };
-        });
-        list.sort((a, b) => b.createdMs - a.createdMs);
-        setUsers(list);
-        setUsersReady(true);
+    const unsub = subscribeUsersForAdmin(
+      (rows) => {
+        setUsers(rows);
+        setLoading(false);
       },
-      (err) => {
-        adminError('users', 'users listener error', err);
-        setUsersReady(true);
-      },
+      () => setLoading(false),
     );
-    return () => u();
+    return () => unsub();
   }, []);
 
-  useEffect(() => {
-    adminLog('users', 'subscribe orders collection (for touch counts)');
-    const o = onSnapshot(
-      collection(db, 'orders'),
-      (snap) => {
-        adminLog('users', `orders snapshot: ${snap.size} documents`);
-        setOrders(
-          snap.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, unknown> })),
-        );
-        setOrdersReady(true);
-      },
-      (err) => {
-        adminError('users', 'orders listener error', err);
-        setOrdersReady(true);
-      },
+  const roleOptions: UserRole[] = ['user', 'driver', 'restaurant', 'admin'];
+
+  async function saveRole(uid: string) {
+    const nextRole = draftRoles[uid];
+    if (!nextRole) return;
+    setSavingUserId(uid);
+    try {
+      await updateUserRole(uid, nextRole);
+      showNotice('Role updated successfully', 'User role was updated successfully.');
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  if (roleLoading || !authorized) {
+    return (
+      <SafeAreaView style={styles.centered}>
+        <ActivityIndicator size="large" color="#16a34a" />
+      </SafeAreaView>
     );
-    return () => o();
-  }, []);
-
-  const rows = useMemo(() => {
-    const touches = mergeTouches(orders);
-    return users.map((u) => ({
-      ...u,
-      totalOrderTouches: touches[u.id] ?? 0,
-    }));
-  }, [users, orders]);
-
-  const loading = !usersReady || !ordersReady;
+  }
 
   return (
-    <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <AdminHeader
-        title="Users"
-        subtitle="Live data · tap for details"
-        backTo={adminRoutes.home}
-        backLabel="Admin"
-      />
-      {loading && rows.length === 0 ? (
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Users & Roles</Text>
+        <Text style={styles.subtitle}>Change marketplace access in real-time</Text>
+      </View>
+      {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.hint}>Syncing Firestore…</Text>
+          <ActivityIndicator size="large" color="#16a34a" />
         </View>
       ) : (
         <FlatList
-          data={rows}
-          keyExtractor={(i) => i.id}
+          data={users}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            loading ? null : (
-              <Text style={styles.empty}>No users in Firestore yet.</Text>
-            )
-          }
+          ListEmptyComponent={<Text style={styles.empty}>No users found.</Text>}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.card, item.banned && styles.cardBanned]}
-              activeOpacity={0.88}
-              onPress={() => router.push(adminRoutes.user(item.id) as never)}
-            >
+            <View style={styles.card}>
               <Text style={styles.name} numberOfLines={1}>
-                {item.displayName}
+                {item.name}
               </Text>
               <Text style={styles.email} numberOfLines={1}>
                 {item.email ?? 'No email'}
               </Text>
-              <View style={styles.metaRow}>
-                <Text style={styles.meta}>Orders: {item.totalOrderTouches}</Text>
-                <Text style={styles.meta}> · Joined {item.createdAt}</Text>
+              <Text style={styles.currentRole}>Current role: {item.role}</Text>
+              <View style={styles.row}>
+                {roleOptions.map((option) => {
+                  const draft = draftRoles[item.id] ?? item.role;
+                  const active = draft === option;
+                  return (
+                    <Pressable
+                      key={option}
+                      style={[styles.roleChip, active ? styles.roleChipActive : null]}
+                      onPress={() =>
+                        setDraftRoles((prev) => ({ ...prev, [item.id]: option }))
+                      }
+                    >
+                      <Text style={[styles.roleChipText, active ? styles.roleChipTextActive : null]}>
+                        {option}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-              {item.banned ? (
-                <Text style={styles.badge}>Banned</Text>
-              ) : (
-                <Text style={styles.cta}>Open profile →</Text>
-              )}
-            </TouchableOpacity>
+              <Pressable
+                style={styles.saveButton}
+                onPress={() => saveRole(item.id)}
+                disabled={savingUserId === item.id}
+              >
+                <Text style={styles.saveButtonText}>
+                  {savingUserId === item.id ? 'Saving...' : 'Save role'}
+                </Text>
+              </Pressable>
+            </View>
           )}
         />
       )}
@@ -167,36 +112,43 @@ export default function AdminUsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.background },
+  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  title: { color: '#0F172A', fontSize: 28, fontWeight: '800' },
+  subtitle: { marginTop: 4, color: '#64748B', fontWeight: '600' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  hint: { marginTop: 10, color: COLORS.textMuted },
-  empty: {
-    textAlign: 'center',
-    color: COLORS.textMuted,
-    marginTop: 32,
-    fontSize: 15,
-  },
+  empty: { textAlign: 'center', color: '#64748B', marginTop: 32, fontSize: 15 },
   list: { padding: 16, paddingBottom: 32 },
   card: {
-    ...adminCardShell,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
     marginBottom: 12,
-    padding: theme.spacing.md,
+    padding: 14,
   },
-  cardBanned: { borderColor: COLORS.error },
-  name: { fontSize: 17, fontWeight: '800', color: COLORS.text },
-  email: { fontSize: 14, color: COLORS.textMuted, marginTop: 4 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  meta: { fontSize: 13, color: COLORS.textMuted },
-  badge: {
-    marginTop: 10,
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.error,
+  name: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
+  email: { fontSize: 14, color: '#64748B', marginTop: 4 },
+  currentRole: { marginTop: 8, color: '#334155', fontWeight: '700' },
+  row: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 8 },
+  roleChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
   },
-  cta: {
-    marginTop: 10,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
+  roleChipActive: { backgroundColor: '#DCFCE7', borderColor: '#16A34A' },
+  roleChipText: { color: '#475569', fontWeight: '700', textTransform: 'capitalize' },
+  roleChipTextActive: { color: '#166534' },
+  saveButton: {
+    marginTop: 12,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  saveButtonText: { color: '#FFFFFF', fontWeight: '800' },
 });

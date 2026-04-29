@@ -142,6 +142,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="restaurant-dashboard"
+        options={{
+          href: null,
+          title: 'Merchant',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="storefront" size={TAB_ICON_SIZE} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
