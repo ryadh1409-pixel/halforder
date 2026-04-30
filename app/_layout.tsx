@@ -30,6 +30,7 @@ import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
 import { trackAppOpen, trackNotificationOpen } from '@/services/analytics';
 import { AuthProvider, useAuth } from '@/services/AuthContext';
 import { CartProvider } from '@/services/CartContext';
+import { StripeProvider } from '@/services/stripe';
 import { startFoodCardAutomation } from '@/services/foodCards';
 import { db, ensureAuthReady } from '@/services/firebase';
 import {
@@ -1195,6 +1196,10 @@ function RootLayoutNav() {
           options={{ title: 'Review Order', headerShown: false }}
         />
         <Stack.Screen
+          name="payment/index"
+          options={{ title: 'Payment', headerShown: false }}
+        />
+        <Stack.Screen
           name="host/add-food"
           options={{ title: 'Host Food Truck', headerShown: false }}
         />
@@ -1233,13 +1238,15 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider value={DarkTheme}>
         <AuthProvider>
-          <CartProvider>
-            <>
-              <RootLayoutNav />
-              <SystemDialogHost />
-              <Toast config={toastConfig} />
-            </>
-          </CartProvider>
+          <StripeProvider>
+            <CartProvider>
+              <>
+                <RootLayoutNav />
+                <SystemDialogHost />
+                <Toast config={toastConfig} />
+              </>
+            </CartProvider>
+          </StripeProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

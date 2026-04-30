@@ -5,7 +5,12 @@ type ConfirmPaymentResult = {
 
 export function useStripeWrapper() {
   return {
-    confirmPayment: async (): Promise<ConfirmPaymentResult> => ({
+    initPaymentSheet: async (): Promise<{ error?: { message?: string } }> => ({}),
+    presentPaymentSheet: async (): Promise<{ error?: { message?: string } }> => ({}),
+    confirmPayment: async (
+      _clientSecret?: string,
+      _params?: unknown,
+    ): Promise<ConfirmPaymentResult> => ({
       paymentIntent: {
         id: `mock_pi_${Date.now()}`,
         status: 'Succeeded (Mock)',

@@ -1,32 +1,37 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const Stripe = require('stripe');
 
 const { notifyUsersExpo } = require('./lib/expoPush');
 
 admin.initializeApp();
 
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+
 /** Inbound address for feedback + daily report (not secret). */
 const SUPPORT_INBOX = 'support@halforder.app';
 
 /**
- * Nodemailer → Gmail using Firebase runtime config (recommended).
- * Run: `firebase functions:config:set gmail.email="you@gmail.com" gmail.password="xxxx xxxx xxxx xxxx"`
- *
- * For local emulator only, you may set GMAIL_USER + GMAIL_APP_PASSWORD instead.
+ * Nodemailer config via environment variables (v2 style).
+ * Required:
+ * - GMAIL_USER
+ * - GMAIL_APP_PASSWORD
+ * Optional SMTP fallback:
+ * - SMTP_USER
+ * - SMTP_PASS
  */
 function getMailTransporter() {
-  const gmailCfg = functions.config().gmail || {};
   const user =
-    gmailCfg.email || process.env.GMAIL_USER || process.env.SMTP_USER || '';
+    process.env.GMAIL_USER || process.env.SMTP_USER || '';
   const pass =
-    gmailCfg.password ||
     process.env.GMAIL_APP_PASSWORD ||
     process.env.SMTP_PASS ||
     '';
   if (!user || !pass) {
     throw new Error(
-      'Mail not configured: set functions.config gmail.email and gmail.password',
+      'Mail not configured: set GMAIL_USER and GMAIL_APP_PASSWORD',
     );
   }
   return nodemailer.createTransport({
@@ -34,6 +39,67 @@ function getMailTransporter() {
     auth: { user, pass },
   });
 }
+
+exports.createStripeAccount = functions.https.onCall(async () => {
+  try {
+    if (!stripe) {
+      throw new Error('Stripe is not configured. Missing STRIPE_SECRET_KEY.');
+    }
+    const account = await stripe.accounts.create({
+      type: 'express',
+    });
+    return { accountId: account.id };
+  } catch (error) {
+    console.error('[createStripeAccount] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to create Stripe account');
+  }
+});
+
+exports.createOnboardingLink = functions.https.onCall(async (data) => {
+  try {
+    if (!stripe) {
+      throw new Error('Stripe is not configured. Missing STRIPE_SECRET_KEY.');
+    }
+    const accountId = typeof data?.accountId === 'string' ? data.accountId.trim() : '';
+    if (!accountId) {
+      throw new functions.https.HttpsError('invalid-argument', 'accountId is required');
+    }
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      type: 'account_onboarding',
+      return_url: 'https://example.com/success',
+      refresh_url: 'https://example.com/refresh',
+    });
+    return { url: link.url };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[createOnboardingLink] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to create onboarding link');
+  }
+});
+
+exports.createPaymentIntentHttp = functions.https.onRequest(async (req, res) => {
+  try {
+    const stripeClient = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+    const { amount } = req.body;
+
+    if (!amount) {
+      return res.status(400).json({ error: 'Missing amount' });
+    }
+
+    const paymentIntent = await stripeClient.paymentIntents.create({
+      amount,
+      currency: 'usd',
+      automatic_payment_methods: { enabled: true },
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 const ADMIN_FCM_TOKEN = process.env.ADMIN_FCM_TOKEN || '';
 

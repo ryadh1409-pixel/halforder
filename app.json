@@ -29,7 +29,9 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["halforder"],
+            "CFBundleURLSchemes": [
+              "halforder"
+            ],
             "CFBundleURLName": "HalfOrder Deep Link"
           },
           {
@@ -107,7 +109,10 @@
               "pathPrefix": "/subscribe"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -156,7 +161,14 @@
           "cameraPermission": "We need access to your camera to take a profile photo."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.halforfer",
+          "enableGooglePay": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -8,12 +8,14 @@ import { assignDriverToOrder } from '@/services/driverService';
 import { addFoodItem, deleteFoodItem, updateFoodItem, type FoodItem } from '@/services/foodService';
 import { db } from '@/services/firebase';
 import { updateOrderStatus } from '@/services/orderService';
+import { createOnboardingLink, createPaymentIntent, createStripeAccount } from '@/services/stripeConnect';
 import { pickAndUploadImage } from '@/services/uploadImage';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { requireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
+import * as WebBrowser from 'expo-web-browser';
 import { Redirect } from 'expo-router';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -40,6 +42,7 @@ type RestaurantView = {
   location: string;
   isOpen: boolean;
   profileCompleted: boolean;
+  stripeAccountId: string | null;
 };
 
 export default function RestaurantDashboardScreen() {
@@ -61,6 +64,7 @@ export default function RestaurantDashboardScreen() {
   const [itemDescription, setItemDescription] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [savingItem, setSavingItem] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -86,6 +90,8 @@ export default function RestaurantDashboardScreen() {
           location: typeof data.location === 'string' ? data.location : '',
           isOpen: data.isOpen !== false,
           profileCompleted: data.profileCompleted === true,
+          stripeAccountId:
+            typeof data.stripeAccountId === 'string' ? data.stripeAccountId : null,
         });
         setRestaurantLoading(false);
       },
@@ -254,6 +260,56 @@ export default function RestaurantDashboardScreen() {
     }
   }
 
+  async function handleRegisterRestaurant() {
+    if (!restaurant?.id) return;
+    setStripeLoading(true);
+    try {
+      const accountId = await createStripeAccount();
+      await updateDoc(doc(db, 'restaurants', restaurant.id), { stripeAccountId: accountId });
+      showSuccess(`Stripe account created: ${accountId}`);
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to create stripe account', error);
+      showError('Could not create Stripe account.');
+    } finally {
+      setStripeLoading(false);
+    }
+  }
+
+  async function handleCompleteStripeSetup() {
+    if (!restaurant?.stripeAccountId) {
+      showError('Please register your Stripe account first.');
+      return;
+    }
+    setStripeLoading(true);
+    try {
+      const url = await createOnboardingLink(restaurant.stripeAccountId);
+      await WebBrowser.openBrowserAsync(url);
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to open stripe onboarding', error);
+      showError('Could not open Stripe onboarding.');
+    } finally {
+      setStripeLoading(false);
+    }
+  }
+
+  async function handleTestPayment() {
+    if (!restaurant?.stripeAccountId) {
+      showError('Please complete Stripe account setup first.');
+      return;
+    }
+    setStripeLoading(true);
+    try {
+      const clientSecret = await createPaymentIntent(1200, restaurant.stripeAccountId);
+      console.log('[restaurant-dashboard] stripe test payment client secret', clientSecret);
+      showSuccess('Payment intent created. Check logs for client secret.');
+    } catch (error) {
+      console.log('[restaurant-dashboard] failed to create payment intent', error);
+      showError('Could not create payment intent.');
+    } finally {
+      setStripeLoading(false);
+    }
+  }
+
   if (roleLoading || !authorized) {
     return (
       <SafeAreaView style={styles.centered}>
@@ -296,6 +352,33 @@ export default function RestaurantDashboardScreen() {
             <StatCard key={stat.label} label={stat.label} value={stat.value} />
           ))}
         </ScrollView>
+        <Text style={styles.sectionTitle}>Stripe Connect</Text>
+        <View style={styles.emptyCard}>
+          <Text style={styles.orderMeta}>
+            Account: {restaurant.stripeAccountId ?? 'Not connected'}
+          </Text>
+          <Pressable
+            style={[styles.acceptButton, stripeLoading ? styles.disabledButton : null]}
+            disabled={stripeLoading}
+            onPress={handleRegisterRestaurant}
+          >
+            <Text style={styles.acceptButtonText}>Register Restaurant</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.smallButton, stripeLoading ? styles.disabledButton : null]}
+            disabled={stripeLoading}
+            onPress={handleCompleteStripeSetup}
+          >
+            <Text style={styles.smallButtonText}>Complete Stripe Setup</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.smallButton, stripeLoading ? styles.disabledButton : null]}
+            disabled={stripeLoading}
+            onPress={handleTestPayment}
+          >
+            <Text style={styles.smallButtonText}>Test Payment</Text>
+          </Pressable>
+        </View>
         <Text style={styles.sectionTitle}>Incoming Orders</Text>
         {orders.filter((order) => order.status === 'pending' || order.status === 'accepted').length === 0 ? (
           <View style={styles.emptyCard}>

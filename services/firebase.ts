@@ -77,7 +77,7 @@ function getOrCreateAuth(app: FirebaseApp): Auth {
   }
 }
 
-const app = getOrCreateApp();
+export const app = getOrCreateApp();
 
 export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);
