@@ -1,4 +1,4 @@
-import { useNearbyOrders } from '@/hooks/useNearbyOrders';
+import { useNearbyOrders } from '../../hooks/useNearbyOrders';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -11,8 +11,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { shadows, theme } from '@/constants/theme';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
+import { shadows, theme } from '../../constants/theme';
 
 const c = theme.colors;
 

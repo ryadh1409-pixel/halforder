@@ -1,48 +1,37 @@
+import { FoodCard } from '../../../components/FoodCard';
 import {
-  adminCardShell,
-  adminColors as COLORS,
-} from '@/constants/adminTheme';
+  FoodSlotEditModal,
+  type FoodSlotDraft,
+} from '../../../components/admin/FoodSlotEditModal';
+import { adminColors as COLORS } from '../../../constants/adminTheme';
 import {
   ADMIN_FOOD_CARD_SLOT_COUNT,
   type AdminFoodCardSlotId,
-} from '@/constants/adminFoodCards';
-import { PickerMediaType } from '@/lib/imagePickerMedia';
-import { auth, storage } from '@/services/firebase';
-import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
+} from '../../../constants/adminFoodCards';
+import { PickerMediaType } from '../../../lib/imagePickerMedia';
+import { auth, storage } from '../../../services/firebase';
+import { generateFoodCardAiDescription } from '../../../services/foodCardAiDescription';
 import {
   saveAdminFoodCardSlot,
   subscribeAdminFoodCardSlots,
   type AdminFoodCardSlot,
-} from '@/services/adminFoodCardSlots';
+} from '../../../services/adminFoodCardSlots';
 import * as ImagePicker from 'expo-image-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
+  FlatList,
   StyleSheet,
-  Switch,
   Text,
-  TextInput,
-  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showNotice, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '../../../utils/errorHandler';
+import { showError, showNotice, showSuccess } from '../../../utils/toast';
 
-type Draft = {
-  title: string;
-  image: string;
-  price: string;
-  sharingPrice: string;
-  venueLocation: string;
-  active: boolean;
-  aiDescription: string;
-  restaurantName: string;
-};
-
-function emptyDraft(): Draft {
+function emptyDraft(): FoodSlotDraft {
   return {
     title: '',
     image: '',
@@ -55,9 +44,18 @@ function emptyDraft(): Draft {
   };
 }
 
+const COL_GAP = 12;
+const ROW_HEIGHT = 196;
+
 export function AdminCardsDashboard() {
+  const { width: winW } = useWindowDimensions();
+  const cellW = (winW - 16 * 4 - COL_GAP) / 2;
+
   const [remote, setRemote] = useState<AdminFoodCardSlot[] | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [drafts, setDrafts] = useState<Record<string, FoodSlotDraft>>({});
+  const [editingSlot, setEditingSlot] = useState<AdminFoodCardSlot | null>(
+    null,
+  );
   const [savingId, setSavingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
@@ -88,20 +86,22 @@ export function AdminCardsDashboard() {
     return unsub;
   }, []);
 
-  const ensureDraft = (docId: string): Draft =>
-    drafts[docId] ?? emptyDraft();
+  const ensureDraft = useCallback(
+    (docId: string): FoodSlotDraft => drafts[docId] ?? emptyDraft(),
+    [drafts],
+  );
 
-  const setField = (
-    docId: AdminFoodCardSlotId,
-    patch: Partial<Draft>,
-  ) => {
-    setDrafts((prev) => ({
-      ...prev,
-      [docId]: { ...ensureDraft(docId), ...patch },
-    }));
-  };
+  const setField = useCallback(
+    (docId: AdminFoodCardSlotId, patch: Partial<FoodSlotDraft>) => {
+      setDrafts((prev) => ({
+        ...prev,
+        [docId]: { ...(prev[docId] ?? emptyDraft()), ...patch },
+      }));
+    },
+    [],
+  );
 
-  const syncDraftFromRemote = (r: AdminFoodCardSlot) => {
+  const syncDraftFromRemote = useCallback((r: AdminFoodCardSlot) => {
     setDrafts((prev) => ({
       ...prev,
       [r.docId]: {
@@ -116,7 +116,53 @@ export function AdminCardsDashboard() {
         restaurantName: r.restaurantName,
       },
     }));
-  };
+  }, []);
+
+  const persistSlot = useCallback(
+    async (
+      slot: AdminFoodCardSlot,
+      d: FoodSlotDraft,
+      showToast: boolean,
+    ): Promise<boolean> => {
+      const docId = slot.docId;
+      const priceNum = Number(d.price);
+      const sharingNum = Number(d.sharingPrice);
+      if (!d.title.trim() || !d.image.trim()) {
+        showError('Title and image are required to save.');
+        return false;
+      }
+      if (!Number.isFinite(priceNum) || priceNum <= 0) {
+        showError('Enter a valid total price.');
+        return false;
+      }
+      if (!Number.isFinite(sharingNum) || sharingNum <= 0) {
+        showError('Enter a valid price per person (sharing).');
+        return false;
+      }
+      setSavingId(docId);
+      try {
+        await saveAdminFoodCardSlot(docId, {
+          id: slot.id,
+          title: d.title,
+          image: d.image,
+          price: priceNum,
+          sharingPrice: sharingNum,
+          venueLocation: d.venueLocation,
+          active: d.active,
+          aiDescription: d.aiDescription,
+          restaurantName: d.restaurantName,
+        });
+        if (showToast) showSuccess(`Card ${docId} updated.`);
+        return true;
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+        return false;
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [],
+  );
 
   const pickImage = async (docId: AdminFoodCardSlotId) => {
     const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -149,39 +195,18 @@ export function AdminCardsDashboard() {
   const onSave = async (slot: AdminFoodCardSlot) => {
     const docId = slot.docId;
     const d = ensureDraft(docId);
-    const priceNum = Number(d.price);
-    const sharingNum = Number(d.sharingPrice);
-    if (!d.title.trim() || !d.image.trim()) {
-      showError('Title and image are required to save.');
-      return;
-    }
-    if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      showError('Enter a valid total price.');
-      return;
-    }
-    if (!Number.isFinite(sharingNum) || sharingNum <= 0) {
-      showError('Enter a valid price per person (sharing).');
-      return;
-    }
-    setSavingId(docId);
-    try {
-      await saveAdminFoodCardSlot(docId, {
-        id: slot.id,
-        title: d.title,
-        image: d.image,
-        price: priceNum,
-        sharingPrice: sharingNum,
-        venueLocation: d.venueLocation,
-        active: d.active,
-        aiDescription: d.aiDescription,
-        restaurantName: d.restaurantName,
-      });
-      showSuccess(`Card ${docId} updated.`);
-    } catch (e) {
-      showError(getUserFriendlyError(e));
-    } finally {
-      setSavingId(null);
-    }
+    const ok = await persistSlot(slot, d, true);
+    if (ok) setEditingSlot(null);
+  };
+
+  const onToggleActive = (slot: AdminFoodCardSlot, next: boolean) => {
+    const docId = slot.docId;
+    const d: FoodSlotDraft = { ...ensureDraft(docId), active: next };
+    setDrafts((prev) => ({ ...prev, [docId]: d }));
+    void (async () => {
+      const ok = await persistSlot(slot, d, false);
+      if (!ok) syncDraftFromRemote(slot);
+    })();
   };
 
   const onGenerateAi = (slot: AdminFoodCardSlot) => {
@@ -208,131 +233,97 @@ export function AdminCardsDashboard() {
     })();
   };
 
+  const modalDraft = editingSlot
+    ? ensureDraft(editingSlot.docId)
+    : emptyDraft();
+
+  const modalSlotId = editingSlot?.docId;
+
+  const listMinHeight = useMemo(() => {
+    if (!remote?.length) return ROW_HEIGHT;
+    return Math.ceil(remote.length / 2) * ROW_HEIGHT;
+  }, [remote?.length]);
+
   if (!remote) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading catalog slots…</Text>
+        <ActivityIndicator color="#16a34a" />
+        <Text style={styles.loadingText}>Loading food cards…</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.headTitle}>Food cards (fixed {ADMIN_FOOD_CARD_SLOT_COUNT} slots)</Text>
-      <Text style={styles.headSub}>
-        Only active slots appear in the app. Each slot uses document id 1–10. New
-        joins reuse the same card.
+      <Text style={styles.headTitle}>
+        Food cards ({ADMIN_FOOD_CARD_SLOT_COUNT} slots)
       </Text>
-      {remote.map((slot) => {
-        const docId = slot.docId;
-        const d = ensureDraft(docId);
-        return (
-          <View key={docId} style={styles.slotCard}>
-            <View style={styles.slotHeader}>
-              <Text style={styles.slotTitle}>Card {docId}</Text>
-              <View style={styles.activeRow}>
-                <Text style={styles.activeLabel}>Active</Text>
-                <Switch
-                  value={d.active}
-                  onValueChange={(v) => setField(docId, { active: v })}
-                  trackColor={{
-                    false: 'rgba(255,255,255,0.15)',
-                    true: 'rgba(52,211,153,0.55)',
-                  }}
-                  thumbColor={d.active ? '#34D399' : '#64748B'}
-                />
-              </View>
+      <Text style={styles.headSub}>
+        Only active slots appear in the app. Tap a card to edit details.
+      </Text>
+      <FlatList
+        data={remote}
+        keyExtractor={(item) => item.docId}
+        numColumns={2}
+        scrollEnabled={false}
+        style={{ minHeight: listMinHeight }}
+        columnWrapperStyle={{ gap: COL_GAP, marginBottom: COL_GAP }}
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item: slot }) => {
+          const docId = slot.docId;
+          const d = ensureDraft(docId);
+          const priceNum = Number(d.price);
+          const priceLabel =
+            Number.isFinite(priceNum) && priceNum > 0
+              ? `$${priceNum.toFixed(2)}`
+              : slot.price > 0
+                ? `$${slot.price.toFixed(2)}`
+                : '—';
+          const title = (d.title || slot.title || `Card ${docId}`).trim();
+          const img = d.image || slot.image;
+          return (
+            <View style={{ width: cellW }}>
+              <FoodCard
+                imageUri={img || null}
+                title={title}
+                priceLabel={priceLabel}
+                active={d.active}
+                onPress={() => setEditingSlot(slot)}
+                onActiveChange={(v) => onToggleActive(slot, v)}
+                activeDisabled={savingId === docId}
+              />
             </View>
-            <TouchableOpacity
-              style={styles.uploadBtn}
-              onPress={() => pickImage(docId)}
-              disabled={uploadingId === docId}
-            >
-              <Text style={styles.uploadBtnText}>
-                {uploadingId === docId ? 'Uploading…' : 'Upload image'}
-              </Text>
-            </TouchableOpacity>
-            {d.image ? (
-              <Image source={{ uri: d.image }} style={styles.preview} />
-            ) : null}
-            <TextInput
-              style={styles.input}
-              placeholder="Title"
-              placeholderTextColor={COLORS.textMuted}
-              value={d.title}
-              onChangeText={(t) => setField(docId, { title: t })}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Restaurant / venue label"
-              placeholderTextColor={COLORS.textMuted}
-              value={d.restaurantName}
-              onChangeText={(t) => setField(docId, { restaurantName: t })}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Total price (USD)"
-              placeholderTextColor={COLORS.textMuted}
-              value={d.price}
-              onChangeText={(t) => setField(docId, { price: t })}
-              keyboardType="decimal-pad"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Price per person (Sharing)"
-              placeholderTextColor={COLORS.textMuted}
-              value={d.sharingPrice}
-              onChangeText={(t) => setField(docId, { sharingPrice: t })}
-              keyboardType="decimal-pad"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Location"
-              placeholderTextColor={COLORS.textMuted}
-              value={d.venueLocation}
-              onChangeText={(t) => setField(docId, { venueLocation: t })}
-            />
-            <TextInput
-              style={[styles.input, styles.multiline]}
-              placeholder="AI description (optional)"
-              placeholderTextColor={COLORS.textMuted}
-              value={d.aiDescription}
-              onChangeText={(t) => setField(docId, { aiDescription: t })}
-              multiline
-            />
-            <TouchableOpacity
-              style={[styles.secondaryBtn, aiBusyId === docId && styles.btnDisabled]}
-              disabled={aiBusyId === docId}
-              onPress={() => onGenerateAi(slot)}
-            >
-              <Text style={styles.secondaryBtnText}>
-                {aiBusyId === docId ? 'Generating…' : 'Generate AI description'}
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.ghostBtn}
-                onPress={() => syncDraftFromRemote(slot)}
-              >
-                <Text style={styles.ghostBtnText}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, savingId === docId && styles.btnDisabled]}
-                disabled={savingId === docId}
-                onPress={() => onSave(slot)}
-              >
-                {savingId === docId ? (
-                  <ActivityIndicator color="#07241A" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Save slot</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      })}
-      <Text style={styles.footerId}>Signed in: {auth.currentUser?.uid ?? '—'}</Text>
+          );
+        }}
+      />
+      <Text style={styles.footerId}>
+        Signed in: {auth.currentUser?.uid ?? '—'}
+      </Text>
+
+      <FoodSlotEditModal
+        visible={!!editingSlot}
+        slotLabel={editingSlot ? `Edit card ${editingSlot.docId}` : ''}
+        draft={modalDraft}
+        onChange={(patch) => {
+          if (modalSlotId) setField(modalSlotId, patch);
+        }}
+        onClose={() => setEditingSlot(null)}
+        onSave={() => {
+          if (editingSlot) void onSave(editingSlot);
+        }}
+        onReset={() => {
+          if (editingSlot) syncDraftFromRemote(editingSlot);
+        }}
+        onPickImage={() => {
+          if (modalSlotId) void pickImage(modalSlotId);
+        }}
+        onGenerateAi={() => {
+          if (editingSlot) onGenerateAi(editingSlot);
+        }}
+        saving={modalSlotId ? savingId === modalSlotId : false}
+        uploading={modalSlotId ? uploadingId === modalSlotId : false}
+        aiBusy={modalSlotId ? aiBusyId === modalSlotId : false}
+      />
     </View>
   );
 }
@@ -342,89 +333,21 @@ const styles = StyleSheet.create({
   center: { padding: 24, alignItems: 'center' },
   loadingText: { marginTop: 10, color: COLORS.textMuted },
   headTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   headSub: {
     fontSize: 13,
+    fontWeight: '500',
     color: COLORS.textMuted,
-    marginBottom: 16,
+    marginBottom: 14,
     lineHeight: 18,
   },
-  slotCard: {
-    ...adminCardShell,
-    marginBottom: 16,
-    padding: 14,
-  },
-  slotHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  slotTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
-  activeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  activeLabel: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  uploadBtn: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.5)',
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  uploadBtnText: { color: '#6EE7B7', fontWeight: '700' },
-  preview: {
-    width: '100%',
-    height: 160,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  input: {
-    backgroundColor: '#11161F',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    color: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    marginBottom: 10,
-  },
-  multiline: { minHeight: 72, textAlignVertical: 'top' },
-  secondaryBtn: {
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(99,102,241,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(129,140,248,0.4)',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  secondaryBtnText: { color: '#C7D2FE', fontWeight: '700' },
-  btnDisabled: { opacity: 0.55 },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  ghostBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-  },
-  ghostBtnText: { color: COLORS.textMuted, fontWeight: '700' },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#34D399',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnText: { color: '#07241A', fontWeight: '800' },
   footerId: {
     fontSize: 11,
+    fontWeight: '500',
     color: COLORS.textMuted,
     marginTop: 8,
   },

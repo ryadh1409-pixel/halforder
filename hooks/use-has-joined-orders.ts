@@ -1,6 +1,6 @@
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { auth, db } from '@/services/firebase';
+import { auth, db } from '../services/firebase';
 
 /**
  * Returns true if the current user is a participant in at least one order.

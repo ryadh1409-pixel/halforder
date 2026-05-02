@@ -16,10 +16,10 @@ import {
   GROWTH_AUTO_INVITE_USER_SCAN_LIMIT,
   GROWTH_MATCH_RADIUS_KM,
   GROWTH_NEARBY_FOOD_PUSH_TYPE,
-} from '@/constants/growth';
-import { db } from '@/services/firebase';
-import { sendPushNotification } from '@/services/expoPushSend';
-import { mapRawUserDocument } from '@/services/users';
+} from '../constants/growth';
+import { db } from './firebase';
+import { sendPushNotification } from './expoPushSend';
+import { mapRawUserDocument } from './users';
 
 export type AutoInviteOrderInput = {
   id: string;

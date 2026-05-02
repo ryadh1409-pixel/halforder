@@ -1,7 +1,7 @@
 /**
  * Ensures alerts never show raw Firebase / SDK / stack strings.
  */
-import { JOIN_ORDER_USER_FACING_MESSAGES } from '@/lib/joinOrderFirestore';
+import { JOIN_ORDER_USER_FACING_MESSAGES } from './joinOrderFirestore';
 
 /** Safe copy for generic failures. */
 export const USER_ERROR_GENERIC = 'Something went wrong. Please try again.';

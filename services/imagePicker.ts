@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 
-import { logError } from '@/utils/errorLogger';
+import { logError } from '../utils/errorLogger';
 
 export class ImagePickerPermissionError extends Error {
   override readonly name = 'ImagePickerPermissionError';

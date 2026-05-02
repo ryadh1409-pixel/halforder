@@ -1,7 +1,7 @@
 import { doc, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
-import { db } from '@/services/firebase';
+import { db } from '../services/firebase';
 
 /**
  * Live `orders/{orderId}` document snapshot.

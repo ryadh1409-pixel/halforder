@@ -1,9 +1,10 @@
-import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '@/components/KeyboardToolbar';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { DeleteAccountModal } from '@/components/DeleteAccountModal';
-import { isAdminUser } from '@/constants/adminUid';
-import { LEGAL_URLS } from '@/constants/legalLinks';
-import { theme } from '@/constants/theme';
+import SwipeWrapper from '@/components/SwipeWrapper';
+import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '../../components/KeyboardToolbar';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { DeleteAccountModal } from '../../components/DeleteAccountModal';
+import { isAdminUser } from '../../constants/adminUid';
+import { LEGAL_URLS } from '../../constants/legalLinks';
+import { theme } from '../../constants/theme';
 import {
   displayFromStoredProfilePhone,
   formatProfileWhatsAppDisplay,
@@ -12,26 +13,26 @@ import {
   isProfilePhoneStorageEmpty,
   profilePhoneForFirestore,
   profileWhatsAppOnChangeText,
-} from '@/lib/profileWhatsAppPhone';
-import { BlockedUsersList } from '@/components/BlockedUsersList';
-import { useBlockedUsers } from '@/hooks/useBlockedUsers';
-import { useTrustScore } from '@/hooks/useTrustScore';
-import { useAuth } from '@/services/AuthContext';
-import { auth, db, ensureAuthReady } from '@/services/firebase';
+} from '../../lib/profileWhatsAppPhone';
+import { BlockedUsersList } from '../../components/BlockedUsersList';
+import { useBlockedUsers } from '../../hooks/useBlockedUsers';
+import { useTrustScore } from '../../hooks/useTrustScore';
+import { useAuth } from '../../services/AuthContext';
+import { auth, db, ensureAuthReady } from '../../services/firebase';
 import {
   ImagePickerPermissionError,
   pickImageFromLibrary,
-} from '@/services/imagePicker';
-import { uploadProfilePhoto } from '@/services/profilePhoto';
+} from '../../services/imagePicker';
+import { uploadProfilePhoto } from '../../services/profilePhoto';
 import {
   reportContentIdUser,
   submitReport,
   type ReportReason,
-} from '@/services/reports';
-import { moderateUserContent } from '@/utils/contentModeration';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import { showError, showNotice, showSuccess } from '@/utils/toast';
+} from '../../services/reports';
+import { moderateUserContent } from '../../utils/contentModeration';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { logError } from '../../utils/errorLogger';
+import { showError, showNotice, showSuccess } from '../../utils/toast';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { updateProfile, type User } from '@firebase/auth';
@@ -66,7 +67,7 @@ const SUPPORT_EMAIL = 'support@halforder.app';
 
 const tc = theme.colors;
 
-const DEFAULT_AVATAR = require('@/assets/default-avatar.png') as number;
+const DEFAULT_AVATAR = require('../../assets/default-avatar.png') as number;
 
 /** Reads `users/{uid}` fields with the same aliases as `getTrustScoreProfile`. */
 function pickRatingAverage(data: DocumentData): number {
@@ -647,15 +648,18 @@ export default function ProfileScreen() {
 
   if (profileLoading && uid) {
     return (
+      <SwipeWrapper currentIndex={4}>
       <SafeAreaView style={[dynamicStyles.container, dynamicStyles.centered]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <ActivityIndicator size="large" color={pal.primary} />
       </SafeAreaView>
+      </SwipeWrapper>
     );
   }
 
   if (!uid) {
     return (
+      <SwipeWrapper currentIndex={4}>
       <SafeAreaView style={dynamicStyles.container}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <ScrollView
@@ -701,10 +705,12 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+      </SwipeWrapper>
     );
   }
 
   return (
+    <SwipeWrapper currentIndex={4}>
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={2} />
@@ -1162,6 +1168,7 @@ export default function ProfileScreen() {
         onNavigateLogin={() => void handleAfterAccountDeleted()}
       />
     </SafeAreaView>
+    </SwipeWrapper>
   );
 }
 

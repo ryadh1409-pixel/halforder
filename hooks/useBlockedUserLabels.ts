@@ -1,7 +1,7 @@
 /**
  * Resolve display names for blocked-user ids (best-effort, for settings UI).
  */
-import { getPublicUserFields } from '@/services/users';
+import { getPublicUserFields } from '../services/users';
 import { useEffect, useState } from 'react';
 
 export function useBlockedUserLabels(userIds: readonly string[]): Record<string, string> {

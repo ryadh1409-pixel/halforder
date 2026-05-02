@@ -2,9 +2,9 @@
  * HalfOrder product assistant: structured order builder + short guidance.
  * @see ORDER_BUILDER_SYSTEM_PROMPT in `aiOrderBuilder.ts`
  */
-import { detectFoodIntent } from '@/services/chatAssistantOrders';
-import type { TimeContext } from '@/services/chatAssistantOrders';
-import { generateSuggestedOrder, SUGGESTED_ORDER_BOT_COPY } from '@/services/suggestedOrder';
+import { detectFoodIntent } from './chatAssistantOrders';
+import type { TimeContext } from './chatAssistantOrders';
+import { generateSuggestedOrder, SUGGESTED_ORDER_BOT_COPY } from './suggestedOrder';
 import {
   initialAiSessionState,
   locationPromptForCategory,
@@ -14,7 +14,7 @@ import {
   type AiSessionState,
   type MealCategory,
   type UserLocationContext,
-} from '@/services/aiOrderBuilder';
+} from './aiOrderBuilder';
 
 export { initialAiSessionState };
 
@@ -46,8 +46,8 @@ export type AiBotMessage = {
   orders?: AiOrderRef[];
 };
 
-export { ORDER_BUILDER_SYSTEM_PROMPT } from '@/services/aiOrderBuilder';
-export { validateOrderForCreate, validateOrder } from '@/services/aiOrderBuilder';
+export { ORDER_BUILDER_SYSTEM_PROMPT } from './aiOrderBuilder';
+export { validateOrderForCreate, validateOrder } from './aiOrderBuilder';
 
 function norm(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');

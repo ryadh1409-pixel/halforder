@@ -1,4 +1,4 @@
-import { isAdminEmail } from '@/utils/admin';
+import { isAdminEmail } from '../utils/admin';
 
 /**
  * Firebase Auth uid for the admin account. Must match `isAdmin()` in

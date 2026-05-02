@@ -1,4 +1,4 @@
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 
 /**

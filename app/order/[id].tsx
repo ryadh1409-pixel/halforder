@@ -28,34 +28,35 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useHiddenUserIds } from '../../hooks/useHiddenUserIds';
 import {
   PAYMENT_MATCH_ALERT_MESSAGE,
   PAYMENT_MATCH_ALERT_TITLE,
-} from '@/constants/paymentDisclaimer';
-import { theme } from '@/constants/theme';
-import { buildOrderWhatsAppInviteLink } from '@/lib/invite-link';
-import { safeAlertBody, USER_ERROR_JOIN } from '@/lib/userFacingErrors';
+} from '../../constants/paymentDisclaimer';
+import { theme } from '../../constants/theme';
+import { buildOrderWhatsAppInviteLink } from '../../lib/invite-link';
+import { safeAlertBody, USER_ERROR_JOIN } from '../../lib/userFacingErrors';
 import {
   openWhatsAppWithMessage,
   WHATSAPP_MATCH_DEFAULT_MESSAGE,
-} from '@/lib/whatsapp';
-import { AIDescription } from '@/components/AIDescription';
-import { OrderCardView } from '@/components/OrderCardView';
-import ReportUserModal from '@/components/ReportUserModal';
-import { reportContentIdOrder } from '@/services/reports';
-import { ScreenFadeIn } from '@/components/ScreenFadeIn';
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
-import { blockUser } from '@/services/blockService';
-import { cancelHalfOrder } from '@/services/halfOrderCancel';
-import { completeHalfOrder } from '@/services/halfOrderLifecycle';
-import { auth, db } from '@/services/firebase';
+} from '../../lib/whatsapp';
+import { AIDescription } from '../../components/AIDescription';
+import AppHeader from '../../components/AppHeader';
+import { OrderCardView } from '../../components/OrderCardView';
+import ReportUserModal from '../../components/ReportUserModal';
+import { reportContentIdOrder } from '../../services/reports';
+import { ScreenFadeIn } from '../../components/ScreenFadeIn';
+import { systemConfirm } from '../../components/SystemDialogHost';
+import { ShimmerSkeleton } from '../../components/ShimmerSkeleton';
+import { blockUser } from '../../services/blockService';
+import { cancelHalfOrder } from '../../services/halfOrderCancel';
+import { completeHalfOrder } from '../../services/halfOrderLifecycle';
+import { auth, db } from '../../services/firebase';
 import {
   getDistanceKm,
   formatDistanceKm,
-} from '@/services/haversineKm';
+} from '../../services/haversineKm';
 import {
   memberIdsFromOrderData,
   normalizeParticipantRecords,
@@ -63,23 +64,23 @@ import {
   publicUserFieldsToOrderParticipant,
   type OrderHost,
   type OrderParticipant,
-} from '@/services/orders';
-import { getPublicUserFields } from '@/services/users';
+} from '../../services/orders';
+import { getPublicUserFields } from '../../services/users';
 import {
   joinHalfOrderByOrderId,
   joinOrder as joinFirestoreOrder,
-} from '@/services/joinOrder';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
+} from '../../services/joinOrder';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
 import {
   formatFoodCardSharingPriceLine,
   joinOrder as joinFoodCardOrder,
   parseFoodCardLocationFields,
-} from '@/services/foodCards';
-import { normalizeParticipantsStrings } from '@/services/orderLifecycle';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showNotice, showSuccess } from '@/utils/toast';
-import { submitOrderEmailInvite } from '@/services/orderInviteEmail';
-import { claimReferralInboxRewards } from '@/services/referralRewards';
+} from '../../services/foodCards';
+import { normalizeParticipantsStrings } from '../../services/orderLifecycle';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { showError, showNotice, showSuccess } from '../../utils/toast';
+import { submitOrderEmailInvite } from '../../services/orderInviteEmail';
+import { claimReferralInboxRewards } from '../../services/referralRewards';
 
 const PLACEHOLDER_FOOD_IMAGE =
   'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80';
@@ -769,6 +770,7 @@ export default function OrderDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingWrap}>
+        <AppHeader title="Order Details" />
         <ShimmerSkeleton width="92%" height={220} borderRadius={18} style={styles.skeletonGap} />
         <ShimmerSkeleton width="72%" height={22} style={styles.skeletonGapLine} />
         <ShimmerSkeleton width="44%" height={14} />
@@ -780,6 +782,7 @@ export default function OrderDetailsScreen() {
   if (!order) {
     return (
       <SafeAreaView style={styles.loadingWrap}>
+        <AppHeader title="Order Details" />
         <Text style={styles.emptyText}>Order not found.</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.backBtnText}>Go Back</Text>
@@ -790,6 +793,7 @@ export default function OrderDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <AppHeader title="Order Details" />
       <ScreenFadeIn style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <Image source={{ uri: order.image }} style={styles.image} />

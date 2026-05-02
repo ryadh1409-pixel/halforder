@@ -1,4 +1,4 @@
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 

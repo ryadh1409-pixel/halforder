@@ -4,7 +4,7 @@ import {
   type UserCredential,
 } from '@firebase/auth';
 
-import { auth } from '@/services/firebase';
+import { auth } from './firebase';
 
 export async function signInWithEmail(
   email: string,

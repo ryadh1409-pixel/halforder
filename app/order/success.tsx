@@ -1,7 +1,8 @@
-import AppLogo from '@/components/AppLogo';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { shadows, theme } from '@/constants/theme';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import AppLogo from '../../components/AppLogo';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
+import { shadows, theme } from '../../constants/theme';
+import { goHome } from '../../lib/navigation';
+import { useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useRef, useState } from 'react';
 import {
@@ -17,13 +18,12 @@ import {
 import { captureRef } from 'react-native-view-shot';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { showError } from '@/utils/toast';
+import { showError } from '../../utils/toast';
 
 const CARD_WIDTH = 320;
 const CARD_HEIGHT = 200;
 
 export default function OrderSuccessScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{
     totalPrice?: string;
     saved?: string;
@@ -192,7 +192,7 @@ export default function OrderSuccessScreen() {
 
         <TouchableOpacity
           style={styles.doneButton}
-          onPress={() => router.replace('/(tabs)')}
+          onPress={goHome}
         >
           <Text style={styles.doneButtonText}>Done</Text>
         </TouchableOpacity>

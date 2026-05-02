@@ -10,6 +10,44 @@ admin.initializeApp();
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+const checkoutCurrency = (process.env.STRIPE_CHECKOUT_CURRENCY || 'cad').toLowerCase();
+const platformFeePercent = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT || '7');
+const connectReturnUrl =
+  process.env.STRIPE_CONNECT_RETURN_URL || 'https://halforder.app/restaurant-dashboard';
+const connectRefreshUrl =
+  process.env.STRIPE_CONNECT_REFRESH_URL || connectReturnUrl;
+
+function allowedRedirectPrefixes() {
+  const raw = process.env.STRIPE_ALLOWED_REDIRECT_PREFIXES || '';
+  const parts = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const defaults = [
+    'halforder://',
+    'exp://',
+    'https://halforder.app',
+    'https://www.halforder.app',
+  ];
+  return [...defaults, ...parts];
+}
+
+function isAllowedCheckoutRedirectUrl(urlString) {
+  try {
+    const u = new URL(urlString);
+    if (u.protocol === 'http:' || u.protocol === 'https:') {
+      return allowedRedirectPrefixes().some((p) => urlString.startsWith(p));
+    }
+    if (u.protocol === 'halforder:' || u.protocol === 'exp:') {
+      return allowedRedirectPrefixes().some((p) => urlString.startsWith(p));
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 /** Inbound address for feedback + daily report (not secret). */
 const SUPPORT_INBOX = 'support@halforder.app';
 
@@ -40,35 +78,75 @@ function getMailTransporter() {
   });
 }
 
-exports.createStripeAccount = functions.https.onCall(async () => {
+exports.createStripeAccount = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
   try {
     if (!stripe) {
-      throw new Error('Stripe is not configured. Missing STRIPE_SECRET_KEY.');
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+      );
+    }
+    const restaurantId = (
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid
+    );
+    if (restaurantId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'restaurantId must match the signed-in user',
+      );
     }
     const account = await stripe.accounts.create({
       type: 'express',
+      metadata: { firebaseRestaurantId: restaurantId },
     });
+    await admin
+      .firestore()
+      .doc(`restaurants/${restaurantId}`)
+      .set({ stripeAccountId: account.id }, { merge: true });
     return { accountId: account.id };
   } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
     console.error('[createStripeAccount] failed', error);
     throw new functions.https.HttpsError('internal', 'Unable to create Stripe account');
   }
 });
 
-exports.createOnboardingLink = functions.https.onCall(async (data) => {
+exports.createOnboardingLink = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
   try {
     if (!stripe) {
-      throw new Error('Stripe is not configured. Missing STRIPE_SECRET_KEY.');
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+      );
     }
-    const accountId = typeof data?.accountId === 'string' ? data.accountId.trim() : '';
+    const restaurantId = (
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid
+    );
+    if (restaurantId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'restaurantId must match the signed-in user',
+      );
+    }
+    const snap = await admin.firestore().doc(`restaurants/${restaurantId}`).get();
+    const accountId = typeof snap.get('stripeAccountId') === 'string' ? snap.get('stripeAccountId') : '';
     if (!accountId) {
-      throw new functions.https.HttpsError('invalid-argument', 'accountId is required');
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Create a Stripe account first',
+      );
     }
     const link = await stripe.accountLinks.create({
       account: accountId,
       type: 'account_onboarding',
-      return_url: 'https://example.com/success',
-      refresh_url: 'https://example.com/refresh',
+      return_url: connectReturnUrl,
+      refresh_url: connectRefreshUrl,
     });
     return { url: link.url };
   } catch (error) {
@@ -76,6 +154,274 @@ exports.createOnboardingLink = functions.https.onCall(async (data) => {
     console.error('[createOnboardingLink] failed', error);
     throw new functions.https.HttpsError('internal', 'Unable to create onboarding link');
   }
+});
+
+exports.createCheckoutSession = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  if (!stripe) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+    );
+  }
+  const orderId = typeof data?.orderId === 'string' ? data.orderId.trim() : '';
+  const successUrl = typeof data?.successUrl === 'string' ? data.successUrl.trim() : '';
+  const cancelUrl = typeof data?.cancelUrl === 'string' ? data.cancelUrl.trim() : '';
+  if (!orderId || !successUrl || !cancelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'orderId, successUrl, cancelUrl required');
+  }
+  if (!isAllowedCheckoutRedirectUrl(successUrl) || !isAllowedCheckoutRedirectUrl(cancelUrl)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Redirect URL not allowed');
+  }
+
+  const db = admin.firestore();
+  const orderRef = db.doc(`orders/${orderId}`);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Order not found');
+  }
+  const order = orderSnap.data() || {};
+  if (order.userId !== context.auth.uid && order.customerId !== context.auth.uid) {
+    throw new functions.https.HttpsError('permission-denied', 'Not your order');
+  }
+  if (order.status !== 'awaiting_payment' || order.paymentStatus !== 'unpaid') {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Order is not awaiting payment',
+    );
+  }
+
+  const restaurantId = typeof order.restaurantId === 'string' ? order.restaurantId : '';
+  if (!restaurantId) {
+    throw new functions.https.HttpsError('failed-precondition', 'Order missing restaurant');
+  }
+  const restSnap = await db.doc(`restaurants/${restaurantId}`).get();
+  const destination =
+    typeof restSnap.get('stripeAccountId') === 'string' ? restSnap.get('stripeAccountId') : '';
+  if (!destination || !String(destination).startsWith('acct_')) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Restaurant has not finished Stripe Connect onboarding',
+    );
+  }
+
+  const totalCents = Math.round(Number(order.totalPrice || order.total || 0) * 100);
+  if (!Number.isFinite(totalCents) || totalCents < 50) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid order total');
+  }
+
+  const feePct = Number.isFinite(platformFeePercent) ? platformFeePercent : 7;
+  const applicationFeeAmount = Math.min(
+    totalCents - 1,
+    Math.max(0, Math.round((totalCents * feePct) / 100)),
+  );
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  const lineItems = [];
+  let sum = 0;
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') continue;
+    const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : 'Item';
+    const qty = Math.max(1, Math.min(99, Math.round(Number(raw.qty) || 1)));
+    const unitCents = Math.round(Number(raw.price) * 100);
+    if (!Number.isFinite(unitCents) || unitCents <= 0) continue;
+    const lineTotal = unitCents * qty;
+    sum += lineTotal;
+    lineItems.push({
+      quantity: qty,
+      price_data: {
+        currency: checkoutCurrency,
+        product_data: { name },
+        unit_amount: unitCents,
+      },
+    });
+  }
+  if (lineItems.length === 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: checkoutCurrency,
+        product_data: { name: 'Order total' },
+        unit_amount: totalCents,
+      },
+    });
+  } else if (sum !== totalCents) {
+    const delta = totalCents - sum;
+    if (delta > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: checkoutCurrency,
+          product_data: { name: 'Adjustment' },
+          unit_amount: delta,
+        },
+      });
+    } else {
+      lineItems.length = 0;
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: checkoutCurrency,
+          product_data: { name: 'Food order' },
+          unit_amount: totalCents,
+        },
+      });
+    }
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    client_reference_id: orderId,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: { orderId, firebaseUid: context.auth.uid },
+    line_items: lineItems,
+    payment_intent_data: {
+      application_fee_amount: applicationFeeAmount,
+      transfer_data: { destination },
+      metadata: { orderId },
+    },
+  });
+
+  await orderRef.set(
+    {
+      stripeCheckoutSessionId: session.id,
+    },
+    { merge: true },
+  );
+
+  return { url: session.url, sessionId: session.id };
+});
+
+exports.createPaymentIntent = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  if (!stripe) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+    );
+  }
+  const amount = Math.round(Number(data?.amount));
+  const accountId = typeof data?.accountId === 'string' ? data.accountId.trim() : '';
+  if (!Number.isFinite(amount) || amount < 50 || !accountId.startsWith('acct_')) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid amount or accountId');
+  }
+  const snap = await admin.firestore().doc(`restaurants/${context.auth.uid}`).get();
+  const linked = typeof snap.get('stripeAccountId') === 'string' ? snap.get('stripeAccountId') : '';
+  if (linked !== accountId) {
+    throw new functions.https.HttpsError('permission-denied', 'accountId does not match restaurant');
+  }
+  const pi = await stripe.paymentIntents.create({
+    amount,
+    currency: checkoutCurrency,
+    automatic_payment_methods: { enabled: true },
+    application_fee_amount: Math.min(amount - 1, Math.round((amount * (platformFeePercent || 7)) / 100)),
+    transfer_data: { destination: accountId },
+  });
+  return { clientSecret: pi.client_secret };
+});
+
+exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+  if (!stripe || !stripeWebhookSecret) {
+    console.error('[stripeWebhook] missing stripe or STRIPE_WEBHOOK_SECRET');
+    res.status(500).send('Server misconfiguration');
+    return;
+  }
+
+  const sig = req.headers['stripe-signature'];
+  if (!sig || typeof sig !== 'string') {
+    res.status(400).send('Missing stripe-signature');
+    return;
+  }
+
+  let event;
+  try {
+    const payload = req.rawBody || Buffer.from('');
+    event = stripe.webhooks.constructEvent(payload, sig, stripeWebhookSecret);
+  } catch (err) {
+    console.error('[stripeWebhook] signature verify failed', err);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+
+  if (event.type !== 'checkout.session.completed') {
+    res.json({ received: true });
+    return;
+  }
+
+  const session = event.data.object;
+  const orderId =
+    (session.metadata && session.metadata.orderId) ||
+    (typeof session.client_reference_id === 'string' ? session.client_reference_id : '');
+  if (!orderId) {
+    console.error('[stripeWebhook] missing orderId on session', session.id);
+    res.status(200).send('ignored');
+    return;
+  }
+
+  const db = admin.firestore();
+  const eventRef = db.doc(`stripe_events/${event.id}`);
+  const orderRef = db.doc(`orders/${orderId}`);
+
+  try {
+    await db.runTransaction(async (t) => {
+      const evSnap = await t.get(eventRef);
+      if (evSnap.exists) {
+        return;
+      }
+      const orderSnap = await t.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new Error('order_missing');
+      }
+      const o = orderSnap.data() || {};
+      if (o.paymentStatus === 'paid') {
+        t.set(eventRef, { type: event.type, orderId, duplicate: true, at: admin.firestore.FieldValue.serverTimestamp() });
+        return;
+      }
+      if (o.status !== 'awaiting_payment' || o.paymentStatus !== 'unpaid') {
+        throw new Error('order_state');
+      }
+      t.set(eventRef, {
+        type: event.type,
+        orderId,
+        checkoutSessionId: session.id,
+        at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      t.update(orderRef, {
+        status: 'pending',
+        paymentStatus: 'paid',
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: (() => {
+          const pi = session.payment_intent;
+          if (typeof pi === 'string') return pi;
+          if (pi && typeof pi === 'object' && typeof pi.id === 'string') return pi.id;
+          return null;
+        })(),
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        estimatedDeliveryTime: 35,
+      });
+    });
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    if (msg === 'order_missing' || msg === 'order_state') {
+      console.warn('[stripeWebhook] non-retryable', msg, orderId);
+      res.status(200).json({ received: true, note: msg });
+      return;
+    }
+    console.error('[stripeWebhook] transaction failed', e);
+    res.status(500).send('retry');
+    return;
+  }
+
+  res.json({ received: true });
 });
 
 exports.createPaymentIntentHttp = functions.https.onRequest(async (req, res) => {

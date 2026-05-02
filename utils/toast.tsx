@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View, type ViewStyle } from 'react-native';
 import Toast, { type ToastConfig } from 'react-native-toast-message';
 
-import { palette } from '@/constants/theme';
+import { palette } from '../constants/theme';
 
 const VISIBILITY_MS = 3000;
 

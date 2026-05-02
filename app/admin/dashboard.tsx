@@ -1,5 +1,6 @@
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { useAuth } from '../../services/AuthContext';
+import { db } from '../../services/firebase';
+import AppHeader from '../../components/AppHeader';
 import { collection, getDocs } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -12,11 +13,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { isAdminUser } from '@/constants/adminUid';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
+import { adminRoutes } from '../../constants/adminRoutes';
+import { isAdminUser } from '../../constants/adminUid';
+import { adminError, adminLog } from '../../lib/admin/adminDebug';
+import { adminCardShell, adminColors as COLORS } from '../../constants/adminTheme';
+import { theme } from '../../constants/theme';
 
 function startOfTodayMs(): number {
   const d = new Date();
@@ -188,11 +189,7 @@ export default function AdminDashboardScreen() {
   if (loading && !stats) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-        </View>
+        <AppHeader title="Admin Dashboard" />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading dashboard...</Text>
@@ -203,11 +200,7 @@ export default function AdminDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-      </View>
+      <AppHeader title="Admin Dashboard" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}

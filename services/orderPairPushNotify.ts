@@ -9,10 +9,10 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
-import { sendPushNotification } from '@/services/expoPushSend';
-import { db } from '@/services/firebase';
-import { normalizeParticipantRecords } from '@/services/orders';
+import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '../constants/pushTypes';
+import { sendPushNotification } from './expoPushSend';
+import { db } from './firebase';
+import { normalizeParticipantRecords } from './orders';
 
 function normalizeOrderUsers(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];

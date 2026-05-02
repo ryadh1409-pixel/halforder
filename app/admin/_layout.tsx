@@ -1,4 +1,4 @@
-import { requireRole } from '@/utils/requireRole';
+import { requireRole } from '../../utils/requireRole';
 import { Redirect, Stack } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';

@@ -1,5 +1,5 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 export type ComplaintUser = {
   uid: string;

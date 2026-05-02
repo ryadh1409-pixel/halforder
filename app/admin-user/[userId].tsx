@@ -1,4 +1,4 @@
-import { adminRoutes } from '@/constants/adminRoutes';
+import { adminRoutes } from '../../constants/adminRoutes';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
 export default function LegacyAdminUser() {

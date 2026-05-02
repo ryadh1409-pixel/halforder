@@ -1,10 +1,10 @@
-import type { TimeContext } from '@/services/chatAssistantOrders';
+import type { TimeContext } from '../services/chatAssistantOrders';
 import {
   handleUserChatTurn,
   initialAiSessionState,
   type AssistantUserContext,
   type AiSessionState,
-} from '@/services/ai';
+} from '../services/ai';
 import { useCallback, useRef } from 'react';
 
 /**

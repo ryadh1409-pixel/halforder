@@ -1,6 +1,6 @@
-import { haversineDistanceKm } from '@/lib/haversine';
-import { db } from '@/services/firebase';
-import { getUserLocation } from '@/services/location';
+import { haversineDistanceKm } from '../lib/haversine';
+import { db } from '../services/firebase';
+import { getUserLocation } from '../services/location';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 

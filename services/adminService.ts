@@ -6,10 +6,10 @@ import {
   deleteFoodTemplate,
   fetchAllFoodTemplatesOnce,
   updateFoodTemplate,
-} from '@/services/foodTemplates';
-import type { FoodTemplate, FoodTemplateWrite } from '@/types/food';
+} from './foodTemplates';
+import type { FoodTemplate, FoodTemplateWrite } from '../types/food';
 
-export { subscribeAllFoodTemplates as subscribeTemplates } from '@/services/foodTemplates';
+export { subscribeAllFoodTemplates as subscribeTemplates } from './foodTemplates';
 
 export async function getAllTemplates(): Promise<FoodTemplate[]> {
   return fetchAllFoodTemplatesOnce();

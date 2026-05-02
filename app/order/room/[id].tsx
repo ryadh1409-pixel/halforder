@@ -2,12 +2,12 @@
  * Legacy thread: messages under `orders/{orderId}/messages`.
  * Primary order UI + HalfOrder flow: `/order/[id]` (sibling route).
  */
-import { theme } from '@/constants/theme';
-import { auth, db } from '@/services/firebase';
-import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '@/utils/contentModeration';
-import { showError } from '@/utils/toast';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import AppHeader from '../../../components/AppHeader';
+import { theme } from '../../../constants/theme';
+import { auth, db } from '../../../services/firebase';
+import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '../../../utils/contentModeration';
+import { showError } from '../../../utils/toast';
+import { useLocalSearchParams } from 'expo-router';
 import {
   addDoc,
   collection,
@@ -43,7 +43,6 @@ type OrderMessage = {
 };
 
 export default function OrderChatScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const orderId = useMemo(() => {
     const raw = params.id;
@@ -162,13 +161,7 @@ export default function OrderChatScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <MaterialIcons name="arrow-back" size={22} color="#F8FAFC" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Order Chat</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <AppHeader title="Order Chat" />
 
       <View style={styles.chatBody}>
         {loading ? (

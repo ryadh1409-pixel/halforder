@@ -1,4 +1,4 @@
-import { USER_ERROR_GENERIC } from '@/lib/userFacingErrors';
+import { USER_ERROR_GENERIC } from './userFacingErrors';
 
 /**
  * Maps unknown errors to a single safe string for alerts (no Firebase codes or stack text).

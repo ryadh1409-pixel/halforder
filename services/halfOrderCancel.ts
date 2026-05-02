@@ -1,6 +1,6 @@
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
-import { auth, db } from '@/services/firebase';
+import { auth, db } from './firebase';
 
 /**
  * HalfOrder: set `status` to `cancelled` and record who cancelled (for push targeting).

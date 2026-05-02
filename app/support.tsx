@@ -19,12 +19,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatTorontoTime } from '@/lib/format-toronto-time';
-import { auth, db } from '@/services/firebase';
-import { reportBlockedMessage } from '@/services/chatSecurity';
-import { moderateUserContent } from '@/utils/contentModeration';
-import { theme } from '@/constants/theme';
-import { showError } from '@/utils/toast';
+import { formatTorontoTime } from '../lib/format-toronto-time';
+import { auth, db } from '../services/firebase';
+import { reportBlockedMessage } from '../services/chatSecurity';
+import { moderateUserContent } from '../utils/contentModeration';
+import { theme } from '../constants/theme';
+import { showError } from '../utils/toast';
 
 const c = theme.colors;
 

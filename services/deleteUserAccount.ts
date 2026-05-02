@@ -5,7 +5,7 @@
  * Order of operations: Firestore cleanup first (while authenticated), then Auth delete.
  * `deleteUser()` signs the user out automatically.
  */
-import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
+import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../lib/invite-link';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteUser, type User } from '@firebase/auth';
 import {
@@ -21,7 +21,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 const CHUNK = 400;
 

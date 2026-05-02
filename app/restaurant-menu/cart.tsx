@@ -1,8 +1,9 @@
-import { useMenu } from '@/hooks/useMenu';
-import { useAuth } from '@/services/AuthContext';
-import { useCart } from '@/services/CartContext';
-import { createOrder } from '@/services/orderService';
-import { showError, showSuccess } from '@/utils/toast';
+import AppHeader from '../../components/AppHeader';
+import { useMenu } from '../../hooks/useMenu';
+import { useAuth } from '../../services/AuthContext';
+import { useCart } from '../../services/CartContext';
+import { createOrder } from '../../services/orderService';
+import { showError } from '../../utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -13,7 +14,7 @@ export default function CartScreen() {
   const params = useLocalSearchParams<{ restaurantId: string }>();
   const restaurantId = typeof params.restaurantId === 'string' ? params.restaurantId : '';
   const { user } = useAuth();
-  const { items: cart, clearCart } = useCart();
+  const { items: cart } = useCart();
   const { items, loading } = useMenu(restaurantId || null);
   const [placing, setPlacing] = useState(false);
 
@@ -57,9 +58,10 @@ export default function CartScreen() {
           address: 'Toronto, ON',
         },
       });
-      clearCart();
-      showSuccess('Order placed successfully');
-      router.replace(`/order/tracking/${orderId}` as never);
+      router.replace({
+        pathname: '/order/checkout',
+        params: { orderId },
+      } as never);
     } catch (error) {
       console.log('[cart] failed to place order', error);
       showError('Could not place order.');
@@ -71,6 +73,7 @@ export default function CartScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.screen}>
+        <AppHeader title="Cart" />
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color="#16A34A" />
         </View>
@@ -80,6 +83,7 @@ export default function CartScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
+      <AppHeader title="Cart" />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Your Cart</Text>
         {cartItems.length === 0 ? (
@@ -103,7 +107,7 @@ export default function CartScreen() {
           onPress={placeOrder}
           disabled={placing || cartItems.length === 0}
         >
-          {placing ? <ActivityIndicator color="#fff" /> : <Text style={styles.placeText}>Place Order</Text>}
+          {placing ? <ActivityIndicator color="#fff" /> : <Text style={styles.placeText}>Pay now</Text>}
         </Pressable>
       </View>
     </SafeAreaView>

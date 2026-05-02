@@ -1,5 +1,5 @@
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { useAuth } from '../services/AuthContext';
+import { db } from '../services/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 
 const c = theme.colors;
 

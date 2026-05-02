@@ -1,4 +1,4 @@
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const c = theme.colors;

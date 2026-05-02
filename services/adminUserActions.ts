@@ -1,8 +1,8 @@
 import type { User } from 'firebase/auth';
 import { deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
-import { isAdminUser } from '@/constants/adminUid';
-import { db } from '@/services/firebase';
+import { isAdminUser } from '../constants/adminUid';
+import { db } from './firebase';
 
 function assertAdminActor(
   actor: User | null,

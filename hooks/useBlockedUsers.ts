@@ -2,8 +2,8 @@
  * Instagram-style blocked accounts: live `users/{uid}.blockedUsers` + profile rows (name, avatar).
  * Subscribes only to the signed-in user's document — same security model as Profile.
  */
-import { useBlock } from '@/hooks/useBlock';
-import { getPublicUserFields } from '@/services/users';
+import { useBlock } from './useBlock';
+import { getPublicUserFields } from '../services/users';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export type BlockedUserRow = {

@@ -1,4 +1,4 @@
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 import {
   addDoc,
   collection,
@@ -12,7 +12,7 @@ import {
   blockUser as persistBlock,
   isUserBlocked,
   unblockBlockedUser,
-} from '@/services/block';
+} from './block';
 
 /**
  * @deprecated Prefer `block` service writing only subcollection + array.

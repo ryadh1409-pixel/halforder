@@ -9,13 +9,13 @@ import {
   View,
 } from 'react-native';
 
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { shadows } from '@/constants/theme';
+import { FoodCardPaymentDisclaimer } from './FoodCardPaymentDisclaimer';
+import { shadows } from '../constants/theme';
 import {
   buildSpotLeftLabel,
   formatSplitPrice,
   type SwipeOrder,
-} from '@/types/swipeOrder';
+} from '../types/swipeOrder';
 
 type Props = {
   order: SwipeOrder;

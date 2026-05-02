@@ -1,4 +1,4 @@
-import { payOrderWithStripe } from '@/services/payment';
+import { payOrderWithStripe } from '../services/payment';
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

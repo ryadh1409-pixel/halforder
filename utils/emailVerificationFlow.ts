@@ -1,4 +1,4 @@
-import { auth } from '@/services/firebase';
+import { auth } from '../services/firebase';
 
 /** Expo Router home (main tabs). */
 export const VERIFY_EMAIL_HOME_HREF = '/(tabs)';
@@ -24,7 +24,7 @@ export async function refreshSessionAndIsEmailVerified(
 /**
  * Same intent as `navigation.reset({ routes: [{ name: "Home" }] })` in React Navigation:
  * reload the Firebase user, then if verified call `redirectToHome` once.
- * With Expo Router, pass e.g. `() => router.replace(VERIFY_EMAIL_HOME_HREF)`.
+ * With Expo Router, pass e.g. `goHome` from `../lib/navigation`.
  */
 export async function checkEmailVerifiedAndRedirect(
   reloadAuthUser: ReloadAuthUserFn,

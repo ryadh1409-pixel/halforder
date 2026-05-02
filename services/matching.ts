@@ -11,7 +11,7 @@ import {
   where,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 export const SPLIT_MAX_DISTANCE_M = 2000;
 

@@ -14,8 +14,8 @@ import {
   where,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
-import { haversineDistanceMeters, SPLIT_MAX_DISTANCE_M } from '@/services/matching';
+import { db } from './firebase';
+import { haversineDistanceMeters, SPLIT_MAX_DISTANCE_M } from './matching';
 
 export type GroupStatus = 'waiting' | 'full' | 'ordered';
 

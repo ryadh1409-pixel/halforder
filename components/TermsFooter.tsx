@@ -1,5 +1,5 @@
-import { LEGAL_URLS } from '@/constants/legalLinks';
-import { theme } from '@/constants/theme';
+import { LEGAL_URLS } from '../constants/legalLinks';
+import { theme } from '../constants/theme';
 import React, { useCallback } from 'react';
 import {
   Linking,

@@ -1,4 +1,4 @@
-import { subscribeUserRole, type UserRole } from '@/services/userService';
+import { subscribeUserRole, type UserRole } from '../services/userService';
 import { useEffect, useState } from 'react';
 
 export function useUserRole(uid: string | null | undefined) {

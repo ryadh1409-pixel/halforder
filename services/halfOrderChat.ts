@@ -10,7 +10,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 function normalizeUserIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];

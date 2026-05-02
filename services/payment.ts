@@ -1,4 +1,4 @@
-import { createCheckoutSession } from '@/services/api';
+import { createCheckoutSession } from './api';
 import * as WebBrowser from 'expo-web-browser';
 
 export async function payOrderWithStripe(params: {

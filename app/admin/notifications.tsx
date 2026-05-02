@@ -1,5 +1,5 @@
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { useAuth } from '../../services/AuthContext';
+import { db } from '../../services/firebase';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { isAdminUser } from '@/constants/adminUid';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
+import { isAdminUser } from '../../constants/adminUid';
+import { adminCardShell, adminColors as COLORS } from '../../constants/adminTheme';
 
 type NotificationItem = {
   id: string;

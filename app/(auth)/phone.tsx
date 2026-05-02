@@ -1,5 +1,5 @@
-import { useAuth } from '@/services/AuthContext';
-import { useRouter } from 'expo-router';
+import { goBackSafe, goHome } from '../../lib/navigation';
+import { useAuth } from '../../services/AuthContext';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,15 +11,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth } from '@/services/firebase';
-import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError } from '@/utils/toast';
+import { auth } from '../../services/firebase';
+import { theme } from '../../constants/theme';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { showError } from '../../utils/toast';
 
 const c = theme.colors;
 
 export default function PhoneLoginScreen() {
-  const router = useRouter();
   const { signInWithPhone, confirmPhoneCode } = useAuth();
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -56,7 +55,7 @@ export default function PhoneLoginScreen() {
     setLoading(true);
     try {
       await confirmPhoneCode(trimmed);
-      router.replace('/(tabs)');
+      goHome();
     } catch (err) {
       showError(getUserFriendlyError(err));
     } finally {
@@ -136,7 +135,7 @@ export default function PhoneLoginScreen() {
 
         <TouchableOpacity
           style={styles.linkBtn}
-          onPress={() => router.back()}
+          onPress={goBackSafe}
           disabled={loading}
         >
           <Text style={styles.linkBtnText}>Back to login</Text>

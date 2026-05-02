@@ -1,8 +1,8 @@
 /**
  * Structured multi-step AI order builder — never creates an order until confirmation.
  */
-import { autoInvite } from '@/services/autoInvite';
-import { db } from '@/services/firebase';
+import { autoInvite } from './autoInvite';
+import { db } from './firebase';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 export const ORDER_BUILDER_SYSTEM_PROMPT = `You are an order builder assistant.

@@ -1,10 +1,10 @@
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
-import { formatFirestoreTime, reportDetailText } from '@/lib/admin/orderHelpers';
-import { db } from '@/services/firebase';
+import { AdminHeader } from '../../../components/admin/AdminHeader';
+import { adminRoutes } from '../../../constants/adminRoutes';
+import { adminCardShell, adminColors as COLORS } from '../../../constants/adminTheme';
+import { theme } from '../../../constants/theme';
+import { adminError, adminLog } from '../../../lib/admin/adminDebug';
+import { formatFirestoreTime, reportDetailText } from '../../../lib/admin/orderHelpers';
+import { db } from '../../../services/firebase';
 import {
   doc,
   onSnapshot,
@@ -24,9 +24,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { systemConfirm } from '../../../components/SystemDialogHost';
+import { getUserFriendlyError } from '../../../utils/errorHandler';
+import { showError, showSuccess } from '../../../utils/toast';
 
 export default function AdminReportDetailScreen() {
   const router = useRouter();

@@ -1,4 +1,4 @@
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 const TERMS_URL = 'https://halforder.app/terms/';

@@ -4,12 +4,12 @@
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 import {
   configureForegroundNotificationHandler,
   ensureAndroidNotificationChannelAsync,
   resolveExpoProjectId,
-} from '@/services/notifications';
+} from './notifications';
 import * as Notifications from 'expo-notifications';
 
 const PUSH_TOKEN_DOC_ID = 'default';

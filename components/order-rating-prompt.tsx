@@ -1,8 +1,8 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, Text, TouchableOpacity, View } from 'react-native';
-import { auth, db } from '@/services/firebase';
-import { theme } from '@/constants/theme';
+import { auth, db } from '../services/firebase';
+import { theme } from '../constants/theme';
 
 const c = theme.colors;
 

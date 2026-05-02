@@ -7,8 +7,8 @@ import {
   updateDoc,
   type Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/services/firebase';
-import { autoInvite } from '@/services/autoInvite';
+import { db } from '../services/firebase';
+import { autoInvite } from '../services/autoInvite';
 
 export type ParticipantStatus = 'joined' | 'left' | 'paid';
 

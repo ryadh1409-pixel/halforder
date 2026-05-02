@@ -1,16 +1,14 @@
-import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
-import { useAuth } from '@/services/AuthContext';
-import { auth } from '@/services/firebase';
+import { userNeedsEmailVerification } from '../lib/authEmailVerification';
+import { goHome } from '../lib/navigation';
+import { useAuth } from '../services/AuthContext';
+import { auth } from '../services/firebase';
 import {
   getUserFriendlyError,
   isFirebaseAuthUserInvalidated,
-} from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import {
-  VERIFY_EMAIL_HOME_HREF,
-  checkEmailVerifiedAndRedirect,
-} from '@/utils/emailVerificationFlow';
-import { showError, showSuccess } from '@/utils/toast';
+} from '../utils/errorHandler';
+import { logError } from '../utils/errorLogger';
+import { checkEmailVerifiedAndRedirect } from '../utils/emailVerificationFlow';
+import { showError, showSuccess } from '../utils/toast';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { sendEmailVerification } from 'firebase/auth';
 import { useRouter } from 'expo-router';
@@ -24,7 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 
 const c = theme.colors;
 const COOLDOWN_SEC = 30;
@@ -58,8 +56,8 @@ export default function VerifyEmailScreen() {
     hasNavigatedRef.current = true;
     clearPollInterval();
     showSuccess('Email verified successfully');
-    router.replace(VERIFY_EMAIL_HOME_HREF as Parameters<typeof router.replace>[0]);
-  }, [router, clearPollInterval]);
+    goHome();
+  }, [clearPollInterval]);
 
   const attemptRefreshAndRedirect = useCallback(async (): Promise<boolean> => {
     if (hasNavigatedRef.current) return true;
@@ -90,7 +88,7 @@ export default function VerifyEmailScreen() {
       if (hasNavigatedRef.current) return;
       hasNavigatedRef.current = true;
       clearPollInterval();
-      router.replace(VERIFY_EMAIL_HOME_HREF as Parameters<typeof router.replace>[0]);
+      goHome();
     }
   }, [authLoading, user, router, clearPollInterval]);
 

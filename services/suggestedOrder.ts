@@ -1,4 +1,4 @@
-import type { TimeContext, TimeOfDayPeriod } from '@/services/chatAssistantOrders';
+import type { TimeContext, TimeOfDayPeriod } from './chatAssistantOrders';
 
 /**
  * In-app template only — not a Firestore document, not other users’ activity.

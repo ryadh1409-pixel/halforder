@@ -1,13 +1,13 @@
-import AppLogo from '@/components/AppLogo';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
-import { useNearbyOrders, type NearbyOrder } from '@/hooks/useNearbyOrders';
-import { haversineDistanceKm } from '@/lib/haversine';
-import { isUserBanned } from '@/services/adminGuard';
-import { isUserBlocked } from '@/services/blockService';
-import { auth, db } from '@/services/firebase';
-import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
-import { trackOrderJoined } from '@/services/analytics';
+import AppLogo from '../components/AppLogo';
+import { FoodCardPaymentDisclaimer } from '../components/FoodCardPaymentDisclaimer';
+import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
+import { useNearbyOrders, type NearbyOrder } from '../hooks/useNearbyOrders';
+import { haversineDistanceKm } from '../lib/haversine';
+import { isUserBanned } from '../services/adminGuard';
+import { isUserBlocked } from '../services/blockService';
+import { auth, db } from '../services/firebase';
+import { joinOrderWithParticipantRecord } from '../services/orderLifecycle';
+import { trackOrderJoined } from '../services/analytics';
 import { useRouter } from 'expo-router';
 import {
   addDoc,
@@ -29,10 +29,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { shadows, theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { filterBlockedUsers } from '@/utils/filter';
-import { showError } from '@/utils/toast';
+import { shadows, theme } from '../constants/theme';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { filterBlockedUsers } from '../utils/filter';
+import { showError } from '../utils/toast';
 
 const NEARBY_RADIUS_KM = 1;
 
@@ -108,10 +108,10 @@ export default function NearbyOrdersScreen() {
         user2Id: uid,
         user2Name: displayName,
       });
-      const { createAlert } = await import('@/services/alerts');
+      const { createAlert } = await import('../services/alerts');
       await createAlert('order_matched', 'Order matched');
       const { incrementGrowthMatches } =
-        await import('@/services/growthMetrics');
+        await import('../services/growthMetrics');
       await incrementGrowthMatches();
       const messagesRef = collection(db, 'orders', order.id, 'messages');
       await addDoc(messagesRef, {

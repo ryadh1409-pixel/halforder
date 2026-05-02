@@ -1,15 +1,15 @@
 import {
   emitTermsAccepted,
   normalizeReturnPathAfterTerms,
-} from '@/constants/termsAcceptance';
-import TermsScreen from '@/screens/TermsScreen';
-import { acceptTermsOfService } from '@/services/userTerms';
-import { useAuth } from '@/services/AuthContext';
+} from '../constants/termsAcceptance';
+import TermsScreen from '../screens/TermsScreen';
+import { acceptTermsOfService } from '../services/userTerms';
+import { useAuth } from '../services/AuthContext';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { showError } from '@/utils/toast';
+import { showError } from '../utils/toast';
 
 /**
  * Post-login Terms of Service (Firestore `hasAcceptedTerms`). WebView + scroll-to-enable.

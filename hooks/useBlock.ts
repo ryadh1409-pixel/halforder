@@ -1,17 +1,17 @@
 /**
  * Block / unblock: live `users/{uid}.blockedUsers` + bidirectional hide via `useHiddenUserIds`.
  */
-import { auth, db } from '@/services/firebase';
+import { auth, db } from '../services/firebase';
 import {
   blockUser as blockUserApi,
   isUserBlocked as isUserBlockedApi,
   unblockUser as unblockUserApi,
   type BlockFilterCurrentUser,
-} from '@/services/blockService';
+} from '../services/blockService';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
+import { useHiddenUserIds } from './useHiddenUserIds';
 
 export type UseBlockResult = {
   uid: string | null;

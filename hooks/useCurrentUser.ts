@@ -1,8 +1,8 @@
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
-import { auth, db } from '@/services/firebase';
-import { mapRawUserDocument, type PublicUserFields } from '@/services/users';
+import { auth, db } from '../services/firebase';
+import { mapRawUserDocument, type PublicUserFields } from '../services/users';
 
 /**
  * Live Firestore profile for the signed-in user (`users/{uid}`).

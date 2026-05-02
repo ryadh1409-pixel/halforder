@@ -1,4 +1,4 @@
-import { isUserBanned } from '@/services/adminGuard';
+import { isUserBanned } from '../services/adminGuard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc,
@@ -38,46 +38,46 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import AppLogo from '@/components/AppLogo';
-import SafeMap, { Marker } from '@/components/SafeMap';
-import { TrustScoreLabel } from '@/components/TrustScoreLabel';
-import JoinOrderScreen from '@/screens/JoinOrderScreen';
-import { useTrustScore } from '@/hooks/useTrustScore';
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
-import { RateOrderPartnerModal } from '@/components/RateOrderPartnerModal';
+import AppLogo from '../components/AppLogo';
+import SafeMap, { Marker } from '../components/SafeMap';
+import { TrustScoreLabel } from '../components/TrustScoreLabel';
+import JoinOrderScreen from './JoinOrderScreen';
+import { useTrustScore } from '../hooks/useTrustScore';
+import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
+import { RateOrderPartnerModal } from '../components/RateOrderPartnerModal';
 import {
   systemActionSheet,
   systemConfirm,
-} from '@/components/SystemDialogHost';
-import { getRatedUserIdsForOrder } from '@/services/ratings';
-import { reportAndBlock } from '@/services/report-block';
-import { blockUser, submitUserReport } from '@/services/userSafety';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import { showError, showNotice, showSuccess } from '@/utils/toast';
+} from '../components/SystemDialogHost';
+import { getRatedUserIdsForOrder } from '../services/ratings';
+import { reportAndBlock } from '../services/report-block';
+import { blockUser, submitUserReport } from '../services/userSafety';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { logError } from '../utils/errorLogger';
+import { showError, showNotice, showSuccess } from '../utils/toast';
 import {
   formatTorontoDate,
   formatTorontoTime,
   formatTorontoTimeHHMM,
-} from '@/lib/format-toronto-time';
-import { generateInviteLink, generateOrderShareLink } from '@/lib/invite-link';
+} from '../lib/format-toronto-time';
+import { generateInviteLink, generateOrderShareLink } from '../lib/invite-link';
 import {
   buildOrderInviteWhatsAppMessage,
   openWhatsAppWithText,
-} from '@/lib/orderWhatsAppInvite';
-import { isMessageSafe, reportBlockedMessage } from '@/services/chatSecurity';
-import { checkTaxGift } from '@/services/taxGift';
-import { auth, db } from '@/services/firebase';
-import { trackOrderJoined } from '@/services/analytics';
-import { ensureOrderChatInitialized } from '@/services/chat';
+} from '../lib/orderWhatsAppInvite';
+import { isMessageSafe, reportBlockedMessage } from '../services/chatSecurity';
+import { checkTaxGift } from '../services/taxGift';
+import { auth, db } from '../services/firebase';
+import { trackOrderJoined } from '../services/analytics';
+import { ensureOrderChatInitialized } from '../services/chat';
 import {
   ORDER_JOIN_WINDOW_MS,
   ensureParticipantRecordForUid,
   formatOrderCountdown,
   getJoinedAtMsForUser,
   joinOrderWithParticipantRecord,
-} from '@/services/orderLifecycle';
-import { shadows, theme } from '@/constants/theme';
+} from '../services/orderLifecycle';
+import { shadows, theme } from '../constants/theme';
 
 const c = theme.colors;
 
@@ -141,7 +141,7 @@ export default function OrderRoomScreen() {
       (async () => {
         try {
           const { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } =
-            await import('@/lib/invite-link');
+            await import('../lib/invite-link');
           const AsyncStorage = (
             await import('@react-native-async-storage/async-storage')
           ).default;
@@ -1441,10 +1441,10 @@ export default function OrderRoomScreen() {
         },
       );
       // Order chat is stored under `orders/{orderId}/messages` (no `chats` doc).
-      const { createAlert } = await import('@/services/alerts');
+      const { createAlert } = await import('../services/alerts');
       await createAlert('order_matched', 'Order matched');
       const { incrementGrowthMatches } =
-        await import('@/services/growthMetrics');
+        await import('../services/growthMetrics');
       await incrementGrowthMatches();
       const messagesRef = collection(db, 'orders', orderId, 'messages');
       await addDoc(messagesRef, {

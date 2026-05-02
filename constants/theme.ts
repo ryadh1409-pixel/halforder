@@ -12,4 +12,4 @@ export {
   spacing,
   theme,
   typography,
-} from '@/theme/theme';
+} from '../theme/theme';

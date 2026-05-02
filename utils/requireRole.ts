@@ -1,23 +1,36 @@
-import { useAuth } from '@/services/AuthContext';
-import { type UserRole } from '@/services/userService';
+import { goHome } from '../lib/navigation';
+import { useAuth } from '../services/AuthContext';
+import { type UserRole } from '../services/userService';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function useRequireRole(allowedRoles: UserRole[]) {
   const { user, role, loading } = useAuth();
   const router = useRouter();
+  const allowedRef = useRef(allowedRoles);
+  allowedRef.current = allowedRoles;
+  /** Avoid repeated `goHome()` when `user` identity changes but role gate is unchanged. */
+  const wrongRoleNavigatedRef = useRef(false);
+
+  /** Stable for deps — inline `['admin']` from callers is a new array every render. */
+  const allowedRolesKey = [...allowedRoles].sort().join('|');
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
+      wrongRoleNavigatedRef.current = false;
       router.replace('/(auth)/login');
       return;
     }
     if (!role) return;
-    if (!allowedRoles.includes(role)) {
-      router.replace('/(tabs)');
+    if (!allowedRef.current.includes(role)) {
+      if (wrongRoleNavigatedRef.current) return;
+      wrongRoleNavigatedRef.current = true;
+      goHome();
+      return;
     }
-  }, [allowedRoles, loading, role, router, user]);
+    wrongRoleNavigatedRef.current = false;
+  }, [allowedRolesKey, loading, role, router, user]);
 
   return {
     loading,

@@ -1,4 +1,4 @@
-import { subscribeAvailableOrders, type DriverOrder } from '@/services/driverService';
+import { subscribeAvailableOrders, type DriverOrder } from '../services/driverService';
 import { useEffect, useState } from 'react';
 
 export function useAvailableOrders() {

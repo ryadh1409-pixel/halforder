@@ -1,5 +1,5 @@
-import { DriverCard } from '@/components/DriverCard';
-import { type DriverProfile } from '@/services/driverService';
+import { DriverCard } from './DriverCard';
+import { type DriverProfile } from '../services/driverService';
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 

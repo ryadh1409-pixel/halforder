@@ -1,4 +1,4 @@
-import { getFoodItems, type FoodItem } from '@/services/foodService';
+import { getFoodItems, type FoodItem } from '../services/foodService';
 import { useEffect, useState } from 'react';
 
 export function useMenu(restaurantId: string | null | undefined) {

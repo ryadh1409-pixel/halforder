@@ -1,5 +1,5 @@
-import AppLogo from '@/components/AppLogo';
-import { theme } from '@/constants/theme';
+import AppLogo from '../components/AppLogo';
+import { theme } from '../constants/theme';
 import React from 'react';
 import {
   ActivityIndicator,

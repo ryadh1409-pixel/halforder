@@ -9,28 +9,28 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 
-import { isUserBanned } from '@/services/adminGuard';
-import { hasBlockBetween } from '@/services/blocks';
+import { isUserBanned } from './adminGuard';
+import { hasBlockBetween } from './blocks';
 import {
   ensureHalfOrderChat,
   postHalfOrderChatSystemMessage,
-} from '@/services/halfOrderChat';
-import { auth, db } from '@/services/firebase';
+} from './halfOrderChat';
+import { auth, db } from './firebase';
 import {
   memberIdsFromOrderData,
   normalizeOrderUserIds,
   planHalfOrderJoin,
-} from '@/services/orders';
-import { syncOrderMemberProfilesForOrder } from '@/services/orderMemberProfile';
-import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
-import { joinOrderWithParticipantRecord } from '@/services/orderLifecycle';
+} from './orders';
+import { syncOrderMemberProfilesForOrder } from './orderMemberProfile';
+import { trySendPairJoinExpoPush } from './orderPairPushNotify';
+import { joinOrderWithParticipantRecord } from './orderLifecycle';
 import {
   FOOD_CARD_ORDER_MAX_USERS,
   isAdminFoodCardSlotId,
-} from '@/constants/adminFoodCards';
-import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '@/constants/paymentDisclaimer';
-import { applyHalfOrderPairReferralRewards } from '@/services/referralRewards';
-import { getPublicUserFields, mapRawUserDocument } from '@/services/users';
+} from '../constants/adminFoodCards';
+import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '../constants/paymentDisclaimer';
+import { applyHalfOrderPairReferralRewards } from './referralRewards';
+import { getPublicUserFields, mapRawUserDocument } from './users';
 
 /**
  * Join the current user to `orders/{orderId}`.

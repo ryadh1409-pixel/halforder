@@ -1,17 +1,20 @@
 /**
- * Home menu templates: list (scrolls with parent) + fixed FAB + form modal.
+ * Home menu templates: 2-column grid + section FAB + edit modal.
  */
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { useAuth } from '@/services/AuthContext';
+import { FoodCard } from '../../../components/FoodCard';
+import { FoodEditModal } from '../../../components/FoodEditModal';
+import { systemConfirm } from '../../../components/SystemDialogHost';
+import { adminColors as COLORS } from '../../../constants/adminTheme';
+import { useAuth } from '../../../services/AuthContext';
 import {
   addTemplate,
   deleteTemplate,
   subscribeTemplates,
   updateTemplate,
-} from '@/services/adminService';
-import { FOOD_TEMPLATES_MAX } from '@/services/foodTemplates';
-import { pickAndUploadImage } from '@/services/uploadImage';
-import type { FoodTemplate, FoodTemplateWrite } from '@/types/food';
+} from '../../../services/adminService';
+import { FOOD_TEMPLATES_MAX } from '../../../services/foodTemplates';
+import { pickAndUploadImage } from '../../../services/uploadImage';
+import type { FoodTemplate, FoodTemplateWrite } from '../../../types/food';
 import React, {
   createContext,
   useCallback,
@@ -22,20 +25,18 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
-  Image,
-  Modal,
-  ScrollView,
+  FlatList,
   StyleSheet,
-  Switch,
   Text,
-  TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '../../../utils/errorHandler';
+import { showError, showSuccess } from '../../../utils/toast';
+
+const PRIMARY = '#16a34a';
 
 function parsePrice(raw: string): number | null {
   const n = Number(String(raw).replace(/[^0-9.]/g, ''));
@@ -49,9 +50,13 @@ type CatalogContextValue = {
   error: string | null;
   openCreate: () => void;
   openEdit: (row: FoodTemplate) => void;
+  toggleTemplateActive: (row: FoodTemplate, next: boolean) => void;
 };
 
 const CatalogContext = createContext<CatalogContextValue | null>(null);
+
+const COL_GAP = 12;
+const ROW_HEIGHT = 196;
 
 export function AdminFoodCatalogProvider({
   enabled,
@@ -119,6 +124,11 @@ export function AdminFoodCatalogProvider({
     setActive(row.active);
     setModalOpen(true);
   }, []);
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    resetForm();
+  }, [resetForm]);
 
   const onPickImage = async () => {
     const uid = user?.uid;
@@ -190,6 +200,46 @@ export function AdminFoodCatalogProvider({
     }
   };
 
+  const onDeletePress = useCallback(() => {
+    if (!editingId) return;
+    const row = list.find((r) => r.id === editingId);
+    if (!row) return;
+    void (async () => {
+      const ok = await systemConfirm({
+        title: 'Delete',
+        message: `Remove “${row.name}”?`,
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!ok) return;
+      try {
+        await deleteTemplate(row.id);
+        setModalOpen(false);
+        resetForm();
+        showSuccess('Template removed.');
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+      }
+    })();
+  }, [editingId, list, resetForm]);
+
+  const toggleTemplateActive = useCallback(
+    async (row: FoodTemplate, next: boolean) => {
+      try {
+        await updateTemplate(row.id, {
+          name: row.name,
+          description: row.description,
+          price: row.price,
+          imageUrl: row.imageUrl,
+          active: next,
+        });
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+      }
+    },
+    [],
+  );
+
   const ctx = useMemo<CatalogContextValue>(
     () => ({
       list,
@@ -197,8 +247,9 @@ export function AdminFoodCatalogProvider({
       error,
       openCreate,
       openEdit,
+      toggleTemplateActive,
     }),
-    [list, loading, error, openCreate, openEdit],
+    [list, loading, error, openCreate, openEdit, toggleTemplateActive],
   );
 
   if (!enabled) {
@@ -208,128 +259,38 @@ export function AdminFoodCatalogProvider({
   return (
     <CatalogContext.Provider value={ctx}>
       {children}
-      <Modal
+      <FoodEditModal
         visible={modalOpen}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setModalOpen(false);
-          resetForm();
-        }}
-      >
-        <View style={modalStyles.sheet}>
-          <View style={modalStyles.sheetHeader}>
-            <Text style={modalStyles.sheetTitle}>
-              {editingId ? 'Edit card' : 'New card'}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setModalOpen(false);
-                resetForm();
-              }}
-              hitSlop={12}
-            >
-              <Text style={modalStyles.close}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={modalStyles.sheetBody}
-          >
-            <TouchableOpacity
-              style={modalStyles.uploadBtn}
-              onPress={onPickImage}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <ActivityIndicator color="#07241A" />
-              ) : (
-                <Text style={modalStyles.uploadBtnText}>
-                  {imageUrl ? 'Change image' : 'Pick image'}
-                </Text>
-              )}
-            </TouchableOpacity>
-            {imageUrl ? (
-              <Image
-                source={{ uri: imageUrl }}
-                style={modalStyles.preview}
-              />
-            ) : null}
-            <TextInput
-              style={modalStyles.input}
-              placeholder="Name"
-              placeholderTextColor={COLORS.textMuted}
-              value={name}
-              onChangeText={setName}
-            />
-            <TextInput
-              style={[modalStyles.input, modalStyles.inputMulti]}
-              placeholder="Description"
-              placeholderTextColor={COLORS.textMuted}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-            />
-            <TextInput
-              style={modalStyles.input}
-              placeholder="Price"
-              placeholderTextColor={COLORS.textMuted}
-              value={priceStr}
-              onChangeText={setPriceStr}
-              keyboardType="decimal-pad"
-            />
-            <View style={modalStyles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={modalStyles.switchLabel}>Visible on Home</Text>
-                <Text style={modalStyles.switchHint}>
-                  Off hides this item from the menu strip (still counts toward
-                  max {FOOD_TEMPLATES_MAX}).
-                </Text>
-              </View>
-              <Switch value={active} onValueChange={setActive} />
-            </View>
-            <TouchableOpacity
-              style={modalStyles.saveBtn}
-              onPress={onSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color="#07241A" />
-              ) : (
-                <Text style={modalStyles.saveText}>
-                  {editingId ? 'Save changes' : 'Create template'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
+        mode={editingId ? 'edit' : 'create'}
+        onClose={closeModal}
+        name={name}
+        onChangeName={setName}
+        description={description}
+        onChangeDescription={setDescription}
+        priceStr={priceStr}
+        onChangePriceStr={setPriceStr}
+        imageUrl={imageUrl}
+        onPickImage={onPickImage}
+        uploading={uploading}
+        active={active}
+        onChangeActive={setActive}
+        saving={saving}
+        onSave={onSave}
+        onDeletePress={editingId ? onDeletePress : undefined}
+      />
     </CatalogContext.Provider>
   );
 }
 
-function confirmDeleteTemplate(row: FoodTemplate) {
-  void (async () => {
-    const ok = await systemConfirm({
-      title: 'Delete',
-      message: `Remove “${row.name}”?`,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await deleteTemplate(row.id);
-      showSuccess('Template removed.');
-    } catch (e) {
-      showError(getUserFriendlyError(e));
-    }
-  })();
-}
-
 export function AdminFoodCatalogList() {
   const ctx = useContext(CatalogContext);
+  const { width: winW } = useWindowDimensions();
   if (!ctx) return null;
-  const { list, loading, error, openEdit } = ctx;
+  const { list, loading, error, openEdit, toggleTemplateActive } = ctx;
+
+  const parentPad = 16 * 2;
+  const innerPad = 16 * 2;
+  const cellW = (winW - parentPad - innerPad - COL_GAP) / 2;
 
   if (error) {
     return (
@@ -342,7 +303,7 @@ export function AdminFoodCatalogList() {
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator color={COLORS.primary} />
+        <ActivityIndicator color={PRIMARY} />
         <Text style={styles.loaderCap}>Loading catalog…</Text>
       </View>
     );
@@ -351,54 +312,39 @@ export function AdminFoodCatalogList() {
   if (list.length === 0) {
     return (
       <View style={styles.emptyWrap}>
-        <Text style={styles.emptyTitle}>No menu cards yet</Text>
+        <Text style={styles.emptyTitle}>No menu items yet</Text>
         <Text style={styles.emptySub}>
-          Tap the + button to add your first item (max {FOOD_TEMPLATES_MAX}).
+          Use + in this section to add your first item (max {FOOD_TEMPLATES_MAX}).
         </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.listWrap}>
-      {list.map((row) => (
-        <View key={row.id} style={[adminCardShell, styles.card]}>
-          {row.imageUrl ? (
-            <Image source={{ uri: row.imageUrl }} style={styles.cardImage} />
-          ) : (
-            <View style={[styles.cardImage, styles.cardImagePh]} />
-          )}
-          {!row.active ? (
-            <View style={styles.hiddenPill}>
-              <Text style={styles.hiddenPillText}>Hidden</Text>
-            </View>
-          ) : null}
-          <View style={styles.cardBody}>
-            <Text style={styles.cardName}>{row.name}</Text>
-            <Text style={styles.cardPrice}>${row.price.toFixed(2)}</Text>
-            {row.description ? (
-              <Text style={styles.cardDesc} numberOfLines={3}>
-                {row.description}
-              </Text>
-            ) : null}
-            <View style={styles.cardActions}>
-              <TouchableOpacity
-                style={styles.btnEdit}
-                onPress={() => openEdit(row)}
-              >
-                <Text style={styles.btnEditText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnDel}
-                onPress={() => confirmDeleteTemplate(row)}
-              >
-                <Text style={styles.btnDelText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+    <FlatList
+      data={list}
+      keyExtractor={(item) => item.id}
+      numColumns={2}
+      scrollEnabled={false}
+      style={{
+        minHeight: Math.ceil(list.length / 2) * ROW_HEIGHT,
+        marginTop: 8,
+      }}
+      columnWrapperStyle={{ gap: COL_GAP, marginBottom: COL_GAP }}
+      keyboardShouldPersistTaps="handled"
+      renderItem={({ item }) => (
+        <View style={{ width: cellW }}>
+          <FoodCard
+            imageUri={item.imageUrl || null}
+            title={item.name}
+            priceLabel={`$${item.price.toFixed(2)}`}
+            active={item.active}
+            onPress={() => openEdit(item)}
+            onActiveChange={(v) => toggleTemplateActive(item, v)}
+          />
         </View>
-      ))}
-    </View>
+      )}
+    />
   );
 }
 
@@ -423,70 +369,42 @@ export function AdminFoodCatalogFab() {
         }}
         activeOpacity={0.9}
       >
-        <Text style={fabStyles.fabPlus}>＋</Text>
+        <Text style={fabStyles.fabPlus}>+</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  listWrap: { gap: 14, marginTop: 8 },
-  card: { overflow: 'hidden', padding: 0, marginBottom: 0 },
-  cardImage: {
-    width: '100%',
-    height: 160,
-    backgroundColor: '#11161F',
-  },
-  cardImagePh: { minHeight: 160 },
-  hiddenPill: {
+const fabStyles = StyleSheet.create({
+  wrap: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    right: 12,
+    bottom: 12,
+    alignItems: 'flex-end',
   },
-  hiddenPillText: { color: '#FDE68A', fontWeight: '800', fontSize: 11 },
-  cardBody: { padding: 14 },
-  cardName: {
-    color: COLORS.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  cardPrice: {
-    color: '#34D399',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 6,
-  },
-  cardDesc: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    marginTop: 8,
-    lineHeight: 18,
-  },
-  cardActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  btnEdit: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+  fab: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: PRIMARY,
     alignItems: 'center',
-    backgroundColor: 'rgba(52, 211, 153, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
+    justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  btnEditText: { color: '#A7F3D0', fontWeight: '800' },
-  btnDel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.45)',
+  fabMuted: { opacity: 0.45 },
+  fabPlus: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '400',
+    marginTop: -2,
   },
-  btnDelText: { color: '#FCA5A5', fontWeight: '800' },
+});
+
+const styles = StyleSheet.create({
   loader: { paddingVertical: 24, alignItems: 'center' },
   loaderCap: { marginTop: 8, color: COLORS.textMuted, fontWeight: '600' },
   emptyWrap: {
@@ -494,7 +412,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: 'center',
   },
-  emptyTitle: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
+  emptyTitle: { color: COLORS.text, fontWeight: '700', fontSize: 16 },
   emptySub: {
     color: COLORS.textMuted,
     textAlign: 'center',
@@ -503,108 +421,11 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 16,
     backgroundColor: COLORS.dangerBg,
     marginTop: 8,
   },
   errorText: { color: COLORS.error, fontWeight: '600' },
-});
-
-const fabStyles = StyleSheet.create({
-  wrap: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    paddingBottom: 24,
-    paddingRight: 20,
-  },
-  fab: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#34D399',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabMuted: { opacity: 0.5 },
-  fabPlus: {
-    color: '#07241A',
-    fontSize: 28,
-    fontWeight: '300',
-    marginTop: -2,
-  },
-});
-
-const modalStyles = StyleSheet.create({
-  sheet: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    paddingTop: 8,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  sheetTitle: { color: COLORS.text, fontSize: 20, fontWeight: '800' },
-  close: { color: COLORS.primary, fontWeight: '700', fontSize: 16 },
-  sheetBody: { padding: 18, paddingBottom: 40 },
-  uploadBtn: {
-    backgroundColor: '#34D399',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  uploadBtnText: { color: '#07241A', fontWeight: '800' },
-  preview: {
-    width: '100%',
-    height: 180,
-    borderRadius: 14,
-    marginBottom: 14,
-    backgroundColor: '#111',
-  },
-  input: {
-    backgroundColor: '#11161F',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    color: COLORS.text,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    fontSize: 16,
-  },
-  inputMulti: { minHeight: 88, textAlignVertical: 'top' },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-    marginTop: 4,
-  },
-  switchLabel: { color: COLORS.text, fontWeight: '700' },
-  switchHint: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  saveBtn: {
-    backgroundColor: '#34D399',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  saveText: { color: '#07241A', fontWeight: '800', fontSize: 16 },
 });
 
 export default AdminFoodCatalogList;

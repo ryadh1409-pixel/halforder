@@ -1,14 +1,14 @@
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
-import { formatMillisToronto } from '@/lib/admin/orderHelpers';
-import { db } from '@/services/firebase';
+import { AdminHeader } from '../../components/admin/AdminHeader';
+import { adminRoutes } from '../../constants/adminRoutes';
+import { adminCardShell, adminColors as COLORS } from '../../constants/adminTheme';
+import { theme } from '../../constants/theme';
+import { adminError, adminLog } from '../../lib/admin/adminDebug';
+import { formatMillisToronto } from '../../lib/admin/orderHelpers';
+import { db } from '../../services/firebase';
 import {
   countFoodCardsWithStatus,
   countVisibleActiveFoodCardsInSnapshot,
-} from '@/services/foodCards';
+} from '../../services/foodCards';
 import { collection, getDocs } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';

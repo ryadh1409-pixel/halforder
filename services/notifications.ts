@@ -9,7 +9,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '@/constants/pushTypes';
+import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '../constants/pushTypes';
 
 let foregroundHandlerConfigured = false;
 

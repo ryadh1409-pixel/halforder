@@ -1,4 +1,4 @@
-import { getOrderLink, getShareMessage } from '@/utils/generateLink';
+import { getOrderLink, getShareMessage } from '../utils/generateLink';
 import * as Linking from 'expo-linking';
 import React from 'react';
 import {
@@ -9,8 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { theme } from '@/constants/theme';
-import { showError, showNotice, showSuccess } from '@/utils/toast';
+import { theme } from '../constants/theme';
+import { showError, showNotice, showSuccess } from '../utils/toast';
 
 const c = theme.colors;
 

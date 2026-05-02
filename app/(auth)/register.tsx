@@ -1,16 +1,16 @@
-import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
+import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '../../components/KeyboardToolbar';
 import {
   isCompleteNaProfilePhone,
   isProfilePhoneStorageEmpty,
   profilePhoneForFirestore,
   profileWhatsAppOnChangeText,
-} from '@/lib/profileWhatsAppPhone';
-import { useAuth } from '@/services/AuthContext';
+} from '../../lib/profileWhatsAppPhone';
+import { useAuth } from '../../services/AuthContext';
 import {
   ImagePickerPermissionError,
   pickImageFromLibrary,
   takePhoto,
-} from '@/services/imagePicker';
+} from '../../services/imagePicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -30,9 +30,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { systemActionSheet } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { systemActionSheet } from '../../components/SystemDialogHost';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { showError, showSuccess } from '../../utils/toast';
 
 const REGISTER_INPUTS = 5;
 const PHOTO_SIZE = 92;

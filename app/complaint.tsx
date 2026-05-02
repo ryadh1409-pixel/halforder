@@ -1,6 +1,6 @@
-import { submitComplaint } from '@/services/complaints';
-import { moderateUserContent } from '@/utils/contentModeration';
-import { useAuth } from '@/services/AuthContext';
+import { submitComplaint } from '../services/complaints';
+import { moderateUserContent } from '../utils/contentModeration';
+import { useAuth } from '../services/AuthContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -13,9 +13,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { theme } from '../constants/theme';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { showError, showSuccess } from '../utils/toast';
 
 const c = theme.colors;
 

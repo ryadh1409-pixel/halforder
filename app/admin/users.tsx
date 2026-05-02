@@ -1,11 +1,11 @@
-import { requireRole } from '@/utils/requireRole';
 import {
-  subscribeUsersForAdmin,
-  updateUserRole,
-  type UserProfileDoc,
-  type UserRole,
-} from '@/services/userService';
-import { showNotice } from '@/utils/toast';
+    subscribeUsersForAdmin,
+    updateUserRole,
+    type UserProfileDoc,
+    type UserRole,
+} from '../../services/userService';
+import { requireRole } from '../../utils/requireRole';
+import { showNotice } from '../../utils/toast';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

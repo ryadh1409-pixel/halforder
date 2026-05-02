@@ -1,7 +1,7 @@
 import {
   COORDINATION_CARD_DISCLAIMER,
   COORDINATION_ORDER_DETAIL_DISCLAIMER,
-} from '@/constants/paymentDisclaimer';
+} from '../constants/paymentDisclaimer';
 import React from 'react';
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 

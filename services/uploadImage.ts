@@ -4,8 +4,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
-import { storage } from '@/services/firebase';
-import { uploadUserProfileImage } from '@/services/profilePhoto';
+import { storage } from './firebase';
+import { uploadUserProfileImage } from './profilePhoto';
 
 export type PickUploadOptions = {
   /** Storage path prefix, e.g. `foodTemplates`. Default `uploads`. */

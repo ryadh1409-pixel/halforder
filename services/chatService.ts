@@ -7,7 +7,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 export type FeedbackSentiment = 'positive' | 'negative' | 'neutral';
 

@@ -1,6 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
-import { auth, db } from '@/services/firebase';
+import { auth, db } from './firebase';
 
 /**
  * Writes `invites/{autoId}` — triggers Cloud Function `sendOrderInvite` (email).

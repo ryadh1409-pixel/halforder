@@ -1,8 +1,8 @@
 import {
   ADMIN_FOOD_CARD_SLOT_IDS,
   type AdminFoodCardSlotId,
-} from '@/constants/adminFoodCards';
-import { auth, db } from '@/services/firebase';
+} from '../constants/adminFoodCards';
+import { auth, db } from './firebase';
 import {
   collection,
   doc,

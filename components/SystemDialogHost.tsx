@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { palette } from '@/constants/theme';
+import { palette } from '../constants/theme';
 
 type ConfirmPayload = {
   kind: 'confirm';

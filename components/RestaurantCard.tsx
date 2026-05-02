@@ -1,5 +1,5 @@
-import { theme } from '@/constants/theme';
-import type { PlaceRestaurant } from '@/services/googlePlaces';
+import { theme } from '../constants/theme';
+import type { PlaceRestaurant } from '../services/googlePlaces';
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';

@@ -3,8 +3,8 @@
  * Use from Explore to detect matches and show MatchAlert.
  */
 
-import { distanceMeters, AUTO_MATCH_RADIUS_METERS } from '@/utils/distance';
-import { db } from '@/services/firebase';
+import { distanceMeters, AUTO_MATCH_RADIUS_METERS } from '../utils/distance';
+import { db } from './firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 export type AutoMatchOrder = {

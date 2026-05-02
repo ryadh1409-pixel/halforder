@@ -4,7 +4,7 @@ import {
   signInWithCredential,
 } from 'firebase/auth';
 import { Platform } from 'react-native';
-import { auth } from '@/services/firebase';
+import { auth } from '../firebase';
 
 type DemoGoogleSignInResult = {
   user: {

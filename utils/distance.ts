@@ -3,7 +3,7 @@
  * Uses haversine formula.
  */
 
-import { haversineDistanceKm } from '@/lib/haversine';
+import { haversineDistanceKm } from '../lib/haversine';
 
 const METERS_PER_KM = 1000;
 

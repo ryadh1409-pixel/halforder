@@ -1,7 +1,7 @@
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
-import { sendExpoPush } from '@/services/sendExpoPush';
-import { useRouter } from 'expo-router';
+import { goBackSafe, goHome } from '../lib/navigation';
+import { useAuth } from '../services/AuthContext';
+import { db } from '../services/firebase';
+import { sendExpoPush } from '../services/sendExpoPush';
 import {
   addDoc,
   collection,
@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -21,9 +21,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { isAdminUser } from '@/constants/adminUid';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { showError } from '@/utils/toast';
+import { isAdminUser } from '../constants/adminUid';
+import { adminCardShell, adminColors as COLORS } from '../constants/adminTheme';
+import { showError } from '../utils/toast';
 
 function getToken(data: {
   expoPushToken?: unknown;
@@ -34,7 +34,6 @@ function getToken(data: {
 }
 
 export default function AdminNotificationsScreen() {
-  const router = useRouter();
   const { user, firestoreUserRole } = useAuth();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -46,12 +45,21 @@ export default function AdminNotificationsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = isAdminUser(user, firestoreUserRole);
+  const nonAdminRedirectRef = useRef(false);
 
   useEffect(() => {
-    if (user && !isAdminUser(user, firestoreUserRole)) {
-      router.replace('/(tabs)');
+    if (!user) {
+      nonAdminRedirectRef.current = false;
+      return;
     }
-  }, [user, router]);
+    if (!isAdmin) {
+      if (nonAdminRedirectRef.current) return;
+      nonAdminRedirectRef.current = true;
+      goHome();
+      return;
+    }
+    nonAdminRedirectRef.current = false;
+  }, [isAdmin, user?.uid]);
 
   const showFeedback = (msg: string) => {
     setFeedback(msg);
@@ -217,7 +225,7 @@ export default function AdminNotificationsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Sign in to continue.</Text>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={goBackSafe}>
             <Text style={styles.link}>Go back</Text>
           </TouchableOpacity>
         </View>
@@ -233,7 +241,7 @@ export default function AdminNotificationsScreen() {
           <Text style={styles.hint}>
             Only the configured admin account can access this page.
           </Text>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
+          <TouchableOpacity onPress={goHome}>
             <Text style={styles.link}>Go to Home</Text>
           </TouchableOpacity>
         </View>
@@ -247,7 +255,7 @@ export default function AdminNotificationsScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBackSafe}>
           <Text style={styles.link}>← Dashboard</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Send Notifications</Text>

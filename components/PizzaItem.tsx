@@ -1,9 +1,9 @@
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { PopularPizza } from '@/services/api';
+import type { PopularPizza } from '../services/api';
 
 const c = theme.colors;
 

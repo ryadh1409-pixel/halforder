@@ -1,18 +1,17 @@
-import { useLocalSearchParams } from 'expo-router';
-import { createMockOrder } from '@/services/mockDeliveryStore';
+import { createMockOrder } from '../../services/mockDeliveryStore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 type Meal = {
   id: string;

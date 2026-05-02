@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { foodDescriptionFallback } from '@/lib/foodDescriptionFallback';
+import { foodDescriptionFallback } from '../lib/foodDescriptionFallback';
 
 const DISCLAIMER = `AI-generated descriptions may be incomplete or contain inaccuracies.
 To confirm details about ingredients, allergens, or dietary preferences,

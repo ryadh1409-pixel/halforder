@@ -3,7 +3,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 export type PublicUserFields = {
   userId: string;

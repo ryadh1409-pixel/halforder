@@ -1,7 +1,7 @@
-import AppLogo from '@/components/AppLogo';
-import { ONBOARDING_COMPLETE_KEY } from '@/constants/onboarding';
-import { useUserTermsStatus } from '@/hooks/useUserTermsStatus';
-import { useAuth } from '@/services/AuthContext';
+import AppLogo from '../components/AppLogo';
+import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
+import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
+import { useAuth } from '../services/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -12,7 +12,8 @@ type GateState =
   | { phase: 'ready'; onboardingDone: boolean };
 
 /**
- * Onboarding → (signed-in) Firestore Terms → tabs.
+ * App root (`/`): gate onboarding and Firestore terms, then send users to the main shell.
+ * For in-app “Home” from nested stacks, use `goHome()` from `../lib/navigation` (tabs group `/(tabs)`).
  * Terms are enforced per account via `users/{uid}.hasAcceptedTerms`, not device storage.
  */
 export default function Index() {

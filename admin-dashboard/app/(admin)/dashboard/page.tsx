@@ -3,8 +3,8 @@
 import { DashboardCharts } from '@/components/DashboardCharts';
 import { StatCard } from '@/components/StatCard';
 import { bucketCountsByDay } from '@/lib/chart-buckets';
-import { db } from '@/lib/firebase';
 import { firestoreTimeToMs, startOfTodayMs } from '@/lib/dates';
+import { db } from '@/lib/firebase';
 import { isActiveOrderStatus } from '@/lib/orders-helpers';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';

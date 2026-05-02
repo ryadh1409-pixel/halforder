@@ -1,19 +1,19 @@
-import { FOOD_CARD_ORDER_MAX_USERS } from '@/constants/adminFoodCards';
-import { ORDER_STATUS } from '@/constants/orderStatus';
+import { FOOD_CARD_ORDER_MAX_USERS } from '../constants/adminFoodCards';
+import { ORDER_STATUS } from '../constants/orderStatus';
 import {
   isFirestoreCompositeIndexError,
   logFirestoreIndexError,
-} from '@/lib/joinOrderFirestore';
-import { db } from '@/services/firebase';
+} from '../lib/joinOrderFirestore';
+import { db } from './firebase';
 import {
   normalizeOrderUserIds,
   planHalfOrderJoin,
-} from '@/services/orders';
+} from './orders';
 import {
   getPublicUserFields,
   mapRawUserDocument,
   type PublicUserFields,
-} from '@/services/users';
+} from './users';
 import {
   collection,
   doc,

@@ -1,5 +1,5 @@
-import { TermsFooter } from '@/components/TermsFooter';
-import { shadows, theme } from '@/constants/theme';
+import { TermsFooter } from '../components/TermsFooter';
+import { shadows, theme } from '../constants/theme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { showNotice } from '@/utils/toast';
+import { showNotice } from '../utils/toast';
 
 const c = theme.colors;
 

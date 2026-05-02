@@ -1,4 +1,4 @@
-import DemandMap from '@/components/DemandMap';
+import DemandMap from '../../components/DemandMap';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
+import { theme } from '../../constants/theme';
 
 const c = theme.colors;
 

@@ -1,7 +1,7 @@
-import { isUserBanned } from '@/services/adminGuard';
-import { auth, db } from '@/services/firebase';
-import { cancelHalfOrder } from '@/services/halfOrderCancel';
-import { joinHalfOrderByOrderId } from '@/services/joinOrder';
+import { isUserBanned } from '../../services/adminGuard';
+import { auth, db } from '../../services/firebase';
+import { cancelHalfOrder } from '../../services/halfOrderCancel';
+import { joinHalfOrderByOrderId } from '../../services/joinOrder';
 import {
   formatOrderCountdown,
   joinOrderWithParticipantRecord,
@@ -9,8 +9,8 @@ import {
   ORDER_JOIN_WINDOW_MS,
   parseJoinedAtMs,
   remainingMsAfterJoin,
-} from '@/services/orderLifecycle';
-import { memberIdsFromOrderData } from '@/services/orders';
+} from '../../services/orderLifecycle';
+import { memberIdsFromOrderData } from '../../services/orders';
 import { useRouter } from 'expo-router';
 import {
   addDoc,
@@ -33,11 +33,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { shadows, theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
+import { systemConfirm } from '../../components/SystemDialogHost';
+import { shadows, theme } from '../../constants/theme';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { showError, showSuccess } from '../../utils/toast';
 
 type JoinableOrder = {
   id: string;
@@ -296,7 +296,7 @@ export default function JoinOrderScreen() {
         if (spot.usesHalf) {
           await cancelHalfOrder(spot.id);
         } else {
-          const { leaveOrderParticipant } = await import('@/services/orderLifecycle');
+          const { leaveOrderParticipant } = await import('../../services/orderLifecycle');
           await leaveOrderParticipant(db, spot.id, u);
         }
         showSuccess('You left the order.');

@@ -4,33 +4,33 @@ import {
   AdminFoodCatalogProvider,
 } from './components/AdminFoodCatalog';
 import { AdminCardsDashboard } from './components/AdminCardsDashboard';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { ADMIN_PANEL_EMAIL, isAdminUser } from '@/constants/adminUid';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { useAuth } from '@/services/AuthContext';
-import { auth, db, storage } from '@/services/firebase';
-import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
+import { ActionCard } from '../../components/ActionCard';
+import { AdminStatCard } from '../../components/AdminStatCard';
+import AppHeader from '../../components/AppHeader';
+import { adminRoutes } from '../../constants/adminRoutes';
+import { ADMIN_PANEL_EMAIL, isAdminUser } from '../../constants/adminUid';
+import { goHome } from '../../lib/navigation';
+import { adminError, adminLog } from '../../lib/admin/adminDebug';
+import { adminColors as COLORS } from '../../constants/adminTheme';
+import { useAuth } from '../../services/AuthContext';
+import { db } from '../../services/firebase';
 import {
   countFoodCardsWithStatus,
   countVisibleActiveFoodCardsInSnapshot,
-  foodCardExpiresAtFromNow,
-} from '@/services/foodCards';
+} from '../../services/foodCards';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import React, { useCallback, useEffect, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,9 +50,14 @@ function startOfWeekMs(): number {
   return d.getTime();
 }
 
+const PAGE_BG = '#f8fafc';
+const PRIMARY = '#16a34a';
+
 export default function AdminScreen() {
   const router = useRouter();
+  const { width: winW } = useWindowDimensions();
   const { user, firestoreUserRole } = useAuth();
+  const [screenReady, setScreenReady] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,15 +72,29 @@ export default function AdminScreen() {
     activeCards: number;
     totalMatches: number;
     completedOrders: number;
+    totalRevenue: number;
   } | null>(null);
 
   const isAdmin = isAdminUser(user, firestoreUserRole);
+  const nonAdminRedirectRef = useRef(false);
 
   useEffect(() => {
-    if (user && !isAdmin) {
-      router.replace('/(tabs)');
+    setScreenReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      nonAdminRedirectRef.current = false;
+      return;
     }
-  }, [isAdmin, router, user]);
+    if (!isAdmin) {
+      if (nonAdminRedirectRef.current) return;
+      nonAdminRedirectRef.current = true;
+      goHome();
+      return;
+    }
+    nonAdminRedirectRef.current = false;
+  }, [isAdmin, user?.uid]);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -136,6 +155,7 @@ export default function AdminScreen() {
         activeCards,
         totalMatches,
         completedOrders,
+        totalRevenue: sumPrice,
       };
       adminLog('admin-home', 'metrics loaded', nextMetrics);
       setMetrics(nextMetrics);
@@ -164,13 +184,24 @@ export default function AdminScreen() {
     fetchMetrics();
   };
 
+  if (!screenReady) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Preparing admin screen...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
           <Text style={styles.accessDenied}>Sign in to continue.</Text>
-          <Text style={styles.link} onPress={() => router.back()}>
-            Go back
+          <Text style={styles.link} onPress={goHome}>
+            Go home
           </Text>
         </View>
       </SafeAreaView>
@@ -186,8 +217,8 @@ export default function AdminScreen() {
             You do not have permission to view this page. Admin sign-in:{' '}
             {ADMIN_PANEL_EMAIL}
           </Text>
-          <Text style={styles.link} onPress={() => router.back()}>
-            Go back
+          <Text style={styles.link} onPress={goHome}>
+            Go home
           </Text>
         </View>
       </SafeAreaView>
@@ -205,213 +236,265 @@ export default function AdminScreen() {
     );
   }
 
+  const scrollPad = 16;
+  const statGap = 12;
+  const statCellW = (winW - scrollPad * 2 - statGap) / 2;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <AdminFoodCatalogProvider enabled={isAdmin}>
-        <View style={styles.mainCol}>
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={COLORS.primary}
-              />
-            }
-          >
-            <Text style={styles.title}>Admin Dashboard</Text>
-
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Home menu catalog</Text>
-              <Text style={styles.cardHint}>
-                Up to 10 templates · Shown on the Home tab (when visible) · Use
-                + to add
-              </Text>
-              <AdminFoodCatalogList />
-            </View>
-
-            {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-            ) : null}
-
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Food cards (10 slots)</Text>
-              <Text style={styles.cardHint}>
-                Edit cards 1–10. Toggle active to show or hide in the app.
-              </Text>
-              <AdminCardsDashboard />
-            </View>
-
-            {metrics ? (
-              <View style={styles.cards}>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.users)}
-            >
-              <Text style={styles.cardLabel}>Total Users</Text>
-              <Text style={styles.cardValue}>{metrics.totalUsers}</Text>
-              <Text style={styles.cardCta}>View users →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.orders())}
-            >
-              <Text style={styles.cardLabel}>Total Orders</Text>
-              <Text style={styles.cardValue}>{metrics.totalOrders}</Text>
-              <Text style={styles.cardCta}>View orders →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push(adminRoutes.orders({ filter: 'today' }))
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <AdminFoodCatalogProvider enabled={isAdmin}>
+          <View style={styles.mainCol}>
+            <AppHeader title="Admin Panel" />
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={PRIMARY}
+                />
               }
             >
-              <Text style={styles.cardLabel}>Orders Today</Text>
-              <Text style={styles.cardValue}>{metrics.ordersToday}</Text>
-              <Text style={styles.cardCta}>Today orders →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.orders())}
-            >
-              <Text style={styles.cardLabel}>Orders This Week</Text>
-              <Text style={styles.cardValue}>{metrics.ordersThisWeek}</Text>
-              <Text style={styles.cardCta}>All orders (scroll) →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.users)}
-            >
-              <Text style={styles.cardLabel}>Active Users (this week)</Text>
-              <Text style={styles.cardValue}>{metrics.activeUsers}</Text>
-              <Text style={styles.cardCta}>User directory →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.orders())}
-            >
-              <Text style={styles.cardLabel}>Average Order Price</Text>
-              <Text style={styles.cardValue}>
-                ${metrics.averageOrderPrice.toFixed(2)}
+              <Text style={styles.title}>Admin Dashboard</Text>
+
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              {metrics ? (
+                <>
+                  <Text style={styles.sectionHeading}>Overview</Text>
+                  <View style={styles.statsGrid}>
+                    <AdminStatCard
+                      label="Total Users"
+                      value={String(metrics.totalUsers)}
+                      hint="View directory"
+                      onPress={() => router.push(adminRoutes.users as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Total Orders"
+                      value={String(metrics.totalOrders)}
+                      hint="Open orders"
+                      onPress={() => router.push(adminRoutes.orders() as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Orders Today"
+                      value={String(metrics.ordersToday)}
+                      hint="Today filter"
+                      onPress={() =>
+                        router.push(
+                          adminRoutes.orders({ filter: 'today' }) as never,
+                        )
+                      }
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Revenue"
+                      value={`$${metrics.totalRevenue.toFixed(0)}`}
+                      hint="All-time total"
+                      onPress={() => router.push(adminRoutes.orders() as never)}
+                      style={{ width: statCellW }}
+                    />
+                  </View>
+                </>
+              ) : null}
+
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                Actions
               </Text>
-              <Text style={styles.cardCta}>Orders data →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.orders())}
-            >
-              <Text style={styles.cardLabel}>Active Cards</Text>
-              <Text style={styles.cardValue}>{metrics.activeCards}</Text>
-              <Text style={styles.cardCta}>Open orders (admin) →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push(adminRoutes.analytics)}
-            >
-              <Text style={styles.cardLabel}>Total Matches</Text>
-              <Text style={styles.cardValue}>{metrics.totalMatches}</Text>
-              <Text style={styles.cardCta}>Admin analytics →</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push(adminRoutes.orders({ filter: 'completed' }))
-              }
-            >
-              <Text style={styles.cardLabel}>Completed Orders</Text>
-              <Text style={styles.cardValue}>{metrics.completedOrders}</Text>
-              <Text style={styles.cardCta}>Completed filter →</Text>
-            </TouchableOpacity>
+              <View style={styles.actionsGrid}>
+                <ActionCard
+                  icon="people-outline"
+                  label="Users"
+                  onPress={() => router.push(adminRoutes.users as never)}
+                />
+                <ActionCard
+                  icon="receipt-outline"
+                  label="Orders"
+                  onPress={() => router.push(adminRoutes.orders() as never)}
+                />
+                <ActionCard
+                  icon="flag-outline"
+                  label="Reports"
+                  onPress={() => router.push(adminRoutes.reports as never)}
+                />
+                <ActionCard
+                  icon="notifications-outline"
+                  label="Notify"
+                  onPress={() =>
+                    router.push(adminRoutes.sendNotification as never)
+                  }
+                />
               </View>
-            ) : null}
 
-            <View style={styles.navSection}>
-              <TouchableOpacity
-                style={styles.navButton}
-                onPress={() => router.push(adminRoutes.aiInsights as never)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.navButtonText}>AI Insights</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navButton}
-                onPress={() => router.push(adminRoutes.sendNotification as never)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.navButtonText}>Send notification</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => router.push('/admin/dashboard' as never)} activeOpacity={0.85}>
-                <Text style={styles.navButtonText}>Dashboard</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.users as never)} activeOpacity={0.85}>
-                <Text style={styles.navButtonText}>Manage Users</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.orders() as never)} activeOpacity={0.85}>
-                <Text style={styles.navButtonText}>Manage Orders</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => router.push(adminRoutes.reports as never)} activeOpacity={0.85}>
-                <Text style={styles.navButtonText}>User Reports (UGC)</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-          <AdminFoodCatalogFab />
-        </View>
-      </AdminFoodCatalogProvider>
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                Food management
+              </Text>
+              <View style={styles.panel}>
+                <AdminCardsDashboard />
+              </View>
+
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                Home menu catalog
+              </Text>
+              <Text style={styles.panelHint}>
+                Up to 10 templates on the Home tab. Tap a card to edit; use +
+                below to add.
+              </Text>
+              <View style={styles.catalogSection}>
+                <AdminFoodCatalogList />
+                <AdminFoodCatalogFab />
+              </View>
+
+              <View style={styles.devLinks}>
+                <TouchableOpacity
+                  onPress={() => router.push('/test' as never)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.devLink}>Test screen</Text>
+                </TouchableOpacity>
+                <Text style={styles.devSep}>·</Text>
+                <TouchableOpacity
+                  onPress={() => router.push(adminRoutes.aiInsights as never)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.devLink}>AI insights</Text>
+                </TouchableOpacity>
+                <Text style={styles.devSep}>·</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/admin/dashboard' as never)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.devLink}>Dashboard</Text>
+                </TouchableOpacity>
+                <Text style={styles.devSep}>·</Text>
+                <TouchableOpacity
+                  onPress={() => router.push(adminRoutes.analytics)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.devLink}>Analytics</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </AdminFoodCatalogProvider>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  mainCol: { flex: 1, position: 'relative' },
+  flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: PAGE_BG },
+  mainCol: { flex: 1 },
   scrollView: { flex: 1 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  scrollContent: { padding: 20, paddingBottom: 100 },
-  title: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: 20, textAlign: 'center' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
-  accessDenied: { fontSize: 18, fontWeight: '600', color: COLORS.error, marginBottom: 8, textAlign: 'center' },
-  hint: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', marginBottom: 16 },
-  link: { fontSize: 16, color: COLORS.primary, fontWeight: '600' },
-  loadingText: { marginTop: 12, fontSize: 14, color: COLORS.textMuted },
-  errorBox: { backgroundColor: COLORS.dangerBg, padding: 12, borderRadius: 8, marginBottom: 16 },
-  errorText: { color: COLORS.error, fontSize: 14 },
-  cards: { gap: 12 },
-  card: { ...adminCardShell, marginBottom: 12 },
-  cardLabel: { fontSize: 13, color: COLORS.textMuted, marginBottom: 4 },
-  cardValue: { fontSize: 22, fontWeight: '700', color: COLORS.text },
-  cardCta: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  cardHint: {
-    marginTop: 8,
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  navSection: { marginTop: 24, gap: 12 },
-  navButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 16,
-    paddingHorizontal: theme.spacing.section,
-    borderRadius: theme.radius.button,
-    alignItems: 'center',
+  centered: {
+    flex: 1,
     justifyContent: 'center',
-    minHeight: theme.spacing.touchMin,
-    marginBottom: 12,
+    alignItems: 'center',
+    padding: 24,
   },
-  navButtonText: { fontSize: 16, fontWeight: '600', color: COLORS.text },
+  scrollContent: { padding: 16, paddingBottom: 48 },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 10,
+  },
+  sectionSpacer: { marginTop: 20 },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 4,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  panel: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  panelHint: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  catalogSection: {
+    position: 'relative',
+    minHeight: 120,
+    paddingBottom: 72,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  devLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 28,
+    marginBottom: 8,
+    gap: 6,
+  },
+  devLink: { fontSize: 13, fontWeight: '600', color: PRIMARY },
+  devSep: { fontSize: 13, color: '#94a3b8' },
+  accessDenied: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.error,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  hint: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  link: { fontSize: 16, color: PRIMARY, fontWeight: '600' },
+  loadingText: { marginTop: 12, fontSize: 14, color: COLORS.textMuted },
+  errorBox: {
+    backgroundColor: COLORS.dangerBg,
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  errorText: { color: COLORS.error, fontSize: 14, fontWeight: '500' },
 });

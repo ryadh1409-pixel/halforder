@@ -1,5 +1,5 @@
-import { signInWithApple } from '@/services/auth/appleSignIn';
-import { useGoogleAuth } from '@/services/googleAuth';
+import { signInWithApple } from '../services/auth/appleSignIn';
+import { useGoogleAuth } from '../services/googleAuth';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,

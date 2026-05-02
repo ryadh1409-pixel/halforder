@@ -1,17 +1,17 @@
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { isAdminUser } from '@/constants/adminUid';
+import { adminRoutes } from '../../constants/adminRoutes';
+import { adminCardShell, adminColors as COLORS } from '../../constants/adminTheme';
+import { isAdminUser } from '../../constants/adminUid';
 import {
   ACTIVE_2H_MS,
   collectBroadcastRecipientTokens,
-} from '@/services/adminBroadcastRecipients';
+} from '../../services/adminBroadcastRecipients';
 import {
   fetchAdminAiNotificationInsights,
   type AdminAiNotificationInsights,
-} from '@/services/adminAiNotificationInsights';
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
-import { sendExpoPush } from '@/services/sendExpoPush';
+} from '../../services/adminAiNotificationInsights';
+import { useAuth } from '../../services/AuthContext';
+import { db } from '../../services/firebase';
+import { sendExpoPush } from '../../services/sendExpoPush';
 import {
   addDoc,
   collection,
@@ -31,9 +31,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { logError } from '../../utils/errorLogger';
+import { showError, showSuccess } from '../../utils/toast';
 
 function MetricCard({
   icon,

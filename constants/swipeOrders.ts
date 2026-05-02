@@ -1,4 +1,4 @@
-import type { SwipeFilter, SwipeOrder } from '@/types/swipeOrder';
+import type { SwipeFilter, SwipeOrder } from '../types/swipeOrder';
 
 export const SWIPE_FILTERS: SwipeFilter[] = [
   'For You',

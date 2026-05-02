@@ -1,8 +1,8 @@
-import { ONBOARDING_COMPLETE_KEY } from '@/constants/onboarding';
-import AppLogo from '@/components/AppLogo';
+import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
+import AppLogo from '../components/AppLogo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { goHome } from '../lib/navigation';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -44,14 +44,13 @@ const SLIDES = [
 ] as const;
 
 export default function OnboardingScreen() {
-  const router = useRouter();
   const flatListRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
   const [index, setIndex] = useState(0);
 
   const completeOnboarding = useCallback(async () => {
     await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
-    router.replace('/');
-  }, [router]);
+    goHome();
+  }, []);
 
   const handleSkip = () => {
     void completeOnboarding();

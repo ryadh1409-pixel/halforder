@@ -1,14 +1,14 @@
-import { isAdminFoodCardSlotId } from '@/constants/adminFoodCards';
-import { isAdminUser } from '@/constants/adminUid';
+import { isAdminFoodCardSlotId } from '../../constants/adminFoodCards';
+import { isAdminUser } from '../../constants/adminUid';
 import {
   PAYMENT_MATCH_ALERT_MESSAGE,
   PAYMENT_MATCH_ALERT_TITLE,
-} from '@/constants/paymentDisclaimer';
-import { safeAlertBody, USER_ERROR_JOIN } from '@/lib/userFacingErrors';
-import { theme } from '@/constants/theme';
-import { useAuth } from '@/services/AuthContext';
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
+} from '../../constants/paymentDisclaimer';
+import { safeAlertBody, USER_ERROR_JOIN } from '../../lib/userFacingErrors';
+import { theme } from '../../constants/theme';
+import { useAuth } from '../../services/AuthContext';
+import { useHiddenUserIds } from '../../hooks/useHiddenUserIds';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
 import {
   formatFoodCardSharingPriceLine,
   isFoodCardJoinDisabled,
@@ -16,12 +16,13 @@ import {
   skipFoodCard,
   subscribeActiveFoodCards,
   type FoodCard,
-} from '@/services/foodCards';
-import { subscribeJoinHintsForFoodCard } from '@/services/foodCardSlotOrders';
-import { subscribeActiveFoodTemplates } from '@/services/foodTemplates';
-import type { FoodTemplate } from '@/types/food';
-import { AIDescription } from '@/components/AIDescription';
-import { showError, showNotice } from '@/utils/toast';
+} from '../../services/foodCards';
+import { subscribeJoinHintsForFoodCard } from '../../services/foodCardSlotOrders';
+import { subscribeActiveFoodTemplates } from '../../services/foodTemplates';
+import type { FoodTemplate } from '../../types/food';
+import { AIDescription } from '../../components/AIDescription';
+import { showError, showNotice } from '../../utils/toast';
+import SwipeWrapper from '@/components/SwipeWrapper';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -279,6 +280,7 @@ export default function SwipeScreen() {
   });
 
   return (
+    <SwipeWrapper currentIndex={0}>
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Swipe Food</Text>
@@ -290,7 +292,7 @@ export default function SwipeScreen() {
         <TouchableOpacity
           activeOpacity={0.88}
           style={styles.dashboardBtn}
-          onPress={() => router.push('/(restaurant)/dashboard' as never)}
+          onPress={() => router.push('/restaurant-dashboard' as never)}
         >
           <Text style={styles.dashboardBtnText}>Open Restaurant Dashboard</Text>
         </TouchableOpacity>
@@ -320,7 +322,7 @@ export default function SwipeScreen() {
                 style={styles.templateCard}
                 onPress={() =>
                   router.push({
-                    pathname: '/(tabs)/create',
+                    pathname: '/create',
                     params: {
                       fromFoodTemplate: '1',
                       prefillTitle: t.name,
@@ -548,6 +550,7 @@ export default function SwipeScreen() {
         </View>
       )}
     </SafeAreaView>
+    </SwipeWrapper>
   );
 }
 

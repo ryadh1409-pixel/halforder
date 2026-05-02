@@ -12,9 +12,9 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-import { HALF_ORDER_MATCH_WAIT_MS } from '@/constants/orderStatus';
-import { auth, db } from '@/services/firebase';
-import { normalizeOrderUserIds } from '@/services/orders';
+import { HALF_ORDER_MATCH_WAIT_MS } from '../constants/orderStatus';
+import { auth, db } from './firebase';
+import { normalizeOrderUserIds } from './orders';
 
 const TICK_MS = 60_000;
 

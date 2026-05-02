@@ -14,8 +14,8 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
-import { normalizeOrderUserIds } from '@/services/orders';
+import { db } from './firebase';
+import { normalizeOrderUserIds } from './orders';
 
 const REFERRAL_INBOX = 'referralInbox';
 const REFER_CREDITS_JOINER = 2;

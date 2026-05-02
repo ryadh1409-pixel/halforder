@@ -1,5 +1,5 @@
-import SafeMap, { Marker, Polyline } from '@/components/SafeMap';
-import { theme } from '@/constants/theme';
+import SafeMap, { Marker, Polyline } from './SafeMap';
+import { theme } from '../constants/theme';
 import React from 'react';
 
 const c = theme.colors;

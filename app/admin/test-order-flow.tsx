@@ -2,8 +2,8 @@
  * Developer test tool: runs order flow test (create order, simulate join, verify).
  * For development only.
  */
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { useAuth } from '../../services/AuthContext';
+import { db } from '../../services/firebase';
 import { Redirect, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import React, { useState } from 'react';
@@ -15,8 +15,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminColors as C } from '@/constants/adminTheme';
-import { showError, showSuccess } from '@/utils/toast';
+import { adminColors as C } from '../../constants/adminTheme';
+import { showError, showSuccess } from '../../utils/toast';
 
 function TestOrderFlowScreenDev() {
   const router = useRouter();

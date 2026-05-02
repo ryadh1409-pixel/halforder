@@ -1,6 +1,6 @@
-import { WHATSAPP_MATCH_DEFAULT_MESSAGE } from '@/lib/whatsapp';
+import { WHATSAPP_MATCH_DEFAULT_MESSAGE } from '../lib/whatsapp';
 import * as Linking from 'expo-linking';
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 import {
   Platform,
   StyleSheet,

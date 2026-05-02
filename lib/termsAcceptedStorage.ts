@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ACCEPTED_TERMS_KEY,
   TERMS_ACCEPTANCE_STORAGE_KEY,
-} from '@/constants/termsAcceptance';
+} from '../constants/termsAcceptance';
 
 export async function getTermsAcceptedAsync(): Promise<boolean> {
   try {

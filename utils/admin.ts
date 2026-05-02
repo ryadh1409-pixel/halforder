@@ -1,7 +1,7 @@
 import type { User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
+import { db } from '../services/firebase';
 
 /** Emails that always receive `role: admin` on sync (lowercased when checked). */
 export const ADMIN_EMAILS = [

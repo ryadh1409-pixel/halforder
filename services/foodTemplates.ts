@@ -1,8 +1,8 @@
 /**
  * Firestore `foodTemplates` — home catalog (max 10 documents in collection).
  */
-import { db } from '@/services/firebase';
-import type { FoodTemplate, FoodTemplateWrite } from '@/types/food';
+import { db } from './firebase';
+import type { FoodTemplate, FoodTemplateWrite } from '../types/food';
 import {
   addDoc,
   collection,

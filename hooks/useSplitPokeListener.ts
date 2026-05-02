@@ -6,7 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useEffect } from 'react';
 
-import { auth, db } from '@/services/firebase';
+import { auth, db } from '../services/firebase';
 
 export function useSplitPokeListener() {
   useEffect(() => {

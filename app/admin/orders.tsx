@@ -1,15 +1,15 @@
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
+import { AdminHeader } from '../../components/admin/AdminHeader';
+import { adminRoutes } from '../../constants/adminRoutes';
+import { adminCardShell, adminColors as COLORS } from '../../constants/adminTheme';
+import { theme } from '../../constants/theme';
+import { adminError, adminLog } from '../../lib/admin/adminDebug';
 import {
   formatFirestoreTime,
   formatParticipantPreview,
   isActiveOrderStatus,
   orderParticipantUids,
-} from '@/lib/admin/orderHelpers';
-import { db } from '@/services/firebase';
+} from '../../lib/admin/orderHelpers';
+import { db } from '../../services/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';

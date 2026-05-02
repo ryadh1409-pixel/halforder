@@ -1,4 +1,4 @@
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 /** Stored on each `reports` document (Guideline 1.2). */

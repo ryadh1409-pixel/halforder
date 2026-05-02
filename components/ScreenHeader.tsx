@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import AppLogo from '@/components/AppLogo';
-import { BrandGradientBar } from '@/components/BrandGradientBar';
-import { spacing, typography } from '@/theme/theme';
+import AppLogo from './AppLogo';
+import { BrandGradientBar } from './BrandGradientBar';
+import { spacing, typography } from '../theme/theme';
 
 type LogoMode = 'none' | 'hero' | 'inline';
 

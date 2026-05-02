@@ -1,33 +1,33 @@
 /**
  * AI-guided ordering: backend decisions + Google Places (or mock) + forward-only UI.
  */
-import { PizzaItem } from '@/components/PizzaItem';
+import { PizzaItem } from './PizzaItem';
 import {
   RestaurantCard,
   restaurantCardKeyExtractor,
-} from '@/components/RestaurantCard';
-import { theme } from '@/constants/theme';
+} from './RestaurantCard';
+import { theme } from '../constants/theme';
 import {
   getAiChatUrl,
   sendMessageToAI as fetchAiDecision,
   type AiDecision,
-} from '@/services/aiBackendDecision';
+} from '../services/aiBackendDecision';
 import {
   getNearbyRestaurantsWithCoords,
   matchPlaceRestaurantByName,
   PLACE_IMAGE_FALLBACK,
   type PlaceRestaurant,
-} from '@/services/googlePlaces';
-import { POPULAR_PIZZAS, type LatLng } from '@/services/api';
-import { acceptGroupOrderNotice } from '@/services/groupOrderNotice';
-import { auth, db } from '@/services/firebase';
+} from '../services/googlePlaces';
+import { POPULAR_PIZZAS, type LatLng } from '../services/api';
+import { acceptGroupOrderNotice } from '../services/groupOrderNotice';
+import { auth, db } from '../services/firebase';
 import {
   groupDocFromSnapshot,
   leaveGroup,
   markGroupOrdered,
   smartMatch,
   type GroupDoc,
-} from '@/services/groupMatching';
+} from '../services/groupMatching';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';

@@ -1,4 +1,4 @@
-import { subscribeDrivers, type DriverProfile } from '@/services/driverService';
+import { subscribeDrivers, type DriverProfile } from '../services/driverService';
 import { useEffect, useState } from 'react';
 
 export function useDrivers() {

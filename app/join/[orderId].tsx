@@ -1,24 +1,25 @@
-import AppLogo from '@/components/AppLogo';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { getIosAppStoreUrl, getPlayStoreUrl } from '@/constants/storeLinks';
-import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
-import { auth, db } from '@/services/firebase';
+import AppLogo from '../../components/AppLogo';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
+import { getIosAppStoreUrl, getPlayStoreUrl } from '../../constants/storeLinks';
+import { shadows, theme } from '../../constants/theme';
+import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../../lib/invite-link';
+import { goHome } from '../../lib/navigation';
+import { auth, db } from '../../services/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Linking,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { shadows, theme } from '@/constants/theme';
 
 const c = theme.colors;
 
@@ -183,7 +184,7 @@ export default function JoinInviteScreen() {
           </Text>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => router.replace('/(tabs)')}
+            onPress={goHome}
           >
             <Text style={styles.primaryButtonText}>Go to HalfOrder</Text>
           </TouchableOpacity>

@@ -1,7 +1,8 @@
-import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '@/components/KeyboardToolbar';
-import { userNeedsEmailVerification } from '@/lib/authEmailVerification';
-import { useAuth } from '@/services/AuthContext';
-import { auth } from '@/services/firebase';
+import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '../../components/KeyboardToolbar';
+import { userNeedsEmailVerification } from '../../lib/authEmailVerification';
+import { goHome } from '../../lib/navigation';
+import { useAuth } from '../../services/AuthContext';
+import { auth } from '../../services/firebase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -18,9 +19,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { errorHaptic, successHaptic } from '@/utils/haptics';
-import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { errorHaptic, successHaptic } from '../../utils/haptics';
+import { showError, showSuccess } from '../../utils/toast';
 
 const LOGIN_INPUTS = 2;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -113,7 +114,7 @@ export default function LoginScreen() {
       if (redirectTo) {
         router.replace(redirectTo as Parameters<typeof router.replace>[0]);
       } else {
-        router.replace('/(tabs)');
+        goHome();
       }
     } catch (err: unknown) {
       const message = getUserFriendlyError(err);

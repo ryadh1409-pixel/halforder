@@ -1,11 +1,11 @@
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { useAuth } from '../services/AuthContext';
+import { db } from '../services/firebase';
 import {
   deriveLifecycleForViewer,
   formatOrderCountdown,
   leaveOrderParticipant,
-} from '@/services/orderLifecycle';
-import { cancelHalfOrder } from '@/services/halfOrderCancel';
+} from '../services/orderLifecycle';
+import { cancelHalfOrder } from '../services/halfOrderCancel';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -31,10 +31,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError } from '@/utils/toast';
+import { FoodCardPaymentDisclaimer } from '../components/FoodCardPaymentDisclaimer';
+import { systemConfirm } from '../components/SystemDialogHost';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { showError } from '../utils/toast';
 
 const TAB_SPINNER = '#34D399';
 

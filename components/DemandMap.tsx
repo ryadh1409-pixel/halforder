@@ -1,11 +1,11 @@
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import OrderMarker from '@/components/OrderMarker';
-import SafeMap from '@/components/SafeMap';
+import { FoodCardPaymentDisclaimer } from './FoodCardPaymentDisclaimer';
+import OrderMarker from './OrderMarker';
+import SafeMap from './SafeMap';
 import {
   useNearbyOrdersRealtime,
   type NearbyOrder,
-} from '@/hooks/useNearbyOrders';
-import { haversineDistanceKm } from '@/lib/haversine';
+} from '../hooks/useNearbyOrders';
+import { haversineDistanceKm } from '../lib/haversine';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 
 const c = theme.colors;
 

@@ -3,8 +3,8 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getOrderById, markOrderPaid, useMockDeliveryOrders } from '@/services/mockDeliveryStore';
-import { payOrderWithStripe } from '@/services/payment';
+import { getOrderById, markOrderPaid, useMockDeliveryOrders } from '../services/mockDeliveryStore';
+import { payOrderWithStripe } from '../services/payment';
 
 export default function ReviewOrderScreen() {
   const router = useRouter();

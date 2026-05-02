@@ -7,14 +7,14 @@
  *
  * `blockUser(currentUserId, targetUserId)` — current user blocks target.
  */
-import { isUserBlocked as isUserBlockedFirestore } from '@/services/block';
-import type { BlockFilterCurrentUser } from '@/utils/filter';
+import { isUserBlocked as isUserBlockedFirestore } from './block';
+import type { BlockFilterCurrentUser } from '../utils/filter';
 import {
   blockUser as blockUserPersist,
   unblockUser as unblockUserPersist,
-} from '@/services/blocks';
+} from './blocks';
 
-export type { BlockFilterCurrentUser } from '@/utils/filter';
+export type { BlockFilterCurrentUser } from '../utils/filter';
 
 export async function blockUser(
   currentUserId: string,

@@ -5,9 +5,9 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-import { ORDER_STATUS } from '@/constants/orderStatus';
-import { auth, db } from '@/services/firebase';
-import { normalizeOrderUserIds } from '@/services/orders';
+import { ORDER_STATUS } from '../constants/orderStatus';
+import { auth, db } from './firebase';
+import { normalizeOrderUserIds } from './orders';
 
 export async function markHalfOrderChatActive(orderId: string): Promise<void> {
   const oid = orderId.trim();

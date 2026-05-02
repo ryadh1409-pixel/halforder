@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, type ViewStyle } from 'react-native';
 
-import { gradients } from '@/theme/theme';
+import { gradients } from '../theme/theme';
 
 type Props = {
   height?: number;

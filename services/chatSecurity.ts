@@ -1,5 +1,5 @@
 import type { Firestore } from 'firebase/firestore';
-import { moderateUserContent } from '@/utils/contentModeration';
+import { moderateUserContent } from '../utils/contentModeration';
 
 const CHAT_MAX_CHARS = 200;
 

@@ -1,6 +1,6 @@
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
-import { blockUser, submitUserReport } from '@/services/userSafety';
+import { useAuth } from '../services/AuthContext';
+import { db } from '../services/firebase';
+import { blockUser, submitUserReport } from '../services/userSafety';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -14,10 +14,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
-import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { systemActionSheet, systemConfirm } from '../components/SystemDialogHost';
+import { theme } from '../constants/theme';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { showError, showSuccess } from '../utils/toast';
 
 const c = theme.colors;
 

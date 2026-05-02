@@ -1,10 +1,11 @@
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
-import { isUserBlocked } from '@/services/blockService';
-import { auth, db } from '@/services/firebase';
-import { theme } from '@/constants/theme';
+import { useHiddenUserIds } from '../../hooks/useHiddenUserIds';
+import { isUserBlocked } from '../../services/blockService';
+import { auth, db } from '../../services/firebase';
+import { theme } from '../../constants/theme';
 import { doc, getDoc } from 'firebase/firestore';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { goBackSafe, goHome } from '../../lib/navigation';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,7 +22,6 @@ const c = theme.colors;
 type UserMini = { uid: string; displayName: string; photoURL: string | null };
 
 export default function FoodMatchScreen() {
-  const router = useRouter();
   const hiddenUserIds = useHiddenUserIds();
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const id = typeof matchId === 'string' ? matchId : '';
@@ -115,7 +115,7 @@ export default function FoodMatchScreen() {
         <View style={styles.pad}>
           <Text style={styles.title}>Match</Text>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.btn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.btn} onPress={goBackSafe}>
             <Text style={styles.btnText}>Go back</Text>
           </TouchableOpacity>
         </View>
@@ -175,7 +175,7 @@ export default function FoodMatchScreen() {
 
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => router.replace('/(tabs)' as never)}
+          onPress={goHome}
           activeOpacity={0.9}
         >
           <Text style={styles.secondaryBtnText}>Keep swiping</Text>

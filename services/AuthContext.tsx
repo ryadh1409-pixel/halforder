@@ -23,13 +23,13 @@ import {
   increment,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createAlert } from '@/services/alerts';
-import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
+import { createAlert } from './alerts';
+import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../lib/invite-link';
 import {
   getUserFriendlyError,
   isFirebaseAuthUserInvalidated,
-} from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
+} from '../utils/errorHandler';
+import { logError } from '../utils/errorLogger';
 import React, {
   createContext,
   useCallback,
@@ -39,23 +39,23 @@ import React, {
   useState,
 } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
-import { theme } from '@/constants/theme';
-import { auth, db } from '@/services/firebase';
+import { theme } from '../constants/theme';
+import { auth, db } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
   profilePhoneDigitsOnly,
-} from '@/lib/profileWhatsAppPhone';
-import { syncUserRoleToFirestore } from '@/utils/admin';
-import { uploadImageAsync } from '@/services/uploadImage';
-import { claimReferralInboxRewards } from '@/services/referralRewards';
-import { subscribeExpoPushTokenRefresh } from '@/services/notifications';
+} from '../lib/profileWhatsAppPhone';
+import { syncUserRoleToFirestore } from '../utils/admin';
+import { uploadImageAsync } from './uploadImage';
+import { claimReferralInboxRewards } from './referralRewards';
+import { subscribeExpoPushTokenRefresh } from './notifications';
 import {
   persistUserPushTokens,
   registerExpoPushTokenAndSyncToFirestore,
-} from '@/services/pushNotifications';
-import { useUserRole } from '@/hooks/useUserRole';
-import { createRestaurant } from '@/services/restaurantService';
-import type { UserRole } from '@/services/userService';
+} from './pushNotifications';
+import { useUserRole } from '../hooks/useUserRole';
+import { createRestaurant } from './restaurantService';
+import type { UserRole } from './userService';
 
 const REFERRAL_CREDIT = 2;
 

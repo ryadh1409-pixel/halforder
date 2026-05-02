@@ -1,10 +1,11 @@
-import { useAvailableOrders } from '@/hooks/useAvailableOrders';
-import { useDriverOrders } from '@/hooks/useDriverOrders';
-import { updateDriverOnlineStatus, acceptDeliveryOrder, acceptGroupDelivery } from '@/services/driverService';
-import { useAuth } from '@/services/AuthContext';
-import { updateOrderStatus } from '@/services/orderService';
-import { requireRole } from '@/utils/requireRole';
-import { showError, showSuccess } from '@/utils/toast';
+import AppHeader from '../components/AppHeader';
+import { useAvailableOrders } from '../hooks/useAvailableOrders';
+import { useDriverOrders } from '../hooks/useDriverOrders';
+import { useAuth } from '../services/AuthContext';
+import { acceptDeliveryOrder, acceptGroupDelivery, updateDriverOnlineStatus } from '../services/driverService';
+import { updateOrderStatus } from '../services/orderService';
+import { requireRole } from '../utils/requireRole';
+import { showError, showSuccess } from '../utils/toast';
 import React, { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -86,6 +87,7 @@ export default function DriverDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
+      <AppHeader title="Driver Dashboard" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Driver Dashboard</Text>

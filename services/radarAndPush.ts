@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { getUserLocation } from './location';
 
-import { registerExpoPushTokenAndSyncToFirestore } from '@/services/pushNotifications';
+import { registerExpoPushTokenAndSyncToFirestore } from './pushNotifications';
 import { db } from './firebase';
 
 /**

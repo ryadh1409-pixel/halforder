@@ -17,9 +17,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import { showError } from '@/utils/toast';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { logError } from '../utils/errorLogger';
+import { showError } from '../utils/toast';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
@@ -46,19 +46,19 @@ import {
   where,
 } from 'firebase/firestore';
 
-import { AIDescription } from '@/components/AIDescription';
+import { AIDescription } from '../components/AIDescription';
 import {
   getHeroImageUrlForType,
   parseMinutesFromTimeLabel,
   SWIPE_MAIN_TABS,
   type MockFoodCard,
   type SwipeMainTab,
-} from '@/constants/mockSwipeFood';
-import { haversineDistanceKm } from '@/lib/haversine';
-import { acceptFoodSwipe } from '@/services/foodSwipeMatch';
-import { ensureOrderChatInitialized } from '@/services/chat';
-import { auth, db } from '@/services/firebase';
-import { getCityFromCoordinates, getUserLocationSafe } from '@/services/location';
+} from '../constants/mockSwipeFood';
+import { haversineDistanceKm } from '../lib/haversine';
+import { acceptFoodSwipe } from '../services/foodSwipeMatch';
+import { ensureOrderChatInitialized } from '../services/chat';
+import { auth, db } from '../services/firebase';
+import { getCityFromCoordinates, getUserLocationSafe } from '../services/location';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_RADIUS = 26;

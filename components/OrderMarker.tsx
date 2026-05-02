@@ -1,6 +1,6 @@
-import type { NearbyOrder } from '@/hooks/useNearbyOrders';
-import { Marker } from '@/components/SafeMap';
-import { theme } from '@/constants/theme';
+import type { NearbyOrder } from '../hooks/useNearbyOrders';
+import { Marker } from './SafeMap';
+import { theme } from '../constants/theme';
 import React from 'react';
 
 const c = theme.colors;

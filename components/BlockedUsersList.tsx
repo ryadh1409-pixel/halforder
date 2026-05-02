@@ -1,4 +1,4 @@
-import type { BlockedUserRow } from '@/hooks/useBlockedUsers';
+import type { BlockedUserRow } from '../hooks/useBlockedUsers';
 import { Image } from 'expo-image';
 import React from 'react';
 import {

@@ -1,4 +1,4 @@
-import { auth } from '@/services/firebase';
+import { auth } from '../../services/firebase';
 import {
   createSingleOrder,
   getRestaurantById,
@@ -6,8 +6,8 @@ import {
   subscribeMySingleOrders,
   type MarketplaceMeal,
   type MarketplaceSingleOrder,
-} from '@/services/marketplaceMvp';
-import { showError, showSuccess } from '@/utils/toast';
+} from '../../services/marketplaceMvp';
+import { showError, showSuccess } from '../../utils/toast';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {

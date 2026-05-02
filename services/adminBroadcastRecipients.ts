@@ -3,7 +3,7 @@
  */
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
-import { haversineDistanceKm, type LatLng } from '@/services/haversineKm';
+import { haversineDistanceKm, type LatLng } from './haversineKm';
 
 export type AdminBroadcastTargetMode = 'all' | 'active_users';
 

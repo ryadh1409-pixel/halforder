@@ -6,6 +6,16 @@ export function HapticTab(props: BottomTabBarButtonProps) {
   return (
     <PlatformPressable
       {...props}
+      onPress={(e) => {
+        if (__DEV__) {
+          const label =
+            typeof props.accessibilityLabel === 'string'
+              ? props.accessibilityLabel
+              : 'tab';
+          console.log('[HapticTab] press', label);
+        }
+        props.onPress?.(e);
+      }}
       onPressIn={(ev) => {
         if (process.env.EXPO_OS === 'ios') {
           // Add a soft haptic feedback when pressing down on the tabs.

@@ -2,42 +2,42 @@ import {
   ADMIN_FOOD_CARD_SLOT_IDS,
   FOOD_CARD_ORDER_MAX_USERS,
   isAdminFoodCardSlotId,
-} from '@/constants/adminFoodCards';
-import { ADMIN_UID } from '@/constants/adminUid';
-import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '@/constants/paymentDisclaimer';
+} from '../constants/adminFoodCards';
+import { ADMIN_UID } from '../constants/adminUid';
+import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '../constants/paymentDisclaimer';
 import {
   HALF_ORDER_MATCH_WAIT_MS,
   ORDER_STATUS,
-} from '@/constants/orderStatus';
-import { autoInvite } from '@/services/autoInvite';
-import { auth, db } from '@/services/firebase';
+} from '../constants/orderStatus';
+import { autoInvite } from './autoInvite';
+import { auth, db } from './firebase';
 import {
   ensureHalfOrderChat,
   postHalfOrderChatSystemMessage,
-} from '@/services/halfOrderChat';
-import { hasBlockBetween } from '@/services/blocks';
+} from './halfOrderChat';
+import { hasBlockBetween } from './blocks';
 import {
   loadHalfOrderCreatorProfiles,
   normalizeOrderUserIds,
-} from '@/services/orders';
-import { trySendPairJoinExpoPush } from '@/services/orderPairPushNotify';
-import { syncOrderMemberProfilesForOrder } from '@/services/orderMemberProfile';
+} from './orders';
+import { trySendPairJoinExpoPush } from './orderPairPushNotify';
+import { syncOrderMemberProfilesForOrder } from './orderMemberProfile';
 import {
   fetchJoinableOrderIdsForCard,
   loadHostProfileForOrderJoin,
   transactionJoinHalfOrderForCard,
-} from '@/services/foodCardSlotOrders';
-import { applyHalfOrderPairReferralRewards } from '@/services/referralRewards';
+} from './foodCardSlotOrders';
+import { applyHalfOrderPairReferralRewards } from './referralRewards';
 import {
   getPublicUserFields,
   type PublicUserFields,
-} from '@/services/users';
+} from './users';
 import {
   isFirestoreArrayServerTimestampError,
   isFirestoreCompositeIndexError,
   isJoinOrderUserFacingError,
   logFirestoreIndexError,
-} from '@/lib/joinOrderFirestore';
+} from '../lib/joinOrderFirestore';
 import {
   addDoc,
   collection,

@@ -1,7 +1,7 @@
 import {
   subscribeRestaurantByOwner,
   type RestaurantDoc,
-} from '@/services/restaurantDashboard';
+} from '../services/restaurantDashboard';
 import { useEffect, useState } from 'react';
 
 export function useRestaurant(ownerId: string | null | undefined) {

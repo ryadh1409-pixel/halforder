@@ -11,18 +11,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
-import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
-import { useBlock } from '@/hooks/useBlock';
-import { useTrustScore } from '@/hooks/useTrustScore';
-import { auth, db } from '@/services/firebase';
+import { systemActionSheet, systemConfirm } from '../../components/SystemDialogHost';
+import { theme } from '../../constants/theme';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { showError, showSuccess } from '../../utils/toast';
+import { useBlock } from '../../hooks/useBlock';
+import { useTrustScore } from '../../hooks/useTrustScore';
+import { auth, db } from '../../services/firebase';
 import {
   reportContentIdUser,
   submitReport,
   type ReportReason,
-} from '@/services/reports';
+} from '../../services/reports';
 
 const c = theme.colors;
 const BADGE_BG = '#1B2230';

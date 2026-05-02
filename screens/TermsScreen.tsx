@@ -1,5 +1,5 @@
-import { theme } from '@/constants/theme';
-import { TERMS_URL } from '@/services/userTerms';
+import { theme } from '../constants/theme';
+import { TERMS_URL } from '../services/userTerms';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {

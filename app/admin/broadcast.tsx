@@ -1,14 +1,14 @@
-import { ADMIN_BROADCAST_TEMPLATES } from '@/constants/adminBroadcastTemplates';
-import { adminColors as COLORS } from '@/constants/adminTheme';
-import { isAdminUser } from '@/constants/adminUid';
+import { ADMIN_BROADCAST_TEMPLATES } from '../../constants/adminBroadcastTemplates';
+import { adminColors as COLORS } from '../../constants/adminTheme';
+import { isAdminUser } from '../../constants/adminUid';
 import {
   collectBroadcastRecipientTokens,
   type AdminBroadcastTargetMode,
-} from '@/services/adminBroadcastRecipients';
-import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
-import { getUserLocationSafe } from '@/services/location';
-import { sendExpoPush } from '@/services/sendExpoPush';
+} from '../../services/adminBroadcastRecipients';
+import { useAuth } from '../../services/AuthContext';
+import { db } from '../../services/firebase';
+import { getUserLocationSafe } from '../../services/location';
+import { sendExpoPush } from '../../services/sendExpoPush';
 import {
   addDoc,
   collection,
@@ -27,9 +27,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { logError } from '../../utils/errorLogger';
+import { showError, showSuccess } from '../../utils/toast';
 
 export default function AdminSendNotificationScreen() {
   const router = useRouter();

@@ -1,4 +1,4 @@
-import { auth } from '@/services/firebase';
+import { auth } from '../../services/firebase';
 import { sendPasswordResetEmail } from '@firebase/auth';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { theme } from '../../constants/theme';
+import { getUserFriendlyError } from '../../utils/errorHandler';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();

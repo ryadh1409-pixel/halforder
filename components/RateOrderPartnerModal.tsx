@@ -3,7 +3,7 @@
  * Shows after order completes; 1–5 stars, optional comment, submit.
  * Prevents duplicate ratings via hasRatedOrder check before save.
  */
-import { hasRatedOrderForUser, saveRating } from '@/services/ratings';
+import { hasRatedOrderForUser, saveRating } from '../services/ratings';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,9 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { theme } from '@/constants/theme';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError } from '@/utils/toast';
+import { theme } from '../constants/theme';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { showError } from '../utils/toast';
 
 const C = theme.colors;
 

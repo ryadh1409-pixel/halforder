@@ -9,7 +9,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 
-import { db } from '@/services/firebase';
+import { db } from './firebase';
 
 export type OrderMemberLocation = { lat: number; lng: number };
 

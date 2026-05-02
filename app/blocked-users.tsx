@@ -1,5 +1,5 @@
-import { BlockedUsersList } from '@/components/BlockedUsersList';
-import { useBlockedUsers } from '@/hooks/useBlockedUsers';
+import { BlockedUsersList } from '../components/BlockedUsersList';
+import { useBlockedUsers } from '../hooks/useBlockedUsers';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { showError, showSuccess } from '../utils/toast';
 
 const BG = '#000000';
 

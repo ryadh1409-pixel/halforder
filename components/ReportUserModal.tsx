@@ -2,7 +2,7 @@ import {
   UGC_REPORT_REASONS,
   type ReportReason,
   submitReport,
-} from '@/services/reports';
+} from '../services/reports';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,

@@ -1,22 +1,22 @@
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { adminError, adminLog } from '@/lib/admin/adminDebug';
+import { AdminHeader } from '../../../components/admin/AdminHeader';
+import { adminRoutes } from '../../../constants/adminRoutes';
+import { adminCardShell, adminColors as COLORS } from '../../../constants/adminTheme';
+import { theme } from '../../../constants/theme';
+import { adminError, adminLog } from '../../../lib/admin/adminDebug';
 import {
   formatFirestoreTime,
   isActiveOrderStatus,
   orderCreatorUid,
   orderParticipantUids,
   reportDetailText,
-} from '@/lib/admin/orderHelpers';
-import { db } from '@/services/firebase';
+} from '../../../lib/admin/orderHelpers';
+import { db } from '../../../services/firebase';
 import {
   demoteUserFromAdmin,
   deleteUserDocumentAsAdmin,
   promoteUserToAdmin,
-} from '@/services/adminUserActions';
-import { useAuth } from '@/services/AuthContext';
+} from '../../../services/adminUserActions';
+import { useAuth } from '../../../services/AuthContext';
 import {
   collection,
   doc,
@@ -37,9 +37,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { systemConfirm } from '../../../components/SystemDialogHost';
+import { getUserFriendlyError } from '../../../utils/errorHandler';
+import { showError, showSuccess } from '../../../utils/toast';
 
 type OrderRow = {
   id: string;

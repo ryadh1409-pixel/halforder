@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import {
   mapOrderMemberSnap,
   type OrderMemberProfileDoc,
-} from '@/services/orderMemberProfile';
-import { db } from '@/services/firebase';
+} from '../services/orderMemberProfile';
+import { db } from '../services/firebase';
 
 /**
  * Live `orders/{orderId}/order_members/*` profiles for HalfOrder UI.

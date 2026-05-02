@@ -1,11 +1,11 @@
-import ContactButtons from '@/components/ContactButtons';
-import MatchCheckoutMap, { type MapPoint } from '@/components/MatchCheckoutMap';
-import { FoodCardPaymentDisclaimer } from '@/components/FoodCardPaymentDisclaimer';
-import PaymentOption, { type PaymentChoice } from '@/components/PaymentOption';
-import { createAlert } from '@/services/alerts';
-import { auth, db } from '@/services/firebase';
-import { getUserLocation } from '@/services/location';
-import { haversineDistanceKm } from '@/lib/haversine';
+import ContactButtons from '../../components/ContactButtons';
+import MatchCheckoutMap, { type MapPoint } from '../../components/MatchCheckoutMap';
+import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
+import PaymentOption, { type PaymentChoice } from '../../components/PaymentOption';
+import { createAlert } from '../../services/alerts';
+import { auth, db } from '../../services/firebase';
+import { getUserLocation } from '../../services/location';
+import { haversineDistanceKm } from '../../lib/haversine';
 import {
   addDoc,
   collection,
@@ -26,7 +26,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
+import { theme } from '../../constants/theme';
 
 const c = theme.colors;
 

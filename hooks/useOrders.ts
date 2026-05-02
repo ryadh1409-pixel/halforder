@@ -1,7 +1,7 @@
 import {
   getOrders,
   type RestaurantOrder,
-} from '@/services/orderService';
+} from '../services/orderService';
 import { useEffect, useState } from 'react';
 
 export function useRestaurantOrders(restaurantId: string | null | undefined) {

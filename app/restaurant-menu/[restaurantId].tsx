@@ -1,7 +1,8 @@
-import { useMenu } from '@/hooks/useMenu';
-import { useAuth } from '@/services/AuthContext';
-import { useCart } from '@/services/CartContext';
-import { showError } from '@/utils/toast';
+import AppHeader from '../../components/AppHeader';
+import { useMenu } from '../../hooks/useMenu';
+import { useAuth } from '../../services/AuthContext';
+import { useCart } from '../../services/CartContext';
+import { showError } from '../../utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
@@ -39,6 +40,7 @@ export default function RestaurantMenuScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.centered}>
+        <AppHeader title="Restaurant Menu" />
         <ActivityIndicator size="large" color="#16A34A" />
       </SafeAreaView>
     );
@@ -46,6 +48,7 @@ export default function RestaurantMenuScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
+      <AppHeader title="Restaurant Menu" />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Restaurant Menu</Text>
         {items.length === 0 ? (

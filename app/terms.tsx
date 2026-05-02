@@ -1,4 +1,4 @@
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import {

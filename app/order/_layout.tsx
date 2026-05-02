@@ -8,6 +8,8 @@ export default function OrderLayout() {
       <Stack.Screen name="[id]" />
       <Stack.Screen name="room/[id]" />
       <Stack.Screen name="success" />
+      <Stack.Screen name="checkout" />
+      <Stack.Screen name="payment-callback" />
     </Stack>
   );
 }

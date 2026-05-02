@@ -1,4 +1,4 @@
-import { theme } from '@/constants/theme';
+import { theme } from '../constants/theme';
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import {

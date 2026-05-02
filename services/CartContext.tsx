@@ -14,6 +14,7 @@ type CartContextValue = {
   addToCart: (item: Omit<CartItem, 'qty'>) => void;
   removeFromCart: (itemId: string) => void;
   clearCart: () => void;
+  clearCartForRestaurant: (restaurantId: string) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -46,6 +47,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       },
       clearCart() {
         setItems([]);
+      },
+      clearCartForRestaurant(restaurantId) {
+        setItems((prev) => prev.filter((row) => row.restaurantId !== restaurantId));
       },
     }),
     [items],

@@ -1,6 +1,6 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { OAuthProvider, signInWithCredential } from 'firebase/auth';
-import { auth } from '@/services/firebase';
+import { auth } from '../firebase';
 
 export async function signInWithApple(): Promise<void> {
   const available = await AppleAuthentication.isAvailableAsync();

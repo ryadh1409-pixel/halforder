@@ -1,5 +1,5 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/services/firebase';
+import { auth, db } from './firebase';
 
 /**
  * Log when the app receives a push notification (foreground or background).

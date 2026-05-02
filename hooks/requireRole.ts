@@ -1,1 +1,1 @@
-export { requireRole, useRequireRole } from '@/utils/requireRole';
+export { requireRole, useRequireRole } from '../utils/requireRole';

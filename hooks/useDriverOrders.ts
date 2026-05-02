@@ -1,4 +1,4 @@
-import { subscribeDriverOrders, type DriverOrder } from '@/services/driverService';
+import { subscribeDriverOrders, type DriverOrder } from '../services/driverService';
 import { useEffect, useState } from 'react';
 
 export function useDriverOrders(driverId: string | null | undefined) {

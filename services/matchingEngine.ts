@@ -18,11 +18,11 @@ import {
 import {
   GROWTH_MATCH_RADIUS_KM,
   GROWTH_ORDER_SCAN_LIMIT,
-} from '@/constants/growth';
-import { getHiddenUserIds } from '@/services/block';
-import { db } from '@/services/firebase';
-import { isUserFlagged } from '@/services/userModeration';
-import { mapRawUserDocument } from '@/services/users';
+} from '../constants/growth';
+import { getHiddenUserIds } from './block';
+import { db } from './firebase';
+import { isUserFlagged } from './userModeration';
+import { mapRawUserDocument } from './users';
 
 /** Input user for `getSmartMatches` (location + food intent). */
 export type GrowthMatchUser = {

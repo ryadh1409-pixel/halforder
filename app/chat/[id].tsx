@@ -1,5 +1,5 @@
-import ReportUserModal from '@/components/ReportUserModal';
-import { reportContentIdChatMessage } from '@/services/reports';
+import ReportUserModal from '../../components/ReportUserModal';
+import { reportContentIdChatMessage } from '../../services/reports';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc,
@@ -27,14 +27,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '@/utils/contentModeration';
-import { showError, showSuccess } from '@/utils/toast';
-import { useHiddenUserIds } from '@/hooks/useHiddenUserIds';
-import { blockUser } from '@/services/blockService';
-import { auth, db } from '@/services/firebase';
-import { markHalfOrderChatActive } from '@/services/halfOrderLifecycle';
+import { systemActionSheet, systemConfirm } from '../../components/SystemDialogHost';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '../../utils/contentModeration';
+import { showError, showSuccess } from '../../utils/toast';
+import { useHiddenUserIds } from '../../hooks/useHiddenUserIds';
+import { blockUser } from '../../services/blockService';
+import { auth, db } from '../../services/firebase';
+import { markHalfOrderChatActive } from '../../services/halfOrderLifecycle';
 
 /** Firestore message doc shape varies; listener spreads `doc.data()`. */
 type ChatMessage = { id: string } & Record<string, unknown>;

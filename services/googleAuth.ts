@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, signInWithCredential, type User } from 'firebase/auth';
 import { useCallback, useMemo, useState } from 'react';
 
-import { auth } from '@/services/firebase';
+import { auth } from './firebase';
 
 WebBrowser.maybeCompleteAuthSession();
 

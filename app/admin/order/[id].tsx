@@ -1,9 +1,9 @@
-import { AdminHeader } from '@/components/admin/AdminHeader';
-import { adminRoutes } from '@/constants/adminRoutes';
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import { theme } from '@/constants/theme';
-import { adminLog } from '@/lib/admin/adminDebug';
-import { adminDeleteOrderDeep } from '@/lib/admin/deleteOrderAdmin';
+import { AdminHeader } from '../../../components/admin/AdminHeader';
+import { adminRoutes } from '../../../constants/adminRoutes';
+import { adminCardShell, adminColors as COLORS } from '../../../constants/adminTheme';
+import { theme } from '../../../constants/theme';
+import { adminLog } from '../../../lib/admin/adminDebug';
+import { adminDeleteOrderDeep } from '../../../lib/admin/deleteOrderAdmin';
 import {
   formatFirestoreTime,
   formatMillisToronto,
@@ -13,8 +13,8 @@ import {
   orderDisplayTitle,
   orderExpiresAtMs,
   orderParticipantUids,
-} from '@/lib/admin/orderHelpers';
-import { db } from '@/services/firebase';
+} from '../../../lib/admin/orderHelpers';
+import { db } from '../../../services/firebase';
 import {
   collection,
   doc,
@@ -34,9 +34,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { showError, showSuccess } from '@/utils/toast';
+import { systemConfirm } from '../../../components/SystemDialogHost';
+import { getUserFriendlyError } from '../../../utils/errorHandler';
+import { showError, showSuccess } from '../../../utils/toast';
 
 type Msg = { id: string; text: string; at: string; atMs: number };
 

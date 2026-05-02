@@ -1,6 +1,6 @@
-import { getHiddenUserIds } from '@/services/block';
-import { db } from '@/services/firebase';
-import { isUserFlagged } from '@/services/userModeration';
+import { getHiddenUserIds } from './block';
+import { db } from './firebase';
+import { isUserFlagged } from './userModeration';
 import {
   collection,
   getDocs,

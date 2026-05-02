@@ -2,7 +2,7 @@ import { EncodingType, readAsStringAsync } from 'expo-file-system/legacy';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { Platform } from 'react-native';
 
-import { auth, ensureAuthReady, storage } from '@/services/firebase';
+import { auth, ensureAuthReady, storage } from './firebase';
 
 /** Matches Storage rules: `profiles/{auth.uid}.jpg` */
 export function profileImageStoragePath(uid: string): string {

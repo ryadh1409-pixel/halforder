@@ -4,15 +4,15 @@
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { collection, getDocs } from 'firebase/firestore';
 
-import { ORDER_STATUS } from '@/constants/orderStatus';
+import { ORDER_STATUS } from '../constants/orderStatus';
 import {
   ACTIVE_2H_MS,
   expoTokenFromUserFields,
   lastActiveMs,
   userLatLngFromDoc,
-} from '@/services/adminBroadcastRecipients';
-import { db } from '@/services/firebase';
-import { haversineDistanceKm, type LatLng } from '@/services/haversineKm';
+} from './adminBroadcastRecipients';
+import { db } from './firebase';
+import { haversineDistanceKm, type LatLng } from './haversineKm';
 
 const CLUSTER_RADIUS_KM = 3;
 

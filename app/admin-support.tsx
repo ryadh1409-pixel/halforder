@@ -17,11 +17,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatTorontoTime } from '@/lib/format-toronto-time';
-import { auth, db } from '@/services/firebase';
-import { useAuth } from '@/services/AuthContext';
-import { isAdminUser } from '@/constants/adminUid';
-import { theme } from '@/constants/theme';
+import { formatTorontoTime } from '../lib/format-toronto-time';
+import { auth, db } from '../services/firebase';
+import { useAuth } from '../services/AuthContext';
+import { isAdminUser } from '../constants/adminUid';
+import { theme } from '../constants/theme';
 
 const c = theme.colors;
 

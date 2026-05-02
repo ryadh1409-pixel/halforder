@@ -1,7 +1,7 @@
 /**
  * Admin consoles share the app design tokens.
  */
-import { shadows, theme } from '@/constants/theme';
+import { shadows, theme } from './theme';
 
 const t = theme.colors;
 

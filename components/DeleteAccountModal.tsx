@@ -1,7 +1,7 @@
-import { deleteUserAccount } from '@/services/deleteUserAccount';
-import { getUserFriendlyError } from '@/utils/errorHandler';
-import { logError } from '@/utils/errorLogger';
-import { showNotice } from '@/utils/toast';
+import { deleteUserAccount } from '../services/deleteUserAccount';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import { logError } from '../utils/errorLogger';
+import { showNotice } from '../utils/toast';
 import type { User } from '@firebase/auth';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
