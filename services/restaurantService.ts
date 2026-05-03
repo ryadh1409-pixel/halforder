@@ -16,6 +16,9 @@ export type RestaurantProfile = {
   type: 'restaurant' | 'food_truck';
   profileCompleted: boolean;
   description: string;
+  stripeAccountId?: string | null;
+  stripeConnected?: boolean;
+  stripeChargesEnabled?: boolean;
 };
 
 export async function getRestaurant(
@@ -34,6 +37,10 @@ export async function getRestaurant(
     type: data.type === 'food_truck' ? 'food_truck' : 'restaurant',
     profileCompleted: data.profileCompleted === true,
     description: typeof data.description === 'string' ? data.description : '',
+    stripeAccountId:
+      typeof data.stripeAccountId === 'string' ? data.stripeAccountId : null,
+    stripeConnected: data.stripeConnected === true,
+    stripeChargesEnabled: data.stripeChargesEnabled === true,
   };
 }
 

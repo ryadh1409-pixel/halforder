@@ -58,6 +58,8 @@ export type RestaurantOrder = {
   restaurantLocation: LatLng | null;
   driverLocation: LatLng | null;
   createdAtLabel: string;
+  /** Firestore `createdAt` millis when available (for “today” stats). */
+  createdAtMs: number | null;
 };
 
 function makeGroupId() {
@@ -109,6 +111,31 @@ function toCreatedAtLabel(value: unknown): string {
       .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
   return 'Now';
+}
+
+function toCreatedAtMs(value: unknown): number | null {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toMillis' in value &&
+    typeof (value as { toMillis: () => number }).toMillis === 'function'
+  ) {
+    try {
+      const ms = (value as { toMillis: () => number }).toMillis();
+      return Number.isFinite(ms) ? ms : null;
+    } catch {
+      return null;
+    }
+  }
+  if (
+    value &&
+    typeof value === 'object' &&
+    'seconds' in value &&
+    typeof (value as { seconds: unknown }).seconds === 'number'
+  ) {
+    return (value as { seconds: number }).seconds * 1000;
+  }
+  return null;
 }
 
 function mapDocToRestaurantOrder(
@@ -199,6 +226,7 @@ function mapDocToRestaurantOrder(
     restaurantLocation: restLoc,
     driverLocation: parseLatLng(data.driverLocation),
     createdAtLabel: toCreatedAtLabel(data.createdAt),
+    createdAtMs: toCreatedAtMs(data.createdAt),
   };
 }
 
@@ -282,7 +310,16 @@ export function getOrders(
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
-      onData(snap.docs.map((docSnap) => mapDocToRestaurantOrder(docSnap, restaurantId)));
+      try {
+        onData(
+          snap.docs.map((docSnap) =>
+            mapDocToRestaurantOrder(docSnap, restaurantId),
+          ),
+        );
+      } catch (e) {
+        console.error('[getOrders]', e);
+        onData([]);
+      }
     },
     () => onData([]),
   );

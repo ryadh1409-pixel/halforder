@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 
-/** Main tab shell — always use this for “Home” from nested stacks (admin, merchant, driver, order, …). */
+/** Main tab shell — same as app root redirect after terms (`/` → `/(tabs)`). */
 const TABS_ROOT = '/(tabs)' as const;
 
 export function goHome(): void {

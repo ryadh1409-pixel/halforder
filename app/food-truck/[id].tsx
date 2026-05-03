@@ -1,109 +1,186 @@
-import { createMockOrder } from '../../services/mockDeliveryStore';
+import { useMenu } from '../../hooks/useMenu';
+import { db } from '../../services/firebase';
+import { useAuth } from '../../services/AuthContext';
+import { useCart } from '../../services/CartContext';
+import { showError } from '../../utils/toast';
+import { Image as ExpoImage } from 'expo-image';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Meal = {
-  id: string;
+type VenueHeader = {
   name: string;
-  price: number;
-};
-
-type FoodTruckMenu = {
-  name: string;
-  meals: Meal[];
-};
-
-const MOCK_MENUS: Record<string, FoodTruckMenu> = {
-  'tacos-el-jefe': {
-    name: 'Tacos El Jefe',
-    meals: [
-      { id: 'm1', name: 'Beef Tacos', price: 11.99 },
-      { id: 'm2', name: 'Chicken Burrito', price: 12.5 },
-      { id: 'm3', name: 'Loaded Nachos', price: 9.99 },
-    ],
-  },
-  'curry-express': {
-    name: 'Curry Express',
-    meals: [
-      { id: 'm4', name: 'Butter Chicken Bowl', price: 13.99 },
-      { id: 'm5', name: 'Paneer Masala', price: 12.99 },
-      { id: 'm6', name: 'Veg Biryani', price: 11.49 },
-    ],
-  },
-  'burger-bus': {
-    name: 'Burger Bus',
-    meals: [
-      { id: 'm7', name: 'Classic Cheeseburger', price: 10.99 },
-      { id: 'm8', name: 'Spicy Chicken Burger', price: 11.49 },
-      { id: 'm9', name: 'Fries + Drink Combo', price: 8.99 },
-    ],
-  },
+  logo: string | null;
+  location: string;
+  isOpen: boolean;
 };
 
 export default function FoodTruckMenuScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string }>();
+  const restaurantId = typeof rawId === 'string' ? rawId : '';
+  const { user } = useAuth();
+  const { items: menu, loading: menuLoading } = useMenu(restaurantId || null);
+  const { items: cart, addToCart, removeFromCart } = useCart();
+
+  const [venue, setVenue] = useState<VenueHeader | null>(null);
+  const [venueLoading, setVenueLoading] = useState(Boolean(restaurantId));
+
   const [showMenu, setShowMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState<string>('Spam');
   const [reportNote, setReportNote] = useState('');
-  const truck = useMemo(
-    () => (id ? MOCK_MENUS[id] : null) ?? { name: 'Food Truck', meals: [] },
-    [id],
+
+  useEffect(() => {
+    if (!restaurantId) {
+      setVenue(null);
+      setVenueLoading(false);
+      return;
+    }
+    setVenueLoading(true);
+    setVenue(null);
+    const unsub = onSnapshot(
+      doc(db, 'restaurants', restaurantId),
+      (snap) => {
+        if (!snap.exists()) {
+          setVenue(null);
+          setVenueLoading(false);
+          return;
+        }
+        const data = snap.data();
+        setVenue({
+          name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'Venue',
+          logo: typeof data.logo === 'string' && data.logo.trim() ? data.logo.trim() : null,
+          location:
+            typeof data.location === 'string' && data.location.trim()
+              ? data.location.trim()
+              : '',
+          isOpen: data.isOpen !== false,
+        });
+        setVenueLoading(false);
+      },
+      () => {
+        setVenue(null);
+        setVenueLoading(false);
+      },
+    );
+    return () => unsub();
+  }, [restaurantId]);
+
+  const cartItems = useMemo(
+    () => cart.filter((row) => row.restaurantId === restaurantId),
+    [cart, restaurantId],
   );
 
-  function handleSoloOrder(mealName: string) {
-    console.log('Solo order placed');
-    const created = createMockOrder({
-      restaurantName: truck.name,
-      itemName: mealName,
-      totalPrice: 24.99,
-      pickupLocation: `${truck.name} Pickup Spot`,
-      dropoffLocation: 'Customer Destination',
-      destination: { latitude: 43.6481, longitude: -79.3974 },
-    });
-    Alert.alert('Solo order confirmed', `Your order for ${mealName} has been placed.`);
-    router.push(`/review-order/${created.id}` as never);
-  }
+  const totalPrice = useMemo(
+    () => cartItems.reduce((sum, row) => sum + row.price * row.qty, 0),
+    [cartItems],
+  );
 
-  function handleOpenChat() {
-    const chatId = `food-truck-${id ?? 'general'}`;
-    router.push(`/chat/${chatId}` as never);
-  }
-
-  function handleInviteNearby() {
-    Alert.alert('Invite Nearby Users', 'Invite people nearby to join your order');
+  function openCart() {
+    if (!user?.uid) {
+      showError('Please sign in first.');
+      return;
+    }
+    if (cartItems.length === 0) {
+      showError('Cart is empty.');
+      return;
+    }
+    router.push(
+      `/restaurant-menu/cart?restaurantId=${encodeURIComponent(restaurantId)}` as never,
+    );
   }
 
   function handleSubmitReport() {
-    console.log({
-      truckId: id ?? 'unknown',
-      reason: reportReason,
-      note: reportNote.trim() || null,
-    });
     setShowReportModal(false);
     setShowMenu(false);
     setReportReason('Spam');
     setReportNote('');
-    Alert.alert('Report submitted', 'Thanks, your report has been submitted');
+  }
+
+  const menuBlockLoading = menuLoading;
+
+  if (!restaurantId) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>Venue</Text>
+          <Text style={styles.subtitle}>Missing venue link.</Text>
+          <Pressable style={styles.secondaryBtn} onPress={() => router.back()}>
+            <Text style={styles.secondaryBtnText}>Go back</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (venueLoading) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.fullCenter}>
+          <ActivityIndicator size="large" color="#16A34A" />
+          <Text style={styles.loadingHint}>Loading venue…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!venue) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>Venue</Text>
+          <Text style={styles.subtitle}>
+            This venue is not available or you do not have access.
+          </Text>
+          <Pressable style={styles.secondaryBtn} onPress={() => router.back()}>
+            <Text style={styles.secondaryBtnText}>Go back</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{truck.name}</Text>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.title} numberOfLines={2}>
+              {venue.name}
+            </Text>
+            <Text style={styles.locationLine} numberOfLines={3}>
+              {venue.location || 'Location not listed'}
+            </Text>
+            <View style={styles.statusRow}>
+              <View
+                style={[
+                  styles.statusPill,
+                  venue.isOpen ? styles.statusOpen : styles.statusClosed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    venue.isOpen ? styles.statusOpenText : styles.statusClosedText,
+                  ]}
+                >
+                  {venue.isOpen ? 'Open' : 'Closed'}
+                </Text>
+              </View>
+            </View>
+          </View>
           <Pressable
             style={styles.moreButton}
             onPress={() => setShowMenu((prev) => !prev)}
@@ -111,7 +188,15 @@ export default function FoodTruckMenuScreen() {
             <Text style={styles.moreButtonText}>⋯</Text>
           </Pressable>
         </View>
-        <Text style={styles.subtitle}>Menu</Text>
+
+        {venue.logo ? (
+          <ExpoImage
+            source={{ uri: venue.logo }}
+            style={styles.heroLogo}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
+        ) : null}
 
         {showMenu ? (
           <View style={styles.menuSheet}>
@@ -122,48 +207,109 @@ export default function FoodTruckMenuScreen() {
                 setShowMenu(false);
               }}
             >
-              <Text style={styles.menuText}>Report this food truck</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                Alert.alert('Blocked', 'This food truck has been blocked.');
-              }}
-            >
-              <Text style={styles.menuText}>Block this food truck</Text>
+              <Text style={styles.menuText}>Report this venue</Text>
             </Pressable>
           </View>
         ) : null}
 
-        {truck.meals.map((meal) => (
-          <View key={meal.id} style={styles.mealCard}>
-            <View>
-              <Text style={styles.mealName}>{meal.name}</Text>
-              <Text style={styles.mealPrice}>${meal.price.toFixed(2)}</Text>
-            </View>
-            <Pressable
-              style={styles.orderButton}
-              onPress={() => handleSoloOrder(meal.name)}
-            >
-              <Text style={styles.orderButtonText}>Order</Text>
-            </Pressable>
+        <Text style={styles.sectionTitle}>Menu</Text>
+        {menuBlockLoading ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator size="large" color="#16A34A" />
+            <Text style={styles.loadingHint}>Loading menu…</Text>
           </View>
-        ))}
+        ) : menu.length === 0 ? (
+          <Text style={styles.emptyMenu}>No menu items published yet.</Text>
+        ) : (
+          menu.map((meal) => (
+            <View key={meal.id} style={styles.mealCard}>
+              {meal.image ? (
+                <ExpoImage
+                  source={{ uri: meal.image }}
+                  style={styles.mealImage}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View style={[styles.mealImage, styles.mealImagePh]} />
+              )}
+              <View style={styles.mealBody}>
+                <Text style={styles.mealName} numberOfLines={2}>
+                  {meal.name}
+                </Text>
+                <Text style={styles.mealPrice}>${meal.price.toFixed(2)}</Text>
+                <View style={styles.qtyRow}>
+                  <Pressable
+                    style={styles.qtyBtn}
+                    onPress={() => removeFromCart(meal.id)}
+                    disabled={
+                      !cart.find(
+                        (row) => row.id === meal.id && row.restaurantId === restaurantId,
+                      )
+                    }
+                  >
+                    <Text style={styles.qtyBtnText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.qtyValue}>
+                    {cartItems.find((row) => row.id === meal.id)?.qty ?? 0}
+                  </Text>
+                  <Pressable
+                    style={styles.qtyBtn}
+                    onPress={() =>
+                      addToCart({
+                        id: meal.id,
+                        name: meal.name,
+                        price: meal.price,
+                        image: meal.image,
+                        restaurantId,
+                      })
+                    }
+                  >
+                    <Text style={styles.qtyBtnText}>+</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.addCompact}
+                    onPress={() =>
+                      addToCart({
+                        id: meal.id,
+                        name: meal.name,
+                        price: meal.price,
+                        image: meal.image,
+                        restaurantId,
+                      })
+                    }
+                  >
+                    <Text style={styles.addCompactText}>Add</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ))
+        )}
 
         <View style={styles.socialSection}>
-          <Text style={styles.socialTitle}>Connect with others</Text>
-          <Pressable style={styles.socialButton} onPress={handleOpenChat}>
-            <Text style={styles.socialButtonText}>Open Chat</Text>
-          </Pressable>
+          <Text style={styles.socialTitle}>Connect</Text>
           <Pressable
-            style={[styles.socialButton, styles.inviteButton]}
-            onPress={handleInviteNearby}
+            style={styles.socialButton}
+            onPress={() =>
+              router.push(`/chat/venue-${encodeURIComponent(restaurantId)}` as never)
+            }
           >
-            <Text style={styles.socialButtonText}>Invite Nearby Users</Text>
+            <Text style={styles.socialButtonText}>Open chat</Text>
           </Pressable>
         </View>
       </ScrollView>
+
+      <View style={styles.cartBar}>
+        <Text style={styles.cartText}>Total: ${totalPrice.toFixed(2)}</Text>
+        <Pressable
+          style={[styles.placeBtn, cartItems.length === 0 && styles.placeBtnDisabled]}
+          onPress={openCart}
+          disabled={cartItems.length === 0}
+        >
+          <Text style={styles.placeText}>View cart</Text>
+        </Pressable>
+      </View>
 
       <Modal
         visible={showReportModal}
@@ -173,28 +319,26 @@ export default function FoodTruckMenuScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Report Food Truck</Text>
-            {['Spam', 'Wrong information', 'Offensive content', 'Other'].map(
-              (reason) => (
-                <Pressable
-                  key={reason}
+            <Text style={styles.modalTitle}>Report venue</Text>
+            {['Spam', 'Wrong information', 'Offensive content', 'Other'].map((reason) => (
+              <Pressable
+                key={reason}
+                style={[
+                  styles.reasonChip,
+                  reportReason === reason && styles.reasonChipActive,
+                ]}
+                onPress={() => setReportReason(reason)}
+              >
+                <Text
                   style={[
-                    styles.reasonChip,
-                    reportReason === reason && styles.reasonChipActive,
+                    styles.reasonChipText,
+                    reportReason === reason && styles.reasonChipTextActive,
                   ]}
-                  onPress={() => setReportReason(reason)}
                 >
-                  <Text
-                    style={[
-                      styles.reasonChipText,
-                      reportReason === reason && styles.reasonChipTextActive,
-                    ]}
-                  >
-                    {reason}
-                  </Text>
-                </Pressable>
-              ),
-            )}
+                  {reason}
+                </Text>
+              </Pressable>
+            ))}
             <TextInput
               style={styles.noteInput}
               placeholder="Optional note"
@@ -226,13 +370,39 @@ export default function FoodTruckMenuScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F8FAFC' },
-  content: { padding: 16, paddingBottom: 28 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 30, color: '#0F172A', fontWeight: '800' },
-  subtitle: { marginTop: 4, marginBottom: 12, color: '#64748B', fontWeight: '700' },
+  content: { padding: 16, paddingBottom: 120 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  title: { fontSize: 26, color: '#0F172A', fontWeight: '800', lineHeight: 30 },
+  locationLine: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  statusRow: { marginTop: 10, flexDirection: 'row' },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  statusOpen: { backgroundColor: 'rgba(22, 163, 74, 0.12)' },
+  statusClosed: { backgroundColor: 'rgba(148, 163, 184, 0.25)' },
+  statusPillText: { fontSize: 12, fontWeight: '800' },
+  statusOpenText: { color: '#15803D' },
+  statusClosedText: { color: '#475569' },
+  heroLogo: {
+    width: '100%',
+    height: 120,
+    marginTop: 14,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
   moreButton: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -244,33 +414,71 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
-    marginBottom: 10,
+    marginTop: 10,
     overflow: 'hidden',
   },
   menuItem: { paddingVertical: 12, paddingHorizontal: 14 },
   menuText: { color: '#0F172A', fontWeight: '600' },
+  sectionTitle: {
+    marginTop: 18,
+    marginBottom: 10,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  subtitle: { marginTop: 8, color: '#64748B', fontWeight: '600', lineHeight: 20 },
+  fullCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  loadingBlock: { paddingVertical: 24, alignItems: 'center' },
+  loadingHint: { marginTop: 10, color: '#64748B', fontWeight: '600' },
+  emptyMenu: { color: '#64748B', fontWeight: '600', marginBottom: 8 },
   mealCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 14,
+    padding: 12,
     marginBottom: 10,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  mealName: { color: '#0F172A', fontSize: 16, fontWeight: '700' },
-  mealPrice: { color: '#64748B', marginTop: 4, fontWeight: '600' },
-  orderButton: {
-    height: 38,
-    borderRadius: 10,
-    paddingHorizontal: 16,
+  mealImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 12,
+    backgroundColor: '#E2E8F0',
+  },
+  mealImagePh: { alignItems: 'center', justifyContent: 'center' },
+  mealBody: { flex: 1, minWidth: 0 },
+  mealName: { color: '#0F172A', fontSize: 16, fontWeight: '800' },
+  mealPrice: { color: '#16A34A', marginTop: 6, fontWeight: '800' },
+  qtyRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  qtyBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  qtyBtnText: { color: '#334155', fontWeight: '900', fontSize: 18, marginTop: -1 },
+  qtyValue: { minWidth: 22, textAlign: 'center', color: '#0F172A', fontWeight: '800' },
+  addCompact: {
+    marginLeft: 'auto',
+    height: 34,
+    borderRadius: 8,
+    paddingHorizontal: 14,
     backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orderButtonText: { color: '#FFFFFF', fontWeight: '800' },
+  addCompactText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
   socialSection: {
     marginTop: 14,
     borderRadius: 14,
@@ -286,10 +494,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#334155',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  inviteButton: { backgroundColor: '#1D4ED8' },
   socialButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  cartBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cartText: { color: '#0F172A', fontWeight: '800', fontSize: 16 },
+  placeBtn: {
+    marginLeft: 'auto',
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeBtnDisabled: { opacity: 0.45 },
+  placeText: { color: '#FFFFFF', fontWeight: '800' },
+  secondaryBtn: {
+    marginTop: 16,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  secondaryBtnText: { color: '#334155', fontWeight: '800' },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.45)',

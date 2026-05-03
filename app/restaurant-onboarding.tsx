@@ -1,23 +1,36 @@
 import { useAuth } from '../services/AuthContext';
 import { createRestaurant, getRestaurant } from '../services/restaurantService';
-import { pickAndUploadImage } from '../services/uploadImage';
-import { requireRole } from '../utils/requireRole';
-import { showError, showSuccess } from '../utils/toast';
-import { Redirect, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableWithoutFeedback,
-    View,
+  connectWithStripeExpo,
+  fetchStripeConnectStatusExpo,
+  openStripeConnectInApp,
+  resumeStripeOnboardingExpo,
+  type StripeConnectStatus,
+} from '../services/stripeConnect';
+import { pickAndUploadImage } from '../services/uploadImage';
+import { API_BASE_URL } from '@/frontend/config/api';
+import { requireRole } from '../utils/requireRole';
+import { stripeConnectErrorMessage } from '../utils/stripeConnectErrors';
+import { showError, showSuccess } from '../utils/toast';
+import { useFocusEffect } from '@react-navigation/native';
+import { Redirect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  type AppStateStatus,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -32,6 +45,12 @@ export default function RestaurantOnboardingScreen() {
   const [logo, setLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [stripeFirestoreConnected, setStripeFirestoreConnected] = useState(false);
+  const [stripeChargesFromFirestore, setStripeChargesFromFirestore] = useState(false);
+  const [stripeConnectStatus, setStripeConnectStatus] = useState<StripeConnectStatus | null>(null);
+  const [stripeStatusLoading, setStripeStatusLoading] = useState(false);
+  const [stripeActionLoading, setStripeActionLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
@@ -55,6 +74,9 @@ export default function RestaurantOnboardingScreen() {
         setDescription(profile?.description ?? '');
         setType(profile?.type ?? 'restaurant');
         setLogo(profile?.logo ?? null);
+        setStripeAccountId(profile?.stripeAccountId ?? null);
+        setStripeFirestoreConnected(profile?.stripeConnected === true);
+        setStripeChargesFromFirestore(profile?.stripeChargesEnabled === true);
       })
       .catch((error) => {
         console.log('[restaurant-onboarding] failed to check restaurant profile', error);
@@ -68,6 +90,43 @@ export default function RestaurantOnboardingScreen() {
   }, [user?.uid]);
 
   useEffect(() => {
+    setStripeConnectStatus(null);
+  }, [user?.uid]);
+
+  const refreshStripeConnectStatus = useCallback(async () => {
+    if (!user?.uid) return;
+    setStripeStatusLoading(true);
+    try {
+      const data = await fetchStripeConnectStatusExpo(user.uid);
+      console.log('[restaurant-onboarding] Stripe status parsed', data);
+      setStripeConnectStatus(data);
+      const profile = await getRestaurant(user.uid);
+      if (profile) {
+        setStripeAccountId(profile.stripeAccountId ?? null);
+        setStripeFirestoreConnected(profile.stripeConnected === true);
+        setStripeChargesFromFirestore(profile.stripeChargesEnabled === true);
+      }
+    } catch (e) {
+      console.warn('[restaurant-onboarding] stripe-status failed (non-fatal)', e);
+    } finally {
+      setStripeStatusLoading(false);
+    }
+  }, [user?.uid]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshStripeConnectStatus();
+    }, [refreshStripeConnectStatus]),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') void refreshStripeConnectStatus();
+    });
+    return () => sub.remove();
+  }, [refreshStripeConnectStatus]);
+
+  useEffect(() => {
     if (!placesKey || query.trim().length < 3) {
       setPredictions([]);
       return;
@@ -77,7 +136,7 @@ export default function RestaurantOnboardingScreen() {
       try {
         const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query.trim())}&key=${placesKey}`;
         const response = await fetch(url);
-        const json = (await response.json()) as { predictions?: Array<{ description?: string }> };
+        const json = (await response.json()) as { predictions?: { description?: string }[] };
         const next = (json.predictions ?? [])
           .map((p) => (typeof p.description === 'string' ? p.description : ''))
           .filter(Boolean)
@@ -109,6 +168,41 @@ export default function RestaurantOnboardingScreen() {
       return;
     }
     if (result.url) setLogo(result.url);
+  }
+
+  const stripeConnectedEffective =
+    stripeFirestoreConnected || stripeConnectStatus?.stripeConnected === true;
+  const stripeChargesEffective =
+    stripeChargesFromFirestore || stripeConnectStatus?.charges_enabled === true;
+
+  async function handleConnectWithStripe() {
+    if (!user?.uid) return;
+    setStripeActionLoading(true);
+    try {
+      const { url } = await connectWithStripeExpo(user.uid);
+      await openStripeConnectInApp(url);
+      void refreshStripeConnectStatus();
+      showSuccess('Finish setup in Stripe, then return here.');
+    } catch (error) {
+      Alert.alert('Stripe Connect', stripeConnectErrorMessage(error));
+    } finally {
+      setStripeActionLoading(false);
+    }
+  }
+
+  async function handleResumeStripeSetup() {
+    if (!user?.uid) return;
+    setStripeActionLoading(true);
+    try {
+      const { url } = await resumeStripeOnboardingExpo(user.uid);
+      await openStripeConnectInApp(url);
+      void refreshStripeConnectStatus();
+      showSuccess('Continue in Stripe, then return here.');
+    } catch (error) {
+      Alert.alert('Stripe Connect', stripeConnectErrorMessage(error));
+    } finally {
+      setStripeActionLoading(false);
+    }
   }
 
   async function saveProfile() {
@@ -208,6 +302,70 @@ export default function RestaurantOnboardingScreen() {
               <Text style={styles.secondaryText}>{logo ? 'Change Logo' : 'Upload Logo'}</Text>
             </Pressable>
             {logo ? <Image source={{ uri: logo }} style={styles.logoPreview} /> : null}
+            <Text style={styles.sectionTitle}>Payouts</Text>
+            <View style={styles.stripeCard}>
+              <View style={styles.stripeBadgeRow}>
+                <View
+                  style={[
+                    styles.stripeStatusBadge,
+                    stripeConnectedEffective ? styles.stripeStatusBadgeOk : styles.stripeStatusBadgePending,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stripeStatusBadgeText,
+                      stripeConnectedEffective ? styles.stripeStatusBadgeTextOk : null,
+                    ]}
+                  >
+                    {stripeStatusLoading
+                      ? 'Checking…'
+                      : stripeConnectedEffective
+                        ? 'Connected ✅'
+                        : stripeAccountId
+                          ? 'Setup incomplete'
+                          : 'Not connected'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.stripeSub}>
+                {stripeChargesEffective
+                  ? 'You can receive payouts on paid orders.'
+                  : 'Register with Stripe to get paid for orders.'}
+              </Text>
+              {__DEV__ && /localhost|127\.0\.0\.1/i.test(API_BASE_URL) && Platform.OS !== 'web' ? (
+                <Text style={styles.stripeDevHint}>
+                  {'Use your computer’s LAN IP in frontend/config/api.ts or EXPO_PUBLIC_STRIPE_API_URL (same Wi‑Fi as this phone).'}
+                </Text>
+              ) : null}
+              {!stripeConnectedEffective ? (
+                <>
+                  <Pressable
+                    style={[styles.stripePrimaryBtn, stripeActionLoading ? styles.disabledButton : null]}
+                    disabled={stripeActionLoading || !!stripeAccountId}
+                    onPress={handleConnectWithStripe}
+                  >
+                    {stripeActionLoading && !stripeAccountId ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.stripePrimaryBtnText}>Connect with Stripe</Text>
+                    )}
+                  </Pressable>
+                  {stripeAccountId ? (
+                    <Pressable
+                      style={[styles.stripeSecondaryBtn, stripeActionLoading ? styles.disabledButton : null]}
+                      disabled={stripeActionLoading}
+                      onPress={handleResumeStripeSetup}
+                    >
+                      {stripeActionLoading && stripeAccountId ? (
+                        <ActivityIndicator color="#0F172A" />
+                      ) : (
+                        <Text style={styles.stripeSecondaryBtnText}>Resume Setup</Text>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </>
+              ) : null}
+            </View>
             <Pressable style={styles.primaryButton} onPress={saveProfile} disabled={saving}>
               {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Save Restaurant</Text>}
             </Pressable>
@@ -270,6 +428,66 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryText: { color: '#FFFFFF', fontWeight: '800' },
+  sectionTitle: {
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  disabledButton: { opacity: 0.5 },
+  stripeCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    marginBottom: 14,
+  },
+  stripeBadgeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  stripeStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  stripeStatusBadgeOk: { backgroundColor: '#DCFCE7' },
+  stripeStatusBadgePending: { backgroundColor: '#F1F5F9' },
+  stripeStatusBadgeText: { fontWeight: '800', fontSize: 13, color: '#0F172A' },
+  stripeStatusBadgeTextOk: { color: '#166534' },
+  stripeSub: {
+    color: '#64748B',
+    fontWeight: '600',
+    fontSize: 14,
+    marginBottom: 14,
+    lineHeight: 20,
+  },
+  stripeDevHint: {
+    color: '#B45309',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  stripePrimaryBtn: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#635BFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stripePrimaryBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  stripeSecondaryBtn: {
+    marginTop: 10,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stripeSecondaryBtnText: { color: '#0F172A', fontWeight: '800', fontSize: 16 },
   secondaryButton: {
     height: 42,
     borderRadius: 10,

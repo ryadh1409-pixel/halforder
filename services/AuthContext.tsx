@@ -38,8 +38,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ActivityIndicator, Platform, View } from 'react-native';
-import { theme } from '../constants/theme';
+import { Platform } from 'react-native';
 import { auth, db } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
@@ -72,10 +71,11 @@ export type EmailSignUpPayload = {
 
 type AuthContextValue = {
   user: User | null;
+  /** Auth + Firestore role subscription — false before navigation should run from `/`. */
   loading: boolean;
   role: UserRole | null;
-  /** `users/{uid}.role` from Firestore (for promoted admins). */
-  firestoreUserRole: string | null;
+  /** `users/{uid}.role` from Firestore (for promoted admins). Always `null` when signed out. */
+  firestoreUserRole: UserRole | null;
   /** Global app role used by routing guards. */
   appRole: 'user' | 'driver';
   appUser: { uid: string; role: 'user' | 'driver' } | null;
@@ -641,25 +641,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={value}>
-      {loading ? (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: theme.colors.sheetDark,
-          }}
-        >
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      ) : (
-        children
-      )}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 }
 
+/**
+ * Auth + Firestore role. For root navigation, use `loading` and `firestoreUserRole` and do not
+ * call `router.replace` until `loading` is `false`.
+ */
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

@@ -2,7 +2,7 @@ import { goHome } from '../lib/navigation';
 import { useAuth } from '../services/AuthContext';
 import { type UserRole } from '../services/userService';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 export function useRequireRole(allowedRoles: UserRole[]) {
   const { user, role, loading } = useAuth();
@@ -32,10 +32,17 @@ export function useRequireRole(allowedRoles: UserRole[]) {
     wrongRoleNavigatedRef.current = false;
   }, [allowedRolesKey, loading, role, router, user]);
 
-  return {
-    loading,
-    authorized: !!user && !!role && allowedRoles.includes(role),
-  };
+  const authorized = !!user && !!role && allowedRoles.includes(role);
+
+  return useMemo(
+    () => ({
+      loading,
+      authorized,
+      stale: false,
+      error: null as string | null,
+    }),
+    [loading, authorized],
+  );
 }
 
 export const requireRole = useRequireRole;

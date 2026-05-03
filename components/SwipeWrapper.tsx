@@ -5,7 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
 /** Tab segment names in left-to-right order (must match `app/(tabs)/` screens). */
-const TAB_ORDER = ['index', 'ai', 'orders', 'trucks', 'profile'] as const;
+const TAB_ORDER = ['index', 'explore', 'ai', 'orders', 'home', 'profile'] as const;
 
 function hrefForTab(name: string) {
   return `/(tabs)/${name}`;
@@ -13,7 +13,7 @@ function hrefForTab(name: string) {
 
 type SwipeWrapperProps = {
   children: React.ReactNode;
-  /** 0 = Home … 4 = Profile */
+  /** Index in TAB_ORDER (0 = Home …). */
   currentIndex: number;
 };
 

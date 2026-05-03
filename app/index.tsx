@@ -3,8 +3,8 @@ import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
 import { useAuth } from '../services/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Redirect } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 type GateState =
@@ -12,13 +12,13 @@ type GateState =
   | { phase: 'ready'; onboardingDone: boolean };
 
 /**
- * App root (`/`): gate onboarding and Firestore terms, then send users to the main shell.
- * For in-app “Home” from nested stacks, use `goHome()` from `../lib/navigation` (tabs group `/(tabs)`).
- * Terms are enforced per account via `users/{uid}.hasAcceptedTerms`, not device storage.
+ * App root (`/`): wait for auth + role loading, gate onboarding/terms, then `router.replace`
+ * (no `<Redirect />` while `loading` is true — avoids navigation before the tree is stable).
  */
 export default function Index() {
   const [gate, setGate] = useState<GateState>({ phase: 'loading' });
-  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const { user, loading, firestoreUserRole } = useAuth();
   const { ready: termsReady, accepted: termsAccepted } = useUserTermsStatus(
     user?.uid,
   );
@@ -50,8 +50,44 @@ export default function Index() {
 
   const waitingForTerms =
     Boolean(user) && !termsReady && gate.phase === 'ready';
+  const gateReady = gate.phase === 'ready';
+  const onboardingDone = gateReady ? gate.onboardingDone : false;
 
-  if (gate.phase === 'loading' || authLoading || waitingForTerms) {
+  useLayoutEffect(() => {
+    if (loading) return;
+    if (!gateReady) return;
+    if (!onboardingDone) {
+      router.replace('/onboarding');
+      return;
+    }
+    if (waitingForTerms) return;
+    if (user && termsReady && !termsAccepted) {
+      router.replace('/terms-acceptance?returnTo=/(tabs)' as never);
+      return;
+    }
+    if (firestoreUserRole === 'restaurant') {
+      router.replace('/(tabs)/host' as never);
+      return;
+    }
+    router.replace('/(tabs)' as never);
+  }, [
+    loading,
+    gateReady,
+    onboardingDone,
+    waitingForTerms,
+    user,
+    termsReady,
+    termsAccepted,
+    firestoreUserRole,
+    router,
+  ]);
+
+  if (
+    loading ||
+    !gateReady ||
+    waitingForTerms ||
+    (gateReady && !onboardingDone)
+  ) {
     return (
       <View
         style={{
@@ -67,21 +103,10 @@ export default function Index() {
     );
   }
 
-  if (!gate.onboardingDone) {
-    return <Redirect href="/onboarding" />;
-  }
-
-  if (user && termsReady && !termsAccepted) {
-    return (
-      <Redirect
-        href={
-          '/terms-acceptance?returnTo=/(tabs)' as Parameters<
-            typeof Redirect
-          >[0]['href']
-        }
-      />
-    );
-  }
-
-  return <Redirect href="/(tabs)" />;
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <AppLogo size={112} marginTop={0} />
+      <ActivityIndicator size="large" style={{ marginTop: 40 }} />
+    </View>
+  );
 }

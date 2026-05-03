@@ -48,21 +48,27 @@ export function getFoodItems(
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
-      onData(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            name: typeof data.name === 'string' ? data.name : 'Food item',
-            price: typeof data.price === 'number' ? data.price : 0,
-            image: typeof data.image === 'string' ? data.image : null,
-            restaurantId,
-            available: data.available !== false,
-            description: typeof data.description === 'string' ? data.description : '',
-            category: typeof data.category === 'string' ? data.category : '',
-          };
-        }),
-      );
+      try {
+        onData(
+          snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              name: typeof data.name === 'string' ? data.name : 'Food item',
+              price: typeof data.price === 'number' ? data.price : 0,
+              image: typeof data.image === 'string' ? data.image : null,
+              restaurantId,
+              available: data.available !== false,
+              description:
+                typeof data.description === 'string' ? data.description : '',
+              category: typeof data.category === 'string' ? data.category : '',
+            };
+          }),
+        );
+      } catch (e) {
+        console.error('[getFoodItems]', e);
+        onData([]);
+      }
     },
     () => onData([]),
   );

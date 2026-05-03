@@ -76,19 +76,24 @@ export function subscribeRestaurantByOwner(
   return onSnapshot(
     doc(db, 'restaurants', ownerId),
     (snap) => {
-      if (!snap.exists()) {
+      try {
+        if (!snap.exists()) {
+          onData(null);
+          return;
+        }
+        const data = snap.data();
+        onData({
+          id: ownerId,
+          name: typeof data.name === 'string' ? data.name : 'My Restaurant',
+          logo: typeof data.logo === 'string' ? data.logo : null,
+          location: typeof data.location === 'string' ? data.location : '',
+          isOpen: data.isOpen !== false,
+          ownerId,
+        });
+      } catch (e) {
+        console.error('[subscribeRestaurantByOwner]', e);
         onData(null);
-        return;
       }
-      const data = snap.data();
-      onData({
-        id: ownerId,
-        name: typeof data.name === 'string' ? data.name : 'My Restaurant',
-        logo: typeof data.logo === 'string' ? data.logo : null,
-        location: typeof data.location === 'string' ? data.location : '',
-        isOpen: data.isOpen !== false,
-        ownerId,
-      });
     },
     () => onData(null),
   );
@@ -237,7 +242,11 @@ export async function updateRestaurantOpen(
   restaurantId: string,
   isOpen: boolean,
 ): Promise<void> {
-  await updateDoc(doc(db, 'restaurants', restaurantId), { isOpen });
+  await setDoc(
+    doc(db, 'restaurants', restaurantId),
+    { isOpen, ownerId: restaurantId },
+    { merge: true },
+  );
 }
 
 export async function markOrderReady(orderId: string): Promise<void> {

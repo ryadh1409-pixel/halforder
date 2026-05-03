@@ -4,7 +4,7 @@ import OrdersScreen from '../../screens/OrdersScreen';
 
 export default function OrdersTab() {
   return (
-    <SwipeWrapper currentIndex={2}>
+    <SwipeWrapper currentIndex={3}>
       <OrdersScreen />
     </SwipeWrapper>
   );

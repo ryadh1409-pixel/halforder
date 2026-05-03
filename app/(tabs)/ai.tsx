@@ -654,7 +654,7 @@ export default function ChatScreen() {
   const showIdeaChips = !input.trim() && !loading;
 
   return (
-    <SwipeWrapper currentIndex={1}>
+    <SwipeWrapper currentIndex={2}>
     <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.container}

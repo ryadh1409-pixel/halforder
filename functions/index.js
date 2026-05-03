@@ -105,7 +105,14 @@ exports.createStripeAccount = functions.https.onCall(async (data, context) => {
     await admin
       .firestore()
       .doc(`restaurants/${restaurantId}`)
-      .set({ stripeAccountId: account.id }, { merge: true });
+      .set(
+        {
+          stripeAccountId: account.id,
+          stripeConnected: false,
+          stripeOnboardingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
     return { accountId: account.id };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -153,6 +160,177 @@ exports.createOnboardingLink = functions.https.onCall(async (data, context) => {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('[createOnboardingLink] failed', error);
     throw new functions.https.HttpsError('internal', 'Unable to create onboarding link');
+  }
+});
+
+/**
+ * One-shot Connect onboarding: create Express account if missing, persist `stripeAccountId`,
+ * then return a fresh Account Link URL (mobile opens in browser / SFSafariViewController).
+ */
+exports.startRestaurantStripeConnect = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  try {
+    if (!stripe) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+      );
+    }
+    const restaurantId =
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid;
+    if (restaurantId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'restaurantId must match the signed-in user',
+      );
+    }
+    const ref = admin.firestore().doc(`restaurants/${restaurantId}`);
+    const snap = await ref.get();
+    let accountId =
+      snap.exists && typeof snap.get('stripeAccountId') === 'string'
+        ? snap.get('stripeAccountId')
+        : '';
+    if (!accountId || !String(accountId).startsWith('acct_')) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        metadata: { firebaseRestaurantId: restaurantId },
+      });
+      accountId = account.id;
+      await ref.set(
+        {
+          stripeAccountId: accountId,
+          stripeConnected: false,
+          stripeOnboardingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      type: 'account_onboarding',
+      return_url: connectReturnUrl,
+      refresh_url: connectRefreshUrl,
+    });
+    if (!link?.url || typeof link.url !== 'string') {
+      throw new functions.https.HttpsError('internal', 'Stripe did not return an onboarding URL');
+    }
+    return { url: link.url, accountId };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[startRestaurantStripeConnect] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to start Stripe Connect onboarding');
+  }
+});
+
+/** New Account Link for an existing Connect account (resume onboarding). */
+exports.resumeRestaurantStripeOnboarding = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  try {
+    if (!stripe) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+      );
+    }
+    const restaurantId =
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid;
+    if (restaurantId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'restaurantId must match the signed-in user',
+      );
+    }
+    const snap = await admin.firestore().doc(`restaurants/${restaurantId}`).get();
+    const accountId =
+      snap.exists && typeof snap.get('stripeAccountId') === 'string'
+        ? snap.get('stripeAccountId')
+        : '';
+    if (!accountId || !String(accountId).startsWith('acct_')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Create a Stripe account first (Connect with Stripe).',
+      );
+    }
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      type: 'account_onboarding',
+      return_url: connectReturnUrl,
+      refresh_url: connectRefreshUrl,
+    });
+    if (!link?.url || typeof link.url !== 'string') {
+      throw new functions.https.HttpsError('internal', 'Stripe did not return an onboarding URL');
+    }
+    return { url: link.url, accountId };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[resumeRestaurantStripeOnboarding] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to resume Stripe onboarding');
+  }
+});
+
+/** Live Connect flags + Firestore sync (call after returning from Stripe onboarding). */
+exports.getRestaurantStripeStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  try {
+    if (!stripe) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
+      );
+    }
+    const restaurantId =
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid;
+    if (restaurantId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'restaurantId must match the signed-in user',
+      );
+    }
+    const ref = admin.firestore().doc(`restaurants/${restaurantId}`);
+    const snap = await ref.get();
+    const accountId =
+      snap.exists && typeof snap.get('stripeAccountId') === 'string'
+        ? snap.get('stripeAccountId')
+        : '';
+    if (!accountId || !String(accountId).startsWith('acct_')) {
+      return {
+        hasAccount: false,
+        stripeConnected: false,
+        charges_enabled: false,
+        payouts_enabled: false,
+        details_submitted: false,
+      };
+    }
+    const account = await stripe.accounts.retrieve(accountId);
+    const charges_enabled = account.charges_enabled === true;
+    const payouts_enabled = account.payouts_enabled === true;
+    const details_submitted = account.details_submitted === true;
+    await ref.set(
+      {
+        stripeConnected: details_submitted,
+        stripeChargesEnabled: charges_enabled,
+        stripePayoutsEnabled: payouts_enabled,
+        stripeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return {
+      hasAccount: true,
+      stripeConnected: details_submitted,
+      charges_enabled,
+      payouts_enabled,
+      details_submitted,
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[getRestaurantStripeStatus] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to load Stripe status');
   }
 });
 
@@ -349,6 +527,30 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   } catch (err) {
     console.error('[stripeWebhook] signature verify failed', err);
     res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+
+  if (event.type === 'account.updated') {
+    const account = event.data.object;
+    const rid =
+      account.metadata && typeof account.metadata.firebaseRestaurantId === 'string'
+        ? account.metadata.firebaseRestaurantId
+        : '';
+    if (rid) {
+      await admin
+        .firestore()
+        .doc(`restaurants/${rid}`)
+        .set(
+          {
+            stripeConnected: account.details_submitted === true,
+            stripeChargesEnabled: account.charges_enabled === true,
+            stripePayoutsEnabled: account.payouts_enabled === true,
+            stripeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+    }
+    res.json({ received: true });
     return;
   }
 

@@ -123,16 +123,21 @@ export function subscribeDriverOrders(
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
-      const rows = snap.docs
-        .map((docSnap) => mapDriverOrder(docSnap))
-        .filter(
-          (o) =>
-            o.status !== 'delivered' &&
-            o.status !== 'rejected' &&
-            o.status !== 'pending' &&
-            o.status !== 'awaiting_payment',
-        );
-      onData(rows);
+      try {
+        const rows = snap.docs
+          .map((docSnap) => mapDriverOrder(docSnap))
+          .filter(
+            (o) =>
+              o.status !== 'delivered' &&
+              o.status !== 'rejected' &&
+              o.status !== 'pending' &&
+              o.status !== 'awaiting_payment',
+          );
+        onData(rows);
+      } catch (e) {
+        console.error('[subscribeDriverOrders]', e);
+        onData([]);
+      }
     },
     () => onData([]),
   );
@@ -149,10 +154,15 @@ export function subscribeAvailableOrders(
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
-      const rows = snap.docs
-        .map((docSnap) => mapDriverOrder(docSnap))
-        .filter((o) => !o.driverId);
-      onData(rows);
+      try {
+        const rows = snap.docs
+          .map((docSnap) => mapDriverOrder(docSnap))
+          .filter((o) => !o.driverId);
+        onData(rows);
+      } catch (e) {
+        console.error('[subscribeAvailableOrders]', e);
+        onData([]);
+      }
     },
     () => onData([]),
   );

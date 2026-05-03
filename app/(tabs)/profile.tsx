@@ -2,6 +2,7 @@ import SwipeWrapper from '@/components/SwipeWrapper';
 import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '../../components/KeyboardToolbar';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { DeleteAccountModal } from '../../components/DeleteAccountModal';
+import { adminRoutes } from '../../constants/adminRoutes';
 import { isAdminUser } from '../../constants/adminUid';
 import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
@@ -648,7 +649,7 @@ export default function ProfileScreen() {
 
   if (profileLoading && uid) {
     return (
-      <SwipeWrapper currentIndex={4}>
+      <SwipeWrapper currentIndex={5}>
       <SafeAreaView style={[dynamicStyles.container, dynamicStyles.centered]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <ActivityIndicator size="large" color={pal.primary} />
@@ -659,7 +660,7 @@ export default function ProfileScreen() {
 
   if (!uid) {
     return (
-      <SwipeWrapper currentIndex={4}>
+      <SwipeWrapper currentIndex={5}>
       <SafeAreaView style={dynamicStyles.container}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <ScrollView
@@ -710,7 +711,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SwipeWrapper currentIndex={4}>
+    <SwipeWrapper currentIndex={5}>
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={2} />
@@ -1135,9 +1136,21 @@ export default function ProfileScreen() {
               <Text style={dynamicStyles.label}>Admin</Text>
               <TouchableOpacity
                 style={dynamicStyles.primaryButton}
-                onPress={() => router.push('/admin')}
+                onPress={() => router.push(adminRoutes.home as never)}
               >
                 <Text style={dynamicStyles.primaryButtonText}>Open admin panel</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {firestoreUserRole === 'restaurant' ? (
+            <View style={dynamicStyles.card}>
+              <Text style={dynamicStyles.label}>Host</Text>
+              <TouchableOpacity
+                style={dynamicStyles.primaryButton}
+                onPress={() => router.push('/(tabs)/host' as never)}
+              >
+                <Text style={dynamicStyles.primaryButtonText}>Open Host Dashboard</Text>
               </TouchableOpacity>
             </View>
           ) : null}
