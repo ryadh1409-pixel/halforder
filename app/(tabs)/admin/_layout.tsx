@@ -1,7 +1,7 @@
-import { requireRole } from '../../../utils/requireRole';
 import { Redirect, Stack } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { requireRole } from '../../../utils/requireRole';
 
 export default function AdminLayout() {
   const { loading, authorized } = requireRole(['admin']);

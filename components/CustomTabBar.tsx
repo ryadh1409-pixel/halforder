@@ -129,8 +129,8 @@ function CustomTabBarInner(props: CustomTabBarProps) {
     return null;
   }
 
-  const tabIndex = state?.index ?? 0;
-  const stale = state?.stale ?? false;
+  const tabIndex = typeof state?.index === 'number' ? state.index : 0;
+  const stale = typeof state === 'object' && state !== null && 'stale' in state ? Boolean(state.stale) : false;
   void stale;
 
   const role = props?.resolvedRole ?? 'user';
@@ -140,7 +140,7 @@ function CustomTabBarInner(props: CustomTabBarProps) {
       key={role}
       style={[styles.container, { bottom: Math.max(10, 8 + insets.bottom) }]}
     >
-      {state.routes?.map((route, index) => {
+      {routes.map((route, index) => {
         if (!route) return null;
         if (!route.name) return null;
         if (HIDDEN_TAB_NAMES.has(route.name)) return null;

@@ -14,6 +14,7 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import type { Auth, Dependencies } from 'firebase/auth';
 import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 
@@ -83,6 +84,15 @@ export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);
 /** Cloud Storage — uses `storageBucket` from firebaseConfig above. */
 export const storage = getStorage(app);
+
+/**
+ * Callable/httpsCallable region — must match deployed Functions (`firebase deploy`).
+ * Wrong region → FirebaseError `functions/not-found`.
+ */
+export const FIREBASE_FUNCTIONS_REGION =
+  process.env.EXPO_PUBLIC_FUNCTIONS_REGION?.trim() || 'us-central1';
+
+export const functions: Functions = getFunctions(app, FIREBASE_FUNCTIONS_REGION);
 
 let authBootstrapPromise: Promise<void> | null = null;
 

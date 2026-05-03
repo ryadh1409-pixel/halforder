@@ -88,7 +88,10 @@ export default function PaymentCallbackScreen() {
           <Pressable
             style={styles.button}
             onPress={() =>
-              router.replace(`/order/checkout?orderId=${encodeURIComponent(orderId)}` as never)
+              router.replace({
+                pathname: '/checkout',
+                params: { orderId },
+              } as never)
             }
           >
             <Text style={styles.buttonText}>Pay now</Text>
@@ -145,7 +148,10 @@ export default function PaymentCallbackScreen() {
         <Pressable
           style={styles.link}
           onPress={() =>
-            router.replace(`/order/checkout?orderId=${encodeURIComponent(orderId)}` as never)
+            router.replace({
+              pathname: '/checkout',
+              params: { orderId },
+            } as never)
           }
         >
           <Text style={styles.linkText}>Pay again</Text>

@@ -35,6 +35,7 @@ export const linking = {
       'safety-community-guidelines': 'safety-community-guidelines',
       'restaurant-dashboard': 'restaurant-dashboard',
       'restaurant-onboarding': 'restaurant-onboarding',
+      checkout: 'checkout',
       order: 'order',
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',

@@ -1,11 +1,9 @@
 import { API_BASE_URL, STRIPE_HTTP_ENABLED } from '@/frontend/config/api';
-import { app, auth } from './firebase';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { auth, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { apiFetch } from '@/utils/apiFetch';
-
-const functions = getFunctions(app);
 
 function logStripeHttp(label: string, payload: unknown) {
   try {
@@ -42,7 +40,7 @@ async function getIdToken(): Promise<string> {
   return user.getIdToken();
 }
 
-/** POST /create-stripe-account — local backend (`npm run backend`). */
+/** POST /create-stripe-account — Express (only when STRIPE_HTTP_ENABLED). */
 async function httpPostStripe(path: string, body: Record<string, unknown>) {
   const base = stripeHttpBase();
   if (!base) {
@@ -249,7 +247,7 @@ export async function createPaymentIntent(
   amount: number,
   accountId: string,
 ): Promise<string> {
-  const callable = httpsCallable(functions, 'createPaymentIntent');
+  const callable = httpsCallable(functions, 'createConnectPaymentIntent');
   const result = await callable({ amount, accountId });
   const clientSecret = (result.data as { clientSecret?: unknown })?.clientSecret;
   if (typeof clientSecret !== 'string' || !clientSecret.includes('_secret_')) {

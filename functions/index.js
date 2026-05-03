@@ -7,8 +7,28 @@ const { notifyUsersExpo } = require('./lib/expoPush');
 
 admin.initializeApp();
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
+/** Stripe API key from Firebase Functions runtime config only (`firebase functions:config:set stripe.secret="..."`). */
+function resolveStripeSecretFromFirebaseConfig() {
+  try {
+    const cfg = functions.config();
+    const secret = cfg?.stripe?.secret;
+    if (secret != null && String(secret).trim()) {
+      return String(secret).trim();
+    }
+  } catch (err) {
+    console.warn('[stripe] functions.config() failed:', err?.message || err);
+  }
+  return '';
+}
+
+const stripeSecretKey = resolveStripeSecretFromFirebaseConfig();
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+
+if (!stripeSecretKey) {
+  console.error(
+    '[stripe] stripe.secret missing in Firebase config. Run: firebase functions:config:set stripe.secret="sk_test_..." && firebase deploy --only functions',
+  );
+}
 
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 const checkoutCurrency = (process.env.STRIPE_CHECKOUT_CURRENCY || 'cad').toLowerCase();
@@ -473,7 +493,7 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
   return { url: session.url, sessionId: session.id };
 });
 
-exports.createPaymentIntent = functions.https.onCall(async (data, context) => {
+exports.createConnectPaymentIntent = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
   }
@@ -626,28 +646,67 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   res.json({ received: true });
 });
 
-exports.createPaymentIntentHttp = functions.https.onRequest(async (req, res) => {
+function setPaymentIntentCors(res) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+async function handleCreatePaymentIntent(req, res) {
+  console.log('🔥 createPaymentIntent HIT');
+  setPaymentIntentCors(res);
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
   try {
-    const stripeClient = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-    const { amount } = req.body;
-
-    if (!amount) {
-      return res.status(400).json({ error: 'Missing amount' });
+    console.log('[createPaymentIntent] body:', req.body);
+    if (!stripe) {
+      console.error(
+        '[createPaymentIntent] Stripe not configured — set stripe.secret: firebase functions:config:set stripe.secret="sk_test_..."',
+      );
+      res.status(500).json({ error: 'Stripe is not configured' });
+      return;
     }
 
-    const paymentIntent = await stripeClient.paymentIntents.create({
+    const raw = req.body?.amount;
+    const amount = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
+
+    if (!amount || amount <= 0 || !Number.isInteger(amount)) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'usd',
       automatic_payment_methods: { enabled: true },
     });
 
-    res.json({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    console.log('[createPaymentIntent] paymentIntent:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: paymentIntent.status,
+    });
+
+    if (!paymentIntent?.client_secret) {
+      res.status(500).json({ error: 'Stripe did not return a client secret' });
+      return;
+    }
+
+    return res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    console.error('❌ Stripe error:', err);
+    return res.status(500).json({ error: err.message || 'Error creating payment intent' });
   }
-});
+}
+
+exports.createPaymentIntent = functions.https.onRequest(handleCreatePaymentIntent);
 
 const ADMIN_FCM_TOKEN = process.env.ADMIN_FCM_TOKEN || '';
 

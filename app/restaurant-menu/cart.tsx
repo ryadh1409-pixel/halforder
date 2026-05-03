@@ -59,7 +59,7 @@ export default function CartScreen() {
         },
       });
       router.replace({
-        pathname: '/order/checkout',
+        pathname: '/checkout',
         params: { orderId },
       } as never);
     } catch (error) {

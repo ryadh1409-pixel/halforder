@@ -1,5 +1,5 @@
-import { theme } from '../constants/theme';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { theme } from '../constants/theme';
 
 const c = theme.colors;
 
