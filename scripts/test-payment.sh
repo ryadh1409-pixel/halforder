@@ -11,6 +11,8 @@ fi
 PROJECT_ID="halforfer"
 FUNCTION_URL="https://us-central1-${PROJECT_ID}.cloudfunctions.net/createPaymentIntent"
 STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-}"
+USER_ID="${FIREBASE_TEST_UID:-}"
+ID_TOKEN="${FIREBASE_ID_TOKEN:-}"
 
 if [ -z "$STRIPE_SECRET_KEY" ]; then
   echo "❌ Missing STRIPE_SECRET_KEY. Export it first:"
@@ -18,14 +20,22 @@ if [ -z "$STRIPE_SECRET_KEY" ]; then
   exit 1
 fi
 
+if [ -z "$USER_ID" ] || [ -z "$ID_TOKEN" ]; then
+  echo "❌ createPaymentIntent requires Firebase Auth (Bearer token + userId body)."
+  echo "   export FIREBASE_TEST_UID='<your uid>'"
+  echo "   export FIREBASE_ID_TOKEN='<ID token from client or REST>'"
+  exit 1
+fi
+
 AMOUNT="${1:-1000}"
 
-echo "🚀 Creating PaymentIntent (amount=${AMOUNT})..."
+echo "🚀 Creating order + PaymentIntent (amount=${AMOUNT})..."
 
-# ===== CREATE INTENT =====
+# ===== CREATE INTENT (HTTP + Bearer) =====
 RESP=$(curl -s -X POST "$FUNCTION_URL" \
   -H "Content-Type: application/json" \
-  -d "{\"amount\":${AMOUNT}}")
+  -H "Authorization: Bearer ${ID_TOKEN}" \
+  -d "{\"amount\":${AMOUNT},\"userId\":\"${USER_ID}\",\"items\":[]}")
 
 echo "📦 Raw response: $RESP"
 
@@ -45,7 +55,7 @@ echo "🔑 PaymentIntent ID: $PI_ID"
 # ===== CONFIRM PAYMENT =====
 echo "💳 Confirming payment with test card..."
 
-CONFIRM_RESP=$(curl -s https://api.stripe.com/v1/payment_intents/$PI_ID/confirm \
+CONFIRM_RESP=$(curl -s "https://api.stripe.com/v1/payment_intents/${PI_ID}/confirm" \
   -u "$STRIPE_SECRET_KEY:" \
   -d payment_method=pm_card_visa)
 

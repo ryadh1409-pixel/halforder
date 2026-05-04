@@ -1,10 +1,9 @@
-import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
-import AppLogo from '../components/AppLogo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { goHome } from '../lib/navigation';
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   NativeScrollEvent,
@@ -15,6 +14,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppLogo from '../components/AppLogo';
+import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
+import { goHome } from '../lib/navigation';
+import { useAuth } from '../services/AuthContext';
+import { startOnboarding } from '../services/stripeConnect';
 
 const BG = '#0B0F14';
 const { width } = Dimensions.get('window');
@@ -46,6 +50,22 @@ const SLIDES = [
 export default function OnboardingScreen() {
   const flatListRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
   const [index, setIndex] = useState(0);
+  const { user, role, loading: authLoading } = useAuth();
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const showRestaurantStripeCta =
+    !authLoading && !!user?.uid && (role === 'restaurant' || role === 'host' || role === 'admin');
+
+  const handleCompleteStripeSetup = useCallback(async () => {
+    if (!user?.uid) return;
+    setStripeLoading(true);
+    try {
+      await startOnboarding(user.uid);
+    } catch (e) {
+      Alert.alert('Stripe', e instanceof Error ? e.message : 'Could not open Stripe setup.');
+    } finally {
+      setStripeLoading(false);
+    }
+  }, [user?.uid]);
 
   const completeOnboarding = useCallback(async () => {
     await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
@@ -118,6 +138,20 @@ export default function OnboardingScreen() {
             />
           ))}
         </View>
+
+        {showRestaurantStripeCta ? (
+          <Pressable
+            style={[styles.stripeOutlineBtn, stripeLoading && styles.stripeOutlineBtnDisabled]}
+            disabled={stripeLoading}
+            onPress={() => void handleCompleteStripeSetup()}
+          >
+            {stripeLoading ? (
+              <ActivityIndicator color="#81C784" />
+            ) : (
+              <Text style={styles.stripeOutlineBtnText}>Complete Stripe Setup</Text>
+            )}
+          </Pressable>
+        ) : null}
 
         <View style={styles.bottomRow}>
           <Pressable
@@ -210,7 +244,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  stripeOutlineBtn: {
+    alignSelf: 'stretch',
+    marginHorizontal: 8,
+    marginBottom: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(129, 199, 132, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  stripeOutlineBtnDisabled: {
+    opacity: 0.55,
+  },
+  stripeOutlineBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#A5D6A7',
   },
   dot: {
     height: 8,

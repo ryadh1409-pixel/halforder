@@ -1143,7 +1143,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          {firestoreUserRole === 'restaurant' ? (
+          {firestoreUserRole === 'restaurant' || firestoreUserRole === 'host' ? (
             <View style={dynamicStyles.card}>
               <Text style={dynamicStyles.label}>Host</Text>
               <TouchableOpacity

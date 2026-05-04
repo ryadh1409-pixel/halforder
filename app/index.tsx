@@ -65,7 +65,7 @@ export default function Index() {
       router.replace('/terms-acceptance?returnTo=/(tabs)' as never);
       return;
     }
-    if (firestoreUserRole === 'restaurant') {
+    if (firestoreUserRole === 'restaurant' || firestoreUserRole === 'host') {
       router.replace('/(tabs)/host' as never);
       return;
     }

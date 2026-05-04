@@ -13,6 +13,8 @@
     "test": "jest --runInBand --forceExit",
     "test:rules": "jest --runInBand tests/firestoreRules.orders.test.ts --forceExit",
     "test:payment": "bash scripts/test-payment.sh",
+    "test:webhook": "bash scripts/test-webhook.sh",
+    "webhook:url": "bash scripts/show-webhook.sh",
     "generate:app-icon": "node ./scripts/generate-app-icon.mjs",
     "seed:orders": "node --experimental-strip-types scripts/run-seed-orders.ts",
     "migrate:food-cards-waiting-to-active": "node --experimental-strip-types scripts/migrate-food-cards-waiting-to-active.ts",

@@ -10,7 +10,7 @@ import React from 'react';
 export default function TabLayout() {
   const { firestoreUserRole } = useAuth();
   const role = firestoreUserRole ?? 'user';
-  const showHostTab = role === 'restaurant';
+  const showHostTab = role === 'restaurant' || role === 'host';
   const showDriverTab = role === 'driver' || role === 'admin';
 
   return (

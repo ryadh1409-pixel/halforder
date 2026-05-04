@@ -48,3 +48,53 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Stripe webhook testing
+
+Cloud Function: `stripeWebhook` (uses `req.rawBody` + `stripe.webhooks.constructEvent` for signature verification).
+
+1. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and log in:
+
+   ```bash
+   stripe login
+   ```
+
+2. **Local (Firebase emulator)** — start emulators, then forward events (replace `YOUR_PROJECT` with your Firebase project id, e.g. `halforfer`):
+
+   ```bash
+   firebase emulators:start --only functions
+   ```
+
+   In another terminal:
+
+   ```bash
+   stripe listen --forward-to http://127.0.0.1:5001/YOUR_PROJECT/us-central1/stripeWebhook
+   ```
+
+   Copy the webhook signing secret (`whsec_...`) printed by `stripe listen` and set **`STRIPE_WEBHOOK_SECRET`** for the Functions emulator so `constructEvent` can verify signatures.
+
+3. **Production** — register the HTTPS URL in the [Stripe Dashboard](https://dashboard.stripe.com/webhooks) and set **`STRIPE_WEBHOOK_SECRET`** on the deployed function (Firebase/GCP environment).
+
+4. Trigger a test event (with `stripe listen` running so Stripe can deliver the event):
+
+   ```bash
+   npm run test:webhook
+   ```
+
+5. Confirm in **Firebase → Functions → Logs**: lines like `🔥 Stripe webhook received:` and, for real order metadata, `✅ Order marked as PAID:`.
+
+## Stripe Webhook Setup (ONE TIME)
+
+1. Go to Stripe Dashboard
+2. Developers → Webhooks
+3. Click "Add endpoint"
+4. Paste this URL:
+
+https://us-central1-halforfer.cloudfunctions.net/stripeWebhook
+
+5. Select event:
+payment_intent.succeeded
+
+6. Save
+
+Done ✅

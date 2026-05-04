@@ -94,50 +94,26 @@ export const FIREBASE_FUNCTIONS_REGION =
 
 export const functions: Functions = getFunctions(app, FIREBASE_FUNCTIONS_REGION);
 
-let authBootstrapPromise: Promise<void> | null = null;
-
 /**
- * Ensures Firebase Auth is initialized and a user exists.
- * If no user session exists at app start, signs in anonymously.
+ * Waits for the initial `onAuthStateChanged` emission (restored session), ensures
+ * `auth.currentUser` exists (anonymous sign-in if still none), then primes the ID token
+ * so `httpsCallable` / HTTP `Bearer` calls do not hit `unauthenticated`.
  */
-export function ensureAuthReady(): Promise<void> {
-  if (authBootstrapPromise) return authBootstrapPromise;
-
-  authBootstrapPromise = new Promise((resolve, reject) => {
-    if (auth.currentUser) {
-      console.log('[auth] UID:', auth.currentUser.uid);
+export async function ensureAuthReady(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const unsub = onAuthStateChanged(auth, () => {
+      unsub();
       resolve();
-      return;
-    }
-
-    let settled = false;
-    let signingIn = false;
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (settled) return;
-
-      if (user) {
-        settled = true;
-        unsub();
-        console.log('[auth] UID:', user.uid);
-        resolve();
-        return;
-      }
-
-      if (signingIn) return;
-      signingIn = true;
-      try {
-        const cred = await signInAnonymously(auth);
-        settled = true;
-        unsub();
-        console.log('[auth] UID:', cred.user.uid);
-        resolve();
-      } catch (error) {
-        settled = true;
-        unsub();
-        reject(error);
-      }
     });
   });
 
-  return authBootstrapPromise;
+  if (!auth.currentUser) {
+    await signInAnonymously(auth);
+  }
+  if (!auth.currentUser) {
+    throw new Error('Firebase Auth could not establish a user session.');
+  }
+
+  await auth.currentUser.getIdToken();
+  console.log('[auth] ensureAuthReady UID:', auth.currentUser.uid);
 }

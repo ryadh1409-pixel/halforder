@@ -39,7 +39,7 @@ import React, {
   useState,
 } from 'react';
 import { Platform } from 'react-native';
-import { auth, db } from './firebase';
+import { auth, db, ensureAuthReady } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
   profilePhoneDigitsOnly,
@@ -276,6 +276,12 @@ async function ensureUserDocument(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void ensureAuthReady().catch((e) => {
+      console.warn('[auth] ensureAuthReady bootstrap failed', e);
+    });
+  }, []);
   const [testingRole, setTestingRole] = useState<'user' | 'driver' | null>(null);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
@@ -285,7 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const uid = user?.uid;
     if (!uid) return;
-    if (firestoreRole !== 'restaurant') return;
+    if (firestoreRole !== 'restaurant' && firestoreRole !== 'host') return;
 
     const ensureRestaurantProfile = async () => {
       try {
@@ -386,7 +392,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       persistUserPushTokens(uid, token).catch(() => {});
     });
     return () => sub.remove();
-  }, [user?.uid, user?.isAnonymous]);
+  }, [user]);
 
   const signUpWithEmail = useCallback(async (payload: EmailSignUpPayload) => {
     const trimmed = typeof payload.email === 'string' ? payload.email.trim() : '';

@@ -58,7 +58,7 @@ export default function HostDashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, loading: authLoading } = useAuth();
-  const { authorized, loading: roleLoading } = requireRole(['restaurant']);
+  const { authorized, loading: roleLoading } = requireRole(['restaurant', 'host']);
   const uid = user?.uid ?? '';
 
   const [restaurant, setRestaurant] = useState<RestaurantState | null>(null);

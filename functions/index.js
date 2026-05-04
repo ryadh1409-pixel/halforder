@@ -7,27 +7,26 @@ const { notifyUsersExpo } = require('./lib/expoPush');
 
 admin.initializeApp();
 
-/** Stripe API key from Firebase Functions runtime config only (`firebase functions:config:set stripe.secret="..."`). */
-function resolveStripeSecretFromFirebaseConfig() {
-  try {
-    const cfg = functions.config();
-    const secret = cfg?.stripe?.secret;
-    if (secret != null && String(secret).trim()) {
-      return String(secret).trim();
-    }
-  } catch (err) {
-    console.warn('[stripe] functions.config() failed:', err?.message || err);
-  }
-  return '';
+const db = admin.firestore();
+
+const stripeSecret = functions.config().stripe?.secret;
+if (!stripeSecret || !String(stripeSecret).trim()) {
+  throw new Error('Stripe is not configured: set firebase functions:config:set stripe.secret="sk_test_..."');
 }
+const stripe = new Stripe(String(stripeSecret).trim());
 
-const stripeSecretKey = resolveStripeSecretFromFirebaseConfig();
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
-
-if (!stripeSecretKey) {
-  console.error(
-    '[stripe] stripe.secret missing in Firebase config. Run: firebase functions:config:set stripe.secret="sk_test_..." && firebase deploy --only functions',
-  );
+async function verifyBearerUid(req) {
+  const h = req.headers.authorization;
+  if (!h || typeof h !== 'string' || !h.startsWith('Bearer ')) return null;
+  const token = h.slice(7).trim();
+  if (!token) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    return typeof decoded.uid === 'string' ? decoded.uid : null;
+  } catch (e) {
+    console.warn('[auth] verifyIdToken failed:', e?.message || e);
+    return null;
+  }
 }
 
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -103,12 +102,6 @@ exports.createStripeAccount = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
   }
   try {
-    if (!stripe) {
-      throw new functions.https.HttpsError(
-        'failed-precondition',
-        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
-      );
-    }
     const restaurantId = (
       typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid
     );
@@ -118,21 +111,27 @@ exports.createStripeAccount = functions.https.onCall(async (data, context) => {
         'restaurantId must match the signed-in user',
       );
     }
+    const ref = db.doc(`restaurants/${restaurantId}`);
+    const snap = await ref.get();
+    const existingRaw = snap.exists ? snap.get('stripeAccountId') : '';
+    const existing =
+      typeof existingRaw === 'string' ? existingRaw.trim() : String(existingRaw || '').trim();
+    if (existing && existing.startsWith('acct_')) {
+      return { accountId: existing };
+    }
+
     const account = await stripe.accounts.create({
       type: 'express',
       metadata: { firebaseRestaurantId: restaurantId },
     });
-    await admin
-      .firestore()
-      .doc(`restaurants/${restaurantId}`)
-      .set(
-        {
-          stripeAccountId: account.id,
-          stripeConnected: false,
-          stripeOnboardingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
+    await ref.set(
+      {
+        stripeAccountId: account.id,
+        stripeConnected: false,
+        stripeOnboardingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
     return { accountId: account.id };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -141,41 +140,78 @@ exports.createStripeAccount = functions.https.onCall(async (data, context) => {
   }
 });
 
+/**
+ * Opens Connect onboarding for `restaurants/{uid}`.
+ * Creates a minimal restaurant doc if missing, creates an Express account if missing, then returns Account Link URL.
+ * Callable may be invoked with `{}` — `restaurantId` defaults to `context.auth.uid`.
+ */
 exports.createOnboardingLink = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    throw new functions.https.HttpsError('unauthenticated', 'User not authenticated');
   }
   try {
-    if (!stripe) {
-      throw new functions.https.HttpsError(
-        'failed-precondition',
-        'Stripe is not configured. Missing STRIPE_SECRET_KEY.',
-      );
-    }
-    const restaurantId = (
-      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid
-    );
-    if (restaurantId !== context.auth.uid) {
+    const uid = context.auth.uid;
+    const restaurantId =
+      typeof data?.restaurantId === 'string' && data.restaurantId.trim()
+        ? data.restaurantId.trim()
+        : uid;
+    if (restaurantId !== uid) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'restaurantId must match the signed-in user',
       );
     }
-    const snap = await admin.firestore().doc(`restaurants/${restaurantId}`).get();
-    const accountId = typeof snap.get('stripeAccountId') === 'string' ? snap.get('stripeAccountId') : '';
-    if (!accountId) {
-      throw new functions.https.HttpsError(
-        'failed-precondition',
-        'Create a Stripe account first',
+
+    const ref = db.doc(`restaurants/${restaurantId}`);
+    let snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set(
+        {
+          ownerId: restaurantId,
+          name: 'My restaurant',
+          location: '',
+          isOpen: true,
+          profileCompleted: false,
+          stripeReady: false,
+        },
+        { merge: true },
+      );
+      snap = await ref.get();
+    }
+
+    let stripeAccountId = snap.exists ? snap.get('stripeAccountId') : '';
+    stripeAccountId =
+      typeof stripeAccountId === 'string'
+        ? stripeAccountId.trim()
+        : String(stripeAccountId || '').trim();
+
+    if (!stripeAccountId || !stripeAccountId.startsWith('acct_')) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        metadata: { firebaseRestaurantId: restaurantId },
+      });
+      stripeAccountId = account.id;
+      await ref.set(
+        {
+          stripeAccountId,
+          stripeConnected: false,
+          stripeOnboardingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+          stripeReady: false,
+        },
+        { merge: true },
       );
     }
-    const link = await stripe.accountLinks.create({
-      account: accountId,
+
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
       type: 'account_onboarding',
       return_url: connectReturnUrl,
       refresh_url: connectRefreshUrl,
     });
-    return { url: link.url };
+    if (!accountLink?.url || typeof accountLink.url !== 'string') {
+      throw new functions.https.HttpsError('internal', 'Stripe did not return an onboarding URL');
+    }
+    return { url: accountLink.url };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('[createOnboardingLink] failed', error);
@@ -334,8 +370,10 @@ exports.getRestaurantStripeStatus = functions.https.onCall(async (data, context)
     await ref.set(
       {
         stripeConnected: details_submitted,
+        stripeDetailsSubmitted: details_submitted,
         stripeChargesEnabled: charges_enabled,
         stripePayoutsEnabled: payouts_enabled,
+        stripeReady: charges_enabled && details_submitted,
         stripeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -351,6 +389,134 @@ exports.getRestaurantStripeStatus = functions.https.onCall(async (data, context)
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('[getRestaurantStripeStatus] failed', error);
     throw new functions.https.HttpsError('internal', 'Unable to load Stripe status');
+  }
+});
+
+/**
+ * Owner-only: `restaurants/{restaurantId}` must belong to `authUid`.
+ * Reads Stripe Connect account, writes `stripeReady` + related fields on the restaurant doc.
+ */
+async function syncOwnerRestaurantStripeDoc(restaurantId, authUid) {
+  if (restaurantId !== authUid) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'restaurantId must match the signed-in user',
+    );
+  }
+  const ref = db.doc(`restaurants/${restaurantId}`);
+  const snap = await ref.get();
+  const accountId =
+    snap.exists && typeof snap.get('stripeAccountId') === 'string'
+      ? snap.get('stripeAccountId')
+      : '';
+  if (!accountId || !String(accountId).startsWith('acct_')) {
+    await ref.set(
+      {
+        stripeDetailsSubmitted: false,
+        stripeChargesEnabled: false,
+        stripeReady: false,
+        stripeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return { ready: false, charges_enabled: false, details_submitted: false };
+  }
+  const account = await stripe.accounts.retrieve(accountId);
+  const charges_enabled = account.charges_enabled === true;
+  const details_submitted = account.details_submitted === true;
+  const ready = charges_enabled && details_submitted;
+  await ref.set(
+    {
+      stripeConnected: details_submitted,
+      stripeDetailsSubmitted: details_submitted,
+      stripeChargesEnabled: charges_enabled,
+      stripePayoutsEnabled: account.payouts_enabled === true,
+      stripeReady: ready,
+      stripeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return { ready, charges_enabled, details_submitted };
+}
+
+/** Owner-only status check used by the onboarding UI. */
+exports.checkStripeAccountStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  try {
+    const restaurantId =
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid;
+    const { charges_enabled, details_submitted } = await syncOwnerRestaurantStripeDoc(
+      restaurantId,
+      context.auth.uid,
+    );
+    return { charges_enabled, details_submitted };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[checkStripeAccountStatus] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to check Stripe account status');
+  }
+});
+
+/** Owner-only: sync `stripeReady` from Stripe; call after returning from Connect onboarding. */
+exports.checkStripeStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  try {
+    const restaurantId =
+      typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : context.auth.uid;
+    return await syncOwnerRestaurantStripeDoc(restaurantId, context.auth.uid);
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[checkStripeStatus] failed', error);
+    throw new functions.https.HttpsError('internal', 'Unable to check Stripe account status');
+  }
+});
+
+/**
+ * Any signed-in customer may call — checks whether the restaurant can accept Connect Checkout
+ * (Stripe account exists and charges are enabled). Keeps Firestore Connect flags in sync.
+ */
+exports.getRestaurantCheckoutEligibility = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+  }
+  const restaurantId = typeof data?.restaurantId === 'string' ? data.restaurantId.trim() : '';
+  if (!restaurantId) {
+    throw new functions.https.HttpsError('invalid-argument', 'restaurantId required');
+  }
+  const restSnap = await db.doc(`restaurants/${restaurantId}`).get();
+  if (!restSnap.exists) {
+    return { ready: false };
+  }
+  const accountIdRaw = restSnap.get('stripeAccountId');
+  const accountId =
+    typeof accountIdRaw === 'string' ? accountIdRaw.trim() : String(accountIdRaw || '').trim();
+  if (!accountId || !accountId.startsWith('acct_')) {
+    return { ready: false };
+  }
+  try {
+    const account = await stripe.accounts.retrieve(accountId);
+    const charges_enabled = account.charges_enabled === true;
+    const details_submitted = account.details_submitted === true;
+    await db.doc(`restaurants/${restaurantId}`).set(
+      {
+        stripeConnected: details_submitted,
+        stripeDetailsSubmitted: details_submitted,
+        stripeChargesEnabled: charges_enabled,
+        stripePayoutsEnabled: account.payouts_enabled === true,
+        stripeReady: charges_enabled && details_submitted,
+        stripeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    const ready = charges_enabled === true && details_submitted === true;
+    return { ready };
+  } catch (e) {
+    console.error('[getRestaurantCheckoutEligibility]', e);
+    return { ready: false };
   }
 });
 
@@ -523,30 +689,138 @@ exports.createConnectPaymentIntent = functions.https.onCall(async (data, context
   return { clientSecret: pi.client_secret };
 });
 
+/**
+ * Stripe webhooks require the **raw** request body for `constructEvent`.
+ * Firebase Cloud Functions (1st gen HTTP) exposes this as `req.rawBody` (Buffer).
+ * Do not replace with `JSON.parse(req.body)` before verification.
+ */
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
-  if (!stripe || !stripeWebhookSecret) {
-    console.error('[stripeWebhook] missing stripe or STRIPE_WEBHOOK_SECRET');
-    res.status(500).send('Server misconfiguration');
-    return;
-  }
-
-  const sig = req.headers['stripe-signature'];
-  if (!sig || typeof sig !== 'string') {
-    res.status(400).send('Missing stripe-signature');
-    return;
-  }
-
-  let event;
   try {
-    const payload = req.rawBody || Buffer.from('');
-    event = stripe.webhooks.constructEvent(payload, sig, stripeWebhookSecret);
-  } catch (err) {
-    console.error('[stripeWebhook] signature verify failed', err);
-    res.status(400).send(`Webhook Error: ${err.message}`);
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed');
+      return;
+    }
+    if (!stripeWebhookSecret) {
+      console.error('[stripeWebhook] missing STRIPE_WEBHOOK_SECRET');
+      res.status(500).send('Server misconfiguration');
+      return;
+    }
+
+    const sig = req.headers['stripe-signature'];
+    if (!sig || typeof sig !== 'string') {
+      res.status(400).send('Missing stripe-signature');
+      return;
+    }
+
+    const payload = req.rawBody;
+    if (!payload || !Buffer.isBuffer(payload) || payload.length === 0) {
+      console.error(
+        '❌ Stripe webhook: missing req.rawBody (need raw body for signature verification)',
+      );
+      res.status(400).send('Missing raw body');
+      return;
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(payload, sig, stripeWebhookSecret);
+    } catch (err) {
+      console.error('[stripeWebhook] signature verify failed', err);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    const logPayload = {
+      id: event.id,
+      type: event.type,
+      created: event.created,
+      livemode: event.livemode,
+    };
+    if (event.type === 'payment_intent.succeeded' && event.data?.object) {
+      const pi = event.data.object;
+      logPayload.paymentIntentId = pi.id;
+      logPayload.orderId = pi.metadata?.orderId ?? null;
+    }
+    console.log('🔥 Stripe webhook received:', JSON.stringify(logPayload));
+
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      const orderId =
+        paymentIntent.metadata && typeof paymentIntent.metadata.orderId === 'string'
+          ? paymentIntent.metadata.orderId.trim()
+          : '';
+      if (!orderId) {
+        console.error('❌ Missing orderId in metadata');
+        res.sendStatus(400);
+        return;
+      }
+
+    const eventRef = db.doc(`stripe_events/${event.id}`);
+    const orderRef = db.doc(`orders/${orderId}`);
+
+    const preOrderSnap = await orderRef.get();
+    if (!preOrderSnap.exists) {
+      console.warn('[stripeWebhook] payment_intent.succeeded order_missing', orderId);
+      res.json({ received: true, note: 'order_missing' });
+      return;
+    }
+    const preData = preOrderSnap.data() || {};
+    if (preData.paymentIntentId !== paymentIntent.id) {
+      res.json({ received: true, note: 'payment_intent_mismatch' });
+      return;
+    }
+
+    try {
+      await db.runTransaction(async (t) => {
+        const evSnap = await t.get(eventRef);
+        if (evSnap.exists) {
+          return;
+        }
+        const orderSnap = await t.get(orderRef);
+        if (!orderSnap.exists) {
+          throw new Error('order_missing');
+        }
+        const o = orderSnap.data() || {};
+        if (o.paymentStatus === 'paid') {
+          t.set(eventRef, {
+            type: event.type,
+            orderId,
+            duplicate: true,
+            at: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+        if (o.paymentIntentId !== paymentIntent.id) {
+          return;
+        }
+
+        t.set(eventRef, {
+          type: event.type,
+          orderId,
+          paymentIntentId: paymentIntent.id,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        t.update(orderRef, {
+          status: 'paid',
+          paymentStatus: 'paid',
+          paidAt: admin.firestore.FieldValue.serverTimestamp(),
+          stripePaymentIntentId: paymentIntent.id,
+        });
+      });
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      if (msg === 'order_missing') {
+        console.warn('[stripeWebhook] payment_intent.succeeded order_missing', orderId);
+        res.json({ received: true, note: msg });
+        return;
+      }
+      console.error('[stripeWebhook] payment_intent.succeeded transaction failed', e);
+      res.status(500).send('retry');
+      return;
+    }
+
+    console.log('✅ Order marked as PAID:', orderId);
+    res.json({ received: true });
     return;
   }
 
@@ -589,7 +863,6 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  const db = admin.firestore();
   const eventRef = db.doc(`stripe_events/${event.id}`);
   const orderRef = db.doc(`orders/${orderId}`);
 
@@ -643,7 +916,13 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  res.json({ received: true });
+    return res.json({ received: true });
+  } catch (err) {
+    console.error('❌ Webhook error:', err);
+    if (!res.headersSent) {
+      res.sendStatus(500);
+    }
+  }
 });
 
 function setPaymentIntentCors(res) {
@@ -665,33 +944,51 @@ async function handleCreatePaymentIntent(req, res) {
   }
 
   try {
-    console.log('[createPaymentIntent] body:', req.body);
-    if (!stripe) {
-      console.error(
-        '[createPaymentIntent] Stripe not configured — set stripe.secret: firebase functions:config:set stripe.secret="sk_test_..."',
-      );
-      res.status(500).json({ error: 'Stripe is not configured' });
-      return;
+    const uid = await verifyBearerUid(req);
+    if (!uid) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const raw = req.body?.amount;
-    const amount = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
+    const { amount: rawAmount, userId, items } = req.body || {};
+    const userIdStr = typeof userId === 'string' ? userId.trim() : '';
+    if (!userIdStr || userIdStr !== uid) {
+      return res.status(403).json({ error: 'userId must match signed-in user' });
+    }
 
-    if (!amount || amount <= 0 || !Number.isInteger(amount)) {
+    const amount =
+      typeof rawAmount === 'string' ? Number.parseInt(rawAmount, 10) : Number(rawAmount);
+    if (!amount || amount <= 0 || !Number.isInteger(amount) || amount < 50) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
+
+    const itemsArr = Array.isArray(items) ? items.slice(0, 50) : [];
+
+    console.log('[createPaymentIntent] body:', { amount, userId: userIdStr, itemsLen: itemsArr.length });
+
+    const orderRef = await db.collection('orders').add({
+      userId: userIdStr,
+      items: itemsArr,
+      amount,
+      currency: 'usd',
+      checkoutType: 'payment_sheet',
+      status: 'awaiting_payment',
+      paymentStatus: 'unpaid',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'usd',
       automatic_payment_methods: { enabled: true },
+      metadata: {
+        orderId: orderRef.id,
+      },
     });
 
-    console.log('[createPaymentIntent] paymentIntent:', {
-      id: paymentIntent.id,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency,
-      status: paymentIntent.status,
+    console.log('🔥 PaymentIntent created:', paymentIntent.id);
+
+    await orderRef.update({
+      paymentIntentId: paymentIntent.id,
     });
 
     if (!paymentIntent?.client_secret) {
@@ -699,9 +996,12 @@ async function handleCreatePaymentIntent(req, res) {
       return;
     }
 
-    return res.json({ clientSecret: paymentIntent.client_secret });
+    return res.json({
+      clientSecret: paymentIntent.client_secret,
+      orderId: orderRef.id,
+    });
   } catch (err) {
-    console.error('❌ Stripe error:', err);
+    console.error('createPaymentIntent error:', err);
     return res.status(500).json({ error: err.message || 'Error creating payment intent' });
   }
 }

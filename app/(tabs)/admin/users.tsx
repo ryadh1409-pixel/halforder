@@ -29,7 +29,7 @@ export default function AdminUsersScreen() {
     return () => unsub();
   }, []);
 
-  const roleOptions: UserRole[] = ['user', 'driver', 'restaurant', 'admin'];
+  const roleOptions: UserRole[] = ['user', 'driver', 'restaurant', 'host', 'admin'];
 
   async function saveRole(uid: string) {
     const nextRole = draftRoles[uid];

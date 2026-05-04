@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -290,6 +291,17 @@ export async function createOrder(payload: {
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function getRestaurantOrderById(orderId: string): Promise<RestaurantOrder | null> {
+  const trimmed = typeof orderId === 'string' ? orderId.trim() : '';
+  if (!trimmed) return null;
+  const snap = await getDoc(doc(db, 'orders', trimmed));
+  if (!snap.exists()) return null;
+  return mapDocToRestaurantOrder({
+    id: snap.id,
+    data: () => snap.data() as Record<string, unknown>,
+  });
 }
 
 export async function rejectOrder(orderId: string): Promise<void> {

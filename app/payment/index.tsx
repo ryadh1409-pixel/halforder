@@ -1,5 +1,10 @@
-import { runPaymentSheetCheckout, useStripeWrapper } from '@/services/stripe';
-import { showError, showSuccess } from '@/utils/toast';
+import {
+  runPaymentSheetCheckout,
+  STRIPE_MERCHANT_DISPLAY_NAME,
+  STRIPE_PAYMENT_SHEET_RETURN_URL,
+  useStripeWrapper,
+} from '@/services/stripe';
+import { useAuth } from '@/services/auth/useAuth';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,6 +27,7 @@ function hasPublishableKey(): boolean {
 }
 
 export default function PaymentScreen() {
+  const { user } = useAuth();
   const stripe = useStripeWrapper();
   const [loading, setLoading] = useState(false);
   const amount = DEFAULT_AMOUNT_CENTS;
@@ -30,6 +36,8 @@ export default function PaymentScreen() {
   const payDisabled = loading || (Platform.OS !== 'web' && !hasPublishableKey());
 
   const handlePay = useCallback(async () => {
+    console.log('[payment] handlePay tap, platform:', Platform.OS);
+
     if (Platform.OS === 'web') {
       Alert.alert(
         'Not available on web',
@@ -46,23 +54,60 @@ export default function PaymentScreen() {
       return;
     }
 
+    if (!user?.uid) {
+      Alert.alert('Sign in required', 'Sign in to complete payment.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const outcome = await runPaymentSheetCheckout(amount, stripe);
-      console.log('[payment] PaymentSheet outcome:', outcome);
-      if (outcome === 'canceled') {
+      console.log('[payment] fetching clientSecret…');
+      const clientSecret = await runPaymentSheetCheckout({
+        amountCents: amount,
+        userId: user.uid,
+        items: [],
+      });
+      console.log('[payment] clientSecret received, length:', clientSecret?.length ?? 0);
+
+      if (!clientSecret) {
+        console.error('[payment] No client secret');
+        Alert.alert('Error', 'No client secret');
         return;
       }
-      showSuccess('Payment successful');
+      console.log('CLIENT SECRET:', clientSecret);
+
+      console.log('[payment] initPaymentSheet…');
+      const { error: initError } = await stripe.initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
+        returnURL: STRIPE_PAYMENT_SHEET_RETURN_URL,
+        allowsDelayedPaymentMethods: false,
+      });
+
+      if (initError) {
+        console.log('[payment] INIT ERROR:', initError);
+        Alert.alert('Init failed', initError.message ?? 'Unknown init error');
+        return;
+      }
+
+      console.log('[payment] presentPaymentSheet…');
+      const { error } = await stripe.presentPaymentSheet();
+
+      if (error) {
+        console.log('[payment] PAY ERROR:', error);
+        Alert.alert('Payment failed', error.message ?? 'Unknown payment error');
+      } else {
+        console.log('[payment] presentPaymentSheet completed without error');
+        Alert.alert('Success', 'Payment complete');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Payment failed. Please try again.';
-      console.error('[payment] failed', error);
-      showError(message);
+      console.error('[payment] caught error:', error);
       Alert.alert('Payment failed', message);
     } finally {
       setLoading(false);
     }
-  }, [amount, stripe]);
+  }, [amount, stripe, user?.uid]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>

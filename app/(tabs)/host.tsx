@@ -4,7 +4,7 @@ import { Redirect } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-/** Host tab is only registered for `restaurant` role; this guards deep links and role transitions. */
+/** Host tab is only registered for `restaurant` / `host` role; this guards deep links and role transitions. */
 export default function HostTabScreen() {
   const { firestoreUserRole, loading } = useAuth();
 
@@ -16,7 +16,7 @@ export default function HostTabScreen() {
     );
   }
 
-  if (firestoreUserRole !== 'restaurant') {
+  if (firestoreUserRole !== 'restaurant' && firestoreUserRole !== 'host') {
     return <Redirect href="/(tabs)" />;
   }
 

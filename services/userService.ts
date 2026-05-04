@@ -11,7 +11,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 
-export type UserRole = 'user' | 'driver' | 'restaurant' | 'admin';
+export type UserRole = 'user' | 'driver' | 'restaurant' | 'admin' | 'host';
 
 export type UserProfileDoc = {
   id: string;
@@ -22,7 +22,7 @@ export type UserProfileDoc = {
 };
 
 function normalizeRole(value: unknown): UserRole {
-  if (value === 'driver' || value === 'restaurant' || value === 'admin') {
+  if (value === 'driver' || value === 'restaurant' || value === 'admin' || value === 'host') {
     return value;
   }
   return 'user';

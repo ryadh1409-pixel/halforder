@@ -144,7 +144,7 @@ function CustomTabBarInner(props: CustomTabBarProps) {
         if (!route) return null;
         if (!route.name) return null;
         if (HIDDEN_TAB_NAMES.has(route.name)) return null;
-        if (route.name === 'host' && role !== 'restaurant') return null;
+        if (route.name === 'host' && role !== 'restaurant' && role !== 'host') return null;
         if (route.name === 'driver' && role !== 'driver' && role !== 'admin')
           return null;
         if (!route.key) return null;

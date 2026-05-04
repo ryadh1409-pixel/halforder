@@ -2,6 +2,7 @@ import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot } from 'expo-router';
 import React from 'react';
@@ -15,6 +16,9 @@ import { StripeProvider } from '../services/stripe';
 LogBox.ignoreAllLogs(true);
 
 configureExpoPushNotificationHandler();
+
+console.log('🔥 STRIPE WEBHOOK URL:');
+console.log(STRIPE_WEBHOOK_URL);
 
 export const unstable_settings = {
   initialRouteName: 'index',

@@ -19,6 +19,8 @@ export type RestaurantProfile = {
   stripeAccountId?: string | null;
   stripeConnected?: boolean;
   stripeChargesEnabled?: boolean;
+  stripeDetailsSubmitted?: boolean;
+  stripeReady?: boolean;
 };
 
 export async function getRestaurant(
@@ -41,6 +43,8 @@ export async function getRestaurant(
       typeof data.stripeAccountId === 'string' ? data.stripeAccountId : null,
     stripeConnected: data.stripeConnected === true,
     stripeChargesEnabled: data.stripeChargesEnabled === true,
+    stripeDetailsSubmitted: data.stripeDetailsSubmitted === true,
+    stripeReady: data.stripeReady === true,
   };
 }
 
@@ -64,6 +68,7 @@ export async function createRestaurant(data: {
       type: data.type ?? 'restaurant',
       description: data.description?.trim() ?? '',
       profileCompleted: data.profileCompleted ?? false,
+      stripeReady: false,
       createdAt: serverTimestamp(),
     },
     { merge: true },

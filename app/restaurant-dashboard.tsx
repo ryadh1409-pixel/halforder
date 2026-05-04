@@ -15,10 +15,8 @@ import {
 } from '../services/orderService';
 import { updateRestaurantOpen } from '../services/restaurantDashboard';
 import {
-  connectWithStripeExpo,
   fetchStripeConnectStatusExpo,
-  openStripeConnectInApp,
-  resumeStripeOnboardingExpo,
+  startOnboarding,
   type StripeConnectStatus,
 } from '../services/stripeConnect';
 import { pickAndUploadImage } from '../services/uploadImage';
@@ -32,7 +30,6 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   type AppStateStatus,
   Image,
@@ -69,7 +66,7 @@ type RestaurantView = {
 type UserStripeDoc = Record<string, unknown> | null;
 
 export default function RestaurantDashboardScreen() {
-  const { authorized, loading: roleLoading } = requireRole(['restaurant', 'admin']);
+  const { authorized, loading: roleLoading } = requireRole(['restaurant', 'host', 'admin']);
   const { user } = useAuth();
   const [restaurant, setRestaurant] = useState<RestaurantView | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState(true);
@@ -398,15 +395,14 @@ export default function RestaurantDashboardScreen() {
     if (!user?.uid || !restaurant?.id) return;
     setStripeLoading(true);
     try {
-      const { url } = await connectWithStripeExpo(restaurant.id);
-      await openStripeConnectInApp(url);
+      await startOnboarding(restaurant.id);
       void refreshStripeConnectStatus();
       void loadUserStripeDoc();
       showSuccess('Finish setup in Stripe, then return to this app.');
     } catch (error) {
       const msg = stripeConnectErrorMessage(error);
-      console.log('[restaurant-dashboard] Connect Stripe failed', error);
-      Alert.alert('Stripe Connect', msg);
+      console.error('[restaurant-dashboard] Connect Stripe failed', error);
+      showError(msg);
     } finally {
       setStripeLoading(false);
     }
@@ -416,15 +412,14 @@ export default function RestaurantDashboardScreen() {
     if (!user?.uid || !restaurant?.id) return;
     setStripeLoading(true);
     try {
-      const { url } = await resumeStripeOnboardingExpo(restaurant.id);
-      await openStripeConnectInApp(url);
+      await startOnboarding(restaurant.id);
       void refreshStripeConnectStatus();
       void loadUserStripeDoc();
       showSuccess('Continue in Stripe, then return here.');
     } catch (error) {
       const msg = stripeConnectErrorMessage(error);
-      console.log('[restaurant-dashboard] Resume Stripe failed', error);
-      Alert.alert('Stripe Connect', msg);
+      console.error('[restaurant-dashboard] Resume Stripe failed', error);
+      showError(msg);
     } finally {
       setStripeLoading(false);
     }

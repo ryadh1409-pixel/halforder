@@ -1,22 +1,88 @@
+import { useFocusEffect } from '@react-navigation/native';
 import AppHeader from '../../components/AppHeader';
 import { useMenu } from '../../hooks/useMenu';
 import { useAuth } from '../../services/AuthContext';
 import { useCart } from '../../services/CartContext';
+import { auth, ensureAuthReady } from '../../services/firebase';
 import { createOrder } from '../../services/orderService';
+import { isOwnerHost } from '../../services/roles';
+import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
+import { getHostStripeOnboardingUrl } from '../../services/stripeOnboarding';
 import { showError } from '../../utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function CartScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ restaurantId: string }>();
   const restaurantId = typeof params.restaurantId === 'string' ? params.restaurantId : '';
-  const { user } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
+  const isOwnerOfThisRestaurant =
+    !authLoading && isOwnerHost(user, role, restaurantId);
   const { items: cart } = useCart();
   const { items, loading } = useMenu(restaurantId || null);
   const [placing, setPlacing] = useState(false);
+  const [stripeReady, setStripeReady] = useState<boolean | null>(null);
+  const [checkingStripe, setCheckingStripe] = useState(false);
+
+  const refreshStripeReadiness = useCallback(async () => {
+    if (!restaurantId) {
+      setStripeReady(null);
+      setCheckingStripe(false);
+      return;
+    }
+    if (!user?.uid) {
+      setStripeReady(null);
+      setCheckingStripe(false);
+      return;
+    }
+    setCheckingStripe(true);
+    try {
+      await ensureAuthReady();
+      if (user?.uid && isOwnerHost(user, role, restaurantId)) {
+        try {
+          await checkStripeStatus(restaurantId);
+        } catch {
+          // Owner-only callable; ignore if not applicable.
+        }
+      }
+      const ready = await resolveRestaurantPaymentsReady(restaurantId);
+      setStripeReady(ready);
+    } catch {
+      setStripeReady(false);
+    } finally {
+      setCheckingStripe(false);
+    }
+  }, [restaurantId, user, role]);
+
+  useEffect(() => {
+    void refreshStripeReadiness();
+  }, [refreshStripeReadiness]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshStripeReadiness();
+    }, [refreshStripeReadiness]),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshStripeReadiness();
+    });
+    return () => sub.remove();
+  }, [refreshStripeReadiness]);
 
   const cartItems = useMemo(
     () =>
@@ -36,6 +102,18 @@ export default function CartScreen() {
     [cartItems],
   );
 
+  async function handleConnectSetup() {
+    try {
+      await ensureAuthReady();
+      if (!auth.currentUser?.uid) return;
+      const url = await getHostStripeOnboardingUrl(restaurantId);
+      await Linking.openURL(url);
+      void refreshStripeReadiness();
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to start onboarding');
+    }
+  }
+
   async function placeOrder() {
     if (!user?.uid) {
       showError('Please sign in first.');
@@ -43,6 +121,26 @@ export default function CartScreen() {
     }
     if (!restaurantId || cartItems.length === 0 || items.length === 0) {
       showError('Cart is empty.');
+      return;
+    }
+    try {
+      await ensureAuthReady();
+    } catch {
+      showError('Could not verify sign-in. Try again.');
+      return;
+    }
+    if (!auth.currentUser) {
+      showError('Please sign in first.');
+      return;
+    }
+    const ready = await resolveRestaurantPaymentsReady(restaurantId);
+    if (!ready) {
+      setStripeReady(false);
+      if (isOwnerOfThisRestaurant) {
+        showError('Complete Stripe setup to receive payments');
+      } else {
+        showError('Payments are temporarily unavailable for this restaurant');
+      }
       return;
     }
     setPlacing(true);
@@ -86,6 +184,20 @@ export default function CartScreen() {
       <AppHeader title="Cart" />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Your Cart</Text>
+        {stripeReady === false && cartItems.length > 0 && !authLoading ? (
+          <View style={styles.setupCard}>
+            <Text style={styles.stripeWarn}>
+              {isOwnerOfThisRestaurant
+                ? 'Complete Stripe setup to receive payments'
+                : 'Payments are temporarily unavailable for this restaurant'}
+            </Text>
+            {isOwnerOfThisRestaurant ? (
+              <Pressable style={styles.setupButton} onPress={() => void handleConnectSetup()}>
+                <Text style={styles.setupButtonText}>Complete Setup</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {cartItems.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No orders yet</Text>
@@ -103,11 +215,29 @@ export default function CartScreen() {
       <View style={styles.footer}>
         <Text style={styles.total}>Total: ${totalPrice.toFixed(2)}</Text>
         <Pressable
-          style={[styles.placeButton, (placing || cartItems.length === 0) && styles.disabled]}
+          style={[
+            styles.placeButton,
+            (placing ||
+              cartItems.length === 0 ||
+              checkingStripe ||
+              authLoading ||
+              stripeReady === false) &&
+              styles.disabled,
+          ]}
           onPress={placeOrder}
-          disabled={placing || cartItems.length === 0}
+          disabled={
+            placing ||
+            cartItems.length === 0 ||
+            checkingStripe ||
+            authLoading ||
+            stripeReady === false
+          }
         >
-          {placing ? <ActivityIndicator color="#fff" /> : <Text style={styles.placeText}>Pay now</Text>}
+          {placing || checkingStripe ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.placeText}>Pay now</Text>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -118,6 +248,29 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F8FAFC' },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingBottom: 120 },
+  setupCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+    padding: 12,
+    marginBottom: 12,
+  },
+  stripeWarn: {
+    color: '#B45309',
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  setupButton: {
+    marginTop: 10,
+    alignSelf: 'center',
+    backgroundColor: '#635BFF',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  setupButtonText: { color: '#FFFFFF', fontWeight: '800' },
   title: { color: '#0F172A', fontSize: 30, fontWeight: '800', marginBottom: 12 },
   emptyCard: { borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', padding: 16 },
   emptyTitle: { color: '#64748B', fontWeight: '700' },

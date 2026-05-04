@@ -9,10 +9,16 @@ type Props = {
 const APPLE_MERCHANT_ID = 'merchant.com.halforfer';
 
 export default function StripeProviderWrapper({ children }: Props) {
+  /** Test/live publishable key only — set `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (e.g. pk_test_…) in `.env`. */
   const publishableKey =
     process.env.EXPO_PUBLIC_STRIPE_KEY?.trim() ||
     process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ||
     '';
+
+  console.log(
+    '[StripeProvider] publishableKey:',
+    publishableKey ? `${publishableKey.slice(0, 12)}… (${publishableKey.length} chars)` : '(MISSING — PaymentSheet will fail)',
+  );
 
   if (__DEV__ && !publishableKey) {
     console.warn(

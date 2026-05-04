@@ -1,6 +1,12 @@
 import AppHeader from '@/components/AppHeader';
 import { useAuth } from '@/services/AuthContext';
-import { createCheckoutSession } from '@/services/stripeConnect';
+import { auth, ensureAuthReady } from '@/services/firebase';
+import { getRestaurantOrderById } from '@/services/orderService';
+import { isOwnerHost } from '@/services/roles';
+import {
+  createCheckoutSession,
+  resolveRestaurantPaymentsReady,
+} from '@/services/stripeConnect';
 import { showError } from '@/utils/toast';
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,9 +21,10 @@ type Phase = 'loading' | 'opening' | 'error' | 'done';
 export default function CheckoutScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-  const { user } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
+  const [stripeBlockedRestaurantId, setStripeBlockedRestaurantId] = useState<string | null>(null);
   const started = useRef(false);
 
   const runCheckout = useCallback(async () => {
@@ -25,11 +32,39 @@ export default function CheckoutScreen() {
     if (!id || !user?.uid) {
       setPhase('error');
       setMessage('Missing order or sign-in.');
+      setStripeBlockedRestaurantId(null);
       return;
     }
     setPhase('loading');
     setMessage('');
+    setStripeBlockedRestaurantId(null);
     try {
+      await ensureAuthReady();
+      if (!auth.currentUser) {
+        setPhase('error');
+        setMessage('Missing order or sign-in.');
+        return;
+      }
+      const order = await getRestaurantOrderById(id);
+      if (!order?.restaurantId) {
+        setPhase('error');
+        setMessage('Order not found.');
+        return;
+      }
+      const ready = await resolveRestaurantPaymentsReady(order.restaurantId);
+      if (!ready) {
+        setStripeBlockedRestaurantId(order.restaurantId);
+        const isOwnerOfOrderRestaurant =
+          !authLoading && isOwnerHost(user, role, order.restaurantId);
+        setPhase('error');
+        setMessage(
+          isOwnerOfOrderRestaurant
+            ? 'Complete Stripe setup to receive payments'
+            : 'Payments are temporarily unavailable for this restaurant',
+        );
+        return;
+      }
+
       const successUrl = Linking.createURL('/order/payment-callback', {
         queryParams: { orderId: id, outcome: 'success' },
       });
@@ -43,9 +78,9 @@ export default function CheckoutScreen() {
       });
       setPhase('opening');
       const returnUrl = Linking.createURL('/order/payment-callback');
-      const auth = await WebBrowser.openAuthSessionAsync(url, returnUrl);
-      if (auth.type === 'success' && auth.url) {
-        const parsed = Linking.parse(auth.url);
+      const browserResult = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      if (browserResult.type === 'success' && browserResult.url) {
+        const parsed = Linking.parse(browserResult.url);
         const q = parsed.queryParams ?? {};
         const oid = Array.isArray(q.orderId) ? q.orderId[0] : q.orderId;
         const oc = Array.isArray(q.outcome) ? q.outcome[0] : q.outcome;
@@ -65,11 +100,12 @@ export default function CheckoutScreen() {
       } as never);
     } catch (e) {
       console.warn('[checkout]', e);
+      setStripeBlockedRestaurantId(null);
       setPhase('error');
       setMessage('Could not start checkout. You can try again.');
       showError('Payment could not start.');
     }
-  }, [orderId, user?.uid, router]);
+  }, [orderId, user, role, authLoading, router]);
 
   useEffect(() => {
     if (started.current) return;
@@ -93,6 +129,16 @@ export default function CheckoutScreen() {
           <>
             <Text style={styles.title}>Checkout unavailable</Text>
             <Text style={styles.sub}>{message}</Text>
+            {stripeBlockedRestaurantId &&
+            !authLoading &&
+            isOwnerHost(user, role, stripeBlockedRestaurantId) ? (
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => router.push('/restaurant-onboarding')}
+              >
+                <Text style={styles.secondaryButtonText}>Complete Setup</Text>
+              </Pressable>
+            ) : null}
             <Pressable style={styles.button} onPress={() => void runCheckout()}>
               <Text style={styles.buttonText}>Try again</Text>
             </Pressable>
@@ -119,6 +165,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 12,
   },
+  secondaryButton: {
+    marginTop: 16,
+    backgroundColor: '#635BFF',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  secondaryButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   buttonText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   link: { marginTop: 16, padding: 8 },
   linkText: { color: '#2563EB', fontWeight: '700' },
