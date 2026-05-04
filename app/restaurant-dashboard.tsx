@@ -1,5 +1,30 @@
-import { AssignDriverModal } from '../components/AssignDriverModal';
+import { API_BASE_URL } from '@/frontend/config/api';
+import { useFocusEffect } from '@react-navigation/native';
+import { Redirect } from 'expo-router';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    AppState,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
+    type AppStateStatus,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AppHeader from '../components/AppHeader';
+import { AssignDriverModal } from '../components/AssignDriverModal';
 import { StatCard } from '../components/restaurant/StatCard';
 import { useDrivers } from '../hooks/useDrivers';
 import { useMenu } from '../hooks/useMenu';
@@ -9,45 +34,20 @@ import { assignDriverToOrder } from '../services/driverService';
 import { db } from '../services/firebase';
 import { addFoodItem, deleteFoodItem, updateFoodItem, type FoodItem } from '../services/foodService';
 import {
-  rejectOrder,
-  updateOrderStatus,
-  type OrderStatus,
+    rejectOrder,
+    updateOrderStatus,
+    type OrderStatus,
 } from '../services/orderService';
 import { updateRestaurantOpen } from '../services/restaurantDashboard';
 import {
-  fetchStripeConnectStatusExpo,
-  startOnboarding,
-  type StripeConnectStatus,
-} from '../services/stripeConnect';
+    fetchStripeConnectStatusExpo,
+    startOnboarding,
+    type StripeConnectStatus,
+} from '@/services/stripeConnect';
 import { pickAndUploadImage } from '../services/uploadImage';
-import { API_BASE_URL } from '@/frontend/config/api';
 import { requireRole } from '../utils/requireRole';
 import { stripeConnectErrorMessage } from '../utils/stripeConnectErrors';
 import { showError, showSuccess } from '../utils/toast';
-import { useFocusEffect } from '@react-navigation/native';
-import { Redirect } from 'expo-router';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  type AppStateStatus,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 type RestaurantView = {
   id: string;
@@ -621,6 +621,19 @@ export default function RestaurantDashboardScreen() {
               )}
             </TouchableOpacity>
           ) : null}
+          <Pressable
+            onPress={startOnboarding}
+            style={{
+              backgroundColor: '#635BFF',
+              padding: 14,
+              borderRadius: 12,
+              marginTop: 12,
+            }}
+          >
+            <Text style={{ color: 'white', textAlign: 'center', fontWeight: 'bold', fontSize: 16 }}>
+              Connect Stripe
+            </Text>
+          </Pressable>
           {stripeConnectedEffective ? (
             <Text style={styles.stripePaymentsConnectedText}>Stripe Connected ✅</Text>
           ) : null}
@@ -719,6 +732,25 @@ export default function RestaurantDashboardScreen() {
                 >
                   {savingItem ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Item</Text>}
                 </Pressable>
+                <View style={{ marginVertical: 20 }}>
+                  <Pressable
+                    onPress={startOnboarding}
+                    style={{
+                      backgroundColor: '#635BFF',
+                      padding: 16,
+                      borderRadius: 12,
+                      marginTop: 10,
+                    }}
+                  >
+                    <Text style={{
+                      color: 'white',
+                      textAlign: 'center',
+                      fontWeight: 'bold'
+                    }}>
+                      Connect Stripe
+                    </Text>
+                  </Pressable>
+                </View>
                 <Pressable
                   style={styles.cancelButton}
                   onPress={() => setMenuModalOpen(false)}
@@ -740,6 +772,41 @@ export default function RestaurantDashboardScreen() {
         onClose={() => setAssignDriverModalOpen(false)}
         onSelectDriver={handleAssignDriver}
       />
+      <View style={{ position: 'absolute', top: 100, left: 20 }}>
+        <Pressable
+          onPress={() => console.log('BUTTON WORKING')}
+          style={{ backgroundColor: 'red', padding: 10 }}
+        >
+          <Text style={{ color: 'white' }}>TEST</Text>
+        </Pressable>
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 100,
+          left: 20,
+          right: 20,
+          zIndex: 999,
+        }}
+      >
+        <Pressable
+          onPress={startOnboarding}
+          style={{
+            backgroundColor: '#635BFF',
+            padding: 18,
+            borderRadius: 14,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOpacity: 0.2,
+            shadowRadius: 10,
+            elevation: 5,
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
+            Connect Stripe
+          </Text>
+        </Pressable>
+      </View>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

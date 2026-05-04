@@ -761,7 +761,7 @@ service cloud.firestore {
     }
 
     /**
-     * Email invite row → Cloud Function `sendOrderInvite` (nodemailer).
+     * Email invite row → Cloud Function `sendOrderInvite`.
      * Inviter must be a member of the order (`users` or string `participants`).
      */
     match /invites/{inviteId} {

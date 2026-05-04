@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -16,12 +15,8 @@
     "test:webhook": "bash scripts/test-webhook.sh",
     "webhook:url": "bash scripts/show-webhook.sh",
     "generate:app-icon": "node ./scripts/generate-app-icon.mjs",
-    "seed:orders": "node --experimental-strip-types scripts/run-seed-orders.ts",
-    "migrate:food-cards-waiting-to-active": "node --experimental-strip-types scripts/migrate-food-cards-waiting-to-active.ts",
-    "migrate:orders-users": "node --experimental-strip-types scripts/migrate-orders-populate-users.ts",
-    "deploy:functions": "firebase deploy --only functions",
     "legal:dev": "vite --config vite.legal.config.ts",
-    "legal:build": "vite build --config vite.legal.config.ts && node -e \"require('fs').renameSync('dist-legal/index.vite.html','dist-legal/index.html')\"",
+    "legal:build": "vite build --config vite.legal.config.ts && mv dist-legal/index.vite.html dist-legal/index.html",
     "legal:preview": "vite preview --config vite.legal.config.ts"
   },
   "dependencies": {
@@ -60,7 +55,6 @@
     "expo-system-ui": "~6.0.9",
     "expo-web-browser": "~15.0.11",
     "firebase": "^12.12.1",
-    "firebase-admin": "^13.6.0",
     "geolib": "^3.3.14",
     "node-fetch": "^2.7.0",
     "openai": "^6.33.0",

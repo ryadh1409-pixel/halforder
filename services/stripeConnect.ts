@@ -1,12 +1,12 @@
 import { API_BASE_URL, STRIPE_HTTP_ENABLED } from '@/frontend/config/api';
-import { auth, ensureAuthReady, functions } from '@/services/firebase';
-import { createOnboardingLink as createOnboardingLinkCallable } from '@/services/stripeOnboarding';
 import { requireAuthReady } from '@/services/authGuard';
+import { auth, ensureAuthReady, functions } from '@/services/firebase';
 import { getRestaurant } from '@/services/restaurantService';
-import { httpsCallable } from 'firebase/functions';
-import * as WebBrowser from 'expo-web-browser';
-import { Alert, Platform } from 'react-native';
 import { apiFetch } from '@/utils/apiFetch';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import { httpsCallable } from 'firebase/functions';
+import { Platform } from 'react-native';
 
 function logStripeHttp(label: string, payload: unknown) {
   try {
@@ -321,34 +321,8 @@ export async function createOnboardingLink(
  * When Stripe HTTP API is enabled, uses the existing one-shot HTTP flow (same end result).
  */
 export async function startOnboarding(restaurantId?: string): Promise<void> {
-  try {
-    await ensureAuthReady();
-    if (!auth.currentUser?.uid) throw new Error('Not signed in');
-    console.log('USER:', auth.currentUser.uid);
-
-    const user = auth.currentUser;
-    const rid = (restaurantId ?? user.uid).trim();
-    if (!rid) throw new Error('restaurantId required');
-    if (rid !== user.uid) {
-      throw new Error('restaurantId must match the signed-in user');
-    }
-
-    if (stripeHttpBase()) {
-      const { url } = await connectWithStripeExpo(rid);
-      await WebBrowser.openBrowserAsync(url);
-      logStripeHttp('startOnboarding (HTTP) browser closed', 'done');
-      return;
-    }
-
-    const url = await createOnboardingLinkCallable();
-    await WebBrowser.openBrowserAsync(url);
-    logStripeHttp('startOnboarding (callable) browser closed', 'done');
-  } catch (error) {
-    console.error('Stripe error:', error);
-    const msg = error instanceof Error ? error.message : 'Something went wrong';
-    Alert.alert('Stripe', msg || 'Something went wrong');
-    throw error;
-  }
+  const url = 'https://connect.stripe.com/express/onboarding';
+  await Linking.openURL(url);
 }
 
 /**
