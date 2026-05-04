@@ -160,6 +160,8 @@ async function ensureUserDocument(
     if (data?.cancellationRate === undefined) updates.cancellationRate = 0;
     if (data?.reportCount === undefined) updates.reportCount = 0;
     if (data?.trustScore === undefined) updates.trustScore = 0;
+    if (data?.stripeAccountId === undefined) updates.stripeAccountId = null;
+    if (data?.stripeOnboardingComplete === undefined) updates.stripeOnboardingComplete = false;
     if (data?.taxGiftEligible === undefined) updates.taxGiftEligible = false;
     if (data?.appOpenCount === undefined) updates.appOpenCount = 0;
     if (data?.ordersCreated === undefined) updates.ordersCreated = 0;
@@ -218,6 +220,8 @@ async function ensureUserDocument(
     cancellationRate: 0,
     reportCount: 0,
     trustScore: 0,
+    stripeAccountId: null,
+    stripeOnboardingComplete: false,
     taxGiftEligible: false,
     appOpenCount: 0,
     ordersCreated: 0,

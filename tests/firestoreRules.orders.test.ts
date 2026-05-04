@@ -16,6 +16,12 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
+/** Run with: `RUN_FIRESTORE_RULES_TESTS=1 firebase emulators:exec --only firestore -- npm test` */
+const integrationDescribe =
+  process.env.FIRESTORE_EMULATOR_HOST != null || process.env.RUN_FIRESTORE_RULES_TESTS === '1'
+    ? describe
+    : describe.skip;
+
 let testEnv: RulesTestEnvironment | undefined;
 
 function te(): RulesTestEnvironment {
@@ -26,25 +32,6 @@ function te(): RulesTestEnvironment {
   }
   return testEnv;
 }
-
-beforeAll(async () => {
-  testEnv = await initializeTestEnvironment({
-    projectId: 'demo-test',
-    firestore: {
-      host: '127.0.0.1',
-      port: 8080,
-      rules: readFileSync('firestore.rules', 'utf8'),
-    },
-  });
-});
-
-afterAll(async () => {
-  if (testEnv) await testEnv.cleanup();
-});
-
-beforeEach(async () => {
-  await te().clearFirestore();
-});
 
 function baseOrderFields(createdByUid: string) {
   return {
@@ -60,7 +47,27 @@ function baseOrderFields(createdByUid: string) {
   };
 }
 
-describe('firestore rules: orders create + participants join', () => {
+integrationDescribe('firestore rules (Firestore emulator)', () => {
+  beforeAll(async () => {
+    testEnv = await initializeTestEnvironment({
+      projectId: 'demo-test',
+      firestore: {
+        host: '127.0.0.1',
+        port: 8080,
+        rules: readFileSync('firestore.rules', 'utf8'),
+      },
+    });
+  });
+
+  afterAll(async () => {
+    if (testEnv) await testEnv.cleanup();
+  });
+
+  beforeEach(async () => {
+    await te().clearFirestore();
+  });
+
+  describe('firestore rules: orders create + participants join', () => {
   it('allows valid order create by owner', async () => {
     const db = te().authenticatedContext('u1').firestore();
     await assertSucceeds(
@@ -180,9 +187,9 @@ describe('firestore rules: orders create + participants join', () => {
     const snap = await getDoc(doc(dbU1, 'orders', 'o1'));
     expect(snap.data()?.image).toBe('https://example.com/new.jpg');
   });
-});
+  });
 
-describe('firestore rules: swipe usersAccepted + food matches', () => {
+  describe('firestore rules: swipe usersAccepted + food matches', () => {
   it('allows a signed-in user to add themselves once to usersAccepted', async () => {
     await te().withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'orders', 'sw1'), {
@@ -407,4 +414,5 @@ describe('firestore rules: HalfOrder cancel + order_members', () => {
       }),
     );
   });
+});
 });

@@ -86,26 +86,38 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 
 /**
- * Callable/httpsCallable region — must match deployed Functions (`firebase deploy`).
+ * Callable/httpsCallable region — must match deployed Functions region (default `us-central1`).
  * Wrong region → FirebaseError `functions/not-found`.
  */
 export const FIREBASE_FUNCTIONS_REGION =
   process.env.EXPO_PUBLIC_FUNCTIONS_REGION?.trim() || 'us-central1';
 
+/**
+ * Same {@link FirebaseApp} as {@link auth} (`auth` was created with this `app`).
+ * Use `getFunctions(app, region)` so callables and Auth share one app instance.
+ */
 export const functions: Functions = getFunctions(app, FIREBASE_FUNCTIONS_REGION);
 
 /**
- * Waits for the initial `onAuthStateChanged` emission (restored session), ensures
- * `auth.currentUser` exists (anonymous sign-in if still none), then primes the ID token
- * so `httpsCallable` / HTTP `Bearer` calls do not hit `unauthenticated`.
+ * HTTPS URL for a 2nd-gen Cloud Function exported name (same region as {@link functions}).
+ * Used for Stripe Connect HTTP handlers verified with Firebase ID tokens.
+ */
+export function cloudFunctionHttpUrl(functionName: string): string {
+  const projectId = app.options.projectId;
+  if (!projectId) {
+    throw new Error('Firebase app is missing projectId');
+  }
+  const safeName = functionName.replace(/^\//, '');
+  return `https://${FIREBASE_FUNCTIONS_REGION}-${projectId}.cloudfunctions.net/${safeName}`;
+}
+
+/**
+ * Waits for auth state to finish loading (debounced `onAuthStateChanged` so persistence
+ * is not cut off by the first `null` emission), ensures `auth.currentUser` exists
+ * (anonymous sign-in only if still none), then refreshes the ID token for callables.
  */
 export async function ensureAuthReady(): Promise<void> {
-  await new Promise<void>((resolve) => {
-    const unsub = onAuthStateChanged(auth, () => {
-      unsub();
-      resolve();
-    });
-  });
+  await waitForAuthStateSettled(auth);
 
   if (!auth.currentUser) {
     await signInAnonymously(auth);
@@ -114,6 +126,40 @@ export async function ensureAuthReady(): Promise<void> {
     throw new Error('Firebase Auth could not establish a user session.');
   }
 
-  await auth.currentUser.getIdToken();
-  console.log('[auth] ensureAuthReady UID:', auth.currentUser.uid);
+  const user = auth.currentUser;
+  await user.getIdToken(true);
+  console.log(
+    '[auth] ensureAuthReady ok',
+    JSON.stringify({
+      uid: user.uid,
+      isAnonymous: user.isAnonymous,
+      projectId: auth.app.options.projectId,
+      functionsRegion: FIREBASE_FUNCTIONS_REGION,
+    }),
+  );
+}
+
+/** Wait until auth stops changing briefly (restored sessions often emit null then user). */
+function waitForAuthStateSettled(a: Auth, debounceMs = 120, maxWaitMs = 8000): Promise<void> {
+  return new Promise((resolve) => {
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let finished = false;
+    let unsub: (() => void) | undefined;
+
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsub?.();
+      clearTimeout(maxTimer);
+      resolve();
+    };
+
+    const maxTimer = setTimeout(done, maxWaitMs);
+
+    unsub = onAuthStateChanged(a, () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(done, debounceMs);
+    });
+  });
 }

@@ -25,6 +25,12 @@ service cloud.firestore {
         );
     }
 
+    /** Clients cannot flip `stripeOnboardingComplete` to true (only Cloud Functions / Admin SDK). */
+    function userStripeOnboardingCompleteNotForged() {
+      return !(request.resource.data.get('stripeOnboardingComplete', false) == true
+        && resource.data.get('stripeOnboardingComplete', false) != true);
+    }
+
     function currentUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -825,7 +831,18 @@ service cloud.firestore {
     /** Client: subscribe only to `users/{request.auth.uid}` for private fields (e.g. blockedUsers). */
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow create, update: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow create: if isAdmin()
+        || (
+          request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.get('stripeOnboardingComplete', false) == false
+        );
+      allow update: if isAdmin()
+        || (
+          request.auth != null
+          && request.auth.uid == userId
+          && userStripeOnboardingCompleteNotForged()
+        );
       allow delete: if (request.auth != null && request.auth.uid == userId) || isAdmin();
       /** Split-match partner joined — writer is `fromId`, must be another signed-in user. */
       match /splitPoke/{fromId} {

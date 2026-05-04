@@ -1,10 +1,12 @@
 import { API_BASE_URL, STRIPE_HTTP_ENABLED } from '@/frontend/config/api';
 import { requireAuthReady } from '@/services/authGuard';
-import { auth, ensureAuthReady, functions } from '@/services/firebase';
+import { auth, db, ensureAuthReady, functions } from '@/services/firebase';
 import { getRestaurant } from '@/services/restaurantService';
 import { apiFetch } from '@/utils/apiFetch';
+import { FirebaseError } from 'firebase/app';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { doc, setDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 
@@ -135,6 +137,80 @@ function parseOnboarding(json: Record<string, unknown>): StripeConnectOnboarding
   return { url };
 }
 
+function isCallableUnauthenticated(error: unknown): boolean {
+  if (error instanceof FirebaseError) {
+    return (
+      error.code === 'functions/unauthenticated' ||
+      error.code === 'unauthenticated' ||
+      error.message?.toLowerCase().includes('unauthenticated')
+    );
+  }
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String((error as { code: string }).code);
+    return code.includes('unauthenticated');
+  }
+  return false;
+}
+
+/**
+ * Refreshes ID token, logs UID, invokes a callable; on `unauthenticated`, refreshes again and retries once.
+ */
+async function invokeStripeCallable(
+  name: string,
+  data: Record<string, unknown> = {},
+): Promise<{ data: unknown }> {
+  await requireAuthReady();
+  if (!auth.currentUser) {
+    console.warn(`[Stripe callable ${name}] blocked — auth.currentUser is null`);
+    throw new Error('You must be signed in.');
+  }
+
+  const run = async (): Promise<{ data: unknown }> => {
+    await auth.currentUser?.getIdToken(true);
+    console.log('UID:', auth.currentUser?.uid);
+    const callable = httpsCallable(functions, name);
+    return callable(data);
+  };
+
+  try {
+    return await run();
+  } catch (e) {
+    if (isCallableUnauthenticated(e) && auth.currentUser) {
+      await auth.currentUser.getIdToken(true);
+      console.log('UID (retry after unauthenticated):', auth.currentUser?.uid);
+      return run();
+    }
+    throw e;
+  }
+}
+
+/** Cloud Functions `checkStripeStatus` (GET + Bearer). */
+function parseHostCheckStatus(json: Record<string, unknown>): StripeConnectStatus {
+  const charges = json.charges_enabled === true;
+  const details = json.details_submitted === true;
+  const onboardingComplete = json.stripeOnboardingComplete === true || charges;
+  return {
+    hasAccount: json.hasAccount === true,
+    stripeConnected: onboardingComplete || details,
+    charges_enabled: charges,
+    payouts_enabled: charges,
+    details_submitted: details,
+  };
+}
+
+/** Firebase Callable `createStripeAccount` (v2, auth required). */
+async function callableCreateStripeAccount(): Promise<StripeConnectOnboardingResult> {
+  const result = await invokeStripeCallable('createStripeAccount', {});
+  logStripeHttp('callable createStripeAccount ok', {});
+  return parseOnboarding((result.data ?? {}) as Record<string, unknown>);
+}
+
+/** Firebase Callable `checkStripeStatus` (v2, auth required). */
+async function callableCheckStripeStatus(): Promise<StripeConnectStatus> {
+  const result = await invokeStripeCallable('checkStripeStatus', {});
+  return parseHostCheckStatus((result.data ?? {}) as Record<string, unknown>);
+}
+
 function parseStatus(json: Record<string, unknown>): StripeConnectStatus {
   /** Minimal backend: `{ connected }` === Stripe `charges_enabled`. */
   if (typeof json.connected === 'boolean') {
@@ -164,15 +240,17 @@ export async function connectWithStripeExpo(
   restaurantId: string,
 ): Promise<StripeConnectOnboardingResult> {
   await requireAuthReady();
+  const user = auth.currentUser;
+  if (!user?.uid) throw new Error('Not signed in');
+  const rid = typeof restaurantId === 'string' ? restaurantId.trim() : '';
+  if (rid && rid !== user.uid) {
+    throw new Error('restaurantId must match signed-in user');
+  }
   if (stripeHttpBase()) {
-    const user = auth.currentUser;
-    if (!user?.uid) throw new Error('Not signed in');
     const json = await httpPostStripe('/create-stripe-account', { userId: user.uid });
     return parseOnboarding(json);
   }
-  const callable = httpsCallable(functions, 'startRestaurantStripeConnect');
-  const result = await callable({ restaurantId });
-  return parseOnboarding((result.data ?? {}) as Record<string, unknown>);
+  return callableCreateStripeAccount();
 }
 
 /** POST /resume-stripe-onboarding (HTTP) or Firebase callable fallback. */
@@ -180,15 +258,17 @@ export async function resumeStripeOnboardingExpo(
   restaurantId: string,
 ): Promise<StripeConnectOnboardingResult> {
   await requireAuthReady();
+  const user = auth.currentUser;
+  if (!user?.uid) throw new Error('Not signed in');
+  const rid = typeof restaurantId === 'string' ? restaurantId.trim() : '';
+  if (rid && rid !== user.uid) {
+    throw new Error('restaurantId must match signed-in user');
+  }
   if (stripeHttpBase()) {
-    const user = auth.currentUser;
-    if (!user?.uid) throw new Error('Not signed in');
     const json = await httpPostStripe('/resume-stripe-onboarding', { userId: user.uid });
     return parseOnboarding(json);
   }
-  const callable = httpsCallable(functions, 'resumeRestaurantStripeOnboarding');
-  const result = await callable({ restaurantId });
-  return parseOnboarding((result.data ?? {}) as Record<string, unknown>);
+  return callableCreateStripeAccount();
 }
 
 /** GET /stripe-status (HTTP) or Firebase callable fallback. */
@@ -196,13 +276,17 @@ export async function fetchStripeConnectStatusExpo(
   restaurantId: string,
 ): Promise<StripeConnectStatus> {
   await requireAuthReady();
+  const user = auth.currentUser;
+  if (!user?.uid) throw new Error('Not signed in');
+  const rid = typeof restaurantId === 'string' ? restaurantId.trim() : '';
+  if (rid && rid !== user.uid) {
+    throw new Error('restaurantId must match signed-in user');
+  }
   if (stripeHttpBase()) {
     const json = await httpGetStripeStatus(restaurantId);
     return parseStatus(json);
   }
-  const callable = httpsCallable(functions, 'getRestaurantStripeStatus');
-  const result = await callable({ restaurantId });
-  return parseStatus((result.data ?? {}) as Record<string, unknown>);
+  return callableCheckStripeStatus();
 }
 
 /** Customer-safe: can this restaurant accept Stripe Checkout (Connect onboarding complete)? */
@@ -266,7 +350,7 @@ export async function startRestaurantStripeConnectHttp(
   return connectWithStripeExpo(restaurantId);
 }
 
-/** Creates (or returns existing) Stripe Express Connect account; persists `stripeAccountId` on `restaurants/{id}`. */
+/** Creates (or returns existing) Stripe Express Connect account; persists `stripeAccountId` on `users/{uid}` (server + client). */
 export async function createStripeAccount(restaurantId: string): Promise<string> {
   await requireAuthReady();
   const rid = typeof restaurantId === 'string' ? restaurantId.trim() : '';
@@ -283,13 +367,11 @@ export async function createStripeAccount(restaurantId: string): Promise<string>
     }
     throw new Error('Stripe account id missing from server response');
   }
-  const callable = httpsCallable(functions, 'createStripeAccount');
-  const result = await callable({ restaurantId: rid });
-  const id = (result.data as { accountId?: unknown })?.accountId;
-  if (typeof id !== 'string' || !id.startsWith('acct_')) {
+  const { accountId } = await callableCreateStripeAccount();
+  if (typeof accountId !== 'string' || !accountId.startsWith('acct_')) {
     throw new Error('Invalid createStripeAccount response');
   }
-  return id;
+  return accountId;
 }
 
 /** Account Links onboarding URL; optional `accountId` must match Firestore when both are set. */
@@ -317,11 +399,29 @@ export async function createOnboardingLink(
 }
 
 /**
- * Restaurant Connect: ensure Express account exists, then open Stripe onboarding in the in-app browser.
- * When Stripe HTTP API is enabled, uses the existing one-shot HTTP flow (same end result).
+ * Restaurant Connect: create or resume Stripe Express onboarding link, persist `stripeAccountId` on
+ * `users/{uid}`, then open the Account Link in the system browser.
  */
 export async function startOnboarding(restaurantId?: string): Promise<void> {
-  const url = 'https://connect.stripe.com/express/onboarding';
+  await requireAuthReady();
+  const user = auth.currentUser;
+  if (!user?.uid) throw new Error('Not signed in');
+  const rid = (restaurantId ?? user.uid).trim();
+  if (rid !== user.uid) {
+    throw new Error('restaurantId must match signed-in user');
+  }
+
+  let result: StripeConnectOnboardingResult;
+  if (stripeHttpBase()) {
+    result = await connectWithStripeExpo(rid);
+  } else {
+    result = await callableCreateStripeAccount();
+  }
+
+  const { url, accountId } = result;
+  if (typeof accountId === 'string' && accountId.startsWith('acct_')) {
+    await setDoc(doc(db, 'users', user.uid), { stripeAccountId: accountId }, { merge: true });
+  }
   await Linking.openURL(url);
 }
 
@@ -330,13 +430,20 @@ export async function startOnboarding(restaurantId?: string): Promise<void> {
  * Backend also syncs `stripeReady` on the restaurant doc.
  */
 export async function checkStripeStatus(restaurantId?: string): Promise<StripeAccountStatus> {
-  await ensureAuthReady();
+  await requireAuthReady();
   if (!auth.currentUser?.uid) throw new Error('Not signed in');
   const user = auth.currentUser;
   const rid = (restaurantId ?? user.uid).trim();
   if (!rid) throw new Error('restaurantId required');
   if (rid !== user.uid) {
     throw new Error('restaurantId must match the signed-in user');
+  }
+  if (!stripeHttpBase()) {
+    const status = await callableCheckStripeStatus();
+    return {
+      charges_enabled: status.charges_enabled,
+      details_submitted: status.details_submitted,
+    };
   }
   const callable = httpsCallable(functions, 'checkStripeStatus');
   const result = await callable({ restaurantId: rid });

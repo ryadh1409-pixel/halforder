@@ -4,6 +4,7 @@ import { auth, ensureAuthReady } from '@/services/firebase';
 export async function requireAuthReady(): Promise<void> {
   await ensureAuthReady();
   if (!auth.currentUser) {
-    throw new Error('Auth not ready');
+    console.warn('[authGuard] requireAuthReady: no auth.currentUser after ensureAuthReady');
+    throw new Error('Not signed in. Please log in and try again.');
   }
 }

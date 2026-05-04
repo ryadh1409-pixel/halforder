@@ -148,10 +148,6 @@ export default function RestaurantDashboardScreen() {
   }, [loadUserStripeDoc]);
 
   useEffect(() => {
-    console.log('Stripe user:', userData);
-  }, [userData]);
-
-  useEffect(() => {
     if (!user?.uid) {
       setRestaurant(null);
       setRestaurantLoading(false);
@@ -431,27 +427,23 @@ export default function RestaurantDashboardScreen() {
     userData.stripeAccountId.startsWith('acct_')
       ? userData.stripeAccountId
       : null;
-  const userStripeConnected = userData?.stripeConnected === true;
   const userStripeChargesEnabled = userData?.stripeChargesEnabled === true;
+  const userStripeOnboardingComplete = userData?.stripeOnboardingComplete === true;
 
   const stripeAccountIdEffective =
     userStripeAccountId ?? restaurant?.stripeAccountId ?? null;
-  /** From `users`, `restaurants`, or last `/stripe-status` response. */
-  const stripeConnectedEffective =
-    userStripeConnected ||
-    restaurant?.stripeConnected === true ||
-    stripeConnectStatus?.stripeConnected === true;
   const stripeChargesEffective =
     userStripeChargesEnabled ||
     restaurant?.stripeChargesEnabled === true ||
     stripeConnectStatus?.charges_enabled === true;
+  /** Host payouts: `users.stripeOnboardingComplete` (synced when Stripe `charges_enabled`) or live status. */
+  const stripePayoutsReady = userStripeOnboardingComplete || stripeChargesEffective;
 
   /** Single entry for the Payments card — connect vs resume from merged Firestore/API state. */
   function handleConnectStripe() {
     if (!user?.uid || !restaurant?.id || stripeLoading) return;
     const hasAcct = !!stripeAccountIdEffective;
-    const connected = stripeConnectedEffective;
-    if (hasAcct && !connected) {
+    if (hasAcct && !stripePayoutsReady) {
       void handleResumeStripeSetup();
       return;
     }
@@ -577,9 +569,28 @@ export default function RestaurantDashboardScreen() {
         )}
         <View style={styles.stripePaymentsSection}>
           <Text style={styles.stripePaymentsTitle}>💳 Payments</Text>
+          {!stripeAccountIdEffective ? (
+            <View style={styles.stripeBannerDanger}>
+              <Text style={styles.stripeBannerText}>
+                Stripe is not connected. Connect to accept card payments and receive payouts.
+              </Text>
+            </View>
+          ) : null}
+          {!!stripeAccountIdEffective && !stripePayoutsReady ? (
+            <View style={styles.stripeBannerWarning}>
+              <Text style={styles.stripeBannerText}>
+                Finish Stripe onboarding to enable payouts. Tap below to continue in Stripe.
+              </Text>
+            </View>
+          ) : null}
+          {stripePayoutsReady ? (
+            <View style={styles.stripeBannerSuccess}>
+              <Text style={styles.stripeBannerText}>Stripe Connected ✅ — you can receive payouts on paid orders.</Text>
+            </View>
+          ) : null}
           <Text style={styles.stripePaymentsSub}>
-            {stripeChargesEffective
-              ? 'You can receive payouts on paid orders.'
+            {stripePayoutsReady
+              ? 'Payouts are enabled for your account.'
               : 'Connect Stripe to get paid for card orders.'}
           </Text>
           {stripeStatusLoading ? (
@@ -603,11 +614,11 @@ export default function RestaurantDashboardScreen() {
               {stripeLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.stripePaymentsConnectBtnText}>Connect with Stripe</Text>
+                <Text style={styles.stripePaymentsConnectBtnText}>Connect Stripe</Text>
               )}
             </TouchableOpacity>
           ) : null}
-          {!!stripeAccountIdEffective && !stripeConnectedEffective ? (
+          {!!stripeAccountIdEffective && !stripePayoutsReady ? (
             <TouchableOpacity
               style={[styles.stripePaymentsFinishBtn, stripeLoading ? styles.stripePaymentsBtnDisabled : null]}
               disabled={stripeLoading}
@@ -620,22 +631,6 @@ export default function RestaurantDashboardScreen() {
                 <Text style={styles.stripePaymentsConnectBtnText}>Finish Stripe Setup</Text>
               )}
             </TouchableOpacity>
-          ) : null}
-          <Pressable
-            onPress={startOnboarding}
-            style={{
-              backgroundColor: '#635BFF',
-              padding: 14,
-              borderRadius: 12,
-              marginTop: 12,
-            }}
-          >
-            <Text style={{ color: 'white', textAlign: 'center', fontWeight: 'bold', fontSize: 16 }}>
-              Connect Stripe
-            </Text>
-          </Pressable>
-          {stripeConnectedEffective ? (
-            <Text style={styles.stripePaymentsConnectedText}>Stripe Connected ✅</Text>
           ) : null}
         </View>
         <Text style={styles.sectionTitle}>Menu Management</Text>
@@ -732,25 +727,6 @@ export default function RestaurantDashboardScreen() {
                 >
                   {savingItem ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Item</Text>}
                 </Pressable>
-                <View style={{ marginVertical: 20 }}>
-                  <Pressable
-                    onPress={startOnboarding}
-                    style={{
-                      backgroundColor: '#635BFF',
-                      padding: 16,
-                      borderRadius: 12,
-                      marginTop: 10,
-                    }}
-                  >
-                    <Text style={{
-                      color: 'white',
-                      textAlign: 'center',
-                      fontWeight: 'bold'
-                    }}>
-                      Connect Stripe
-                    </Text>
-                  </Pressable>
-                </View>
                 <Pressable
                   style={styles.cancelButton}
                   onPress={() => setMenuModalOpen(false)}
@@ -772,41 +748,6 @@ export default function RestaurantDashboardScreen() {
         onClose={() => setAssignDriverModalOpen(false)}
         onSelectDriver={handleAssignDriver}
       />
-      <View style={{ position: 'absolute', top: 100, left: 20 }}>
-        <Pressable
-          onPress={() => console.log('BUTTON WORKING')}
-          style={{ backgroundColor: 'red', padding: 10 }}
-        >
-          <Text style={{ color: 'white' }}>TEST</Text>
-        </Pressable>
-      </View>
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 100,
-          left: 20,
-          right: 20,
-          zIndex: 999,
-        }}
-      >
-        <Pressable
-          onPress={startOnboarding}
-          style={{
-            backgroundColor: '#635BFF',
-            padding: 18,
-            borderRadius: 14,
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOpacity: 0.2,
-            shadowRadius: 10,
-            elevation: 5,
-          }}
-        >
-          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-            Connect Stripe
-          </Text>
-        </Pressable>
-      </View>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -1017,7 +958,38 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '600',
     fontSize: 14,
+    marginTop: 10,
     marginBottom: 12,
+    lineHeight: 20,
+  },
+  stripeBannerDanger: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  stripeBannerWarning: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  stripeBannerSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  stripeBannerText: {
+    color: '#0F172A',
+    fontWeight: '600',
+    fontSize: 14,
     lineHeight: 20,
   },
   stripePaymentsLoadingRow: {
@@ -1055,12 +1027,6 @@ const styles = StyleSheet.create({
   },
   stripePaymentsBtnDisabled: { opacity: 0.55 },
   stripePaymentsConnectBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
-  stripePaymentsConnectedText: {
-    color: '#166534',
-    fontWeight: '600',
-    fontSize: 16,
-    marginTop: 12,
-  },
   menuCard: {
     borderRadius: 16,
     borderWidth: 1,

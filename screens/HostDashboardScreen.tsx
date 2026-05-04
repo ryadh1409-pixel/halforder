@@ -14,9 +14,11 @@ import {
 } from '@/services/foodService';
 import { db } from '@/services/firebase';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
+import { startOnboarding } from '@/services/stripeConnect';
 import { pickAndUploadImage } from '@/services/uploadImage';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { requireRole } from '@/utils/requireRole';
+import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
@@ -29,6 +31,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -68,6 +71,8 @@ export default function HostDashboardScreen() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   const { items: menu, loading: menuLoading } = useMenu(uid || null);
   const { orders, loading: ordersLoading } = useRestaurantOrders(uid || null);
@@ -114,6 +119,43 @@ export default function HostDashboardScreen() {
       },
     );
     return () => unsub();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setStripeAccountId(null);
+      return;
+    }
+    const userRef = doc(db, 'users', uid);
+    const unsub = onSnapshot(
+      userRef,
+      (snap) => {
+        if (!snap.exists()) {
+          setStripeAccountId(null);
+          return;
+        }
+        const v = snap.data()?.stripeAccountId;
+        setStripeAccountId(
+          typeof v === 'string' && v.startsWith('acct_') ? v : null,
+        );
+      },
+      () => setStripeAccountId(null),
+    );
+    return () => unsub();
+  }, [uid]);
+
+  const handleConnectStripe = useCallback(async () => {
+    if (!uid) return;
+    setStripeLoading(true);
+    try {
+      await startOnboarding(uid);
+      showSuccess('Continue in Stripe, then return here.');
+    } catch (e) {
+      console.log('[host-dashboard] Connect Stripe', e);
+      showError(stripeConnectErrorMessage(e));
+    } finally {
+      setStripeLoading(false);
+    }
   }, [uid]);
 
   const saveProfileFields = useCallback(async () => {
@@ -449,6 +491,26 @@ export default function HostDashboardScreen() {
                     <Text style={styles.primaryBtnText}>Save venue</Text>
                   )}
                 </TouchableOpacity>
+
+                {!stripeAccountId ? (
+                  <Pressable
+                    onPress={handleConnectStripe}
+                    disabled={stripeLoading}
+                    style={({ pressed }) => [
+                      styles.stripeConnectBtn,
+                      pressed && { opacity: 0.9 },
+                      stripeLoading && styles.stripeConnectBtnDisabled,
+                    ]}
+                  >
+                    {stripeLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.stripeConnectBtnText}>Connect Stripe</Text>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Text style={styles.stripeConnectedText}>Stripe Connected ✅</Text>
+                )}
               </>
             )}
           </View>
@@ -739,6 +801,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  stripeConnectBtn: {
+    marginTop: 12,
+    backgroundColor: '#635BFF',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  stripeConnectBtnDisabled: { opacity: 0.55 },
+  stripeConnectBtnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  stripeConnectedText: {
+    marginTop: 12,
+    color: '#15803d',
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 16,
+  },
   fab: {
     position: 'absolute',
     right: 18,

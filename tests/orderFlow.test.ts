@@ -23,9 +23,25 @@ import {
 const userA = 'user-a-test-' + Date.now();
 const userB = 'user-b-test-' + Date.now();
 
+/** Run with emulator: `RUN_FIRESTORE_RULES_TESTS=1 firebase emulators:exec --only firestore -- npm test` */
+const integrationDescribe =
+  process.env.FIRESTORE_EMULATOR_HOST != null || process.env.RUN_FIRESTORE_RULES_TESTS === '1'
+    ? describe
+    : describe.skip;
+
 let testEnv: RulesTestEnvironment | undefined;
 
+function requireTestEnv(): RulesTestEnvironment {
+  if (!testEnv) {
+    throw new Error(
+      'Rules test environment not initialized (start Firestore emulator on 127.0.0.1:8080 or set RUN_FIRESTORE_RULES_TESTS=1 with emulator).',
+    );
+  }
+  return testEnv;
+}
+
 async function joinOrderWithTransaction(
+  /** Rules-unit-testing returns a compat Firestore instance; cast at call site for modular helpers. */
   firestore: Firestore,
   orderId: string,
   user: { uid: string },
@@ -81,11 +97,12 @@ beforeEach(async () => {
 
 const EMULATOR_TIMEOUT_MS = 8000;
 
-describe('order flow integration', () => {
+integrationDescribe('order flow integration', () => {
   it(
     'creates order as User A, User B joins, participants length 2 and status stays open',
     async () => {
-      const dbA = testEnv.authenticatedContext(userA).firestore();
+      const env = requireTestEnv();
+      const dbA = env.authenticatedContext(userA).firestore() as unknown as Firestore;
       const ordersRef = collection(dbA, 'orders');
       const orderData = {
         status: 'open',
@@ -139,7 +156,7 @@ describe('order flow integration', () => {
       expect(created.participants.length).toBe(1);
       expect(created.maxPeople).toBe(3);
 
-      const dbB = testEnv.authenticatedContext(userB).firestore();
+      const dbB = env.authenticatedContext(userB).firestore() as unknown as Firestore;
       await joinOrderWithTransaction(dbB, orderId, { uid: userB });
 
       const afterSnap = await getDoc(doc(dbB, 'orders', orderId));

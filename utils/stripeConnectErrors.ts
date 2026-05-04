@@ -7,10 +7,12 @@ export function stripeConnectErrorMessage(error: unknown): string {
   }
   if (error && typeof error === 'object' && 'code' in error) {
     const code = String((error as { code: string }).code);
+    if (code.includes('unauthenticated')) {
+      return 'Please sign in again.';
+    }
     if (code.includes('failed-precondition')) {
       return 'Stripe is not configured on the server yet. Try again later or contact support.';
     }
-    if (code.includes('unauthenticated')) return 'Please sign in again.';
     if (code.includes('permission-denied')) {
       return 'You can only connect payouts for your own restaurant account.';
     }
