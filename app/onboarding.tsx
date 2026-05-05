@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -59,7 +60,10 @@ export default function OnboardingScreen() {
     if (!user?.uid) return;
     setStripeLoading(true);
     try {
-      await startOnboarding(user.uid);
+      const { url } = await startOnboarding(user.uid);
+      if (url) {
+        await Linking.openURL(url);
+      }
     } catch (e) {
       Alert.alert('Stripe', e instanceof Error ? e.message : 'Could not open Stripe setup.');
     } finally {

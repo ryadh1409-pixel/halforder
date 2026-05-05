@@ -7,6 +7,9 @@ export function stripeConnectErrorMessage(error: unknown): string {
   }
   if (error && typeof error === 'object' && 'code' in error) {
     const code = String((error as { code: string }).code);
+    if (code.includes('not-found')) {
+      return 'Stripe onboarding function is missing or not deployed in this region. Please redeploy Firebase Functions.';
+    }
     if (code.includes('unauthenticated')) {
       return 'Please sign in again.';
     }

@@ -166,14 +166,7 @@
           "cameraPermission": "We need access to your camera to take a profile photo."
         }
       ],
-      "expo-web-browser",
-      [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "merchant.com.halforfer",
-          "enableGooglePay": true
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

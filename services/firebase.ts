@@ -10,7 +10,8 @@
  * `getReactNativePersistence` (it is not exported from the browser build).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import type { Auth, Dependencies } from 'firebase/auth';
 import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -29,13 +30,6 @@ const firebaseConfig = {
   measurementId: 'G-JC37LM61J6',
 };
 
-function getOrCreateApp(): FirebaseApp {
-  if (getApps().length === 0) {
-    return initializeApp(firebaseConfig);
-  }
-  return getApp();
-}
-
 function isAuthAlreadyInitialized(e: unknown): boolean {
   return (
     typeof e === 'object' &&
@@ -45,7 +39,7 @@ function isAuthAlreadyInitialized(e: unknown): boolean {
   );
 }
 
-function getOrCreateAuth(app: FirebaseApp): Auth {
+function getOrCreateAuth(app: ReturnType<typeof initializeApp>): Auth {
   if (Platform.OS === 'web') {
     return getAuth(app);
   }
@@ -78,7 +72,8 @@ function getOrCreateAuth(app: FirebaseApp): Auth {
   }
 }
 
-export const app = getOrCreateApp();
+const app = initializeApp(firebaseConfig);
+export { app };
 
 export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);

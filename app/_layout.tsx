@@ -11,7 +11,6 @@ import { LogBox } from 'react-native';
 import { AuthProvider } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
-import { StripeProvider } from '../services/stripe';
 
 LogBox.ignoreAllLogs(true);
 
@@ -61,11 +60,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={DarkTheme}>
         <AuthProvider>
-          <StripeProvider>
-            <CartProvider>
-              <Slot />
-            </CartProvider>
-          </StripeProvider>
+          <CartProvider>
+            <Slot />
+          </CartProvider>
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

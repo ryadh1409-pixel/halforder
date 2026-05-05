@@ -21,6 +21,7 @@ import { requireRole } from '@/utils/requireRole';
 import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { Redirect, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -148,7 +149,10 @@ export default function HostDashboardScreen() {
     if (!uid) return;
     setStripeLoading(true);
     try {
-      await startOnboarding(uid);
+      const { url } = await startOnboarding(uid);
+      if (url) {
+        await Linking.openURL(url);
+      }
       showSuccess('Continue in Stripe, then return here.');
     } catch (e) {
       console.log('[host-dashboard] Connect Stripe', e);

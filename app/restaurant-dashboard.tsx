@@ -1,5 +1,5 @@
-import { API_BASE_URL } from '@/frontend/config/api';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import { Redirect } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -391,7 +391,10 @@ export default function RestaurantDashboardScreen() {
     if (!user?.uid || !restaurant?.id) return;
     setStripeLoading(true);
     try {
-      await startOnboarding(restaurant.id);
+      const { url } = await startOnboarding(restaurant.id);
+      if (url) {
+        await Linking.openURL(url);
+      }
       void refreshStripeConnectStatus();
       void loadUserStripeDoc();
       showSuccess('Finish setup in Stripe, then return to this app.');
@@ -408,7 +411,10 @@ export default function RestaurantDashboardScreen() {
     if (!user?.uid || !restaurant?.id) return;
     setStripeLoading(true);
     try {
-      await startOnboarding(restaurant.id);
+      const { url } = await startOnboarding(restaurant.id);
+      if (url) {
+        await Linking.openURL(url);
+      }
       void refreshStripeConnectStatus();
       void loadUserStripeDoc();
       showSuccess('Continue in Stripe, then return here.');
@@ -598,11 +604,6 @@ export default function RestaurantDashboardScreen() {
               <ActivityIndicator color="#635BFF" />
               <Text style={styles.stripePaymentsLoadingText}>Checking Stripe status…</Text>
             </View>
-          ) : null}
-          {__DEV__ && /localhost|127\.0\.0\.1/i.test(API_BASE_URL) && Platform.OS !== 'web' ? (
-            <Text style={styles.stripeDevHint}>
-              {'Use your computer’s LAN IP in frontend/config/api.ts or EXPO_PUBLIC_STRIPE_API_URL (same Wi‑Fi as this device).'}
-            </Text>
           ) : null}
           {!stripeAccountIdEffective ? (
             <TouchableOpacity
@@ -999,13 +1000,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   stripePaymentsLoadingText: { color: '#64748B', fontWeight: '600', fontSize: 14 },
-  stripeDevHint: {
-    color: '#B45309',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 12,
-    lineHeight: 18,
-  },
   stripePaymentsConnectBtn: {
     backgroundColor: '#635BFF',
     paddingVertical: 14,

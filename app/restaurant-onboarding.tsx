@@ -1,4 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import { Redirect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -59,7 +60,10 @@ export default function RestaurantOnboardingScreen() {
     if (!user?.uid) return;
     setLoading(true);
     try {
-      await startOnboarding(user.uid);
+      const { url } = await startOnboarding(user.uid);
+      if (url) {
+        await Linking.openURL(url);
+      }
       await refresh();
     } catch (e) {
       console.warn('[restaurant-onboarding] startOnboarding', e);
