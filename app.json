@@ -166,6 +166,13 @@
           "cameraPermission": "We need access to your camera to take a profile photo."
         }
       ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.halforder.app",
+          "enableGooglePay": true
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {
