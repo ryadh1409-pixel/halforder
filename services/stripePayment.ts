@@ -83,6 +83,7 @@ export const initializePaymentSheet = async (
   const { error } = await initPaymentSheet({
     paymentIntentClientSecret: clientSecret,
     merchantDisplayName: "Halforder",
+    returnURL: "halforder://stripe-redirect",
   });
   if (error) throw new Error("initPaymentSheet failed: " + error.message);
 
