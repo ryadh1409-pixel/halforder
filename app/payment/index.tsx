@@ -1,10 +1,13 @@
-import { createPaymentIntent } from '@/services/stripe';
+import { db } from '@/services/firebase';
+import { openPaymentSheet } from '@/services/stripePayment';
 import { useAuth } from '@/services/auth/useAuth';
+import { showError, showSuccess } from '@/utils/toast';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,63 +17,71 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const DEFAULT_AMOUNT_CENTS = 1200;
 
-function hasPublishableKey(): boolean {
-  return true;
-}
-
 export default function PaymentScreen() {
+  const router = useRouter();
+  const { orderId } = useLocalSearchParams<{ orderId?: string }>();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const amount = DEFAULT_AMOUNT_CENTS;
   const amountLabel = useMemo(() => `$${(amount / 100).toFixed(2)}`, [amount]);
-  const showNativeKeyWarning = false;
   const payDisabled = loading;
+  const trimmedOrderId = typeof orderId === 'string' ? orderId.trim() : '';
 
   const handlePay = useCallback(async () => {
-    console.log('[payment] handlePay tap, platform:', Platform.OS);
-
-    if (!user?.uid) {
+    if (!user?.uid || user.isAnonymous) {
       Alert.alert('Sign in required', 'Sign in to complete payment.');
+      router.replace('/(auth)/login');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await createPaymentIntent(amount);
-      const hasSecret =
-        response &&
-        typeof response === 'object' &&
-        'clientSecret' in (response as Record<string, unknown>) &&
-        typeof (response as { clientSecret?: unknown }).clientSecret === 'string';
-      if (!hasSecret) {
-        Alert.alert('Payment unavailable', 'Client SDK has been removed from this app build.');
+      const result = await openPaymentSheet({
+        amount,
+        merchantDisplayName: 'HalfOrder',
+        orderId: trimmedOrderId || undefined,
+      });
+
+      if (result.status === 'canceled') {
+        Alert.alert('Payment canceled', 'No charge was made.');
         return;
       }
-      Alert.alert('Payment intent created', 'Proceed from your backend-driven checkout flow.');
+
+      if (result.status === 'failed') {
+        showError(result.message || 'Payment failed. Please try again.');
+        return;
+      }
+
+      if (trimmedOrderId) {
+        await updateDoc(doc(db, 'orders', trimmedOrderId), {
+          paymentStatus: 'paid',
+          stripePaymentIntentId: result.paymentIntentId,
+          amount,
+          createdAt: serverTimestamp(),
+          status: 'pending',
+        });
+      }
+
+      showSuccess('Payment successful.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Payment failed. Please try again.';
       console.error('[payment] caught error:', error);
+      if (message === 'Please sign in to complete payment') {
+        router.replace('/(auth)/login');
+      }
       Alert.alert('Payment failed', message);
     } finally {
       setLoading(false);
     }
-  }, [amount, user?.uid]);
+  }, [amount, router, user?.isAnonymous, user?.uid]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.content}>
         <Text style={styles.title}>Pay with Stripe</Text>
         <Text style={styles.subtitle}>
-          Server-driven payment flow
+          Secure native checkout
         </Text>
-        {Platform.OS === 'web' && (
-          <Text style={styles.warn}>Web payment flow is backend-controlled.</Text>
-        )}
-        {showNativeKeyWarning && (
-          <Text style={styles.warn}>
-            Stripe client SDK has been removed from this build.
-          </Text>
-        )}
         <View style={styles.buttonWrap}>
           <Pressable
             style={[styles.payButton, payDisabled ? styles.payButtonDisabled : null]}

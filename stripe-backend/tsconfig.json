@@ -1,19 +1,19 @@
 {
   "compilerOptions": {
     "module": "NodeNext",
-    "esModuleInterop": true,
     "moduleResolution": "nodenext",
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    "target": "es2019",
+    "lib": ["es2019"],
     "outDir": "lib",
     "rootDir": "src",
-    "sourceMap": true,
     "strict": true,
-    "target": "es2017"
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noEmit": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "resolveJsonModule": true
   },
-  "compileOnSave": true,
-  "include": [
-    "src"
-  ],
-  "extends": "expo/tsconfig.base"
+  "include": ["src"]
 }

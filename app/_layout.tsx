@@ -4,6 +4,7 @@ import 'react-native-reanimated';
 
 import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import { Slot } from 'expo-router';
 import React from 'react';
 import { LogBox } from 'react-native';
@@ -58,13 +59,19 @@ export const linking = {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={DarkTheme}>
-        <AuthProvider>
-          <CartProvider>
-            <Slot />
-          </CartProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
+        merchantIdentifier="merchant.com.halforder.app"
+        urlScheme="halforder"
+      >
+        <ThemeProvider value={DarkTheme}>
+          <AuthProvider>
+            <CartProvider>
+              <Slot />
+            </CartProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }

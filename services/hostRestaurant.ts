@@ -22,19 +22,32 @@ export async function saveRestaurantVenueMain(input: {
   const uid = input.uid.trim();
   if (!uid) throw new Error('Invalid owner id');
   const ref = doc(db, 'restaurants', uid);
+  const firestorePath = `restaurants/${uid}`;
   const snap = await getDoc(ref);
+  const payload = {
+    id: uid,
+    name: input.name.trim(),
+    location: input.location.trim(),
+    logo: input.logo,
+    ownerId: uid,
+    stripeAccountId:
+      typeof snap.data()?.stripeAccountId === 'string'
+        ? snap.data()?.stripeAccountId
+        : null,
+    updatedAt: serverTimestamp(),
+    ...(snap.exists() ? {} : { createdAt: Date.now() }),
+  };
+  console.log('[venue.save] auth uid:', uid);
+  console.log('[venue.save] document id:', uid);
+  console.log('[venue.save] firestore path:', firestorePath);
+  console.log('[venue.save] payload:', JSON.stringify(payload));
   await setDoc(
     ref,
-    {
-      name: input.name.trim(),
-      location: input.location.trim(),
-      logo: input.logo,
-      ownerId: uid,
-      updatedAt: serverTimestamp(),
-      ...(snap.exists() ? {} : { createdAt: Date.now() }),
-    },
+    payload,
     { merge: true },
   );
+  const verifySnap = await getDoc(ref);
+  console.log('[venue.save] exists after write:', verifySnap.exists());
   try {
     await updateDoc(doc(db, 'users', uid), { restaurantId: uid });
   } catch {

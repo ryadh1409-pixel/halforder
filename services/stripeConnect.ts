@@ -6,11 +6,6 @@ import {
   functions,
 } from '@/services/firebase';
 import { getRestaurant } from '@/services/restaurantService';
-import {
-  createPaymentIntent as createPaymentIntentService,
-  startStripeOnboarding,
-} from '@/services/stripe';
-import * as WebBrowser from 'expo-web-browser';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
@@ -20,15 +15,6 @@ function logStripe(label: string, payload: unknown) {
   } catch {
     console.log(`[Stripe] ${label}`, payload);
   }
-}
-
-/** Opens Stripe Connect onboarding inside the app (SFSafariViewController / Chrome Custom Tabs). */
-export async function openStripeConnectInApp(url: string): Promise<void> {
-  if (typeof url !== 'string' || !url.startsWith('http')) {
-    throw new Error('Invalid Stripe URL');
-  }
-  const result = await WebBrowser.openBrowserAsync(url);
-  logStripe('WebBrowser closed', result);
 }
 
 export type StripeConnectOnboardingResult = { url: string; accountId?: string };
@@ -105,7 +91,9 @@ async function callableCreateStripeAccount(): Promise<StripeConnectOnboardingRes
   await requireAuthReady();
   if (!auth.currentUser?.uid) throw new Error('Not signed in');
   console.log('AUTH UID:', auth.currentUser.uid);
-  const result = (await startStripeOnboarding()) as Record<string, unknown>;
+  const fn = httpsCallable(functions, 'startRestaurantStripeConnect');
+  const response = await fn({});
+  const result = (response.data ?? {}) as Record<string, unknown>;
   logStripe('callable createStripeAccount ok', {});
   return parseOnboarding(result);
 }
@@ -301,41 +289,3 @@ export async function checkStripeStatus(restaurantId?: string): Promise<StripeAc
   };
 }
 
-export async function createCheckoutSession(params: {
-  orderId: string;
-  successUrl: string;
-  cancelUrl: string;
-}): Promise<{ url: string; sessionId: string }> {
-  await requireAuthReady();
-  const callable = httpsCallable(functions, 'createCheckoutSession');
-  const result = await callable({
-    orderId: params.orderId,
-    successUrl: params.successUrl,
-    cancelUrl: params.cancelUrl,
-  });
-  const data = result.data as { url?: unknown; sessionId?: unknown };
-  const url = data.url;
-  const sessionId = data.sessionId;
-  if (typeof url !== 'string' || !url.startsWith('http')) {
-    throw new Error('Invalid checkout session response');
-  }
-  if (typeof sessionId !== 'string' || !sessionId.startsWith('cs_')) {
-    throw new Error('Invalid checkout session id');
-  }
-  return { url, sessionId };
-}
-
-export async function createPaymentIntent(
-  amount: number,
-  accountId: string,
-): Promise<string> {
-  void accountId;
-  const data = (await createPaymentIntentService(amount)) as {
-    clientSecret?: unknown;
-  };
-  const clientSecret = data?.clientSecret;
-  if (typeof clientSecret !== 'string' || !clientSecret.includes('_secret_')) {
-    throw new Error('Invalid payment intent response');
-  }
-  return clientSecret;
-}

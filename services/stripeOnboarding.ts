@@ -1,5 +1,5 @@
 import { auth, ensureAuthReady } from '@/services/firebase';
-import { startStripeOnboarding } from '@/services/stripe';
+import { startOnboarding } from '@/services/stripeConnect';
 
 /**
  * Single callable: creates restaurant doc / Connect account as needed, returns Account Link URL.
@@ -10,7 +10,7 @@ export async function createOnboardingLink(): Promise<string> {
   if (!auth.currentUser) {
     throw new Error('Sign in required');
   }
-  const data = (await startStripeOnboarding()) as { url?: unknown };
+  const data = (await startOnboarding(auth.currentUser.uid)) as { url?: unknown };
   const url = data?.url;
   if (typeof url !== 'string' || !url.startsWith('http')) {
     throw new Error('No onboarding URL returned');

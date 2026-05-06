@@ -180,11 +180,7 @@ export function subscribeRestaurantMenuItems(
   onData: (items: MenuItemDoc[]) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(
-      collection(db, 'menuItems'),
-      where('restaurantId', '==', restaurantId),
-      orderBy('name', 'asc'),
-    ),
+    query(collection(db, 'restaurants', restaurantId, 'menuItems'), orderBy('name', 'asc')),
     (snap) => {
       onData(
         snap.docs.map((d) => {
@@ -195,7 +191,7 @@ export function subscribeRestaurantMenuItems(
             name: typeof data.name === 'string' ? data.name : 'Unnamed item',
             price: typeof data.price === 'number' ? data.price : 0,
             image: typeof data.image === 'string' ? data.image : null,
-            isAvailable: data.isAvailable !== false,
+            isAvailable: data.available !== false,
           };
         }),
       );
@@ -275,21 +271,31 @@ export async function addMenuItem(payload: {
   image: string | null;
   isAvailable: boolean;
 }): Promise<void> {
-  await addDoc(collection(db, 'menuItems'), {
-    ...payload,
+  await addDoc(collection(db, 'restaurants', payload.restaurantId, 'menuItems'), {
+    restaurantId: payload.restaurantId,
+    name: payload.name,
+    price: payload.price,
+    image: payload.image,
+    available: payload.isAvailable,
     createdAt: serverTimestamp(),
   });
 }
 
 export async function updateMenuItem(
+  restaurantId: string,
   itemId: string,
   updates: Partial<Pick<MenuItemDoc, 'name' | 'price' | 'image' | 'isAvailable'>>,
 ): Promise<void> {
-  await updateDoc(doc(db, 'menuItems', itemId), updates);
+  const patch: Record<string, unknown> = { ...updates };
+  if ('isAvailable' in patch) {
+    patch.available = patch.isAvailable;
+    delete patch.isAvailable;
+  }
+  await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', itemId), patch);
 }
 
-export async function deleteMenuItem(itemId: string): Promise<void> {
-  await deleteDoc(doc(db, 'menuItems', itemId));
+export async function deleteMenuItem(restaurantId: string, itemId: string): Promise<void> {
+  await deleteDoc(doc(db, 'restaurants', restaurantId, 'menuItems', itemId));
 }
 
 export async function contactCustomer(payload: {

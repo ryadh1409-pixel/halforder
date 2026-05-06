@@ -1,5 +1,5 @@
 import SwipeWrapper from '@/components/SwipeWrapper';
-import { db } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
 import { collection, getDocs } from 'firebase/firestore';
@@ -34,7 +34,10 @@ export default function HomeFoodTrucksTab() {
   const fetchRestaurants = useCallback(async () => {
     setLoading(true);
     try {
+      console.log('[venues.list] auth uid:', auth.currentUser?.uid ?? null);
+      console.log('[venues.list] firestore path: restaurants');
       const snapshot = await getDocs(collection(db, 'restaurants'));
+      console.log('[venues.list] query results count:', snapshot.size);
       const data = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
@@ -43,7 +46,8 @@ export default function HomeFoodTrucksTab() {
         String(a.name ?? 'Venue').localeCompare(String(b.name ?? 'Venue')),
       );
       setRestaurants(data);
-    } catch {
+    } catch (e) {
+      console.warn('[venues.list] failed to load restaurants', e);
       setRestaurants([]);
     } finally {
       setLoading(false);

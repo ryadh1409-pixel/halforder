@@ -57,20 +57,27 @@ export async function createRestaurant(data: {
   profileCompleted?: boolean;
   description?: string;
 }): Promise<void> {
+  const payload = {
+    id: data.userId,
+    name: data.name.trim(),
+    logo: data.logo ?? null,
+    location: data.location.trim(),
+    ownerId: data.userId,
+    isOpen: true,
+    type: data.type ?? 'restaurant',
+    description: data.description?.trim() ?? '',
+    profileCompleted: data.profileCompleted ?? false,
+    stripeReady: false,
+    stripeAccountId: null,
+    createdAt: serverTimestamp(),
+  };
+  console.log('[venue.create] auth uid:', data.userId);
+  console.log('[venue.create] document id:', data.userId);
+  console.log('[venue.create] firestore path:', `restaurants/${data.userId}`);
+  console.log('[venue.create] payload:', JSON.stringify(payload));
   await setDoc(
     doc(db, 'restaurants', data.userId),
-    {
-      name: data.name.trim(),
-      logo: data.logo ?? null,
-      location: data.location.trim(),
-      ownerId: data.userId,
-      isOpen: true,
-      type: data.type ?? 'restaurant',
-      description: data.description?.trim() ?? '',
-      profileCompleted: data.profileCompleted ?? false,
-      stripeReady: false,
-      createdAt: serverTimestamp(),
-    },
+    payload,
     { merge: true },
   );
   await updateDoc(doc(db, 'users', data.userId), { restaurantId: data.userId });

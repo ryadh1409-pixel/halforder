@@ -1,117 +1,110 @@
-import { resolvePaymentIntentPostUrl } from '@/frontend/config/paymentIntentApi';
-import { requireAuthReady } from '@/services/authGuard';
-import { auth } from '@/services/firebase';
+import {
+  initPaymentSheet,
+  presentPaymentSheet,
+} from "@stripe/stripe-react-native";
+import { httpsCallable } from "firebase/functions";
+import { Platform } from "react-native";
+import { auth, functions } from "./firebase";
 
-export type CreatePaymentIntentApiBody = {
-  clientSecret?: string;
-  orderId?: string;
-  error?: string;
-};
+const SIGN_IN_REQUIRED_ERROR = "Please sign in to complete payment";
 
-export type CreatePaymentIntentResult = {
-  clientSecret: string;
-  orderId?: string;
-  response: CreatePaymentIntentApiBody;
-};
-
-export type CreateOrderPaymentIntentParams = {
-  amount: number;
-  userId: string;
-  items?: unknown[];
-};
-
-/** Stripe PaymentIntent client secrets contain `_secret_` (e.g. pi_xxx_secret_yyy). */
-export function normalizePaymentIntentClientSecret(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const s = value.trim();
-  if (!s || !s.includes('_secret_')) return null;
-  return s;
-}
-
-/**
- * Creates Firestore `orders` doc + Cloud Function PaymentIntent (metadata.orderId).
- * Order `paymentStatus` becomes `paid` only via Stripe webhook (`payment_intent.succeeded`).
- */
-export async function createPaymentIntent(
-  params: CreateOrderPaymentIntentParams,
-): Promise<CreatePaymentIntentResult> {
-  await requireAuthReady();
-  const { amount, userId, items } = params;
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error('Amount must be a positive integer.');
-  }
-  if (typeof userId !== 'string' || !userId.trim()) {
-    throw new Error('userId is required.');
-  }
-
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('Not signed in');
-  }
-  if (user.uid !== userId.trim()) {
-    throw new Error('userId must match the signed-in user.');
-  }
-
-  const url = resolvePaymentIntentPostUrl();
-  console.log('🔥 USING URL:', url);
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${await user.getIdToken()}`,
-  };
-
-  const body = JSON.stringify({
-    amount,
-    userId: userId.trim(),
-    items: Array.isArray(items) ? items : [],
-  });
-  console.log('[stripePayment] POST', url, 'body keys: amount, userId, items');
-
-  let httpResponse: Response;
-  try {
-    httpResponse = await fetch(url, {
-      method: 'POST',
-      headers,
-      body,
-    });
-  } catch (e) {
-    console.error('[stripePayment] network error (full):', e);
-    throw e instanceof Error ? e : new Error(String(e));
-  }
-
-  const contentType = httpResponse.headers.get('content-type') || '';
-  const rawText = await httpResponse.text();
-  console.log('[stripePayment] HTTP status:', httpResponse.status, 'content-type:', contentType);
-  console.log('[stripePayment] RAW body:', rawText);
-
-  let json: CreatePaymentIntentApiBody = {};
-  const trimmed = rawText.trim();
-  if (trimmed) {
-    try {
-      json = JSON.parse(trimmed) as CreatePaymentIntentApiBody;
-    } catch (parseErr) {
-      console.error('[stripePayment] JSON.parse failed:', parseErr);
-      json = { error: trimmed.slice(0, 500) };
+function assertNonAnonymousPaymentUser(): void {
+  const currentUser = auth.currentUser;
+  if (!currentUser || currentUser.isAnonymous) {
+    // Prevent anonymous users from reaching payment callables.
+    if (currentUser?.isAnonymous) {
+      void auth.signOut();
     }
+    throw new Error(SIGN_IN_REQUIRED_ERROR);
   }
-
-  console.log('[stripePayment] API RESPONSE:', json);
-
-  if (!httpResponse.ok) {
-    const msg = json.error || `Unable to create payment intent (HTTP ${httpResponse.status}).`;
-    console.error('[stripePayment] request failed:', msg);
-    throw new Error(msg);
-  }
-
-  const secret = normalizePaymentIntentClientSecret(json.clientSecret);
-  if (!secret) {
-    const msg =
-      json.error ||
-      'Invalid payment intent response: clientSecret missing or does not contain _secret_.';
-    console.error('[stripePayment]', msg, 'raw clientSecret field:', json.clientSecret);
-    throw new Error(msg);
-  }
-
-  const orderId = typeof json.orderId === 'string' ? json.orderId : undefined;
-
-  return { clientSecret: secret, orderId, response: json };
 }
+
+type InitSheetParams = {
+  amount: number;
+  merchantDisplayName?: string;
+  orderId?: string;
+};
+
+type InitSheetResult = {
+  clientSecret: string;
+  paymentIntentId: string;
+};
+
+function parsePaymentIntentId(clientSecret: string): string {
+  const idx = clientSecret.indexOf("_secret_");
+  return idx > 0 ? clientSecret.slice(0, idx) : clientSecret;
+}
+
+export const initializePaymentSheet = async (
+  params: InitSheetParams,
+): Promise<InitSheetResult> => {
+  const amount = Number(params.amount);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("Amount must be a positive integer (in cents).");
+  }
+  if (Platform.OS === "web") {
+    throw new Error("PaymentSheet is not supported on web.");
+  }
+
+  assertNonAnonymousPaymentUser();
+
+  console.log(
+    "[stripePayment] auth.currentUser.uid",
+    auth.currentUser?.uid ?? null,
+  );
+  console.log(
+    "[stripePayment] auth.currentUser.isAnonymous",
+    auth.currentUser?.isAnonymous ?? null,
+  );
+
+  await auth.currentUser?.getIdToken(true);
+
+  const fn = httpsCallable(functions, "createPaymentIntent");
+  const result = await fn({
+    amount,
+    orderId: params.orderId ?? null,
+  });
+
+  console.log(
+    "[stripePayment] callable response",
+    JSON.stringify(result.data ?? null),
+  );
+
+  const data = result.data as Record<string, unknown> | undefined;
+  const clientSecret =
+    typeof data?.clientSecret === "string"
+      ? data.clientSecret
+      : typeof data?.client_secret === "string"
+        ? data.client_secret
+        : undefined;
+
+  console.log("clientSecret value:", clientSecret);
+  if (!clientSecret) throw new Error("clientSecret missing");
+  const { error } = await initPaymentSheet({
+    paymentIntentClientSecret: clientSecret,
+    merchantDisplayName: "Halforder",
+  });
+  if (error) throw new Error("initPaymentSheet failed: " + error.message);
+
+  return {
+    clientSecret,
+    paymentIntentId: parsePaymentIntentId(clientSecret),
+  };
+};
+
+export const openPaymentSheet = async (params: InitSheetParams) => {
+  assertNonAnonymousPaymentUser();
+  const init = await initializePaymentSheet(params);
+  const { error } = await presentPaymentSheet();
+  if (error) {
+    if (error.code === "Canceled") {
+      return { status: "canceled" as const, ...init };
+    }
+    return {
+      status: "failed" as const,
+      message: error.message || "Payment failed.",
+      ...init,
+    };
+  }
+  return { status: "success" as const, ...init };
+};

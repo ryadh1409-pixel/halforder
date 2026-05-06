@@ -47,7 +47,7 @@ export type RestaurantOrder = {
   totalPrice: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
-  stripeCheckoutSessionId: string | null;
+  stripePaymentIntentId: string | null;
   driverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
@@ -200,9 +200,9 @@ function mapDocToRestaurantOrder(
           : 0,
     status,
     paymentStatus: parsePaymentStatus(data.paymentStatus, status),
-    stripeCheckoutSessionId:
-      typeof data.stripeCheckoutSessionId === 'string'
-        ? data.stripeCheckoutSessionId
+    stripePaymentIntentId:
+      typeof data.stripePaymentIntentId === 'string'
+        ? data.stripePaymentIntentId
         : null,
     groupId: typeof data.groupId === 'string' ? data.groupId : null,
     estimatedDeliveryTime:
@@ -277,7 +277,7 @@ export async function createOrder(payload: {
     total: payload.totalPrice,
     status: 'awaiting_payment',
     paymentStatus: 'unpaid',
-    stripeCheckoutSessionId: null,
+    stripePaymentIntentId: null,
     groupId,
     estimatedDeliveryTime,
     driverId: payload.driverId ?? null,

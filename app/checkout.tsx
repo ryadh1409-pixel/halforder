@@ -1,21 +1,18 @@
 import AppHeader from '@/components/AppHeader';
 import { useAuth } from '@/services/AuthContext';
-import { auth, ensureAuthReady } from '@/services/firebase';
+import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
-import {
-  createCheckoutSession,
-  resolveRestaurantPaymentsReady,
-} from '@/services/stripeConnect';
-import { showError } from '@/utils/toast';
-import * as Linking from 'expo-linking';
+import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
+import { openPaymentSheet } from '@/services/stripePayment';
+import { showError, showSuccess } from '@/utils/toast';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Phase = 'loading' | 'opening' | 'error' | 'done';
+type Phase = 'loading' | 'paying' | 'error' | 'done';
 
 /** Root checkout — outside `(tabs)` so no tab chrome appears during payment. */
 export default function CheckoutScreen() {
@@ -45,6 +42,12 @@ export default function CheckoutScreen() {
         setMessage('Missing order or sign-in.');
         return;
       }
+      if (auth.currentUser.isAnonymous) {
+        await auth.signOut();
+        showError('Please sign in to complete payment');
+        router.replace('/(auth)/login');
+        return;
+      }
       const order = await getRestaurantOrderById(id);
       if (!order?.restaurantId) {
         setPhase('error');
@@ -65,44 +68,47 @@ export default function CheckoutScreen() {
         return;
       }
 
-      const successUrl = Linking.createURL('/order/payment-callback', {
-        queryParams: { orderId: id, outcome: 'success' },
-      });
-      const cancelUrl = Linking.createURL('/order/payment-callback', {
-        queryParams: { orderId: id, outcome: 'cancel' },
-      });
-      const { url } = await createCheckoutSession({
+      setPhase('paying');
+      const result = await openPaymentSheet({
+        amount: Math.round(order.totalPrice * 100),
+        merchantDisplayName: 'HalfOrder',
         orderId: id,
-        successUrl,
-        cancelUrl,
       });
-      setPhase('opening');
-      const returnUrl = Linking.createURL('/order/payment-callback');
-      const browserResult = await WebBrowser.openAuthSessionAsync(url, returnUrl);
-      if (browserResult.type === 'success' && browserResult.url) {
-        const parsed = Linking.parse(browserResult.url);
-        const q = parsed.queryParams ?? {};
-        const oid = Array.isArray(q.orderId) ? q.orderId[0] : q.orderId;
-        const oc = Array.isArray(q.outcome) ? q.outcome[0] : q.outcome;
-        router.replace({
-          pathname: '/order/payment-callback',
-          params: {
-            orderId: typeof oid === 'string' ? oid : id,
-            outcome: typeof oc === 'string' ? oc : 'success',
-          },
-        } as never);
+
+      if (result.status === 'canceled') {
+        setPhase('done');
+        setMessage('Payment was canceled.');
         return;
       }
+      if (result.status === 'failed') {
+        setPhase('error');
+        setMessage(result.message || 'Payment failed. Please try again.');
+        showError('Payment failed.');
+        return;
+      }
+
+      await updateDoc(doc(db, 'orders', id), {
+        paymentStatus: 'paid',
+        stripePaymentIntentId: result.paymentIntentId,
+        amount: Math.round(order.totalPrice * 100),
+        createdAt: serverTimestamp(),
+        status: 'pending',
+      });
+
       setPhase('done');
-      router.replace({
-        pathname: '/order/payment-callback',
-        params: { orderId: id, outcome: 'cancel' },
-      } as never);
+      showSuccess('Payment successful.');
+      router.replace(`/order/tracking/${id}` as never);
     } catch (e) {
       console.warn('[checkout]', e);
+      if (e instanceof Error && e.message === 'Please sign in to complete payment') {
+        await auth.signOut();
+        showError(e.message);
+        router.replace('/(auth)/login');
+        return;
+      }
       setStripeBlockedRestaurantId(null);
       setPhase('error');
-      setMessage('Could not start checkout. You can try again.');
+      setMessage('Could not start payment. You can try again.');
       showError('Payment could not start.');
     }
   }, [orderId, user, role, authLoading, router]);
@@ -117,11 +123,13 @@ export default function CheckoutScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <AppHeader title="Pay now" />
       <View style={styles.center}>
-        {(phase === 'loading' || phase === 'opening') && (
+        {(phase === 'loading' || phase === 'paying') && (
           <>
             <ActivityIndicator size="large" color="#16A34A" />
             <Text style={styles.hint}>
-              {phase === 'opening' ? 'Complete payment in the browser…' : 'Starting secure checkout…'}
+              {phase === 'paying'
+                ? 'Complete payment in the payment sheet…'
+                : 'Preparing secure payment…'}
             </Text>
           </>
         )}
@@ -147,6 +155,15 @@ export default function CheckoutScreen() {
             </Pressable>
           </>
         )}
+        {phase === 'done' && message ? (
+          <>
+            <Text style={styles.title}>Payment update</Text>
+            <Text style={styles.sub}>{message}</Text>
+            <Pressable style={styles.button} onPress={() => router.back()}>
+              <Text style={styles.buttonText}>Back</Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
     </SafeAreaView>
   );

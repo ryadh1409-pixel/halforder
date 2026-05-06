@@ -1,31 +1,37 @@
 /**
- * Stripe Connect HTTPS endpoints (firebase-functions v2).
+ * Stripe HTTPS callables (Firebase Functions **1st gen**) — matches existing deployed API version.
  */
 
 import * as admin from "firebase-admin";
-import {setGlobalOptions} from "firebase-functions";
-import {onCall} from "firebase-functions/v2/https";
+import * as functions from "firebase-functions/v1";
+import type { CallableContext } from "firebase-functions/v1/https";
+import {defineSecret} from "firebase-functions/params";
 import Stripe from "stripe";
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-setGlobalOptions({maxInstances: 10});
-
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeSecretKey) {
-  throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+let stripeSingleton: Stripe | null = null;
+const stripeSecret = defineSecret("STRIPE_SECRET_KEY");
+function getStripe(): Stripe {
+  const stripeSecretKey = stripeSecret.value();
+  if (!stripeSecretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+  }
+  if (!stripeSingleton) {
+    stripeSingleton = new Stripe(stripeSecretKey, {
+      apiVersion: "2025-02-24.acacia",
+    });
+  }
+  return stripeSingleton;
 }
 
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2025-02-24.acacia",
-});
-
-export const startRestaurantStripeConnect = onCall(
-  {region: "us-central1"},
-  async (_request) => {
+export const startRestaurantStripeConnect = functions
+  .region("us-central1")
+  .https.onCall(async (_data: unknown, _context: CallableContext) => {
     try {
+      const stripe = getStripe();
       const account = await stripe.accounts.create({
         type: "express",
       });
@@ -40,7 +46,154 @@ export const startRestaurantStripeConnect = onCall(
       return {url: accountLink.url};
     } catch (error) {
       console.error(error);
-      throw new Error("Stripe onboarding failed");
+      throw new functions.https.HttpsError(
+        "internal",
+        "Stripe onboarding failed",
+      );
     }
-  },
-);
+  });
+
+export const createPaymentIntent = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
+  .region("us-central1")
+  .https.onCall(async (data: unknown, context: CallableContext) => {
+    // App Check: not enforced in this handler (Console enforcement is separate).
+    // Gen1 callable uses `context` (same auth as v2 `request.auth`).
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Login required",
+      );
+    }
+    // Anonymous Firebase users have `context.auth` + `uid` — allowed for MVP checkout.
+    const uid = context.auth.uid;
+    const provider =
+      (
+        context.auth.token as
+          | {firebase?: {sign_in_provider?: string}}
+          | undefined
+      )?.firebase?.sign_in_provider ?? "unknown";
+    console.log("[createPaymentIntent] caller uid=", uid, "provider=", provider);
+
+    const payload =
+      data !== null && typeof data === "object"
+        ? (data as Record<string, unknown>)
+        : {};
+
+    const amountRaw = payload.amount;
+    const amount =
+      typeof amountRaw === "number" ? amountRaw : Number(amountRaw);
+
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "amount must be a positive integer in cents.",
+      );
+    }
+
+    const orderIdRaw = payload.orderId;
+    const orderId =
+      typeof orderIdRaw === "string" && orderIdRaw.trim()
+        ? orderIdRaw.trim()
+        : null;
+    if (!orderId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "orderId is required.",
+      );
+    }
+
+    const secretLoaded = Boolean(process.env.STRIPE_SECRET_KEY);
+    console.log("[createPaymentIntent] stripe secret loaded:", secretLoaded);
+    if (!secretLoaded) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Missing STRIPE_SECRET_KEY in function environment.",
+      );
+    }
+
+    const orderSnap = await admin.firestore().doc(`orders/${orderId}`).get();
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Order not found.",
+      );
+    }
+    const orderData = orderSnap.data() ?? {};
+    const restaurantId =
+      typeof orderData.restaurantId === "string" && orderData.restaurantId.trim()
+        ? orderData.restaurantId.trim()
+        : "";
+    if (!restaurantId) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Order is missing restaurantId.",
+      );
+    }
+
+    const restaurantSnap = await admin
+      .firestore()
+      .doc(`restaurants/${restaurantId}`)
+      .get();
+    if (!restaurantSnap.exists) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Restaurant not found.",
+      );
+    }
+    const restaurantData = restaurantSnap.data() ?? {};
+    if (
+      typeof restaurantData.stripeAccountId !== "string" ||
+      !restaurantData.stripeAccountId.trim()
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Restaurant Stripe account not set up",
+      );
+    }
+    const restaurantStripeAccountId = restaurantData.stripeAccountId.trim();
+
+    try {
+      const stripe = new Stripe(stripeSecret.value(), {
+        apiVersion: "2023-10-16" as unknown as Stripe.LatestApiVersion,
+      });
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        transfer_data: {
+          destination: restaurantStripeAccountId,
+        },
+        metadata: {
+          uid,
+          orderId,
+          restaurantId,
+        },
+      });
+      console.log("[createPaymentIntent] success:", paymentIntent.id);
+      const clientSecret = paymentIntent.client_secret;
+      if (!clientSecret) {
+        throw new Error("Missing payment intent client secret");
+      }
+      return {clientSecret};
+    } catch (err) {
+      const stripeErr = err as {
+        message?: string;
+        type?: string;
+        code?: string;
+      };
+      console.error(
+        "[createPaymentIntent] Stripe error:",
+        stripeErr.message,
+        stripeErr.type,
+        stripeErr.code,
+      );
+      console.error("[createPaymentIntent] Stripe raw error:", err);
+      throw new functions.https.HttpsError(
+        "internal",
+        stripeErr.message || "Failed to create payment intent.",
+      );
+    }
+  });
