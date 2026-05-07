@@ -4,7 +4,7 @@ import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
 import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
-import { openPaymentSheet } from '@/services/stripePayment';
+import { openPaymentSheet } from '@/services/stripe';
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';

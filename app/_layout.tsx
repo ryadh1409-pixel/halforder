@@ -3,8 +3,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
+import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { StripeProvider } from '@stripe/stripe-react-native';
 import { Slot } from 'expo-router';
 import React from 'react';
 import { LogBox } from 'react-native';
@@ -59,7 +59,7 @@ export const linking = {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StripeProvider
+      <AppStripeProvider
         publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
         merchantIdentifier="merchant.com.halforder.app"
         urlScheme="halforder"
@@ -71,7 +71,7 @@ export default function RootLayout() {
             </CartProvider>
           </AuthProvider>
         </ThemeProvider>
-      </StripeProvider>
+      </AppStripeProvider>
     </GestureHandlerRootView>
   );
 }

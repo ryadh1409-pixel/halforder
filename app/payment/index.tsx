@@ -1,5 +1,5 @@
 import { db } from '@/services/firebase';
-import { openPaymentSheet } from '@/services/stripePayment';
+import { openPaymentSheet } from '@/services/stripe';
 import { useAuth } from '@/services/auth/useAuth';
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
