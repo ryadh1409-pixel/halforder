@@ -1,6 +1,7 @@
 import { systemConfirm } from '@/components/SystemDialogHost';
 import { useMenu } from '@/hooks/useMenu';
 import { useRestaurantOrders } from '@/hooks/useOrders';
+import OrderCard from '@/components/orders/OrderCard';
 import {
   mergeHostRestaurantProfile,
   saveRestaurantVenueMain,
@@ -25,7 +26,7 @@ import * as Linking from 'expo-linking';
 import { Redirect, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { doc, onSnapshot } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -33,6 +34,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -45,6 +47,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import type { OrderStatus } from '@/services/orderService';
 
 type RestaurantState = {
   id: string;
@@ -57,6 +60,42 @@ type RestaurantState = {
 const PRIMARY = '#16a34a';
 const PAGE = '#f8fafc';
 const CARD = '#ffffff';
+
+function relativeTime(createdAtMs: number | null): string {
+  if (!createdAtMs) return 'just now';
+  const diff = Date.now() - createdAtMs;
+  const sec = Math.max(1, Math.floor(diff / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  return `${day}d ago`;
+}
+
+function badgeTone(status: OrderStatus): { bg: string; text: string } {
+  switch (status) {
+    case 'awaiting_payment':
+      return { bg: '#E2E8F0', text: '#334155' };
+    case 'pending':
+      return { bg: '#FEF3C7', text: '#92400E' };
+    case 'restaurant_accepted':
+    case 'preparing':
+      return { bg: '#DBEAFE', text: '#1E40AF' };
+    case 'ready_for_pickup':
+      return { bg: '#D1FAE5', text: '#065F46' };
+    case 'picked_up':
+    case 'on_the_way':
+      return { bg: '#CCFBF1', text: '#0F766E' };
+    case 'delivered':
+      return { bg: '#ECFDF5', text: '#166534' };
+    case 'rejected':
+      return { bg: '#FEE2E2', text: '#991B1B' };
+    default:
+      return { bg: '#F1F5F9', text: '#475569' };
+  }
+}
 
 export default function HostDashboardScreen() {
   const router = useRouter();
@@ -84,6 +123,8 @@ export default function HostDashboardScreen() {
   const [itemPrice, setItemPrice] = useState('');
   const [itemImage, setItemImage] = useState<string | null>(null);
   const [savingItem, setSavingItem] = useState(false);
+  const [ordersRefreshing, setOrdersRefreshing] = useState(false);
+  const knownOrderIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!uid) {
@@ -344,6 +385,18 @@ export default function HostDashboardScreen() {
     [orders],
   );
 
+  useEffect(() => {
+    if (knownOrderIdsRef.current.size === 0) {
+      knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
+      return;
+    }
+    const incoming = orders.some((o) => !knownOrderIdsRef.current.has(o.id));
+    if (incoming) {
+      // Placeholder hook for new-order sound.
+      knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
+    }
+  }, [orders]);
+
   const stats = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -354,6 +407,14 @@ export default function HostDashboardScreen() {
     const activeItems = menu.length;
     return { ordersToday, revenueToday, activeItems };
   }, [menu, orders]);
+
+  const pendingCount = orders.filter((o) => o.status === 'pending').length;
+  const preparingCount = orders.filter(
+    (o) => o.status === 'accepted' || o.status === 'restaurant_accepted' || o.status === 'preparing',
+  ).length;
+  const readyCount = orders.filter(
+    (o) => o.status === 'ready' || o.status === 'ready_for_pickup',
+  ).length;
 
   if (authLoading || roleLoading) {
     return (
@@ -412,6 +473,15 @@ export default function HostDashboardScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={ordersRefreshing}
+              onRefresh={() => {
+                setOrdersRefreshing(true);
+                setTimeout(() => setOrdersRefreshing(false), 500);
+              }}
+            />
+          }
         >
           <View style={styles.statsRow}>
             <View style={styles.statTile}>
@@ -571,25 +641,47 @@ export default function HostDashboardScreen() {
 
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>Orders</Text>
+            <View style={styles.ordersSummaryRow}>
+              <View style={styles.ordersSummaryTile}>
+                <Text style={styles.ordersSummaryValue}>{pendingCount}</Text>
+                <Text style={styles.ordersSummaryLabel}>Pending</Text>
+              </View>
+              <View style={styles.ordersSummaryTile}>
+                <Text style={styles.ordersSummaryValue}>{preparingCount}</Text>
+                <Text style={styles.ordersSummaryLabel}>Preparing</Text>
+              </View>
+              <View style={styles.ordersSummaryTile}>
+                <Text style={styles.ordersSummaryValue}>{readyCount}</Text>
+                <Text style={styles.ordersSummaryLabel}>Ready</Text>
+              </View>
+              <View style={styles.ordersSummaryTile}>
+                <Text style={styles.ordersSummaryValue}>${stats.revenueToday.toFixed(0)}</Text>
+                <Text style={styles.ordersSummaryLabel}>Revenue Today</Text>
+              </View>
+            </View>
             {ordersLoading ? (
-              <ActivityIndicator color={PRIMARY} style={{ marginTop: 8 }} />
+              <>
+                <ActivityIndicator color={PRIMARY} style={{ marginTop: 8 }} />
+                <View style={styles.orderSkeleton} />
+                <View style={styles.orderSkeleton} />
+              </>
             ) : ordersPreview.length === 0 ? (
               <Text style={styles.empty}>No orders yet for your venue.</Text>
             ) : (
               ordersPreview.map((o) => (
-                <View key={o.id} style={styles.orderRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.orderId} numberOfLines={1}>
-                      {o.id}
-                    </Text>
-                    <Text style={styles.orderMeta}>
-                      {o.createdAtLabel} · {o.status} · ${o.totalPrice.toFixed(2)}
-                    </Text>
-                    <Text style={styles.orderItems} numberOfLines={2}>
-                      {o.items.map((i) => i.name).join(', ') || '—'}
-                    </Text>
-                  </View>
-                </View>
+                <OrderCard
+                  key={o.id}
+                  order={o}
+                  onPress={() =>
+                    router.push(`/restaurant/order/${encodeURIComponent(o.id)}` as never)
+                  }
+                  onStatus={(status) => {
+                    void updateOrderStatus(o.id, status);
+                  }}
+                  onReject={() => {
+                    void rejectOrder(o.id);
+                  }}
+                />
               ))
             )}
           </View>
@@ -884,13 +976,20 @@ const styles = StyleSheet.create({
   menuActionBtnDanger: { backgroundColor: '#dc2626' },
   menuActionBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   orderRow: {
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f1f5f9',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    marginBottom: 10,
   },
+  orderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   orderId: { fontSize: 12, color: '#64748b', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  orderBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  orderBadgeText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
   orderMeta: { fontSize: 13, color: '#334155', marginTop: 4, fontWeight: '600' },
   orderItems: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  orderTotal: { fontSize: 16, color: '#0f172a', marginTop: 8, fontWeight: '800' },
   footerHint: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8 },
   footerLink: { color: PRIMARY, fontWeight: '700' },
   modalSafe: { flex: 1, backgroundColor: PAGE },

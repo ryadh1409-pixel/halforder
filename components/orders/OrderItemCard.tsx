@@ -1,0 +1,34 @@
+import type { OrderItem } from '@/services/orderService';
+import React from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
+
+export default function OrderItemCard({ item }: { item: OrderItem }) {
+  return (
+    <View style={styles.row}>
+      {item.image ? <Image source={{ uri: item.image }} style={styles.img} /> : <View style={styles.ph} />}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.name}>{item.name}</Text>
+        <Text style={styles.meta}>Qty {item.qty}</Text>
+      </View>
+      <Text style={styles.price}>${(item.price * item.qty).toFixed(2)}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    marginBottom: 8,
+  },
+  img: { width: 44, height: 44, borderRadius: 10, backgroundColor: '#E2E8F0' },
+  ph: { width: 44, height: 44, borderRadius: 10, backgroundColor: '#E2E8F0' },
+  name: { color: '#0F172A', fontWeight: '800' },
+  meta: { color: '#64748B', marginTop: 2, fontWeight: '600' },
+  price: { color: '#0F172A', fontWeight: '800' },
+});

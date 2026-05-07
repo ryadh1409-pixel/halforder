@@ -19,12 +19,15 @@ import {
 export type OrderStatus =
   | 'awaiting_payment'
   | 'pending'
+  | 'accepted'
   | 'restaurant_accepted'
   | 'preparing'
+  | 'ready'
   | 'ready_for_pickup'
   | 'picked_up'
   | 'on_the_way'
   | 'delivered'
+  | 'cancelled'
   | 'rejected';
 
 export type PaymentStatus = 'unpaid' | 'paid' | 'failed' | 'refunded';
@@ -42,8 +45,13 @@ export type LatLng = { lat: number; lng: number };
 export type RestaurantOrder = {
   id: string;
   userId: string;
+  customerName: string | null;
+  customerPhone: string | null;
   restaurantId: string;
   items: OrderItem[];
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
   totalPrice: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
@@ -58,6 +66,7 @@ export type RestaurantOrder = {
   userLocation: LatLng | null;
   restaurantLocation: LatLng | null;
   driverLocation: LatLng | null;
+  notes: string | null;
   createdAtLabel: string;
   /** Firestore `createdAt` millis when available (for “today” stats). */
   createdAtMs: number | null;
@@ -69,17 +78,18 @@ function makeGroupId() {
 
 function parseStatus(value: unknown): OrderStatus {
   const s = typeof value === 'string' ? value : '';
-  if (s === 'accepted') return 'restaurant_accepted';
-  if (s === 'ready') return 'ready_for_pickup';
   if (
     s === 'awaiting_payment' ||
     s === 'pending' ||
+    s === 'accepted' ||
     s === 'restaurant_accepted' ||
     s === 'preparing' ||
+    s === 'ready' ||
     s === 'ready_for_pickup' ||
     s === 'picked_up' ||
     s === 'on_the_way' ||
     s === 'delivered' ||
+    s === 'cancelled' ||
     s === 'rejected'
   ) {
     return s;
@@ -194,8 +204,25 @@ function mapDocToRestaurantOrder(
         : typeof data.customerId === 'string'
           ? data.customerId
           : '',
+    customerName: typeof data.customerName === 'string' ? data.customerName : null,
+    customerPhone:
+      typeof data.customerPhone === 'string'
+        ? data.customerPhone
+        : typeof data.customerPhoneNumber === 'string'
+          ? data.customerPhoneNumber
+          : null,
     restaurantId: rid,
     items,
+    subtotal:
+      typeof data.subtotal === 'number'
+        ? data.subtotal
+        : typeof data.totalPrice === 'number'
+          ? data.totalPrice
+          : typeof data.total === 'number'
+            ? data.total
+            : 0,
+    tax: typeof data.tax === 'number' ? data.tax : 0,
+    deliveryFee: typeof data.deliveryFee === 'number' ? data.deliveryFee : 0,
     totalPrice:
       typeof data.totalPrice === 'number'
         ? data.totalPrice
@@ -230,6 +257,7 @@ function mapDocToRestaurantOrder(
     userLocation: userLoc,
     restaurantLocation: restLoc,
     driverLocation: parseLatLng(data.driverLocation),
+    notes: typeof data.notes === 'string' ? data.notes : null,
     createdAtLabel: toCreatedAtLabel(data.createdAt),
     createdAtMs: toCreatedAtMs(data.createdAt),
   };
@@ -286,8 +314,15 @@ export async function createOrder(payload: {
     // Backward/alt schema compatibility for dashboards or older clients.
     venueId: payload.restaurantId,
     items: payload.items,
+    customerName: null,
+    customerPhone: null,
+    subtotal: payload.totalPrice,
+    tax: 0,
+    deliveryFee: 0,
     totalPrice: payload.totalPrice,
     total: payload.totalPrice,
+    deliveryType: 'delivery',
+    estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',
     paymentStatus: 'unpaid',
     stripePaymentIntentId: null,
@@ -299,8 +334,15 @@ export async function createOrder(payload: {
     driverVehicle: null,
     driverLocation: null,
     deliveryLocation: payload.deliveryLocation,
+    deliveryAddress: payload.deliveryLocation.address,
     userLocation,
     restaurantLocation,
+    notes: null,
+    acceptedAt: null,
+    preparedAt: null,
+    pickedUpAt: null,
+    deliveredAt: null,
+    estimatedArrival: null,
     createdAt: serverTimestamp(),
   });
   return ref.id;
@@ -362,10 +404,12 @@ function etaForStatus(status: OrderStatus): number {
   switch (status) {
     case 'awaiting_payment':
       return 0;
+    case 'accepted':
     case 'restaurant_accepted':
       return 28;
     case 'preparing':
       return 22;
+    case 'ready':
     case 'ready_for_pickup':
       return 18;
     case 'picked_up':
@@ -373,6 +417,7 @@ function etaForStatus(status: OrderStatus): number {
     case 'on_the_way':
       return 10;
     case 'delivered':
+    case 'cancelled':
     case 'rejected':
       return 0;
     default:
@@ -388,6 +433,18 @@ export async function updateOrderStatus(
     status,
     estimatedDeliveryTime: etaForStatus(status),
   };
+  if (status === 'accepted' || status === 'restaurant_accepted') {
+    patch.acceptedAt = serverTimestamp();
+  }
+  if (status === 'ready' || status === 'ready_for_pickup') {
+    patch.preparedAt = serverTimestamp();
+  }
+  if (status === 'picked_up') {
+    patch.pickedUpAt = serverTimestamp();
+  }
+  if (status === 'delivered') {
+    patch.deliveredAt = serverTimestamp();
+  }
   await updateDoc(doc(db, 'orders', orderId), patch);
 }
 
