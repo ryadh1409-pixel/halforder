@@ -1,5 +1,6 @@
 import OrderActions from '@/components/orders/OrderActions';
 import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
+import { normalizeMerchantStatus } from '@/components/orders/statusFlow';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import React, { useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -21,6 +22,7 @@ type Props = {
 
 export default function OrderCard({ order, onPress, onStatus, onReject, loading }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
+  const merchantStatus = normalizeMerchantStatus(order.status);
   const itemPreview = useMemo(
     () => order.items.map((i) => `${i.name} x${i.qty}`).join(', '),
     [order.items],
@@ -55,9 +57,10 @@ export default function OrderCard({ order, onPress, onStatus, onReject, loading 
           <Text style={styles.link}>View Details</Text>
         </View>
         <OrderActions
-          status={order.status}
+          status={merchantStatus}
           loading={loading}
           onAccept={() => onStatus('accepted')}
+          onStartPreparing={() => onStatus('preparing')}
           onMarkReady={() => onStatus('ready')}
           onReject={onReject}
         />

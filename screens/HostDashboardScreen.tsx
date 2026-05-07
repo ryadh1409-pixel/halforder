@@ -14,6 +14,7 @@ import {
   type FoodItem,
 } from '@/services/foodService';
 import { db } from '@/services/firebase';
+import { rejectOrder, updateOrderStatus } from '@/services/orderService';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { startOnboarding } from '@/services/stripeConnect';
 import { pickAndUploadImage } from '@/services/uploadImage';
@@ -990,6 +991,24 @@ const styles = StyleSheet.create({
   orderMeta: { fontSize: 13, color: '#334155', marginTop: 4, fontWeight: '600' },
   orderItems: { fontSize: 13, color: '#64748b', marginTop: 4 },
   orderTotal: { fontSize: 16, color: '#0f172a', marginTop: 8, fontWeight: '800' },
+  ordersSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  ordersSummaryTile: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    padding: 8,
+    alignItems: 'center',
+  },
+  ordersSummaryValue: { color: '#0F172A', fontWeight: '800', fontSize: 14 },
+  ordersSummaryLabel: { color: '#64748B', fontWeight: '700', fontSize: 11, marginTop: 2 },
+  orderSkeleton: {
+    height: 92,
+    borderRadius: 14,
+    backgroundColor: '#E2E8F0',
+    marginTop: 10,
+  },
   footerHint: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8 },
   footerLink: { color: PRIMARY, fontWeight: '700' },
   modalSafe: { flex: 1, backgroundColor: PAGE },

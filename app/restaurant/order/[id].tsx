@@ -1,8 +1,14 @@
 import AppHeader from '@/components/AppHeader';
 import OrderActions from '@/components/orders/OrderActions';
-import OrderItemCard from '@/components/orders/OrderItemCard';
+import OrderItems from '@/components/orders/OrderItems';
 import OrderTimeline from '@/components/orders/OrderTimeline';
+import PaymentSummary from '@/components/orders/PaymentSummary';
 import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
+import {
+  canTransition,
+  normalizeMerchantStatus,
+  type MerchantOrderStatus,
+} from '@/components/orders/statusFlow';
 import { db } from '@/services/firebase';
 import {
   rejectOrder,
@@ -16,6 +22,9 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  LayoutAnimation,
+  Platform,
+  UIManager,
   Linking,
   ScrollView,
   StyleSheet,
@@ -24,8 +33,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-function money(value: number): string {
-  return `$${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export default function RestaurantOrderDetailsScreen() {
@@ -34,6 +43,10 @@ export default function RestaurantOrderDetailsScreen() {
   const [order, setOrder] = useState<RestaurantOrder | null>(null);
   const [saving, setSaving] = useState(false);
   const [customerName, setCustomerName] = useState<string | null>(null);
+  const merchantStatus = useMemo(
+    () => (order ? normalizeMerchantStatus(order.status) : null),
+    [order],
+  );
 
   useEffect(() => {
     if (!id) {
@@ -79,9 +92,12 @@ export default function RestaurantOrderDetailsScreen() {
   );
 
   async function setStatus(next: 'accepted' | 'preparing' | 'ready') {
-    if (!order?.id || saving) return;
+    if (!order?.id || !merchantStatus || saving) return;
+    const nextStatus = normalizeMerchantStatus(next) as MerchantOrderStatus;
+    if (!canTransition(merchantStatus, nextStatus)) return;
     setSaving(true);
     try {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       await updateOrderStatus(order.id, next);
       showSuccess('Order updated');
     } catch {
@@ -171,57 +187,32 @@ export default function RestaurantOrderDetailsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.section}>Items ({itemCount})</Text>
-          {order.items.map((item) => <OrderItemCard key={`${item.id}-${item.name}`} item={item} />)}
-        </View>
-
-        <View style={styles.card}>
           <Text style={styles.section}>Timeline</Text>
-          <OrderTimeline status={order.status} />
+          <OrderTimeline status={merchantStatus ?? 'pending'} />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.section}>Payment</Text>
-          <View style={styles.line} />
-          <View style={styles.itemRow}>
-            <Text style={styles.label}>Subtotal</Text>
-            <Text style={styles.value}>{money(order.subtotal)}</Text>
-          </View>
-          <View style={styles.itemRow}>
-            <Text style={styles.label}>Tax</Text>
-            <Text style={styles.value}>{money(order.tax)}</Text>
-          </View>
-          <View style={styles.itemRow}>
-            <Text style={styles.label}>Delivery Fee</Text>
-            <Text style={styles.value}>{money(order.deliveryFee)}</Text>
-          </View>
-          <View style={styles.itemRow}>
-            <Text style={styles.total}>Total</Text>
-            <Text style={styles.total}>{money(order.totalPrice)}</Text>
-          </View>
-        </View>
+        <OrderItems items={order.items} itemCount={itemCount} />
+
+        <PaymentSummary
+          subtotal={order.subtotal}
+          tax={order.tax}
+          deliveryFee={order.deliveryFee}
+          total={order.totalPrice}
+        />
 
         <View style={styles.card}>
           {order.status === 'awaiting_payment' ? (
             <Text style={styles.waiting}>Waiting for payment</Text>
           ) : (
             <OrderActions
-              status={order.status}
+              status={merchantStatus ?? 'pending'}
               loading={saving}
               onAccept={() => void setStatus('accepted')}
+              onStartPreparing={() => void setStatus('preparing')}
               onMarkReady={() => void setStatus('ready')}
               onReject={() => void onReject()}
             />
           )}
-          {(order.status === 'ready_for_pickup' || order.status === 'ready') ? (
-            <Text style={styles.waiting}>Waiting Driver</Text>
-          ) : null}
-          {(order.status === 'picked_up' ||
-            order.status === 'delivered' ||
-            order.status === 'rejected' ||
-            order.status === 'cancelled') ? (
-            <Text style={styles.waiting}>Status: {order.status.replace(/_/g, ' ')}</Text>
-          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -256,9 +247,6 @@ const styles = StyleSheet.create({
   label: { color: '#64748B', fontWeight: '700', marginTop: 6 },
   value: { color: '#0F172A', fontWeight: '600', marginTop: 2 },
   link: { color: '#2563EB', fontWeight: '700', marginTop: 2 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  total: { color: '#0F172A', fontWeight: '800', fontSize: 16, marginTop: 6 },
-  line: { height: 1, backgroundColor: '#E2E8F0', marginTop: 10, marginBottom: 6 },
   waiting: { color: '#334155', fontWeight: '700' },
   emptyTitle: { color: '#0F172A', fontWeight: '800', fontSize: 20 },
   emptySub: { color: '#64748B', fontWeight: '600', marginTop: 8, textAlign: 'center' },

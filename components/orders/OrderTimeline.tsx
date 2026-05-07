@@ -1,18 +1,19 @@
-import type { OrderStatus } from '@/services/orderService';
+import type { MerchantOrderStatus } from '@/components/orders/statusFlow';
+import { getOrderStepIndex } from '@/components/orders/statusFlow';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-const STEPS: Array<{ key: string; label: string; statuses: OrderStatus[] }> = [
-  { key: 'pending', label: 'Pending', statuses: ['pending', 'awaiting_payment'] },
-  { key: 'accepted', label: 'Accepted', statuses: ['accepted', 'restaurant_accepted'] },
-  { key: 'preparing', label: 'Preparing', statuses: ['preparing'] },
-  { key: 'ready', label: 'Ready', statuses: ['ready', 'ready_for_pickup'] },
-  { key: 'picked_up', label: 'Picked up', statuses: ['picked_up'] },
-  { key: 'delivered', label: 'Delivered', statuses: ['delivered'] },
+const STEPS: Array<{ key: MerchantOrderStatus; label: string }> = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'accepted', label: 'Accepted' },
+  { key: 'preparing', label: 'Preparing' },
+  { key: 'ready', label: 'Ready' },
+  { key: 'picked_up', label: 'Picked up' },
+  { key: 'delivered', label: 'Delivered' },
 ];
 
-export default function OrderTimeline({ status }: { status: OrderStatus }) {
-  const activeIdx = STEPS.findIndex((step) => step.statuses.includes(status));
+export default function OrderTimeline({ status }: { status: MerchantOrderStatus }) {
+  const activeIdx = getOrderStepIndex(status);
   return (
     <View>
       {STEPS.map((step, idx) => {
