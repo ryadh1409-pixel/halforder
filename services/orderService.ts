@@ -19,6 +19,9 @@ import {
 export type OrderStatus =
   | 'awaiting_payment'
   | 'pending'
+  | 'pending_driver'
+  | 'driver_accepted'
+  | 'arriving_restaurant'
   | 'accepted'
   | 'restaurant_accepted'
   | 'preparing'
@@ -81,6 +84,9 @@ function parseStatus(value: unknown): OrderStatus {
   if (
     s === 'awaiting_payment' ||
     s === 'pending' ||
+    s === 'pending_driver' ||
+    s === 'driver_accepted' ||
+    s === 'arriving_restaurant' ||
     s === 'accepted' ||
     s === 'restaurant_accepted' ||
     s === 'preparing' ||
@@ -404,6 +410,12 @@ function etaForStatus(status: OrderStatus): number {
   switch (status) {
     case 'awaiting_payment':
       return 0;
+    case 'pending_driver':
+      return 30;
+    case 'driver_accepted':
+      return 24;
+    case 'arriving_restaurant':
+      return 20;
     case 'accepted':
     case 'restaurant_accepted':
       return 28;

@@ -1,11 +1,11 @@
 import AppHeader from '../../components/AppHeader';
 import { useAvailableOrders } from '../../hooks/useAvailableOrders';
 import { useAuth } from '../../services/AuthContext';
-import { acceptDeliveryOrder, acceptGroupDelivery } from '../../services/driverService';
+import { acceptDriverOrder } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,32 +14,9 @@ export default function DriverOrdersScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { orders, loading } = useAvailableOrders();
+  const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
 
-  const grouped = useMemo(() => {
-    const map = new Map<
-      string,
-      { groupId: string; orderId: string; count: number; total: number; name: string }
-    >();
-    for (const o of orders) {
-      const key = o.groupId ?? o.id;
-      const cur = map.get(key);
-      if (cur) {
-        cur.count += 1;
-        cur.total += o.total;
-      } else {
-        map.set(key, {
-          groupId: key,
-          orderId: o.id,
-          count: 1,
-          total: o.total,
-          name: o.restaurantName,
-        });
-      }
-    }
-    return [...map.values()];
-  }, [orders]);
-
-  async function onAccept(groupId: string, orderId: string) {
+  async function onAccept(orderId: string) {
     if (!user?.uid) return;
     const driver = {
       id: user.uid,
@@ -48,15 +25,22 @@ export default function DriverOrdersScreen() {
       isOnline: true,
     };
     try {
-      await acceptGroupDelivery(groupId, driver);
-      showSuccess('Orders assigned to you');
-    } catch {
-      try {
-        await acceptDeliveryOrder(orderId, driver);
-        showSuccess('Order assigned to you');
-      } catch {
-        showError('Could not accept order.');
+      setAcceptingOrderId(orderId);
+      const result = await acceptDriverOrder(orderId, driver);
+      if (!result.ok) {
+        if (result.reason === 'already_assigned') {
+          showError('This order was accepted by another driver.');
+        } else {
+          showError('Could not accept order.');
+        }
+        return;
       }
+      showSuccess('Order assigned to you');
+      router.push('/(driver)/active' as never);
+    } catch {
+      showError('Could not accept order.');
+    } finally {
+      setAcceptingOrderId(null);
     }
   }
 
@@ -77,7 +61,7 @@ export default function DriverOrdersScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {grouped.length === 0 ? (
+          {orders.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No pending orders</Text>
               <Text style={styles.emptySub}>
@@ -85,15 +69,24 @@ export default function DriverOrdersScreen() {
               </Text>
             </View>
           ) : (
-            grouped.map((g) => (
-              <View key={g.groupId} style={styles.card}>
-                <Text style={styles.cardTitle}>{g.name}</Text>
-                <Text style={styles.meta}>{g.count} order(s) · ${g.total.toFixed(2)}</Text>
-                <Text style={styles.hint}>Group {g.groupId.slice(0, 12)}…</Text>
-                <Pressable style={styles.primary} onPress={() => onAccept(g.groupId, g.orderId)}>
-                  <Text style={styles.primaryText}>Accept</Text>
+            orders.map((order) => (
+              <Pressable key={order.id} style={styles.card} onPress={() => onAccept(order.id)}>
+                <Text style={styles.cardTitle}>{order.restaurantName}</Text>
+                <Text style={styles.meta}>#{order.id.slice(0, 10)}…</Text>
+                <Text style={styles.meta}>
+                  {order.items.map((i) => `${i.qty}x ${i.name}`).join(', ') || 'Items'}
+                </Text>
+                <Text style={styles.meta}>Total ${order.total.toFixed(2)}</Text>
+                <Pressable
+                  style={[styles.primary, acceptingOrderId === order.id && styles.primaryDisabled]}
+                  disabled={acceptingOrderId === order.id}
+                  onPress={() => onAccept(order.id)}
+                >
+                  <Text style={styles.primaryText}>
+                    {acceptingOrderId === order.id ? 'Accepting...' : 'Accept'}
+                  </Text>
                 </Pressable>
-              </View>
+              </Pressable>
             ))
           )}
           <Pressable style={styles.link} onPress={() => router.push('/(driver)/active' as never)}>
@@ -138,6 +131,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryDisabled: { opacity: 0.6 },
   primaryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
   link: { marginTop: 16, alignSelf: 'center' },
   linkText: { color: '#2563EB', fontWeight: '700' },

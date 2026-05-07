@@ -2,7 +2,7 @@ import AppHeader from '../components/AppHeader';
 import { useAvailableOrders } from '../hooks/useAvailableOrders';
 import { useDriverOrders } from '../hooks/useDriverOrders';
 import { useAuth } from '../services/AuthContext';
-import { acceptDeliveryOrder, acceptGroupDelivery, updateDriverOnlineStatus } from '../services/driverService';
+import { acceptDriverOrder, updateDriverOnlineStatus } from '../services/driverService';
 import { updateOrderStatus } from '../services/orderService';
 import { requireRole } from '../utils/requireRole';
 import { showError, showSuccess } from '../utils/toast';
@@ -22,49 +22,19 @@ export default function DriverDashboardScreen() {
     updateDriverOnlineStatus(user.uid, isOnline).catch(() => {});
   }, [isOnline, user?.uid]);
 
-  const groupedAvailableOrders = availableOrders.reduce<
-    Array<{ groupId: string; orderId: string; orderCount: number; total: number; restaurantName: string }>
-  >((acc, order) => {
-    const key = order.groupId ?? order.id;
-    const found = acc.find((row) => row.groupId === key);
-    if (found) {
-      found.orderCount += 1;
-      found.total += order.total;
-      return acc;
-    }
-    acc.push({
-      groupId: key,
-      orderId: order.id,
-      orderCount: 1,
-      total: order.total,
-      restaurantName: order.restaurantName,
-    });
-    return acc;
-  }, []);
-
-  async function handleAcceptDelivery(groupId: string, orderId: string) {
+  async function handleAcceptDelivery(orderId: string) {
     if (!user?.uid) return;
     try {
-      await acceptGroupDelivery(groupId, {
+      const result = await acceptDriverOrder(orderId, {
         id: user.uid,
         name: user.displayName?.trim() || 'Driver',
         phone: user.phoneNumber ?? null,
         isOnline,
       });
-      showSuccess('Group delivery accepted');
+      if (!result.ok) throw new Error(result.reason ?? 'accept_failed');
+      showSuccess('Delivery accepted');
     } catch {
-      // Fallback for legacy orders that do not have groupId yet
-      try {
-        await acceptDeliveryOrder(orderId, {
-          id: user.uid,
-          name: user.displayName?.trim() || 'Driver',
-          phone: user.phoneNumber ?? null,
-          isOnline,
-        });
-        showSuccess('Delivery accepted');
-      } catch {
-        showError('Failed to accept delivery.');
-      }
+      showError('Failed to accept delivery.');
     }
   }
 
@@ -97,20 +67,19 @@ export default function DriverDashboardScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Available Group Deliveries</Text>
-        {groupedAvailableOrders.length === 0 ? (
+        <Text style={styles.sectionTitle}>Available Deliveries</Text>
+        {availableOrders.length === 0 ? (
           <View style={styles.card}>
-            <Text style={styles.meta}>No group deliveries right now.</Text>
+            <Text style={styles.meta}>No pending deliveries right now.</Text>
           </View>
         ) : (
-          groupedAvailableOrders.map((group) => (
-            <View key={group.groupId} style={styles.card}>
-              <Text style={styles.orderId}>Group #{group.groupId}</Text>
-              <Text style={styles.meta}>Restaurant: {group.restaurantName}</Text>
-              <Text style={styles.meta}>{group.orderCount} orders from same area</Text>
-              <Text style={styles.meta}>Total earnings: ${group.total.toFixed(2)}</Text>
-              <Pressable style={styles.primaryButton} onPress={() => handleAcceptDelivery(group.groupId, group.orderId)}>
-                <Text style={styles.primaryText}>Accept Group Delivery</Text>
+          availableOrders.map((order) => (
+            <View key={order.id} style={styles.card}>
+              <Text style={styles.orderId}>Order #{order.id}</Text>
+              <Text style={styles.meta}>Restaurant: {order.restaurantName}</Text>
+              <Text style={styles.meta}>Total earnings: ${order.total.toFixed(2)}</Text>
+              <Pressable style={styles.primaryButton} onPress={() => handleAcceptDelivery(order.id)}>
+                <Text style={styles.primaryText}>Accept Delivery</Text>
               </Pressable>
             </View>
           ))
@@ -126,7 +95,9 @@ export default function DriverDashboardScreen() {
             <View key={order.id} style={styles.card}>
               <Text style={styles.orderId}>Order #{order.id}</Text>
               <Text style={styles.meta}>Restaurant: {order.restaurantName}</Text>
-              <Text style={styles.meta}>Items: {order.items.join(', ') || 'No items'}</Text>
+              <Text style={styles.meta}>
+                Items: {order.items.map((item) => `${item.qty}x ${item.name}`).join(', ') || 'No items'}
+              </Text>
               <Text style={styles.meta}>Total: ${order.total.toFixed(2)}</Text>
               <Text style={styles.status}>Status: {order.status}</Text>
               <Text style={styles.meta}>
@@ -140,13 +111,13 @@ export default function DriverDashboardScreen() {
                 style={[
                   styles.primaryButton,
                   (order.status === 'delivered' ||
-                    order.status === 'pending' ||
+                    order.status === 'pending_driver' ||
                     order.status === 'restaurant_accepted') &&
                     styles.disabled,
                 ]}
                 disabled={
                   order.status === 'delivered' ||
-                  order.status === 'pending' ||
+                  order.status === 'pending_driver' ||
                   order.status === 'restaurant_accepted'
                 }
                 onPress={() => updateOrderStatus(order.id, 'on_the_way')}
@@ -157,13 +128,13 @@ export default function DriverDashboardScreen() {
                 style={[
                   styles.secondaryButton,
                   (order.status === 'delivered' ||
-                    order.status === 'pending' ||
+                    order.status === 'pending_driver' ||
                     order.status === 'restaurant_accepted') &&
                     styles.disabled,
                 ]}
                 disabled={
                   order.status === 'delivered' ||
-                  order.status === 'pending' ||
+                  order.status === 'pending_driver' ||
                   order.status === 'restaurant_accepted'
                 }
                 onPress={() => handleComplete(order.id)}

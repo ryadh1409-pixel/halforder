@@ -58,7 +58,7 @@ export default function PaymentScreen() {
           stripePaymentIntentId: result.paymentIntentId,
           amount,
           createdAt: serverTimestamp(),
-          status: 'pending',
+          status: 'pending_driver',
         });
       }
 

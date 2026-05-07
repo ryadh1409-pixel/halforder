@@ -106,7 +106,7 @@ export default function CheckoutScreen() {
         paymentStatus: 'paid',
         stripePaymentIntentId: result.paymentIntentId,
         amount: Math.round(order.totalPrice * 100),
-        status: 'pending',
+        status: 'pending_driver',
       });
 
       setPhase('done');

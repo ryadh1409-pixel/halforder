@@ -1,4 +1,4 @@
-import { subscribeAvailableOrders, type DriverOrder } from '../services/driverService';
+import { getDriverAvailableOrders, type DriverOrder } from '../services/driverService';
 import { useEffect, useMemo, useState } from 'react';
 
 export function useAvailableOrders() {
@@ -10,7 +10,7 @@ export function useAvailableOrders() {
     setLoading(true);
     setError(null);
     try {
-      const unsub = subscribeAvailableOrders((rows) => {
+      const unsub = getDriverAvailableOrders((rows) => {
         try {
           setOrders(Array.isArray(rows) ? rows : []);
           setLoading(false);

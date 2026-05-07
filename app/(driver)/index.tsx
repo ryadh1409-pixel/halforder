@@ -1,4 +1,6 @@
 import AppHeader from '../../components/AppHeader';
+import { useAvailableOrders } from '../../hooks/useAvailableOrders';
+import { useDriverOrders } from '../../hooks/useDriverOrders';
 import { useAuth } from '../../services/AuthContext';
 import { updateDriverOnlineStatus } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
@@ -12,6 +14,8 @@ export default function DriverHubScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [isOnline, setIsOnline] = useState(false);
+  const { orders: availableOrders } = useAvailableOrders();
+  const { orders: activeOrders } = useDriverOrders(user?.uid);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -43,7 +47,9 @@ export default function DriverHubScreen() {
           onPress={() => router.push('/(driver)/orders' as never)}
         >
           <Text style={styles.cardBtnTitle}>Available orders</Text>
-          <Text style={styles.cardBtnSub}>Pickup queue · real-time</Text>
+          <Text style={styles.cardBtnSub}>
+            Pickup queue · real-time ({availableOrders.length})
+          </Text>
         </Pressable>
 
         <Pressable
@@ -51,7 +57,9 @@ export default function DriverHubScreen() {
           onPress={() => router.push('/(driver)/active' as never)}
         >
           <Text style={styles.cardBtnTitle}>Active delivery</Text>
-          <Text style={styles.cardBtnSub}>Status updates · live location</Text>
+          <Text style={styles.cardBtnSub}>
+            Status updates · live location ({activeOrders.length})
+          </Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
