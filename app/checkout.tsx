@@ -6,7 +6,7 @@ import { isOwnerHost } from '@/services/roles';
 import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripePayment';
 import { showError, showSuccess } from '@/utils/toast';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -76,6 +76,14 @@ export default function CheckoutScreen() {
       });
 
       if (result.status === 'canceled') {
+        try {
+          await updateDoc(doc(db, 'orders', id), {
+            status: 'rejected',
+            paymentStatus: 'failed',
+          });
+        } catch {
+          // best-effort cleanup
+        }
         setPhase('done');
         setMessage('Payment was canceled.');
         return;
@@ -87,11 +95,17 @@ export default function CheckoutScreen() {
         return;
       }
 
+      console.log('[checkout] marking order paid', {
+        venueId: order.restaurantId,
+        restaurantId: order.restaurantId,
+        userId: user.uid,
+        paymentStatus: 'paid',
+      });
+
       await updateDoc(doc(db, 'orders', id), {
         paymentStatus: 'paid',
         stripePaymentIntentId: result.paymentIntentId,
         amount: Math.round(order.totalPrice * 100),
-        createdAt: serverTimestamp(),
         status: 'pending',
       });
 

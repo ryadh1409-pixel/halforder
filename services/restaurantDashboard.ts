@@ -40,7 +40,17 @@ export type DriverDoc = {
   location?: { latitude: number; longitude: number } | null;
 };
 
-export type RestaurantOrderStatus = 'pending' | 'preparing' | 'ready' | 'picked_up';
+export type RestaurantOrderStatus =
+  | 'awaiting_payment'
+  | 'pending'
+  | 'restaurant_accepted'
+  | 'preparing'
+  | 'ready'
+  | 'ready_for_pickup'
+  | 'picked_up'
+  | 'on_the_way'
+  | 'delivered'
+  | 'rejected';
 
 export type RestaurantOrderDoc = {
   id: string;
@@ -132,13 +142,23 @@ export function subscribeRestaurantOrders(
       const rows: RestaurantOrderDoc[] = snap.docs.map((d) => {
         const data = d.data();
         const status = data.status;
-        const safeStatus: RestaurantOrderStatus =
-          status === 'pending' ||
-          status === 'ready' ||
-          status === 'picked_up' ||
-          status === 'preparing'
-            ? status
-            : 'preparing';
+        const validStatuses: RestaurantOrderStatus[] = [
+          'awaiting_payment',
+          'pending',
+          'restaurant_accepted',
+          'preparing',
+          'ready',
+          'ready_for_pickup',
+          'picked_up',
+          'on_the_way',
+          'delivered',
+          'rejected',
+        ];
+        const safeStatus: RestaurantOrderStatus = validStatuses.includes(
+          status as RestaurantOrderStatus,
+        )
+          ? (status as RestaurantOrderStatus)
+          : 'pending';
         const items = Array.isArray(data.items)
           ? data.items
               .map((item) => {

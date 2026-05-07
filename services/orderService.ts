@@ -272,6 +272,13 @@ export async function createOrder(payload: {
     payload.restaurantLocation ??
     ({ lat: lat + 0.015, lng: lng + 0.015 } as LatLng);
 
+  console.log('[createOrder] about to save order', {
+    venueId: payload.restaurantId,
+    restaurantId: payload.restaurantId,
+    userId: payload.userId,
+    paymentStatus: 'unpaid',
+  });
+
   const ref = await addDoc(collection(db, 'orders'), {
     userId: payload.userId,
     customerId: payload.userId,
@@ -321,18 +328,7 @@ export function getOrders(
   restaurantId: string,
   onData: (orders: RestaurantOrder[]) => void,
 ): Unsubscribe {
-  let byRestaurant: RestaurantOrder[] = [];
-  let byVenue: RestaurantOrder[] = [];
-  const emitMerged = () => {
-    const merged = new Map<string, RestaurantOrder>();
-    [...byRestaurant, ...byVenue].forEach((order) => merged.set(order.id, order));
-    const rows = Array.from(merged.values()).sort(
-      (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
-    );
-    onData(rows);
-  };
-
-  const unsubRestaurant = onSnapshot(
+  const unsub = onSnapshot(
     query(
       collection(db, 'orders'),
       where('restaurantId', '==', restaurantId),
@@ -340,49 +336,25 @@ export function getOrders(
     ),
     (snap) => {
       try {
-        byRestaurant = snap.docs.map((docSnap) =>
+        console.log('Current restaurant UID:', restaurantId);
+        console.log('Orders found:', snap.docs.length);
+        console.log(snap.docs.map((d) => d.data()));
+        const rows = snap.docs.map((docSnap) =>
           mapDocToRestaurantOrder(docSnap, restaurantId),
         );
-        emitMerged();
+        onData(rows);
       } catch (e) {
         console.error('[getOrders:restaurantId]', e);
-        byRestaurant = [];
-        emitMerged();
+        onData([]);
       }
     },
     () => {
-      byRestaurant = [];
-      emitMerged();
-    },
-  );
-
-  const unsubVenue = onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('venueId', '==', restaurantId),
-      orderBy('createdAt', 'desc'),
-    ),
-    (snap) => {
-      try {
-        byVenue = snap.docs.map((docSnap) =>
-          mapDocToRestaurantOrder(docSnap, restaurantId),
-        );
-        emitMerged();
-      } catch (e) {
-        console.error('[getOrders:venueId]', e);
-        byVenue = [];
-        emitMerged();
-      }
-    },
-    () => {
-      byVenue = [];
-      emitMerged();
+      onData([]);
     },
   );
 
   return () => {
-    unsubRestaurant();
-    unsubVenue();
+    unsub();
   };
 }
 

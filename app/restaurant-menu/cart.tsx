@@ -1,14 +1,4 @@
 import { useFocusEffect } from '@react-navigation/native';
-import AppHeader from '../../components/AppHeader';
-import { useMenu } from '../../hooks/useMenu';
-import { useAuth } from '../../services/AuthContext';
-import { useCart } from '../../services/CartContext';
-import { auth, ensureAuthReady } from '../../services/firebase';
-import { createOrder } from '../../services/orderService';
-import { isOwnerHost } from '../../services/roles';
-import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
-import { getHostStripeOnboardingUrl } from '../../services/stripeOnboarding';
-import { showError } from '../../utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -23,6 +13,16 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppHeader from '../../components/AppHeader';
+import { useMenu } from '../../hooks/useMenu';
+import { useAuth } from '../../services/AuthContext';
+import { useCart } from '../../services/CartContext';
+import { auth, ensureAuthReady } from '../../services/firebase';
+import { createOrder } from '../../services/orderService';
+import { isOwnerHost } from '../../services/roles';
+import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
+import { getHostStripeOnboardingUrl } from '../../services/stripeOnboarding';
+import { showError } from '../../utils/toast';
 
 export default function CartScreen() {
   const router = useRouter();
