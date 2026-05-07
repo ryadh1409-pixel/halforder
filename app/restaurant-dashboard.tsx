@@ -237,7 +237,7 @@ export default function RestaurantDashboardScreen() {
       orders.filter(
         (o) =>
           o.status !== 'awaiting_payment' &&
-          ['pending', 'accepted', 'preparing', 'ready'].includes(o.status),
+          ['pending', 'restaurant_accepted', 'preparing', 'ready_for_pickup'].includes(o.status),
       ),
     [orders],
   );
@@ -248,11 +248,11 @@ export default function RestaurantDashboardScreen() {
         return { bg: '#E2E8F0', fg: '#334155' };
       case 'pending':
         return { bg: '#FEF3C7', fg: '#92400E' };
-      case 'accepted':
+      case 'restaurant_accepted':
         return { bg: '#DBEAFE', fg: '#1E40AF' };
       case 'preparing':
         return { bg: '#E0E7FF', fg: '#3730A3' };
-      case 'ready':
+      case 'ready_for_pickup':
         return { bg: '#D1FAE5', fg: '#065F46' };
       case 'picked_up':
       case 'on_the_way':
@@ -532,9 +532,9 @@ export default function RestaurantDashboardScreen() {
                     <>
                       <Pressable
                         style={styles.acceptButton}
-                        onPress={() => handleOrderStatus(order.id, 'accepted')}
+                        onPress={() => handleOrderStatus(order.id, 'restaurant_accepted')}
                       >
-                        <Text style={styles.acceptButtonText}>Accept</Text>
+                        <Text style={styles.acceptButtonText}>Restaurant accepted</Text>
                       </Pressable>
                       <Pressable
                         style={styles.rejectButton}
@@ -544,23 +544,23 @@ export default function RestaurantDashboardScreen() {
                       </Pressable>
                     </>
                   ) : null}
-                  {order.status === 'accepted' ? (
+                  {order.status === 'restaurant_accepted' ? (
                     <Pressable
                       style={styles.secondaryOrderBtn}
                       onPress={() => handleOrderStatus(order.id, 'preparing')}
                     >
-                      <Text style={styles.secondaryOrderBtnText}>Start preparing</Text>
+                      <Text style={styles.secondaryOrderBtnText}>Preparing</Text>
                     </Pressable>
                   ) : null}
                   {order.status === 'preparing' ? (
                     <Pressable
                       style={styles.readyButton}
-                      onPress={() => handleOrderStatus(order.id, 'ready')}
+                      onPress={() => handleOrderStatus(order.id, 'ready_for_pickup')}
                     >
                       <Text style={styles.readyButtonText}>Mark ready for pickup</Text>
                     </Pressable>
                   ) : null}
-                  {order.status === 'ready' ? (
+                  {order.status === 'ready_for_pickup' ? (
                     <Pressable
                       style={styles.secondaryOrderBtn}
                       onPress={() => openAssignDriverModal(order.id)}

@@ -79,9 +79,9 @@ export default function DriverOrdersScreen() {
         <ScrollView contentContainerStyle={styles.list}>
           {grouped.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No orders ready for pickup</Text>
+              <Text style={styles.emptyTitle}>No pending orders</Text>
               <Text style={styles.emptySub}>
-                Restaurants mark orders “ready” — they appear here live.
+                New customer orders appear here in real time.
               </Text>
             </View>
           ) : (

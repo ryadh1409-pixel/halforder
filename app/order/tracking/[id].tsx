@@ -20,9 +20,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const TIMELINE: { status: OrderStatus; label: string }[] = [
   { status: 'awaiting_payment', label: 'Awaiting payment' },
   { status: 'pending', label: 'Order placed' },
-  { status: 'accepted', label: 'Restaurant accepted' },
+  { status: 'restaurant_accepted', label: 'Restaurant accepted' },
   { status: 'preparing', label: 'Preparing' },
-  { status: 'ready', label: 'Ready for pickup' },
+  { status: 'ready_for_pickup', label: 'Ready for pickup' },
   { status: 'picked_up', label: 'Picked up' },
   { status: 'on_the_way', label: 'On the way' },
   { status: 'delivered', label: 'Delivered' },
@@ -40,10 +40,10 @@ function badgeForStatus(status: OrderStatus | undefined): { bg: string; fg: stri
       return { bg: '#E2E8F0', fg: '#334155' };
     case 'pending':
       return { bg: '#FEF3C7', fg: '#92400E' };
-    case 'accepted':
+    case 'restaurant_accepted':
     case 'preparing':
       return { bg: '#DBEAFE', fg: '#1E3A8A' };
-    case 'ready':
+    case 'ready_for_pickup':
       return { bg: '#D1FAE5', fg: '#065F46' };
     case 'picked_up':
     case 'on_the_way':
@@ -81,7 +81,7 @@ export default function OrderTrackingScreen() {
     if (!order?.status) return;
     const prev = lastStatusRef.current;
     if (prev === order.status) return;
-    if (order.status === 'accepted') {
+    if (order.status === 'restaurant_accepted') {
       showNotice('Order update', 'Restaurant accepted your order.');
     }
     if (order.status === 'on_the_way') {
@@ -175,7 +175,7 @@ export default function OrderTrackingScreen() {
           </Text>
           <View style={styles.mapPlaceholder}>
             <View style={styles.mapGrid} />
-            <View style={styles.mapPin} />
+            {order.status === 'on_the_way' && <View style={styles.mapPin} />}
             <Text style={styles.mapCoords}>
               {driverLat.toFixed(4)}, {driverLng.toFixed(4)}
             </Text>

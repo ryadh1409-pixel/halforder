@@ -1,4 +1,5 @@
 import AppHeader from '../../components/AppHeader';
+import * as Location from 'expo-location';
 import { useDriverOrders } from '../../hooks/useDriverOrders';
 import { useAuth } from '../../services/AuthContext';
 import {
@@ -37,16 +38,19 @@ export default function DriverActiveScreen() {
       }
       return;
     }
-    const base = { lat: 43.6532, lng: -79.3832 };
-    let step = 0;
-    tickRef.current = setInterval(() => {
-      step += 1;
-      const jitter = 0.0008 * Math.sin(step / 3);
-      void updateOrderDriverLocation(active[0].id, {
-        lat: base.lat + jitter,
-        lng: base.lng + jitter * 0.7,
-      }).catch(() => {});
-    }, 4000);
+    void Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status !== 'granted') return;
+      tickRef.current = setInterval(() => {
+        void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+          .then((position) =>
+            updateOrderDriverLocation(active[0].id, {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            }),
+          )
+          .catch(() => {});
+      }, 5000);
+    });
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
@@ -94,7 +98,7 @@ export default function DriverActiveScreen() {
                   </Pressable>
                 ) : null}
 
-                {order.status === 'ready' ? (
+                {order.status === 'ready_for_pickup' ? (
                   <Pressable
                     style={styles.primary}
                     onPress={() =>

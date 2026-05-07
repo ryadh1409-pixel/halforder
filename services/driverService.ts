@@ -34,12 +34,14 @@ export type DriverOrder = {
 
 function normalizeStatus(value: unknown): OrderStatus {
   const s = typeof value === 'string' ? value : '';
+  if (s === 'accepted') return 'restaurant_accepted';
+  if (s === 'ready') return 'ready_for_pickup';
   if (
     s === 'awaiting_payment' ||
     s === 'pending' ||
-    s === 'accepted' ||
+    s === 'restaurant_accepted' ||
     s === 'preparing' ||
-    s === 'ready' ||
+    s === 'ready_for_pickup' ||
     s === 'picked_up' ||
     s === 'on_the_way' ||
     s === 'delivered' ||
@@ -150,7 +152,7 @@ export function subscribeAvailableOrders(
   return onSnapshot(
     query(
       collection(db, 'orders'),
-      where('status', '==', 'ready'),
+      where('status', '==', 'pending'),
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
@@ -177,7 +179,7 @@ export async function assignDriverToOrder(
     driverId: driver.id,
     driverName: driver.name,
     driverPhone: driver.phone ?? null,
-    status: 'preparing',
+    status: 'restaurant_accepted',
   });
 }
 
@@ -192,7 +194,7 @@ export async function acceptDeliveryOrder(
     driverName: driver.name,
     driverPhone: driver.phone ?? null,
     ...(vehicle ? { driverVehicle: vehicle } : {}),
-    status: 'ready',
+    status: 'restaurant_accepted',
     estimatedDeliveryTime: 18,
   });
 }
@@ -202,7 +204,7 @@ export async function acceptGroupDelivery(groupId: string, driver: DriverProfile
     query(
       collection(db, 'orders'),
       where('groupId', '==', groupId),
-      where('status', '==', 'ready'),
+      where('status', '==', 'pending'),
     ),
   );
   await Promise.all(
@@ -211,7 +213,7 @@ export async function acceptGroupDelivery(groupId: string, driver: DriverProfile
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: driver.phone ?? null,
-        status: 'ready',
+        status: 'restaurant_accepted',
         estimatedDeliveryTime: 18,
       }),
     ),

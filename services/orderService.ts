@@ -19,9 +19,9 @@ import {
 export type OrderStatus =
   | 'awaiting_payment'
   | 'pending'
-  | 'accepted'
+  | 'restaurant_accepted'
   | 'preparing'
-  | 'ready'
+  | 'ready_for_pickup'
   | 'picked_up'
   | 'on_the_way'
   | 'delivered'
@@ -69,12 +69,14 @@ function makeGroupId() {
 
 function parseStatus(value: unknown): OrderStatus {
   const s = typeof value === 'string' ? value : '';
+  if (s === 'accepted') return 'restaurant_accepted';
+  if (s === 'ready') return 'ready_for_pickup';
   if (
     s === 'awaiting_payment' ||
     s === 'pending' ||
-    s === 'accepted' ||
+    s === 'restaurant_accepted' ||
     s === 'preparing' ||
-    s === 'ready' ||
+    s === 'ready_for_pickup' ||
     s === 'picked_up' ||
     s === 'on_the_way' ||
     s === 'delivered' ||
@@ -173,6 +175,8 @@ function mapDocToRestaurantOrder(
   const rid =
     typeof data.restaurantId === 'string'
       ? data.restaurantId
+      : typeof data.venueId === 'string'
+        ? data.venueId
       : fallbackRestaurantId ?? '';
   const delivery = data.deliveryLocation;
   const userLoc = parseLatLng(data.userLocation) ?? parseLatLng(delivery);
@@ -272,6 +276,8 @@ export async function createOrder(payload: {
     userId: payload.userId,
     customerId: payload.userId,
     restaurantId: payload.restaurantId,
+    // Backward/alt schema compatibility for dashboards or older clients.
+    venueId: payload.restaurantId,
     items: payload.items,
     totalPrice: payload.totalPrice,
     total: payload.totalPrice,
@@ -315,7 +321,18 @@ export function getOrders(
   restaurantId: string,
   onData: (orders: RestaurantOrder[]) => void,
 ): Unsubscribe {
-  return onSnapshot(
+  let byRestaurant: RestaurantOrder[] = [];
+  let byVenue: RestaurantOrder[] = [];
+  const emitMerged = () => {
+    const merged = new Map<string, RestaurantOrder>();
+    [...byRestaurant, ...byVenue].forEach((order) => merged.set(order.id, order));
+    const rows = Array.from(merged.values()).sort(
+      (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
+    );
+    onData(rows);
+  };
+
+  const unsubRestaurant = onSnapshot(
     query(
       collection(db, 'orders'),
       where('restaurantId', '==', restaurantId),
@@ -323,29 +340,61 @@ export function getOrders(
     ),
     (snap) => {
       try {
-        onData(
-          snap.docs.map((docSnap) =>
-            mapDocToRestaurantOrder(docSnap, restaurantId),
-          ),
+        byRestaurant = snap.docs.map((docSnap) =>
+          mapDocToRestaurantOrder(docSnap, restaurantId),
         );
+        emitMerged();
       } catch (e) {
-        console.error('[getOrders]', e);
-        onData([]);
+        console.error('[getOrders:restaurantId]', e);
+        byRestaurant = [];
+        emitMerged();
       }
     },
-    () => onData([]),
+    () => {
+      byRestaurant = [];
+      emitMerged();
+    },
   );
+
+  const unsubVenue = onSnapshot(
+    query(
+      collection(db, 'orders'),
+      where('venueId', '==', restaurantId),
+      orderBy('createdAt', 'desc'),
+    ),
+    (snap) => {
+      try {
+        byVenue = snap.docs.map((docSnap) =>
+          mapDocToRestaurantOrder(docSnap, restaurantId),
+        );
+        emitMerged();
+      } catch (e) {
+        console.error('[getOrders:venueId]', e);
+        byVenue = [];
+        emitMerged();
+      }
+    },
+    () => {
+      byVenue = [];
+      emitMerged();
+    },
+  );
+
+  return () => {
+    unsubRestaurant();
+    unsubVenue();
+  };
 }
 
 function etaForStatus(status: OrderStatus): number {
   switch (status) {
     case 'awaiting_payment':
       return 0;
-    case 'accepted':
+    case 'restaurant_accepted':
       return 28;
     case 'preparing':
       return 22;
-    case 'ready':
+    case 'ready_for_pickup':
       return 18;
     case 'picked_up':
       return 14;

@@ -139,9 +139,16 @@ export default function DriverDashboardScreen() {
               <Pressable
                 style={[
                   styles.primaryButton,
-                  (order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted') && styles.disabled,
+                  (order.status === 'delivered' ||
+                    order.status === 'pending' ||
+                    order.status === 'restaurant_accepted') &&
+                    styles.disabled,
                 ]}
-                disabled={order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted'}
+                disabled={
+                  order.status === 'delivered' ||
+                  order.status === 'pending' ||
+                  order.status === 'restaurant_accepted'
+                }
                 onPress={() => updateOrderStatus(order.id, 'on_the_way')}
               >
                 <Text style={styles.primaryText}>Start Delivery</Text>
@@ -149,9 +156,16 @@ export default function DriverDashboardScreen() {
               <Pressable
                 style={[
                   styles.secondaryButton,
-                  (order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted') && styles.disabled,
+                  (order.status === 'delivered' ||
+                    order.status === 'pending' ||
+                    order.status === 'restaurant_accepted') &&
+                    styles.disabled,
                 ]}
-                disabled={order.status === 'delivered' || order.status === 'pending' || order.status === 'accepted'}
+                disabled={
+                  order.status === 'delivered' ||
+                  order.status === 'pending' ||
+                  order.status === 'restaurant_accepted'
+                }
                 onPress={() => handleComplete(order.id)}
               >
                 <Text style={styles.secondaryText}>Complete Delivery</Text>
