@@ -1,11 +1,12 @@
 import AppHeader from '../../components/AppHeader';
 import { useAvailableOrders } from '../../hooks/useAvailableOrders';
 import { useDriverOrders } from '../../hooks/useDriverOrders';
+import { useDriverOnlineStatus } from '../../hooks/useDriverOnlineStatus';
 import { useAuth } from '../../services/AuthContext';
-import { updateDriverOnlineStatus } from '../../services/driverService';
+import { updateDriverOnlineStatus } from '../../services/driverDispatch';
 import { requireRole } from '../../utils/requireRole';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,13 +15,30 @@ export default function DriverHubScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [isOnline, setIsOnline] = useState(false);
-  const { orders: availableOrders } = useAvailableOrders();
+  const { online, loading: onlineLoading } = useDriverOnlineStatus(user?.uid);
+  const hydratedRef = useRef(false);
+  const { orders: availableOrders } = useAvailableOrders(user?.uid);
   const { orders: activeOrders } = useDriverOrders(user?.uid);
 
   useEffect(() => {
-    if (!user?.uid) return;
-    updateDriverOnlineStatus(user.uid, isOnline).catch(() => {});
-  }, [isOnline, user?.uid]);
+    if (onlineLoading) return;
+    setIsOnline(online);
+    hydratedRef.current = true;
+  }, [online, onlineLoading]);
+
+  const onToggleOnline = (next: boolean) => {
+    setIsOnline(next);
+    if (!user?.uid || !hydratedRef.current) return;
+    updateDriverOnlineStatus(user.uid, next)
+      .then(() => {
+        console.log('[ONLINE WRITE]', {
+          driverId: user.uid,
+          path: `drivers/${user.uid}`,
+          isOnline: next,
+        });
+      })
+      .catch(() => {});
+  };
 
   if (loading || !authorized) {
     return (
@@ -38,7 +56,7 @@ export default function DriverHubScreen() {
           <Text style={styles.title}>Driver hub</Text>
           <View style={styles.onlineRow}>
             <Text style={styles.onlineLabel}>{isOnline ? 'Online' : 'Offline'}</Text>
-            <Switch value={isOnline} onValueChange={setIsOnline} />
+            <Switch value={isOnline} onValueChange={onToggleOnline} />
           </View>
         </View>
 

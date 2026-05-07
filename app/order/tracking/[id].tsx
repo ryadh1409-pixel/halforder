@@ -1,4 +1,9 @@
 import AppHeader from '../../../components/AppHeader';
+import { DeliveryProgressBar } from '../../../components/order/DeliveryProgressBar';
+import { DeliveryTimeline } from '../../../components/order/DeliveryTimeline';
+import { DriverCard } from '../../../components/order/DriverCard';
+import { ETAChip } from '../../../components/order/ETAChip';
+import { OrderStatusBadge } from '../../../components/order/OrderStatusBadge';
 import {
   subscribeOrderById,
   type OrderStatus,
@@ -134,37 +139,16 @@ export default function OrderTrackingScreen() {
       <AppHeader title="Track order" />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.orderId}>Order #{order.id.slice(0, 10)}…</Text>
-        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-          <Text style={[styles.statusBadgeText, { color: badge.fg }]}>
-            {(order.status ?? 'pending').replace('_', ' ')}
-          </Text>
-        </View>
+        <OrderStatusBadge status={order.status ?? 'pending'} />
 
         {order.estimatedDeliveryTime ? (
-          <View style={styles.etaChip}>
-            <Text style={styles.etaChipText}>ETA ~{order.estimatedDeliveryTime} min</Text>
-          </View>
+          <ETAChip minutes={order.estimatedDeliveryTime} />
         ) : null}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Driver</Text>
-          <Text style={styles.meta}>
-            {order.driverName?.trim() ? order.driverName : 'Matching a driver…'}
-          </Text>
-          {order.driverPhone ? (
-            <Text
-              style={styles.link}
-              onPress={() => Linking.openURL(`tel:${order.driverPhone}`)}
-            >
-              Call {order.driverPhone}
-            </Text>
-          ) : (
-            <Text style={styles.muted}>Phone unavailable</Text>
-          )}
-          {order.driverVehicle ? (
-            <Text style={styles.meta}>Vehicle: {order.driverVehicle}</Text>
-          ) : null}
+        <View style={styles.progressWrap}>
+          <DeliveryProgressBar progress={(stepDone + 1) / TIMELINE.length} />
         </View>
+
+        <DriverCard order={order} />
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live map</Text>
@@ -182,27 +166,10 @@ export default function OrderTrackingScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Timeline</Text>
-          {TIMELINE.map((step, idx) => {
-            const done = order.status !== 'rejected' && idx <= stepDone;
-            const current = order.status === step.status;
-            return (
-              <View key={step.status} style={styles.stepRow}>
-                <View
-                  style={[
-                    styles.dot,
-                    done && styles.dotOn,
-                    current && styles.dotCurrent,
-                  ]}
-                />
-                <Text style={[styles.stepLabel, done && styles.stepLabelOn]}>
-                  {step.label}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+        <DeliveryTimeline
+          steps={TIMELINE}
+          status={order.status}
+        />
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Details</Text>

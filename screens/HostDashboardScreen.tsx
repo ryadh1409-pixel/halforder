@@ -382,7 +382,25 @@ export default function HostDashboardScreen() {
   };
 
   const ordersPreview = useMemo(
-    () => orders.slice(0, 24),
+    () =>
+      [...orders]
+        .sort((a, b) => {
+          const priority = (status: OrderStatus): number => {
+            if (status === 'ready_for_pickup' || status === 'ready') return 0;
+            if (
+              status === 'preparing' ||
+              status === 'accepted' ||
+              status === 'restaurant_accepted'
+            )
+              return 1;
+            if (status === 'pending') return 2;
+            return 3;
+          };
+          const p = priority(a.status) - priority(b.status);
+          if (p !== 0) return p;
+          return (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
+        })
+        .slice(0, 24),
     [orders],
   );
 

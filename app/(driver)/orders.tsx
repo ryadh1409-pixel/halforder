@@ -1,7 +1,8 @@
 import AppHeader from '../../components/AppHeader';
 import { useAvailableOrders } from '../../hooks/useAvailableOrders';
+import { useDriverOnlineStatus } from '../../hooks/useDriverOnlineStatus';
 import { useAuth } from '../../services/AuthContext';
-import { acceptDriverOrder } from '../../services/driverService';
+import { acceptDelivery } from '../../services/driverDispatch';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
 import { useRouter } from 'expo-router';
@@ -13,7 +14,8 @@ export default function DriverOrdersScreen() {
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const router = useRouter();
-  const { orders, loading } = useAvailableOrders();
+  const { orders, loading } = useAvailableOrders(user?.uid);
+  const { online, loading: onlineLoading } = useDriverOnlineStatus(user?.uid);
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
 
   async function onAccept(orderId: string) {
@@ -26,15 +28,7 @@ export default function DriverOrdersScreen() {
     };
     try {
       setAcceptingOrderId(orderId);
-      const result = await acceptDriverOrder(orderId, driver);
-      if (!result.ok) {
-        if (result.reason === 'already_assigned') {
-          showError('This order was accepted by another driver.');
-        } else {
-          showError('Could not accept order.');
-        }
-        return;
-      }
+      await acceptDelivery(orderId, driver);
       showSuccess('Order assigned to you');
       router.push('/(driver)/active' as never);
     } catch {
@@ -55,13 +49,20 @@ export default function DriverOrdersScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <AppHeader title="Available" />
-      {loading ? (
+      {loading || onlineLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#16A34A" />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {orders.length === 0 ? (
+          {!online ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>You are offline</Text>
+              <Text style={styles.emptySub}>
+                Go online in Driver Hub to receive dispatch requests.
+              </Text>
+            </View>
+          ) : orders.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No pending orders</Text>
               <Text style={styles.emptySub}>
@@ -73,10 +74,8 @@ export default function DriverOrdersScreen() {
               <Pressable key={order.id} style={styles.card} onPress={() => onAccept(order.id)}>
                 <Text style={styles.cardTitle}>{order.restaurantName}</Text>
                 <Text style={styles.meta}>#{order.id.slice(0, 10)}…</Text>
-                <Text style={styles.meta}>
-                  {order.items.map((i) => `${i.qty}x ${i.name}`).join(', ') || 'Items'}
-                </Text>
                 <Text style={styles.meta}>Total ${order.total.toFixed(2)}</Text>
+                <Text style={styles.meta}>Dispatch: waiting for driver</Text>
                 <Pressable
                   style={[styles.primary, acceptingOrderId === order.id && styles.primaryDisabled]}
                   disabled={acceptingOrderId === order.id}

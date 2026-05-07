@@ -2,7 +2,8 @@ import AppHeader from '../components/AppHeader';
 import { useAvailableOrders } from '../hooks/useAvailableOrders';
 import { useDriverOrders } from '../hooks/useDriverOrders';
 import { useAuth } from '../services/AuthContext';
-import { acceptDriverOrder, updateDriverOnlineStatus } from '../services/driverService';
+import { acceptDriverOrder } from '../services/driverService';
+import { updateDriverOnlineStatus } from '../services/driverDispatch';
 import { updateOrderStatus } from '../services/orderService';
 import { requireRole } from '../utils/requireRole';
 import { showError, showSuccess } from '../utils/toast';
@@ -14,7 +15,7 @@ export default function DriverDashboardScreen() {
   const { authorized, loading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const { orders, loading: ordersLoading } = useDriverOrders(user?.uid);
-  const { orders: availableOrders, loading: availableLoading } = useAvailableOrders();
+  const { orders: availableOrders, loading: availableLoading } = useAvailableOrders(user?.uid);
   const [isOnline, setIsOnline] = useState(false);
 
   useEffect(() => {

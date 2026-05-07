@@ -266,7 +266,10 @@ export async function updateRestaurantOpen(
 }
 
 export async function markOrderReady(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), { status: 'ready' });
+  await updateDoc(doc(db, 'orders', orderId), {
+    status: 'pending_driver',
+    estimatedDeliveryTime: 20,
+  });
 }
 
 export async function assignDriverToOrder(

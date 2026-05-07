@@ -1,4 +1,5 @@
 import { db } from './firebase';
+import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import {
   addDoc,
   collection,
@@ -21,7 +22,9 @@ export type OrderStatus =
   | 'pending'
   | 'pending_driver'
   | 'driver_accepted'
+  | 'driver_assigned'
   | 'arriving_restaurant'
+  | 'picked_up_pending'
   | 'accepted'
   | 'restaurant_accepted'
   | 'preparing'
@@ -58,6 +61,7 @@ export type RestaurantOrder = {
   totalPrice: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  deliveryStatus: DeliveryStatus;
   stripePaymentIntentId: string | null;
   driverId: string | null;
   driverName: string | null;
@@ -86,7 +90,9 @@ function parseStatus(value: unknown): OrderStatus {
     s === 'pending' ||
     s === 'pending_driver' ||
     s === 'driver_accepted' ||
+    s === 'driver_assigned' ||
     s === 'arriving_restaurant' ||
+    s === 'picked_up_pending' ||
     s === 'accepted' ||
     s === 'restaurant_accepted' ||
     s === 'preparing' ||
@@ -237,6 +243,7 @@ function mapDocToRestaurantOrder(
           : 0,
     status,
     paymentStatus: parsePaymentStatus(data.paymentStatus, status),
+    deliveryStatus: normalizeDeliveryStatus(data.deliveryStatus),
     stripePaymentIntentId:
       typeof data.stripePaymentIntentId === 'string'
         ? data.stripePaymentIntentId
@@ -300,7 +307,7 @@ export async function createOrder(payload: {
   const groupId = existingOrderId ? `grp_${existingOrderId}` : makeGroupId();
   const estimatedDeliveryTime = existingOrderId ? 25 : 35;
 
-  const { lat, lng, address } = payload.deliveryLocation;
+  const { lat, lng } = payload.deliveryLocation;
   const userLocation: LatLng = { lat, lng };
   const restaurantLocation =
     payload.restaurantLocation ??
@@ -330,6 +337,7 @@ export async function createOrder(payload: {
     deliveryType: 'delivery',
     estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',
+    deliveryStatus: 'waiting_driver',
     paymentStatus: 'unpaid',
     stripePaymentIntentId: null,
     groupId,
@@ -413,9 +421,12 @@ function etaForStatus(status: OrderStatus): number {
     case 'pending_driver':
       return 30;
     case 'driver_accepted':
+    case 'driver_assigned':
       return 24;
     case 'arriving_restaurant':
       return 20;
+    case 'picked_up_pending':
+      return 18;
     case 'accepted':
     case 'restaurant_accepted':
       return 28;
@@ -441,22 +452,41 @@ export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
 ): Promise<void> {
+  const normalizedStatus: OrderStatus = status === 'ready' ? 'ready_for_pickup' : status;
   const patch: Record<string, unknown> = {
-    status,
-    estimatedDeliveryTime: etaForStatus(status),
+    status: normalizedStatus,
+    estimatedDeliveryTime: etaForStatus(normalizedStatus),
   };
-  if (status === 'accepted' || status === 'restaurant_accepted') {
+  if (normalizedStatus === 'accepted' || normalizedStatus === 'restaurant_accepted') {
     patch.acceptedAt = serverTimestamp();
   }
-  if (status === 'ready' || status === 'ready_for_pickup') {
+  if (normalizedStatus === 'ready_for_pickup') {
     patch.preparedAt = serverTimestamp();
+    patch.deliveryStatus = 'waiting_driver';
+    patch.driverId = null;
+    patch.assignedDriverId = null;
+    patch.driverName = null;
+    patch.driverPhone = null;
+    patch.readyAt = serverTimestamp();
   }
-  if (status === 'picked_up') {
+  if (normalizedStatus === 'picked_up_pending' || normalizedStatus === 'driver_assigned') {
+    patch.deliveryStatus = 'driver_assigned';
+  }
+  if (normalizedStatus === 'picked_up') {
     patch.pickedUpAt = serverTimestamp();
+    patch.deliveryStatus = 'picked_up';
   }
-  if (status === 'delivered') {
+  if (normalizedStatus === 'delivered') {
     patch.deliveredAt = serverTimestamp();
+    patch.deliveryStatus = 'delivered';
   }
+  console.log('[DRIVER FLOW] updateOrderStatus', {
+    orderId,
+    requestedStatus: status,
+    status: patch.status,
+    deliveryStatus: patch.deliveryStatus ?? null,
+    driverId: patch.driverId ?? '(unchanged)',
+  });
   await updateDoc(doc(db, 'orders', orderId), patch);
 }
 

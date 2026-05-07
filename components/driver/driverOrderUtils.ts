@@ -1,8 +1,10 @@
 import type { OrderStatus } from '@/services/orderService';
 
 export const DRIVER_TIMELINE_STATUSES: OrderStatus[] = [
+  'driver_assigned',
   'driver_accepted',
   'arriving_restaurant',
+  'picked_up_pending',
   'picked_up',
   'on_the_way',
   'delivered',
@@ -12,8 +14,12 @@ export function formatOrderStatus(status: OrderStatus): string {
   switch (status) {
     case 'driver_accepted':
       return 'Driver accepted';
+    case 'driver_assigned':
+      return 'Driver assigned';
     case 'arriving_restaurant':
       return 'Arriving at restaurant';
+    case 'picked_up_pending':
+      return 'Picked up pending';
     case 'picked_up':
       return 'Picked up';
     case 'on_the_way':
@@ -33,7 +39,7 @@ export function formatOrderStatus(status: OrderStatus): string {
 export function getNextDriverAction(status: OrderStatus):
   | { label: string; nextStatus: OrderStatus; successText: string }
   | null {
-  if (status === 'driver_accepted') {
+  if (status === 'driver_accepted' || status === 'driver_assigned') {
     return {
       label: 'Arrive at restaurant',
       nextStatus: 'arriving_restaurant',
@@ -41,6 +47,13 @@ export function getNextDriverAction(status: OrderStatus):
     };
   }
   if (status === 'arriving_restaurant') {
+    return {
+      label: 'Confirm pickup pending',
+      nextStatus: 'picked_up_pending',
+      successText: 'Pickup confirmed',
+    };
+  }
+  if (status === 'picked_up_pending') {
     return {
       label: 'Mark picked up',
       nextStatus: 'picked_up',

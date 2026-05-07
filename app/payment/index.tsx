@@ -59,6 +59,7 @@ export default function PaymentScreen() {
           amount,
           createdAt: serverTimestamp(),
           status: 'pending_driver',
+          deliveryStatus: 'waiting_driver',
         });
       }
 

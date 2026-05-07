@@ -1,16 +1,22 @@
-import { getDriverAvailableOrders, type DriverOrder } from '../services/driverService';
+import { subscribeAvailableOrders, type DispatchOrder } from '../services/driverDispatch';
 import { useEffect, useMemo, useState } from 'react';
 
-export function useAvailableOrders() {
-  const [orders, setOrders] = useState<DriverOrder[]>([]);
+export function useAvailableOrders(driverId: string | null | undefined) {
+  const [orders, setOrders] = useState<DispatchOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!driverId) {
+      setOrders([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const unsub = getDriverAvailableOrders((rows) => {
+      const unsub = subscribeAvailableOrders(driverId, (rows) => {
         try {
           setOrders(Array.isArray(rows) ? rows : []);
           setLoading(false);
@@ -29,7 +35,7 @@ export function useAvailableOrders() {
       setLoading(false);
       setError('subscribe');
     }
-  }, []);
+  }, [driverId]);
 
   return useMemo(
     () => ({

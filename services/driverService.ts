@@ -1,5 +1,3 @@
-import { db } from './firebase';
-import type { OrderStatus } from './orderService';
 import {
   collection,
   doc,
@@ -14,6 +12,8 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { db } from './firebase';
+import type { OrderStatus } from './orderService';
 
 export type DriverProfile = {
   id: string;
@@ -34,7 +34,7 @@ export type DriverOrder = {
   groupId: string | null;
   restaurantName: string;
   restaurantImage: string | null;
-  items: Array<{ name: string; qty: number }>;
+  items: { name: string; qty: number }[];
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -78,6 +78,7 @@ function normalizeStatus(value: unknown): OrderStatus {
     s === 'pending' ||
     s === 'pending_driver' ||
     s === 'driver_accepted' ||
+    s === 'driver_assigned' ||
     s === 'arriving_restaurant' ||
     s === 'accepted' ||
     s === 'restaurant_accepted' ||
@@ -235,7 +236,7 @@ export function subscribeAvailableOrders(
   return onSnapshot(
     query(
       collection(db, 'orders'),
-      where('status', '==', 'pending_driver'),
+      where('status', 'in', ['pending_driver', 'ready_for_pickup', 'ready']),
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
@@ -363,8 +364,10 @@ export function getDriverActiveOrders(
     onData(
       rows.filter((o) =>
         [
+          'driver_assigned',
           'driver_accepted',
           'arriving_restaurant',
+          'picked_up_pending',
           'picked_up',
           'on_the_way',
         ].includes(o.status),
