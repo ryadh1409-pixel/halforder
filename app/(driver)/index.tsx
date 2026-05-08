@@ -24,7 +24,7 @@ import {
   type DriverOrder,
 } from '../../services/driverService';
 import { showError, showSuccess } from '../../utils/toast';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
 export default function DriverHubScreen() {
@@ -43,6 +43,13 @@ export default function DriverHubScreen() {
   // Subscribe to driver profile (online status + stats)
   useEffect(() => {
     if (!user?.uid) return;
+    // Ensure driver document exists
+    setDoc(
+      doc(db, 'drivers', user.uid),
+      { isOnline: false, name: user.displayName ?? 'Driver' },
+      { merge: true }
+    ).catch(() => {});
+
     const ref = doc(db, 'drivers', user.uid);
     unsubDriver.current = onSnapshot(ref, (snap) => {
       if (!snap.exists()) return;
@@ -81,11 +88,14 @@ export default function DriverHubScreen() {
 
   const handleToggleOnline = useCallback(async () => {
     if (!user?.uid || togglingOnline) return;
+    const newValue = !isOnline;
     setTogglingOnline(true);
+    setIsOnline(newValue); // optimistic update
     try {
-      await updateDriverOnlineStatus(user.uid, !isOnline);
+      await updateDriverOnlineStatus(user.uid, newValue);
     } catch {
-      showError('Failed to update status');
+      setIsOnline(!newValue); // revert on failure
+      showError('Failed to update online status');
     } finally {
       setTogglingOnline(false);
     }
