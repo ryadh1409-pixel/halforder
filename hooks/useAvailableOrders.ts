@@ -18,7 +18,10 @@ export function useAvailableOrders(driverId: string | null | undefined) {
     try {
       const unsub = subscribeAvailableOrders(driverId, (rows) => {
         try {
-          setOrders(Array.isArray(rows) ? rows : []);
+          const deduped = Array.isArray(rows)
+            ? Array.from(new Map(rows.map((row) => [row.id, row])).values())
+            : [];
+          setOrders(deduped);
           setLoading(false);
           setError(null);
         } catch (e) {

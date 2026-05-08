@@ -24,6 +24,11 @@ export type DispatchOrder = {
   restaurantName: string;
   restaurantImage: string | null;
   customerName: string | null;
+  customerPhone: string | null;
+  deliveryAddress: string | null;
+  items: { name: string; qty: number }[];
+  estimatedDeliveryTime: number;
+  distanceKm: number | null;
   total: number;
   createdAtMs: number | null;
   status: string;
@@ -31,6 +36,28 @@ export type DispatchOrder = {
   driverId: string | null;
   acceptedAtMs: number | null;
 };
+
+type LatLng = { lat: number; lng: number };
+
+function parseLatLng(value: unknown): LatLng | null {
+  if (!value || typeof value !== 'object') return null;
+  const lat = Number((value as { lat?: unknown }).lat);
+  const lng = Number((value as { lng?: unknown }).lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+function distanceKm(a: LatLng | null, b: LatLng | null): number | null {
+  if (!a || !b) return null;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const earthKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const i =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return Number((2 * earthKm * Math.atan2(Math.sqrt(i), Math.sqrt(1 - i))).toFixed(1));
+}
 
 export const DRIVER_PRESENCE_COLLECTION = 'drivers';
 
@@ -52,6 +79,31 @@ function toMillis(value: unknown): number | null {
 
 function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }): DispatchOrder {
   const data = d.data();
+  const items = Array.isArray(data.items)
+    ? data.items
+        .map((item) => {
+          if (typeof item === 'string') return { name: item, qty: 1 };
+          if (item && typeof item === 'object' && 'name' in item) {
+            return {
+              name: String((item as { name: unknown }).name),
+              qty:
+                typeof (item as { qty?: unknown }).qty === 'number'
+                  ? Number((item as { qty: unknown }).qty)
+                  : 1,
+            };
+          }
+          return null;
+        })
+        .filter((entry): entry is { name: string; qty: number } => Boolean(entry))
+    : [];
+  const restaurantLocation = parseLatLng(data.restaurantLocation);
+  const customerLocation =
+    parseLatLng(data.userLocation) ??
+    parseLatLng(
+      data.deliveryLocation && typeof data.deliveryLocation === 'object'
+        ? data.deliveryLocation
+        : null,
+    );
   return {
     id: d.id,
     restaurantName:
@@ -67,6 +119,24 @@ function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }
           ? data.image
           : null,
     customerName: typeof data.customerName === 'string' ? data.customerName : null,
+    customerPhone:
+      typeof data.customerPhone === 'string'
+        ? data.customerPhone
+        : typeof data.customerPhoneNumber === 'string'
+          ? data.customerPhoneNumber
+          : null,
+    deliveryAddress:
+      typeof data.deliveryAddress === 'string'
+        ? data.deliveryAddress
+        : data.deliveryLocation &&
+            typeof data.deliveryLocation === 'object' &&
+            typeof (data.deliveryLocation as { address?: unknown }).address === 'string'
+          ? String((data.deliveryLocation as { address: unknown }).address)
+          : null,
+    items,
+    estimatedDeliveryTime:
+      typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 20,
+    distanceKm: distanceKm(restaurantLocation, customerLocation),
     total:
       typeof data.totalPrice === 'number'
         ? data.totalPrice

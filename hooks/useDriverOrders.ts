@@ -1,8 +1,8 @@
-import { getDriverActiveOrders, type DriverOrder } from '../services/driverService';
+import { subscribeDriverActiveOrders, type ActiveDelivery } from '@/services/delivery';
 import { useEffect, useMemo, useState } from 'react';
 
 export function useDriverOrders(driverId: string | null | undefined) {
-  const [orders, setOrders] = useState<DriverOrder[]>([]);
+  const [orders, setOrders] = useState<ActiveDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +16,7 @@ export function useDriverOrders(driverId: string | null | undefined) {
     setLoading(true);
     setError(null);
     try {
-      const unsub = getDriverActiveOrders(driverId, (rows) => {
+      const unsub = subscribeDriverActiveOrders(driverId, (rows) => {
         try {
           setOrders(Array.isArray(rows) ? rows : []);
           setLoading(false);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -14,8 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../services/AuthContext';
+import { acceptOrderWithLock } from '../../services/delivery';
 import {
-  acceptDriverOrder,
   driverMarkOnTheWay,
   driverMarkPickedUp,
   getDriverActiveOrders,
@@ -106,18 +107,34 @@ export default function DriverHubScreen() {
     setAcceptingId(order.id);
     try {
       const profile = { id: user.uid, name: user.displayName ?? 'Driver', phone: null, isOnline: true };
-      const result = await acceptDriverOrder(order.id, profile);
-      if (result.ok) {
-        showSuccess('Order accepted!');
-      } else {
-        showError(result.reason === 'already_assigned' ? 'Order taken by another driver' : 'Could not accept order');
-      }
+      await acceptOrderWithLock(order.id, profile);
+      setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
+      showSuccess('Order accepted!');
+      router.replace(`/driver/active/${encodeURIComponent(order.id)}` as never);
     } catch {
       showError('Failed to accept order');
     } finally {
       setAcceptingId(null);
     }
   }, [user?.uid, acceptingId]);
+
+  const formatOrderTime = (value: number | null) => {
+    if (!value) return 'Now';
+    const date = new Date(value);
+    const now = new Date();
+    const isToday =
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
+    const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return isToday ? `Today ${timeLabel}` : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+
+  const formatItemsSummary = (order: DriverOrder) =>
+    order.items.map((item) => `${item.qty}x ${item.name}`).join(', ');
+
+  const totalItemsCount = (order: DriverOrder) =>
+    order.items.reduce((sum, item) => sum + (Number.isFinite(item.qty) ? item.qty : 0), 0);
 
   const handlePickedUp = useCallback(async (orderId: string) => {
     try {
@@ -276,44 +293,45 @@ export default function DriverHubScreen() {
           ) : (
             availableOrders.map((order) => (
               <View key={order.id} style={styles.orderCard}>
-                {/* Top row */}
                 <View style={styles.orderCardTop}>
-                  <View style={styles.orderCardLeft}>
-                    <Text style={styles.orderRestaurant}>🍽 {order.restaurantName}</Text>
-                    {order.distanceKm != null && (
-                      <Text style={styles.orderDistance}>📍 {order.distanceKm} km away</Text>
+                  <View style={styles.orderIdentityWrap}>
+                    {order.restaurantImage ? (
+                      <Image source={{ uri: order.restaurantImage }} style={styles.restaurantLogo} />
+                    ) : (
+                      <View style={[styles.restaurantLogo, styles.restaurantLogoFallback]}>
+                        <Text style={styles.restaurantLogoFallbackText}>
+                          {(order.restaurantName || 'R').trim().charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
                     )}
+                    <View style={styles.orderCardLeft}>
+                      <Text style={styles.orderRestaurant}>{order.restaurantName || 'Restaurant'}</Text>
+                      <Text style={styles.orderTimestamp}>{formatOrderTime(order.createdAtMs)}</Text>
+                    </View>
                   </View>
                   <View style={styles.orderEarningBadge}>
-                    <Text style={styles.orderEarningText}>${order.total.toFixed(2)}</Text>
+                    <Text style={styles.orderEarningText}>${(order.deliveryFee || order.total).toFixed(2)}</Text>
+                    <Text style={styles.orderEarningCaption}>Earnings</Text>
                   </View>
                 </View>
 
-                {/* Items */}
+                <View style={styles.orderMetaGrid}>
+                  <Text style={styles.orderMetaText}>📍 {order.distanceKm != null ? `${order.distanceKm} km to pickup` : 'Distance unavailable'}</Text>
+                  <Text style={styles.orderMetaText}>⏱ {order.estimatedDeliveryTime} min est.</Text>
+                  <Text style={styles.orderMetaText}>📦 {totalItemsCount(order)} items</Text>
+                  <Text style={styles.orderMetaText}>💵 Total ${order.total.toFixed(2)}</Text>
+                </View>
+
                 <View style={styles.orderItems}>
-                  {order.items.slice(0, 3).map((item, i) => (
-                    <Text key={i} style={styles.orderItem}>• {item.qty}× {item.name}</Text>
-                  ))}
-                  {order.items.length > 3 && (
-                    <Text style={styles.orderItem}>+{order.items.length - 3} more items</Text>
-                  )}
+                  <Text style={styles.orderAddressLabel}>Items</Text>
+                  <Text style={styles.orderItem}>{formatItemsSummary(order) || 'No items listed'}</Text>
                 </View>
 
-                {/* Delivery address */}
-                {order.deliveryAddress && (
-                  <View style={styles.orderAddress}>
-                    <Text style={styles.orderAddressLabel}>Drop off</Text>
-                    <Text style={styles.orderAddressValue}>{order.deliveryAddress}</Text>
-                  </View>
-                )}
-
-                {/* ETA */}
-                <View style={styles.orderMeta}>
-                  <Text style={styles.orderMetaText}>⏱ ~{order.estimatedDeliveryTime} min</Text>
-                  <Text style={styles.orderMetaText}>📦 {order.items.length} item{order.items.length !== 1 ? 's' : ''}</Text>
+                <View style={styles.orderAddress}>
+                  <Text style={styles.orderAddressLabel}>Drop-off address</Text>
+                  <Text style={styles.orderAddressValue}>{order.deliveryAddress ?? (order as DriverOrder & { address?: string | null }).address ?? 'Address unavailable'}</Text>
                 </View>
 
-                {/* Accept Button */}
                 <Pressable
                   style={[styles.acceptBtn, acceptingId === order.id && styles.acceptBtnDisabled]}
                   onPress={() => handleAccept(order)}
@@ -419,19 +437,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
-  orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
+  orderIdentityWrap: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  restaurantLogo: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#0F172A' },
+  restaurantLogoFallback: { alignItems: 'center', justifyContent: 'center' },
+  restaurantLogoFallbackText: { color: '#F8FAFC', fontWeight: '800', fontSize: 18 },
   orderCardLeft: { flex: 1 },
-  orderRestaurant: { color: '#F8FAFC', fontSize: 16, fontWeight: '700' },
-  orderDistance: { color: '#94A3B8', fontSize: 12, marginTop: 3, fontWeight: '500' },
-  orderEarningBadge: { backgroundColor: '#16A34A', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, justifyContent: 'center' },
+  orderRestaurant: { color: '#F8FAFC', fontSize: 16, fontWeight: '800', marginLeft: 10 },
+  orderTimestamp: { color: '#94A3B8', fontSize: 12, marginTop: 3, fontWeight: '600', marginLeft: 10 },
+  orderEarningBadge: { backgroundColor: '#16A34A', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, justifyContent: 'center', alignItems: 'center' },
   orderEarningText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  orderEarningCaption: { color: '#DCFCE7', fontSize: 10, fontWeight: '700', marginTop: 2 },
+  orderMetaGrid: { gap: 6, marginBottom: 12 },
   orderItems: { marginBottom: 10 },
-  orderItem: { color: '#CBD5E1', fontSize: 13, fontWeight: '500', marginBottom: 2 },
+  orderItem: { color: '#CBD5E1', fontSize: 13, fontWeight: '500', marginBottom: 2, lineHeight: 18 },
   orderAddress: { backgroundColor: '#0F172A', borderRadius: 10, padding: 10, marginBottom: 10 },
   orderAddressLabel: { color: '#64748B', fontSize: 10, fontWeight: '600', marginBottom: 2 },
   orderAddressValue: { color: '#94A3B8', fontSize: 13, fontWeight: '500' },
-  orderMeta: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   orderMetaText: { color: '#64748B', fontSize: 12, fontWeight: '600' },
   acceptBtn: { backgroundColor: '#16A34A', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   acceptBtnDisabled: { opacity: 0.5 },

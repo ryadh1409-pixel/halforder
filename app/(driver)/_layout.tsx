@@ -12,6 +12,7 @@ export default function DriverLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="orders" />
+      <Stack.Screen name="order/[id]" />
       <Stack.Screen name="active" />
     </Stack>
   );

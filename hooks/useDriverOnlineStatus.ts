@@ -17,7 +17,7 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
       driverPresenceDoc(driverId),
       (snap) => {
         const data = snap.data();
-        const resolvedIsOnline = data?.isOnline === true;
+        const resolvedIsOnline = data?.isOnline === true || data?.online === true;
         console.log('[ONLINE READ]', {
           driverId,
           path: `${DRIVER_PRESENCE_COLLECTION}/${driverId}`,

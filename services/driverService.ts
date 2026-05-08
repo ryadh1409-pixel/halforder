@@ -42,10 +42,16 @@ export type DriverOrder = {
   customerName: string | null;
   customerAvatar: string | null;
   customerPhone: string | null;
+  restaurantPhone: string | null;
   deliveryAddress: string | null;
+  notes: string | null;
+  restaurantLocation: LatLng | null;
+  customerLocation: LatLng | null;
+  driverLocation: LatLng | null;
   estimatedDeliveryTime: number;
   distanceKm: number | null;
   acceptedAtMs: number | null;
+  createdAtMs: number | null;
   driverId: string | null;
 };
 
@@ -87,6 +93,7 @@ function normalizeStatus(value: unknown): OrderStatus {
     s === 'ready_for_pickup' ||
     s === 'picked_up' ||
     s === 'on_the_way' ||
+    s === 'arrived_customer' ||
     s === 'delivered' ||
     s === 'cancelled' ||
     s === 'rejected'
@@ -116,6 +123,7 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
         .filter((entry): entry is { name: string; qty: number } => Boolean(entry))
     : [];
   const acceptedAtRaw = data.acceptedAt as { toMillis?: () => number } | undefined;
+  const createdAtRaw = data.createdAt as { toMillis?: () => number } | undefined;
   const restaurantLocation = parseLatLng(data.restaurantLocation);
   const dropoffLocation =
     parseLatLng(data.userLocation) ??
@@ -163,6 +171,12 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
         : typeof data.customerPhoneNumber === 'string'
           ? data.customerPhoneNumber
           : null,
+    restaurantPhone:
+      typeof data.restaurantPhone === 'string'
+        ? data.restaurantPhone
+        : typeof data.restaurantContactPhone === 'string'
+          ? data.restaurantContactPhone
+          : null,
     deliveryAddress:
       typeof data.deliveryAddress === 'string'
         ? data.deliveryAddress
@@ -171,9 +185,17 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
             typeof (data.deliveryLocation as { address?: unknown }).address === 'string'
           ? String((data.deliveryLocation as { address: unknown }).address)
           : null,
+    notes: typeof data.notes === 'string' ? data.notes : null,
+    restaurantLocation,
+    customerLocation: dropoffLocation,
+    driverLocation,
     acceptedAtMs:
       acceptedAtRaw && typeof acceptedAtRaw.toMillis === 'function'
         ? acceptedAtRaw.toMillis()
+        : null,
+    createdAtMs:
+      createdAtRaw && typeof createdAtRaw.toMillis === 'function'
+        ? createdAtRaw.toMillis()
         : null,
     estimatedDeliveryTime:
       typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 0,
@@ -322,6 +344,13 @@ export async function driverMarkOnTheWay(orderId: string): Promise<void> {
   });
 }
 
+export async function driverMarkArrivedCustomer(orderId: string): Promise<void> {
+  await updateDoc(doc(db, 'orders', orderId), {
+    status: 'arrived_customer',
+    estimatedDeliveryTime: 4,
+  });
+}
+
 export async function markPickedUp(orderId: string): Promise<void> {
   await driverMarkPickedUp(orderId);
 }
@@ -370,6 +399,7 @@ export function getDriverActiveOrders(
           'picked_up_pending',
           'picked_up',
           'on_the_way',
+          'arrived_customer',
         ].includes(o.status),
       ),
     );

@@ -2,28 +2,28 @@ import type { OrderStatus } from '@/services/orderService';
 
 export const DRIVER_TIMELINE_STATUSES: OrderStatus[] = [
   'driver_assigned',
-  'driver_accepted',
   'arriving_restaurant',
-  'picked_up_pending',
   'picked_up',
   'on_the_way',
+  'arrived_customer',
   'delivered',
 ];
 
 export function formatOrderStatus(status: OrderStatus): string {
   switch (status) {
     case 'driver_accepted':
-      return 'Driver accepted';
     case 'driver_assigned':
-      return 'Driver assigned';
+      return 'Heading to restaurant';
     case 'arriving_restaurant':
-      return 'Arriving at restaurant';
+      return 'Arrived at restaurant';
     case 'picked_up_pending':
-      return 'Picked up pending';
+      return 'Preparing pickup';
     case 'picked_up':
       return 'Picked up';
     case 'on_the_way':
       return 'On the way';
+    case 'arrived_customer':
+      return 'Arrived at customer';
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
@@ -41,33 +41,33 @@ export function getNextDriverAction(status: OrderStatus):
   | null {
   if (status === 'driver_accepted' || status === 'driver_assigned') {
     return {
-      label: 'Arrive at restaurant',
+      label: 'Arrived at restaurant',
       nextStatus: 'arriving_restaurant',
-      successText: 'Arrived at restaurant',
+      successText: 'Heading to restaurant',
     };
   }
   if (status === 'arriving_restaurant') {
     return {
-      label: 'Confirm pickup pending',
-      nextStatus: 'picked_up_pending',
-      successText: 'Pickup confirmed',
-    };
-  }
-  if (status === 'picked_up_pending') {
-    return {
-      label: 'Mark picked up',
+      label: 'Picked up',
       nextStatus: 'picked_up',
       successText: 'Order picked up',
     };
   }
   if (status === 'picked_up') {
     return {
-      label: 'Start delivery',
+      label: 'Start delivering',
       nextStatus: 'on_the_way',
-      successText: 'Delivery started',
+      successText: 'Delivering',
     };
   }
   if (status === 'on_the_way') {
+    return {
+      label: 'Arrived at customer',
+      nextStatus: 'arrived_customer',
+      successText: 'Arrived at customer',
+    };
+  }
+  if (status === 'arrived_customer') {
     return {
       label: 'Mark delivered',
       nextStatus: 'delivered',

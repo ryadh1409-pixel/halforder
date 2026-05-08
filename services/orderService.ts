@@ -32,6 +32,7 @@ export type OrderStatus =
   | 'ready_for_pickup'
   | 'picked_up'
   | 'on_the_way'
+  | 'arrived_customer'
   | 'delivered'
   | 'cancelled'
   | 'rejected';
@@ -100,6 +101,7 @@ function parseStatus(value: unknown): OrderStatus {
     s === 'ready_for_pickup' ||
     s === 'picked_up' ||
     s === 'on_the_way' ||
+    s === 'arrived_customer' ||
     s === 'delivered' ||
     s === 'cancelled' ||
     s === 'rejected'
@@ -439,6 +441,8 @@ function etaForStatus(status: OrderStatus): number {
       return 14;
     case 'on_the_way':
       return 10;
+    case 'arrived_customer':
+      return 4;
     case 'delivered':
     case 'cancelled':
     case 'rejected':
@@ -479,6 +483,9 @@ export async function updateOrderStatus(
   if (normalizedStatus === 'delivered') {
     patch.deliveredAt = serverTimestamp();
     patch.deliveryStatus = 'delivered';
+  }
+  if (normalizedStatus === 'arrived_customer') {
+    patch.deliveryStatus = 'near_customer';
   }
   console.log('[DRIVER FLOW] updateOrderStatus', {
     orderId,

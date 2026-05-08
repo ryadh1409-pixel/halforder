@@ -13,6 +13,7 @@ type Props = {
   actionLoading: boolean;
   onPressAction: () => void;
   onCallCustomer: () => void;
+  onNavigate: () => void;
 };
 
 export function DeliveryCard({
@@ -22,6 +23,7 @@ export function DeliveryCard({
   actionLoading,
   onPressAction,
   onCallCustomer,
+  onNavigate,
 }: Props) {
   const customerLabel = order.customerName?.trim() || 'Customer';
   const customerInitial = customerLabel.charAt(0).toUpperCase();
@@ -72,7 +74,10 @@ export function DeliveryCard({
       <Text style={styles.total}>Total {formatCurrency(order.total)}</Text>
 
       <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapTitle}>Live tracking coming soon</Text>
+        <Text style={styles.mapTitle}>Live map with route navigation</Text>
+        <Pressable onPress={onNavigate}>
+          <Text style={styles.mapLink}>Open navigation</Text>
+        </Pressable>
       </View>
 
       <DriverTimeline status={order.status} />
@@ -137,5 +142,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   mapTitle: { color: '#475569', fontWeight: '700' },
+  mapLink: { marginTop: 6, color: '#2563EB', fontWeight: '800' },
   call: { marginTop: 12, color: '#2563EB', fontWeight: '800' },
 });

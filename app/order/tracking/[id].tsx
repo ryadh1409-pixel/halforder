@@ -15,6 +15,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,8 +31,17 @@ const TIMELINE: { status: OrderStatus; label: string }[] = [
   { status: 'ready_for_pickup', label: 'Ready for pickup' },
   { status: 'picked_up', label: 'Picked up' },
   { status: 'on_the_way', label: 'On the way' },
+  { status: 'arrived_customer', label: 'Arrived nearby' },
   { status: 'delivered', label: 'Delivered' },
 ];
+
+let MapViewModule: any = null;
+if (Platform.OS !== 'web') {
+  MapViewModule = require('react-native-maps');
+}
+const MapView = MapViewModule?.default;
+const Marker = MapViewModule?.Marker;
+const Polyline = MapViewModule?.Polyline;
 
 function statusIndex(status: OrderStatus | undefined): number {
   if (!status || status === 'rejected') return -1;
@@ -52,6 +62,7 @@ function badgeForStatus(status: OrderStatus | undefined): { bg: string; fg: stri
       return { bg: '#D1FAE5', fg: '#065F46' };
     case 'picked_up':
     case 'on_the_way':
+    case 'arrived_customer':
       return { bg: '#E0F2FE', fg: '#0369A1' };
     case 'delivered':
       return { bg: '#ECFDF5', fg: '#166534' };
@@ -91,6 +102,9 @@ export default function OrderTrackingScreen() {
     }
     if (order.status === 'on_the_way') {
       showNotice('Order update', 'Your driver is on the way.');
+    }
+    if (order.status === 'arrived_customer') {
+      showNotice('Order update', 'Your driver is near your location.');
     }
     if (order.status === 'delivered') {
       showNotice('Order update', 'Your order was delivered.');
@@ -133,6 +147,15 @@ export default function OrderTrackingScreen() {
     -79.38;
 
   const badge = badgeForStatus(order.status);
+  const mapPoints = [
+    order.driverLocation ? { latitude: order.driverLocation.lat, longitude: order.driverLocation.lng } : null,
+    order.restaurantLocation
+      ? { latitude: order.restaurantLocation.lat, longitude: order.restaurantLocation.lng }
+      : null,
+    order.deliveryLocation
+      ? { latitude: order.deliveryLocation.lat, longitude: order.deliveryLocation.lng }
+      : null,
+  ].filter((point): point is { latitude: number; longitude: number } => Boolean(point));
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -153,17 +176,54 @@ export default function OrderTrackingScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live map</Text>
           <Text style={styles.mapHint}>
-            {order.status === 'on_the_way' || order.status === 'picked_up'
+            {order.status === 'on_the_way' || order.status === 'picked_up' || order.status === 'arrived_customer'
               ? 'Driver location updates automatically.'
               : 'Map activates when your order is out for delivery.'}
           </Text>
-          <View style={styles.mapPlaceholder}>
-            <View style={styles.mapGrid} />
-            {order.status === 'on_the_way' && <View style={styles.mapPin} />}
-            <Text style={styles.mapCoords}>
-              {driverLat.toFixed(4)}, {driverLng.toFixed(4)}
-            </Text>
-          </View>
+          {MapView && mapPoints.length > 0 ? (
+            <MapView
+              style={styles.mapReal}
+              initialRegion={{
+                latitude: mapPoints[0].latitude,
+                longitude: mapPoints[0].longitude,
+                latitudeDelta: 0.08,
+                longitudeDelta: 0.08,
+              }}
+            >
+              {order.driverLocation ? (
+                <Marker
+                  coordinate={{ latitude: order.driverLocation.lat, longitude: order.driverLocation.lng }}
+                  title="Driver"
+                  pinColor="#22C55E"
+                />
+              ) : null}
+              {order.restaurantLocation ? (
+                <Marker
+                  coordinate={{ latitude: order.restaurantLocation.lat, longitude: order.restaurantLocation.lng }}
+                  title="Restaurant"
+                  pinColor="#F59E0B"
+                />
+              ) : null}
+              {order.deliveryLocation ? (
+                <Marker
+                  coordinate={{ latitude: order.deliveryLocation.lat, longitude: order.deliveryLocation.lng }}
+                  title="Dropoff"
+                  pinColor="#2563EB"
+                />
+              ) : null}
+              {mapPoints.length >= 2 ? <Polyline coordinates={mapPoints} strokeWidth={4} strokeColor="#16A34A" /> : null}
+            </MapView>
+          ) : (
+            <View style={styles.mapPlaceholder}>
+              <View style={styles.mapGrid} />
+              {(order.status === 'on_the_way' || order.status === 'arrived_customer') && (
+                <View style={styles.mapPin} />
+              )}
+              <Text style={styles.mapCoords}>
+                {driverLat.toFixed(4)}, {driverLng.toFixed(4)}
+              </Text>
+            </View>
+          )}
         </View>
 
         <DeliveryTimeline
@@ -232,6 +292,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  mapReal: { height: 220, borderRadius: 14 },
   mapGrid: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.35,
