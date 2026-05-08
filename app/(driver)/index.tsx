@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   Image,
@@ -17,16 +18,104 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../services/AuthContext';
 import { acceptOrderWithLock } from '../../services/delivery';
 import {
-  driverMarkOnTheWay,
-  driverMarkPickedUp,
   getDriverActiveOrders,
   subscribeAvailableOrders,
   updateDriverOnlineStatus,
   type DriverOrder,
 } from '../../services/driverService';
 import { showError, showSuccess } from '../../utils/toast';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+
+function formatOrderTime(value: number | null): string {
+  if (!value) return 'Now';
+  const date = new Date(value);
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return isToday ? `Today ${timeLabel}` : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function formatItems(items: Array<{ qty?: number; quantity?: number; name?: string; title?: string }>): string {
+  if (!items || items.length === 0) return '';
+  return items
+    .map((item) => `${item.quantity || item.qty || 1}× ${item.name || item.title || 'Item'}`)
+    .join(', ');
+}
+
+function totalItemsCount(order: DriverOrder): number {
+  return order.items.reduce((sum, item) => sum + (Number.isFinite(item.qty) ? item.qty : 0), 0);
+}
+
+const openMapsWithPicker = (address: string, lat?: number | null, lng?: number | null) => {
+  const coords = lat && lng ? `${lat},${lng}` : null;
+
+  const openApple = () => {
+    const url = coords
+      ? `maps://?q=${encodeURIComponent(address)}&ll=${coords}`
+      : `maps://?q=${encodeURIComponent(address)}`;
+    Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open Apple Maps'));
+  };
+
+  const openGoogle = async () => {
+    const appUrl = coords
+      ? `comgooglemaps://?daddr=${coords}`
+      : `comgooglemaps://?q=${encodeURIComponent(address)}`;
+    const webUrl = coords
+      ? `https://www.google.com/maps/dir/?api=1&destination=${coords}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    const canOpen = await Linking.canOpenURL(appUrl).catch(() => false);
+    Linking.openURL(canOpen ? appUrl : webUrl).catch(() =>
+      Alert.alert('Error', 'Could not open Google Maps'),
+    );
+  };
+
+  const openWaze = async () => {
+    const appUrl = coords
+      ? `waze://?ll=${coords}&navigate=yes`
+      : `waze://?q=${encodeURIComponent(address)}`;
+    const webUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
+    const canOpen = await Linking.canOpenURL(appUrl).catch(() => false);
+    Linking.openURL(canOpen ? appUrl : webUrl).catch(() =>
+      Alert.alert('Error', 'Could not open Waze'),
+    );
+  };
+
+  if (Platform.OS === 'ios') {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: 'Open with Maps',
+        options: ['Cancel', '🗺️  Apple Maps', '🟢  Google Maps', '🔵  Waze'],
+        cancelButtonIndex: 0,
+        userInterfaceStyle: 'dark',
+      },
+      (i) => {
+        if (i === 1) openApple();
+        if (i === 2) void openGoogle();
+        if (i === 3) void openWaze();
+      },
+    );
+  } else {
+    Alert.alert('Open with Maps', 'Choose your maps app', [
+      { text: '🗺️  Google Maps', onPress: () => void openGoogle() },
+      { text: '🔵  Waze', onPress: () => void openWaze() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+};
+
+const makeCall = (phone: string, name: string) => {
+  if (!phone) {
+    Alert.alert('No Number', `No phone number available for ${name}`);
+    return;
+  }
+  Linking.openURL(`tel:${phone.replace(/\s/g, '')}`).catch(() =>
+    Alert.alert('Error', 'Could not open phone app'),
+  );
+};
 
 export default function DriverHubScreen() {
   const { user } = useAuth();
@@ -41,21 +130,18 @@ export default function DriverHubScreen() {
   const unsubActive = useRef<(() => void) | null>(null);
   const unsubDriver = useRef<(() => void) | null>(null);
 
-  // Subscribe to driver profile (online status + stats)
   useEffect(() => {
     if (!user?.uid) return;
-    // Ensure driver document exists
-    setDoc(
+    void setDoc(
       doc(db, 'drivers', user.uid),
       { isOnline: false, name: user.displayName ?? 'Driver' },
-      { merge: true }
-    ).catch(() => {});
-
+      { merge: true },
+    );
     const ref = doc(db, 'drivers', user.uid);
     unsubDriver.current = onSnapshot(ref, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      setIsOnline(data.isOnline === true);
+      setIsOnline(data.isOnline === true || data.online === true);
       setStats({
         deliveries: typeof data.totalDeliveries === 'number' ? data.totalDeliveries : 0,
         earnings: typeof data.totalEarnings === 'number' ? data.totalEarnings : 0,
@@ -63,19 +149,17 @@ export default function DriverHubScreen() {
       });
     });
     return () => unsubDriver.current?.();
-  }, [user?.uid]);
+  }, [user?.uid, user?.displayName]);
 
-  // Subscribe to available + active orders when online
   useEffect(() => {
     if (!user?.uid) return;
     if (isOnline) {
-      console.log('[DRIVER FLOW] going online, subscribing to orders');
       unsubAvailable.current = subscribeAvailableOrders((orders) => {
-        setAvailableOrders(orders.filter((o) => !o.driverId));
+        const unique = Array.from(new Map(orders.filter((o) => !o.driverId).map((o) => [o.id, o])).values());
+        setAvailableOrders(unique);
       });
       unsubActive.current = getDriverActiveOrders(user.uid, setActiveOrders);
     } else {
-      console.log('[DRIVER FLOW] going offline, clearing orders');
       unsubAvailable.current?.();
       unsubActive.current?.();
       setAvailableOrders([]);
@@ -89,116 +173,53 @@ export default function DriverHubScreen() {
 
   const handleToggleOnline = useCallback(async () => {
     if (!user?.uid || togglingOnline) return;
-    const newValue = !isOnline;
+    const nextValue = !isOnline;
     setTogglingOnline(true);
-    setIsOnline(newValue); // optimistic update
+    setIsOnline(nextValue);
     try {
-      await updateDriverOnlineStatus(user.uid, newValue);
+      await updateDriverOnlineStatus(user.uid, nextValue);
     } catch {
-      setIsOnline(!newValue); // revert on failure
+      setIsOnline(!nextValue);
       showError('Failed to update online status');
     } finally {
       setTogglingOnline(false);
     }
-  }, [user?.uid, isOnline, togglingOnline]);
+  }, [isOnline, togglingOnline, user?.uid]);
 
   const handleAccept = useCallback(async (order: DriverOrder) => {
     if (!user?.uid || acceptingId) return;
     setAcceptingId(order.id);
     try {
-      const profile = { id: user.uid, name: user.displayName ?? 'Driver', phone: null, isOnline: true };
-      await acceptOrderWithLock(order.id, profile);
+      await acceptOrderWithLock(order.id, {
+        id: user.uid,
+        name: user.displayName ?? 'Driver',
+        phone: user.phoneNumber ?? null,
+      });
       setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
-      showSuccess('Order accepted!');
+      showSuccess('Order accepted');
       router.replace(`/driver/active/${encodeURIComponent(order.id)}` as never);
     } catch {
       showError('Failed to accept order');
     } finally {
       setAcceptingId(null);
     }
-  }, [user?.uid, acceptingId]);
+  }, [acceptingId, router, user?.displayName, user?.phoneNumber, user?.uid]);
 
-  const formatOrderTime = (value: number | null) => {
-    if (!value) return 'Now';
-    const date = new Date(value);
-    const now = new Date();
-    const isToday =
-      date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate();
-    const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    return isToday ? `Today ${timeLabel}` : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  };
-
-  const formatItemsSummary = (order: DriverOrder) =>
-    order.items.map((item) => `${item.qty}x ${item.name}`).join(', ');
-
-  const totalItemsCount = (order: DriverOrder) =>
-    order.items.reduce((sum, item) => sum + (Number.isFinite(item.qty) ? item.qty : 0), 0);
-
-  const handlePickedUp = useCallback(async (orderId: string) => {
-    try {
-      await driverMarkPickedUp(orderId);
-      showSuccess('Marked as picked up!');
-    } catch { showError('Failed to update'); }
-  }, []);
-
-  const handleOnTheWay = useCallback(async (orderId: string) => {
-    try {
-      await driverMarkOnTheWay(orderId);
-      showSuccess('On the way!');
-    } catch { showError('Failed to update'); }
-  }, []);
-
-  const handleDelivered = useCallback(async (orderId: string) => {
-    try {
-      await updateDoc(doc(db, 'orders', orderId), { status: 'delivered', estimatedDeliveryTime: 0 });
-      showSuccess('Delivered! 🎉');
-    } catch { showError('Failed to update'); }
-  }, []);
-
-  const callPhone = (phone: string | null) => {
-    if (!phone) return;
-    Linking.openURL(`tel:${phone}`);
-  };
-
-  const getStatusLabel = (status: string) => {
-    const map: Record<string, string> = {
-      driver_accepted: 'Head to Restaurant',
-      arriving_restaurant: 'At Restaurant',
-      picked_up: 'Heading to Customer',
-      on_the_way: 'On The Way',
-    };
-    return map[status] ?? status;
-  };
-
-  const getNextAction = (order: DriverOrder) => {
-    if (order.status === 'driver_accepted' || order.status === 'arriving_restaurant') {
-      return { label: '📦 Picked Up', action: () => handlePickedUp(order.id), color: '#FF6B00' };
-    }
-    if (order.status === 'picked_up') {
-      return { label: '🚗 On The Way', action: () => handleOnTheWay(order.id), color: '#2563EB' };
-    }
-    if (order.status === 'on_the_way') {
-      return { label: '✅ Delivered', action: () => handleDelivered(order.id), color: '#16A34A' };
-    }
-    return null;
-  };
+  const pinnedActiveOrder = activeOrders[0] ?? null;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      {/* ── Header ── */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Driver Hub</Text>
-          <Text style={styles.headerSub}>{isOnline ? '🟢 You are online' : '⚫ You are offline'}</Text>
+          <Text style={styles.headerSub}>{isOnline ? 'Online and receiving orders' : 'Offline'}</Text>
         </View>
         <View style={styles.onlineRow}>
-          {togglingOnline && <ActivityIndicator color="#fff" size="small" style={{ marginRight: 8 }} />}
+          {togglingOnline ? <ActivityIndicator color="#fff" size="small" style={styles.toggleLoader} /> : null}
           <Switch
             value={isOnline}
             onValueChange={handleToggleOnline}
-            trackColor={{ false: '#374151', true: '#16A34A' }}
+            trackColor={{ false: '#3E3E5A', true: '#00C853' }}
             thumbColor="#fff"
             disabled={togglingOnline}
           />
@@ -206,8 +227,6 @@ export default function DriverHubScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* ── Stats ── */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.deliveries}</Text>
@@ -215,7 +234,7 @@ export default function DriverHubScreen() {
           </View>
           <View style={[styles.statCard, styles.statCardMid]}>
             <Text style={styles.statValue}>${stats.earnings.toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Earned</Text>
+            <Text style={styles.statLabelMid}>Earnings</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>⭐ {stats.rating.toFixed(1)}</Text>
@@ -223,119 +242,128 @@ export default function DriverHubScreen() {
           </View>
         </View>
 
-        {/* ── Active Delivery ── */}
-        {activeOrders.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🚗 Active Delivery</Text>
-            {activeOrders.map((order) => {
-              const nextAction = getNextAction(order);
-              return (
-                <View key={order.id} style={styles.activeCard}>
-                  <View style={styles.activeCardHeader}>
-                    <View style={styles.statusBadge}>
-                      <Text style={styles.statusBadgeText}>{getStatusLabel(order.status)}</Text>
-                    </View>
-                    <Text style={styles.activeEarning}>${order.total.toFixed(2)}</Text>
-                  </View>
-
-                  <Text style={styles.restaurantName}>🍽 {order.restaurantName}</Text>
-
-                  <View style={styles.divider} />
-
-                  <View style={styles.deliveryInfo}>
-                    <Text style={styles.deliveryLabel}>Deliver to</Text>
-                    <Text style={styles.deliveryAddress}>{order.deliveryAddress ?? 'Address unavailable'}</Text>
-                  </View>
-
-                  {order.customerPhone && (
-                    <Pressable style={styles.callBtn} onPress={() => callPhone(order.customerPhone)}>
-                      <Text style={styles.callBtnText}>📞 Call Customer</Text>
-                    </Pressable>
-                  )}
-
-                  {nextAction && (
-                    <Pressable
-                      style={[styles.actionBtn, { backgroundColor: nextAction.color }]}
-                      onPress={nextAction.action}
-                    >
-                      <Text style={styles.actionBtnText}>{nextAction.label}</Text>
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* ── Available Orders ── */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📋 Available Orders</Text>
-            <Text style={styles.sectionCount}>{availableOrders.length} order{availableOrders.length !== 1 ? 's' : ''}</Text>
-          </View>
-
-          {!isOnline ? (
-            <View style={styles.offlineCard}>
-              <Text style={styles.offlineIcon}>⚫</Text>
-              <Text style={styles.offlineTitle}>You are offline</Text>
-              <Text style={styles.offlineSub}>Go online to see available orders</Text>
-              <Pressable style={styles.goOnlineBtn} onPress={handleToggleOnline}>
-                <Text style={styles.goOnlineBtnText}>Go Online</Text>
-              </Pressable>
+        {pinnedActiveOrder ? (
+          <Pressable
+            style={styles.activeCard}
+            onPress={() => router.push(`/driver/active/${encodeURIComponent(pinnedActiveOrder.id)}` as never)}
+          >
+            <View style={styles.activeRow}>
+              <Text style={styles.activeTitle}>Active Delivery</Text>
+              <Text style={styles.activePayout}>${pinnedActiveOrder.total.toFixed(2)}</Text>
             </View>
-          ) : availableOrders.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyTitle}>Looking for orders...</Text>
-              <Text style={styles.emptySub}>New orders will appear here in real-time</Text>
-              <ActivityIndicator color="#16A34A" style={{ marginTop: 12 }} />
-            </View>
-          ) : (
-            availableOrders.map((order) => (
+            <Text style={styles.activeRestaurant}>{pinnedActiveOrder.restaurantName}</Text>
+            <Text style={styles.activeMeta}>Customer: {pinnedActiveOrder.customerName ?? 'Customer'}</Text>
+            <Text style={styles.activeMeta}>Drop-off: {pinnedActiveOrder.deliveryAddress ?? 'Address unavailable'}</Text>
+            <Text style={styles.activeMeta}>
+              Pickup: {pinnedActiveOrder.restaurantAddress ?? 'Restaurant address unavailable'}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Available Orders</Text>
+          <Text style={styles.sectionCount}>{availableOrders.length}</Text>
+        </View>
+
+        {!isOnline ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateTitle}>You are offline</Text>
+            <Text style={styles.stateSub}>Go online to receive delivery offers.</Text>
+          </View>
+        ) : availableOrders.length === 0 ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateTitle}>No orders right now</Text>
+            <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
+          </View>
+        ) : (
+          availableOrders.map((order) => {
+            const restaurantAddress = order.restaurantAddress ?? 'Address unavailable';
+            const customerAddress =
+              order.deliveryAddress ?? (order as DriverOrder & { address?: string | null }).address ?? 'Address unavailable';
+            return (
               <View key={order.id} style={styles.orderCard}>
-                <View style={styles.orderCardTop}>
-                  <View style={styles.orderIdentityWrap}>
+                <View style={styles.orderTop}>
+                  <View style={styles.brandWrap}>
                     {order.restaurantImage ? (
-                      <Image source={{ uri: order.restaurantImage }} style={styles.restaurantLogo} />
+                      <Image source={{ uri: order.restaurantImage }} style={styles.brandLogo} />
                     ) : (
-                      <View style={[styles.restaurantLogo, styles.restaurantLogoFallback]}>
-                        <Text style={styles.restaurantLogoFallbackText}>
+                      <View style={[styles.brandLogo, styles.brandFallback]}>
+                        <Text style={styles.brandFallbackText}>
                           {(order.restaurantName || 'R').trim().charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     )}
-                    <View style={styles.orderCardLeft}>
-                      <Text style={styles.orderRestaurant}>{order.restaurantName || 'Restaurant'}</Text>
-                      <Text style={styles.orderTimestamp}>{formatOrderTime(order.createdAtMs)}</Text>
+                    <View style={styles.brandMeta}>
+                      <Text style={styles.restaurantName}>{order.restaurantName || 'Restaurant'}</Text>
+                      <Text style={styles.timestamp}>{formatOrderTime(order.createdAtMs)}</Text>
                     </View>
                   </View>
-                  <View style={styles.orderEarningBadge}>
-                    <Text style={styles.orderEarningText}>${(order.deliveryFee || order.total).toFixed(2)}</Text>
-                    <Text style={styles.orderEarningCaption}>Earnings</Text>
+                  <View style={styles.earningPill}>
+                    <Text style={styles.earningText}>${(order.deliveryFee || order.total).toFixed(2)}</Text>
+                    <Text style={styles.earningLabel}>Delivery fee</Text>
                   </View>
                 </View>
 
-                <View style={styles.orderMetaGrid}>
-                  <Text style={styles.orderMetaText}>📍 {order.distanceKm != null ? `${order.distanceKm} km to pickup` : 'Distance unavailable'}</Text>
-                  <Text style={styles.orderMetaText}>⏱ {order.estimatedDeliveryTime} min est.</Text>
-                  <Text style={styles.orderMetaText}>📦 {totalItemsCount(order)} items</Text>
-                  <Text style={styles.orderMetaText}>💵 Total ${order.total.toFixed(2)}</Text>
+                <View style={styles.detailBlock}>
+                  <Text style={styles.detailTitle}>Restaurant</Text>
+                  <Text style={styles.detailValue}>{restaurantAddress}</Text>
+                  <Text style={styles.detailValue}>{order.restaurantPhone || 'Phone unavailable'}</Text>
+                  <Pressable
+                    style={styles.callBtn}
+                    onPress={() => makeCall(order.restaurantPhone || '', order.restaurantName || 'Restaurant')}
+                  >
+                    <Text style={styles.callBtnText}>Call Restaurant</Text>
+                  </Pressable>
                 </View>
 
-                <View style={styles.orderItems}>
-                  <Text style={styles.orderAddressLabel}>Items</Text>
-                  <Text style={styles.orderItem}>{formatItemsSummary(order) || 'No items listed'}</Text>
+                <View style={styles.detailBlock}>
+                  <Text style={styles.detailTitle}>Customer</Text>
+                  <Text style={styles.detailValue}>{order.customerName || 'Customer'}</Text>
+                  <Text style={styles.detailValue}>{order.customerPhone || 'Phone unavailable'}</Text>
+                  <Text style={styles.detailValue}>{customerAddress}</Text>
+                  <Pressable
+                    style={styles.callBtn}
+                    onPress={() => makeCall(order.customerPhone || '', order.customerName || 'Customer')}
+                  >
+                    <Text style={styles.callBtnText}>Call Customer</Text>
+                  </Pressable>
                 </View>
 
-                <View style={styles.orderAddress}>
-                  <Text style={styles.orderAddressLabel}>Drop-off address</Text>
-                  <Text style={styles.orderAddressValue}>{order.deliveryAddress ?? (order as DriverOrder & { address?: string | null }).address ?? 'Address unavailable'}</Text>
+                <View style={styles.detailBlock}>
+                  <Text style={styles.detailTitle}>Order Details</Text>
+                  <Text style={styles.detailValue}>{formatItems(order.items) || 'No items listed'}</Text>
+                  <Text style={styles.metaLine}>
+                    {totalItemsCount(order)} items • {order.estimatedDeliveryTime} min •{' '}
+                    {order.distanceKm != null ? `${order.distanceKm} km` : 'Distance unavailable'}
+                  </Text>
+                  <Text style={styles.metaLine}>Total order value: ${order.total.toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.mapActions}>
+                  <Pressable
+                    style={styles.mapBtn}
+                    onPress={() => openMapsWithPicker(restaurantAddress, order.restaurantLat, order.restaurantLng)}
+                  >
+                    <Text style={styles.mapBtnText}>Pickup Map</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.mapBtn}
+                    onPress={() =>
+                      openMapsWithPicker(
+                        customerAddress,
+                        order.deliveryLat ?? order.customerLocation?.lat ?? null,
+                        order.deliveryLng ?? order.customerLocation?.lng ?? null,
+                      )
+                    }
+                  >
+                    <Text style={styles.mapBtnText}>Drop-off Map</Text>
+                  </Pressable>
                 </View>
 
                 <Pressable
                   style={[styles.acceptBtn, acceptingId === order.id && styles.acceptBtnDisabled]}
                   onPress={() => handleAccept(order)}
-                  disabled={!!acceptingId}
+                  disabled={acceptingId !== null}
                 >
                   {acceptingId === order.id ? (
                     <ActivityIndicator color="#fff" />
@@ -344,133 +372,127 @@ export default function DriverHubScreen() {
                   )}
                 </Pressable>
               </View>
-            ))
-          )}
-        </View>
-
-        <View style={{ height: 40 }} />
+            );
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0F172A' },
-  scroll: { paddingBottom: 32 },
-
-  // Header
+  screen: { flex: 1, backgroundColor: '#1a1a2e' },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
-  },
-  headerTitle: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
-  headerSub: { color: '#94A3B8', fontSize: 13, marginTop: 2, fontWeight: '500' },
-  onlineRow: { flexDirection: 'row', alignItems: 'center' },
-
-  // Stats
-  statsRow: {
+    borderBottomColor: '#2A2A45',
     flexDirection: 'row',
-    margin: 16,
-    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
+  headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  headerSub: { color: '#9CA3AF', marginTop: 2, fontWeight: '600' },
+  onlineRow: { flexDirection: 'row', alignItems: 'center' },
+  toggleLoader: { marginRight: 8 },
+  scroll: { padding: 14, paddingBottom: 36 },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statCard: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#22223A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  statCardMid: { backgroundColor: '#00C853' },
+  statValue: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
+  statLabel: { color: '#9CA3AF', marginTop: 2, fontWeight: '600', fontSize: 11 },
+  statLabelMid: { color: '#E7FBEA', marginTop: 2, fontWeight: '700', fontSize: 11 },
+  activeCard: {
+    backgroundColor: '#132B1E',
+    borderWidth: 1,
+    borderColor: '#00C853',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  activeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  activeTitle: { color: '#A7F3D0', fontWeight: '800' },
+  activePayout: { color: '#00E676', fontWeight: '900', fontSize: 18 },
+  activeRestaurant: { color: '#FFFFFF', marginTop: 8, fontSize: 16, fontWeight: '800' },
+  activeMeta: { color: '#D1FAE5', marginTop: 4, fontWeight: '600' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  sectionCount: { color: '#9CA3AF', fontWeight: '700' },
+  stateCard: {
+    backgroundColor: '#22223A',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+  },
+  stateTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  stateSub: { color: '#9CA3AF', marginTop: 6, textAlign: 'center', fontWeight: '600' },
+  orderCard: {
+    backgroundColor: '#22223A',
     borderRadius: 14,
     padding: 14,
-    alignItems: 'center',
-  },
-  statCardMid: { backgroundColor: '#16A34A' },
-  statValue: { color: '#F8FAFC', fontSize: 20, fontWeight: '800' },
-  statLabel: { color: '#94A3B8', fontSize: 11, marginTop: 4, fontWeight: '600' },
-
-  // Section
-  section: { paddingHorizontal: 16, marginBottom: 8 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { color: '#F8FAFC', fontSize: 18, fontWeight: '800', marginBottom: 12 },
-  sectionCount: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
-
-  // Active Card
-  activeCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#16A34A',
+    borderColor: '#34345A',
   },
-  activeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  statusBadge: { backgroundColor: '#16A34A22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusBadgeText: { color: '#16A34A', fontWeight: '700', fontSize: 12 },
-  activeEarning: { color: '#16A34A', fontSize: 20, fontWeight: '800' },
-  restaurantName: { color: '#F8FAFC', fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  divider: { height: 1, backgroundColor: '#334155', marginVertical: 10 },
-  deliveryInfo: { marginBottom: 10 },
-  deliveryLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '600', marginBottom: 2 },
-  deliveryAddress: { color: '#F8FAFC', fontSize: 14, fontWeight: '600' },
-  callBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingVertical: 10,
+  orderTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  brandWrap: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
+  brandLogo: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#1a1a2e' },
+  brandFallback: { alignItems: 'center', justifyContent: 'center' },
+  brandFallbackText: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
+  brandMeta: { marginLeft: 10, flex: 1 },
+  restaurantName: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  timestamp: { color: '#9CA3AF', marginTop: 2, fontWeight: '600', fontSize: 12 },
+  earningPill: {
+    backgroundColor: '#00C853',
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 10,
-  },
-  callBtnText: { color: '#94A3B8', fontWeight: '700', fontSize: 14 },
-  actionBtn: {
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     alignItems: 'center',
   },
-  actionBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-
-  // Order Card
-  orderCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+  earningText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
+  earningLabel: { color: '#D1FAE5', fontWeight: '700', fontSize: 10, marginTop: 2 },
+  detailBlock: { marginBottom: 10 },
+  detailTitle: { color: '#A3A3C2', fontWeight: '700', fontSize: 11, marginBottom: 3 },
+  detailValue: { color: '#E5E7EB', fontWeight: '600', marginTop: 2 },
+  metaLine: { color: '#9CA3AF', fontWeight: '600', marginTop: 3, fontSize: 12 },
+  callBtn: {
+    marginTop: 8,
+    height: 34,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A3A5A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a2e',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
   },
-  orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
-  orderIdentityWrap: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  restaurantLogo: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#0F172A' },
-  restaurantLogoFallback: { alignItems: 'center', justifyContent: 'center' },
-  restaurantLogoFallbackText: { color: '#F8FAFC', fontWeight: '800', fontSize: 18 },
-  orderCardLeft: { flex: 1 },
-  orderRestaurant: { color: '#F8FAFC', fontSize: 16, fontWeight: '800', marginLeft: 10 },
-  orderTimestamp: { color: '#94A3B8', fontSize: 12, marginTop: 3, fontWeight: '600', marginLeft: 10 },
-  orderEarningBadge: { backgroundColor: '#16A34A', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, justifyContent: 'center', alignItems: 'center' },
-  orderEarningText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  orderEarningCaption: { color: '#DCFCE7', fontSize: 10, fontWeight: '700', marginTop: 2 },
-  orderMetaGrid: { gap: 6, marginBottom: 12 },
-  orderItems: { marginBottom: 10 },
-  orderItem: { color: '#CBD5E1', fontSize: 13, fontWeight: '500', marginBottom: 2, lineHeight: 18 },
-  orderAddress: { backgroundColor: '#0F172A', borderRadius: 10, padding: 10, marginBottom: 10 },
-  orderAddressLabel: { color: '#64748B', fontSize: 10, fontWeight: '600', marginBottom: 2 },
-  orderAddressValue: { color: '#94A3B8', fontSize: 13, fontWeight: '500' },
-  orderMetaText: { color: '#64748B', fontSize: 12, fontWeight: '600' },
-  acceptBtn: { backgroundColor: '#16A34A', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  acceptBtnDisabled: { opacity: 0.5 },
-  acceptBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-
-  // Offline / Empty
-  offlineCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 28, alignItems: 'center' },
-  offlineIcon: { fontSize: 40, marginBottom: 12 },
-  offlineTitle: { color: '#F8FAFC', fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  offlineSub: { color: '#64748B', fontSize: 14, textAlign: 'center', marginBottom: 16 },
-  goOnlineBtn: { backgroundColor: '#16A34A', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12 },
-  goOnlineBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  emptyCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 28, alignItems: 'center' },
-  emptyIcon: { fontSize: 36, marginBottom: 12 },
-  emptyTitle: { color: '#F8FAFC', fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  emptySub: { color: '#64748B', fontSize: 13, textAlign: 'center' },
+  callBtnText: { color: '#C7D2FE', fontWeight: '700', fontSize: 12 },
+  mapActions: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  mapBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#3A3A5A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a2e',
+  },
+  mapBtnText: { color: '#C7D2FE', fontWeight: '700', fontSize: 12 },
+  acceptBtn: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#00C853',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  acceptBtnDisabled: { opacity: 0.6 },
+  acceptBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
 });

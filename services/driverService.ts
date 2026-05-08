@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -32,8 +33,10 @@ export type DriverAssignment = {
 export type DriverOrder = {
   id: string;
   groupId: string | null;
+  restaurantId: string | null;
   restaurantName: string;
   restaurantImage: string | null;
+  restaurantAddress: string | null;
   items: { name: string; qty: number }[];
   subtotal: number;
   deliveryFee: number;
@@ -43,7 +46,13 @@ export type DriverOrder = {
   customerAvatar: string | null;
   customerPhone: string | null;
   restaurantPhone: string | null;
+  restaurantLat: number | null;
+  restaurantLng: number | null;
   deliveryAddress: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  itemsSummary?: string;
+  createdAt?: unknown;
   notes: string | null;
   restaurantLocation: LatLng | null;
   customerLocation: LatLng | null;
@@ -136,6 +145,7 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
   return {
     id: d.id,
     groupId: typeof data.groupId === 'string' ? data.groupId : null,
+    restaurantId: typeof data.restaurantId === 'string' ? data.restaurantId : null,
     restaurantName:
       typeof data.restaurantName === 'string'
         ? data.restaurantName
@@ -147,6 +157,14 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
         ? data.restaurantImage
         : typeof data.image === 'string'
           ? data.image
+          : null,
+    restaurantAddress:
+      typeof data.restaurantAddress === 'string'
+        ? data.restaurantAddress
+        : data.restaurantLocation &&
+            typeof data.restaurantLocation === 'object' &&
+            typeof (data.restaurantLocation as { address?: unknown }).address === 'string'
+          ? String((data.restaurantLocation as { address: unknown }).address)
           : null,
     items,
     subtotal: typeof data.subtotal === 'number' ? data.subtotal : 0,
@@ -185,8 +203,14 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
             typeof (data.deliveryLocation as { address?: unknown }).address === 'string'
           ? String((data.deliveryLocation as { address: unknown }).address)
           : null,
+    deliveryLat: dropoffLocation?.lat ?? null,
+    deliveryLng: dropoffLocation?.lng ?? null,
+    itemsSummary: items.map((item) => `${item.qty}x ${item.name}`).join(', '),
+    createdAt: data.createdAt ?? null,
     notes: typeof data.notes === 'string' ? data.notes : null,
     restaurantLocation,
+    restaurantLat: restaurantLocation?.lat ?? null,
+    restaurantLng: restaurantLocation?.lng ?? null,
     customerLocation: dropoffLocation,
     driverLocation,
     acceptedAtMs:
@@ -261,13 +285,77 @@ export function subscribeAvailableOrders(
       where('status', 'in', ['pending_driver', 'ready_for_pickup', 'ready']),
       orderBy('createdAt', 'desc'),
     ),
-    (snap) => {
+    async (snap) => {
       try {
         const rows = snap.docs
           .map((docSnap) => mapDriverOrder(docSnap))
           .filter((o) => !o.driverId);
-        console.log('[DRIVER FLOW] available snapshot', rows.length);
-        onData(rows);
+        const enrichedRows = await Promise.all(
+          rows.map(async (order) => {
+            if (!order.restaurantId) return order;
+            try {
+              const restaurantDoc = await getDoc(doc(db, 'restaurants', order.restaurantId));
+              const restaurantData = restaurantDoc.exists()
+                ? (restaurantDoc.data() as Record<string, unknown>)
+                : null;
+              const location =
+                restaurantData?.location && typeof restaurantData.location === 'object'
+                  ? (restaurantData.location as Record<string, unknown>)
+                  : null;
+              const restaurantName =
+                typeof restaurantData?.name === 'string'
+                  ? restaurantData.name
+                  : typeof restaurantData?.restaurantName === 'string'
+                    ? restaurantData.restaurantName
+                    : order.restaurantName || 'Restaurant';
+              const restaurantPhone =
+                typeof restaurantData?.phone === 'string'
+                  ? restaurantData.phone
+                  : typeof restaurantData?.phoneNumber === 'string'
+                    ? restaurantData.phoneNumber
+                    : order.restaurantPhone ?? '';
+              const restaurantAddress =
+                typeof restaurantData?.address === 'string'
+                  ? restaurantData.address
+                  : typeof location?.address === 'string'
+                    ? location.address
+                    : order.restaurantAddress ?? '';
+              const restaurantImage =
+                typeof restaurantData?.image === 'string'
+                  ? restaurantData.image
+                  : typeof restaurantData?.logoUrl === 'string'
+                    ? restaurantData.logoUrl
+                    : order.restaurantImage ?? '';
+              const latFromLocation =
+                typeof location?.lat === 'number' ? Number(location.lat) : null;
+              const lngFromLocation =
+                typeof location?.lng === 'number' ? Number(location.lng) : null;
+              const restaurantLat =
+                latFromLocation ??
+                (typeof restaurantData?.lat === 'number'
+                  ? Number(restaurantData.lat)
+                  : order.restaurantLat);
+              const restaurantLng =
+                lngFromLocation ??
+                (typeof restaurantData?.lng === 'number'
+                  ? Number(restaurantData.lng)
+                  : order.restaurantLng);
+              return {
+                ...order,
+                restaurantName,
+                restaurantPhone,
+                restaurantAddress,
+                restaurantImage,
+                restaurantLat: Number.isFinite(restaurantLat as number) ? (restaurantLat as number) : null,
+                restaurantLng: Number.isFinite(restaurantLng as number) ? (restaurantLng as number) : null,
+              };
+            } catch {
+              return order;
+            }
+          }),
+        );
+        console.log('[DRIVER FLOW] available snapshot', enrichedRows.length);
+        onData(enrichedRows);
       } catch (e) {
         console.error('[DRIVER FLOW] subscribeAvailableOrders', e);
         onData([]);
@@ -376,6 +464,28 @@ export async function acceptDriverOrder(
       estimatedDeliveryTime: 24,
     });
     return { ok: true };
+  });
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: 'driver_accepted' | 'picked_up' | 'on_the_way' | 'delivered',
+): Promise<void> {
+  const updates: Record<string, unknown> = {
+    status,
+    updatedAt: serverTimestamp(),
+  };
+  if (status === 'picked_up') updates.pickedUpAt = serverTimestamp();
+  if (status === 'delivered') updates.deliveredAt = serverTimestamp();
+  await updateDoc(doc(db, 'orders', orderId), updates);
+}
+
+export async function acceptOrder(orderId: string, driverId: string): Promise<void> {
+  await updateDoc(doc(db, 'orders', orderId), {
+    status: 'driver_accepted',
+    driverId,
+    driverAcceptedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
