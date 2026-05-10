@@ -541,9 +541,19 @@ export async function updateOrderDriverLocation(
   });
 }
 
+export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean {
+  return (
+    typeof o.restaurantId === 'string' &&
+    o.restaurantId.trim().length > 0 &&
+    o.deliveryLocation != null &&
+    typeof o.deliveryLocation.address === 'string'
+  );
+}
+
 export function subscribeOrderById(
   orderId: string,
   onData: (order: RestaurantOrder | null) => void,
+  options?: { onListenError?: (err: Error) => void },
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'orders', orderId),
@@ -552,8 +562,16 @@ export function subscribeOrderById(
         onData(null);
         return;
       }
-      onData(mapDocToRestaurantOrder(snap));
+      try {
+        onData(mapDocToRestaurantOrder(snap));
+      } catch (e) {
+        console.warn('[subscribeOrderById] mapDoc failed', orderId, e);
+        options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));
+      }
     },
-    () => onData(null),
+    (err) => {
+      console.warn('[subscribeOrderById] listener error (keeping UI stable)', orderId, err);
+      options?.onListenError?.(err);
+    },
   );
 }

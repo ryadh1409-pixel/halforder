@@ -26,7 +26,7 @@ export default function ReviewOrderScreen() {
         amount: totalWithDelivery,
       });
       markOrderPaid(order.id);
-      router.replace(`/order/tracking/${order.id}` as never);
+      router.replace(`/order/${order.id}` as never);
     } catch {
       setErrorText('Payment failed, try again');
     } finally {

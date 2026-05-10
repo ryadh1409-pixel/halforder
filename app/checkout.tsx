@@ -190,7 +190,7 @@ export default function CheckoutScreen() {
             <Text style={styles.sub}>Payment confirmed. We will keep this order updated live.</Text>
             <Pressable
               style={styles.button}
-              onPress={() => router.replace(`/order/tracking/${orderParam}` as never)}
+              onPress={() => router.replace(`/order/${orderParam}` as never)}
             >
               <Text style={styles.buttonText}>Track order</Text>
             </Pressable>
