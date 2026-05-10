@@ -154,6 +154,26 @@ export const createPaymentIntent = functions
     }
     const restaurantStripeAccountId = restaurantData.stripeAccountId.trim();
 
+    const orderUserId =
+      typeof orderData.userId === "string" && orderData.userId.trim()
+        ? orderData.userId.trim()
+        : typeof orderData.customerId === "string" && orderData.customerId.trim()
+          ? orderData.customerId.trim()
+          : "";
+    if (!orderUserId || orderUserId !== uid) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "You can only pay for your own orders.",
+      );
+    }
+
+    const driverIdRaw =
+      typeof orderData.driverId === "string" && orderData.driverId.trim()
+        ? orderData.driverId.trim()
+        : typeof orderData.assignedDriverId === "string" && orderData.assignedDriverId.trim()
+          ? orderData.assignedDriverId.trim()
+          : "";
+
     try {
       const stripe = new Stripe(stripeSecret.value(), {
         apiVersion: "2023-10-16" as unknown as Stripe.LatestApiVersion,
@@ -168,12 +188,23 @@ export const createPaymentIntent = functions
           destination: restaurantStripeAccountId,
         },
         metadata: {
-          uid,
           orderId,
+          userId: uid,
           restaurantId,
+          driverId: driverIdRaw,
+          uid,
         },
       });
-      console.log("[createPaymentIntent] success:", paymentIntent.id);
+      console.log(
+        JSON.stringify({
+          msg: "createPaymentIntent_success",
+          paymentIntentId: paymentIntent.id,
+          orderId,
+          userId: uid,
+          restaurantId,
+          driverId: driverIdRaw || null,
+        }),
+      );
       const clientSecret = paymentIntent.client_secret;
       if (!clientSecret) {
         throw new Error("Missing payment intent client secret");

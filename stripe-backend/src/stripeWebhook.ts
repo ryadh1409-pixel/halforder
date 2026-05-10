@@ -8,16 +8,15 @@ if (!admin.apps.length) {
 }
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import type { DocumentSnapshot, Firestore, Transaction } from "firebase-admin/firestore";
 import Stripe from "stripe";
+import { paymentIntentIdFromSession, trimMetadata } from "./stripeWebhookLogic.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 
-/**
- * Resolve a Firebase-defined secret for Functions v2:
- * 1) `defineSecret(...).value()` when the param runtime is wired (preferred).
- * 2) `process.env.<NAME>` — Cloud Functions also injects bound secrets as env vars.
- */
+const PROCESSED_EVENTS = "stripe_processed_events";
+
 function resolveBoundSecret(
   param: { value: () => string },
   envName: string,
@@ -54,58 +53,118 @@ function getStripe(): Stripe {
   return stripeSingleton;
 }
 
+function logStripe(structLog: Record<string, unknown>): void {
+  console.log("[stripeWebhook]", JSON.stringify(structLog));
+}
+
 function logStripeDebug(stage: string, payload: Record<string, unknown>): void {
   console.log(`[stripeWebhook][DEBUG] ${stage}`, JSON.stringify(payload));
 }
 
-async function markOrderPaidFromStripe(params: {
-  orderId: string;
-  stripePaymentIntentId?: string | null;
-  sourceEventType: string;
-  stripeEventId: string;
-}): Promise<void> {
-  const { orderId, stripePaymentIntentId, sourceEventType, stripeEventId } = params;
-  const ref = admin.firestore().doc(`orders/${orderId}`);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    logStripeDebug("order_missing", {
-      orderId,
-      sourceEventType,
-      stripeEventId,
+async function withEventIdempotency(
+  event: Stripe.Event,
+  handler: (tx: Transaction, db: Firestore) => void | Promise<void>,
+): Promise<"duplicate" | "applied"> {
+  const db = admin.firestore();
+  const evRef = db.collection(PROCESSED_EVENTS).doc(event.id);
+  let duplicate = false;
+
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(evRef);
+    if (existing.exists) {
+      duplicate = true;
+      return;
+    }
+    tx.set(evRef, {
+      stripeEventId: event.id,
+      type: event.type,
+      livemode: event.livemode,
+      apiVersion: event.api_version ?? null,
+      receivedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    return;
-  }
-
-  const existing = snap.data() ?? {};
-  if (existing.paymentStatus === "paid") {
-    logStripeDebug("order_already_paid_skip", {
-      orderId,
-      sourceEventType,
-      stripeEventId,
-    });
-    return;
-  }
-
-  await ref.set(
-    {
-      paymentStatus: "paid",
-      ...(stripePaymentIntentId ? { stripePaymentIntentId } : {}),
-      status: "pending_driver",
-      deliveryStatus: "waiting_driver",
-      stripeWebhookLastEventType: sourceEventType,
-      stripeWebhookLastEventId: stripeEventId,
-      paymentConfirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  console.log("[stripeWebhook] Firestore order marked paid", {
-    orderId,
-    stripePaymentIntentId: stripePaymentIntentId ?? null,
-    sourceEventType,
-    stripeEventId,
+    await Promise.resolve(handler(tx, db));
   });
+
+  return duplicate ? "duplicate" : "applied";
+}
+
+function mergeOrderPaidSync(
+  tx: Transaction,
+  orderSnap: DocumentSnapshot,
+  params: {
+    orderId: string;
+    paymentIntentId: string | null;
+    checkoutSessionId: string | null;
+    sourceEventType: string;
+    stripeEventId: string;
+  },
+): void {
+  const { orderId, paymentIntentId, checkoutSessionId, sourceEventType, stripeEventId } =
+    params;
+  if (!orderSnap.exists) {
+    logStripeDebug("order_missing_in_tx", { orderId, stripeEventId });
+    return;
+  }
+  const data = orderSnap.data() ?? {};
+  if (data.paymentStatus === "paid") {
+    logStripeDebug("order_already_paid_skip_order_patch", {
+      orderId,
+      stripeEventId,
+      sourceEventType,
+    });
+    return;
+  }
+
+  const patch: Record<string, unknown> = {
+    paymentStatus: "paid",
+    status: "pending_driver",
+    deliveryStatus: "waiting_driver",
+    paidAt: admin.firestore.FieldValue.serverTimestamp(),
+    stripeWebhookLastEventType: sourceEventType,
+    stripeWebhookLastEventId: stripeEventId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (paymentIntentId) {
+    patch.paymentIntentId = paymentIntentId;
+    patch.stripePaymentIntentId = paymentIntentId;
+  }
+  if (checkoutSessionId) {
+    patch.checkoutSessionId = checkoutSessionId;
+  }
+  tx.set(orderSnap.ref, patch, { merge: true });
+}
+
+function mergeOrderPaymentFailed(
+  tx: Transaction,
+  orderSnap: DocumentSnapshot,
+  params: {
+    paymentIntentId: string | null;
+    sourceEventType: string;
+    stripeEventId: string;
+  },
+): void {
+  const { paymentIntentId, sourceEventType, stripeEventId } = params;
+  if (!orderSnap.exists) return;
+  const data = orderSnap.data() ?? {};
+  if (data.paymentStatus === "paid") {
+    logStripeDebug("payment_failed_ignored_already_paid", { stripeEventId });
+    return;
+  }
+
+  const patch: Record<string, unknown> = {
+    paymentStatus: "failed",
+    status: "payment_failed",
+    paymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+    stripeWebhookLastEventType: sourceEventType,
+    stripeWebhookLastEventId: stripeEventId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (paymentIntentId) {
+    patch.lastFailedPaymentIntentId = paymentIntentId;
+    patch.paymentIntentId = paymentIntentId;
+    patch.stripePaymentIntentId = paymentIntentId;
+  }
+  tx.set(orderSnap.ref, patch, { merge: true });
 }
 
 async function handleStripeEvent(event: Stripe.Event): Promise<void> {
@@ -119,25 +178,39 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
-      const orderId =
-        typeof pi.metadata?.orderId === "string" && pi.metadata.orderId.trim()
-          ? pi.metadata.orderId.trim()
-          : null;
+      const orderId = trimMetadata(pi.metadata?.orderId);
       logStripeDebug("payment_intent_succeeded", {
         paymentIntentId: pi.id,
         orderId,
         hasMetadata: Boolean(pi.metadata && Object.keys(pi.metadata).length > 0),
       });
       if (!orderId) {
-        console.log(
-          "[stripeWebhook] payment_intent.succeeded: no orderId in metadata — acknowledging (test events ok)",
-        );
+        logStripe({
+          level: "info",
+          msg: "payment_intent.succeeded_no_order_id",
+          stripeEventId: event.id,
+        });
         return;
       }
-      await markOrderPaidFromStripe({
+
+      const outcome = await withEventIdempotency(event, async (tx, db) => {
+        const orderRef = db.doc(`orders/${orderId}`);
+        const orderSnap = await tx.get(orderRef);
+        mergeOrderPaidSync(tx, orderSnap, {
+          orderId,
+          paymentIntentId: pi.id,
+          checkoutSessionId: null,
+          sourceEventType: event.type,
+          stripeEventId: event.id,
+        });
+      });
+
+      logStripe({
+        level: "info",
+        msg: "payment_intent_succeeded_handled",
+        outcome,
         orderId,
-        stripePaymentIntentId: pi.id,
-        sourceEventType: event.type,
+        paymentIntentId: pi.id,
         stripeEventId: event.id,
       });
       return;
@@ -145,15 +218,8 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const orderId =
-        typeof session.metadata?.orderId === "string" && session.metadata.orderId.trim()
-          ? session.metadata.orderId.trim()
-          : null;
-      const piRaw = session.payment_intent;
-      const stripePaymentIntentId =
-        typeof piRaw === "string" ? piRaw : piRaw && typeof piRaw === "object" && "id" in piRaw
-          ? String((piRaw as { id: string }).id)
-          : null;
+      const orderId = trimMetadata(session.metadata?.orderId);
+      const stripePaymentIntentId = paymentIntentIdFromSession(session);
 
       logStripeDebug("checkout_session_completed", {
         sessionId: session.id,
@@ -163,25 +229,80 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       });
 
       if (!orderId) {
-        console.log(
-          "[stripeWebhook] checkout.session.completed: no orderId in metadata — acknowledging",
-        );
+        logStripe({
+          level: "info",
+          msg: "checkout_session_completed_no_order_id",
+          stripeEventId: event.id,
+        });
         return;
       }
 
-      await markOrderPaidFromStripe({
+      const outcome = await withEventIdempotency(event, async (tx, db) => {
+        const orderRef = db.doc(`orders/${orderId}`);
+        const orderSnap = await tx.get(orderRef);
+        mergeOrderPaidSync(tx, orderSnap, {
+          orderId,
+          paymentIntentId: stripePaymentIntentId,
+          checkoutSessionId: session.id,
+          sourceEventType: event.type,
+          stripeEventId: event.id,
+        });
+      });
+
+      logStripe({
+        level: "info",
+        msg: "checkout_session_completed_handled",
+        outcome,
         orderId,
-        stripePaymentIntentId,
-        sourceEventType: event.type,
+        sessionId: session.id,
+        stripeEventId: event.id,
+      });
+      return;
+    }
+
+    case "payment_intent.payment_failed": {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const orderId = trimMetadata(pi.metadata?.orderId);
+      logStripeDebug("payment_intent_payment_failed", {
+        paymentIntentId: pi.id,
+        orderId,
+      });
+      if (!orderId) {
+        logStripe({
+          level: "info",
+          msg: "payment_failed_no_order_id",
+          stripeEventId: event.id,
+        });
+        return;
+      }
+
+      const outcome = await withEventIdempotency(event, async (tx, db) => {
+        const orderRef = db.doc(`orders/${orderId}`);
+        const orderSnap = await tx.get(orderRef);
+        mergeOrderPaymentFailed(tx, orderSnap, {
+          paymentIntentId: pi.id,
+          sourceEventType: event.type,
+          stripeEventId: event.id,
+        });
+      });
+
+      logStripe({
+        level: "info",
+        msg: "payment_intent_payment_failed_handled",
+        outcome,
+        orderId,
+        paymentIntentId: pi.id,
         stripeEventId: event.id,
       });
       return;
     }
 
     default:
-      console.log("[stripeWebhook] Ignoring unhandled event type", {
+      logStripe({
+        level: "info",
+        msg: "event_ignored",
         type: event.type,
-        id: event.id,
+        stripeEventId: event.id,
       });
   }
 }
@@ -204,21 +325,23 @@ export const stripeWebhook = onRequest(
 
     try {
       if (req.method !== "POST") {
-        console.log("[stripeWebhook] Method not allowed", { method: req.method, requestId });
+        logStripe({ level: "warn", msg: "method_not_allowed", method: req.method, requestId });
         res.status(405).set("Allow", "POST").send("Method Not Allowed");
         return;
       }
 
       const sig = req.headers["stripe-signature"];
       if (!sig || typeof sig !== "string") {
-        console.warn("[stripeWebhook] Missing Stripe-Signature header", { requestId });
+        logStripe({ level: "warn", msg: "missing_signature", requestId });
         res.status(400).send("Missing stripe-signature header");
         return;
       }
 
       const rawBody = req.rawBody;
       if (!Buffer.isBuffer(rawBody)) {
-        console.error("[stripeWebhook] req.rawBody is not a Buffer — cannot verify signature", {
+        logStripe({
+          level: "error",
+          msg: "raw_body_not_buffer",
           requestId,
           bodyType: typeof rawBody,
         });
@@ -232,10 +355,9 @@ export const stripeWebhook = onRequest(
       );
 
       if (!webhookSigningSecret) {
-        console.error("[stripeWebhook] STRIPE_WEBHOOK_SECRET not configured or not mounted", {
-          fixSetSecret: "firebase functions:secrets:set STRIPE_WEBHOOK_SECRET",
-          fixGrantAccess: "firebase functions:secrets:grantaccess STRIPE_WEBHOOK_SECRET",
-          fixRedeploy: "firebase deploy --only functions:functions:stripeWebhook",
+        logStripe({
+          level: "error",
+          msg: "webhook_secret_missing",
           requestId,
         });
         res.status(500).send("Webhook secret not configured");
@@ -247,7 +369,9 @@ export const stripeWebhook = onRequest(
         event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSigningSecret);
       } catch (verifyErr) {
         const message = verifyErr instanceof Error ? verifyErr.message : String(verifyErr);
-        console.warn("[stripeWebhook] Signature verification failed", {
+        logStripe({
+          level: "warn",
+          msg: "signature_verify_failed",
           message,
           requestId,
           rawBodyLength: rawBody.length,
@@ -256,8 +380,10 @@ export const stripeWebhook = onRequest(
         return;
       }
 
-      console.log("[stripeWebhook] Verified event", {
-        id: event.id,
+      logStripe({
+        level: "info",
+        msg: "event_verified",
+        stripeEventId: event.id,
         type: event.type,
         livemode: event.livemode,
         requestId,
@@ -266,9 +392,11 @@ export const stripeWebhook = onRequest(
       try {
         await handleStripeEvent(event);
       } catch (handlerErr) {
-        console.error("[stripeWebhook] Handler threw — returning 500 for Stripe retry", {
-          eventId: event.id,
-          eventType: event.type,
+        logStripe({
+          level: "error",
+          msg: "handler_threw",
+          stripeEventId: event.id,
+          type: event.type,
           error: handlerErr instanceof Error ? handlerErr.message : String(handlerErr),
           stack: handlerErr instanceof Error ? handlerErr.stack : undefined,
         });
@@ -278,7 +406,9 @@ export const stripeWebhook = onRequest(
 
       res.status(200).json({ received: true });
     } catch (fatalErr) {
-      console.error("[stripeWebhook] Fatal error", {
+      logStripe({
+        level: "error",
+        msg: "fatal",
         error: fatalErr instanceof Error ? fatalErr.message : String(fatalErr),
         stack: fatalErr instanceof Error ? fatalErr.stack : undefined,
         requestId,
