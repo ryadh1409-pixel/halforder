@@ -19,6 +19,8 @@ import {
 /** Full delivery lifecycle (plus rejected / ready for handoff). */
 export type OrderStatus =
   | 'awaiting_payment'
+  | 'payment_processing'
+  | 'payment_failed'
   | 'pending'
   | 'pending_driver'
   | 'driver_accepted'
@@ -37,7 +39,7 @@ export type OrderStatus =
   | 'cancelled'
   | 'rejected';
 
-export type PaymentStatus = 'unpaid' | 'paid' | 'failed' | 'refunded';
+export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed' | 'refunded';
 
 export type OrderItem = {
   id: string;
@@ -64,6 +66,9 @@ export type RestaurantOrder = {
   paymentStatus: PaymentStatus;
   deliveryStatus: DeliveryStatus;
   stripePaymentIntentId: string | null;
+  /** Canonical Stripe PI id (mirrors `stripePaymentIntentId` when set). */
+  paymentIntentId: string | null;
+  checkoutSessionId: string | null;
   driverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
@@ -86,8 +91,11 @@ function makeGroupId() {
 
 function parseStatus(value: unknown): OrderStatus {
   const s = typeof value === 'string' ? value : '';
+  if (s === 'pending_payment') return 'awaiting_payment';
   if (
     s === 'awaiting_payment' ||
+    s === 'payment_processing' ||
+    s === 'payment_failed' ||
     s === 'pending' ||
     s === 'pending_driver' ||
     s === 'driver_accepted' ||
@@ -113,8 +121,18 @@ function parseStatus(value: unknown): OrderStatus {
 
 function parsePaymentStatus(value: unknown, orderStatus: OrderStatus): PaymentStatus {
   const p = typeof value === 'string' ? value : '';
-  if (p === 'paid' || p === 'unpaid' || p === 'failed' || p === 'refunded') return p;
-  return orderStatus === 'awaiting_payment' ? 'unpaid' : 'paid';
+  if (
+    p === 'paid' ||
+    p === 'unpaid' ||
+    p === 'processing' ||
+    p === 'failed' ||
+    p === 'refunded'
+  ) {
+    return p;
+  }
+  if (orderStatus === 'payment_processing') return 'processing';
+  if (orderStatus === 'awaiting_payment') return 'unpaid';
+  return 'paid';
 }
 
 function parseLatLng(value: unknown): LatLng | null {
@@ -249,7 +267,17 @@ function mapDocToRestaurantOrder(
     stripePaymentIntentId:
       typeof data.stripePaymentIntentId === 'string'
         ? data.stripePaymentIntentId
-        : null,
+        : typeof data.paymentIntentId === 'string'
+          ? data.paymentIntentId
+          : null,
+    paymentIntentId:
+      typeof data.paymentIntentId === 'string'
+        ? data.paymentIntentId
+        : typeof data.stripePaymentIntentId === 'string'
+          ? data.stripePaymentIntentId
+          : null,
+    checkoutSessionId:
+      typeof data.checkoutSessionId === 'string' ? data.checkoutSessionId : null,
     groupId: typeof data.groupId === 'string' ? data.groupId : null,
     estimatedDeliveryTime:
       typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 35,
@@ -342,6 +370,8 @@ export async function createOrder(payload: {
     deliveryStatus: 'waiting_driver',
     paymentStatus: 'unpaid',
     stripePaymentIntentId: null,
+    paymentIntentId: null,
+    checkoutSessionId: null,
     groupId,
     estimatedDeliveryTime,
     driverId: payload.driverId ?? null,
@@ -419,6 +449,10 @@ export function getOrders(
 function etaForStatus(status: OrderStatus): number {
   switch (status) {
     case 'awaiting_payment':
+      return 0;
+    case 'payment_processing':
+      return 2;
+    case 'payment_failed':
       return 0;
     case 'pending_driver':
       return 30;

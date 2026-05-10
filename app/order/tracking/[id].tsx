@@ -1,6 +1,7 @@
 import AppHeader from '../../../components/AppHeader';
 import { DeliveryProgressBar } from '../../../components/order/DeliveryProgressBar';
 import { DeliveryTimeline } from '../../../components/order/DeliveryTimeline';
+import { OrderPaymentTimeline } from '../../../components/order/OrderPaymentTimeline';
 import { DriverCard } from '../../../components/order/DriverCard';
 import { ETAChip } from '../../../components/order/ETAChip';
 import { OrderStatusBadge } from '../../../components/order/OrderStatusBadge';
@@ -25,6 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const TIMELINE: { status: OrderStatus; label: string }[] = [
   { status: 'awaiting_payment', label: 'Awaiting payment' },
+  { status: 'pending_driver', label: 'Finding a driver' },
   { status: 'pending', label: 'Order placed' },
   { status: 'restaurant_accepted', label: 'Restaurant accepted' },
   { status: 'preparing', label: 'Preparing' },
@@ -44,7 +46,10 @@ const Marker = MapViewModule?.Marker;
 const Polyline = MapViewModule?.Polyline;
 
 function statusIndex(status: OrderStatus | undefined): number {
-  if (!status || status === 'rejected') return -1;
+  if (!status || status === 'rejected' || status === 'payment_failed') return -1;
+  if (status === 'payment_processing') {
+    return TIMELINE.findIndex((s) => s.status === 'awaiting_payment');
+  }
   const i = TIMELINE.findIndex((s) => s.status === status);
   return i >= 0 ? i : 0;
 }
@@ -52,7 +57,12 @@ function statusIndex(status: OrderStatus | undefined): number {
 function badgeForStatus(status: OrderStatus | undefined): { bg: string; fg: string } {
   switch (status) {
     case 'awaiting_payment':
+    case 'payment_processing':
       return { bg: '#E2E8F0', fg: '#334155' };
+    case 'payment_failed':
+      return { bg: '#FEE2E2', fg: '#991B1B' };
+    case 'pending_driver':
+      return { bg: '#FEF9C3', fg: '#854D0E' };
     case 'pending':
       return { bg: '#FEF3C7', fg: '#92400E' };
     case 'restaurant_accepted':
@@ -167,6 +177,8 @@ export default function OrderTrackingScreen() {
         {order.estimatedDeliveryTime ? (
           <ETAChip minutes={order.estimatedDeliveryTime} />
         ) : null}
+        <OrderPaymentTimeline order={order} />
+
         <View style={styles.progressWrap}>
           <DeliveryProgressBar progress={(stepDone + 1) / TIMELINE.length} />
         </View>

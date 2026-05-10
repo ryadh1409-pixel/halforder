@@ -1,6 +1,6 @@
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { openPaymentSheet } from './stripePayment';
+import { openPaymentSheet } from '@/services/stripe';
 
 export async function payOrderWithStripe(params: {
   orderId: string;
@@ -25,9 +25,11 @@ export async function payOrderWithStripe(params: {
   }
   await updateDoc(doc(db, 'orders', orderId), {
     paymentStatus: 'paid',
+    paymentIntentId: result.paymentIntentId,
     stripePaymentIntentId: result.paymentIntentId,
     amount,
-    createdAt: serverTimestamp(),
-    status: 'pending',
+    status: 'pending_driver',
+    deliveryStatus: 'waiting_driver',
+    updatedAt: serverTimestamp(),
   });
 }

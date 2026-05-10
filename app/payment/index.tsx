@@ -55,11 +55,12 @@ export default function PaymentScreen() {
       if (trimmedOrderId) {
         await updateDoc(doc(db, 'orders', trimmedOrderId), {
           paymentStatus: 'paid',
+          paymentIntentId: result.paymentIntentId,
           stripePaymentIntentId: result.paymentIntentId,
           amount,
-          createdAt: serverTimestamp(),
           status: 'pending_driver',
           deliveryStatus: 'waiting_driver',
+          updatedAt: serverTimestamp(),
         });
       }
 

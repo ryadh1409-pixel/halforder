@@ -8,7 +8,8 @@ import {
 } from '@stripe/stripe-react-native';
 import { httpsCallable } from 'firebase/functions';
 import React from 'react';
-import { auth, functions } from '@/services/firebase';
+import { auth, db, functions } from '@/services/firebase';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
 
@@ -73,7 +74,36 @@ export async function initializePaymentSheet(
     throw new Error(`initPaymentSheet failed: ${initResult.error.message}`);
   }
 
-  return { clientSecret, paymentIntentId: parsePaymentIntentId(clientSecret) };
+  const paymentIntentId = parsePaymentIntentId(clientSecret);
+
+  if (params.orderId) {
+    try {
+      await updateDoc(doc(db, 'orders', params.orderId), {
+        status: 'payment_processing',
+        paymentStatus: 'processing',
+        paymentIntentId,
+        stripePaymentIntentId: paymentIntentId,
+        updatedAt: serverTimestamp(),
+      });
+      console.log(
+        JSON.stringify({
+          msg: 'payment_flow_sheet_initialized',
+          orderId: params.orderId,
+          paymentIntentId,
+        }),
+      );
+    } catch (e) {
+      console.warn(
+        JSON.stringify({
+          msg: 'payment_flow_processing_patch_failed',
+          orderId: params.orderId,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
+  }
+
+  return { clientSecret, paymentIntentId };
 }
 
 export async function openPaymentSheet(

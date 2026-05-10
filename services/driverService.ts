@@ -88,6 +88,8 @@ function distanceKm(a: LatLng | null, b: LatLng | null): number | null {
 
 function normalizeStatus(value: unknown): OrderStatus {
   const s = typeof value === 'string' ? value : '';
+  if (s === 'payment_processing') return 'payment_processing';
+  if (s === 'payment_failed') return 'payment_failed';
   if (
     s === 'awaiting_payment' ||
     s === 'pending' ||

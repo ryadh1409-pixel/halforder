@@ -6,10 +6,10 @@ import { isOwnerHost } from '@/services/roles';
 import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripe';
 import { showError, showSuccess } from '@/utils/toast';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Phase = 'loading' | 'paying' | 'error' | 'done';
@@ -18,6 +18,7 @@ type Phase = 'loading' | 'paying' | 'error' | 'done';
 export default function CheckoutScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+  const orderParam = typeof orderId === 'string' ? orderId.trim() : '';
   const { user, role, loading: authLoading } = useAuth();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
@@ -36,6 +37,13 @@ export default function CheckoutScreen() {
     setMessage('');
     setStripeBlockedRestaurantId(null);
     try {
+      if (Platform.OS === 'web') {
+        setPhase('error');
+        setMessage(
+          'Card checkout runs on the HalfOrder iOS or Android app. Open the same order there to pay securely.',
+        );
+        return;
+      }
       await ensureAuthReady();
       if (!auth.currentUser) {
         setPhase('error');
@@ -78,14 +86,15 @@ export default function CheckoutScreen() {
       if (result.status === 'canceled') {
         try {
           await updateDoc(doc(db, 'orders', id), {
-            status: 'rejected',
-            paymentStatus: 'failed',
+            status: 'awaiting_payment',
+            paymentStatus: 'unpaid',
+            updatedAt: serverTimestamp(),
           });
         } catch {
           // best-effort cleanup
         }
         setPhase('done');
-        setMessage('Payment was canceled.');
+        setMessage('Payment was canceled. You can try again anytime.');
         return;
       }
       if (result.status === 'failed') {
@@ -95,24 +104,29 @@ export default function CheckoutScreen() {
         return;
       }
 
-      console.log('[checkout] marking order paid', {
-        venueId: order.restaurantId,
-        restaurantId: order.restaurantId,
-        userId: user.uid,
-        paymentStatus: 'paid',
-      });
+      console.log(
+        JSON.stringify({
+          msg: 'payment_flow_client_success',
+          orderId: id,
+          restaurantId: order.restaurantId,
+          userId: user.uid,
+          paymentIntentId: result.paymentIntentId,
+        }),
+      );
 
       await updateDoc(doc(db, 'orders', id), {
         paymentStatus: 'paid',
+        paymentIntentId: result.paymentIntentId,
         stripePaymentIntentId: result.paymentIntentId,
         amount: Math.round(order.totalPrice * 100),
         status: 'pending_driver',
         deliveryStatus: 'waiting_driver',
+        updatedAt: serverTimestamp(),
       });
 
       setPhase('done');
+      setMessage('');
       showSuccess('Payment successful.');
-      router.replace(`/order/tracking/${id}` as never);
     } catch (e) {
       console.warn('[checkout]', e);
       if (e instanceof Error && e.message === 'Please sign in to complete payment') {
@@ -170,6 +184,18 @@ export default function CheckoutScreen() {
             </Pressable>
           </>
         )}
+        {phase === 'done' && !message ? (
+          <>
+            <Text style={styles.title}>You&apos;re all set</Text>
+            <Text style={styles.sub}>Payment confirmed. We will keep this order updated live.</Text>
+            <Pressable
+              style={styles.button}
+              onPress={() => router.replace(`/order/tracking/${orderParam}` as never)}
+            >
+              <Text style={styles.buttonText}>Track order</Text>
+            </Pressable>
+          </>
+        ) : null}
         {phase === 'done' && message ? (
           <>
             <Text style={styles.title}>Payment update</Text>
