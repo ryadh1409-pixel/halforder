@@ -1,27 +1,53 @@
 /**
- * Customer-facing order grouping — Firestore field **`status`** only.
- * Do not key list/track UI off `orderStatus`, `state`, or generic `progress`.
+ * Centralized order status architecture.
+ * Standalone module (no imports) to avoid circular dependency crashes.
  */
 
-/** User-visible active lifecycle (Part 1). */
-export const USER_ACTIVE_ORDER_STATUSES = [
-  'awaiting_payment',
-  'payment_processing',
-  'payment_confirmed',
-  'finding_driver',
-  'pending_driver',
-  'matched',
-  'order_placed',
-  'restaurant_accepted',
-  'preparing',
-  'ready_for_pickup',
-  'picked_up',
-  'on_the_way',
-  'arrived_nearby',
-] as const;
+export const HALF_ORDER_MATCH_WAIT_MS = 2 * 60 * 1000;
 
-/** Backend / legacy aliases resolved into Active via `ACTIVE_ORDER_STATUSES`. */
-export const ACTIVE_ORDER_STATUS_ALIASES = [
+export const ORDER_STATUS = {
+  AWAITING_PAYMENT: 'awaiting_payment',
+  PAYMENT_PROCESSING: 'payment_processing',
+  PAYMENT_CONFIRMED: 'payment_confirmed',
+  FINDING_DRIVER: 'finding_driver',
+  PENDING_DRIVER: 'pending_driver',
+  MATCHED: 'matched',
+  ORDER_PLACED: 'order_placed',
+  RESTAURANT_ACCEPTED: 'restaurant_accepted',
+  PREPARING: 'preparing',
+  READY_FOR_PICKUP: 'ready_for_pickup',
+  PICKED_UP: 'picked_up',
+  ON_THE_WAY: 'on_the_way',
+  ARRIVED_NEARBY: 'arrived_nearby',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled',
+
+  // backward compatibility
+  WAITING: 'awaiting_payment',
+  ACTIVE: 'matched',
+  COMPLETED: 'delivered',
+} as const;
+
+console.log('ORDER_STATUS loaded', ORDER_STATUS);
+if (!ORDER_STATUS || !ORDER_STATUS.WAITING) {
+  throw new Error('ORDER_STATUS failed to initialize correctly.');
+}
+
+export const ACTIVE_ORDER_STATUSES = [
+  ORDER_STATUS.AWAITING_PAYMENT,
+  ORDER_STATUS.PAYMENT_PROCESSING,
+  ORDER_STATUS.PAYMENT_CONFIRMED,
+  ORDER_STATUS.FINDING_DRIVER,
+  ORDER_STATUS.PENDING_DRIVER,
+  ORDER_STATUS.MATCHED,
+  ORDER_STATUS.ORDER_PLACED,
+  ORDER_STATUS.RESTAURANT_ACCEPTED,
+  ORDER_STATUS.PREPARING,
+  ORDER_STATUS.READY_FOR_PICKUP,
+  ORDER_STATUS.PICKED_UP,
+  ORDER_STATUS.ON_THE_WAY,
+  ORDER_STATUS.ARRIVED_NEARBY,
+  // Legacy aliases retained for existing docs.
   'pending',
   'payment_failed',
   'driver_accepted',
@@ -37,64 +63,41 @@ export const ACTIVE_ORDER_STATUS_ALIASES = [
   'arrived_customer',
 ] as const;
 
-/** Full active set for list filtering & badges. */
-export const ACTIVE_ORDER_STATUSES = [
-  ...USER_ACTIVE_ORDER_STATUSES,
-  ...ACTIVE_ORDER_STATUS_ALIASES,
-] as const;
+export const COMPLETED_ORDER_STATUSES = [ORDER_STATUS.DELIVERED, 'completed'] as const;
 
-export type ActiveOrderStatus = (typeof ACTIVE_ORDER_STATUSES)[number];
-
-export const COMPLETED_ORDER_STATUSES = ['delivered'] as const;
-
-/** Older swipe/half-order terminal status — bucketed as Completed in lists. */
-export const LEGACY_COMPLETED_ORDER_STATUSES = ['completed'] as const;
-
-export type CompletedOrderStatus =
-  | (typeof COMPLETED_ORDER_STATUSES)[number]
-  | (typeof LEGACY_COMPLETED_ORDER_STATUSES)[number];
-
-export const CANCELLED_ORDER_STATUSES = ['cancelled'] as const;
-
-export const SIDE_CANCELLED_ORDER_STATUSES = ['expired', 'rejected'] as const;
-
-export type CancelledOrderStatus =
-  | (typeof CANCELLED_ORDER_STATUSES)[number]
-  | (typeof SIDE_CANCELLED_ORDER_STATUSES)[number];
+export const CANCELLED_ORDER_STATUSES = [ORDER_STATUS.CANCELLED, 'expired', 'rejected'] as const;
 
 export type OrderListSection = 'active' | 'completed' | 'cancelled';
 
 const ACTIVE_SET = new Set<string>(ACTIVE_ORDER_STATUSES);
-const COMPLETED_SET = new Set<string>([
-  ...COMPLETED_ORDER_STATUSES,
-  ...LEGACY_COMPLETED_ORDER_STATUSES,
-]);
-const CANCELLED_SET = new Set<string>([
-  ...CANCELLED_ORDER_STATUSES,
-  ...SIDE_CANCELLED_ORDER_STATUSES,
-]);
+const COMPLETED_SET = new Set<string>(COMPLETED_ORDER_STATUSES);
+const CANCELLED_SET = new Set<string>(CANCELLED_ORDER_STATUSES);
 
 export function normalizeOrderStatusRaw(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
+export function isActiveOrder(status: string): boolean {
+  return ACTIVE_SET.has(normalizeOrderStatusRaw(status));
+}
+
+export function isCompletedOrder(status: string): boolean {
+  return COMPLETED_SET.has(normalizeOrderStatusRaw(status));
+}
+
+export function isCancelledOrder(status: string): boolean {
+  return CANCELLED_SET.has(normalizeOrderStatusRaw(status));
+}
+
 export function getOrderListSection(status: string): OrderListSection {
   const s = normalizeOrderStatusRaw(status);
   if (!s || s === '—') return 'active';
-  if (CANCELLED_SET.has(s)) return 'cancelled';
-  if (COMPLETED_SET.has(s)) return 'completed';
-  if (ACTIVE_SET.has(s)) return 'active';
+  if (isCancelledOrder(s)) return 'cancelled';
+  if (isCompletedOrder(s)) return 'completed';
   return 'active';
 }
 
-export function isActiveOrderStatus(status: string): boolean {
-  return getOrderListSection(status) === 'active';
-}
-
-export function isCompletedOrderStatus(status: string): boolean {
-  return getOrderListSection(status) === 'completed';
-}
-
-export function isCancelledOrderStatus(status: string): boolean {
-  return getOrderListSection(status) === 'cancelled';
-}
+// Backward-compatible helper names used by existing screens.
+export const isActiveOrderStatus = isActiveOrder;
+export const isCompletedOrderStatus = isCompletedOrder;
+export const isCancelledOrderStatus = isCancelledOrder;

@@ -1,3 +1,4 @@
+import { ACTIVE_ORDER_STATUSES } from '@/constants/orderStatus';
 import { getHiddenUserIds } from './block';
 import { db } from './firebase';
 import { isUserFlagged } from './userModeration';
@@ -8,9 +9,6 @@ import {
   query,
   where,
 } from 'firebase/firestore';
-
-/** Order statuses considered “active” / joinable for the assistant. */
-const ACTIVE_ORDER_STATUSES = ['open', 'active', 'waiting'] as const;
 
 const FOOD_INTENT_KEYWORDS = [
   'pizza',

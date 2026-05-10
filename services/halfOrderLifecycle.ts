@@ -5,7 +5,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-import { ORDER_STATUS } from '../constants/orderStatus';
+import { ORDER_STATUS } from '@/constants/orderStatus';
 import { auth, db } from './firebase';
 import { normalizeOrderUserIds } from './orders';
 

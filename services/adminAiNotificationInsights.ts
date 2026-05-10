@@ -4,7 +4,7 @@
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { collection, getDocs } from 'firebase/firestore';
 
-import { ORDER_STATUS } from '../constants/orderStatus';
+import { ORDER_STATUS } from '@/constants/orderStatus';
 import {
   ACTIVE_2H_MS,
   expoTokenFromUserFields,

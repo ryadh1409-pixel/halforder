@@ -8,7 +8,7 @@ import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '../constants/paymentDisclaimer'
 import {
   HALF_ORDER_MATCH_WAIT_MS,
   ORDER_STATUS,
-} from '../constants/orderStatus';
+} from '@/constants/orderStatus';
 import { autoInvite } from './autoInvite';
 import { auth, db } from './firebase';
 import {

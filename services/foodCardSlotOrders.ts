@@ -1,5 +1,5 @@
 import { FOOD_CARD_ORDER_MAX_USERS } from '../constants/adminFoodCards';
-import { ORDER_STATUS } from '../constants/orderStatus';
+import { ORDER_STATUS } from '@/constants/orderStatus';
 import {
   isFirestoreCompositeIndexError,
   logFirestoreIndexError,

@@ -8,7 +8,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 
-import { ORDER_STATUS } from '../constants/orderStatus';
+import { ORDER_STATUS } from '@/constants/orderStatus';
 import { getPublicUserFields, type PublicUserFields } from './users';
 
 export type OrderHost = {
