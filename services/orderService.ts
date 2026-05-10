@@ -381,6 +381,29 @@ export async function createOrder(payload: {
     driverLocation: null,
     deliveryLocation: payload.deliveryLocation,
     deliveryAddress: payload.deliveryLocation.address,
+    restaurant: {
+      id: payload.restaurantId,
+      name: '',
+      image: null,
+      address: null,
+      latitude:
+        typeof restaurantLocation?.lat === 'number' ? restaurantLocation.lat : null,
+      longitude:
+        typeof restaurantLocation?.lng === 'number' ? restaurantLocation.lng : null,
+    },
+    customer: {
+      id: payload.userId,
+      name: '',
+      avatar: null,
+      address: payload.deliveryLocation.address,
+    },
+    driver: {
+      id: payload.driverId ?? null,
+      name: null,
+      phone: null,
+      vehicle: null,
+      avatar: null,
+    },
     userLocation,
     restaurantLocation,
     notes: null,

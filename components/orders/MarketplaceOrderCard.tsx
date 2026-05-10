@@ -10,11 +10,35 @@ import {
   Text,
   View,
 } from 'react-native';
+import {
+  formatAddress,
+  formatETA,
+  formatOrderStatus,
+  formatRestaurantName,
+} from '@/utils/orderFormatters';
 
 export type MarketplaceOrdersFeedRow = {
   id: string;
-  restaurantName: string;
-  restaurantImageUrl: string | null;
+  restaurant: {
+    id: string | null;
+    name: string;
+    image: string | null;
+    address: string | null;
+  };
+  customer: {
+    id: string | null;
+    name: string;
+    avatar: string | null;
+    address: string | null;
+  };
+  driver: {
+    id: string | null;
+    name: string | null;
+    avatar: string | null;
+    phone: string | null;
+    vehicle: string | null;
+    status: string | null;
+  };
   status: string;
   paymentStatus: string;
   totalPrice: number;
@@ -51,7 +75,7 @@ export function MarketplaceOrderCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Order ${row.restaurantName}, ${row.status}`}
+      accessibilityLabel={`Order ${row.restaurant.name}, ${row.status}`}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -62,8 +86,8 @@ export function MarketplaceOrderCard({
     >
       <View style={styles.topRow}>
         <View style={styles.imgWrap}>
-          {row.restaurantImageUrl ? (
-            <Image source={{ uri: row.restaurantImageUrl }} style={styles.img} />
+          {row.restaurant.image ? (
+            <Image source={{ uri: row.restaurant.image }} style={styles.img} />
           ) : (
             <View style={styles.imgPlaceholder}>
               <MaterialIcons name="restaurant" size={28} color="rgba(255,255,255,0.35)" />
@@ -72,7 +96,7 @@ export function MarketplaceOrderCard({
         </View>
         <View style={styles.topMain}>
           <Text style={styles.restaurantName} numberOfLines={2}>
-            {row.restaurantName}
+            {formatRestaurantName(row.restaurant.name)}
           </Text>
           <View style={styles.pillRow}>
             <View style={styles.pill}>
@@ -89,18 +113,20 @@ export function MarketplaceOrderCard({
       </View>
 
       <View style={styles.statusRow}>
-        <Text style={styles.statusMain}>{row.status.replace(/_/g, ' ')}</Text>
+        <Text style={styles.statusMain}>{formatOrderStatus(row.status)}</Text>
         <View style={[styles.payBadge, payBadgeStyle(row.paymentStatus)]}>
           <Text style={[styles.payBadgeText, payBadgeTextStyle(row.paymentStatus)]}>{payLabel}</Text>
         </View>
       </View>
 
-      {row.etaMinutes != null && row.section === 'active' ? (
-        <Text style={styles.eta}>ETA ~{row.etaMinutes} min</Text>
+      {row.section === 'active' && formatETA(row.etaMinutes) ? (
+        <Text style={styles.eta}>{formatETA(row.etaMinutes)}</Text>
       ) : null}
 
-      {row.driverSummary ? (
-        <Text style={styles.driverLine}>{row.driverSummary}</Text>
+      {row.driverSummary || row.driver.name ? (
+        <Text style={styles.driverLine}>
+          {row.driverSummary ?? `Driver: ${row.driver.name}`}
+        </Text>
       ) : null}
 
       {row.itemsPreview.length ? (
@@ -113,7 +139,7 @@ export function MarketplaceOrderCard({
         <View style={styles.addrRow}>
           <MaterialIcons name="location-on" size={16} color="#94A3B8" />
           <Text style={styles.addr} numberOfLines={2}>
-            {row.deliveryAddress}
+            {formatAddress(row.deliveryAddress)}
           </Text>
         </View>
       ) : null}

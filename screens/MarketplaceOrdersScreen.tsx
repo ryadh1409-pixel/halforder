@@ -6,6 +6,11 @@ import { getOrderListSection } from '@/constants/orderStatus';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
+import {
+  formatAddress,
+  formatOrderStatus,
+  formatRestaurantName,
+} from '@/utils/orderFormatters';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -122,7 +127,7 @@ function mapDocToFeedRow(
     createdAtMs = rawCreated;
   }
 
-  const status = typeof data.status === 'string' ? data.status : '—';
+  const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
   const paymentStatus = typeof data.paymentStatus === 'string' ? data.paymentStatus : 'unpaid';
   const section = getOrderListSection(status);
 
@@ -150,27 +155,56 @@ function mapDocToFeedRow(
   });
 
   const deliveryLocation = data.deliveryLocation;
+  const customerObj =
+    data.customer && typeof data.customer === 'object'
+      ? (data.customer as Record<string, unknown>)
+      : null;
+  const restaurantObj =
+    data.restaurant && typeof data.restaurant === 'object'
+      ? (data.restaurant as Record<string, unknown>)
+      : null;
+  const driverObj =
+    data.driver && typeof data.driver === 'object'
+      ? (data.driver as Record<string, unknown>)
+      : null;
+  const deliveryAddressRaw =
+    customerObj && typeof customerObj.address === 'string'
+      ? customerObj.address
+      : null;
   const deliveryAddress =
-    deliveryLocation &&
+    deliveryAddressRaw ||
+    (deliveryLocation &&
     typeof deliveryLocation === 'object' &&
     typeof (deliveryLocation as { address?: unknown }).address === 'string'
       ? String((deliveryLocation as { address: string }).address)
       : typeof data.deliveryAddress === 'string'
         ? data.deliveryAddress
-        : null;
+        : null);
 
+  const restaurantIdRaw =
+    restaurantObj && typeof restaurantObj.id === 'string'
+      ? restaurantObj.id
+      : null;
   const restaurantId =
-    typeof data.restaurantId === 'string'
+    restaurantIdRaw ||
+    (typeof data.restaurantId === 'string'
       ? data.restaurantId
       : typeof data.venueId === 'string'
         ? data.venueId
-        : '';
+        : '');
+  const restaurantNameRaw =
+    restaurantObj && typeof restaurantObj.name === 'string'
+      ? restaurantObj.name
+      : null;
   const restaurantName =
+    formatRestaurantName(restaurantNameRaw) !== 'Unknown restaurant'
+      ? formatRestaurantName(restaurantNameRaw)
+      :
     typeof data.restaurantName === 'string' && data.restaurantName.trim()
       ? data.restaurantName.trim()
       : typeof data.foodName === 'string' && String(data.foodName).trim()
         ? String(data.foodName)
-        : 'Restaurant';
+        : 'Unknown restaurant';
 
   const etaMinutes =
     typeof data.estimatedDeliveryTime === 'number' && Number.isFinite(data.estimatedDeliveryTime)
@@ -179,15 +213,83 @@ function mapDocToFeedRow(
 
   const totalPrice = Number(data.totalPrice ?? data.total ?? 0);
 
+  const customerName =
+    customerObj && typeof customerObj.name === 'string' && customerObj.name.trim()
+      ? customerObj.name.trim()
+      : typeof data.customerName === 'string' && data.customerName.trim()
+        ? data.customerName.trim()
+        : 'Customer';
+  const customerId =
+    customerObj && typeof customerObj.id === 'string'
+      ? customerObj.id
+      : typeof data.userId === 'string'
+        ? data.userId
+        : typeof data.customerId === 'string'
+          ? data.customerId
+          : null;
+  const customerAvatar =
+    customerObj && typeof customerObj.avatar === 'string'
+      ? customerObj.avatar
+      : null;
+
+  const driverName =
+    driverObj && typeof driverObj.name === 'string'
+      ? driverObj.name
+      : typeof data.driverName === 'string'
+        ? data.driverName
+        : null;
+
   return {
     id: d.id,
-    restaurantName,
-    restaurantImageUrl: restaurantId ? restaurantImages[restaurantId] ?? null : null,
+    restaurant: {
+      id: restaurantId || null,
+      name: restaurantName,
+      image:
+        restaurantObj && typeof restaurantObj.image === 'string'
+          ? restaurantObj.image
+          : restaurantId
+            ? restaurantImages[restaurantId] ?? null
+            : null,
+      address:
+        restaurantObj && typeof restaurantObj.address === 'string'
+          ? formatAddress(restaurantObj.address)
+          : null,
+    },
+    customer: {
+      id: customerId,
+      name: customerName,
+      avatar: customerAvatar,
+      address: formatAddress(deliveryAddress),
+    },
+    driver: {
+      id:
+        driverObj && typeof driverObj.id === 'string'
+          ? driverObj.id
+          : typeof data.driverId === 'string'
+            ? data.driverId
+            : null,
+      name: driverName,
+      avatar:
+        driverObj && typeof driverObj.avatar === 'string' ? driverObj.avatar : null,
+      phone:
+        driverObj && typeof driverObj.phone === 'string'
+          ? driverObj.phone
+          : typeof data.driverPhone === 'string'
+            ? data.driverPhone
+            : null,
+      vehicle:
+        driverObj && typeof driverObj.vehicle === 'string'
+          ? driverObj.vehicle
+          : typeof data.driverVehicle === 'string'
+            ? data.driverVehicle
+            : null,
+      status: driverSummaryFromDoc(data),
+    },
     status,
     paymentStatus,
     totalPrice,
     etaMinutes,
-    deliveryAddress,
+    deliveryAddress: formatAddress(deliveryAddress),
     driverSummary: driverSummaryFromDoc(data),
     itemsPreview,
     participantCount,
@@ -299,7 +401,7 @@ export default function MarketplaceOrdersScreen() {
         mapDocToFeedRow(docSnap, restaurantImagesRef.current),
       );
       nextRows.forEach((order) => {
-        console.log('LIVE ORDER:', order.id, order.status);
+        console.log('LIVE ORDER:', order.id, formatOrderStatus(order.status));
       });
       setRows(nextRows);
       setLoadError(false);

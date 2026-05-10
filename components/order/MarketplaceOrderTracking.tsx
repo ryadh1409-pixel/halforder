@@ -4,13 +4,23 @@ import { DeliveryTimeline } from '@/components/order/DeliveryTimeline';
 import { OrderPaymentTimeline } from '@/components/order/OrderPaymentTimeline';
 import { ETAChip } from '@/components/order/ETAChip';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
+import {
+  formatAddress,
+  formatETA,
+  formatOrderStatus,
+  formatRestaurantName,
+} from '@/utils/orderFormatters';
 import { showNotice } from '@/utils/toast';
 import * as Linking from 'expo-linking';
-import React, { useEffect, useMemo, useRef } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Image,
   LayoutAnimation,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -124,6 +134,18 @@ function driverStatusLabel(order: RestaurantOrder): string {
 
 /** Presentational live tracker — parent owns the Firestore subscription. */
 export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) {
+  const [restaurantMeta, setRestaurantMeta] = useState<{
+    name: string;
+    image: string | null;
+    address: string | null;
+  }>({ name: 'Unknown restaurant', image: null, address: null });
+  const [customerMeta, setCustomerMeta] = useState<{
+    name: string;
+    avatar: string | null;
+    address: string | null;
+  }>({ name: 'Customer', avatar: null, address: null });
+  const [driverMeta, setDriverMeta] = useState<{ avatar: string | null }>({ avatar: null });
+
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [
@@ -133,6 +155,87 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
     order.driverName,
     order.driverLocation?.lat,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const restName = 'Unknown restaurant';
+      const baseAddress = formatAddress(order.deliveryLocation?.address);
+      const nextRestaurant = {
+        name: restName,
+        image: null as string | null,
+        address: null as string | null,
+      };
+
+      if (order.restaurantId) {
+        try {
+          const snap = await getDoc(doc(db, 'restaurants', order.restaurantId));
+          const d = snap.data() as Record<string, unknown> | undefined;
+          nextRestaurant.name = formatRestaurantName(d?.name ?? d?.restaurantName ?? restName);
+          nextRestaurant.image =
+            typeof d?.image === 'string'
+              ? d.image
+              : typeof d?.logoUrl === 'string'
+                ? d.logoUrl
+                : typeof d?.photoUrl === 'string'
+                  ? d.photoUrl
+                  : null;
+          nextRestaurant.address =
+            typeof d?.address === 'string' ? formatAddress(d.address) : null;
+        } catch {
+          // keep fallback
+        }
+      }
+      if (!cancelled) setRestaurantMeta(nextRestaurant);
+
+      const nextCustomer = {
+        name:
+          typeof order.customerName === 'string' && order.customerName.trim()
+            ? order.customerName.trim()
+            : 'Customer',
+        avatar: null as string | null,
+        address: baseAddress,
+      };
+      if (order.userId) {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', order.userId));
+          const u = userSnap.data() as Record<string, unknown> | undefined;
+          nextCustomer.name =
+            typeof u?.name === 'string' && u.name.trim() ? u.name.trim() : nextCustomer.name;
+          nextCustomer.avatar =
+            typeof u?.avatar === 'string'
+              ? u.avatar
+              : typeof u?.photoURL === 'string'
+                ? u.photoURL
+                : null;
+        } catch {
+          // keep fallback
+        }
+      }
+      if (!cancelled) setCustomerMeta(nextCustomer);
+
+      const nextDriver = { avatar: null as string | null };
+      if (order.driverId) {
+        try {
+          const driverSnap = await getDoc(doc(db, 'drivers', order.driverId));
+          const dr = driverSnap.data() as Record<string, unknown> | undefined;
+          nextDriver.avatar =
+            typeof dr?.avatar === 'string'
+              ? dr.avatar
+              : typeof dr?.photoURL === 'string'
+                ? dr.photoURL
+                : null;
+        } catch {
+          // keep fallback
+        }
+      }
+      if (!cancelled) setDriverMeta(nextDriver);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [order]);
 
   const lastStatusRef = useRef<string | null>(null);
   useEffect(() => {
@@ -188,7 +291,7 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.stickyHeader}>
-          <Text style={styles.orderId}>Order #{order.id.slice(0, 10)}…</Text>
+          <Text style={styles.orderId}>Live order tracking</Text>
           <View style={styles.chipRow}>
             <View style={[styles.chip, { backgroundColor: statusChip.bg }]}>
               <Text style={[styles.chipText, { color: statusChip.fg }]}>
@@ -200,7 +303,7 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
             </View>
           </View>
           <Text style={styles.driverLine}>Driver: {driverStatusLabel(order)}</Text>
-          {order.estimatedDeliveryTime ? (
+          {formatETA(order.estimatedDeliveryTime) ? (
             <View style={styles.etaWrap}>
               <ETAChip minutes={order.estimatedDeliveryTime} />
             </View>
@@ -213,7 +316,60 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
         <OrderPaymentTimeline order={order} variant="dark" />
 
         <View style={styles.card}>
+          <Text style={styles.cardTitle}>Restaurant</Text>
+          <View style={styles.heroRow}>
+            <View style={styles.heroImageWrap}>
+              {restaurantMeta.image ? (
+                <Image source={{ uri: restaurantMeta.image }} style={styles.heroImage} />
+              ) : (
+                <View style={styles.heroImageFallback}>
+                  <Text style={styles.heroImageFallbackIcon}>🍽️</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.heroBody}>
+              <Text style={styles.heroTitle}>{formatRestaurantName(restaurantMeta.name)}</Text>
+              <Text style={styles.meta}>{formatAddress(restaurantMeta.address)}</Text>
+              <Text style={styles.meta}>{formatOrderStatus(order.status)}</Text>
+              {formatETA(order.estimatedDeliveryTime) ? (
+                <Text style={styles.etaText}>{formatETA(order.estimatedDeliveryTime)}</Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Customer</Text>
+          <View style={styles.heroRow}>
+            <View style={styles.avatarWrap}>
+              {customerMeta.avatar ? (
+                <Image source={{ uri: customerMeta.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarFallbackText}>👤</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.heroBody}>
+              <Text style={styles.metaStrongText}>{customerMeta.name}</Text>
+              <Text style={styles.meta}>{formatAddress(customerMeta.address)}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
           <Text style={styles.cardTitle}>Driver</Text>
+          <View style={styles.heroRow}>
+            <View style={styles.avatarWrap}>
+              {driverMeta.avatar ? (
+                <Image source={{ uri: driverMeta.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarFallbackText}>🚗</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.heroBody}>
           <Text style={styles.meta}>
             {order.driverName?.trim() ? order.driverName : 'Matching a driver…'}
           </Text>
@@ -230,10 +386,12 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
           {order.driverVehicle ? (
             <Text style={styles.meta}>Vehicle: {order.driverVehicle}</Text>
           ) : null}
+            </View>
+          </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Live map</Text>
+          <Text style={styles.cardTitle}>Apple Maps</Text>
           <Text style={styles.mapHint}>
             {order.status === 'on_the_way' ||
             order.status === 'picked_up' ||
@@ -297,22 +455,38 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
         <DeliveryTimeline steps={TIMELINE} status={order.status} variant="dark" />
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Delivery details</Text>
-          <Text style={styles.metaStrong}>Address</Text>
-          <Text style={styles.meta}>{order.deliveryLocation?.address ?? '—'}</Text>
-          <Text style={styles.metaStrong}>Items</Text>
+          <Text style={styles.cardTitle}>Items</Text>
           {order.items?.length ? (
-            order.items.slice(0, 8).map((item) => (
-              <Text key={`${item.id}-${item.name}`} style={styles.itemLine}>
-                {item.qty}× {item.name}
-              </Text>
+            order.items.slice(0, 12).map((item) => (
+              <View key={`${item.id}-${item.name}`} style={styles.itemRow}>
+                <View style={styles.itemImageWrap}>
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={styles.itemImage} />
+                  ) : (
+                    <View style={styles.itemImageFallback}>
+                      <Text style={styles.itemImageFallbackText}>🍴</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.itemBody}>
+                  <Text style={styles.itemName}>
+                    {item.qty}× {item.name}
+                  </Text>
+                  <Text style={styles.itemSubtotal}>
+                    Subtotal ${(item.price * item.qty).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
             ))
           ) : (
             <Text style={styles.muted}>No line items</Text>
           )}
-          {order.items.length > 8 ? (
-            <Text style={styles.muted}>+ more items</Text>
-          ) : null}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Delivery details</Text>
+          <Text style={styles.metaStrong}>Address</Text>
+          <Text style={styles.meta}>{formatAddress(order.deliveryLocation?.address)}</Text>
           <View style={styles.priceBlock}>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Subtotal</Text>
@@ -327,8 +501,16 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
               <Text style={styles.totalVal}>${order.totalPrice.toFixed(2)}</Text>
             </View>
           </View>
-          <Text style={styles.metaStrong}>Participants</Text>
-          <Text style={styles.meta}>Primary guest (your account)</Text>
+          <Pressable
+            style={styles.mapOpenBtn}
+            onPress={() =>
+              void Linking.openURL(
+                `http://maps.apple.com/?q=${encodeURIComponent(formatAddress(order.deliveryLocation?.address))}`,
+              )
+            }
+          >
+            <Text style={styles.mapOpenBtnText}>Open in Apple Maps</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -367,7 +549,30 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   cardTitle: { fontSize: 17, fontWeight: '800', color: '#F8FAFC', marginBottom: 10 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroImageWrap: { width: 66, height: 66, borderRadius: 16, overflow: 'hidden' },
+  heroImage: { width: '100%', height: '100%' },
+  heroImageFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  heroImageFallbackIcon: { fontSize: 28 },
+  heroBody: { flex: 1 },
+  heroTitle: { color: '#F8FAFC', fontSize: 17, fontWeight: '800' },
+  etaText: { marginTop: 6, color: '#FDE68A', fontWeight: '700', fontSize: 13 },
+  avatarWrap: { width: 52, height: 52, borderRadius: 26, overflow: 'hidden' },
+  avatar: { width: '100%', height: '100%' },
+  avatarFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  avatarFallbackText: { fontSize: 20 },
   meta: { color: 'rgba(226,232,240,0.78)', fontWeight: '600', marginTop: 4, fontSize: 14 },
+  metaStrongText: { color: '#F8FAFC', fontWeight: '700', fontSize: 15 },
   metaStrong: {
     color: '#94A3B8',
     fontWeight: '800',
@@ -388,7 +593,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemLine: { color: '#E2E8F0', marginTop: 4, fontWeight: '600', fontSize: 14 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  itemImageWrap: { width: 46, height: 46, borderRadius: 12, overflow: 'hidden' },
+  itemImage: { width: '100%', height: '100%' },
+  itemImageFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  itemImageFallbackText: { fontSize: 18 },
+  itemBody: { flex: 1 },
+  itemName: { color: '#E2E8F0', fontWeight: '700', fontSize: 14 },
+  itemSubtotal: { color: 'rgba(148,163,184,0.9)', fontWeight: '600', marginTop: 2 },
   priceBlock: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
   priceRow: {
     flexDirection: 'row',
@@ -406,4 +623,15 @@ const styles = StyleSheet.create({
   },
   totalLabel: { color: '#F8FAFC', fontWeight: '800', fontSize: 16 },
   totalVal: { color: '#34D399', fontWeight: '900', fontSize: 17 },
+  mapOpenBtn: {
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(125,211,252,0.35)',
+    backgroundColor: 'rgba(125,211,252,0.12)',
+  },
+  mapOpenBtnText: { color: '#7DD3FC', fontWeight: '800', fontSize: 13 },
 });
