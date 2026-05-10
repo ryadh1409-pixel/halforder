@@ -14,6 +14,8 @@
     "test:payment": "bash scripts/test-payment.sh",
     "test:webhook": "bash scripts/test-webhook.sh",
     "webhook:url": "bash scripts/show-webhook.sh",
+    "deploy:stripe-webhook": "npm --prefix stripe-backend run build && firebase deploy --only functions:functions:stripeWebhook",
+    "logs:stripe-webhook": "firebase functions:log --only stripeWebhook",
     "generate:app-icon": "node ./scripts/generate-app-icon.mjs",
     "legal:dev": "vite --config vite.legal.config.ts",
     "legal:build": "vite build --config vite.legal.config.ts && mv dist-legal/index.vite.html dist-legal/index.html",

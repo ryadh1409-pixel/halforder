@@ -51,50 +51,23 @@ Join our community of developers creating universal apps.
 
 ## Stripe webhook testing
 
-Cloud Function: `stripeWebhook` (uses `req.rawBody` + `stripe.webhooks.constructEvent` for signature verification).
+Implementation: **`stripe-backend`** codebase → **`stripeWebhook`** (Firebase Functions **v2** `onRequest`). Verification uses **`req.rawBody`** only — no `express.json()` on this route.
 
-1. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and log in:
+Full setup (secrets, redeploy, local Stripe CLI, event types): see **`stripe-backend/WEBHOOK.md`**.
 
-   ```bash
-   stripe login
-   ```
+Quick checks:
 
-2. **Local (Firebase emulator)** — start emulators, then forward events (replace `YOUR_PROJECT` with your Firebase project id, e.g. `halforfer`):
+1. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and log in: `stripe login`
+2. Emulator forward URL (replace project id if needed):
 
-   ```bash
-   firebase emulators:start --only functions
-   ```
+   `stripe listen --forward-to http://127.0.0.1:5001/halforfer/us-central1/stripeWebhook`
 
-   In another terminal:
-
-   ```bash
-   stripe listen --forward-to http://127.0.0.1:5001/YOUR_PROJECT/us-central1/stripeWebhook
-   ```
-
-   Copy the webhook signing secret (`whsec_...`) printed by `stripe listen` and set **`STRIPE_WEBHOOK_SECRET`** for the Functions emulator so `constructEvent` can verify signatures.
-
-3. **Production** — register the HTTPS URL in the [Stripe Dashboard](https://dashboard.stripe.com/webhooks) and set **`STRIPE_WEBHOOK_SECRET`** on the deployed function (Firebase/GCP environment).
-
-4. Trigger a test event (with `stripe listen` running so Stripe can deliver the event):
-
-   ```bash
-   npm run test:webhook
-   ```
-
-5. Confirm in **Firebase → Functions → Logs**: lines like `🔥 Stripe webhook received:` and, for real order metadata, `✅ Order marked as PAID:`.
+3. Trigger test: `npm run test:webhook`
+4. Logs: `[stripeWebhook]` entries in Firebase Functions logs.
 
 ## Stripe Webhook Setup (ONE TIME)
 
-1. Go to Stripe Dashboard
-2. Developers → Webhooks
-3. Click "Add endpoint"
-4. Paste this URL:
-
-https://us-central1-halforfer.cloudfunctions.net/stripeWebhook
-
-5. Select event:
-payment_intent.succeeded
-
-6. Save
-
-Done ✅
+1. Stripe Dashboard → Developers → Webhooks → Add endpoint  
+   URL: `https://us-central1-halforfer.cloudfunctions.net/stripeWebhook`
+2. Events: at minimum `payment_intent.succeeded`; add `checkout.session.completed` if you use Checkout.
+3. Copy the endpoint signing secret into Firebase Secret **`STRIPE_WEBHOOK_SECRET`** (`firebase functions:secrets:set`), then redeploy — see **`stripe-backend/WEBHOOK.md`**.

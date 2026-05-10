@@ -1,5 +1,6 @@
 /**
  * Stripe HTTPS callables (Firebase Functions **1st gen**) — matches existing deployed API version.
+ * Webhook is exported from Firebase Functions **v2** (see `stripeWebhook.ts`).
  */
 
 import * as admin from "firebase-admin";
@@ -197,3 +198,5 @@ export const createPaymentIntent = functions
       );
     }
   });
+
+export { stripeWebhook } from "./stripeWebhook.js";
