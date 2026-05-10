@@ -91,6 +91,10 @@ export type RestaurantOrder = {
   restaurant: RestaurantSnapshot;
   customer: CustomerSnapshot;
   driver: DriverSnapshot | null;
+  acceptedAtMs: number | null;
+  pickedUpAtMs: number | null;
+  deliveredAtMs: number | null;
+  cancelledAtMs: number | null;
 };
 
 function makeGroupId() {
@@ -408,6 +412,10 @@ function mapDocToRestaurantOrder(
                 : null,
           }
         : null,
+    acceptedAtMs: toCreatedAtMs(data.acceptedAt),
+    pickedUpAtMs: toCreatedAtMs(data.pickedUpAt),
+    deliveredAtMs: toCreatedAtMs(data.deliveredAt),
+    cancelledAtMs: toCreatedAtMs(data.cancelledAt),
   };
 }
 
@@ -602,6 +610,31 @@ export async function rejectOrder(orderId: string): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId), {
     status: 'rejected',
     estimatedDeliveryTime: 0,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+const CUSTOMER_CANCELLABLE_STATUSES: OrderStatus[] = [
+  'awaiting_payment',
+  'payment_processing',
+  'pending',
+  'pending_driver',
+  'accepted',
+  'restaurant_accepted',
+  'preparing',
+];
+
+export function customerCanCancelMarketplaceOrder(status: OrderStatus): boolean {
+  return CUSTOMER_CANCELLABLE_STATUSES.includes(status);
+}
+
+export async function customerCancelMarketplaceOrder(orderId: string): Promise<void> {
+  await updateDoc(doc(db, 'orders', orderId), {
+    status: 'cancelled',
+    deliveryStatus: 'cancelled',
+    updatedAt: serverTimestamp(),
+    cancelledAt: serverTimestamp(),
+    cancelledBy: 'customer',
   });
 }
 
@@ -687,6 +720,7 @@ export async function updateOrderStatus(
   const patch: Record<string, unknown> = {
     status: normalizedStatus,
     estimatedDeliveryTime: etaForStatus(normalizedStatus),
+    updatedAt: serverTimestamp(),
   };
   if (normalizedStatus === 'accepted' || normalizedStatus === 'restaurant_accepted') {
     patch.acceptedAt = serverTimestamp();
@@ -702,6 +736,12 @@ export async function updateOrderStatus(
   }
   if (normalizedStatus === 'picked_up_pending' || normalizedStatus === 'driver_assigned') {
     patch.deliveryStatus = 'driver_assigned';
+  }
+  if (normalizedStatus === 'arriving_restaurant') {
+    patch.deliveryStatus = 'arrived_restaurant';
+  }
+  if (normalizedStatus === 'driver_accepted') {
+    patch.deliveryStatus = 'heading_to_restaurant';
   }
   if (normalizedStatus === 'picked_up') {
     patch.pickedUpAt = serverTimestamp();

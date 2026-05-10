@@ -871,6 +871,93 @@ service cloud.firestore {
         || isOrderMember(d)
         || driverPoolOrderReadable(d);
     }
+    function isMarketplaceDeliveryOrderDoc(d) {
+      return d.get('deliveryType', '') == 'delivery';
+    }
+    function marketplaceOrderPatchKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    function requestUserRoleRaw() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
+        : '';
+    }
+    function requestUserIsDriver() {
+      return requestUserRoleRaw() == 'driver';
+    }
+    function isRestaurantVendorActor(d) {
+      return d.restaurantId is string && d.restaurantId == request.auth.uid;
+    }
+    function customerCancelStatusOk(before, after) {
+      return after.status == 'cancelled'
+        && before.status != 'delivered'
+        && before.status != 'cancelled'
+        && before.status != 'rejected';
+    }
+    function marketplaceCustomerPatchOk() {
+      let before = resource.data;
+      return primaryUidFromOrder(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly(['status','updatedAt','cancelledAt','cancelledBy','notes','deliveryStatus'])
+        && (
+          request.resource.data.status == before.status
+          || customerCancelStatusOk(before, request.resource.data)
+        );
+    }
+    /** Checkout / client payment sheet updates (prefer tightening once all payment writes are server-side). */
+    function marketplaceCustomerCheckoutPatchOk() {
+      let before = resource.data;
+      return primaryUidFromOrder(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','paymentStatus','paymentIntentId','checkoutSessionId','stripePaymentIntentId',
+          'updatedAt','paidAt','paymentFailedAt','estimatedDeliveryTime','deliveryStatus'
+        ]);
+    }
+    function restaurantMustNotAssignDriver(before, after) {
+      return !(
+        (!(before.driverId is string && before.driverId.size() > 0))
+        && after.driverId is string
+        && after.driverId.size() > 0
+      );
+    }
+    function marketplaceRestaurantPatchOk() {
+      let before = resource.data;
+      return isRestaurantVendorActor(before)
+        && restaurantMustNotAssignDriver(before, request.resource.data)
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','acceptedAt','preparedAt','readyAt','estimatedDeliveryTime','estimatedPrepTime',
+          'estimatedDeliveryMinutes','deliveryStatus','updatedAt','driverId','assignedDriverId',
+          'driverName','driverPhone','driverVehicle','driver','notes','rejectionReason'
+        ]);
+    }
+    function driverClaimPatchOk() {
+      let before = resource.data;
+      return requestUserIsDriver()
+        && driverPoolOrderReadable(before)
+        && (!(before.driverId is string && before.driverId.size() > 0))
+        && request.resource.data.driverId == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'driverId','assignedDriverId','driverName','driverPhone','driverVehicle','driver',
+          'status','deliveryStatus','acceptedAt','estimatedDeliveryTime','updatedAt'
+        ]);
+    }
+    function driverActivePatchOk() {
+      let before = resource.data;
+      return requestUserIsDriver()
+        && before.driverId is string
+        && before.driverId == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'driverLocation','status','deliveryStatus','pickedUpAt','deliveredAt',
+          'estimatedDeliveryTime','updatedAt','driver','driverName','driverPhone','driverVehicle','acceptedAt'
+        ]);
+    }
+    function marketplaceDriverPatchOk() {
+      return driverClaimPatchOk() || driverActivePatchOk();
+    }
+    function marketplaceOrderActorPatchOk() {
+      return marketplaceCustomerPatchOk()
+        || marketplaceRestaurantPatchOk()
+        || marketplaceDriverPatchOk();
+    }
     match /orders/{orderId} {
       allow read: if isSignedIn()
         && canAccessMarketplaceDeliveryOrder(resource.data)
@@ -898,6 +985,10 @@ service cloud.firestore {
           || (
             !isCurrentUserRestricted()
             && canAccessMarketplaceDeliveryOrder(resource.data)
+            && (
+              !isMarketplaceDeliveryOrderDoc(resource.data)
+              || marketplaceOrderActorPatchOk()
+            )
           )
         );
       allow delete: if isAdmin()
@@ -905,6 +996,41 @@ service cloud.firestore {
           isSignedIn()
           && primaryUidFromOrder(resource.data) == request.auth.uid
         );
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && (
+            isAdmin()
+            || (
+              !isCurrentUserRestricted()
+              && canAccessMarketplaceDeliveryOrder(
+                get(/databases/$(database)/documents/orders/$(orderId)).data
+              )
+            )
+          );
+        allow create: if isSignedIn()
+          && !isCurrentUserRestricted()
+          && (
+            isAdmin()
+            || canAccessMarketplaceDeliveryOrder(
+              get(/databases/$(database)/documents/orders/$(orderId)).data
+            )
+          )
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 600
+          && request.resource.data.createdAt == request.time
+          && (
+            !request.resource.data.keys().hasAny(['chatType'])
+            || (
+              request.resource.data.chatType == 'customer_driver'
+              || request.resource.data.chatType == 'restaurant_driver'
+              || request.resource.data.chatType == 'support'
+            )
+          );
+        allow update, delete: if false;
+      }
     }
     match /food_cards/{cardId} {
       allow read: if isSignedIn();

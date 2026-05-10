@@ -445,6 +445,76 @@ export async function markPickedUp(orderId: string): Promise<void> {
   await driverMarkPickedUp(orderId);
 }
 
+/**
+ * Driver claims a paid matching-queue order (`pending_driver`) or a restaurant-released dispatch order (`ready_for_pickup` + `waiting_driver`).
+ * Updates embedded `driver` snapshot for customer/restaurant UIs.
+ */
+export async function claimMarketplaceDriverOrder(
+  orderId: string,
+  driver: DriverProfile,
+  vehicle?: string | null,
+): Promise<{ ok: boolean; reason?: string }> {
+  const orderRef = doc(db, 'orders', orderId);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(orderRef);
+    if (!snap.exists()) return { ok: false, reason: 'missing' };
+    const data = snap.data();
+    if (typeof data.driverId === 'string' && data.driverId.length > 0) {
+      return { ok: false, reason: 'already_assigned' };
+    }
+
+    const status = typeof data.status === 'string' ? data.status : '';
+    const deliveryStatus = typeof data.deliveryStatus === 'string' ? data.deliveryStatus : '';
+    const paid = data.paymentStatus === 'paid';
+
+    const driverBlob = {
+      id: driver.id,
+      name: driver.name,
+      phone: driver.phone ?? null,
+      vehicle: vehicle ?? null,
+      avatar: null as string | null,
+    };
+
+    if (paid && status === 'pending_driver') {
+      tx.update(orderRef, {
+        driverId: driver.id,
+        assignedDriverId: driver.id,
+        driverName: driver.name,
+        driverPhone: driver.phone ?? null,
+        ...(vehicle ? { driverVehicle: vehicle } : {}),
+        driver: driverBlob,
+        status: 'driver_accepted',
+        deliveryStatus: 'heading_to_restaurant',
+        acceptedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        estimatedDeliveryTime:
+          typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 24,
+      });
+      return { ok: true };
+    }
+
+    if (status === 'ready_for_pickup' && deliveryStatus === 'waiting_driver') {
+      tx.update(orderRef, {
+        driverId: driver.id,
+        assignedDriverId: driver.id,
+        driverName: driver.name,
+        driverPhone: driver.phone ?? null,
+        ...(vehicle ? { driverVehicle: vehicle } : {}),
+        driver: driverBlob,
+        status: 'driver_assigned',
+        deliveryStatus: 'driver_assigned',
+        acceptedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        estimatedDeliveryTime:
+          typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 18,
+      });
+      return { ok: true };
+    }
+
+    return { ok: false, reason: 'invalid_state' };
+  });
+}
+
 export async function acceptDriverOrder(
   orderId: string,
   driver: DriverProfile,

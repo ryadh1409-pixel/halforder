@@ -1,3 +1,4 @@
+import { USER_ROLE } from '@/constants/roles';
 import { db } from './firebase';
 import {
   collection,
@@ -11,7 +12,13 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 
-export type UserRole = 'user' | 'driver' | 'restaurant' | 'admin' | 'host';
+export type UserRole =
+  | 'user'
+  | 'customer'
+  | 'driver'
+  | 'restaurant'
+  | 'admin'
+  | 'host';
 
 export type UserProfileDoc = {
   id: string;
@@ -22,6 +29,7 @@ export type UserProfileDoc = {
 };
 
 function normalizeRole(value: unknown): UserRole {
+  if (value === 'customer' || value === USER_ROLE.CUSTOMER) return 'customer';
   if (value === 'driver' || value === 'restaurant' || value === 'admin' || value === 'host') {
     return value;
   }

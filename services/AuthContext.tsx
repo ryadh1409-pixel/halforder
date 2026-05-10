@@ -54,6 +54,7 @@ import {
 } from './pushNotifications';
 import { useUserRole } from '../hooks/useUserRole';
 import { createRestaurant } from './restaurantService';
+import { USER_ROLE } from '@/constants/roles';
 import type { UserRole } from './userService';
 
 const REFERRAL_CREDIT = 2;
@@ -149,7 +150,7 @@ async function ensureUserDocument(
     if (data?.uid === undefined) updates.uid = uid;
     if (data?.activeOrderId === undefined) updates.activeOrderId = null;
     if (data?.credits === undefined) updates.credits = 0;
-    if (data?.role === undefined) updates.role = 'user';
+    if (data?.role === undefined) updates.role = USER_ROLE.CUSTOMER;
     if (data?.createdAt === undefined) updates.createdAt = serverTimestamp();
     if (data?.notificationsEnabled === undefined) updates.notificationsEnabled = true;
     if (data?.restaurantId === undefined) updates.restaurantId = null;
@@ -210,7 +211,7 @@ async function ensureUserDocument(
     activeOrderId: null,
     credits: referredBy ? REFERRAL_CREDIT : 0,
     referredBy: referredBy ?? null,
-    role: 'user',
+    role: USER_ROLE.CUSTOMER,
     restaurantId: null,
     notificationsEnabled: true,
     ordersCount: 0,
@@ -467,7 +468,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           photo: photoURL?.trim() ?? '',
           photoURL: photoURL ?? null,
           avatar: photoURL ?? null,
-          role: 'user',
+          role: USER_ROLE.CUSTOMER,
           rating: 5,
           reviewsCount: 0,
           averageRating: 5,

@@ -1,22 +1,27 @@
-import { MarketplaceOrderTracking } from '@/components/order/MarketplaceOrderTracking';
+import { CustomerOrderDetailsScreen } from '@/components/orders/customer/CustomerOrderDetailsScreen';
+import { DriverOrderDetailsScreen } from '@/components/orders/driver/DriverOrderDetailsScreen';
+import { RestaurantOrderDetailsScreen } from '@/components/orders/restaurant/RestaurantOrderDetailsScreen';
 import { HalfOrderDetailsScreen } from '@/screens/HalfOrderDetailsScreen';
+import { useAuth } from '@/services/AuthContext';
 import {
   looksLikeMarketplaceRestaurantOrder,
   subscribeOrderById,
   type RestaurantOrder,
 } from '@/services/orderService';
+import { resolveMarketplaceOrderViewerRole } from '@/services/orderViewerRole';
 import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /**
- * Unified order route: marketplace delivery (live Firestore model) vs HalfOrder / food-card flows.
- * Single `subscribeOrderById` subscription avoids duplicate listeners on the delivery path.
+ * Marketplace orders route by viewer role (customer / driver / restaurant / admin).
+ * HalfOrder / food-card flows keep `HalfOrderDetailsScreen`.
  */
 export default function OrderRouteScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const orderId = typeof id === 'string' ? id.trim() : '';
+  const { user, firestoreUserRole } = useAuth();
 
   const [live, setLive] = useState<RestaurantOrder | null | undefined>(undefined);
 
@@ -41,6 +46,11 @@ export default function OrderRouteScreen() {
     return unsub;
   }, [orderId]);
 
+  const viewerRole = useMemo(() => {
+    if (!live || !looksLikeMarketplaceRestaurantOrder(live)) return null;
+    return resolveMarketplaceOrderViewerRole(live, user?.uid, firestoreUserRole);
+  }, [live, user?.uid, firestoreUserRole]);
+
   if (!orderId) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -62,7 +72,13 @@ export default function OrderRouteScreen() {
   }
 
   if (live && looksLikeMarketplaceRestaurantOrder(live)) {
-    return <MarketplaceOrderTracking order={live} />;
+    if (viewerRole === 'restaurant') {
+      return <RestaurantOrderDetailsScreen order={live} />;
+    }
+    if (viewerRole === 'driver') {
+      return <DriverOrderDetailsScreen order={live} />;
+    }
+    return <CustomerOrderDetailsScreen order={live} />;
   }
 
   return <HalfOrderDetailsScreen orderId={orderId} />;

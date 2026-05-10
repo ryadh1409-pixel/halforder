@@ -3,6 +3,8 @@
  * Primary order UI + HalfOrder flow: `/order/[id]` (sibling route).
  */
 import AppHeader from '../../../components/AppHeader';
+import type { OrderChatType } from '@/constants/orderChat';
+import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { theme } from '../../../constants/theme';
 import { auth, db } from '../../../services/firebase';
 import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '../../../utils/contentModeration';
@@ -37,18 +39,30 @@ const ORDER_ROOM_CHAT_MAX = 200;
 type OrderMessage = {
   id: string;
   text?: string;
+  chatType?: string;
   senderId?: string;
   senderName?: string;
   createdAt?: unknown;
 };
 
 export default function OrderChatScreen() {
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    id?: string | string[];
+    chatType?: string | string[];
+  }>();
   const orderId = useMemo(() => {
     const raw = params.id;
     const str = Array.isArray(raw) ? raw[0] : raw;
     return typeof str === 'string' ? str : '';
   }, [params.id]);
+
+  const chatType: OrderChatType = useMemo(() => {
+    const raw = params.chatType;
+    const str = (Array.isArray(raw) ? raw[0] : raw)?.trim?.() ?? '';
+    if (str === ORDER_CHAT_TYPE.RESTAURANT_DRIVER) return ORDER_CHAT_TYPE.RESTAURANT_DRIVER;
+    if (str === ORDER_CHAT_TYPE.SUPPORT) return ORDER_CHAT_TYPE.SUPPORT;
+    return ORDER_CHAT_TYPE.CUSTOMER_DRIVER;
+  }, [params.chatType]);
 
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +112,7 @@ export default function OrderChatScreen() {
     );
 
     return () => unsub();
-  }, [q, orderId]);
+  }, [q, orderId, chatType]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -128,6 +142,7 @@ export default function OrderChatScreen() {
     try {
       await addDoc(messagesRef, {
         text: mod.text,
+        chatType,
         senderId: uid,
         senderName:
           typeof currentUser?.displayName === 'string' && currentUser.displayName.trim()
@@ -161,7 +176,15 @@ export default function OrderChatScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <AppHeader title="Order Chat" />
+      <AppHeader
+        title={
+          chatType === ORDER_CHAT_TYPE.RESTAURANT_DRIVER
+            ? 'Restaurant ↔ Driver'
+            : chatType === ORDER_CHAT_TYPE.SUPPORT
+              ? 'Support'
+              : 'Driver chat'
+        }
+      />
 
       <View style={styles.chatBody}>
         {loading ? (
