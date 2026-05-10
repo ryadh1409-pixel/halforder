@@ -196,15 +196,10 @@ function mapDocToFeedRow(
     restaurantObj && typeof restaurantObj.name === 'string'
       ? restaurantObj.name
       : null;
-  const restaurantName =
-    formatRestaurantName(restaurantNameRaw) !== 'Unknown restaurant'
-      ? formatRestaurantName(restaurantNameRaw)
-      :
-    typeof data.restaurantName === 'string' && data.restaurantName.trim()
-      ? data.restaurantName.trim()
-      : typeof data.foodName === 'string' && String(data.foodName).trim()
-        ? String(data.foodName)
-        : 'Unknown restaurant';
+  const restaurantName = formatRestaurantName(
+    restaurantNameRaw ||
+      (typeof data.restaurantName === 'string' ? data.restaurantName : ''),
+  );
 
   const etaMinutes =
     typeof data.estimatedDeliveryTime === 'number' && Number.isFinite(data.estimatedDeliveryTime)
@@ -308,6 +303,9 @@ export default function MarketplaceOrdersScreen() {
   const [loadError, setLoadError] = useState(false);
   const [listenerKey, setListenerKey] = useState(0);
   const restaurantImagesRef = useRef<Record<string, string | null>>({});
+  const restaurantMetaRef = useRef<
+    Record<string, { name: string | null; address: string | null; image: string | null }>
+  >({});
 
   const uid = user?.uid ?? null;
 
@@ -339,8 +337,26 @@ export default function MarketplaceOrdersScreen() {
                   ? d.photoUrl
                   : null;
           restaurantImagesRef.current[rid] = img;
+          restaurantMetaRef.current[rid] = {
+            name:
+              typeof d?.name === 'string'
+                ? d.name
+                : typeof d?.restaurantName === 'string'
+                  ? d.restaurantName
+                  : null,
+            address:
+              typeof d?.address === 'string'
+                ? d.address
+                : d?.location &&
+                    typeof d.location === 'object' &&
+                    typeof (d.location as { address?: unknown }).address === 'string'
+                  ? String((d.location as { address: string }).address)
+                  : null,
+            image: img,
+          };
         } catch {
           restaurantImagesRef.current[rid] = null;
+          restaurantMetaRef.current[rid] = { name: null, address: null, image: null };
         }
       }),
     );
@@ -397,9 +413,19 @@ export default function MarketplaceOrdersScreen() {
 
       await enrichRestaurants(merged);
 
-      const nextRows = merged.map((docSnap) =>
-        mapDocToFeedRow(docSnap, restaurantImagesRef.current),
-      );
+      const nextRows = merged.map((docSnap) => {
+        const row = mapDocToFeedRow(docSnap, restaurantImagesRef.current);
+        if (row.restaurant.id && restaurantMetaRef.current[row.restaurant.id]) {
+          const meta = restaurantMetaRef.current[row.restaurant.id]!;
+          row.restaurant = {
+            ...row.restaurant,
+            name: formatRestaurantName(row.restaurant.name || meta.name || ''),
+            address: row.restaurant.address ?? (meta.address ? formatAddress(meta.address) : null),
+            image: row.restaurant.image ?? meta.image ?? null,
+          };
+        }
+        return row;
+      });
       nextRows.forEach((order) => {
         console.log('LIVE ORDER:', order.id, formatOrderStatus(order.status));
       });

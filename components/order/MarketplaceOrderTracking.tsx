@@ -14,6 +14,7 @@ import {
 } from '@/utils/orderFormatters';
 import { showNotice } from '@/utils/toast';
 import * as Linking from 'expo-linking';
+import { useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -134,6 +135,7 @@ function driverStatusLabel(order: RestaurantOrder): string {
 
 /** Presentational live tracker — parent owns the Firestore subscription. */
 export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) {
+  const router = useRouter();
   const [restaurantMeta, setRestaurantMeta] = useState<{
     name: string;
     image: string | null;
@@ -159,15 +161,18 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const restName = 'Unknown restaurant';
+      const restName = formatRestaurantName(order.restaurant?.name);
       const baseAddress = formatAddress(order.deliveryLocation?.address);
       const nextRestaurant = {
         name: restName,
-        image: null as string | null,
-        address: null as string | null,
+        image: order.restaurant?.image ?? null,
+        address: order.restaurant?.address ? formatAddress(order.restaurant.address) : null,
       };
 
-      if (order.restaurantId) {
+      if (
+        order.restaurantId &&
+        (nextRestaurant.name === 'Unknown restaurant' || !nextRestaurant.image || !nextRestaurant.address)
+      ) {
         try {
           const snap = await getDoc(doc(db, 'restaurants', order.restaurantId));
           const d = snap.data() as Record<string, unknown> | undefined;
@@ -189,14 +194,14 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
       if (!cancelled) setRestaurantMeta(nextRestaurant);
 
       const nextCustomer = {
-        name:
-          typeof order.customerName === 'string' && order.customerName.trim()
-            ? order.customerName.trim()
-            : 'Customer',
-        avatar: null as string | null,
-        address: baseAddress,
+        name: order.customer?.name?.trim() || order.customerName?.trim() || 'Customer',
+        avatar: order.customer?.avatar ?? null,
+        address:
+          order.customer?.address && order.customer.address.trim()
+            ? formatAddress(order.customer.address)
+            : baseAddress,
       };
-      if (order.userId) {
+      if (order.userId && (!nextCustomer.name || nextCustomer.name === 'Customer')) {
         try {
           const userSnap = await getDoc(doc(db, 'users', order.userId));
           const u = userSnap.data() as Record<string, unknown> | undefined;
@@ -215,7 +220,9 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
       if (!cancelled) setCustomerMeta(nextCustomer);
 
       const nextDriver = { avatar: null as string | null };
-      if (order.driverId) {
+      if (order.driver?.avatar) {
+        nextDriver.avatar = order.driver.avatar;
+      } else if (order.driverId) {
         try {
           const driverSnap = await getDoc(doc(db, 'drivers', order.driverId));
           const dr = driverSnap.data() as Record<string, unknown> | undefined;
@@ -371,20 +378,26 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
             </View>
             <View style={styles.heroBody}>
           <Text style={styles.meta}>
-            {order.driverName?.trim() ? order.driverName : 'Matching a driver…'}
+            {order.driver?.name?.trim() || order.driverName?.trim()
+              ? order.driver?.name?.trim() || order.driverName
+              : 'Matching a driver…'}
           </Text>
-          {order.driverPhone ? (
+          {(order.driver?.phone || order.driverPhone) ? (
             <Text
               style={styles.link}
-              onPress={() => void Linking.openURL(`tel:${order.driverPhone}`)}
+              onPress={() =>
+                void Linking.openURL(`tel:${order.driver?.phone || order.driverPhone}`)
+              }
             >
               Call driver
             </Text>
           ) : (
             <Text style={styles.muted}>Phone unavailable until assigned</Text>
           )}
-          {order.driverVehicle ? (
-            <Text style={styles.meta}>Vehicle: {order.driverVehicle}</Text>
+          {(order.driver?.vehicle || order.driverVehicle) ? (
+            <Text style={styles.meta}>
+              Vehicle: {order.driver?.vehicle || order.driverVehicle}
+            </Text>
           ) : null}
             </View>
           </View>
@@ -511,6 +524,12 @@ export function MarketplaceOrderTracking({ order }: { order: RestaurantOrder }) 
           >
             <Text style={styles.mapOpenBtnText}>Open in Apple Maps</Text>
           </Pressable>
+          <Pressable
+            style={styles.reorderBtn}
+            onPress={() => router.push('/(tabs)/index')}
+          >
+            <Text style={styles.reorderBtnText}>Reorder from home</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -634,4 +653,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(125,211,252,0.12)',
   },
   mapOpenBtnText: { color: '#7DD3FC', fontWeight: '800', fontSize: 13 },
+  reorderBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(52,211,153,0.45)',
+    backgroundColor: 'rgba(52,211,153,0.18)',
+  },
+  reorderBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 13 },
 });

@@ -1,5 +1,10 @@
 import { db } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
+import type {
+  CustomerSnapshot,
+  DriverSnapshot,
+  RestaurantSnapshot,
+} from '@/types/order';
 import {
   addDoc,
   collection,
@@ -83,6 +88,9 @@ export type RestaurantOrder = {
   createdAtLabel: string;
   /** Firestore `createdAt` millis when available (for “today” stats). */
   createdAtMs: number | null;
+  restaurant: RestaurantSnapshot;
+  customer: CustomerSnapshot;
+  driver: DriverSnapshot | null;
 };
 
 function makeGroupId() {
@@ -227,6 +235,18 @@ function mapDocToRestaurantOrder(
     (userLoc ? { lat: userLoc.lat + 0.01, lng: userLoc.lng + 0.01 } : null);
 
   const status = parseStatus(data.status);
+  const restaurantObj =
+    data.restaurant && typeof data.restaurant === 'object'
+      ? (data.restaurant as Record<string, unknown>)
+      : null;
+  const customerObj =
+    data.customer && typeof data.customer === 'object'
+      ? (data.customer as Record<string, unknown>)
+      : null;
+  const driverObj =
+    data.driver && typeof data.driver === 'object'
+      ? (data.driver as Record<string, unknown>)
+      : null;
 
   return {
     id: d.id,
@@ -303,6 +323,91 @@ function mapDocToRestaurantOrder(
     notes: typeof data.notes === 'string' ? data.notes : null,
     createdAtLabel: toCreatedAtLabel(data.createdAt),
     createdAtMs: toCreatedAtMs(data.createdAt),
+    restaurant: {
+      id:
+        restaurantObj && typeof restaurantObj.id === 'string'
+          ? restaurantObj.id
+          : rid,
+      name:
+        restaurantObj && typeof restaurantObj.name === 'string'
+          ? restaurantObj.name
+          : '',
+      image:
+        restaurantObj && typeof restaurantObj.image === 'string'
+          ? restaurantObj.image
+          : null,
+      address:
+        restaurantObj && typeof restaurantObj.address === 'string'
+          ? restaurantObj.address
+          : null,
+      latitude:
+        restaurantObj && typeof restaurantObj.latitude === 'number'
+          ? restaurantObj.latitude
+          : restLoc?.lat ?? null,
+      longitude:
+        restaurantObj && typeof restaurantObj.longitude === 'number'
+          ? restaurantObj.longitude
+          : restLoc?.lng ?? null,
+    },
+    customer: {
+      id:
+        customerObj && typeof customerObj.id === 'string'
+          ? customerObj.id
+          : typeof data.userId === 'string'
+            ? data.userId
+            : typeof data.customerId === 'string'
+              ? data.customerId
+              : '',
+      name:
+        customerObj && typeof customerObj.name === 'string'
+          ? customerObj.name
+          : typeof data.customerName === 'string'
+            ? data.customerName
+            : '',
+      avatar:
+        customerObj && typeof customerObj.avatar === 'string'
+          ? customerObj.avatar
+          : null,
+      address:
+        customerObj && typeof customerObj.address === 'string'
+          ? customerObj.address
+          : typeof (delivery as { address?: unknown })?.address === 'string'
+            ? ((delivery as { address: string }).address ?? null)
+            : null,
+    },
+    driver:
+      driverObj || data.driverId
+        ? {
+            id:
+              driverObj && typeof driverObj.id === 'string'
+                ? driverObj.id
+                : typeof data.driverId === 'string'
+                  ? data.driverId
+                  : '',
+            name:
+              driverObj && typeof driverObj.name === 'string'
+                ? driverObj.name
+                : typeof data.driverName === 'string'
+                  ? data.driverName
+                  : '',
+            phone:
+              driverObj && typeof driverObj.phone === 'string'
+                ? driverObj.phone
+                : typeof data.driverPhone === 'string'
+                  ? data.driverPhone
+                  : null,
+            vehicle:
+              driverObj && typeof driverObj.vehicle === 'string'
+                ? driverObj.vehicle
+                : typeof data.driverVehicle === 'string'
+                  ? data.driverVehicle
+                  : null,
+            avatar:
+              driverObj && typeof driverObj.avatar === 'string'
+                ? driverObj.avatar
+                : null,
+          }
+        : null,
   };
 }
 
@@ -342,6 +447,82 @@ export async function createOrder(payload: {
   const restaurantLocation =
     payload.restaurantLocation ??
     ({ lat: lat + 0.015, lng: lng + 0.015 } as LatLng);
+  let restaurantSnapshot: RestaurantSnapshot = {
+    id: payload.restaurantId,
+    name: '',
+    image: null,
+    address: null,
+    latitude: restaurantLocation.lat,
+    longitude: restaurantLocation.lng,
+  };
+  let customerSnapshot: CustomerSnapshot = {
+    id: payload.userId,
+    name: '',
+    avatar: null,
+    address: payload.deliveryLocation.address,
+  };
+  try {
+    const [restaurantSnap, customerSnap] = await Promise.all([
+      getDoc(doc(db, 'restaurants', payload.restaurantId)),
+      getDoc(doc(db, 'users', payload.userId)),
+    ]);
+    if (restaurantSnap.exists()) {
+      const r = restaurantSnap.data() as Record<string, unknown>;
+      restaurantSnapshot = {
+        id: payload.restaurantId,
+        name:
+          typeof r.name === 'string'
+            ? r.name
+            : typeof r.restaurantName === 'string'
+              ? r.restaurantName
+              : '',
+        image:
+          typeof r.image === 'string'
+            ? r.image
+            : typeof r.logoUrl === 'string'
+              ? r.logoUrl
+              : typeof r.photoUrl === 'string'
+                ? r.photoUrl
+                : null,
+        address:
+          typeof r.address === 'string'
+            ? r.address
+            : (r.location &&
+                typeof r.location === 'object' &&
+                typeof (r.location as { address?: unknown }).address === 'string'
+              ? String((r.location as { address: string }).address)
+              : null),
+        latitude:
+          typeof r.latitude === 'number'
+            ? r.latitude
+            : typeof r.lat === 'number'
+              ? r.lat
+              : restaurantLocation.lat,
+        longitude:
+          typeof r.longitude === 'number'
+            ? r.longitude
+            : typeof r.lng === 'number'
+              ? r.lng
+              : restaurantLocation.lng,
+      };
+    }
+    if (customerSnap.exists()) {
+      const u = customerSnap.data() as Record<string, unknown>;
+      customerSnapshot = {
+        id: payload.userId,
+        name: typeof u.name === 'string' ? u.name : '',
+        avatar:
+          typeof u.avatar === 'string'
+            ? u.avatar
+            : typeof u.photoURL === 'string'
+              ? u.photoURL
+              : null,
+        address: payload.deliveryLocation.address,
+      };
+    }
+  } catch {
+    // Keep snapshot fallbacks and still create order.
+  }
 
   console.log('[createOrder] about to save order', {
     venueId: payload.restaurantId,
@@ -381,22 +562,8 @@ export async function createOrder(payload: {
     driverLocation: null,
     deliveryLocation: payload.deliveryLocation,
     deliveryAddress: payload.deliveryLocation.address,
-    restaurant: {
-      id: payload.restaurantId,
-      name: '',
-      image: null,
-      address: null,
-      latitude:
-        typeof restaurantLocation?.lat === 'number' ? restaurantLocation.lat : null,
-      longitude:
-        typeof restaurantLocation?.lng === 'number' ? restaurantLocation.lng : null,
-    },
-    customer: {
-      id: payload.userId,
-      name: '',
-      avatar: null,
-      address: payload.deliveryLocation.address,
-    },
+    restaurant: restaurantSnapshot,
+    customer: customerSnapshot,
     driver: {
       id: payload.driverId ?? null,
       name: null,
@@ -412,6 +579,9 @@ export async function createOrder(payload: {
     pickedUpAt: null,
     deliveredAt: null,
     estimatedArrival: null,
+    fees: 0,
+    taxes: 0,
+    etaMinutes: estimatedDeliveryTime,
     createdAt: serverTimestamp(),
   });
   return ref.id;
