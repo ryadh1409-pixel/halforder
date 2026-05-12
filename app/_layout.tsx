@@ -5,8 +5,8 @@ import 'react-native-reanimated';
 import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { Slot, usePathname } from 'expo-router';
-import React, { useEffect } from 'react';
+import { Slot, usePathname, useRouter } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
 import { LogBox } from 'react-native';
 
 import { AuthProvider, useAuth } from '../services/AuthContext';
@@ -28,6 +28,58 @@ function RootNavigationDebug() {
       authLoading,
     });
   }, [pathname, firestoreUserRole, authLoading]);
+  return null;
+}
+
+/**
+ * Role-based deep-link guard: must not call `router.replace` when the user is already
+ * on a valid route for their role (e.g. drivers on `/order/[id]`), or Expo will re-render
+ * in a tight loop ("Maximum update depth exceeded").
+ */
+function RoleRouteGuard() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { loading: authLoading, firestoreUserRole: role } = useAuth();
+  const hasRedirected = useRef(false);
+
+  useEffect(() => {
+    if (authLoading || !role) return;
+
+    if (role === 'driver' || role === 'admin') {
+      const onAllowedDriverRoute =
+        pathname.startsWith('/(driver)') ||
+        pathname === '/home' ||
+        pathname.startsWith('/order') ||
+        pathname.startsWith('/track-order') ||
+        pathname.startsWith('/(tabs)') ||
+        pathname === '/' ||
+        pathname.startsWith('/(auth)') ||
+        pathname.startsWith('/onboarding') ||
+        pathname.startsWith('/terms') ||
+        pathname.startsWith('/join') ||
+        pathname.startsWith('/checkout') ||
+        pathname.startsWith('/map') ||
+        pathname.startsWith('/restaurant-menu') ||
+        pathname.startsWith('/match') ||
+        pathname.startsWith('/food-match') ||
+        pathname.startsWith('/chat') ||
+        pathname.startsWith('/create-order') ||
+        pathname.startsWith('/driver');
+
+      if (onAllowedDriverRoute) {
+        hasRedirected.current = false;
+        return;
+      }
+
+      if (hasRedirected.current) return;
+      hasRedirected.current = true;
+      router.replace('/(driver)' as never);
+      return;
+    }
+
+    hasRedirected.current = false;
+  }, [authLoading, role, pathname, router]);
+
   return null;
 }
 
@@ -66,8 +118,8 @@ export const linking = {
 };
 
 /**
- * Root: providers + `<Slot />` only — no navigation logic, `useEffect`, or `useRouter` here
- * (avoids redirect / listener loops). Group layouts (`(tabs)`, `(auth)`, `order`, …) own UI.
+ * Root: providers + `<Slot />` — role guard runs in an effect with pathname / ref guards only
+ * (avoids redirect loops on dynamic routes like `/order/[id]`).
  *
  * `CartProvider` wraps `Slot` so `useCart()` works on stack routes; it is not navigation logic.
  */
@@ -86,6 +138,7 @@ export default function RootLayout() {
           <AuthProvider>
             <CartProvider>
               <RootNavigationDebug />
+              <RoleRouteGuard />
               <Slot />
             </CartProvider>
           </AuthProvider>

@@ -1,10 +1,15 @@
 import { getFoodItems, type FoodItem } from '../services/foodService';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function useMenu(restaurantId: string | null | undefined) {
   const [items, setItems] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const refetch = useCallback(() => {
+    setRefreshToken((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -35,7 +40,7 @@ export function useMenu(restaurantId: string | null | undefined) {
       setLoading(false);
       setError('subscribe');
     }
-  }, [restaurantId]);
+  }, [restaurantId, refreshToken]);
 
   return useMemo(
     () => ({
@@ -43,7 +48,8 @@ export function useMenu(restaurantId: string | null | undefined) {
       loading,
       stale: false,
       error,
+      refetch,
     }),
-    [items, loading, error],
+    [items, loading, error, refetch],
   );
 }
