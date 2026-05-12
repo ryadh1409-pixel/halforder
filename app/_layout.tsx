@@ -55,6 +55,7 @@ export const linking = {
       'restaurant-onboarding': 'restaurant-onboarding',
       checkout: 'checkout',
       order: 'order',
+      'track-order/[orderId]': 'track-order/:orderId',
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',
       'join/[orderId]': 'join/:orderId',

@@ -237,7 +237,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           <Text style={styles.phaseSubtitle}>{customerPhase.subtitle}</Text>
           <Pressable
             style={styles.trackFullscreenBtn}
-            onPress={() => router.push(`/(customer)/track/${encodeURIComponent(order.id)}` as never)}
+            onPress={() => router.push(`/track-order/${encodeURIComponent(order.id)}` as never)}
           >
             <Text style={styles.trackFullscreenBtnText}>Fullscreen live map</Text>
           </Pressable>
