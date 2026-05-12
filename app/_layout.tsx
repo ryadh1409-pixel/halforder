@@ -32,9 +32,7 @@ function RootNavigationDebug() {
 }
 
 /**
- * Role-based deep-link guard: must not call `router.replace` when the user is already
- * on a valid route for their role (e.g. drivers on `/order/[id]`), or Expo will re-render
- * in a tight loop ("Maximum update depth exceeded").
+ * Role-based deep-link guard: `router.replace` only inside this effect (never during render).
  */
 function RoleRouteGuard() {
   const pathname = usePathname();
@@ -43,22 +41,42 @@ function RoleRouteGuard() {
   const hasRedirected = useRef(false);
 
   useEffect(() => {
-    if (authLoading || !role) return;
+    if (authLoading) {
+      hasRedirected.current = false;
+      return;
+    }
+    if (!role) return;
+
+    const DRIVER_SAFE_PATHS = [
+      '/home',
+      '/profile',
+      '/orders',
+      '/order/',
+      '/food-truck/',
+      '/restaurant',
+      '/map',
+      '/payment',
+      '/join',
+    ];
+    if (role === 'driver' && DRIVER_SAFE_PATHS.some((p) => pathname.startsWith(p))) {
+      hasRedirected.current = false;
+      return;
+    }
+    if (role === 'admin' && DRIVER_SAFE_PATHS.some((p) => pathname.startsWith(p))) {
+      hasRedirected.current = false;
+      return;
+    }
 
     if (role === 'driver' || role === 'admin') {
       const onAllowedDriverRoute =
         pathname.startsWith('/(driver)') ||
-        pathname === '/home' ||
-        pathname.startsWith('/order') ||
         pathname.startsWith('/track-order') ||
         pathname.startsWith('/(tabs)') ||
         pathname === '/' ||
         pathname.startsWith('/(auth)') ||
         pathname.startsWith('/onboarding') ||
         pathname.startsWith('/terms') ||
-        pathname.startsWith('/join') ||
         pathname.startsWith('/checkout') ||
-        pathname.startsWith('/map') ||
         pathname.startsWith('/restaurant-menu') ||
         pathname.startsWith('/match') ||
         pathname.startsWith('/food-match') ||
