@@ -1,6 +1,7 @@
 /**
  * Firestore sync for Expo push tokens (uses `./notifications` for channels + project id).
  */
+import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
@@ -19,6 +20,7 @@ let lastExpoPushSynced: { uid: string; token: string } | null = null;
 
 /** @see configureForegroundNotificationHandler in `./notifications` */
 export function configureExpoPushNotificationHandler(): void {
+  if (isExpoGo) return;
   configureForegroundNotificationHandler();
 }
 
@@ -28,6 +30,9 @@ export function configureExpoPushNotificationHandler(): void {
 export async function requestNotificationPermissionOnAppLaunch(): Promise<Notifications.PermissionStatus> {
   if (Platform.OS === 'web') {
     return Notifications.PermissionStatus.UNDETERMINED;
+  }
+  if (isExpoGo) {
+    return Notifications.PermissionStatus.DENIED;
   }
 
   await ensureAndroidNotificationChannelAsync();
@@ -61,7 +66,7 @@ export async function persistUserPushTokens(
   uid: string,
   token: string,
 ): Promise<void> {
-  if (Platform.OS === 'web' || !uid?.trim() || !token?.trim()) return;
+  if (Platform.OS === 'web' || !uid?.trim() || !token?.trim() || isExpoGo) return;
 
   const userRef = doc(db, 'users', uid);
   const tokenRef = doc(db, 'users', uid, 'pushToken', PUSH_TOKEN_DOC_ID);
@@ -99,7 +104,7 @@ export async function persistUserPushTokens(
 export async function registerExpoPushTokenAndSyncToFirestore(
   uid: string,
 ): Promise<void> {
-  if (Platform.OS === 'web' || !uid?.trim()) return;
+  if (Platform.OS === 'web' || !uid?.trim() || isExpoGo) return;
 
   await ensureAndroidNotificationChannelAsync();
 

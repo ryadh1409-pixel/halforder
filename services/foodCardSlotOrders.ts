@@ -26,6 +26,7 @@ import {
   type QueryDocumentSnapshot,
   where,
 } from 'firebase/firestore';
+import { safeToMillis } from '@/utils/safeToMillis';
 
 const OPEN_ORDER_STATUSES = [ORDER_STATUS.WAITING, ORDER_STATUS.ACTIVE];
 
@@ -58,18 +59,8 @@ function filterAndSortJoinableOrders(rows: OrderDocRow[]): OrderDocRow[] {
     const na = normalizeOrderUserIds(a.data.users).length;
     const nb = normalizeOrderUserIds(b.data.users).length;
     if (na !== nb) return nb - na;
-    const ta =
-      a.data.createdAt &&
-      typeof (a.data.createdAt as { toMillis?: () => number }).toMillis ===
-        'function'
-        ? (a.data.createdAt as { toMillis: () => number }).toMillis()
-        : 0;
-    const tb =
-      b.data.createdAt &&
-      typeof (b.data.createdAt as { toMillis?: () => number }).toMillis ===
-        'function'
-        ? (b.data.createdAt as { toMillis: () => number }).toMillis()
-        : 0;
+    const ta = safeToMillis(a.data.createdAt) ?? 0;
+    const tb = safeToMillis(b.data.createdAt) ?? 0;
     return ta - tb;
   });
 }

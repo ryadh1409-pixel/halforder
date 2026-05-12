@@ -1,3 +1,4 @@
+import { isExpoGo } from '@/constants/runtimeEnvironment';
 import React, { memo, useEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
@@ -70,6 +71,16 @@ function LiveDeliveryMapInner({
       longitudeDelta: 0.06,
     };
   }, [driver, dropoff, restaurant]);
+
+  if (isExpoGo) {
+    return (
+      <View style={[styles.fallback, dark && styles.fallbackDark]}>
+        <Text style={styles.fallbackText}>
+          Live maps are disabled in Expo Go. Use a development build (EAS) to track deliveries on the map.
+        </Text>
+      </View>
+    );
+  }
 
   if (!RNMaps || Platform.OS === 'web') {
     return (

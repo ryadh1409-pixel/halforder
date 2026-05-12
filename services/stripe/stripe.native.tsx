@@ -6,6 +6,7 @@ import {
   type InitPaymentSheetResult,
   type PresentPaymentSheetResult,
 } from '@stripe/stripe-react-native';
+import { isNativePaymentsAndMapsSupported } from '@/constants/runtimeEnvironment';
 import { httpsCallable } from 'firebase/functions';
 import React from 'react';
 import { auth, db, functions } from '@/services/firebase';
@@ -127,6 +128,10 @@ export async function openPaymentSheet(
 type StripeProviderProps = React.ComponentProps<typeof StripeProvider>;
 
 export function AppStripeProvider(props: StripeProviderProps) {
+  /** Expo Go: no embedded Stripe native SDK — avoid mounting `StripeProvider`. */
+  if (!isNativePaymentsAndMapsSupported) {
+    return <>{props.children}</>;
+  }
   return <StripeProvider {...props} />;
 }
 

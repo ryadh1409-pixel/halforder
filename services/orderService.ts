@@ -1,3 +1,4 @@
+import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { db } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import type {
@@ -166,42 +167,9 @@ function parseLatLng(value: unknown): LatLng | null {
 }
 
 function toCreatedAtLabel(value: unknown): string {
-  if (
-    value &&
-    typeof value === 'object' &&
-    'toDate' in value &&
-    typeof (value as { toDate: () => Date }).toDate === 'function'
-  ) {
-    return (value as { toDate: () => Date })
-      .toDate()
-      .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return 'Now';
-}
-
-function toCreatedAtMs(value: unknown): number | null {
-  if (
-    value &&
-    typeof value === 'object' &&
-    'toMillis' in value &&
-    typeof (value as { toMillis: () => number }).toMillis === 'function'
-  ) {
-    try {
-      const ms = (value as { toMillis: () => number }).toMillis();
-      return Number.isFinite(ms) ? ms : null;
-    } catch {
-      return null;
-    }
-  }
-  if (
-    value &&
-    typeof value === 'object' &&
-    'seconds' in value &&
-    typeof (value as { seconds: unknown }).seconds === 'number'
-  ) {
-    return (value as { seconds: number }).seconds * 1000;
-  }
-  return null;
+  const ms = safeToMillis(value);
+  if (ms == null) return 'Now';
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function mapDocToRestaurantOrder(
@@ -209,6 +177,11 @@ function mapDocToRestaurantOrder(
   fallbackRestaurantId?: string,
 ): RestaurantOrder {
   const data = d.data();
+  warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
+  warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
+  warnDevIfUnparsableTimestamp(d.id, 'pickedUpAt', data.pickedUpAt);
+  warnDevIfUnparsableTimestamp(d.id, 'deliveredAt', data.deliveredAt);
+  warnDevIfUnparsableTimestamp(d.id, 'cancelledAt', data.cancelledAt);
   const items = Array.isArray(data.items)
     ? data.items.map((item) => ({
         id:
@@ -335,7 +308,7 @@ function mapDocToRestaurantOrder(
     driverLocation: parseLatLng(data.driverLocation),
     notes: typeof data.notes === 'string' ? data.notes : null,
     createdAtLabel: toCreatedAtLabel(data.createdAt),
-    createdAtMs: toCreatedAtMs(data.createdAt),
+    createdAtMs: safeToMillis(data.createdAt),
     restaurant: {
       id:
         restaurantObj && typeof restaurantObj.id === 'string'
@@ -421,10 +394,10 @@ function mapDocToRestaurantOrder(
                 : null,
           }
         : null,
-    acceptedAtMs: toCreatedAtMs(data.acceptedAt),
-    pickedUpAtMs: toCreatedAtMs(data.pickedUpAt),
-    deliveredAtMs: toCreatedAtMs(data.deliveredAt),
-    cancelledAtMs: toCreatedAtMs(data.cancelledAt),
+    acceptedAtMs: safeToMillis(data.acceptedAt),
+    pickedUpAtMs: safeToMillis(data.pickedUpAt),
+    deliveredAtMs: safeToMillis(data.deliveredAt),
+    cancelledAtMs: safeToMillis(data.cancelledAt),
     deliveryPin:
       typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
         ? data.deliveryPin

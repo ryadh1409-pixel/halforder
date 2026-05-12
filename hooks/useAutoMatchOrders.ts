@@ -3,6 +3,7 @@ import { db } from '../services/firebase';
 import { getUserLocation } from '../services/location';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
+import { safeToMillis } from '../utils/safeToMillis';
 
 const AUTO_MATCH_RADIUS_KM = 1;
 const AUTO_MATCH_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
@@ -57,13 +58,8 @@ export function useAutoMatchOrders() {
           lng,
         );
         if (distanceKm > AUTO_MATCH_RADIUS_KM) return;
-        const createdAt = data?.createdAt;
-        const createdAtMs =
-          createdAt?.toMillis?.() ??
-          (typeof createdAt?.seconds === 'number'
-            ? createdAt.seconds * 1000
-            : 0);
-        if (createdAtMs < cutoff) return;
+        const createdAtMs = safeToMillis(data?.createdAt);
+        if (createdAtMs == null || createdAtMs < cutoff) return;
         const plist = Array.isArray(data?.participants)
           ? data.participants.filter((x): x is string => typeof x === 'string')
           : [];
@@ -93,7 +89,7 @@ export function useAutoMatchOrders() {
       list.sort((a, b) => {
         if (Math.abs(a.distanceKm - b.distanceKm) > 0.001)
           return a.distanceKm - b.distanceKm;
-        return b.createdAtMs - a.createdAtMs; // newer first when distance tie
+        return b.createdAtMs - a.createdAtMs;
       });
       setOrders(list.slice(0, AUTO_MATCH_TOP));
     } catch (e) {

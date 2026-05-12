@@ -3,19 +3,31 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
+import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
+import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
+import { devLog } from '../utils/devLog';
 
-LogBox.ignoreAllLogs(true);
+/** Production: suppress noisy redbox logs. Development: keep logs visible for debugging. */
+if (!__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
 
-configureExpoPushNotificationHandler();
+/**
+ * Push foreground handler uses native notification APIs — skip in Expo Go (unsupported /
+ * different binary). Dev Client and standalone builds call this once at startup.
+ */
+if (Platform.OS !== 'web' && !isExpoGo) {
+  configureExpoPushNotificationHandler();
+}
 
 function RootNavigationDebug() {
   const pathname = usePathname();
@@ -101,8 +113,7 @@ function RoleRouteGuard() {
   return null;
 }
 
-console.log('🔥 STRIPE WEBHOOK URL:');
-console.log(STRIPE_WEBHOOK_URL);
+devLog('🔥 STRIPE WEBHOOK URL:', STRIPE_WEBHOOK_URL);
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -142,9 +153,16 @@ export const linking = {
  * `CartProvider` wraps `Slot` so `useCart()` works on stack routes; it is not navigation logic.
  */
 export default function RootLayout() {
-  if (__DEV__) {
-    console.log('[RootLayout] render');
+  devLog('[RootLayout] render');
+
+  if (Platform.OS !== 'web' && isExpoGo) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <DevClientRequiredScreen />
+      </GestureHandlerRootView>
+    );
   }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStripeProvider

@@ -9,7 +9,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function DriverActiveScreen() {
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
-  const router = useRouter();
   const { orders, loading } = useDriverOrders(user?.uid);
   /** Firestore snapshots produce a new `orders` array each tick — never depend on that reference for navigation. */
   const firstOrderId = orders[0]?.id ?? '';

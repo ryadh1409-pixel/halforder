@@ -4,6 +4,7 @@
  */
 
 import { distanceMeters, AUTO_MATCH_RADIUS_METERS } from '../utils/distance';
+import { safeToMillis } from '../utils/safeToMillis';
 import { db } from './firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
@@ -74,8 +75,7 @@ export function subscribeToNearbyOpenOrders(
         )
           return;
 
-        const created =
-          data?.createdAt?.toMillis?.() ?? data?.createdAt ?? null;
+        const createdAtMs = safeToMillis(data?.createdAt);
         onMatch({
           id: d.id,
           orderId: d.id,
@@ -89,7 +89,7 @@ export function subscribeToNearbyOpenOrders(
           longitude: lng,
           distanceMeters: Math.round(meters),
           status: (data?.status as string) ?? 'open',
-          createdAt: created,
+          createdAt: createdAtMs,
         });
       });
     },

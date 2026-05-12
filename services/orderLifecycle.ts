@@ -9,6 +9,8 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
+import { safeToMillis } from '../utils/safeToMillis';
+
 /** Legacy per-user join window when `orders.expiresAt` is not set (`joinedAtMap[uid]`). */
 export const ORDER_JOIN_WINDOW_MS = 45 * 60 * 1000;
 
@@ -36,13 +38,7 @@ export function normalizeParticipantsStrings(raw: unknown): string[] {
 }
 
 export function parseJoinedAtMs(v: unknown): number | null {
-  if (v == null) return null;
-  if (typeof v === 'object' && v !== null && 'toMillis' in v) {
-    const fn = (v as { toMillis?: () => number }).toMillis;
-    if (typeof fn === 'function') return fn.call(v);
-  }
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  return null;
+  return safeToMillis(v);
 }
 
 export function getJoinedAtMsForUser(

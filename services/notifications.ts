@@ -4,6 +4,7 @@
  * Call `configureForegroundNotificationHandler()` once early in app startup (e.g. root layout).
  * Use `registerForPushNotificationsAsync()` after sign-in or when you need a fresh token.
  */
+import { isExpoGo } from '@/constants/runtimeEnvironment';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -49,14 +50,14 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
  * Safe to call from `App` mount alongside root layout configuration.
  */
 export async function setupNotifications(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || isExpoGo) return;
   configureForegroundNotificationHandler();
   await ensureAndroidNotificationChannelAsync();
 }
 
 /** Foreground presentation. Idempotent — safe to call multiple times. */
 export function configureForegroundNotificationHandler(): void {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || isExpoGo) return;
   if (foregroundHandlerConfigured) return;
   foregroundHandlerConfigured = true;
 
@@ -92,6 +93,9 @@ export function configureForegroundNotificationHandler(): void {
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (Platform.OS === 'web') {
+    return null;
+  }
+  if (isExpoGo) {
     return null;
   }
 
@@ -140,7 +144,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 export function subscribeExpoPushTokenRefresh(
   onToken: (expoPushToken: string) => void,
 ): { remove: () => void } {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || isExpoGo) {
     return { remove: () => {} };
   }
   return Notifications.addPushTokenListener((devicePushToken) => {

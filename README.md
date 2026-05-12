@@ -1,73 +1,100 @@
-# Welcome to your Expo app 👋
+# HalfOrder (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Native-first delivery app built with **Expo Router**, **Firebase**, and **EAS**.
 
-## Get started
+## Why not Expo Go?
 
-1. Install dependencies
+This project uses **custom native code** (`@stripe/stripe-react-native`, `react-native-maps`, full push setup, etc.). **Expo Go** cannot load that surface. Use a **development build** (`expo-dev-client`) or a store/production binary. If you open the project in Expo Go, the app shows a blocking screen explaining this.
 
-   ```bash
-   npm install
-   ```
+## Prerequisites
 
-2. Start the app
+- Node 20+ recommended  
+- [EAS CLI](https://docs.expo.dev/build/setup/) (`npm i -g eas-cli`) and an Expo account  
+- Xcode (iOS) / Android Studio (Android) for `expo run:*` when working locally
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Install
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Daily development (Dev Client + Metro)
 
-## Learn more
+1. **Create or install a development build** (one-time per machine / when native deps change):
 
-To learn more about developing your project with Expo, look at the following resources:
+   ```bash
+   eas build --profile development --platform ios
+   # or Android:
+   eas build --profile development --platform android
+   ```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+   Install the resulting artifact on a simulator or device (EAS dashboard → Install).
 
-## Join the community
+2. **Start Metro for the dev client** (not Expo Go):
 
-Join our community of developers creating universal apps.
+   ```bash
+   npm start
+   # same as:
+   npx expo start --dev-client
+   ```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+   Or:
+
+   ```bash
+   npm run dev
+   ```
+
+3. Open the **HalfOrder development** app on the simulator/device; it will connect to this Metro server.
+
+## Run native locally (optional)
+
+```bash
+npm run ios
+npm run android
+```
+
+These use `expo run:ios` / `expo run:android` to compile and launch the dev client from your machine.
+
+## Web
+
+```bash
+npm run web
+```
+
+Web uses static export where configured; native-only modules are stubbed or gated on web.
+
+## EAS profiles
+
+| Profile        | Purpose                                      |
+|----------------|----------------------------------------------|
+| `development` | Dev client, internal distribution, iOS sim   |
+| `preview`     | Internal / QA builds                         |
+| `production`  | Store releases (`autoIncrement` on iOS)    |
+
+```bash
+eas build --profile development --platform ios
+eas build --profile preview --platform all
+eas build --profile production --platform all
+```
+
+## App identifiers
+
+- **iOS bundle ID:** `com.halforder.app` (`app.json` → `expo.ios.bundleIdentifier`)  
+- **Android package:** `com.anonymous.ourfoodclean` (`app.json` → `expo.android.package`) — align with iOS when ready for Play Console.  
+- **URL scheme:** `halforder` (deep links + Stripe return URL)
 
 ## Stripe webhook testing
 
-Implementation: **`stripe-backend`** codebase → **`stripeWebhook`** (Firebase Functions **v2** `onRequest`). Verification uses **`req.rawBody`** only — no `express.json()` on this route.
-
-Full setup (secrets, redeploy, local Stripe CLI, event types): see **`stripe-backend/WEBHOOK.md`**.
+Implementation: **`stripe-backend`** → **`stripeWebhook`** (Firebase Functions v2 `onRequest`). Full setup: **`stripe-backend/WEBHOOK.md`**.
 
 Quick checks:
 
-1. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and log in: `stripe login`
-2. Emulator forward URL (replace project id if needed):
+1. [Stripe CLI](https://stripe.com/docs/stripe-cli): `stripe login`
+2. Forward: `stripe listen --forward-to http://127.0.0.1:5001/halforfer/us-central1/stripeWebhook` (adjust project/region)
+3. `npm run test:webhook`
+4. Logs: Firebase console → Functions → `stripeWebhook`
 
-   `stripe listen --forward-to http://127.0.0.1:5001/halforfer/us-central1/stripeWebhook`
+## Learn more
 
-3. Trigger test: `npm run test:webhook`
-4. Logs: `[stripeWebhook]` entries in Firebase Functions logs.
-
-## Stripe Webhook Setup (ONE TIME)
-
-1. Stripe Dashboard → Developers → Webhooks → Add endpoint  
-   URL: `https://us-central1-halforfer.cloudfunctions.net/stripeWebhook`
-2. Events: at minimum `payment_intent.succeeded`; add `checkout.session.completed` if you use Checkout.
-3. Copy the endpoint signing secret into Firebase Secret **`STRIPE_WEBHOOK_SECRET`** (`firebase functions:secrets:set`), then redeploy — see **`stripe-backend/WEBHOOK.md`**.
+- [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/)
+- [EAS Build](https://docs.expo.dev/build/introduction/)

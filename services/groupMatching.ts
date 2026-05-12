@@ -16,6 +16,7 @@ import {
 
 import { db } from './firebase';
 import { haversineDistanceMeters, SPLIT_MAX_DISTANCE_M } from './matching';
+import { safeToMillis } from '@/utils/safeToMillis';
 
 export type GroupStatus = 'waiting' | 'full' | 'ordered';
 
@@ -57,20 +58,7 @@ export function getGroupCenter(
 }
 
 export function createdAtToMillis(createdAt: unknown): number | null {
-  if (createdAt == null) return null;
-  if (typeof createdAt === 'number' && Number.isFinite(createdAt)) {
-    return createdAt < 1e12 ? createdAt * 1000 : createdAt;
-  }
-  if (
-    typeof createdAt === 'object' &&
-    createdAt !== null &&
-    'toMillis' in createdAt &&
-    typeof (createdAt as { toMillis: () => number }).toMillis === 'function'
-  ) {
-    return (createdAt as { toMillis: () => number }).toMillis();
-  }
-  if (createdAt instanceof Date) return createdAt.getTime();
-  return null;
+  return safeToMillis(createdAt);
 }
 
 /**

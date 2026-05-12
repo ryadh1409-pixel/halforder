@@ -7,6 +7,7 @@ import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
 import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
+import { safeToMillis } from '@/utils/safeToMillis';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -110,18 +111,7 @@ function mapDocToFeedRow(
   restaurantImages: Record<string, string | null>,
 ): MarketplaceOrdersFeedRow {
   const data = d.data() as Record<string, unknown>;
-  const rawCreated = data.createdAt;
-  let createdAtMs: number | null = null;
-  if (
-    rawCreated &&
-    typeof rawCreated === 'object' &&
-    'toMillis' in rawCreated &&
-    typeof (rawCreated as { toMillis: () => number }).toMillis === 'function'
-  ) {
-    createdAtMs = (rawCreated as { toMillis: () => number }).toMillis();
-  } else if (typeof rawCreated === 'number') {
-    createdAtMs = rawCreated;
-  }
+  const createdAtMs = safeToMillis(data.createdAt);
 
   const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
   const paymentStatus = typeof data.paymentStatus === 'string' ? data.paymentStatus : 'unpaid';
@@ -403,16 +393,8 @@ export default function MarketplaceOrdersScreen() {
         map.set(docSnap.id, docSnap),
       );
       const merged = [...map.values()].sort((a, b) => {
-        const ta = a.data()?.createdAt;
-        const tb = b.data()?.createdAt;
-        const ma =
-          ta && typeof ta === 'object' && 'toMillis' in ta
-            ? (ta as { toMillis: () => number }).toMillis()
-            : 0;
-        const mb =
-          tb && typeof tb === 'object' && 'toMillis' in tb
-            ? (tb as { toMillis: () => number }).toMillis()
-            : 0;
+        const ma = safeToMillis(a.data()?.createdAt) ?? 0;
+        const mb = safeToMillis(b.data()?.createdAt) ?? 0;
         return mb - ma;
       });
 

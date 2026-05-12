@@ -20,6 +20,8 @@
       "buildNumber": "3",
       "associatedDomains": [
         "applinks:halforder.app",
+        "applinks:www.halforder.app",
+        "applinks:halforder.app",
         "applinks:www.halforder.app"
       ],
       "infoPlist": {
@@ -28,6 +30,17 @@
         "NSCameraUsageDescription": "We need access to your camera to take a profile photo.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "halforder"
+            ],
+            "CFBundleURLName": "HalfOrder Deep Link"
+          },
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.1087129301998-fpbmk5onqteqmgjsf91hq7cl7knobukf"
+            ]
+          },
           {
             "CFBundleURLSchemes": [
               "halforder"
@@ -113,6 +126,76 @@
             "BROWSABLE",
             "DEFAULT"
           ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "halforder.app",
+              "pathPrefix": "/order"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
+              "pathPrefix": "/terms"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
+              "pathPrefix": "/privacy"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
+              "pathPrefix": "/safety-community-guidelines"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
+              "pathPrefix": "/subscribe"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/order"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/terms"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/privacy"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/safety-community-guidelines"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/subscribe"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -125,6 +208,9 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -133,6 +219,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-dev-client",
       [
         "expo-notifications",
         {
@@ -186,6 +273,12 @@
       },
       "iosAppStoreId": ""
     },
-    "owner": "thamer1989"
+    "owner": "thamer1989",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9b7ffbaf-659d-493c-a1bd-a695e2c2982c"
+    }
   }
 }

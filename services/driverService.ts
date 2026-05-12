@@ -14,6 +14,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { acceptOrderWithLock } from '@/services/delivery';
+import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { db } from './firebase';
 import type { OrderStatus } from './orderService';
 
@@ -134,8 +135,8 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
         })
         .filter((entry): entry is { name: string; qty: number } => Boolean(entry))
     : [];
-  const acceptedAtRaw = data.acceptedAt as { toMillis?: () => number } | undefined;
-  const createdAtRaw = data.createdAt as { toMillis?: () => number } | undefined;
+  warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
+  warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
   const restaurantLocation = parseLatLng(data.restaurantLocation);
   const dropoffLocation =
     parseLatLng(data.userLocation) ??
@@ -216,14 +217,8 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     restaurantLng: restaurantLocation?.lng ?? null,
     customerLocation: dropoffLocation,
     driverLocation,
-    acceptedAtMs:
-      acceptedAtRaw && typeof acceptedAtRaw.toMillis === 'function'
-        ? acceptedAtRaw.toMillis()
-        : null,
-    createdAtMs:
-      createdAtRaw && typeof createdAtRaw.toMillis === 'function'
-        ? createdAtRaw.toMillis()
-        : null,
+    acceptedAtMs: safeToMillis(data.acceptedAt),
+    createdAtMs: safeToMillis(data.createdAt),
     estimatedDeliveryTime:
       typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 0,
     distanceKm: distanceKm(driverLocation ?? restaurantLocation, dropoffLocation),

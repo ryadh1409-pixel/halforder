@@ -1,3 +1,4 @@
+import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { db } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import {
@@ -65,20 +66,10 @@ export function driverPresenceDoc(driverId: string) {
   return doc(db, DRIVER_PRESENCE_COLLECTION, driverId);
 }
 
-function toMillis(value: unknown): number | null {
-  if (
-    value &&
-    typeof value === 'object' &&
-    'toMillis' in value &&
-    typeof (value as { toMillis: () => number }).toMillis === 'function'
-  ) {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  return null;
-}
-
 function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }): DispatchOrder {
   const data = d.data();
+  warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
+  warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
   const items = Array.isArray(data.items)
     ? data.items
         .map((item) => {
@@ -143,11 +134,11 @@ function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }
         : typeof data.total === 'number'
           ? data.total
           : 0,
-    createdAtMs: toMillis(data.createdAt),
+    createdAtMs: safeToMillis(data.createdAt),
     status: typeof data.status === 'string' ? data.status : 'ready_for_pickup',
     deliveryStatus: normalizeDeliveryStatus(data.deliveryStatus),
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
-    acceptedAtMs: toMillis(data.acceptedAt),
+    acceptedAtMs: safeToMillis(data.acceptedAt),
   };
 }
 

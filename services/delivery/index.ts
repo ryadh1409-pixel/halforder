@@ -5,6 +5,7 @@ import {
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
 import { db } from '@/services/firebase';
+import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import {
   arrayUnion,
   collection,
@@ -18,10 +19,42 @@ import {
   updateDoc,
   where,
   writeBatch,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
 
 type LatLng = { lat: number; lng: number };
+
+function isPermissionDeniedError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'permission-denied'
+  );
+}
+
+function logDeliveryListenError(context: string, error: unknown): void {
+  if (__DEV__) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : undefined;
+    // eslint-disable-next-line no-console
+    console.warn('[delivery] Firestore listener error', { context, code, error });
+  }
+}
+
+function warnMalformedDeliveryDoc(docId: string, phase: string, err: unknown): void {
+  if (!__DEV__) return;
+  // eslint-disable-next-line no-console
+  console.warn('[delivery] Malformed or unmappable Firestore document', {
+    docId,
+    phase,
+    error: err,
+  });
+}
 
 export type DeliveryLocation = LatLng & {
   heading?: number | null;
@@ -73,14 +106,6 @@ export type ActiveDelivery = DeliveryQueueOrder & {
   driverPhone: string | null;
 };
 
-function toMillis(value: unknown): number | null {
-  if (value && typeof value === 'object' && 'toMillis' in value) {
-    const fn = (value as { toMillis?: () => number }).toMillis;
-    if (typeof fn === 'function') return fn();
-  }
-  return null;
-}
-
 function parseLatLng(value: unknown): LatLng | null {
   if (!value || typeof value !== 'object') return null;
   const lat = Number((value as { lat?: unknown }).lat);
@@ -103,24 +128,25 @@ function distanceKm(a: LatLng | null, b: LatLng | null): number | null {
 
 function mapItems(raw: unknown): DeliveryQueueOrder['items'] {
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object') return null;
-      const row = entry as Record<string, unknown>;
-      const name = typeof row.name === 'string' ? row.name : 'Item';
-      const qty = typeof row.qty === 'number' ? row.qty : 1;
-      const image = typeof row.image === 'string' ? row.image : null;
-      const modifiers = Array.isArray(row.modifiers)
-        ? row.modifiers.filter((v): v is string => typeof v === 'string')
-        : [];
-      return { name, qty, image, modifiers };
-    })
-    .filter((item): item is DeliveryQueueOrder['items'][number] => Boolean(item));
+  const out: DeliveryQueueOrder['items'] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    const name = typeof row.name === 'string' ? row.name : 'Item';
+    const qty = typeof row.qty === 'number' && Number.isFinite(row.qty) ? row.qty : 1;
+    const image = typeof row.image === 'string' ? row.image : null;
+    const modifiers = Array.isArray(row.modifiers)
+      ? row.modifiers.filter((v): v is string => typeof v === 'string')
+      : [];
+    out.push({ name, qty, image, modifiers });
+  }
+  return out;
 }
 
 function mapQueueOrder(d: { id: string; data: () => Record<string, unknown> }): DeliveryQueueOrder {
-  const data = d.data();
-  const createdAtMs = toMillis(data.createdAt);
+  const data = d.data() ?? {};
+  const createdAtMs = safeToMillis(data.createdAt);
+  warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
   const restaurantLocation = parseLatLng(data.restaurantLocation);
   const customerLocation =
     parseLatLng(data.userLocation) ??
@@ -179,7 +205,11 @@ function mapQueueOrder(d: { id: string; data: () => Record<string, unknown> }): 
         : typeof data.estimatedDeliveryMinutes === 'number'
           ? data.estimatedDeliveryMinutes
           : 20,
-    orderAgeMin: createdAtMs ? Math.max(0, Math.round((Date.now() - createdAtMs) / 60000)) : 0,
+    orderAgeMin:
+      createdAtMs != null
+        ? Math.max(0, Math.round((Date.now() - createdAtMs) / 60000))
+        : 0,
+    /** Unknown creation time when Firestore value is missing or invalid (UI should tolerate null). */
     createdAtMs,
     status: typeof data.status === 'string' ? data.status : 'pending_driver',
     deliveryStatus: normalizeDeliveryLifecycleStatus(data.deliveryStatus),
@@ -190,8 +220,14 @@ function mapActiveDelivery(
   d: { id: string; data: () => Record<string, unknown> },
 ): ActiveDelivery {
   const base = mapQueueOrder(d);
-  const data = d.data();
+  const data = d.data() ?? {};
   const timelineRaw = Array.isArray(data.timeline) ? data.timeline : [];
+  const acceptedAtMs = safeToMillis(data.acceptedAt);
+  const pickedUpAtMs = safeToMillis(data.pickedUpAt);
+  const deliveredAtMs = safeToMillis(data.deliveredAt);
+  warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
+  warnDevIfUnparsableTimestamp(d.id, 'pickedUpAt', data.pickedUpAt);
+  warnDevIfUnparsableTimestamp(d.id, 'deliveredAt', data.deliveredAt);
   return {
     ...base,
     assignedDriverId:
@@ -200,9 +236,9 @@ function mapActiveDelivery(
         : typeof data.driverId === 'string'
           ? data.driverId
           : null,
-    acceptedAtMs: toMillis(data.acceptedAt),
-    pickedUpAtMs: toMillis(data.pickedUpAt),
-    deliveredAtMs: toMillis(data.deliveredAt),
+    acceptedAtMs,
+    pickedUpAtMs,
+    deliveredAtMs,
     notes: typeof data.notes === 'string' ? data.notes : null,
     customerInstructions:
       typeof data.customerInstructions === 'string' ? data.customerInstructions : null,
@@ -236,21 +272,47 @@ function mapActiveDelivery(
             updatedAt: (data.driverLocation as { updatedAt?: unknown }).updatedAt ?? null,
           } as DeliveryLocation)
         : null,
-    timeline: timelineRaw
-      .map((event) => {
-        if (!event || typeof event !== 'object') return null;
+    timeline: (() => {
+      const timeline: ActiveDelivery['timeline'] = [];
+      for (const event of timelineRaw) {
+        if (!event || typeof event !== 'object') continue;
         const row = event as Record<string, unknown>;
-        return {
+        timeline.push({
           type: typeof row.type === 'string' ? row.type : 'event',
           actor: typeof row.actor === 'string' ? row.actor : 'system',
-          at: toMillis(row.at),
+          at: safeToMillis(row.at),
           note: typeof row.note === 'string' ? row.note : null,
-        };
-      })
-      .filter((v): v is ActiveDelivery['timeline'][number] => Boolean(v)),
+        });
+      }
+      return timeline;
+    })(),
     driverName: typeof data.driverName === 'string' ? data.driverName : null,
     driverPhone: typeof data.driverPhone === 'string' ? data.driverPhone : null,
   };
+}
+
+function safeMapQueueOrder(row: QueryDocumentSnapshot): DeliveryQueueOrder | null {
+  try {
+    return mapQueueOrder({
+      id: row.id,
+      data: () => (row.data() ?? {}) as Record<string, unknown>,
+    });
+  } catch (err) {
+    warnMalformedDeliveryDoc(row.id, 'mapQueueOrder', err);
+    return null;
+  }
+}
+
+function safeMapActiveDelivery(row: DocumentSnapshot): ActiveDelivery | null {
+  try {
+    return mapActiveDelivery({
+      id: row.id,
+      data: () => (row.data() ?? {}) as Record<string, unknown>,
+    });
+  } catch (err) {
+    warnMalformedDeliveryDoc(row.id, 'mapActiveDelivery', err);
+    return null;
+  }
 }
 
 function toLegacyDeliveryStatus(status: DeliveryLifecycleStatus): string {
@@ -310,15 +372,38 @@ export function subscribeDriverQueue(
     unique.sort((a, b) => {
       const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
       const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
-      return da - db;
+      if (da !== db) return da - db;
+      const ta = a.createdAtMs ?? 0;
+      const tb = b.createdAtMs ?? 0;
+      return tb - ta;
     });
     onData(unique);
   };
 
-  const unsubDriver = onSnapshot(doc(db, 'drivers', driverId), (snap) => {
-    online = snap.data()?.isOnline === true || snap.data()?.online === true;
-    emit();
-  });
+  const unsubDriver = onSnapshot(
+    doc(db, 'drivers', driverId),
+    (snap) => {
+      try {
+        const data = snap.data();
+        online = data?.isOnline === true || data?.online === true;
+      } catch (err) {
+        warnMalformedDeliveryDoc(driverId, 'subscribeDriverQueue driver doc', err);
+        online = false;
+      }
+      emit();
+    },
+    (error) => {
+      logDeliveryListenError(`subscribeDriverQueue drivers/${driverId}`, error);
+      if (isPermissionDeniedError(error) && __DEV__) {
+        // eslint-disable-next-line no-console
+        console.warn('[delivery] Driver presence may be unreadable with current rules.', {
+          driverId,
+        });
+      }
+      online = false;
+      emit();
+    },
+  );
 
   const unsubOrders = onSnapshot(
     query(
@@ -327,13 +412,20 @@ export function subscribeDriverQueue(
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
-      cache = snap.docs
-        .map((row) => mapQueueOrder(row))
-        .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
-        .filter((row) => row.status !== 'cancelled');
+      try {
+        cache = snap.docs
+          .map((row) => safeMapQueueOrder(row))
+          .filter((row): row is DeliveryQueueOrder => row != null)
+          .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
+          .filter((row) => row.status !== 'cancelled');
+      } catch (err) {
+        warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue orders map', err);
+        cache = [];
+      }
       emit();
     },
-    () => {
+    (error) => {
+      logDeliveryListenError('subscribeDriverQueue orders query', error);
       cache = [];
       emit();
     },
@@ -347,66 +439,95 @@ export function subscribeDriverQueue(
 
 export async function acceptOrderWithLock(orderId: string, driver: DriverIdentity): Promise<void> {
   const ref = doc(db, 'orders', orderId);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) throw new Error('missing_order');
-    const data = snap.data();
-    if (data.assignedDriverId || data.driverId) throw new Error('already_assigned');
-    const status = normalizeDeliveryLifecycleStatus(data.deliveryStatus);
-    if (status !== DELIVERY_STATUS.AVAILABLE) throw new Error('not_available');
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('missing_order');
+      const data = snap.data() ?? {};
+      if (data.assignedDriverId || data.driverId) throw new Error('already_assigned');
+      const status = normalizeDeliveryLifecycleStatus(data.deliveryStatus);
+      if (status !== DELIVERY_STATUS.AVAILABLE) throw new Error('not_available');
 
-    tx.update(ref, {
-      assignedDriverId: driver.id,
-      assignedAt: serverTimestamp(),
-      acceptedAt: serverTimestamp(),
-      driverId: driver.id,
-      driverName: driver.name,
-      driverPhone: driver.phone ?? null,
-      deliveryStatus: DELIVERY_STATUS.ACCEPTED,
-      legacyDeliveryStatus: toLegacyDeliveryStatus(DELIVERY_STATUS.ACCEPTED),
-      status: toLegacyOrderStatus(DELIVERY_STATUS.ACCEPTED),
-      timeline: arrayUnion({
-        type: 'accepted',
-        actor: 'driver',
-        actorId: driver.id,
-        at: serverTimestamp(),
-        note: 'Order accepted by driver',
-      }),
+      tx.update(ref, {
+        assignedDriverId: driver.id,
+        assignedAt: serverTimestamp(),
+        acceptedAt: serverTimestamp(),
+        driverId: driver.id,
+        driverName: driver.name,
+        driverPhone: driver.phone ?? null,
+        deliveryStatus: DELIVERY_STATUS.ACCEPTED,
+        legacyDeliveryStatus: toLegacyDeliveryStatus(DELIVERY_STATUS.ACCEPTED),
+        status: toLegacyOrderStatus(DELIVERY_STATUS.ACCEPTED),
+        timeline: arrayUnion({
+          type: 'accepted',
+          actor: 'driver',
+          actorId: driver.id,
+          at: serverTimestamp(),
+          note: 'Order accepted by driver',
+        }),
+      });
+
+      tx.set(
+        doc(db, 'drivers', driver.id),
+        {
+          currentOrderId: orderId,
+          activeDeliveryStatus: DELIVERY_STATUS.ACCEPTED,
+          online: true,
+          isOnline: true,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
     });
-
-    tx.set(
-      doc(db, 'drivers', driver.id),
-      {
-        currentOrderId: orderId,
-        activeDeliveryStatus: DELIVERY_STATUS.ACCEPTED,
-        online: true,
-        isOnline: true,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  });
+  } catch (e) {
+    if (isPermissionDeniedError(e) && __DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[delivery] acceptOrderWithLock permission denied', { orderId, error: e });
+    }
+    throw e;
+  }
 }
 
 export async function declineOrder(orderId: string, driverId: string): Promise<void> {
-  await setDoc(
-    doc(db, 'orders', orderId, 'driverDeclines', driverId),
-    { createdAt: serverTimestamp(), driverId },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, 'orders', orderId, 'driverDeclines', driverId),
+      { createdAt: serverTimestamp(), driverId },
+      { merge: true },
+    );
+  } catch (e) {
+    if (isPermissionDeniedError(e) && __DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[delivery] declineOrder permission denied', { orderId, driverId, error: e });
+    }
+    throw e;
+  }
 }
 
 export function subscribeActiveDelivery(
   orderId: string,
   onData: (order: ActiveDelivery | null) => void,
 ): Unsubscribe {
-  return onSnapshot(doc(db, 'orders', orderId), (snap) => {
-    if (!snap.exists()) {
+  return onSnapshot(
+    doc(db, 'orders', orderId),
+    (snap) => {
+      try {
+        if (!snap.exists()) {
+          onData(null);
+          return;
+        }
+        const mapped = safeMapActiveDelivery(snap);
+        onData(mapped);
+      } catch (err) {
+        warnMalformedDeliveryDoc(orderId, 'subscribeActiveDelivery snapshot', err);
+        onData(null);
+      }
+    },
+    (error) => {
+      logDeliveryListenError(`subscribeActiveDelivery orders/${orderId}`, error);
       onData(null);
-      return;
-    }
-    onData(mapActiveDelivery({ id: snap.id, data: () => snap.data() as Record<string, unknown> }));
-  });
+    },
+  );
 }
 
 export function subscribeDriverActiveOrders(
@@ -416,12 +537,27 @@ export function subscribeDriverActiveOrders(
   return onSnapshot(
     query(collection(db, 'orders'), where('assignedDriverId', '==', driverId), orderBy('createdAt', 'desc')),
     (snap) => {
-      const rows = snap.docs
-        .map((d) => mapActiveDelivery(d))
-        .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
-      onData(rows);
+      try {
+        const rows = snap.docs
+          .map((d) => safeMapActiveDelivery(d))
+          .filter((order): order is ActiveDelivery => order != null)
+          .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
+        rows.sort((a, b) => {
+          const ca = a.createdAtMs ?? 0;
+          const cb = b.createdAtMs ?? 0;
+          if (ca !== cb) return cb - ca;
+          return a.id.localeCompare(b.id);
+        });
+        onData(rows);
+      } catch (err) {
+        warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
+        onData([]);
+      }
     },
-    () => onData([]),
+    (error) => {
+      logDeliveryListenError(`subscribeDriverActiveOrders driverId=${driverId}`, error);
+      onData([]);
+    },
   );
 }
 
@@ -431,10 +567,11 @@ export async function updateDeliveryStatus(
   nextStatus: DeliveryLifecycleStatus,
 ): Promise<void> {
   const ref = doc(db, 'orders', orderId);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) throw new Error('missing_order');
-    const data = snap.data();
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('missing_order');
+      const data = snap.data() ?? {};
     const assignedDriverId =
       typeof data.assignedDriverId === 'string'
         ? data.assignedDriverId
@@ -471,7 +608,19 @@ export async function updateDeliveryStatus(
       },
       { merge: true },
     );
-  });
+    });
+  } catch (e) {
+    if (isPermissionDeniedError(e) && __DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[delivery] updateDeliveryStatus permission denied', {
+        orderId,
+        driverId,
+        nextStatus,
+        error: e,
+      });
+    }
+    throw e;
+  }
 }
 
 export async function updateDriverLiveLocation(
@@ -505,20 +654,43 @@ export async function updateDriverLiveLocation(
     },
     { merge: true },
   );
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (e) {
+    if (isPermissionDeniedError(e) && __DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[delivery] updateDriverLiveLocation permission denied', {
+        orderId,
+        driverId,
+        error: e,
+      });
+    }
+    throw e;
+  }
 }
 
 export async function setDriverOnlineAvailability(
   driverId: string,
   online: boolean,
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'drivers', driverId),
-    {
-      isOnline: online,
-      online,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, 'drivers', driverId),
+      {
+        isOnline: online,
+        online,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (e) {
+    if (isPermissionDeniedError(e) && __DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[delivery] setDriverOnlineAvailability permission denied', {
+        driverId,
+        error: e,
+      });
+    }
+    throw e;
+  }
 }
