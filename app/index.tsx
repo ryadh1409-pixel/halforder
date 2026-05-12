@@ -3,7 +3,7 @@ import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
 import { useAuth } from '../services/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -17,7 +17,6 @@ type GateState =
  */
 export default function Index() {
   const [gate, setGate] = useState<GateState>({ phase: 'loading' });
-  const router = useRouter();
   const { user, loading, firestoreUserRole } = useAuth();
   const { ready: termsReady, accepted: termsAccepted } = useUserTermsStatus(
     user?.uid,
@@ -79,7 +78,6 @@ export default function Index() {
     termsReady,
     termsAccepted,
     firestoreUserRole,
-    router,
   ]);
 
   if (

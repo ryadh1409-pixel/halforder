@@ -10,7 +10,9 @@ import {
   FULFILLMENT_TIMELINE,
   paymentBadge,
 } from '@/components/orders/shared/marketplaceTrackingParts';
+import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
+import { orderRoomHref } from '@/services/orderChat';
 import type { RestaurantOrder } from '@/services/orderService';
 import {
   customerCancelMarketplaceOrder,
@@ -77,21 +79,27 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 
   useEffect(() => {
     let cancelled = false;
+    const restName = formatRestaurantName(order.restaurant?.name);
+    const orderRestaurantId = order.restaurantId;
+    const orderDriverId = order.driverId;
+    const rName = order.restaurant?.name;
+    const rImage = order.restaurant?.image;
+    const rAddr = order.restaurant?.address;
+    const dAvatar = order.driver?.avatar;
+
     void (async () => {
-      const restName = formatRestaurantName(order.restaurant?.name);
-      const baseAddress = formatAddress(order.deliveryLocation?.address);
       const nextRestaurant = {
         name: restName,
-        image: order.restaurant?.image ?? null,
-        address: order.restaurant?.address ? formatAddress(order.restaurant.address) : null,
+        image: rImage ?? null,
+        address: rAddr ? formatAddress(rAddr) : null,
       };
 
       if (
-        order.restaurantId &&
+        orderRestaurantId &&
         (nextRestaurant.name === 'Unknown restaurant' || !nextRestaurant.image || !nextRestaurant.address)
       ) {
         try {
-          const snap = await getDoc(doc(db, 'restaurants', order.restaurantId));
+          const snap = await getDoc(doc(db, 'restaurants', orderRestaurantId));
           const d = snap.data() as Record<string, unknown> | undefined;
           nextRestaurant.name = formatRestaurantName(d?.name ?? d?.restaurantName ?? restName);
           nextRestaurant.image =
@@ -111,11 +119,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
       if (!cancelled) setRestaurantMeta(nextRestaurant);
 
       const nextDriver = { avatar: null as string | null };
-      if (order.driver?.avatar) {
-        nextDriver.avatar = order.driver.avatar;
-      } else if (order.driverId) {
+      if (dAvatar) {
+        nextDriver.avatar = dAvatar;
+      } else if (orderDriverId) {
         try {
-          const driverSnap = await getDoc(doc(db, 'drivers', order.driverId));
+          const driverSnap = await getDoc(doc(db, 'drivers', orderDriverId));
           const dr = driverSnap.data() as Record<string, unknown> | undefined;
           nextDriver.avatar =
             typeof dr?.avatar === 'string'
@@ -133,7 +141,15 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     return () => {
       cancelled = true;
     };
-  }, [order]);
+  }, [
+    order.id,
+    order.restaurantId,
+    order.driverId,
+    order.restaurant?.name,
+    order.restaurant?.image,
+    order.restaurant?.address,
+    order.driver?.avatar,
+  ]);
 
   const lastStatusRef = useRef<string | null>(null);
   useEffect(() => {
@@ -156,6 +172,17 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   }, [order.status]);
 
   const stepDone = useMemo(() => fulfillmentStatusIndex(order.status), [order.status]);
+
+  const customerPhase = useMemo(
+    () =>
+      resolveCustomerDeliveryPhase({
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        deliveryStatus: order.deliveryStatus,
+        driverId: order.driverId,
+      }),
+    [order.status, order.paymentStatus, order.deliveryStatus, order.driverId],
+  );
 
   const mapPoints = useMemo(() => {
     return [
@@ -206,6 +233,14 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
       >
         <View style={styles.stickyHeader}>
           <Text style={styles.orderId}>Live order tracking</Text>
+          <Text style={styles.phaseHeadline}>{customerPhase.title}</Text>
+          <Text style={styles.phaseSubtitle}>{customerPhase.subtitle}</Text>
+          <Pressable
+            style={styles.trackFullscreenBtn}
+            onPress={() => router.push(`/(customer)/track/${encodeURIComponent(order.id)}` as never)}
+          >
+            <Text style={styles.trackFullscreenBtnText}>Fullscreen live map</Text>
+          </Pressable>
           <View style={styles.chipRow}>
             <View style={[styles.chip, { backgroundColor: statusChip.bg }]}>
               <Text style={[styles.chipText, { color: statusChip.fg }]}>
@@ -251,6 +286,14 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             </View>
           </View>
         </View>
+
+        {order.deliveryPin && order.status !== 'delivered' && order.paymentStatus === 'paid' ? (
+          <View style={styles.pinCard}>
+            <Text style={styles.pinLabel}>Your delivery PIN</Text>
+            <Text style={styles.pinDigits}>{order.deliveryPin}</Text>
+            <Text style={styles.pinHint}>Give this code to your driver only at dropoff.</Text>
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Driver</Text>
@@ -424,10 +467,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             style={[styles.secondaryBtn, !driverChatEnabled && styles.secondaryBtnDisabled]}
             disabled={!driverChatEnabled}
             onPress={() =>
-              router.push({
-                pathname: '/order/room/[id]',
-                params: { id: order.id, chatType: ORDER_CHAT_TYPE.CUSTOMER_DRIVER },
-              })
+              router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)
             }
           >
             <Text style={styles.secondaryBtnText}>Chat with driver</Text>
@@ -438,12 +478,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 
           <Pressable
             style={[styles.secondaryBtn, { marginTop: 10 }]}
-            onPress={() =>
-              router.push({
-                pathname: '/order/room/[id]',
-                params: { id: order.id, chatType: ORDER_CHAT_TYPE.SUPPORT },
-              })
-            }
+            onPress={() => router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.SUPPORT) as never)}
           >
             <Text style={styles.secondaryBtnText}>Help & support</Text>
           </Pressable>
@@ -482,6 +517,51 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   orderId: { color: 'rgba(148,163,184,0.95)', fontWeight: '700', paddingHorizontal: 16 },
+  phaseHeadline: {
+    color: '#F8FAFC',
+    fontWeight: '900',
+    fontSize: 20,
+    paddingHorizontal: 16,
+    marginTop: 10,
+    letterSpacing: -0.3,
+  },
+  phaseSubtitle: {
+    color: 'rgba(226,232,240,0.72)',
+    fontWeight: '600',
+    fontSize: 14,
+    paddingHorizontal: 16,
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  trackFullscreenBtn: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(52, 211, 153, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.35)',
+    alignItems: 'center',
+  },
+  trackFullscreenBtnText: { color: '#A7F3D0', fontWeight: '900', fontSize: 15 },
+  pinCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.32)',
+  },
+  pinLabel: { color: '#FDE68A', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
+  pinDigits: {
+    color: '#FFFBEB',
+    fontWeight: '900',
+    fontSize: 28,
+    letterSpacing: 6,
+    marginTop: 8,
+  },
+  pinHint: { color: 'rgba(254, 243, 199, 0.88)', fontWeight: '600', fontSize: 12, marginTop: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingHorizontal: 16 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   chipText: { fontWeight: '800', fontSize: 12, textTransform: 'capitalize' },

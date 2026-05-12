@@ -2,7 +2,10 @@ import AppHeader from '@/components/AppHeader';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import type { OrderStatus } from '@/services/orderService';
 import { updateOrderStatus, type RestaurantOrder } from '@/services/orderService';
-import { claimMarketplaceDriverOrder, type DriverProfile } from '@/services/driverService';
+import {
+  acceptQueuedDeliveryOrder,
+  type DriverProfile,
+} from '@/services/driverService';
 import { useAuth } from '@/services/AuthContext';
 import {
   formatAddress,
@@ -11,14 +14,19 @@ import {
 } from '@/utils/orderFormatters';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import * as Linking from 'expo-linking';
+import { orderRoomHref } from '@/services/orderChat';
+import { updateDriverLiveLocation } from '@/services/delivery';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import * as Location from 'expo-location';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -53,6 +61,8 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
   const router = useRouter();
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [deliverPin, setDeliverPin] = useState('');
+  const watchRef = useRef<Location.LocationSubscription | null>(null);
 
   const driverProfile: DriverProfile | null = useMemo(() => {
     if (!user?.uid) return null;
@@ -71,6 +81,40 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     ((order.paymentStatus === 'paid' && order.status === 'pending_driver') ||
       (order.status === 'ready_for_pickup' && order.deliveryStatus === 'waiting_driver'));
 
+  useEffect(() => {
+    if (!assignedToMe || !user?.uid || Platform.OS === 'web') return undefined;
+    if (order.status === 'delivered' || order.status === 'cancelled') return undefined;
+
+    let cancelled = false;
+    const uid = user.uid;
+    void Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (cancelled || status !== 'granted') return;
+      Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+          distanceInterval: 35,
+        },
+        (pos) => {
+          void updateDriverLiveLocation(order.id, uid, {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            heading: pos.coords.heading ?? null,
+            speed: pos.coords.speed ?? null,
+          });
+        },
+      ).then((sub) => {
+        if (!cancelled) watchRef.current = sub;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      watchRef.current?.remove();
+      watchRef.current = null;
+    };
+  }, [assignedToMe, user?.uid, order.id, order.status]);
+
   const primaryAction = assignedToMe ? nextDriverStep(order.status) : null;
 
   const payoutEst = Math.max(0, order.deliveryFee) * 0.72;
@@ -86,7 +130,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     if (!driverProfile || !canClaim || busy) return;
     setBusy(true);
     try {
-      const res = await claimMarketplaceDriverOrder(order.id, driverProfile);
+      const res = await acceptQueuedDeliveryOrder(order.id, driverProfile);
       if (!res.ok) {
         showError(res.reason === 'already_assigned' ? 'Already assigned' : 'Cannot accept this order');
         return;
@@ -102,12 +146,19 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
 
   async function onAdvance() {
     if (!primaryAction || busy) return;
+    if (primaryAction.next === 'delivered' && order.deliveryPin) {
+      if (deliverPin.trim() !== order.deliveryPin) {
+        showError('Enter the 4-digit delivery PIN from the customer.');
+        return;
+      }
+    }
     setBusy(true);
     try {
       await updateOrderStatus(order.id, primaryAction.next);
       showSuccess('Updated');
       if (primaryAction.next === 'delivered') {
         showNotice('Great job', 'Delivery completed.');
+        setDeliverPin('');
       }
     } catch {
       showError('Could not update status');
@@ -165,6 +216,21 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
           </Pressable>
         ) : null}
 
+        {primaryAction?.next === 'delivered' && order.deliveryPin ? (
+          <View style={styles.pinBox}>
+            <Text style={styles.pinLabel}>Customer delivery PIN</Text>
+            <TextInput
+              value={deliverPin}
+              onChangeText={setDeliverPin}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="••••"
+              placeholderTextColor="rgba(148,163,184,0.5)"
+              style={styles.pinInput}
+            />
+          </View>
+        ) : null}
+
         {primaryAction ? (
           <Pressable style={styles.secondaryBtn} disabled={busy} onPress={() => void onAdvance()}>
             {busy ? (
@@ -181,10 +247,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
             style={styles.linkBtn}
             disabled={!assignedToMe}
             onPress={() =>
-              router.push({
-                pathname: '/order/room/[id]',
-                params: { id: order.id, chatType: ORDER_CHAT_TYPE.CUSTOMER_DRIVER },
-              })
+              router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)
             }
           >
             <Text style={styles.linkBtnText}>Chat customer</Text>
@@ -196,10 +259,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
           <Pressable
             style={[styles.linkBtn, { marginTop: 10 }]}
             onPress={() =>
-              router.push({
-                pathname: '/order/room/[id]',
-                params: { id: order.id, chatType: ORDER_CHAT_TYPE.RESTAURANT_DRIVER },
-              })
+              router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.RESTAURANT_DRIVER) as never)
             }
           >
             <Text style={styles.linkBtnText}>Chat restaurant</Text>
@@ -285,6 +345,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtnText: { color: '#e0f2fe', fontWeight: '900', fontSize: 17 },
+  pinBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.35)',
+    backgroundColor: 'rgba(251,191,36,0.08)',
+  },
+  pinLabel: { color: '#fde68a', fontWeight: '800', fontSize: 12 },
+  pinInput: {
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#f8fafc',
+    fontWeight: '900',
+    fontSize: 22,
+    letterSpacing: 8,
+    backgroundColor: 'rgba(15,23,42,0.9)',
+  },
   linkBtn: {
     paddingVertical: 12,
     borderRadius: 12,

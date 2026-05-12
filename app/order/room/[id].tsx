@@ -6,13 +6,16 @@ import AppHeader from '../../../components/AppHeader';
 import type { OrderChatType } from '@/constants/orderChat';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { theme } from '../../../constants/theme';
+import { useAuth } from '@/services/AuthContext';
 import { auth, db } from '../../../services/firebase';
+import type { UserRole } from '@/services/userService';
 import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '../../../utils/contentModeration';
 import { showError } from '../../../utils/toast';
 import { useLocalSearchParams } from 'expo-router';
 import {
   addDoc,
   collection,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -31,7 +34,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { onSnapshot } from 'firebase/firestore';
 
 /** Align with `OrderRoomScreen` / `chatSecurity` order chat limits. */
 const ORDER_ROOM_CHAT_MAX = 200;
@@ -42,8 +44,16 @@ type OrderMessage = {
   chatType?: string;
   senderId?: string;
   senderName?: string;
+  senderRole?: string;
   createdAt?: unknown;
 };
+
+function mapParticipantSenderRole(role: UserRole | null): string {
+  if (role === 'driver') return 'driver';
+  if (role === 'restaurant' || role === 'host') return 'restaurant';
+  if (role === 'admin') return 'admin';
+  return 'customer';
+}
 
 export default function OrderChatScreen() {
   const params = useLocalSearchParams<{
@@ -71,6 +81,7 @@ export default function OrderChatScreen() {
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList<OrderMessage> | null>(null);
 
+  const { firestoreUserRole } = useAuth();
   const currentUser = auth.currentUser;
   const uid = currentUser?.uid ?? '';
 
@@ -102,7 +113,12 @@ export default function OrderChatScreen() {
           id: docSnap.id,
           ...(docSnap.data() as Omit<OrderMessage, 'id'>),
         }));
-        setMessages(next);
+        const filtered = next.filter((m) => {
+          const t = m.chatType;
+          if (!t) return chatType === ORDER_CHAT_TYPE.CUSTOMER_DRIVER;
+          return t === chatType;
+        });
+        setMessages(filtered);
         setLoading(false);
       },
       (e) => {
@@ -144,6 +160,7 @@ export default function OrderChatScreen() {
         text: mod.text,
         chatType,
         senderId: uid,
+        senderRole: mapParticipantSenderRole(firestoreUserRole ?? null),
         senderName:
           typeof currentUser?.displayName === 'string' && currentUser.displayName.trim()
             ? currentUser.displayName
@@ -165,8 +182,11 @@ export default function OrderChatScreen() {
     return (
       <View style={[styles.row, mine ? styles.rowRight : styles.rowLeft]}>
         <View style={[styles.bubble, bubbleStyle]}>
-          {!mine && item.senderName ? (
-            <Text style={[styles.senderName, styles.textMuted]}>{item.senderName}</Text>
+          {!mine && (item.senderName || item.senderRole) ? (
+            <Text style={[styles.senderName, styles.textMuted]}>
+              {item.senderName ?? 'User'}
+              {item.senderRole ? ` · ${item.senderRole}` : ''}
+            </Text>
           ) : null}
           <Text style={[styles.text, textStyle]}>{item.text ?? ''}</Text>
         </View>

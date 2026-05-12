@@ -5,17 +5,31 @@ import 'react-native-reanimated';
 import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { Slot } from 'expo-router';
-import React from 'react';
+import { Slot, usePathname } from 'expo-router';
+import React, { useEffect } from 'react';
 import { LogBox } from 'react-native';
 
-import { AuthProvider } from '../services/AuthContext';
+import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
 
 LogBox.ignoreAllLogs(true);
 
 configureExpoPushNotificationHandler();
+
+function RootNavigationDebug() {
+  const pathname = usePathname();
+  const { firestoreUserRole, loading: authLoading } = useAuth();
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log('[RootLayout]', {
+      pathname,
+      role: firestoreUserRole,
+      authLoading,
+    });
+  }, [pathname, firestoreUserRole, authLoading]);
+  return null;
+}
 
 console.log('🔥 STRIPE WEBHOOK URL:');
 console.log(STRIPE_WEBHOOK_URL);
@@ -57,6 +71,9 @@ export const linking = {
  * `CartProvider` wraps `Slot` so `useCart()` works on stack routes; it is not navigation logic.
  */
 export default function RootLayout() {
+  if (__DEV__) {
+    console.log('[RootLayout] render');
+  }
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStripeProvider
@@ -67,6 +84,7 @@ export default function RootLayout() {
         <ThemeProvider value={DarkTheme}>
           <AuthProvider>
             <CartProvider>
+              <RootNavigationDebug />
               <Slot />
             </CartProvider>
           </AuthProvider>

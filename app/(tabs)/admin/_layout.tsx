@@ -1,4 +1,4 @@
-import { Redirect, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { requireRole } from '../../../utils/requireRole';
@@ -6,16 +6,13 @@ import { requireRole } from '../../../utils/requireRole';
 export default function AdminLayout() {
   const { loading, authorized } = requireRole(['admin']);
 
-  if (loading) {
+  /** Wrong-role navigation is handled inside `useRequireRole` effects — never `<Redirect />` here (avoids double navigation). */
+  if (loading || !authorized) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
       </View>
     );
-  }
-
-  if (!authorized) {
-    return <Redirect href="/(tabs)" />;
   }
 
   return (

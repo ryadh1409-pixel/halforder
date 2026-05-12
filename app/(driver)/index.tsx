@@ -14,9 +14,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { useAuth } from '../../services/AuthContext';
-import { acceptOrderWithLock } from '../../services/delivery';
+import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import {
   getDriverActiveOrders,
   subscribeAvailableOrders,
@@ -117,93 +117,189 @@ const makeCall = (phone: string, name: string) => {
   );
 };
 
+function ordersListSignature(orders: DriverOrder[]): string {
+  return orders
+    .map((o) =>
+      [
+        o.id,
+        o.status,
+        o.driverId ?? '',
+        o.total,
+        o.createdAtMs ?? '',
+        o.estimatedDeliveryTime,
+        o.restaurantName,
+        o.restaurantAddress ?? '',
+        o.deliveryAddress ?? '',
+        o.deliveryFee,
+      ].join(':'),
+    )
+    .join('|');
+}
+
 export default function DriverHubScreen() {
   const { user } = useAuth();
-  const router = useRouter();
+  const uid = user?.uid ?? '';
   const [isOnline, setIsOnline] = useState(false);
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [availableOrders, setAvailableOrders] = useState<DriverOrder[]>([]);
   const [activeOrders, setActiveOrders] = useState<DriverOrder[]>([]);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [stats, setStats] = useState({ deliveries: 0, earnings: 0, rating: 5.0 });
-  const unsubAvailable = useRef<(() => void) | null>(null);
-  const unsubActive = useRef<(() => void) | null>(null);
-  const unsubDriver = useRef<(() => void) | null>(null);
+
+  const unsubAvailableRef = useRef<(() => void) | null>(null);
+  const unsubActiveRef = useRef<(() => void) | null>(null);
+
+  const driverBootstrapUidRef = useRef<string | null>(null);
+  const lastOnlineRef = useRef<boolean | null>(null);
+  const lastStatsRef = useRef({ deliveries: 0, earnings: 0, rating: 5.0 });
+  const availableSigRef = useRef('');
+  const activeSigRef = useRef('');
+  const acceptingIdRef = useRef<string | null>(null);
+  acceptingIdRef.current = acceptingId;
+
+  /** Sync display name only — never rewrite `isOnline` here (avoids fighting the hub / snapshots). */
+  useEffect(() => {
+    if (!uid) return;
+    const name = user?.displayName?.trim() || 'Driver';
+    void setDoc(doc(db, 'drivers', uid), { name }, { merge: true });
+  }, [uid, user?.displayName]);
 
   useEffect(() => {
-    if (!user?.uid) return;
-    void setDoc(
-      doc(db, 'drivers', user.uid),
-      { isOnline: false, name: user.displayName ?? 'Driver' },
-      { merge: true },
-    );
-    const ref = doc(db, 'drivers', user.uid);
-    unsubDriver.current = onSnapshot(ref, (snap) => {
+    if (!uid) {
+      lastOnlineRef.current = null;
+      driverBootstrapUidRef.current = null;
+      return undefined;
+    }
+
+    const driverRef = doc(db, 'drivers', uid);
+    const unsub = onSnapshot(driverRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      setIsOnline(data.isOnline === true || data.online === true);
-      setStats({
+      const online = data.isOnline === true || data.online === true;
+      if (lastOnlineRef.current !== online) {
+        lastOnlineRef.current = online;
+        setIsOnline(online);
+      }
+
+      const nextStats = {
         deliveries: typeof data.totalDeliveries === 'number' ? data.totalDeliveries : 0,
         earnings: typeof data.totalEarnings === 'number' ? data.totalEarnings : 0,
         rating: typeof data.rating === 'number' ? data.rating : 5.0,
-      });
+      };
+      const prev = lastStatsRef.current;
+      if (
+        prev.deliveries !== nextStats.deliveries ||
+        prev.earnings !== nextStats.earnings ||
+        prev.rating !== nextStats.rating
+      ) {
+        lastStatsRef.current = nextStats;
+        setStats(nextStats);
+      }
     });
-    return () => unsubDriver.current?.();
-  }, [user?.uid, user?.displayName]);
+
+    if (driverBootstrapUidRef.current !== uid) {
+      driverBootstrapUidRef.current = uid;
+      void setDoc(
+        driverRef,
+        {
+          isOnline: false,
+          name: user?.displayName?.trim() || 'Driver',
+        },
+        { merge: true },
+      );
+    }
+
+    return () => {
+      unsub();
+    };
+  }, [uid]);
 
   useEffect(() => {
-    if (!user?.uid) return;
-    if (isOnline) {
-      unsubAvailable.current = subscribeAvailableOrders((orders) => {
-        const unique = Array.from(new Map(orders.filter((o) => !o.driverId).map((o) => [o.id, o])).values());
-        setAvailableOrders(unique);
-      });
-      unsubActive.current = getDriverActiveOrders(user.uid, setActiveOrders);
-    } else {
-      unsubAvailable.current?.();
-      unsubActive.current?.();
+    if (!uid) {
+      availableSigRef.current = '';
+      activeSigRef.current = '';
+      return undefined;
+    }
+
+    const clearListeners = () => {
+      unsubAvailableRef.current?.();
+      unsubAvailableRef.current = null;
+      unsubActiveRef.current?.();
+      unsubActiveRef.current = null;
+    };
+
+    if (!isOnline) {
+      clearListeners();
+      availableSigRef.current = '';
+      activeSigRef.current = '';
       setAvailableOrders([]);
       setActiveOrders([]);
+      return undefined;
     }
+
+    unsubAvailableRef.current = subscribeAvailableOrders((orders) => {
+      const unique = Array.from(
+        new Map(orders.filter((o) => !o.driverId).map((o) => [o.id, o])).values(),
+      );
+      const sig = ordersListSignature(unique);
+      if (sig === availableSigRef.current) return;
+      availableSigRef.current = sig;
+      setAvailableOrders(unique);
+    });
+
+    unsubActiveRef.current = getDriverActiveOrders(uid, (rows) => {
+      const sig = ordersListSignature(rows);
+      if (sig === activeSigRef.current) return;
+      activeSigRef.current = sig;
+      setActiveOrders(rows);
+    });
+
     return () => {
-      unsubAvailable.current?.();
-      unsubActive.current?.();
+      clearListeners();
     };
-  }, [isOnline, user?.uid]);
+  }, [isOnline, uid]);
 
   const handleToggleOnline = useCallback(async () => {
-    if (!user?.uid || togglingOnline) return;
+    if (!uid || togglingOnline) return;
     const nextValue = !isOnline;
     setTogglingOnline(true);
     setIsOnline(nextValue);
     try {
-      await updateDriverOnlineStatus(user.uid, nextValue);
+      await updateDriverOnlineStatus(uid, nextValue);
     } catch {
       setIsOnline(!nextValue);
       showError('Failed to update online status');
     } finally {
       setTogglingOnline(false);
     }
-  }, [isOnline, togglingOnline, user?.uid]);
+  }, [isOnline, togglingOnline, uid]);
 
-  const handleAccept = useCallback(async (order: DriverOrder) => {
-    if (!user?.uid || acceptingId) return;
-    setAcceptingId(order.id);
-    try {
-      await acceptOrderWithLock(order.id, {
-        id: user.uid,
-        name: user.displayName ?? 'Driver',
-        phone: user.phoneNumber ?? null,
-      });
-      setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
-      showSuccess('Order accepted');
-      router.replace(`/driver/active/${encodeURIComponent(order.id)}` as never);
-    } catch {
-      showError('Failed to accept order');
-    } finally {
-      setAcceptingId(null);
-    }
-  }, [acceptingId, router, user?.displayName, user?.phoneNumber, user?.uid]);
+  const handleAccept = useCallback(
+    async (order: DriverOrder) => {
+      if (!uid || acceptingIdRef.current) return;
+      setAcceptingId(order.id);
+      try {
+        const res = await acceptQueuedDeliveryOrder(order.id, {
+          id: uid,
+          name: user?.displayName ?? 'Driver',
+          phone: user?.phoneNumber ?? null,
+          isOnline: true,
+        });
+        if (!res.ok) {
+          showError(res.reason === 'already_assigned' ? 'Already assigned' : 'Could not accept order');
+          return;
+        }
+        setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
+        showSuccess('Order accepted');
+        router.replace(`/driver/active/${encodeURIComponent(order.id)}` as never);
+      } catch {
+        showError('Failed to accept order');
+      } finally {
+        setAcceptingId(null);
+      }
+    },
+    [uid, user?.displayName, user?.phoneNumber],
+  );
 
   const pinnedActiveOrder = activeOrders[0] ?? null;
 

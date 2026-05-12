@@ -35,6 +35,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -291,7 +292,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const { role: firestoreRole, loading: roleLoading } = useUserRole(user?.uid);
-  const firestoreUserRole = firestoreRole ?? null;
 
   useEffect(() => {
     const uid = user?.uid;
@@ -628,20 +628,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await firebaseSignOut(auth);
   }, []);
 
-  const value: AuthContextValue = {
+  const value = useMemo((): AuthContextValue => {
+    const fur = firestoreRole ?? null;
+    const appRole = testingRole ?? (fur === 'driver' ? 'driver' : 'user');
+    return {
+      user,
+      loading: loading || roleLoading,
+      role: firestoreRole,
+      firestoreUserRole: fur,
+      appRole,
+      appUser: user ? { uid: user.uid, role: appRole } : null,
+      setTestingRole,
+      signUpWithEmail,
+      signInWithEmail,
+      signInWithPhone,
+      confirmPhoneCode,
+      reloadAuthUser,
+      signOutUser,
+    };
+  }, [
     user,
-    loading: loading || roleLoading,
-    role: firestoreRole,
-    firestoreUserRole,
-    appRole:
-      testingRole ?? (firestoreUserRole === 'driver' ? 'driver' : 'user'),
-    appUser: user
-      ? {
-          uid: user.uid,
-          role:
-            testingRole ?? (firestoreUserRole === 'driver' ? 'driver' : 'user'),
-        }
-      : null,
+    loading,
+    roleLoading,
+    firestoreRole,
+    testingRole,
     setTestingRole,
     signUpWithEmail,
     signInWithEmail,
@@ -649,7 +659,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     confirmPhoneCode,
     reloadAuthUser,
     signOutUser,
-  };
+  ]);
 
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

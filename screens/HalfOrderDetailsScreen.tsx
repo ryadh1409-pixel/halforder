@@ -1557,3 +1557,5 @@ const styles = StyleSheet.create({
   secondaryDot: { color: '#475569', fontSize: 13 },
   secondaryActionLinkDanger: { color: '#fca5a5', fontSize: 13, fontWeight: '600' },
 });
+
+export default HalfOrderDetailsScreen;

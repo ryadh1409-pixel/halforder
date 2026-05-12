@@ -1,12 +1,23 @@
-import { Redirect, useLocalSearchParams } from 'expo-router';
-import React from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
-/** Canonical tracking lives at `/order/[id]` — keep legacy URLs working. */
+/** Canonical tracking lives at `/order/[id]` — keep legacy URLs working (redirect in an effect, not during render). */
 export default function LegacyOrderTrackingRedirect() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const oid = typeof id === 'string' ? id.trim() : '';
-  if (!oid) {
-    return <Redirect href="/(tabs)/orders" />;
-  }
-  return <Redirect href={`/order/${oid}`} />;
+
+  useEffect(() => {
+    if (!oid) {
+      router.replace('/(tabs)/orders' as never);
+      return;
+    }
+    router.replace(`/order/${encodeURIComponent(oid)}` as never);
+  }, [oid]);
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#06080C' }}>
+      <ActivityIndicator size="large" color="#34D399" />
+    </View>
+  );
 }

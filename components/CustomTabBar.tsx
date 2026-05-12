@@ -136,10 +136,7 @@ function CustomTabBarInner(props: CustomTabBarProps) {
   const role = props?.resolvedRole ?? 'user';
 
   return (
-    <View
-      key={role}
-      style={[styles.container, { bottom: Math.max(10, 8 + insets.bottom) }]}
-    >
+    <View style={[styles.container, { bottom: Math.max(10, 8 + insets.bottom) }]}>
       {routes.map((route, index) => {
         if (!route) return null;
         if (!route.name) return null;

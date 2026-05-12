@@ -13,6 +13,7 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { acceptOrderWithLock } from '@/services/delivery';
 import { db } from './firebase';
 import type { OrderStatus } from './orderService';
 
@@ -463,6 +464,12 @@ export async function claimMarketplaceDriverOrder(
       return { ok: false, reason: 'already_assigned' };
     }
 
+    const existingPin =
+      typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
+        ? data.deliveryPin
+        : null;
+    const deliveryPin = existingPin ?? String(1000 + Math.floor(Math.random() * 9000));
+
     const status = typeof data.status === 'string' ? data.status : '';
     const deliveryStatus = typeof data.deliveryStatus === 'string' ? data.deliveryStatus : '';
     const paid = data.paymentStatus === 'paid';
@@ -489,11 +496,15 @@ export async function claimMarketplaceDriverOrder(
         updatedAt: serverTimestamp(),
         estimatedDeliveryTime:
           typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 24,
+        deliveryPin,
       });
       return { ok: true };
     }
 
-    if (status === 'ready_for_pickup' && deliveryStatus === 'waiting_driver') {
+    if (
+      (status === 'ready_for_pickup' || status === 'ready') &&
+      deliveryStatus === 'waiting_driver'
+    ) {
       tx.update(orderRef, {
         driverId: driver.id,
         assignedDriverId: driver.id,
@@ -507,12 +518,37 @@ export async function claimMarketplaceDriverOrder(
         updatedAt: serverTimestamp(),
         estimatedDeliveryTime:
           typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 18,
+        deliveryPin,
       });
       return { ok: true };
     }
 
     return { ok: false, reason: 'invalid_state' };
   });
+}
+
+/**
+ * Prefer marketplace Firestore rules-friendly assign (`claimMarketplaceDriverOrder`);
+ * fall back to legacy dispatch lifecycle (`acceptOrderWithLock`) when appropriate.
+ */
+export async function acceptQueuedDeliveryOrder(
+  orderId: string,
+  driver: DriverProfile,
+  vehicle?: string | null,
+): Promise<{ ok: boolean; reason?: string }> {
+  const mp = await claimMarketplaceDriverOrder(orderId, driver, vehicle);
+  if (mp.ok) return mp;
+  if (mp.reason !== 'invalid_state' && mp.reason !== 'missing') return mp;
+  try {
+    await acceptOrderWithLock(orderId, {
+      id: driver.id,
+      name: driver.name,
+      phone: driver.phone,
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'accept_failed' };
+  }
 }
 
 export async function acceptDriverOrder(

@@ -2,11 +2,11 @@ import AppHeader from '../../components/AppHeader';
 import { useDriverOnlineStatus } from '../../hooks/useDriverOnlineStatus';
 import { useAuth } from '../../services/AuthContext';
 import {
-  acceptOrderWithLock,
   declineOrder,
   subscribeDriverQueue,
   type DeliveryQueueOrder,
 } from '../../services/delivery';
+import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
 import { useRouter } from 'expo-router';
@@ -56,10 +56,15 @@ export default function DriverOrdersScreen() {
       id: user.uid,
       name: user.displayName?.trim() || 'Driver',
       phone: user.phoneNumber ?? null,
+      isOnline: true,
     };
     try {
       setAcceptingOrderId(orderId);
-      await acceptOrderWithLock(orderId, driver);
+      const res = await acceptQueuedDeliveryOrder(orderId, driver);
+      if (!res.ok) {
+        showError(res.reason === 'already_assigned' ? 'Already assigned' : 'Could not accept order');
+        return;
+      }
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
       showSuccess('Order assigned to you');
       router.push(`/driver/active/${encodeURIComponent(orderId)}` as never);

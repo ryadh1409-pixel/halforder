@@ -15,9 +15,10 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  type Unsubscribe,
   updateDoc,
   where,
+  writeBatch,
+  type Unsubscribe,
 } from 'firebase/firestore';
 
 type LatLng = { lat: number; lng: number };
@@ -485,17 +486,26 @@ export async function updateDriverLiveLocation(
     speed: typeof location.speed === 'number' ? location.speed : null,
     updatedAt: serverTimestamp(),
   };
-  await Promise.all([
-    updateDoc(doc(db, 'orders', orderId), { driverLocation: payload }),
-    setDoc(
-      doc(db, 'drivers', driverId),
-      {
-        liveLocation: payload,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    ),
-  ]);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'orders', orderId), { driverLocation: payload });
+  batch.set(
+    doc(db, 'live_locations', orderId),
+    {
+      orderId,
+      driverId,
+      ...payload,
+    },
+    { merge: true },
+  );
+  batch.set(
+    doc(db, 'drivers', driverId),
+    {
+      liveLocation: payload,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+  await batch.commit();
 }
 
 export async function setDriverOnlineAvailability(

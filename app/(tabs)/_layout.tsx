@@ -1,23 +1,32 @@
 import CustomTabBar from '@/components/CustomTabBar';
 import { useAuth } from '@/services/AuthContext';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 
 /**
  * Keep every tab route mounted as a `Tabs.Screen` (no conditional `null` children, no remount `key`).
  * Hide role-only tabs with `href: null` so the tab router state stays valid and avoids `stale` crashes.
  */
 export default function TabLayout() {
-  const { firestoreUserRole } = useAuth();
-  const role = firestoreUserRole ?? 'user';
-  const showHostTab = role === 'restaurant' || role === 'host';
-  const showDriverTab = role === 'driver' || role === 'admin';
+  const { loading, firestoreUserRole } = useAuth();
+  const resolvedRole = useMemo(() => {
+    if (loading) return 'user';
+    return firestoreUserRole ?? 'user';
+  }, [loading, firestoreUserRole]);
+
+  const showHostTab = resolvedRole === 'restaurant' || resolvedRole === 'host';
+  const showDriverTab = resolvedRole === 'driver' || resolvedRole === 'admin';
+
+  const renderTabBar = useCallback(
+    (props: BottomTabBarProps) => (
+      <CustomTabBar {...props} resolvedRole={resolvedRole} />
+    ),
+    [resolvedRole],
+  );
 
   return (
-    <Tabs
-      screenOptions={{ headerShown: false }}
-      tabBar={(props) => <CustomTabBar {...props} resolvedRole={role} />}
-    >
+    <Tabs screenOptions={{ headerShown: false }} tabBar={renderTabBar}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="explore" />
       <Tabs.Screen name="ai" />

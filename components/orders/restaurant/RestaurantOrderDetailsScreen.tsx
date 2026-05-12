@@ -1,5 +1,6 @@
 import AppHeader from '@/components/AppHeader';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
+import { orderRoomHref } from '@/services/orderChat';
 import type { OrderStatus } from '@/services/orderService';
 import {
   rejectOrder,
@@ -121,10 +122,7 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
               <Pressable
                 style={styles.outlineBtn}
                 onPress={() =>
-                  router.push({
-                    pathname: '/order/room/[id]',
-                    params: { id: order.id, chatType: ORDER_CHAT_TYPE.RESTAURANT_DRIVER },
-                  })
+                  router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.RESTAURANT_DRIVER) as never)
                 }
               >
                 <Text style={styles.outlineBtnText}>Chat driver</Text>

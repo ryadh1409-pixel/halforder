@@ -1,8 +1,8 @@
 import { useDriverOrders } from '../../hooks/useDriverOrders';
 import { useAuth } from '../../services/AuthContext';
 import { requireRole } from '../../utils/requireRole';
-import { useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import { router } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,12 +11,20 @@ export default function DriverActiveScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { orders, loading } = useDriverOrders(user?.uid);
+  /** Firestore snapshots produce a new `orders` array each tick — never depend on that reference for navigation. */
+  const firstOrderId = orders[0]?.id ?? '';
+  const redirectedForIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!loading && orders.length > 0) {
-      router.replace(`/driver/active/${encodeURIComponent(orders[0].id)}` as never);
+    if (loading) return;
+    if (!firstOrderId) {
+      redirectedForIdRef.current = null;
+      return;
     }
-  }, [loading, orders, router]);
+    if (redirectedForIdRef.current === firstOrderId) return;
+    redirectedForIdRef.current = firstOrderId;
+    router.replace(`/driver/active/${encodeURIComponent(firstOrderId)}` as never);
+  }, [loading, firstOrderId]);
 
   if (roleLoading || !authorized) {
     return (

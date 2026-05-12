@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 
+/** Shell only — no listeners, redirects, or state (avoids navigation/render churn). */
 export default function DriverLayout() {
   return (
     <Stack
@@ -8,12 +9,6 @@ export default function DriverLayout() {
         headerShown: false,
         animation: 'slide_from_right',
       }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="dashboard" />
-      <Stack.Screen name="orders" />
-      <Stack.Screen name="order/[id]" />
-      <Stack.Screen name="active" />
-    </Stack>
+    />
   );
 }

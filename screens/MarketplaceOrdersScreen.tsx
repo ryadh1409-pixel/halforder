@@ -6,11 +6,7 @@ import { getOrderListSection } from '@/constants/orderStatus';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
-import {
-  formatAddress,
-  formatOrderStatus,
-  formatRestaurantName,
-} from '@/utils/orderFormatters';
+import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -391,6 +387,15 @@ export default function MarketplaceOrdersScreen() {
       setRefreshing(false);
     };
 
+    let mergeDebounce: ReturnType<typeof setTimeout> | null = null;
+    const scheduleMerge = () => {
+      if (mergeDebounce) clearTimeout(mergeDebounce);
+      mergeDebounce = setTimeout(() => {
+        mergeDebounce = null;
+        void merge();
+      }, 72);
+    };
+
     const merge = async () => {
       if (!heardPart || !heardUsers || !heardUid || !heardCust) return;
       const map = new Map<string, QueryDocumentSnapshot>();
@@ -426,9 +431,6 @@ export default function MarketplaceOrdersScreen() {
         }
         return row;
       });
-      nextRows.forEach((order) => {
-        console.log('LIVE ORDER:', order.id, formatOrderStatus(order.status));
-      });
       setRows(nextRows);
       setLoadError(false);
       setLoading(false);
@@ -437,42 +439,43 @@ export default function MarketplaceOrdersScreen() {
 
     const unsubPart = onSnapshot(
       qParticipants,
-      async (snap) => {
+      (snap) => {
         listPart = snap.docs;
         heardPart = true;
-        await merge();
+        scheduleMerge();
       },
       onListenError,
     );
     const unsubUsers = onSnapshot(
       qUsers,
-      async (snap) => {
+      (snap) => {
         listUsers = snap.docs;
         heardUsers = true;
-        await merge();
+        scheduleMerge();
       },
       onListenError,
     );
     const unsubUid = onSnapshot(
       qUserId,
-      async (snap) => {
+      (snap) => {
         listUid = snap.docs;
         heardUid = true;
-        await merge();
+        scheduleMerge();
       },
       onListenError,
     );
     const unsubCust = onSnapshot(
       qCustomerId,
-      async (snap) => {
+      (snap) => {
         listCust = snap.docs;
         heardCust = true;
-        await merge();
+        scheduleMerge();
       },
       onListenError,
     );
 
     return () => {
+      if (mergeDebounce) clearTimeout(mergeDebounce);
       unsubPart();
       unsubUsers();
       unsubUid();

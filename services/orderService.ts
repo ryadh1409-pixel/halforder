@@ -54,7 +54,7 @@ export type OrderItem = {
   image: string | null;
 };
 
-export type LatLng = { lat: number; lng: number };
+export type LatLng = { lat: number; lng: number; heading?: number | null };
 
 export type RestaurantOrder = {
   id: string;
@@ -95,6 +95,10 @@ export type RestaurantOrder = {
   pickedUpAtMs: number | null;
   deliveredAtMs: number | null;
   cancelledAtMs: number | null;
+  /** 4-digit handoff PIN — shown to customer, entered by driver to complete. */
+  deliveryPin: string | null;
+  /** Encoded polyline for map route (optional; from Directions API). */
+  routePolyline: string | null;
 };
 
 function makeGroupId() {
@@ -153,7 +157,12 @@ function parseLatLng(value: unknown): LatLng | null {
   const lat = typeof o.lat === 'number' ? o.lat : Number(o.lat);
   const lng = typeof o.lng === 'number' ? o.lng : Number(o.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+  const headingRaw = o.heading;
+  const heading =
+    typeof headingRaw === 'number' && Number.isFinite(headingRaw) ? headingRaw : null;
+  const base: LatLng = { lat, lng };
+  if (heading != null) base.heading = heading;
+  return base;
 }
 
 function toCreatedAtLabel(value: unknown): string {
@@ -416,6 +425,11 @@ function mapDocToRestaurantOrder(
     pickedUpAtMs: toCreatedAtMs(data.pickedUpAt),
     deliveredAtMs: toCreatedAtMs(data.deliveredAt),
     cancelledAtMs: toCreatedAtMs(data.cancelledAt),
+    deliveryPin:
+      typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
+        ? data.deliveryPin
+        : null,
+    routePolyline: typeof data.routePolyline === 'string' ? data.routePolyline : null,
   };
 }
 
@@ -770,7 +784,13 @@ export async function updateOrderDriverLocation(
   location: LatLng,
 ): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId), {
-    driverLocation: { lat: location.lat, lng: location.lng },
+    driverLocation: {
+      lat: location.lat,
+      lng: location.lng,
+      ...(typeof location.heading === 'number' && Number.isFinite(location.heading)
+        ? { heading: location.heading }
+        : {}),
+    },
   });
 }
 

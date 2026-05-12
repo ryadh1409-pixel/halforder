@@ -1,12 +1,11 @@
 import { goHome } from '../lib/navigation';
 import { useAuth } from '../services/AuthContext';
 import { type UserRole } from '../services/userService';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useMemo, useRef } from 'react';
 
 export function useRequireRole(allowedRoles: UserRole[]) {
   const { user, role, loading } = useAuth();
-  const router = useRouter();
   const allowedRef = useRef(allowedRoles);
   allowedRef.current = allowedRoles;
   /** Avoid repeated `goHome()` when `user` identity changes but role gate is unchanged. */
@@ -30,7 +29,7 @@ export function useRequireRole(allowedRoles: UserRole[]) {
       return;
     }
     wrongRoleNavigatedRef.current = false;
-  }, [allowedRolesKey, loading, role, router, user]);
+  }, [allowedRolesKey, loading, role, user]);
 
   const authorized = !!user && !!role && allowedRoles.includes(role);
 

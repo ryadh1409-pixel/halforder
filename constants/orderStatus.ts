@@ -28,9 +28,9 @@ export const ORDER_STATUS = {
   COMPLETED: 'delivered',
 } as const;
 
-console.log('ORDER_STATUS loaded', ORDER_STATUS);
-if (!ORDER_STATUS || !ORDER_STATUS.WAITING) {
-  throw new Error('ORDER_STATUS failed to initialize correctly.');
+if (__DEV__) {
+  // eslint-disable-next-line no-console
+  console.log('[orderStatus] ORDER_STATUS keys:', Object.keys(ORDER_STATUS).length);
 }
 
 export const ACTIVE_ORDER_STATUSES = [

@@ -937,7 +937,7 @@ service cloud.firestore {
         && request.resource.data.driverId == request.auth.uid
         && marketplaceOrderPatchKeys().hasOnly([
           'driverId','assignedDriverId','driverName','driverPhone','driverVehicle','driver',
-          'status','deliveryStatus','acceptedAt','estimatedDeliveryTime','updatedAt'
+          'status','deliveryStatus','acceptedAt','estimatedDeliveryTime','updatedAt','deliveryPin'
         ]);
     }
     function driverActivePatchOk() {
@@ -1028,6 +1028,14 @@ service cloud.firestore {
               || request.resource.data.chatType == 'restaurant_driver'
               || request.resource.data.chatType == 'support'
             )
+          )
+          && (
+            !request.resource.data.keys().hasAny(['senderRole'])
+            || (
+              request.resource.data.senderRole is string
+              && request.resource.data.senderRole.size() > 0
+              && request.resource.data.senderRole.size() <= 24
+            )
           );
         allow update, delete: if false;
       }
@@ -1095,6 +1103,25 @@ service cloud.firestore {
     }
     match /notification_opens/{docId} {
       allow read, write: if request.auth != null;
+    }
+    match /live_locations/{orderId} {
+      function liveLocOrderData() {
+        return get(/databases/$(database)/documents/orders/$(orderId)).data;
+      }
+      allow read: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && canAccessMarketplaceDeliveryOrder(liveLocOrderData());
+      allow create, update: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && requestUserIsDriver()
+        && canAccessMarketplaceDeliveryOrder(liveLocOrderData())
+        && liveLocOrderData().driverId == request.auth.uid
+        && request.resource.data.orderId == orderId
+        && request.resource.data.driverId == request.auth.uid
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number
+        && request.resource.data.keys().hasOnly(['orderId','driverId','lat','lng','heading','speed','updatedAt']);
+      allow delete: if false;
     }
     match /{document=**} {
       allow read, write: if isAdmin();
