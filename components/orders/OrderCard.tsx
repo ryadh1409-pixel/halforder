@@ -2,6 +2,7 @@ import OrderActions from '@/components/orders/OrderActions';
 import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
 import { normalizeMerchantStatus } from '@/components/orders/statusFlow';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import { platformElevation } from '@/utils/platformElevation';
 import React, { useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -77,11 +78,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 14,
     marginBottom: 12,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    ...platformElevation({
+      web: '0px 3px 10px rgba(15, 23, 42, 0.06)',
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+      },
+      android: { elevation: 2 },
+    }),
   },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   customer: { fontSize: 16, fontWeight: '800', color: '#0F172A' },

@@ -22,6 +22,7 @@ import { subscribeActiveFoodTemplates } from '@/services/foodTemplates';
 import type { FoodTemplate } from '@/types/food';
 import { useAuth } from '@/services/AuthContext';
 import { showError, showNotice } from '@/utils/toast';
+import { useIsFocused } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -115,6 +116,7 @@ export default function SwipeExploreFeed() {
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { user, firestoreUserRole } = useAuth();
 
   const [cards, setCards] = useState<FoodCardModel[]>([]);
@@ -123,7 +125,7 @@ export default function SwipeExploreFeed() {
   const [cardsRetryKey, setCardsRetryKey] = useState(0);
   const [tick, setTick] = useState(0);
   const [joining, setJoining] = useState(false);
-  const hiddenUserIds = useHiddenUserIds();
+  const hiddenUserIds = useHiddenUserIds(isFocused);
   const [foodTemplates, setFoodTemplates] = useState<FoodTemplate[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<FoodCardModel>>(null);
@@ -134,6 +136,9 @@ export default function SwipeExploreFeed() {
   } | null>(null);
 
   useEffect(() => {
+    if (!isFocused) {
+      return undefined;
+    }
     setLoading(true);
     setCardsError(false);
     const unsub = subscribeActiveFoodCards(
@@ -145,15 +150,18 @@ export default function SwipeExploreFeed() {
       () => setCardsError(true),
     );
     return () => unsub();
-  }, [cardsRetryKey]);
+  }, [isFocused, cardsRetryKey]);
 
   useEffect(() => {
+    if (!isFocused) {
+      return undefined;
+    }
     const unsub = subscribeActiveFoodTemplates(
       (rows) => setFoodTemplates(rows),
       () => setFoodTemplates([]),
     );
     return () => unsub();
-  }, []);
+  }, [isFocused]);
 
   useEffect(() => {
     const id = setInterval(() => setTick((x) => x + 1), 1000);
@@ -189,12 +197,16 @@ export default function SwipeExploreFeed() {
   }, [deckCards.length, activeIndex, windowWidth]);
 
   useEffect(() => {
+    if (!isFocused) {
+      setTopJoinHint(null);
+      return undefined;
+    }
     if (!topCard?.id) {
       setTopJoinHint(null);
-      return;
+      return undefined;
     }
     return subscribeJoinHintsForFoodCard(topCard.id, setTopJoinHint);
-  }, [topCard?.id]);
+  }, [isFocused, topCard?.id]);
 
   const joinBlockedForUser =
     !!uid &&

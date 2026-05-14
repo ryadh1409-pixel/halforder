@@ -2,19 +2,17 @@ import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import { STRIPE_WEBHOOK_URL } from '@/frontend/config/stripeWebhook';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { Slot, usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
+import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
 
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
-import { devLog } from '../utils/devLog';
 
 /** Production: suppress noisy redbox logs. Development: keep logs visible for debugging. */
 if (!__DEV__) {
@@ -29,91 +27,48 @@ if (Platform.OS !== 'web' && !isExpoGo) {
   configureExpoPushNotificationHandler();
 }
 
-function RootNavigationDebug() {
-  const pathname = usePathname();
-  const { firestoreUserRole, loading: authLoading } = useAuth();
-  useEffect(() => {
-    if (!__DEV__) return;
-    console.log('[RootLayout]', {
-      pathname,
-      role: firestoreUserRole,
-      authLoading,
-    });
-  }, [pathname, firestoreUserRole, authLoading]);
-  return null;
-}
-
-/**
- * Role-based deep-link guard: `router.replace` only inside this effect (never during render).
- */
+/** Sole role-based `router.replace`: root `/` landing by role (see `app/index.tsx` for onboarding / terms). */
 function RoleRouteGuard() {
   const pathname = usePathname();
+  const segments = useSegments();
   const router = useRouter();
-  const { loading: authLoading, firestoreUserRole: role } = useAuth();
-  const hasRedirected = useRef(false);
+  const { loading: authLoading, firestoreUserRole: role, user } = useAuth();
 
   useEffect(() => {
-    if (authLoading) {
-      hasRedirected.current = false;
-      return;
-    }
-    if (!role) return;
-
-    const DRIVER_SAFE_PATHS = [
-      '/home',
-      '/profile',
-      '/orders',
-      '/order/',
-      '/food-truck/',
-      '/restaurant',
-      '/map',
-      '/payment',
-      '/join',
-    ];
-    if (role === 'driver' && DRIVER_SAFE_PATHS.some((p) => pathname.startsWith(p))) {
-      hasRedirected.current = false;
-      return;
-    }
-    if (role === 'admin' && DRIVER_SAFE_PATHS.some((p) => pathname.startsWith(p))) {
-      hasRedirected.current = false;
+    if (authLoading || !role || pathname !== '/') return;
+    if (!user) return;
+    // `usePathname()` can be `/` for tab screens in some Expo Router builds; never role-redirect from inside these shells.
+    const root = segments[0];
+    if (
+      root === '(tabs)' ||
+      root === '(driver)' ||
+      root === '(auth)' ||
+      root === '(customer)' ||
+      root === '(restaurant)'
+    ) {
       return;
     }
 
-    if (role === 'driver' || role === 'admin') {
-      const onAllowedDriverRoute =
-        pathname.startsWith('/(driver)') ||
-        pathname.startsWith('/track-order') ||
-        pathname.startsWith('/(tabs)') ||
-        pathname === '/' ||
-        pathname.startsWith('/(auth)') ||
-        pathname.startsWith('/onboarding') ||
-        pathname.startsWith('/terms') ||
-        pathname.startsWith('/checkout') ||
-        pathname.startsWith('/restaurant-menu') ||
-        pathname.startsWith('/match') ||
-        pathname.startsWith('/food-match') ||
-        pathname.startsWith('/chat') ||
-        pathname.startsWith('/create-order') ||
-        pathname.startsWith('/driver');
-
-      if (onAllowedDriverRoute) {
-        hasRedirected.current = false;
-        return;
-      }
-
-      if (hasRedirected.current) return;
-      hasRedirected.current = true;
-      router.replace('/(driver)' as never);
+    if (role === 'driver') {
+      router.replace('/home' as never);
       return;
     }
-
-    hasRedirected.current = false;
-  }, [authLoading, role, pathname, router]);
+    if (role === 'admin') {
+      router.replace('/admin' as never);
+      return;
+    }
+    if (role === 'restaurant' || role === 'host') {
+      router.replace('/(tabs)/host' as never);
+      return;
+    }
+    if (role === 'user' || role === 'customer') {
+      router.replace('/(tabs)' as never);
+      return;
+    }
+  }, [authLoading, role, pathname, router, user, segments]);
 
   return null;
 }
-
-devLog('🔥 STRIPE WEBHOOK URL:', STRIPE_WEBHOOK_URL);
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -147,14 +102,11 @@ export const linking = {
 };
 
 /**
- * Root: providers + `<Slot />` — role guard runs in an effect with pathname / ref guards only
- * (avoids redirect loops on dynamic routes like `/order/[id]`).
+ * Root: providers + `<Slot />` — `RoleRouteGuard` is the only role-based navigation.
  *
  * `CartProvider` wraps `Slot` so `useCart()` works on stack routes; it is not navigation logic.
  */
 export default function RootLayout() {
-  devLog('[RootLayout] render');
-
   if (Platform.OS !== 'web' && isExpoGo) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -173,7 +125,6 @@ export default function RootLayout() {
         <ThemeProvider value={DarkTheme}>
           <AuthProvider>
             <CartProvider>
-              <RootNavigationDebug />
               <RoleRouteGuard />
               <Slot />
             </CartProvider>

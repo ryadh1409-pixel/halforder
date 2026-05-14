@@ -1,8 +1,11 @@
+import { SmartMatchChip } from '@/components/SmartMatchChip';
+import SwipeWrapper from '@/components/SwipeWrapper';
 import { ChatFlow } from '../../components/ChatFlow';
 import { systemActionSheet } from '../../components/SystemDialogHost';
 import { LEGAL_URLS } from '../../constants/legalLinks';
 import { useAIChat } from '../../hooks/useAIChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useSmartMatches } from '../../hooks/useSmartMatches';
 import { buildProductAssistantIntro } from '../../services/ai';
 import {
   getAiChatUrl,
@@ -17,11 +20,8 @@ import {
   type AssistantOrderSummary,
   type TimeContext,
 } from '../../services/chatAssistantOrders';
+import type { SmartMatchOrder } from '@/services/matchingEngine';
 import { saveAssistantChatFeedback } from '../../services/chatService';
-import {
-  getSmartMatches,
-  type SmartMatchOrder,
-} from '../../services/matchingEngine';
 import { userHasSoloWaitingHalfOrder } from '../../services/referralRewards';
 import {
   SUGGESTED_ORDER_BOT_COPY,
@@ -32,11 +32,10 @@ import { showError, showNotice } from '../../utils/toast';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
-import SwipeWrapper from '@/components/SwipeWrapper';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -105,6 +104,37 @@ const AI_PIZZA_TYPE_CHIPS = [
   'Veggie 🥗',
 ] as const;
 
+/** Dev-only: append demo chips for layout QA (`__DEV__` only — never in production). */
+const SHOW_SMART_MATCH_MOCK_CARDS = typeof __DEV__ !== 'undefined' && __DEV__;
+
+/** Same shape as live `SmartMatchOrder` rows from `getSmartMatches`. */
+const MOCK_SMART_MATCH_CARDS: SmartMatchOrder[] = [
+  {
+    id: 'demo-1',
+    score: 92,
+    distanceMeters: 180,
+    foodName: 'Pizza',
+    restaurantName: 'Pizza Pizza',
+    foodType: 'Pizza',
+    status: 'open',
+    etaMinutes: 12,
+    slotsOpen: 2,
+    maxSlots: 4,
+  },
+  {
+    id: 'demo-2',
+    score: 88,
+    distanceMeters: 340,
+    foodName: 'Burger',
+    restaurantName: 'Burger King',
+    foodType: 'Burger',
+    status: 'waiting',
+    etaMinutes: 8,
+    slotsOpen: 1,
+    maxSlots: 3,
+  },
+];
+
 function buildIntroSuggestionMessage(
   ctx: TimeContext,
   rows: AssistantOrderSummary[],
@@ -133,20 +163,35 @@ function buildIntroSuggestionMessage(
 
 export default function ChatScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { user: authUser } = useAuth();
   const { profile } = useCurrentUser();
   const { markIntroSuggestedTemplate, runUserTurn } = useAIChat();
+  const smartMatchesState = useSmartMatches(
+    profile?.location &&
+      typeof profile.location.lat === 'number' &&
+      typeof profile.location.lng === 'number'
+      ? { lat: profile.location.lat, lng: profile.location.lng }
+      : null,
+    { enabled: isFocused },
+  );
+  const liveSmartMatches = smartMatchesState.data?.nearbyOrders ?? [];
+  const smartMatchChipsForUi = useMemo(() => {
+    if (!SHOW_SMART_MATCH_MOCK_CARDS) return liveSmartMatches;
+    const realIds = new Set(liveSmartMatches.map((m) => m.id));
+    const extras = MOCK_SMART_MATCH_CARDS.filter((m) => !realIds.has(m.id));
+    return [...liveSmartMatches, ...extras];
+  }, [liveSmartMatches]);
+
+  const hasSmartMatchSection =
+    smartMatchChipsForUi.length > 0 || Boolean(smartMatchesState.data?.aiText);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [introLoading, setIntroLoading] = useState(true);
   const [introFetchFailed, setIntroFetchFailed] = useState(false);
   const [error, setError] = useState('');
-  const [smartLoading, setSmartLoading] = useState(false);
-  const [smartMatches, setSmartMatches] = useState<{
-    aiText: string;
-    nearbyOrders: SmartMatchOrder[];
-  } | null>(null);
   /** AI-driven guided UI (backend decisions), not only chat text */
   const [step, setStep] = useState<'chat' | 'pizzaType'>('chat');
   const [showSplit, setShowSplit] = useState(false);
@@ -165,33 +210,7 @@ export default function ChatScreen() {
   );
 
   useEffect(() => {
-    let cancelled = false;
-    const loc = profile?.location;
-    if (!loc || !authUser?.uid) {
-      setSmartMatches(null);
-      return;
-    }
-    const ctx = detectTimeContext();
-    const food = ctx.fallbackFood;
-    setSmartLoading(true);
-    void getSmartMatches({
-      lat: loc.lat,
-      lng: loc.lng,
-      food,
-      uid: authUser.uid,
-    })
-      .then((res) => {
-        if (!cancelled) setSmartMatches(res);
-      })
-      .finally(() => {
-        if (!cancelled) setSmartLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser?.uid, profile?.location]);
-
-  useEffect(() => {
+    if (!isFocused) return;
     let cancelled = false;
     (async () => {
       let productIntro: Message | null = null;
@@ -263,6 +282,7 @@ export default function ChatScreen() {
       cancelled = true;
     };
   }, [
+    isFocused,
     markIntroSuggestedTemplate,
     authUser?.uid,
     authUser?.displayName,
@@ -723,49 +743,141 @@ export default function ChatScreen() {
                   Enable location on your profile for AI + nearby order matches (2km).
                 </Text>
               ) : null}
-              {smartLoading ? (
-                <View style={styles.growthCard}>
-                  <ActivityIndicator size="small" color="#6EE7B7" />
-                  <Text style={styles.growthSubtitle}>Finding smart matches…</Text>
-                </View>
-              ) : null}
-              {!smartLoading &&
-              smartMatches &&
-              (smartMatches.nearbyOrders.length > 0 || smartMatches.aiText) ? (
-                <View style={styles.growthCard}>
-                  <Text style={styles.growthTitle}>Smart matches</Text>
-                  {smartMatches.aiText ? (
-                    <Text style={styles.growthAi}>{smartMatches.aiText}</Text>
+              {authUser?.uid && profile?.location ? (
+                <>
+                  {smartMatchesState.loading ? (
+                    <View style={styles.growthCard}>
+                      <ActivityIndicator size="small" color="#6EE7B7" />
+                      <Text style={styles.growthSubtitle}>Finding smart matches…</Text>
+                      <View style={styles.growthSkeletonRow}>
+                        <View style={styles.growthSkeletonChip} />
+                        <View style={styles.growthSkeletonChip} />
+                        <View style={styles.growthSkeletonChip} />
+                      </View>
+                    </View>
                   ) : null}
-                  {smartMatches.nearbyOrders.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.chipRow}
-                    >
-                      {smartMatches.nearbyOrders.map((o) => (
-                        <TouchableOpacity
-                          key={o.id}
-                          style={styles.matchChip}
-                          activeOpacity={0.85}
-                          onPress={() => router.push(`/order/${o.id}` as never)}
+                  {smartMatchesState.error === 'permission-denied' ? (
+                    <View style={[styles.growthCard, styles.growthErrorCard]}>
+                      <Text style={styles.growthTitle}>Could not load matches</Text>
+                      <Text style={styles.growthAi}>
+                        Firestore blocked reads on `public_matchable_orders`. In Firebase Console →
+                        Firestore → Rules, ensure signed-in users can read that collection, then run
+                        `firebase deploy --only firestore:rules`. Deploy the
+                        `syncPublicMatchableOrder` function so documents exist.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.growthRetryBtn}
+                        onPress={smartMatchesState.retry}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.growthRetryBtnText}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  {smartMatchesState.error === 'invalid-argument' ? (
+                    <View style={[styles.growthCard, styles.growthErrorCard]}>
+                      <Text style={styles.growthTitle}>Index or query required</Text>
+                      <Text style={styles.growthAi}>
+                        Deploy Firestore indexes (`firebase deploy --only firestore:indexes`) or use
+                        the index link from the browser / device log. The directory query uses
+                        `status` plus limits on `public_matchable_orders`.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.growthRetryBtn}
+                        onPress={smartMatchesState.retry}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.growthRetryBtnText}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  {smartMatchesState.error === 'unknown' ? (
+                    <View style={[styles.growthCard, styles.growthErrorCard]}>
+                      <Text style={styles.growthTitle}>Could not refresh matches</Text>
+                      <Text style={styles.growthAi}>
+                        Something went wrong loading smart matches. Check your connection and try
+                        again.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.growthRetryBtn}
+                        onPress={smartMatchesState.retry}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.growthRetryBtnText}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  {!smartMatchesState.loading &&
+                  smartMatchesState.error !== 'permission-denied' &&
+                  smartMatchesState.error !== 'invalid-argument' &&
+                  smartMatchesState.error !== 'unknown' &&
+                  smartMatchesState.data &&
+                  hasSmartMatchSection ? (
+                    <View style={styles.growthCard}>
+                      <Text style={styles.growthTitle}>Smart matches</Text>
+                      {SHOW_SMART_MATCH_MOCK_CARDS &&
+                      smartMatchChipsForUi.some((o) => o.id.startsWith('demo-')) ? (
+                        <Text style={styles.growthSubtitle}>
+                          Demo cards shown for development layout checks only.
+                        </Text>
+                      ) : null}
+                      {smartMatchesState.data.aiText ? (
+                        <Text style={styles.growthAi}>{smartMatchesState.data.aiText}</Text>
+                      ) : null}
+                      {smartMatchChipsForUi.length > 0 ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.chipRow}
                         >
-                          <Text style={styles.chipTitle} numberOfLines={1}>
-                            {o.restaurantName}
+                          {smartMatchChipsForUi.map((o, i) => (
+                            <SmartMatchChip key={o.id} order={o} index={i} />
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <View>
+                          <Text style={styles.growthEmpty}>
+                            No smart matches nearby right now.
                           </Text>
-                          <Text style={styles.chipMeta} numberOfLines={2}>
-                            {o.distanceMeters != null
-                              ? `${Math.round(o.distanceMeters)}m`
-                              : 'Nearby'}{' '}
-                            · {o.foodName}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  ) : (
-                    <Text style={styles.growthEmpty}>No orders in 2km right now.</Text>
-                  )}
-                </View>
+                          <TouchableOpacity
+                            style={styles.growthPrimaryBtn}
+                            onPress={() => router.push('/create' as never)}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.growthPrimaryBtnText}>Create Shared Order</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
+                  {!smartMatchesState.loading &&
+                  smartMatchesState.data &&
+                  smartMatchChipsForUi.length === 0 &&
+                  !smartMatchesState.data.aiText &&
+                  !smartMatchesState.error ? (
+                    <View style={styles.growthCard}>
+                      <Text style={styles.growthTitle}>No smart matches nearby</Text>
+                      <Text style={styles.growthSubtitle}>
+                        There are no joinable orders in the directory, or none match your area and food
+                        preference yet. Refresh to check again, or start an order others can join.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.growthRetryBtn}
+                        onPress={smartMatchesState.retry}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.growthRetryBtnText}>Refresh</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.growthPrimaryBtn}
+                        onPress={() => router.push('/create' as never)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.growthPrimaryBtnText}>Create Shared Order</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </>
               ) : null}
             </View>
           }
@@ -1152,18 +1264,43 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   growthEmpty: { color: '#9CA3AF', fontSize: 13 },
-  chipRow: { gap: 10, paddingVertical: 4 },
-  matchChip: {
-    width: 200,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: '#252a33',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+  growthErrorCard: {
+    borderColor: 'rgba(248, 113, 113, 0.45)',
   },
-  chipTitle: { color: '#F8FAFC', fontWeight: '700', fontSize: 14 },
-  chipMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
+  growthRetryBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(248, 113, 113, 0.2)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  growthRetryBtnText: { color: '#FECACA', fontWeight: '700', fontSize: 13 },
+  growthSkeletonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  growthSkeletonChip: {
+    flex: 1,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  growthPrimaryBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(110, 231, 183, 0.12)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(110, 231, 183, 0.35)',
+  },
+  growthPrimaryBtnText: { color: '#6EE7B7', fontWeight: '700', fontSize: 13 },
+  chipRow: { gap: 10, paddingVertical: 4 },
   guidedPanel: {
     marginHorizontal: 12,
     marginBottom: 10,

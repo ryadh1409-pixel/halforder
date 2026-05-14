@@ -14,7 +14,6 @@ import {
   Alert,
   AppState,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -32,39 +31,14 @@ import { isOwnerHost } from '@/services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '@/services/stripeOnboarding';
 import { showError } from '@/utils/toast';
+import MapRenderer from '@/components/maps';
 
 const TORONTO = { lat: 43.6532, lng: -79.3832 };
 
 function MapPreviewCard({ onEdit }: { onEdit: () => void }) {
-  const [MapMod, setMapMod] = useState<typeof import('react-native-maps') | null>(null);
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    try {
-      setMapMod(require('react-native-maps') as typeof import('react-native-maps'));
-    } catch {
-      setMapMod(null);
-    }
-  }, []);
-
-  if (!MapMod) {
-    return (
-      <View style={styles.mapPh}>
-        <Text style={styles.mapPhTitle}>Dropoff area</Text>
-        <Text style={styles.mapPhSub}>Toronto · map preview</Text>
-        <Pressable style={styles.mapEdit} onPress={onEdit}>
-          <Text style={styles.mapEditTxt}>Edit pin</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const MapView = MapMod.default;
-  const Marker = MapMod.Marker;
-
   return (
     <View style={styles.mapWrap}>
-      <MapView
+      <MapRenderer
         style={styles.map}
         pointerEvents="none"
         initialRegion={{
@@ -73,9 +47,17 @@ function MapPreviewCard({ onEdit }: { onEdit: () => void }) {
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
-      >
-        <Marker coordinate={{ latitude: TORONTO.lat, longitude: TORONTO.lng }} />
-      </MapView>
+        markers={[
+          {
+            id: 'toronto',
+            latitude: TORONTO.lat,
+            longitude: TORONTO.lng,
+            pinColor: '#c41e3a',
+          },
+        ]}
+        webTitle="Dropoff area"
+        webSubtitle="Toronto · map preview"
+      />
       <Pressable style={styles.mapEditFloating} onPress={onEdit}>
         <Text style={styles.mapEditTxt}>Edit pin</Text>
       </Pressable>

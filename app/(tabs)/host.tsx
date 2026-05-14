@@ -1,17 +1,18 @@
 import HostDashboardScreen from '@/screens/HostDashboardScreen';
-import { HOST_TAB_ROLES, useRoleGuard } from '@/hooks/useRoleGuard';
+import { HOST_TAB_ROLES } from '@/services/roles';
 import { useAuth } from '@/services/AuthContext';
-import React from 'react';
+import type { UserRole } from '@/services/userService';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-/** Host tab is only registered for `restaurant` / `host` role; redirects run in `useRoleGuard` (not during render). */
+/** Host tab: wrong-role UI only; role landing from `/` is in `app/_layout.tsx`. */
 export default function HostTabScreen() {
-  const { loading } = useAuth();
-  const { authorized } = useRoleGuard({
-    allowedKey: 'host|restaurant',
-    allowedRoles: HOST_TAB_ROLES,
-    fallbackHref: '/(tabs)',
-  });
+  const { user, loading, firestoreUserRole } = useAuth();
+  const effectiveRole = (firestoreUserRole ?? 'user') as UserRole;
+  const authorized = useMemo(
+    () => !loading && Boolean(user) && HOST_TAB_ROLES.includes(effectiveRole),
+    [user, loading, effectiveRole],
+  );
 
   if (loading || !authorized) {
     return (

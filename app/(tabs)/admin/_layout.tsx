@@ -6,7 +6,7 @@ import { requireRole } from '../../../utils/requireRole';
 export default function AdminLayout() {
   const { loading, authorized } = requireRole(['admin']);
 
-  /** Wrong-role navigation is handled inside `useRequireRole` effects — never `<Redirect />` here (avoids double navigation). */
+  /** Wrong-role UI only; root `/` role landing is handled by `RoleRouteGuard` in `app/_layout.tsx`. */
   if (loading || !authorized) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

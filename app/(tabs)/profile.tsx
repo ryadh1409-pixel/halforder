@@ -40,6 +40,7 @@ import { updateProfile, type User } from '@firebase/auth';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useIsFocused } from '@react-navigation/native';
 import {
   deleteField,
   doc,
@@ -225,6 +226,7 @@ function useProfilePalette(): Palette {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const pal = useProfilePalette();
   const isDark = true;
   const {
@@ -309,6 +311,9 @@ export default function ProfileScreen() {
       setProfileLoading(false);
       return;
     }
+    if (!isFocused) {
+      return undefined;
+    }
     const userRef = doc(db, 'users', uid);
     let cancelled = false;
 
@@ -367,7 +372,7 @@ export default function ProfileScreen() {
       cancelled = true;
       unsubscribe();
     };
-  }, [uid]);
+  }, [uid, isFocused]);
 
   useEffect(() => {
     return () => {

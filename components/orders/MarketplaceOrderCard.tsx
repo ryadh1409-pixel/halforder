@@ -1,10 +1,10 @@
 import { DeliveryProgressBar } from '@/components/order/DeliveryProgressBar';
 import type { OrderListSection } from '@/constants/orderStatus';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { platformElevation } from '@/utils/platformElevation';
 import React from 'react';
 import {
   Image,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -192,7 +192,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#11161F',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    ...Platform.select({
+    ...platformElevation({
+      web: '0px 10px 14px rgba(0, 0, 0, 0.28)',
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
@@ -200,7 +201,6 @@ const styles = StyleSheet.create({
         shadowRadius: 14,
       },
       android: { elevation: 8 },
-      default: {},
     }),
   },
   cardDisabled: { opacity: 0.52 },

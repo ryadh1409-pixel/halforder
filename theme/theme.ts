@@ -1,7 +1,9 @@
 /**
  * HalfOrder design system — minimal, high-contrast (Uber / Airbnb style).
  */
-import { Platform, StyleSheet, type TextStyle } from 'react-native';
+import { StyleSheet, type TextStyle } from 'react-native';
+
+import { platformElevation } from '../utils/platformElevation';
 
 export const palette = {
   primaryGreen: '#4CAF50',
@@ -174,7 +176,8 @@ export const theme = {
 
 /** Subtle elevation — cards, floating panels */
 export const shadows = {
-  card: Platform.select({
+  card: platformElevation({
+    web: '0px 4px 14px rgba(0, 0, 0, 0.07)',
     ios: {
       shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 4 },
@@ -182,7 +185,6 @@ export const shadows = {
       shadowRadius: 14,
     },
     android: { elevation: 3 },
-    default: {},
   }),
 } as const;
 

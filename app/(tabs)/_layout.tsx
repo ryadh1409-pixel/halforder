@@ -1,32 +1,22 @@
 import CustomTabBar from '@/components/CustomTabBar';
-import { useAuth } from '@/services/AuthContext';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
+import React from 'react';
 
 /**
- * Keep every tab route mounted as a `Tabs.Screen` (no conditional `null` children, no remount `key`).
- * Hide role-only tabs with `href: null` so the tab router state stays valid and avoids `stale` crashes.
+ * Custom tab bar: `onPress` → `router.navigate(href)` only (see `components/CustomTabBar.tsx`).
+ * No `initialRouteName` / `initialLayout` / extra `defaultScreenOptions` here — those can
+ * interact badly with lazy tabs.
  */
 export default function TabLayout() {
-  const { loading, firestoreUserRole } = useAuth();
-  const resolvedRole = useMemo(() => {
-    if (loading) return 'user';
-    return firestoreUserRole ?? 'user';
-  }, [loading, firestoreUserRole]);
-
-  const showHostTab = resolvedRole === 'restaurant' || resolvedRole === 'host';
-  const showDriverTab = resolvedRole === 'driver' || resolvedRole === 'admin';
-
-  const renderTabBar = useCallback(
-    (props: BottomTabBarProps) => (
-      <CustomTabBar {...props} resolvedRole={resolvedRole} />
-    ),
-    [resolvedRole],
-  );
-
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={renderTabBar}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        /** Mount tab screens on demand so inactive tabs do not run effects at startup. */
+        lazy: true,
+      }}
+      tabBar={(props) => <CustomTabBar {...props} />}
+    >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="explore" />
       <Tabs.Screen name="ai" />
@@ -34,8 +24,8 @@ export default function TabLayout() {
       <Tabs.Screen name="home" />
       <Tabs.Screen name="profile" />
       <Tabs.Screen name="admin" options={{ href: null }} />
-      <Tabs.Screen name="host" options={showHostTab ? {} : { href: null }} />
-      <Tabs.Screen name="driver" options={showDriverTab ? {} : { href: null }} />
+      <Tabs.Screen name="host" />
+      <Tabs.Screen name="driver" />
     </Tabs>
   );
 }

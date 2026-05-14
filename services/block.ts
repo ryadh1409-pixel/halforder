@@ -1,4 +1,6 @@
 import { auth, db } from './firebase';
+import { FIRESTORE_COLLECTIONS } from './firestorePaths';
+import { logFirestoreQuery, shouldLogFirestoreQueries } from './firestoreQueryLog';
 import {
   arrayRemove,
   arrayUnion,
@@ -152,20 +154,33 @@ export async function isUserBlocked(
 
 /**
  * All user IDs this account hides (blocked + users who blocked this account).
+ * Uses only the signed-in user's `users/{uid}` doc, `blockedUsers` subcollection,
+ * and `blocks` docs — avoids listing other users' `users/*` documents (disallowed by rules).
  */
 export async function getHiddenUserIds(currentUserId: string): Promise<Set<string>> {
   if (!currentUserId) return new Set<string>();
 
+  if (shouldLogFirestoreQueries()) {
+    logFirestoreQuery('block.getHiddenUserIds', {
+      collections: [
+        `${FIRESTORE_COLLECTIONS.users}/${currentUserId}`,
+        `users/${currentUserId}/blockedUsers`,
+        FIRESTORE_COLLECTIONS.blocks,
+      ],
+      constraints: {
+        blocksQueries: ['blockerId == uid', 'blockedUserId == uid'],
+      },
+    });
+  }
+
   const meRef = doc(db, 'users', currentUserId);
-  const qBlockers = query(
-    collection(db, 'users'),
-    where('blockedUsers', 'array-contains', currentUserId),
-  );
-  const [meSnap, blockersSnap, subSnap] = await Promise.all([
+  const [meSnap, subSnap, blocksAsBlocker, blocksAsBlocked] = await Promise.all([
     getDoc(meRef),
-    getDocs(qBlockers),
     getDocs(collection(db, 'users', currentUserId, 'blockedUsers')),
+    getDocs(query(collection(db, 'blocks'), where('blockerId', '==', currentUserId))),
+    getDocs(query(collection(db, 'blocks'), where('blockedUserId', '==', currentUserId))),
   ]);
+
   const ids = new Set<string>();
   const mine = meSnap.exists() ? meSnap.data()?.blockedUsers : [];
   if (Array.isArray(mine)) {
@@ -177,8 +192,13 @@ export async function getHiddenUserIds(currentUserId: string): Promise<Set<strin
     const bid = typeof d.data()?.blockedUserId === 'string' ? d.data()?.blockedUserId : d.id;
     if (typeof bid === 'string' && bid) ids.add(bid);
   });
-  blockersSnap.docs.forEach((d) => {
-    if (d.id) ids.add(d.id);
+  blocksAsBlocker.docs.forEach((d) => {
+    const other = d.data()?.blockedUserId;
+    if (typeof other === 'string' && other) ids.add(other);
+  });
+  blocksAsBlocked.docs.forEach((d) => {
+    const other = d.data()?.blockerId;
+    if (typeof other === 'string' && other) ids.add(other);
   });
   return ids;
 }

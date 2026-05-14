@@ -10,14 +10,15 @@ import { useEffect, useMemo, useState } from 'react';
 
 /**
  * User IDs the current user should not see in discovery (blocked either direction).
+ * @param enabled When false, skips Firestore listeners (e.g. explore tab not focused).
  */
-export function useHiddenUserIds(): Set<string> {
+export function useHiddenUserIds(enabled: boolean = true): Set<string> {
   const uid = auth.currentUser?.uid ?? null;
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
   const [blockerIds, setBlockerIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!uid) {
+    if (!enabled || !uid) {
       setBlockedIds([]);
       setBlockerIds([]);
       return;
@@ -48,7 +49,7 @@ export function useHiddenUserIds(): Set<string> {
       unsub1();
       unsub2();
     };
-  }, [uid]);
+  }, [uid, enabled]);
 
   return useMemo(
     () => new Set([...blockedIds, ...blockerIds]),

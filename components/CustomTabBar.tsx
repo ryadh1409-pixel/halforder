@@ -1,20 +1,48 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/services/AuthContext';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import React, { memo, useCallback, useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { type Href, useRouter } from 'expo-router';
+import React, { memo, useCallback, useMemo } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withSpring,
-} from 'react-native-reanimated';
+import { platformElevation } from '@/utils/platformElevation';
 
+/**
+ * Custom bottom tab bar — visuals + role filtering only.
+ * Tab changes: **only** `Pressable.onPress` → `router.navigate(href)` (Expo Router).
+ * No `useEffect`, no loops that navigate, no prefetch, no `navigation.navigate` outside press.
+ */
 const ACTIVE = '#FF6B6B';
 const INACTIVE = '#777';
 
 const HIDDEN_TAB_NAMES = new Set<string>(['admin']);
+
+/** Stable `href` for each `(tabs)` screen name (Expo Router file routes). */
+function hrefForTabRoute(routeName: string): Href {
+  switch (routeName) {
+    case 'index':
+      return '/(tabs)' as Href;
+    case 'explore':
+      return '/(tabs)/explore' as Href;
+    case 'ai':
+      return '/(tabs)/ai' as Href;
+    case 'orders':
+      return '/(tabs)/orders' as Href;
+    case 'home':
+      return '/(tabs)/home' as Href;
+    case 'profile':
+      return '/(tabs)/profile' as Href;
+    case 'host':
+      return '/(tabs)/host' as Href;
+    case 'driver':
+      return '/(tabs)/driver' as Href;
+    case 'admin':
+      return '/(tabs)/admin' as Href;
+    default:
+      return `/(tabs)/${routeName}` as Href;
+  }
+}
 
 function iconGlyph(
   routeName: string,
@@ -48,46 +76,17 @@ function iconGlyph(
 type ItemProps = {
   route: BottomTabBarProps['state']['routes'][number];
   focused: boolean;
-  navigation: BottomTabBarProps['navigation'];
+  href: Href;
 };
 
-const TabBarItem = memo(function TabBarItem({ route, focused, navigation }: ItemProps) {
-  const scale = useSharedValue(focused ? 1.06 : 1);
-
-  useEffect(() => {
-    scale.value = withSpring(focused ? 1.06 : 1, { damping: 16, stiffness: 220 });
-  }, [focused, scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+const TabBarItem = memo(function TabBarItem({ route, focused, href }: ItemProps) {
+  const router = useRouter();
 
   const onPress = useCallback(() => {
-    if (!navigation || !route?.key || !route?.name) return;
-    try {
-      const event = navigation.emit({
-        type: 'tabPress',
-        target: route.key,
-        canPreventDefault: true,
-      });
-
-      scale.value = withSequence(
-        withSpring(1.14, { damping: 10, stiffness: 420 }),
-        withSpring(focused ? 1.06 : 1.06, { damping: 14, stiffness: 260 }),
-      );
-
-      if (!event.defaultPrevented) {
-        navigation.navigate(route.name as never);
-      }
-    } catch (e) {
-      console.warn('[CustomTabBar] tabPress', e);
-      try {
-        navigation.navigate(route.name as never);
-      } catch (navErr) {
-        console.warn('[CustomTabBar] navigate', navErr);
-      }
-    }
-  }, [focused, navigation, route.key, route.name, scale]);
+    if (!route?.name) return;
+    if (focused) return;
+    router.navigate(href);
+  }, [focused, href, route?.name, router]);
 
   const iconName = iconGlyph(route?.name ?? '', focused);
 
@@ -99,41 +98,34 @@ const TabBarItem = memo(function TabBarItem({ route, focused, navigation }: Item
       onPress={onPress}
       style={styles.tab}
     >
-      <Animated.View
-        style={[styles.iconContainer, focused && styles.activeTab, animatedStyle]}
-      >
+      <View style={[styles.iconContainer, focused && styles.activeTab]}>
         <Ionicons name={iconName} size={22} color={focused ? ACTIVE : INACTIVE} />
-      </Animated.View>
+      </View>
     </Pressable>
   );
 });
 
-export type CustomTabBarProps = BottomTabBarProps & {
-  resolvedRole?: string;
-};
+export type CustomTabBarProps = BottomTabBarProps;
 
-function CustomTabBarInner(props: CustomTabBarProps) {
+function CustomTabBar(props: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { loading, firestoreUserRole } = useAuth();
+  const role = useMemo(
+    () => (loading ? 'user' : firestoreUserRole ?? 'user'),
+    [loading, firestoreUserRole],
+  );
 
-  if (!props || !props.state || !props.state.routes) {
+  if (!props?.state?.routes) {
     return null;
   }
 
-  const { state, navigation } = props ?? {};
-  if (!state || !navigation) {
-    return null;
-  }
-
-  const routes = state?.routes ?? [];
+  const { state } = props;
+  const routes = state.routes ?? [];
   if (routes.length === 0) {
     return null;
   }
 
-  const tabIndex = typeof state?.index === 'number' ? state.index : 0;
-  const stale = typeof state === 'object' && state !== null && 'stale' in state ? Boolean(state.stale) : false;
-  void stale;
-
-  const role = props?.resolvedRole ?? 'user';
+  const tabIndex = typeof state.index === 'number' ? state.index : 0;
 
   return (
     <View style={[styles.container, { bottom: Math.max(10, 8 + insets.bottom) }]}>
@@ -142,17 +134,17 @@ function CustomTabBarInner(props: CustomTabBarProps) {
         if (!route.name) return null;
         if (HIDDEN_TAB_NAMES.has(route.name)) return null;
         if (route.name === 'host' && role !== 'restaurant' && role !== 'host') return null;
-        if (route.name === 'driver' && role !== 'driver' && role !== 'admin')
-          return null;
+        if (route.name === 'driver' && role !== 'driver' && role !== 'admin') return null;
         if (!route.key) return null;
 
-        const focused = tabIndex === index;
+        const isFocused = tabIndex === index;
+        const href = hrefForTabRoute(route.name);
         return (
           <TabBarItem
             key={route.key}
             route={route}
-            focused={focused}
-            navigation={navigation}
+            focused={isFocused}
+            href={href}
           />
         );
       })}
@@ -160,7 +152,7 @@ function CustomTabBarInner(props: CustomTabBarProps) {
   );
 }
 
-export default memo(CustomTabBarInner);
+export default memo(CustomTabBar);
 
 const styles = StyleSheet.create({
   container: {
@@ -176,14 +168,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     borderTopWidth: 0,
-    ...Platform.select({
+    ...platformElevation({
+      web: '0px 5px 10px rgba(0, 0, 0, 0.25)',
       ios: {
         shadowColor: '#000',
         shadowOpacity: 0.25,
         shadowOffset: { width: 0, height: 5 },
         shadowRadius: 10,
       },
-      default: { elevation: 10 },
+      android: { elevation: 10 },
     }),
   },
   tab: {

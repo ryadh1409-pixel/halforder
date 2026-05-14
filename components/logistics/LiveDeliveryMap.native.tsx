@@ -1,28 +1,8 @@
 import { isExpoGo } from '@/constants/runtimeEnvironment';
+import type { LiveDeliveryMapProps } from './liveDeliveryMapTypes';
 import React, { memo, useEffect, useMemo, useRef } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-
-export type MapCoord = { latitude: number; longitude: number };
-
-type Props = {
-  /** Restaurant → dropoff → driver (straight segments; replace with Directions polyline when available). */
-  polylineCoords: MapCoord[];
-  restaurant: MapCoord | null;
-  dropoff: MapCoord | null;
-  driver: MapCoord | null;
-  /** Optional map rotation for driver marker (degrees). */
-  driverHeading?: number | null;
-  dark?: boolean;
-};
-
-let RNMaps: typeof import('react-native-maps') | null = null;
-if (Platform.OS !== 'web') {
-  try {
-    RNMaps = require('react-native-maps');
-  } catch {
-    RNMaps = null;
-  }
-}
+import { StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
 function LiveDeliveryMapInner({
   polylineCoords,
@@ -31,11 +11,11 @@ function LiveDeliveryMapInner({
   driver,
   driverHeading,
   dark = true,
-}: Props) {
-  const mapRef = useRef<any>(null);
+}: LiveDeliveryMapProps) {
+  const mapRef = useRef<MapView | null>(null);
 
   const fitCoords = useMemo(() => {
-    const pts: MapCoord[] = [...polylineCoords];
+    const pts = [...polylineCoords];
     if (restaurant) pts.push(restaurant);
     if (dropoff) pts.push(dropoff);
     if (driver) pts.push(driver);
@@ -82,18 +62,6 @@ function LiveDeliveryMapInner({
     );
   }
 
-  if (!RNMaps || Platform.OS === 'web') {
-    return (
-      <View style={[styles.fallback, dark && styles.fallbackDark]}>
-        <Text style={styles.fallbackText}>Live map is available on iOS and Android.</Text>
-      </View>
-    );
-  }
-
-  const MapView = RNMaps.default;
-  const Marker = RNMaps.Marker;
-  const Polyline = RNMaps.Polyline;
-
   return (
     <MapView
       ref={mapRef}
@@ -138,5 +106,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
   },
   fallbackDark: { backgroundColor: '#020617' },
-  fallbackText: { color: 'rgba(226,232,240,0.75)', fontWeight: '600', paddingHorizontal: 24, textAlign: 'center' },
+  fallbackText: {
+    color: 'rgba(226,232,240,0.75)',
+    fontWeight: '600',
+    paddingHorizontal: 24,
+    textAlign: 'center',
+  },
 });
+
+export type { MapCoord, LiveDeliveryMapProps } from './liveDeliveryMapTypes';

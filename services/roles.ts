@@ -21,3 +21,9 @@ export function isOwnerHost(
   if (!rid || !user?.uid || user.uid !== rid) return false;
   return isHostUser(user, role);
 }
+
+/** Roles allowed to see the Driver tab in `(tabs)` (see `app/(tabs)/driver.tsx`). */
+export const DRIVER_TAB_ROLES: readonly UserRole[] = ['driver', 'admin'];
+
+/** Roles allowed to see the Host tab in `(tabs)` (see `app/(tabs)/host.tsx`). */
+export const HOST_TAB_ROLES: readonly UserRole[] = ['restaurant', 'host'];

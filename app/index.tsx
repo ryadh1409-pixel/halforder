@@ -17,7 +17,7 @@ type GateState =
  */
 export default function Index() {
   const [gate, setGate] = useState<GateState>({ phase: 'loading' });
-  const { user, loading, firestoreUserRole } = useAuth();
+  const { user, loading } = useAuth();
   const { ready: termsReady, accepted: termsAccepted } = useUserTermsStatus(
     user?.uid,
   );
@@ -64,10 +64,8 @@ export default function Index() {
       router.replace('/terms-acceptance?returnTo=/(tabs)' as never);
       return;
     }
-    if (firestoreUserRole === 'restaurant' || firestoreUserRole === 'host') {
-      router.replace('/(tabs)/host' as never);
-      return;
-    }
+    /** Signed-in role landing is handled by `RoleRouteGuard` in `app/_layout.tsx` when `pathname === '/'`. */
+    if (user) return;
     router.replace('/(tabs)' as never);
   }, [
     loading,
@@ -77,7 +75,6 @@ export default function Index() {
     user,
     termsReady,
     termsAccepted,
-    firestoreUserRole,
   ]);
 
   if (

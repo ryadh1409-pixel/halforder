@@ -1,14 +1,18 @@
-import { ACTIVE_ORDER_STATUSES } from '@/constants/orderStatus';
 import { getHiddenUserIds } from './block';
-import { db } from './firebase';
-import { isUserFlagged } from './userModeration';
 import {
-  collection,
-  getDocs,
-  limit,
-  query,
-  where,
-} from 'firebase/firestore';
+  joinDirectoryOrdersQuery,
+  isJoinDirectoryProbeMode,
+  type PublicMatchableOrderDoc,
+} from './joinDirectoryFirestore';
+import { auth, syncAuthForFirestoreReads } from './firebase';
+import {
+  fetchUserRoleWithLog,
+  logFirestoreQuery,
+  shouldLogFirestoreQueries,
+} from './firestoreQueryLog';
+import { FIRESTORE_COLLECTIONS } from './firestorePaths';
+import { logFirestoreSnapshotResult } from './firestoreAiDebug';
+import { getDocs } from 'firebase/firestore';
 
 const FOOD_INTENT_KEYWORDS = [
   'pizza',
@@ -225,21 +229,66 @@ export async function fetchActiveJoinableOrdersForContext(
   scanLimit: number = 48,
   viewerUid?: string | null,
 ): Promise<AssistantOrderSummary[]> {
-  const q = query(
-    collection(db, 'orders'),
-    where('status', 'in', [...ACTIVE_ORDER_STATUSES]),
-    limit(scanLimit),
-  );
-  const snap = await getDocs(q);
+  await syncAuthForFirestoreReads();
+
+  let roleForLog: string | undefined;
+  if (shouldLogFirestoreQueries()) {
+    roleForLog = await fetchUserRoleWithLog(auth.currentUser?.uid ?? null);
+    logFirestoreQuery('chatAssistantOrders.fetchActiveJoinableOrdersForContext', {
+      collection: FIRESTORE_COLLECTIONS.publicMatchableOrders,
+      constraints: isJoinDirectoryProbeMode()
+        ? { mode: 'PROBE', limit: 5 }
+        : {
+            where: ['status', 'in', '(join directory)'],
+            limit: scanLimit,
+          },
+      role: roleForLog,
+    });
+  }
+
+  let snap: Awaited<ReturnType<typeof getDocs>>;
+  try {
+    const q = joinDirectoryOrdersQuery(scanLimit);
+    snap = await getDocs(q);
+    logFirestoreSnapshotResult(snap, 'chatAssistantOrders.fetchActiveJoinableOrdersForContext');
+  } catch (e) {
+    const code =
+      e && typeof e === 'object' && 'code' in e ? String((e as { code?: string }).code) : '';
+    if (shouldLogFirestoreQueries()) {
+      logFirestoreQuery('chatAssistantOrders.fetchActiveJoinableOrdersForContext.ERROR', {
+        collection: FIRESTORE_COLLECTIONS.publicMatchableOrders,
+        constraints: { code },
+        role: roleForLog,
+      });
+    }
+    if (__DEV__) {
+      console.warn('[chatAssistantOrders] fetchActiveJoinableOrdersForContext', e);
+    }
+    if (code === 'permission-denied' || code === 'missing-or-insufficient-permissions') {
+      return [];
+    }
+    return [];
+  }
+
   const now = Date.now();
   const summaries: AssistantOrderSummary[] = [];
+  if (shouldLogFirestoreQueries() && viewerUid?.trim()) {
+    logFirestoreQuery('chatAssistantOrders.getHiddenUserIds', {
+      collections: [
+        `${FIRESTORE_COLLECTIONS.users}/${viewerUid.trim()}`,
+        `users/${viewerUid.trim()}/blockedUsers`,
+        FIRESTORE_COLLECTIONS.blocks,
+      ],
+      role: roleForLog,
+    });
+  }
   const hidden =
     viewerUid && viewerUid.trim()
       ? await getHiddenUserIds(viewerUid.trim())
       : null;
 
   for (const d of snap.docs) {
-    const data = d.data() as Record<string, unknown>;
+    const data = d.data() as PublicMatchableOrderDoc;
     const exp =
       typeof data.expiresAt === 'number' ? data.expiresAt : null;
     if (exp != null && exp <= now) {
@@ -248,19 +297,17 @@ export async function fetchActiveJoinableOrdersForContext(
     const itemsSummary =
       typeof data.itemsSummary === 'string'
         ? data.itemsSummary
-        : typeof data.title === 'string'
-          ? data.title
+        : typeof data.foodName === 'string'
+          ? data.foodName
           : undefined;
     const hostUserId =
-      typeof data.hostId === 'string' && data.hostId.trim()
-        ? data.hostId.trim()
-        : typeof data.createdBy === 'string' && data.createdBy.trim()
-          ? data.createdBy.trim()
-          : undefined;
-    if (hostUserId && hidden?.has(hostUserId)) {
+      typeof data.hostUserId === 'string' && data.hostUserId.trim()
+        ? data.hostUserId.trim()
+        : undefined;
+    if (viewerUid && data.memberIds && data.memberIds.includes(viewerUid)) {
       continue;
     }
-    if (hostUserId && (await isUserFlagged(hostUserId))) {
+    if (hostUserId && hidden?.has(hostUserId)) {
       continue;
     }
     summaries.push({

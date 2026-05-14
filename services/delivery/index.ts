@@ -5,7 +5,7 @@ import {
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
 import { db } from '@/services/firebase';
-import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
+import { warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import {
   arrayUnion,
   collection,
@@ -16,13 +16,25 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
   writeBatch,
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
+
+function safeToMillis(value: unknown): number | null {
+  if (!value) return null;
+  if (typeof (value as any).toMillis === 'function') return (value as any).toMillis();
+  if (typeof (value as any).seconds === 'number') return (value as any).seconds * 1000;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  if (typeof value === 'number') return value > 1e10 ? value : value * 1000;
+  return null;
+}
 
 type LatLng = { lat: number; lng: number };
 
@@ -269,7 +281,7 @@ function mapActiveDelivery(
               typeof (data.driverLocation as { speed?: unknown }).speed === 'number'
                 ? Number((data.driverLocation as { speed: number }).speed)
                 : null,
-            updatedAt: (data.driverLocation as { updatedAt?: unknown }).updatedAt ?? null,
+            updatedAt: safeToMillis((data.driverLocation as { updatedAt?: unknown }).updatedAt),
           } as DeliveryLocation)
         : null,
     timeline: (() => {
@@ -572,42 +584,42 @@ export async function updateDeliveryStatus(
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('missing_order');
       const data = snap.data() ?? {};
-    const assignedDriverId =
-      typeof data.assignedDriverId === 'string'
-        ? data.assignedDriverId
-        : typeof data.driverId === 'string'
-          ? data.driverId
-          : null;
-    if (assignedDriverId !== driverId) throw new Error('not_assigned_driver');
-    const currentStatus = normalizeDeliveryLifecycleStatus(data.deliveryStatus);
-    if (currentStatus === DELIVERY_STATUS.CANCELLED || currentStatus === DELIVERY_STATUS.DELIVERED) {
-      throw new Error('delivery_finalized');
-    }
+      const assignedDriverId =
+        typeof data.assignedDriverId === 'string'
+          ? data.assignedDriverId
+          : typeof data.driverId === 'string'
+            ? data.driverId
+            : null;
+      if (assignedDriverId !== driverId) throw new Error('not_assigned_driver');
+      const currentStatus = normalizeDeliveryLifecycleStatus(data.deliveryStatus);
+      if (currentStatus === DELIVERY_STATUS.CANCELLED || currentStatus === DELIVERY_STATUS.DELIVERED) {
+        throw new Error('delivery_finalized');
+      }
 
-    const patch: Record<string, unknown> = {
-      deliveryStatus: nextStatus,
-      legacyDeliveryStatus: toLegacyDeliveryStatus(nextStatus),
-      status: toLegacyOrderStatus(nextStatus),
-      timeline: arrayUnion({
-        type: nextStatus,
-        actor: 'driver',
-        actorId: driverId,
-        at: serverTimestamp(),
-      }),
-      updatedAt: serverTimestamp(),
-    };
-    if (nextStatus === DELIVERY_STATUS.PICKED_UP) patch.pickedUpAt = serverTimestamp();
-    if (nextStatus === DELIVERY_STATUS.DELIVERED) patch.deliveredAt = serverTimestamp();
-    tx.update(ref, patch);
-    tx.set(
-      doc(db, 'drivers', driverId),
-      {
-        currentOrderId: nextStatus === DELIVERY_STATUS.DELIVERED ? null : orderId,
-        activeDeliveryStatus: nextStatus,
+      const patch: Record<string, unknown> = {
+        deliveryStatus: nextStatus,
+        legacyDeliveryStatus: toLegacyDeliveryStatus(nextStatus),
+        status: toLegacyOrderStatus(nextStatus),
+        timeline: arrayUnion({
+          type: nextStatus,
+          actor: 'driver',
+          actorId: driverId,
+          at: serverTimestamp(),
+        }),
         updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+      };
+      if (nextStatus === DELIVERY_STATUS.PICKED_UP) patch.pickedUpAt = serverTimestamp();
+      if (nextStatus === DELIVERY_STATUS.DELIVERED) patch.deliveredAt = serverTimestamp();
+      tx.update(ref, patch);
+      tx.set(
+        doc(db, 'drivers', driverId),
+        {
+          currentOrderId: nextStatus === DELIVERY_STATUS.DELIVERED ? null : orderId,
+          activeDeliveryStatus: nextStatus,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
     });
   } catch (e) {
     if (isPermissionDeniedError(e) && __DEV__) {

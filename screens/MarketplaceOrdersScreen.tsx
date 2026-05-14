@@ -10,6 +10,7 @@ import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { safeToMillis } from '@/utils/safeToMillis';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useIsFocused } from '@react-navigation/native';
 import {
   collection,
   doc,
@@ -282,6 +283,7 @@ function mapDocToFeedRow(
 
 export default function MarketplaceOrdersScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { user } = useAuth();
   const [rows, setRows] = useState<MarketplaceOrdersFeedRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -349,6 +351,10 @@ export default function MarketplaceOrdersScreen() {
   }, []);
 
   useEffect(() => {
+    if (!isFocused) {
+      setLoading(false);
+      return undefined;
+    }
     if (!uid) {
       setRows([]);
       setLoading(false);
@@ -463,7 +469,7 @@ export default function MarketplaceOrdersScreen() {
       unsubUid();
       unsubCust();
     };
-  }, [uid, listenerKey, enrichRestaurants]);
+  }, [isFocused, uid, listenerKey, enrichRestaurants]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

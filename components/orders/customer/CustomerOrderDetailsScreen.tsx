@@ -42,19 +42,11 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import MapRenderer from '@/components/maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-let RNMaps: typeof import('react-native-maps') | null = null;
-if (Platform.OS !== 'web') {
-  try {
-    RNMaps = require('react-native-maps');
-  } catch {
-    RNMaps = null;
-  }
 }
 
 export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }) {
@@ -204,6 +196,44 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     ].filter((p): p is { latitude: number; longitude: number } => Boolean(p));
   }, [order]);
 
+  const mapMarkers = useMemo(() => {
+    const out: {
+      id: string;
+      latitude: number;
+      longitude: number;
+      title?: string;
+      pinColor?: string;
+    }[] = [];
+    if (order.driverLocation) {
+      out.push({
+        id: 'driver',
+        latitude: order.driverLocation.lat,
+        longitude: order.driverLocation.lng,
+        title: 'Driver',
+        pinColor: '#22C55E',
+      });
+    }
+    if (order.restaurantLocation) {
+      out.push({
+        id: 'restaurant',
+        latitude: order.restaurantLocation.lat,
+        longitude: order.restaurantLocation.lng,
+        title: 'Restaurant',
+        pinColor: '#F59E0B',
+      });
+    }
+    if (order.deliveryLocation) {
+      out.push({
+        id: 'dropoff',
+        latitude: order.deliveryLocation.lat,
+        longitude: order.deliveryLocation.lng,
+        title: 'Dropoff',
+        pinColor: '#38BDF8',
+      });
+    }
+    return out;
+  }, [order]);
+
   const statusChip = chipForFulfillment(order.status);
   const payChip = paymentBadge(order.paymentStatus);
 
@@ -344,8 +374,8 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
               : 'Map highlights restaurant and dropoff.'}
           </Text>
           <View style={styles.mapHost}>
-            {RNMaps && mapPoints.length > 0 ? (
-              <RNMaps.default
+            {mapPoints.length > 0 ? (
+              <MapRenderer
                 style={styles.mapReal}
                 initialRegion={{
                   latitude: mapPoints[0].latitude,
@@ -353,41 +383,22 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
                   latitudeDelta: 0.08,
                   longitudeDelta: 0.08,
                 }}
-              >
-                {order.driverLocation ? (
-                  <RNMaps.Marker
-                    coordinate={{
-                      latitude: order.driverLocation.lat,
-                      longitude: order.driverLocation.lng,
-                    }}
-                    title="Driver"
-                    pinColor="#22C55E"
-                  />
-                ) : null}
-                {order.restaurantLocation ? (
-                  <RNMaps.Marker
-                    coordinate={{
-                      latitude: order.restaurantLocation.lat,
-                      longitude: order.restaurantLocation.lng,
-                    }}
-                    title="Restaurant"
-                    pinColor="#F59E0B"
-                  />
-                ) : null}
-                {order.deliveryLocation ? (
-                  <RNMaps.Marker
-                    coordinate={{
-                      latitude: order.deliveryLocation.lat,
-                      longitude: order.deliveryLocation.lng,
-                    }}
-                    title="Dropoff"
-                    pinColor="#38BDF8"
-                  />
-                ) : null}
-                {mapPoints.length >= 2 ? (
-                  <RNMaps.Polyline coordinates={mapPoints} strokeWidth={4} strokeColor="#34D399" />
-                ) : null}
-              </RNMaps.default>
+                markers={mapMarkers}
+                polylines={
+                  mapPoints.length >= 2
+                    ? [
+                        {
+                          id: 'route',
+                          coordinates: mapPoints,
+                          strokeWidth: 4,
+                          strokeColor: '#34D399',
+                        },
+                      ]
+                    : []
+                }
+                webTitle="Apple Maps"
+                webSubtitle="Restaurant → dropoff route"
+              />
             ) : (
               <View style={styles.mapPlaceholder}>
                 <Text style={styles.muted}>Map preview unavailable</Text>

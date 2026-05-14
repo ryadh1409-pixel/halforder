@@ -733,8 +733,11 @@ service cloud.firestore {
         );
     }
     match /chats/{chatId} {
-      allow read: if isAdmin() || isChatDocMember(chatId);
+      allow read: if isAdmin()
+        || isChatDocMember(chatId)
+        || (isSignedIn() && chatId.matches('venue-.*'));
       allow create: if isAdmin()
+        || (isSignedIn() && chatId.matches('venue-.*'))
         || (
           isSignedIn()
           && !isCurrentUserRestricted()
@@ -745,11 +748,18 @@ service cloud.firestore {
           && request.auth.uid in request.resource.data.users
           && request.resource.data.createdAt != null
         );
-      allow update: if isAdmin() || isChatUsersAppendUpdate(chatId) || isChatLastMessagePatch(chatId) || isChatReadsUpdate(chatId);
+      allow update: if isAdmin()
+        || isChatUsersAppendUpdate(chatId)
+        || isChatLastMessagePatch(chatId)
+        || isChatReadsUpdate(chatId)
+        || (isSignedIn() && chatId.matches('venue-.*'));
       allow delete: if isAdmin();
       match /messages/{messageId} {
-        allow read: if isAdmin() || isChatDocMember(chatId);
+        allow read: if isAdmin()
+          || isChatDocMember(chatId)
+          || (isSignedIn() && chatId.matches('venue-.*'));
         allow create: if isAdmin()
+          || (isSignedIn() && chatId.matches('venue-.*'))
           || (
             isSignedIn()
             && request.resource.data.text is string
@@ -958,10 +968,88 @@ service cloud.firestore {
         || marketplaceRestaurantPatchOk()
         || marketplaceDriverPatchOk();
     }
+
+    /**
+     * AI / assistant join discovery: readable subset of non-delivery `orders` docs.
+     * Keep aligned with `JOIN_DISCOVERY_ORDER_STATUSES` in `constants/joinDiscovery.ts`.
+     * Marketplace `deliveryType == delivery` stays on `canAccessMarketplaceDeliveryOrder` only.
+     */
+    function joinGrowthDiscoveryStatusOk(s) {
+      return s == 'open'
+        || s == 'active'
+        || s == 'waiting'
+        || s == 'matched'
+        || s == 'pending'
+        || s == 'full';
+    }
+    function isHalfOrderJoinDiscovery(d) {
+      let users = d.get('users', []);
+      let maxU = d.get('maxUsers', 2);
+      return d.keys().hasAny(['cardId'])
+        && d.cardId is string
+        && d.cardId.size() > 0
+        && users is list
+        && usersAllStrings(users)
+        && maxU is int
+        && maxU >= 2
+        && maxU <= 20
+        && users.size() >= 1
+        && users.size() < maxU
+        && !(request.auth.uid in users)
+        && d.status is string
+        && joinGrowthDiscoveryStatusOk(d.status);
+    }
+    function isClassicSwipeJoinDiscovery(d) {
+      let participants = d.get('participants', []);
+      let maxP = d.get('maxPeople', 2);
+      return (
+          !d.keys().hasAny(['cardId'])
+          || !(d.cardId is string)
+          || d.cardId.size() == 0
+        )
+        && maxP is int
+        && maxP >= 2
+        && maxP <= 50
+        && participants is list
+        && participantsAllStrings(participants)
+        && participants.size() >= 1
+        && participants.size() < maxP
+        && !(request.auth.uid in participants)
+        && (
+          !d.keys().hasAny(['usersAccepted'])
+          || (
+            d.usersAccepted is list
+            && !(request.auth.uid in d.usersAccepted)
+          )
+        )
+        && d.status is string
+        && joinGrowthDiscoveryStatusOk(d.status);
+    }
+    function joinDiscoveryReadable(d) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && !isMarketplaceDeliveryOrderDoc(d)
+        && (isHalfOrderJoinDiscovery(d) || isClassicSwipeJoinDiscovery(d));
+    }
+
+    /**
+     * Join-directory projection for AI / smart match queries (no phones, street addresses, or payment).
+     * Only HTTPS restaurant/brand image URLs may appear (`syncPublicMatchableOrder` truncates and filters).
+     * Writes: Admin SDK / Cloud Functions only (`syncPublicMatchableOrder`).
+     * Any signed-in user may list/read (must stay above catch-all `/{document=**}` by path specificity).
+     */
+    match /public_matchable_orders/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     match /orders/{orderId} {
       allow read: if isSignedIn()
-        && canAccessMarketplaceDeliveryOrder(resource.data)
-        && (isAdmin() || !isCurrentUserRestricted());
+        && (isAdmin() || !isCurrentUserRestricted())
+        && (
+          canAccessMarketplaceDeliveryOrder(resource.data)
+          || joinDiscoveryReadable(resource.data)
+        );
       allow create: if isSignedIn()
         && !isCurrentUserRestricted()
         && (
@@ -1122,6 +1210,15 @@ service cloud.firestore {
         && request.resource.data.lng is number
         && request.resource.data.keys().hasOnly(['orderId','driverId','lat','lng','heading','speed','updatedAt']);
       allow delete: if false;
+    }
+    /**
+     * Optional driver dispatch queue documents (HalfOrder / OurFood).
+     * Drivers and admins only; aligns with client delivery-layer expectations.
+     */
+    match /deliveryQueue/{docId} {
+      allow read, write: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && (isAdmin() || requestUserIsDriver());
     }
     match /{document=**} {
       allow read, write: if isAdmin();

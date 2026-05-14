@@ -3,6 +3,7 @@ import { Text, View, type ViewStyle } from 'react-native';
 import Toast, { type ToastConfig } from 'react-native-toast-message';
 
 import { palette } from '../constants/theme';
+import { platformElevation } from './platformElevation';
 
 const VISIBILITY_MS = 3000;
 
@@ -12,11 +13,16 @@ const cardBase: ViewStyle = {
   borderLeftWidth: 4,
   padding: 14,
   borderRadius: 12,
-  shadowColor: '#000',
-  shadowOpacity: 0.3,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 4 },
-  elevation: 5,
+  ...platformElevation({
+    web: '0px 4px 10px rgba(0, 0, 0, 0.3)',
+    ios: {
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+    },
+    android: { elevation: 5 },
+  }),
 };
 
 export const toastConfig: ToastConfig = {

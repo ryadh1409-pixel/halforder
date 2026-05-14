@@ -77,6 +77,31 @@ export { app };
 
 export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);
+
+/**
+ * Ensures the Auth session has finished restoring before Firestore reads.
+ * Avoids `permission-denied` when rules require `request.auth != null` but
+ * `getDocs` runs in the first frame before persistence rehydrates.
+ */
+export async function syncAuthForFirestoreReads(): Promise<void> {
+  const a = auth as { authStateReady?: () => Promise<void> };
+  if (typeof a.authStateReady === 'function') {
+    await a.authStateReady();
+  }
+  if (
+    process.env.EXPO_PUBLIC_FIRESTORE_FORCE_ID_TOKEN_REFRESH === '1' &&
+    auth.currentUser
+  ) {
+    try {
+      await auth.currentUser.getIdToken(true);
+      if (__DEV__) {
+        console.log('[auth] getIdToken(true) ok', { projectId: auth.app.options.projectId });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+}
 /** Cloud Storage — uses `storageBucket` from firebaseConfig above. */
 export const storage = getStorage(app);
 
@@ -123,15 +148,17 @@ export async function ensureAuthReady(): Promise<void> {
 
   const user = auth.currentUser;
   await user.getIdToken(true);
-  console.log(
-    '[auth] ensureAuthReady ok',
-    JSON.stringify({
-      uid: user.uid,
-      isAnonymous: user.isAnonymous,
-      projectId: auth.app.options.projectId,
-      functionsRegion: FIREBASE_FUNCTIONS_REGION,
-    }),
-  );
+  if (__DEV__) {
+    console.log(
+      '[auth] ensureAuthReady ok',
+      JSON.stringify({
+        uid: user.uid,
+        isAnonymous: user.isAnonymous,
+        projectId: auth.app.options.projectId,
+        functionsRegion: FIREBASE_FUNCTIONS_REGION,
+      }),
+    );
+  }
 }
 
 /** Wait until auth stops changing briefly (restored sessions often emit null then user). */

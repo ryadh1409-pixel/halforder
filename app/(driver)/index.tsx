@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import {
@@ -138,6 +139,7 @@ function ordersListSignature(orders: DriverOrder[]): string {
 
 export default function DriverHubScreen() {
   const { user } = useAuth();
+  const isFocused = useIsFocused();
   const uid = user?.uid ?? '';
   const [isOnline, setIsOnline] = useState(false);
   const [togglingOnline, setTogglingOnline] = useState(false);
@@ -159,15 +161,18 @@ export default function DriverHubScreen() {
 
   /** Sync display name only — never rewrite `isOnline` here (avoids fighting the hub / snapshots). */
   useEffect(() => {
-    if (!uid) return;
+    if (!isFocused || !uid) return;
     const name = user?.displayName?.trim() || 'Driver';
     void setDoc(doc(db, 'drivers', uid), { name }, { merge: true });
-  }, [uid, user?.displayName]);
+  }, [isFocused, uid, user?.displayName]);
 
   useEffect(() => {
     if (!uid) {
       lastOnlineRef.current = null;
       driverBootstrapUidRef.current = null;
+      return undefined;
+    }
+    if (!isFocused) {
       return undefined;
     }
 
@@ -212,7 +217,7 @@ export default function DriverHubScreen() {
     return () => {
       unsub();
     };
-  }, [uid]);
+  }, [isFocused, uid, user?.displayName]);
 
   useEffect(() => {
     if (!uid) {
@@ -227,6 +232,15 @@ export default function DriverHubScreen() {
       unsubActiveRef.current?.();
       unsubActiveRef.current = null;
     };
+
+    if (!isFocused) {
+      clearListeners();
+      availableSigRef.current = '';
+      activeSigRef.current = '';
+      setAvailableOrders([]);
+      setActiveOrders([]);
+      return undefined;
+    }
 
     if (!isOnline) {
       clearListeners();
@@ -257,7 +271,7 @@ export default function DriverHubScreen() {
     return () => {
       clearListeners();
     };
-  }, [isOnline, uid]);
+  }, [isFocused, isOnline, uid]);
 
   const handleToggleOnline = useCallback(async () => {
     if (!uid || togglingOnline) return;

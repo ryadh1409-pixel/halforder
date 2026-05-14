@@ -1,3 +1,4 @@
+import { DriverActiveRouteMap } from '@/components/maps/DriverActiveRouteMap';
 import { DELIVERY_STATUS, DELIVERY_STATUS_LABEL, type DeliveryLifecycleStatus } from '@/constants/deliveryStatus';
 import { DeliveryActionBar } from '@/components/delivery/DeliveryActionBar';
 import { DeliveryTimeline } from '@/components/delivery/DeliveryTimeline';
@@ -25,15 +26,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-let MapViewModule: any = null;
-if (Platform.OS !== 'web') {
-  MapViewModule = require('react-native-maps');
-}
-
-const MapView = MapViewModule?.default;
-const Marker = MapViewModule?.Marker;
-const Polyline = MapViewModule?.Polyline;
-
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
 }
@@ -52,7 +44,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
   const [currentLocation, setCurrentLocation] = useState<DeliveryLocation | null>(null);
   const [permissionReady, setPermissionReady] = useState(false);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (!user?.uid || !id || Platform.OS === 'web') return;
@@ -103,14 +95,6 @@ export default function DriverActiveDeliveryDetailsScreen() {
     return list;
   }, [currentLocation, order]);
 
-  useEffect(() => {
-    if (!MapView || !mapRef.current || points.length === 0) return;
-    mapRef.current.fitToCoordinates(points, {
-      edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-      animated: true,
-    });
-  }, [points]);
-
   async function onAdvance(nextStatus: DeliveryLifecycleStatus) {
     if (!id || !user?.uid || busy) return;
     setBusy(true);
@@ -159,49 +143,13 @@ export default function DriverActiveDeliveryDetailsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live route</Text>
-          {MapView && points.length > 0 ? (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              initialRegion={{
-                latitude: points[0].latitude,
-                longitude: points[0].longitude,
-                latitudeDelta: 0.08,
-                longitudeDelta: 0.08,
-              }}
-            >
-              {(currentLocation ?? order.driverLocation) ? (
-                <Marker
-                  coordinate={{
-                    latitude: (currentLocation ?? order.driverLocation)!.lat,
-                    longitude: (currentLocation ?? order.driverLocation)!.lng,
-                  }}
-                  title="Driver"
-                  pinColor="#22C55E"
-                />
-              ) : null}
-              {order.restaurantLocation ? (
-                <Marker
-                  coordinate={{
-                    latitude: order.restaurantLocation.lat,
-                    longitude: order.restaurantLocation.lng,
-                  }}
-                  title="Restaurant"
-                  pinColor="#F59E0B"
-                />
-              ) : null}
-              {order.customerLocation ? (
-                <Marker
-                  coordinate={{
-                    latitude: order.customerLocation.lat,
-                    longitude: order.customerLocation.lng,
-                  }}
-                  title="Customer"
-                  pinColor="#2563EB"
-                />
-              ) : null}
-              {points.length >= 2 ? <Polyline coordinates={points} strokeColor="#22C55E" strokeWidth={4} /> : null}
-            </MapView>
+          {points.length > 0 && order ? (
+            <DriverActiveRouteMap
+              mapRef={mapRef}
+              order={order}
+              currentLocation={currentLocation}
+              points={points}
+            />
           ) : (
             <View style={styles.mapFallback}>
               <Text style={styles.meta}>

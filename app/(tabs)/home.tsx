@@ -1,10 +1,10 @@
 import SwipeWrapper from '@/components/SwipeWrapper';
 import { auth, db } from '@/services/firebase';
-import { useFocusEffect } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
 import { collection, getDocs } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { platformElevation } from '@/utils/platformElevation';
 
 type RestaurantRow = {
   id: string;
@@ -28,16 +30,21 @@ const GAP = 16;
 
 export default function HomeFoodTrucksTab() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const [restaurants, setRestaurants] = useState<RestaurantRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchRestaurants = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('[venues.list] auth uid:', auth.currentUser?.uid ?? null);
-      console.log('[venues.list] firestore path: restaurants');
+      if (__DEV__) {
+        console.log('[venues.list] auth uid:', auth.currentUser?.uid ?? null);
+        console.log('[venues.list] firestore path: restaurants');
+      }
       const snapshot = await getDocs(collection(db, 'restaurants'));
-      console.log('[venues.list] query results count:', snapshot.size);
+      if (__DEV__) {
+        console.log('[venues.list] query results count:', snapshot.size);
+      }
       const data = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
@@ -47,18 +54,19 @@ export default function HomeFoodTrucksTab() {
       );
       setRestaurants(data);
     } catch (e) {
-      console.warn('[venues.list] failed to load restaurants', e);
+      if (__DEV__) {
+        console.warn('[venues.list] failed to load restaurants', e);
+      }
       setRestaurants([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      void fetchRestaurants();
-    }, [fetchRestaurants]),
-  );
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchRestaurants();
+  }, [isFocused, fetchRestaurants]);
 
   return (
     <SwipeWrapper currentIndex={4}>
@@ -162,11 +170,16 @@ const styles = StyleSheet.create({
     marginBottom: GAP,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    ...platformElevation({
+      web: '0px 2px 8px rgba(15, 23, 42, 0.08)',
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
   },
   image: { width: '100%', height: 168, backgroundColor: '#E2E8F0' },
   imagePh: { alignItems: 'center', justifyContent: 'center' },

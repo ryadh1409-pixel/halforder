@@ -24,7 +24,7 @@ import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
-import { Redirect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -445,11 +445,22 @@ export default function HostDashboardScreen() {
   }
 
   if (!user) {
-    return <Redirect href="/(auth)/login" />;
+    return (
+      <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
+        <Text style={styles.screenTitle}>Sign in required</Text>
+        <TouchableOpacity onPress={() => router.push('/(auth)/login' as never)} hitSlop={12}>
+          <Text style={styles.topLink}>Go to sign in</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
   }
 
   if (!authorized) {
-    return <Redirect href="/(tabs)" />;
+    return (
+      <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
+        <Text style={styles.muted}>This dashboard is only available for restaurant or host accounts.</Text>
+      </SafeAreaView>
+    );
   }
 
   return (

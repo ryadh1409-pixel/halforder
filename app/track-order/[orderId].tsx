@@ -2,6 +2,7 @@
  * DoorDash-style customer live order tracking (light theme).
  * Route: /track-order/[orderId]
  */
+import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
@@ -10,16 +11,14 @@ import {
   subscribeOrderById,
   type RestaurantOrder,
 } from '@/services/orderService';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,242 +30,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 const WINDOW_H = Dimensions.get('window').height;
 const MAP_HEIGHT = Math.round(WINDOW_H * 0.45);
 
-type LatLng = { latitude: number; longitude: number };
-
-function toLatLng(
-  loc: { lat: number; lng: number } | null | undefined,
-): LatLng | null {
-  if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return null;
-  if (!Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return null;
-  return { latitude: loc.lat, longitude: loc.lng };
-}
-
-class MapErrorBoundary extends Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) return this.props.fallback;
-    return this.props.children;
-  }
-}
-
-function MapFallbackCard({ pickup, dropoff }: { pickup: string; dropoff: string }) {
-  return (
-    <LinearGradient
-      colors={['#E8F4FF', '#FFFFFF', '#FFF5F0']}
-      style={styles.mapFallbackRoot}
-    >
-      <Text style={styles.mapFallbackTitle}>Delivery route</Text>
-      <View style={styles.mapFallbackRow}>
-        <Text style={styles.mapFallbackEmoji}>📍</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.mapFallbackLabel}>Pickup</Text>
-          <Text style={styles.mapFallbackAddr}>{pickup || 'Restaurant address'}</Text>
-        </View>
-      </View>
-      <View style={styles.mapFallbackDivider} />
-      <View style={styles.mapFallbackRow}>
-        <Text style={styles.mapFallbackEmoji}>🏠</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.mapFallbackLabel}>Dropoff</Text>
-          <Text style={styles.mapFallbackAddr}>{dropoff || 'Your address'}</Text>
-        </View>
-      </View>
-      <Text style={styles.mapFallbackHint}>Map unavailable — details update live below.</Text>
-    </LinearGradient>
-  );
-}
-
-type MapsModule = typeof import('react-native-maps');
-
-function TrackingMapInner({
-  restaurant,
-  dropoff,
-  driver,
-  pickupLabel,
-  dropoffLabel,
-}: {
-  restaurant: LatLng | null;
-  dropoff: LatLng | null;
-  driver: LatLng | null;
-  pickupLabel: string;
-  dropoffLabel: string;
-}) {
-  const mapRef = useRef<any>(null);
-  const [maps, setMaps] = useState<MapsModule | null | undefined>(undefined);
-  const driverAnimRef = useRef<InstanceType<MapsModule['AnimatedRegion']> | null>(null);
-  const seededRef = useRef(false);
-
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      setMaps(null);
-      return;
-    }
-    try {
-      setMaps(require('react-native-maps') as MapsModule);
-    } catch {
-      setMaps(null);
-    }
-  }, []);
-
-  const defaultCenter = restaurant ?? dropoff ?? driver ?? { latitude: 37.7749, longitude: -122.4194 };
-
-  useEffect(() => {
-    if (!maps) return;
-    if (!driverAnimRef.current) {
-      driverAnimRef.current = new maps.AnimatedRegion({
-        ...defaultCenter,
-        latitudeDelta: 0,
-        longitudeDelta: 0,
-      });
-      seededRef.current = false;
-    }
-  }, [maps, defaultCenter.latitude, defaultCenter.longitude]);
-
-  useEffect(() => {
-    if (!maps || !driver || !driverAnimRef.current) return;
-    const anim = driverAnimRef.current;
-    if (!seededRef.current) {
-      anim.setValue({ ...driver, latitudeDelta: 0, longitudeDelta: 0 });
-      seededRef.current = true;
-      return;
-    }
-    anim
-      .timing({
-        latitude: driver.latitude,
-        longitude: driver.longitude,
-        latitudeDelta: 0,
-        longitudeDelta: 0,
-        duration: 850,
-        useNativeDriver: false,
-      } as never)
-      .start();
-  }, [maps, driver?.latitude, driver?.longitude]);
-
-  const polyline = useMemo(() => {
-    const pts: LatLng[] = [];
-    if (restaurant) pts.push(restaurant);
-    if (driver) pts.push(driver);
-    if (dropoff) pts.push(dropoff);
-    return pts;
-  }, [restaurant, driver, dropoff]);
-
-  useEffect(() => {
-    if (!mapRef.current || polyline.length < 2) return;
-    const t = setTimeout(() => {
-      try {
-        mapRef.current?.fitToCoordinates?.(polyline, {
-          edgePadding: { top: 100, right: 36, bottom: 40, left: 36 },
-          animated: true,
-        });
-      } catch {
-        /* ignore */
-      }
-    }, 450);
-    return () => clearTimeout(t);
-  }, [polyline]);
-
-  const fallback = <MapFallbackCard pickup={pickupLabel} dropoff={dropoffLabel} />;
-
-  if (maps === undefined) {
-    return (
-      <View style={[styles.mapView, styles.mapLoading]}>
-        <ActivityIndicator color="#FF3008" />
-      </View>
-    );
-  }
-
-  if (!maps) {
-    return fallback;
-  }
-
-  const MapView = maps.default;
-  const Marker = maps.Marker;
-  const MarkerAnimated = maps.MarkerAnimated;
-  const Polyline = maps.Polyline;
-  const anim = driverAnimRef.current;
-
-  return (
-    <MapView
-      ref={mapRef}
-      style={styles.mapView}
-      initialRegion={{
-        latitude: defaultCenter.latitude,
-        longitude: defaultCenter.longitude,
-        latitudeDelta: 0.06,
-        longitudeDelta: 0.06,
-      }}
-      userInterfaceStyle="light"
-      showsCompass={false}
-      toolbarEnabled={false}
-    >
-      {restaurant ? (
-        <Marker coordinate={restaurant} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
-          <View style={styles.markerBubble}>
-            <Text style={styles.markerEmoji}>📍</Text>
-          </View>
-        </Marker>
-      ) : null}
-      {dropoff ? (
-        <Marker coordinate={dropoff} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
-          <View style={styles.markerBubble}>
-            <Text style={styles.markerEmoji}>🏠</Text>
-          </View>
-        </Marker>
-      ) : null}
-      {driver && anim && MarkerAnimated ? (
-        <MarkerAnimated coordinate={anim as never} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.driverMarker}>
-            <Text style={styles.driverMarkerEmoji}>🚗</Text>
-          </View>
-        </MarkerAnimated>
-      ) : driver ? (
-        <Marker coordinate={driver} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.driverMarker}>
-            <Text style={styles.driverMarkerEmoji}>🚗</Text>
-          </View>
-        </Marker>
-      ) : null}
-      {polyline.length >= 2 ? (
-        <Polyline coordinates={polyline} strokeColor="#FF3008" strokeWidth={4} />
-      ) : null}
-    </MapView>
-  );
-}
-
 function TrackingMap({ order }: { order: RestaurantOrder }) {
-  const restaurant = toLatLng(order.restaurantLocation);
-  const dropoff = toLatLng(order.deliveryLocation);
-  const driver = order.driverLocation ? toLatLng(order.driverLocation) : null;
-  const pickupLabel =
-    order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';
-  const dropoffLabel =
-    order.deliveryLocation?.address?.trim() || order.customer?.address || 'Your address';
-  const fallback = <MapFallbackCard pickup={pickupLabel} dropoff={dropoffLabel} />;
-
-  if (Platform.OS === 'web') {
-    return fallback;
-  }
-
-  return (
-    <MapErrorBoundary fallback={fallback}>
-      <TrackingMapInner
-        key={order.id}
-        restaurant={restaurant}
-        dropoff={dropoff}
-        driver={driver}
-        pickupLabel={pickupLabel}
-        dropoffLabel={dropoffLabel}
-      />
-    </MapErrorBoundary>
-  );
+  return <CustomerTrackingMap order={order} />;
 }
 
 export default function TrackOrderScreen() {
@@ -501,8 +266,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     overflow: 'hidden',
   },
-  mapView: { ...StyleSheet.absoluteFillObject },
-  mapLoading: { alignItems: 'center', justifyContent: 'center' },
   mapOverlay: {
     position: 'absolute',
     left: 0,
@@ -543,57 +306,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   helpPillText: { fontWeight: '800', color: '#111827', fontSize: 15 },
-  mapFallbackRoot: {
-    flex: 1,
-    padding: 22,
-    justifyContent: 'center',
-  },
-  mapFallbackTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 18,
-  },
-  mapFallbackRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  mapFallbackEmoji: { fontSize: 28, marginTop: 2 },
-  mapFallbackLabel: { fontSize: 12, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' },
-  mapFallbackAddr: { fontSize: 15, fontWeight: '600', color: '#0F172A', marginTop: 4, lineHeight: 22 },
-  mapFallbackDivider: {
-    height: 1,
-    backgroundColor: 'rgba(15,23,42,0.08)',
-    marginVertical: 16,
-  },
-  mapFallbackHint: { fontSize: 13, color: '#64748B', fontWeight: '600', marginTop: 8 },
-  markerBubble: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  markerEmoji: { fontSize: 22 },
-  driverMarker: {
-    backgroundColor: '#FFFFFF',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FF3008',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 5,
-  },
-  driverMarkerEmoji: { fontSize: 22 },
   sheet: {
     flex: 1,
     backgroundColor: '#FFFFFF',
