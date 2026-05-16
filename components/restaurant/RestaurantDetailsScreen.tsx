@@ -2,7 +2,10 @@ import { MenuHorizontalCarousel } from '@/components/menu/MenuHorizontalCarousel
 import { MenuItemCard } from '@/components/menu/MenuItemCard';
 import { FloatingCartBar } from '@/components/cart/FloatingCartBar';
 import { CategoryTabs } from '@/components/restaurant/CategoryTabs';
-import { DeliveryOptions, type DeliveryMode } from '@/components/restaurant/DeliveryOptions';
+import {
+  DeliveryOptions,
+  type DeliveryMode,
+} from '@/components/restaurant/DeliveryOptions';
 import {
   ItemDetailsSheet,
   type ItemSheetAddPayload,
@@ -18,7 +21,10 @@ import { RestaurantInfo } from '@/components/restaurant/RestaurantInfo';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import { useMenu } from '@/hooks/useMenu';
 import { useRestaurantMenuSections } from '@/hooks/useRestaurantMenuSections';
-import { useRestaurantProfile, type RestaurantProfile } from '@/hooks/useRestaurantProfile';
+import {
+  useRestaurantProfile,
+  type RestaurantProfile,
+} from '@/hooks/useRestaurantProfile';
 import { useAuth } from '@/services/AuthContext';
 import { useCart } from '@/services/CartContext';
 import {
@@ -40,8 +46,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 const PLACEHOLDER_PROFILE = (id: string): RestaurantProfile => ({
   id,
@@ -78,15 +90,24 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     },
   });
 
-  const { profile, loading: profileLoading } = useRestaurantProfile(restaurantId || null);
-  const { items, loading: menuLoading, error, refetch } = useMenu(restaurantId || null);
+  const { profile, loading: profileLoading } = useRestaurantProfile(
+    restaurantId || null,
+  );
+  const {
+    items,
+    loading: menuLoading,
+    error,
+    refetch,
+  } = useMenu(restaurantId || null);
   const { items: cart, addToCart } = useCart();
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('delivery');
   const [activeCat, setActiveCat] = useState('Popular');
   const [refreshing, setRefreshing] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<DisplayMenuItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<DisplayMenuItem | null>(
+    null,
+  );
 
   const resolvedProfile = profile ?? PLACEHOLDER_PROFILE(restaurantId);
 
@@ -121,14 +142,19 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     () => cartForRestaurant.reduce((s, c) => s + c.price * c.qty, 0),
     [cartForRestaurant],
   );
-  const savings = useMemo(() => (subtotal >= 25 ? Math.min(6.5, subtotal * 0.06) : 0), [subtotal]);
+  const savings = useMemo(
+    () => (subtotal >= 25 ? Math.min(6.5, subtotal * 0.06) : 0),
+    [subtotal],
+  );
 
   const loading = profileLoading || menuLoading;
 
   /** Sum quantity across cart lines sharing the same base menu item id. */
   const qtyForBaseMenuItem = useCallback(
     (id: string) =>
-      cartForRestaurant.filter((c) => c.id === id).reduce((acc, row) => acc + row.qty, 0),
+      cartForRestaurant
+        .filter((c) => c.id === id)
+        .reduce((acc, row) => acc + row.qty, 0),
     [cartForRestaurant],
   );
 
@@ -175,23 +201,34 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
 
   const deliveryFee = deliveryMode === 'pickup' ? 0 : 2.49;
   const serviceFee = 0.99;
-  const etaRange = deliveryMode === 'pickup' ? '15–25 min' : deliveryMode === 'group' ? '30–45 min' : '25–40 min';
+  const etaRange =
+    deliveryMode === 'pickup'
+      ? '15–25 min'
+      : deliveryMode === 'group'
+        ? '30–45 min'
+        : '25–40 min';
 
   const rows = useMemo(() => {
     const out: DisplayMenuItem[][] = [];
     for (let i = 0; i < categoryItems.length; i += 2) {
-      out.push([categoryItems[i]!, categoryItems[i + 1]].filter(Boolean) as DisplayMenuItem[]);
+      out.push(
+        [categoryItems[i]!, categoryItems[i + 1]].filter(
+          Boolean,
+        ) as DisplayMenuItem[],
+      );
     }
     return out;
   }, [categoryItems]);
 
+  const addFromSheet = useCallback(
     (payload: ItemSheetAddPayload) => {
       const it = selectedItem;
       if (!it) return;
       const fp = cartFingerprint(buildOptionsFingerprint(payload));
-      const optParts = [payload.optionsSummary, payload.notes ? `Note: ${payload.notes}` : ''].filter(
-        Boolean,
-      );
+      const optParts = [
+        payload.optionsSummary,
+        payload.notes ? `Note: ${payload.notes}` : '',
+      ].filter(Boolean);
       addToCart({
         id: it.id,
         cartLineId: `${it.id}__${fp}`,
@@ -241,9 +278,16 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         onScroll={onScroll}
         scrollEventThrottle={16}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={RP.text} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={RP.text}
+          />
         }
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: cartQty > 0 ? 128 : 36 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: cartQty > 0 ? 128 : 36 },
+        ]}
       >
         <View>
           {profileLoading ? (
@@ -256,11 +300,16 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                 topInset={insets.top}
                 onBack={() => router.back()}
                 onSearch={openRestaurantMenu}
-                onFavorite={() => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                onFavorite={() =>
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                }
                 onShare={() => void shareRestaurant()}
                 onMore={() => {
                   void Haptics.selectionAsync();
-                  Alert.alert('Restaurant', 'Coupons, hours, and allergen info — coming soon.');
+                  Alert.alert(
+                    'Restaurant',
+                    'Coupons, hours, and allergen info — coming soon.',
+                  );
                 }}
               />
               <RestaurantInfo
@@ -324,45 +373,54 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
           />
         </View>
 
-        <CategoryTabs categories={categories} active={activeCat} onSelect={setActiveCat} />
+        <CategoryTabs
+          categories={categories}
+          active={activeCat}
+          onSelect={setActiveCat}
+        />
 
         <View>
           <View style={styles.menuHeaderRow}>
             <Text style={styles.menuHeaderTitle}>{activeCat}</Text>
             <Text style={styles.menuHeaderSub}>
-              {categoryItems.length} {categoryItems.length === 1 ? 'item' : 'items'}
+              {categoryItems.length}{' '}
+              {categoryItems.length === 1 ? 'item' : 'items'}
             </Text>
           </View>
 
           <View style={styles.menuBlock}>
-          {error ? (
-            <Text style={styles.err}>Could not load menu. Pull to refresh.</Text>
-          ) : null}
-          {loading && displayItems.length === 0 ? (
-            <MenuGridSkeleton rows={5} />
-          ) : items.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Menu is empty</Text>
-              <Text style={styles.emptySub}>Check back soon for new dishes.</Text>
-            </View>
-          ) : (
-            rows.map((pair, idx) => (
-              <View key={`${activeCat}-${idx}`} style={styles.menuRow}>
-                {pair.map((it) => (
-                  <View key={it.id} style={styles.menuCell}>
-                    <MenuItemCard
-                      item={it}
-                      qty={qtyForBaseMenuItem(it.id)}
-                      onPress={() => openSheet(it)}
-                      onAdd={() => quickAdd(it)}
-                    />
-                  </View>
-                ))}
-                {pair.length === 1 ? <View style={styles.menuCell} /> : null}
+            {error ? (
+              <Text style={styles.err}>
+                Could not load menu. Pull to refresh.
+              </Text>
+            ) : null}
+            {loading && displayItems.length === 0 ? (
+              <MenuGridSkeleton rows={5} />
+            ) : items.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>Menu is empty</Text>
+                <Text style={styles.emptySub}>
+                  Check back soon for new dishes.
+                </Text>
               </View>
-            ))
-          />
-        </View>
+            ) : (
+              rows.map((pair, idx) => (
+                <View key={`${activeCat}-${idx}`} style={styles.menuRow}>
+                  {pair.map((it) => (
+                    <View key={it.id} style={styles.menuCell}>
+                      <MenuItemCard
+                        item={it}
+                        qty={qtyForBaseMenuItem(it.id)}
+                        onPress={() => openSheet(it)}
+                        onAdd={() => quickAdd(it)}
+                      />
+                    </View>
+                  ))}
+                  {pair.length === 1 ? <View style={styles.menuCell} /> : null}
+                </View>
+              ))
+            )}
+          </View>
         </View>
       </Animated.ScrollView>
 
@@ -396,12 +454,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 6,
   },
-  menuHeaderTitle: { fontSize: 22, fontWeight: '900', color: RP.text, letterSpacing: -0.4 },
+  menuHeaderTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: RP.text,
+    letterSpacing: -0.4,
+  },
   menuHeaderSub: { fontSize: 13, fontWeight: '700', color: RP.textMuted },
   menuBlock: { paddingTop: 4, minHeight: 200 },
-  menuRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 16 },
+  menuRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
   menuCell: { flex: 1, minWidth: 0 },
-  err: { paddingHorizontal: 16, color: RP.offer, fontWeight: '700', marginBottom: 8 },
+  err: {
+    paddingHorizontal: 16,
+    color: RP.offer,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   empty: {
     marginHorizontal: 16,
     padding: 24,
@@ -411,5 +484,10 @@ const styles = StyleSheet.create({
     borderColor: RP.border,
   },
   emptyTitle: { fontSize: 18, fontWeight: '900', color: RP.text },
-  emptySub: { marginTop: 6, fontSize: 14, fontWeight: '600', color: RP.textSecondary },
+  emptySub: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: RP.textSecondary,
+  },
 });
