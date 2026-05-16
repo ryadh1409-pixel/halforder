@@ -54,7 +54,7 @@ export function DeliveryOptions({ mode, onChange }: Props) {
             <Text style={[styles.label, mode === 'pickup' && styles.labelOn]}>Pickup</Text>
           </Pressable>
           <Pressable style={[styles.cell, { width: segW }]} onPress={() => select('group')}>
-            <Text style={[styles.label, mode === 'group' && styles.labelOn]}>Group</Text>
+            <Text style={[styles.label, mode === 'group' && styles.labelOn]}>Group order</Text>
           </Pressable>
         </View>
       </View>

@@ -1,9 +1,12 @@
 import { RP } from '@/constants/restaurantPremiumTheme';
+import { RestaurantHeroShell } from '@/constants/restaurantLayout';
+import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -11,7 +14,9 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-const HERO_H = 280;
+const HERO_H = RestaurantHeroShell.height;
+
+export const RESTAURANT_HERO_HEIGHT = HERO_H;
 
 type Props = {
   scrollY: SharedValue<number>;
@@ -21,6 +26,7 @@ type Props = {
   onSearch: () => void;
   onFavorite: () => void;
   onShare: () => void;
+  onMore: () => void;
 };
 
 export function RestaurantHero({
@@ -31,6 +37,7 @@ export function RestaurantHero({
   onSearch,
   onFavorite,
   onShare,
+  onMore,
 }: Props) {
   const parallax = useAnimatedStyle(() => ({
     transform: [
@@ -38,102 +45,101 @@ export function RestaurantHero({
         translateY: interpolate(
           scrollY.value,
           [0, HERO_H],
-          [0, -HERO_H * 0.35],
+          [0, -HERO_H * 0.38],
           Extrapolation.CLAMP,
         ),
       },
       {
-        scale: interpolate(scrollY.value, [0, HERO_H], [1, 1.08], Extrapolation.CLAMP),
+        scale: interpolate(scrollY.value, [0, HERO_H], [1, 1.1], Extrapolation.CLAMP),
       },
     ],
   }));
 
   const fadeButtons = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, 120], [1, 0.35], Extrapolation.CLAMP),
+    opacity: interpolate(scrollY.value, [40, 140], [1, 0.4], Extrapolation.CLAMP),
   }));
 
-  const tap = () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
+  const tapLight = () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+  const topPad = topInset + 6;
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { height: HERO_H }]}>
       <Animated.View style={[styles.coverClip, parallax]}>
         {coverUri ? (
-          <Image source={{ uri: coverUri }} style={styles.coverImg} resizeMode="cover" />
+          <Image
+            source={{ uri: coverUri }}
+            style={styles.coverImg}
+            contentFit="cover"
+            transition={420}
+            recyclingKey={coverUri}
+          />
         ) : (
-          <LinearGradient colors={['#1a1a2e', '#2d2d44', '#1f2937']} style={styles.coverImg} />
+          <LinearGradient colors={['#1a1a2e', '#2d3748', '#0f172a']} style={styles.coverImg} />
         )}
         <LinearGradient
-          colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0)']}
+          colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.08)', 'rgba(255,255,255,0)']}
+          locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
 
-      <Animated.View style={[styles.topRow, fadeButtons]}>
-        <Pressable
+      <Animated.View style={[styles.topRow, fadeButtons, { paddingTop: topPad }]}>
+        <GlassIconButton
           onPress={() => {
-            tap();
+            tapLight();
             onBack();
           }}
-          style={styles.iconBtn}
+          label="Go back"
         >
-          {Platform.OS === 'ios' ? (
-            <BlurView intensity={28} tint="dark" style={styles.blurCircle}>
-              <Text style={styles.iconGlyph}>‹</Text>
-            </BlurView>
-          ) : (
-            <View style={styles.androidCircle}>
-              <Text style={styles.iconGlyph}>‹</Text>
-            </View>
-          )}
-        </Pressable>
+          <Ionicons name="chevron-back" size={24} color="#fff" />
+        </GlassIconButton>
+
         <View style={styles.topRight}>
-          <Pressable onPress={() => { tap(); onSearch(); }} style={styles.iconBtn}>
-            {Platform.OS === 'ios' ? (
-              <BlurView intensity={28} tint="dark" style={styles.blurCircle}>
-                <Text style={styles.iconGlyphSm}>⌕</Text>
-              </BlurView>
-            ) : (
-              <View style={styles.androidCircle}>
-                <Text style={styles.iconGlyphSm}>⌕</Text>
-              </View>
-            )}
-          </Pressable>
-          <Pressable onPress={() => { tap(); onFavorite(); }} style={styles.iconBtn}>
-            {Platform.OS === 'ios' ? (
-              <BlurView intensity={28} tint="dark" style={styles.blurCircle}>
-                <Text style={styles.iconGlyphSm}>♡</Text>
-              </BlurView>
-            ) : (
-              <View style={styles.androidCircle}>
-                <Text style={styles.iconGlyphSm}>♡</Text>
-              </View>
-            )}
-          </Pressable>
-          <Pressable onPress={() => { tap(); onShare(); }} style={styles.iconBtn}>
-            {Platform.OS === 'ios' ? (
-              <BlurView intensity={28} tint="dark" style={styles.blurCircle}>
-                <Text style={styles.iconGlyphSm}>↗</Text>
-              </BlurView>
-            ) : (
-              <View style={styles.androidCircle}>
-                <Text style={styles.iconGlyphSm}>↗</Text>
-              </View>
-            )}
-          </Pressable>
+          <GlassIconButton onPress={() => { tapLight(); onSearch(); }} label="Search menu">
+            <Ionicons name="search" size={19} color="#fff" />
+          </GlassIconButton>
+          <GlassIconButton onPress={() => { tapLight(); onFavorite(); }} label="Favorite">
+            <Ionicons name="heart-outline" size={21} color="#fff" />
+          </GlassIconButton>
+          <GlassIconButton onPress={() => { tapLight(); onMore(); }} label="More">
+            <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
+          </GlassIconButton>
+          <GlassIconButton onPress={() => { tapLight(); onShare(); }} label="Share">
+            <Ionicons name="share-outline" size={20} color="#fff" />
+          </GlassIconButton>
         </View>
       </Animated.View>
     </View>
   );
 }
 
-export const RESTAURANT_HERO_HEIGHT = HERO_H;
+function GlassIconButton({
+  children,
+  onPress,
+  label,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  label: string;
+}) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.iconBtn}>
+      {Platform.OS === 'ios' ? (
+        <BlurView intensity={34} tint="dark" style={styles.blurCircle}>
+          {children}
+        </BlurView>
+      ) : (
+        <View style={styles.androidCircle}>{children}</View>
+      )}
+    </Pressable>
+  );
+}
 
 const styles = StyleSheet.create({
-  wrap: { height: HERO_H, overflow: 'hidden', backgroundColor: '#111' },
+  wrap: { overflow: 'hidden', backgroundColor: RP.text },
   coverClip: { ...StyleSheet.absoluteFillObject },
-  coverImg: { width: '100%', height: HERO_H + 40 },
+  coverImg: { width: '100%', height: HERO_H + 48 },
   topRow: {
     position: 'absolute',
     left: 12,
@@ -141,8 +147,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    zIndex: 2,
   },
-  topRight: { flexDirection: 'row', gap: 8 },
+  topRight: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    maxWidth: 230,
+  },
   iconBtn: {},
   blurCircle: {
     width: 42,
@@ -152,16 +165,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   androidCircle: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.48)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconGlyph: { color: '#fff', fontSize: 28, fontWeight: '300', marginTop: -2 },
-  iconGlyphSm: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });

@@ -1,8 +1,9 @@
 import { RP } from '@/constants/restaurantPremiumTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+/** Full-width grid dish card (category browser). Uses lazy image decoding via expo-image. */
 export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
@@ -23,7 +25,7 @@ export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
   return (
     <AnimatedPressable
       onPressIn={() => {
-        scale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
+        scale.value = withSpring(0.98, { damping: 16, stiffness: 400 });
       }}
       onPressOut={() => {
         scale.value = withSpring(1, { damping: 12, stiffness: 260 });
@@ -36,7 +38,12 @@ export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
     >
       <View style={styles.imageWrap}>
         {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
+          <Image
+            source={{ uri: item.image }}
+            style={styles.image}
+            contentFit="cover"
+            transition={320}
+          />
         ) : (
           <View style={[styles.image, styles.imagePh]}>
             <Text style={styles.imagePhTxt}>🍽</Text>
@@ -48,6 +55,8 @@ export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
           </View>
         ) : null}
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Add ${item.name}`}
           style={styles.plusBtn}
           hitSlop={12}
           onPress={() => {
@@ -86,12 +95,12 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     backgroundColor: RP.bg,
     borderRadius: RP.radiusL,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: RP.border,
     padding: 10,
     shadowColor: RP.shadow,
     shadowOpacity: 1,
-    shadowRadius: 16,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
   },
@@ -121,12 +130,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 4,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
     elevation: 4,
   },
   plusTxt: { color: '#fff', fontSize: 26, fontWeight: '400', marginTop: -2 },
-  title: { marginTop: 10, fontSize: 16, fontWeight: '900', color: RP.text, minHeight: 40 },
+  title: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '900',
+    color: RP.text,
+    minHeight: 40,
+    letterSpacing: -0.25,
+  },
   price: { marginTop: 4, fontSize: 15, fontWeight: '800', color: RP.text },
   ing: { marginTop: 4, fontSize: 12, fontWeight: '600', color: RP.textSecondary, lineHeight: 16 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },

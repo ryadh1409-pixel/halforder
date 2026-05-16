@@ -21,6 +21,11 @@ export type FoodItem = {
   available: boolean;
   description: string;
   category: string;
+  /** Optional tags for rails / filtering (Firestore: `tags: string[]`) */
+  tags: string[];
+  popular: boolean;
+  recommended: boolean;
+  promotion: string | null;
 };
 
 export async function addFoodItem(payload: {
@@ -34,6 +39,10 @@ export async function addFoodItem(payload: {
 }): Promise<void> {
   await addDoc(collection(db, 'restaurants', payload.restaurantId, 'menuItems'), {
     ...payload,
+    tags: [],
+    popular: false,
+    recommended: false,
+    promotion: null,
     createdAt: serverTimestamp(),
   });
 }
@@ -52,6 +61,11 @@ export function getFoodItems(
         onData(
           snap.docs.map((d) => {
             const data = d.data();
+            const tagsRaw = data.tags;
+            const tags =
+              Array.isArray(tagsRaw)
+                ? tagsRaw.filter((t): t is string => typeof t === 'string')
+                : [];
             return {
               id: d.id,
               name: typeof data.name === 'string' ? data.name : 'Food item',
@@ -62,6 +76,13 @@ export function getFoodItems(
               description:
                 typeof data.description === 'string' ? data.description : '',
               category: typeof data.category === 'string' ? data.category : '',
+              tags,
+              popular: data.popular === true,
+              recommended: data.recommended === true,
+              promotion:
+                typeof data.promotion === 'string' && data.promotion.trim()
+                  ? data.promotion.trim()
+                  : null,
             };
           }),
         );
@@ -78,7 +99,19 @@ export async function updateFoodItem(
   restaurantId: string,
   itemId: string,
   updates: Partial<
-    Pick<FoodItem, 'name' | 'price' | 'image' | 'available' | 'description' | 'category'>
+    Pick<
+      FoodItem,
+      | 'name'
+      | 'price'
+      | 'image'
+      | 'available'
+      | 'description'
+      | 'category'
+      | 'tags'
+      | 'popular'
+      | 'recommended'
+      | 'promotion'
+    >
   >,
 ): Promise<void> {
   await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', itemId), updates);

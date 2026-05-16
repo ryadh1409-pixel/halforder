@@ -60,7 +60,7 @@ export function FloatingCartBar({ visible, itemCount, savings, total, onCheckout
             onCheckout();
           }}
         >
-          <Text style={styles.ctaTxt}>Checkout</Text>
+          <Text style={styles.ctaTxt}>Go to checkout</Text>
         </Pressable>
       </View>
     </Animated.View>

@@ -1,17 +1,18 @@
 import { RP } from '@/constants/restaurantPremiumTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
-  Image,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -27,12 +28,18 @@ const { height: SH } = Dimensions.get('window');
 const SHEET_H = Math.min(SH * 0.92, 720);
 const DISMISS_Y = SHEET_H + 40;
 
+export type ItemSheetAddPayload = {
+  qty: number;
+  notes: string;
+  /** Human-readable customization summary */
+  optionsSummary: string;
+};
+
 type Props = {
   visible: boolean;
   item: DisplayMenuItem | null;
   onClose: () => void;
-  /** Called with selected quantity after user confirms. */
-  onAdd: (qty: number) => void;
+  onAdd: (payload: ItemSheetAddPayload) => void;
 };
 
 const BREAD = ['Sourdough', 'Multigrain', 'Herb wrap'] as const;
@@ -51,6 +58,7 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
   const [sauces, setSauces] = useState<string[]>(['House sauce']);
   const [season, setSeason] = useState<string[]>(['Black pepper']);
   const [qty, setQty] = useState(1);
+  const [notes, setNotes] = useState('');
 
   const closeSheet = useCallback(() => {
     translateY.value = withSpring(DISMISS_Y, { damping: 22, stiffness: 220 }, (finished) => {
@@ -67,6 +75,7 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
       setVeggies(['Lettuce', 'Tomato']);
       setSauces(['House sauce']);
       setSeason(['Black pepper']);
+      setNotes('');
       translateY.value = withSpring(0, { damping: 24, stiffness: 260 });
     } else if (!visible) {
       translateY.value = DISMISS_Y;
@@ -150,7 +159,7 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
             >
               <View style={styles.hero}>
                 {item.image ? (
-                  <Image source={{ uri: item.image }} style={styles.heroImg} resizeMode="cover" />
+                  <Image source={{ uri: item.image }} style={styles.heroImg} contentFit="cover" transition={300} />
                 ) : (
                   <View style={[styles.heroImg, styles.heroPh]}>
                     <Text style={styles.heroPhTxt}>Fresh</Text>
@@ -218,6 +227,21 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                 ))}
               </Section>
 
+              <View style={styles.notesBlock}>
+                <Text style={styles.notesLabel}>Special instructions</Text>
+                <TextInput
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Add a note (allergies, spice level…)"
+                  placeholderTextColor={RP.textMuted}
+                  style={styles.notesInput}
+                  multiline
+                  maxLength={240}
+                  textAlignVertical="top"
+                  accessibilityLabel="Order notes"
+                />
+              </View>
+
               <View style={styles.qtyRow}>
                 <Text style={styles.qtyLabel}>Quantity</Text>
                 <View style={styles.qtyCtrl}>
@@ -255,7 +279,18 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                 style={styles.ctaBtn}
                 onPress={() => {
                   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  onAdd(qty);
+                  const parts = [
+                    `Bread: ${bread}`,
+                    `Cheese: ${cheese}`,
+                    veggies.length ? `Veggies: ${veggies.join(', ')}` : null,
+                    sauces.length ? `Sauces: ${sauces.join(', ')}` : null,
+                    season.length ? `Seasonings: ${season.join(', ')}` : null,
+                  ].filter(Boolean) as string[];
+                  onAdd({
+                    qty,
+                    notes: notes.trim(),
+                    optionsSummary: parts.join(' · '),
+                  });
                   closeSheet();
                 }}
               >
@@ -359,6 +394,21 @@ const styles = StyleSheet.create({
   },
   prevStrong: { fontSize: 15, fontWeight: '900', color: RP.text },
   prevSub: { marginTop: 4, fontSize: 13, fontWeight: '600', color: RP.textSecondary },
+  notesBlock: { marginTop: 20 },
+  notesLabel: { fontSize: 15, fontWeight: '900', color: RP.text },
+  notesInput: {
+    marginTop: 10,
+    minHeight: 88,
+    borderRadius: RP.radiusM,
+    borderWidth: 1,
+    borderColor: RP.border,
+    backgroundColor: RP.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: RP.text,
+  },
   section: { marginTop: 22 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
   sectionTitle: { fontSize: 17, fontWeight: '900', color: RP.text },

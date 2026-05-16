@@ -14,13 +14,18 @@ function hash(s: string): number {
   return Math.abs(h);
 }
 
+/** Stable fingerprint for distinguishing cart rows with modifiers. */
+export function cartFingerprint(signature: string): string {
+  return String(hash(signature));
+}
+
 export function enrichMenuItem(item: FoodItem): DisplayMenuItem {
   const h = hash(item.id);
   const likedPct = 88 + (h % 12);
   const previouslyOrdered = h % 5 === 0;
   const mostLiked = h % 7 === 0;
   const offers = ['BOGO', '20% off', 'Free drink', null, null, null];
-  const offerLabel = offers[h % offers.length];
+  const offerLabel = item.promotion ?? offers[h % offers.length];
   const shortIngredients =
     item.description?.trim().slice(0, 72) ||
     'Fresh ingredients · chef-crafted · made to order';

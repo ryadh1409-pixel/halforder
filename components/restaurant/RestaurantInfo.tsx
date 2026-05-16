@@ -1,5 +1,5 @@
 import { RP } from '@/constants/restaurantPremiumTheme';
-import type { RestaurantProfile } from '@/hooks/useRestaurantProfile';
+import { RESTAURANT_INFO_OVERLAP } from '@/constants/restaurantLayout';
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
@@ -95,7 +95,7 @@ export function RestaurantInfo({
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: 16,
-    marginTop: -56,
+    marginTop: -RESTAURANT_INFO_OVERLAP,
     backgroundColor: RP.bg,
     borderRadius: RP.radiusL,
     padding: 18,

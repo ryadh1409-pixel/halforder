@@ -1,19 +1,28 @@
+import { MenuHorizontalCarousel } from '@/components/menu/MenuHorizontalCarousel';
+import { MenuItemCard } from '@/components/menu/MenuItemCard';
+import { FloatingCartBar } from '@/components/cart/FloatingCartBar';
 import { CategoryTabs } from '@/components/restaurant/CategoryTabs';
 import { DeliveryOptions, type DeliveryMode } from '@/components/restaurant/DeliveryOptions';
-import { FloatingCartBar } from '@/components/cart/FloatingCartBar';
-import { ItemDetailsSheet } from '@/components/restaurant/ItemDetailsSheet';
-import { MenuGridSkeleton } from '@/components/restaurant/MenuGridSkeleton';
-import { MenuItemCard } from '@/components/restaurant/MenuItemCard';
+import {
+  ItemDetailsSheet,
+  type ItemSheetAddPayload,
+} from '@/components/restaurant/ItemDetailsSheet';
+import {
+  MenuGridSkeleton,
+  RestaurantAboveFoldSkeleton,
+} from '@/components/restaurant/MenuGridSkeleton';
 import { MiniStickyHeader } from '@/components/restaurant/MiniStickyHeader';
-import { PromoBanner } from '@/components/restaurant/PromoBanner';
+import { QuickInfoCards } from '@/components/restaurant/QuickInfoCards';
 import { RestaurantHero } from '@/components/restaurant/RestaurantHero';
 import { RestaurantInfo } from '@/components/restaurant/RestaurantInfo';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import { useMenu } from '@/hooks/useMenu';
+import { useRestaurantMenuSections } from '@/hooks/useRestaurantMenuSections';
 import { useRestaurantProfile, type RestaurantProfile } from '@/hooks/useRestaurantProfile';
 import { useAuth } from '@/services/AuthContext';
 import { useCart } from '@/services/CartContext';
 import {
+  cartFingerprint,
   defaultCategoriesFromItems,
   enrichMenuItem,
   itemsForCategory,
@@ -40,7 +49,7 @@ const PLACEHOLDER_PROFILE = (id: string): RestaurantProfile => ({
   image: null,
   coverImage: null,
   address: null,
-  rating: 4.8,
+  rating: 4.85,
   reviewCount: 1240,
 });
 
@@ -48,6 +57,16 @@ type Props = {
   restaurantId: string;
 };
 
+function buildOptionsFingerprint(payload: ItemSheetAddPayload): string {
+  const note = payload.notes ? `notes:${payload.notes}` : '';
+  return `${payload.optionsSummary}|${note}`;
+}
+
+/**
+ * Marketplace restaurant storefront — Uber Eats–grade layout: hero, info, segmented order type,
+ * featured horizontal rails, sticky category pills, denser grid menu, customizable item sheet,
+ * floating checkout bar (`CartProvider`).
+ */
 export function RestaurantDetailsScreen({ restaurantId }: Props) {
   const router = useRouter();
   const { user } = useAuth();
@@ -71,8 +90,12 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
 
   const resolvedProfile = profile ?? PLACEHOLDER_PROFILE(restaurantId);
 
-  const displayItems = useMemo(() => items.map(enrichMenuItem), [items]);
+  const displayItems = useMemo(
+    () => items.filter((i) => i.available).map(enrichMenuItem),
+    [items],
+  );
   const categories = useMemo(() => defaultCategoriesFromItems(items), [items]);
+  const sectionBuckets = useRestaurantMenuSections(displayItems);
 
   useEffect(() => {
     if (categories.length > 0 && !categories.includes(activeCat)) {
@@ -90,7 +113,10 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     [cart, restaurantId],
   );
 
-  const cartQty = useMemo(() => cartForRestaurant.reduce((s, c) => s + c.qty, 0), [cartForRestaurant]);
+  const cartQty = useMemo(
+    () => cartForRestaurant.reduce((s, c) => s + c.qty, 0),
+    [cartForRestaurant],
+  );
   const subtotal = useMemo(
     () => cartForRestaurant.reduce((s, c) => s + c.price * c.qty, 0),
     [cartForRestaurant],
@@ -99,18 +125,21 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
 
   const loading = profileLoading || menuLoading;
 
-  const qtyForItem = useCallback(
-    (id: string) => cartForRestaurant.find((c) => c.id === id)?.qty ?? 0,
+  /** Sum quantity across cart lines sharing the same base menu item id. */
+  const qtyForBaseMenuItem = useCallback(
+    (id: string) =>
+      cartForRestaurant.filter((c) => c.id === id).reduce((acc, row) => acc + row.qty, 0),
     [cartForRestaurant],
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     refetch();
-    setTimeout(() => setRefreshing(false), 700);
+    setTimeout(() => setRefreshing(false), 680);
   }, [refetch]);
 
   const openSheet = useCallback((item: DisplayMenuItem) => {
+    void Haptics.selectionAsync();
     setSelectedItem(item);
     setSheetOpen(true);
   }, []);
@@ -144,6 +173,10 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     }
   }, [resolvedProfile.name]);
 
+  const deliveryFee = deliveryMode === 'pickup' ? 0 : 2.49;
+  const serviceFee = 0.99;
+  const etaRange = deliveryMode === 'pickup' ? '15–25 min' : deliveryMode === 'group' ? '30–45 min' : '25–40 min';
+
   const rows = useMemo(() => {
     const out: DisplayMenuItem[][] = [];
     for (let i = 0; i < categoryItems.length; i += 2) {
@@ -151,6 +184,47 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     }
     return out;
   }, [categoryItems]);
+
+    (payload: ItemSheetAddPayload) => {
+      const it = selectedItem;
+      if (!it) return;
+      const fp = cartFingerprint(buildOptionsFingerprint(payload));
+      const optParts = [payload.optionsSummary, payload.notes ? `Note: ${payload.notes}` : ''].filter(
+        Boolean,
+      );
+      addToCart({
+        id: it.id,
+        cartLineId: `${it.id}__${fp}`,
+        name: it.name,
+        price: it.price,
+        image: it.image,
+        restaurantId,
+        optionsSummary: optParts.join(' · '),
+        qty: payload.qty,
+      });
+    },
+    [addToCart, restaurantId, selectedItem],
+  );
+
+  const quickAdd = useCallback(
+    (it: DisplayMenuItem) => {
+      addToCart({
+        id: it.id,
+        name: it.name,
+        price: it.price,
+        image: it.image,
+        restaurantId,
+      });
+    },
+    [addToCart, restaurantId],
+  );
+
+  const openRestaurantMenu = useCallback(() => {
+    Alert.alert(
+      'Menu',
+      'Search and dietary filters arrive in the next update. Explore categories below.',
+    );
+  }, []);
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -162,46 +236,109 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       />
 
       <Animated.ScrollView
-        stickyHeaderIndices={[1]}
+        stickyHeaderIndices={[2]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={RP.text} />
         }
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: cartQty > 0 ? 120 : 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: cartQty > 0 ? 128 : 36 }]}
       >
         <View>
-          <RestaurantHero
-            scrollY={scrollY}
-            coverUri={resolvedProfile.coverImage}
-            topInset={insets.top}
-            onBack={() => router.back()}
-            onSearch={() => Alert.alert('Search', 'Menu search is coming soon.')}
-            onFavorite={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-            onShare={() => void shareRestaurant()}
+          {profileLoading ? (
+            <RestaurantAboveFoldSkeleton />
+          ) : (
+            <>
+              <RestaurantHero
+                scrollY={scrollY}
+                coverUri={resolvedProfile.coverImage}
+                topInset={insets.top}
+                onBack={() => router.back()}
+                onSearch={openRestaurantMenu}
+                onFavorite={() => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                onShare={() => void shareRestaurant()}
+                onMore={() => {
+                  void Haptics.selectionAsync();
+                  Alert.alert('Restaurant', 'Coupons, hours, and allergen info — coming soon.');
+                }}
+              />
+              <RestaurantInfo
+                profile={resolvedProfile}
+                deliveryFee={deliveryFee}
+                serviceFee={serviceFee}
+                distanceLabel="2.4 mi"
+                etaRange={etaRange}
+                reorderCopy="800+ people in your neighborhood reordered last month"
+              />
+              <DeliveryOptions mode={deliveryMode} onChange={setDeliveryMode} />
+              <QuickInfoCards
+                mode={deliveryMode}
+                deliveryFee={deliveryFee}
+                etaRange={etaRange}
+              />
+            </>
+          )}
+        </View>
+
+        <View style={styles.featuredBlock}>
+          <MenuHorizontalCarousel
+            title="Popular items"
+            subtitle="Top picks near you"
+            items={sectionBuckets.popular}
+            qtyForItem={qtyForBaseMenuItem}
+            onItemPress={openSheet}
+            onItemAdd={quickAdd}
           />
-          <RestaurantInfo
-            profile={resolvedProfile}
-            deliveryFee={deliveryMode === 'pickup' ? 0 : 2.49}
-            serviceFee={0.99}
-            distanceLabel="2.4 mi"
-            etaRange={deliveryMode === 'pickup' ? '15–25 min' : '25–35 min'}
-            reorderCopy="800+ people in your neighborhood reordered last month"
+          <MenuHorizontalCarousel
+            title="Buy 1 Get 1"
+            subtitle="Deals on bundles"
+            items={sectionBuckets.deals}
+            qtyForItem={qtyForBaseMenuItem}
+            onItemPress={openSheet}
+            onItemAdd={quickAdd}
           />
-          <DeliveryOptions mode={deliveryMode} onChange={setDeliveryMode} />
-          <PromoBanner />
+          <MenuHorizontalCarousel
+            title="Recommended"
+            subtitle="Because you order great food"
+            items={sectionBuckets.recommended}
+            qtyForItem={qtyForBaseMenuItem}
+            onItemPress={openSheet}
+            onItemAdd={quickAdd}
+          />
+          <MenuHorizontalCarousel
+            title="Drinks"
+            subtitle="Add a beverage"
+            items={sectionBuckets.drinks}
+            qtyForItem={qtyForBaseMenuItem}
+            onItemPress={openSheet}
+            onItemAdd={quickAdd}
+          />
+          <MenuHorizontalCarousel
+            title="Desserts"
+            subtitle="Finish sweet"
+            items={sectionBuckets.desserts}
+            qtyForItem={qtyForBaseMenuItem}
+            onItemPress={openSheet}
+            onItemAdd={quickAdd}
+          />
         </View>
 
         <CategoryTabs categories={categories} active={activeCat} onSelect={setActiveCat} />
 
-        <View style={styles.menuBlock}>
+        <View>
+          <View style={styles.menuHeaderRow}>
+            <Text style={styles.menuHeaderTitle}>{activeCat}</Text>
+            <Text style={styles.menuHeaderSub}>
+              {categoryItems.length} {categoryItems.length === 1 ? 'item' : 'items'}
+            </Text>
+          </View>
+
+          <View style={styles.menuBlock}>
           {error ? (
             <Text style={styles.err}>Could not load menu. Pull to refresh.</Text>
           ) : null}
-          {loading ? (
+          {loading && displayItems.length === 0 ? (
             <MenuGridSkeleton rows={5} />
           ) : items.length === 0 ? (
             <View style={styles.empty}>
@@ -215,24 +352,17 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                   <View key={it.id} style={styles.menuCell}>
                     <MenuItemCard
                       item={it}
-                      qty={qtyForItem(it.id)}
+                      qty={qtyForBaseMenuItem(it.id)}
                       onPress={() => openSheet(it)}
-                      onAdd={() =>
-                        addToCart({
-                          id: it.id,
-                          name: it.name,
-                          price: it.price,
-                          image: it.image,
-                          restaurantId,
-                        })
-                      }
+                      onAdd={() => quickAdd(it)}
                     />
                   </View>
                 ))}
                 {pair.length === 1 ? <View style={styles.menuCell} /> : null}
               </View>
             ))
-          )}
+          />
+        </View>
         </View>
       </Animated.ScrollView>
 
@@ -248,19 +378,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         visible={sheetOpen}
         item={selectedItem}
         onClose={closeSheet}
-        onAdd={(qty) => {
-          const it = selectedItem;
-          if (!it) return;
-          for (let i = 0; i < qty; i += 1) {
-            addToCart({
-              id: it.id,
-              name: it.name,
-              price: it.price,
-              image: it.image,
-              restaurantId,
-            });
-          }
-        }}
+        onAdd={addFromSheet}
       />
     </SafeAreaView>
   );
@@ -269,7 +387,18 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: RP.bg },
   scrollContent: { flexGrow: 1 },
-  menuBlock: { paddingTop: 8, minHeight: 200 },
+  featuredBlock: { marginTop: 4 },
+  menuHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  menuHeaderTitle: { fontSize: 22, fontWeight: '900', color: RP.text, letterSpacing: -0.4 },
+  menuHeaderSub: { fontSize: 13, fontWeight: '700', color: RP.textMuted },
+  menuBlock: { paddingTop: 4, minHeight: 200 },
   menuRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 16 },
   menuCell: { flex: 1, minWidth: 0 },
   err: { paddingHorizontal: 16, color: RP.offer, fontWeight: '700', marginBottom: 8 },

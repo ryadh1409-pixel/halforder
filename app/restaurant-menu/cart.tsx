@@ -89,8 +89,11 @@ export default function CartScreen() {
       cart
         .filter((item) => item.restaurantId === restaurantId)
         .map((item) => ({
-          id: item.id,
-          name: item.name,
+          id: item.cartLineId,
+          name:
+            item.optionsSummary && item.optionsSummary.length > 0
+              ? `${item.name} (${item.optionsSummary})`
+              : item.name,
           price: item.price,
           qty: item.qty,
           image: item.image,
