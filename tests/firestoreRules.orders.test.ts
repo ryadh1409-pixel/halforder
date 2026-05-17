@@ -68,6 +68,86 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
   });
 
   describe('firestore rules: orders create + participants join', () => {
+  it('allows marketplace delivery order create with required fields', async () => {
+    const db = te().authenticatedContext('cust1').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'orders', 'mkt1'), {
+        userId: 'cust1',
+        customerId: 'cust1',
+        restaurantId: 'rest_abc',
+        venueId: 'rest_abc',
+        paymentStatus: 'unpaid',
+        deliveryType: 'delivery',
+        status: 'awaiting_payment',
+        items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+        totalPrice: 12,
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies marketplace order create when userId does not match auth', async () => {
+    const db = te().authenticatedContext('cust1').firestore();
+    await assertFails(
+      setDoc(doc(db, 'orders', 'mkt2'), {
+        userId: 'other_user',
+        restaurantId: 'rest_abc',
+        venueId: 'rest_abc',
+        paymentStatus: 'unpaid',
+        deliveryType: 'delivery',
+        status: 'awaiting_payment',
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies marketplace order create without paymentStatus', async () => {
+    const db = te().authenticatedContext('cust1').firestore();
+    await assertFails(
+      setDoc(doc(db, 'orders', 'mkt3'), {
+        userId: 'cust1',
+        restaurantId: 'rest_abc',
+        venueId: 'rest_abc',
+        deliveryType: 'delivery',
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('allows customer to read own marketplace order', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'mkt4'), {
+        userId: 'cust1',
+        customerId: 'cust1',
+        restaurantId: 'rest_abc',
+        venueId: 'rest_abc',
+        paymentStatus: 'unpaid',
+        deliveryType: 'delivery',
+        status: 'awaiting_payment',
+        totalPrice: 20,
+        createdAt: serverTimestamp(),
+      });
+    });
+    const db = te().authenticatedContext('cust1').firestore();
+    await assertSucceeds(getDoc(doc(db, 'orders', 'mkt4')));
+  });
+
+  it('denies other users from reading marketplace order', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'orders', 'mkt5'), {
+        userId: 'cust1',
+        restaurantId: 'rest_abc',
+        venueId: 'rest_abc',
+        paymentStatus: 'unpaid',
+        deliveryType: 'delivery',
+        status: 'awaiting_payment',
+        createdAt: serverTimestamp(),
+      });
+    });
+    const db = te().authenticatedContext('cust2').firestore();
+    await assertFails(getDoc(doc(db, 'orders', 'mkt5')));
+  });
+
   it('allows valid order create by owner', async () => {
     const db = te().authenticatedContext('u1').firestore();
     await assertSucceeds(

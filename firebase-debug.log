@@ -1,0 +1,51 @@
+[debug] [2026-05-17T04:13:11.063Z] ----------------------------------------------------------------------
+[debug] [2026-05-17T04:13:11.069Z] Command:       /usr/local/bin/node /Users/thamer/.npm-global/bin/firebase emulators:exec --only firestore npm run test:rules
+[debug] [2026-05-17T04:13:11.070Z] CLI Version:   15.16.0
+[debug] [2026-05-17T04:13:11.070Z] Platform:      darwin
+[debug] [2026-05-17T04:13:11.070Z] Node Version:  v24.13.0
+[debug] [2026-05-17T04:13:11.070Z] Time:          Sun May 17 2026 00:13:11 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-05-17T04:13:11.070Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-17T04:13:11.070Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-05-17T04:13:11.634Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-17T04:13:11.634Z] > authorizing via signed-in user (ryadh1409@gmail.com)
+[debug] [2026-05-17T04:13:11.637Z] Error: EPERM: operation not permitted, open '/Users/thamer/.config/configstore/firebase-tools.json.3878236905'
+    at Object.openSync (node:fs:559:18)
+    at writeFile.writeFileSync [as sync] (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/write-file-atomic/index.js:205:13)
+    at set all (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/configstore/index.js:61:20)
+    at Configstore.set (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/configstore/index.js:91:12)
+    at session (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/track.js:181:39)
+    at emulatorSession (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/track.js:160:12)
+    at trackEmulator (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/track.js:72:21)
+    at Command.<anonymous> (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/command.js:101:48)
+    at Command.listener [as _actionHandler] (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/commander/index.js:413:31)
+    at Command._parseCommand (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/commander/index.js:914:14)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-05-17T04:13:11.637Z] Error: EPERM: operation not permitted, open '/Users/thamer/.config/configstore/firebase-tools.json.3636676657'
+    at Object.openSync (node:fs:559:18)
+    at writeFile.writeFileSync [as sync] (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/write-file-atomic/index.js:205:13)
+    at set all (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/configstore/index.js:61:20)
+    at Configstore.set (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/configstore/index.js:91:12)
+    at session (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/track.js:181:39)
+    at emulatorSession (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/track.js:160:12)
+    at trackEmulator (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/track.js:72:21)
+    at /Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/command.js:150:53
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-05-17T04:13:11.751Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-05-17T04:13:11.751Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[warn] ⚠  Unable to fetch the CLI MOTD and remote config. This is not a fatal error, but may indicate an issue with your network connection. 
+[debug] [2026-05-17T04:13:11.752Z] Failed to fetch MOTD Error: EPERM: operation not permitted, open '/Users/thamer/.config/configstore/firebase-tools.json.3628165348'
+[debug] [2026-05-17T04:13:11.894Z] Error: EPERM: operation not permitted, open '/Users/thamer/.config/configstore/firebase-tools.json.247045991'
+    at Object.openSync (node:fs:559:18)
+    at writeFile.writeFileSync [as sync] (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/write-file-atomic/index.js:205:13)
+    at set all (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/configstore/index.js:61:20)
+    at Configstore.delete (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/node_modules/configstore/index.js:101:12)
+    at process.<anonymous> (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/bin/cli.js:65:45)
+    at process.emit (node:events:520:35)
+    at process.exit (node:internal/process/per_thread:236:15)
+    at Timeout._onTimeout (/Users/thamer/.npm-global/lib/node_modules/firebase-tools/lib/errorOut.js:20:17)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)

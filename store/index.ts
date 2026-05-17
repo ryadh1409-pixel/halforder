@@ -5,3 +5,4 @@ export {
   type CartLine,
 } from '@/store/cartStore';
 export { useCheckoutStore } from '@/store/checkoutStore';
+export { useSwipeStore } from '@/store/swipeStore';

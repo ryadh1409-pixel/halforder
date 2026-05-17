@@ -18,6 +18,7 @@ export default function TabLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen name="index" />
+      <Tabs.Screen name="swipe" />
       <Tabs.Screen name="explore" />
       <Tabs.Screen name="search" />
       <Tabs.Screen name="cart" />

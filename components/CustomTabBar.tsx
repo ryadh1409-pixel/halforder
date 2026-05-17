@@ -22,6 +22,7 @@ const ICON_SIZE = 26;
 
 const VISIBLE_TAB_ORDER = [
   'index',
+  'swipe',
   'explore',
   'search',
   'cart',
@@ -69,6 +70,8 @@ function iconGlyph(
   switch (routeName) {
     case 'index':
       return pick('home', 'home-outline');
+    case 'swipe':
+      return pick('flame', 'flame-outline');
     case 'explore':
       return pick('grid', 'grid-outline');
     case 'search':
@@ -96,6 +99,8 @@ function tabLabel(routeName: string): string {
   switch (routeName) {
     case 'index':
       return 'Home';
+    case 'swipe':
+      return 'Swipe';
     case 'explore':
       return 'Browse';
     case 'search':

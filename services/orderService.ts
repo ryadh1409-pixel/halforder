@@ -1,5 +1,5 @@
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import type {
   CustomerSnapshot,
@@ -519,14 +519,11 @@ export async function createOrder(payload: {
     // Keep snapshot fallbacks and still create order.
   }
 
-  console.log('[createOrder] about to save order', {
-    venueId: payload.restaurantId,
-    restaurantId: payload.restaurantId,
-    userId: payload.userId,
-    paymentStatus: 'unpaid',
-  });
+  if (auth.currentUser?.uid !== payload.userId) {
+    throw new Error('createOrder: signed-in user does not match payload.userId');
+  }
 
-  const ref = await addDoc(collection(db, 'orders'), {
+  const orderPayload = {
     userId: payload.userId,
     customerId: payload.userId,
     restaurantId: payload.restaurantId,
@@ -578,7 +575,37 @@ export async function createOrder(payload: {
     taxes: 0,
     etaMinutes: estimatedDeliveryTime,
     createdAt: serverTimestamp(),
-  });
+  };
+
+  if (__DEV__) {
+    console.log('[createOrder] writing orders/', {
+      collection: 'orders',
+      authUid: payload.userId,
+      userId: orderPayload.userId,
+      restaurantId: orderPayload.restaurantId,
+      venueId: orderPayload.venueId,
+      paymentStatus: orderPayload.paymentStatus,
+      deliveryType: orderPayload.deliveryType,
+      status: orderPayload.status,
+    });
+  }
+
+  let ref;
+  try {
+    ref = await addDoc(collection(db, 'orders'), orderPayload);
+    if (__DEV__) {
+      console.log('[createOrder] success', { orderId: ref.id, path: `orders/${ref.id}` });
+    }
+  } catch (err) {
+    if (__DEV__) {
+      console.error('[createOrder] permission or write failed', {
+        code: (err as { code?: string })?.code,
+        message: err instanceof Error ? err.message : String(err),
+        authUid: payload.userId,
+      });
+    }
+    throw err;
+  }
   return ref.id;
 }
 
