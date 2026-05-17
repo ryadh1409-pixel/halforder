@@ -26,6 +26,7 @@ import { useRestaurantProfile } from '@/hooks/useRestaurantProfile';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { useAuth } from '@/services/AuthContext';
 import { useCart } from '@/services/CartContext';
+import { useCheckoutStore } from '@/store/checkoutStore';
 import { createOrder } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
@@ -68,10 +69,14 @@ export default function CheckoutPremiumScreen() {
     },
   });
 
-  const [fulfillmentMode, setFulfillmentMode] = useState<CheckoutFulfillmentMode>('delivery');
-  const [timing, setTiming] = useState<CheckoutDeliveryTiming>('standard');
-  const [promo, setPromo] = useState('');
-  const [gift, setGift] = useState(false);
+  const fulfillmentMode = useCheckoutStore((s) => s.fulfillmentMode);
+  const setFulfillmentMode = useCheckoutStore((s) => s.setFulfillmentMode);
+  const timing = useCheckoutStore((s) => s.timing);
+  const setTiming = useCheckoutStore((s) => s.setTiming);
+  const promo = useCheckoutStore((s) => s.promoCode);
+  const setPromo = useCheckoutStore((s) => s.setPromoCode);
+  const gift = useCheckoutStore((s) => s.gift);
+  const setGift = useCheckoutStore((s) => s.setGift);
   const [placing, setPlacing] = useState(false);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   const [checkingStripe, setCheckingStripe] = useState(false);

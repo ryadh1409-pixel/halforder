@@ -1,24 +1,11 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import { useCartStore, type CartAddInput, type CartLine } from '@/store/cartStore';
+import React, { createContext, useContext, useMemo } from 'react';
 
-export type CartItem = {
-  /** Base menu item id (Firestore document id under menuItems). */
-  id: string;
-  /** Unique line — supports multiple lines for same dish with different options. */
-  cartLineId: string;
-  name: string;
-  price: number;
-  qty: number;
-  image: string | null;
-  restaurantId: string;
-  /** Optional kitchen / modifier summary */
-  optionsSummary?: string;
-};
+export type CartItem = CartLine;
 
 type CartContextValue = {
   items: CartItem[];
-  addToCart: (
-    item: Omit<CartItem, 'qty' | 'cartLineId'> & { cartLineId?: string; qty?: number },
-  ) => void;
+  addToCart: (item: CartAddInput) => void;
   removeFromCart: (itemId: string) => void;
   clearCart: () => void;
   clearCartForRestaurant: (restaurantId: string) => void;
@@ -26,44 +13,23 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+/** Bridges Zustand cart store for legacy `useCart()` consumers. */
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const items = useCartStore((s) => s.items);
+  const addToCart = useCartStore((s) => s.addToCart);
+  const removeFromCart = useCartStore((s) => s.removeFromCart);
+  const clearCart = useCartStore((s) => s.clearCart);
+  const clearCartForRestaurant = useCartStore((s) => s.clearCartForRestaurant);
 
   const value = useMemo<CartContextValue>(
     () => ({
       items,
-      addToCart(item) {
-        const lineKey = item.cartLineId ?? item.id;
-        const addQty = typeof item.qty === 'number' && item.qty > 0 ? Math.floor(item.qty) : 1;
-        setItems((prev) => {
-          const exists = prev.find((row) => row.cartLineId === lineKey);
-          const { qty: _omit, ...rest } = item;
-          const line = rest as Omit<CartItem, 'qty'>;
-          if (exists) {
-            return prev.map((row) =>
-              row.cartLineId === lineKey ? { ...row, qty: row.qty + addQty } : row,
-            );
-          }
-          return [...prev, { ...line, cartLineId: lineKey, qty: addQty }];
-        });
-      },
-      removeFromCart(itemId) {
-        setItems((prev) =>
-          prev
-            .map((row) =>
-              row.cartLineId === itemId ? { ...row, qty: Math.max(0, row.qty - 1) } : row,
-            )
-            .filter((row) => row.qty > 0),
-        );
-      },
-      clearCart() {
-        setItems([]);
-      },
-      clearCartForRestaurant(restaurantId) {
-        setItems((prev) => prev.filter((row) => row.restaurantId !== restaurantId));
-      },
+      addToCart,
+      removeFromCart,
+      clearCart,
+      clearCartForRestaurant,
     }),
-    [items],
+    [items, addToCart, removeFromCart, clearCart, clearCartForRestaurant],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -76,3 +42,6 @@ export function useCart() {
   }
   return ctx;
 }
+
+/** Direct Zustand access — preferred in new screens. */
+export { useCartStore, selectCartTotals } from '@/store/cartStore';

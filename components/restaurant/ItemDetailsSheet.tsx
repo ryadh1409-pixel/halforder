@@ -295,7 +295,7 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                 }}
               >
                 <Text style={styles.ctaTxt}>
-                  Add {qty} · ${lineTotal.toFixed(2)}
+                  Add to cart · ${lineTotal.toFixed(2)}
                 </Text>
               </Pressable>
             </View>

@@ -1,4 +1,4 @@
-import { RP } from '@/constants/restaurantPremiumTheme';
+import { UE } from '@/constants/uberEatsTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
@@ -13,7 +13,12 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { MenuCarouselCard } from '@/components/menu/MenuCarouselCard';
+import {
+  MenuCarouselCard,
+  MENU_CARD_WIDTH,
+} from '@/components/menu/MenuCarouselCard';
+
+const SNAP = MENU_CARD_WIDTH + 14;
 
 type Props = {
   title: string;
@@ -59,26 +64,35 @@ export function MenuHorizontalCarousel({
         data={items}
         keyExtractor={(i) => i.id}
         renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+        ItemSeparatorComponent={() => <View style={{ width: 14 }} />}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listPad}
-        decelerationRate={Platform.OS === 'ios' ? 'fast' : undefined}
+        decelerationRate="fast"
+        snapToInterval={Platform.OS !== 'web' ? SNAP : undefined}
+        snapToAlignment="start"
+        disableIntervalMomentum
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  block: { marginBottom: 8 },
+  block: { marginBottom: UE.spaceBlock },
   head: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 14,
+    paddingHorizontal: UE.spaceCard,
+    marginBottom: UE.spaceInline,
     gap: 10,
   },
-  title: { fontSize: 22, fontWeight: '900', color: RP.text, letterSpacing: -0.4, flexShrink: 1 },
-  sub: { fontSize: 13, fontWeight: '600', color: RP.textMuted },
-  listPad: { paddingHorizontal: 16, paddingBottom: 20 },
+  title: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: UE.text,
+    letterSpacing: -0.4,
+    flexShrink: 1,
+  },
+  sub: { fontSize: 14, fontWeight: '600', color: UE.textMuted },
+  listPad: { paddingHorizontal: UE.spaceCard, paddingBottom: 24 },
 });

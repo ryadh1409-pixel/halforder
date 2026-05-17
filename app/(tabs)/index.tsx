@@ -1,11 +1,7 @@
-import SwipeExploreFeed from '@/components/SwipeExploreFeed';
-import SwipeWrapper from '@/components/SwipeWrapper';
+import { UberEatsHomeScreen } from '@/components/home/UberEatsHomeScreen';
 import React from 'react';
 
+/** Marketplace home — Uber Eats–style discovery (Firestore realtime). */
 export default function HomeTab() {
-  return (
-    <SwipeWrapper currentIndex={0}>
-      <SwipeExploreFeed />
-    </SwipeWrapper>
-  );
+  return <UberEatsHomeScreen />;
 }

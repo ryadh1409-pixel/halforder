@@ -19,9 +19,11 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="explore" />
-      <Tabs.Screen name="ai" />
+      <Tabs.Screen name="search" />
+      <Tabs.Screen name="cart" />
+      <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="orders" />
-      <Tabs.Screen name="home" />
+      <Tabs.Screen name="home" options={{ href: null }} />
       <Tabs.Screen name="profile" />
       <Tabs.Screen name="admin" options={{ href: null }} />
       <Tabs.Screen name="host" />

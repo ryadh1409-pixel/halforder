@@ -7,6 +7,8 @@ type Props = {
   height: number;
   borderRadius?: number;
   style?: ViewStyle;
+  /** `light` for marketplace home; `dark` for swipe/dark surfaces */
+  tone?: 'light' | 'dark';
 };
 
 export function ShimmerSkeleton({
@@ -14,7 +16,17 @@ export function ShimmerSkeleton({
   height,
   borderRadius = 10,
   style,
+  tone = 'dark',
 }: Props) {
+  const baseColor = tone === 'light' ? '#EBEBEB' : '#1D2430';
+  const shimmerColors =
+    tone === 'light'
+      ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.65)', 'rgba(255,255,255,0)']
+      : [
+          'rgba(255,255,255,0)',
+          'rgba(255,255,255,0.18)',
+          'rgba(255,255,255,0)',
+        ];
   const translate = useRef(new Animated.Value(-1)).current;
 
   useEffect(() => {
@@ -38,13 +50,15 @@ export function ShimmerSkeleton({
     <View
       style={[
         styles.base,
-        { width, height, borderRadius },
+        { width, height, borderRadius, backgroundColor: baseColor },
         style,
       ]}
     >
-      <Animated.View style={[styles.shimmerWrap, { transform: [{ translateX: shimmerX }] }]}>
+      <Animated.View
+        style={[styles.shimmerWrap, { transform: [{ translateX: shimmerX }] }]}
+      >
         <LinearGradient
-          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.18)', 'rgba(255,255,255,0)']}
+          colors={shimmerColors}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={styles.shimmer}
@@ -57,7 +71,6 @@ export function ShimmerSkeleton({
 const styles = StyleSheet.create({
   base: {
     overflow: 'hidden',
-    backgroundColor: '#1D2430',
   },
   shimmerWrap: {
     ...StyleSheet.absoluteFillObject,

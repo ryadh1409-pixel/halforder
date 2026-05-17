@@ -6,7 +6,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-export const MENU_CARD_WIDTH = 168;
+export const MENU_CARD_WIDTH = 180;
 
 type Props = {
   item: DisplayMenuItem;
@@ -87,15 +87,15 @@ const styles = StyleSheet.create({
   card: {
     width: MENU_CARD_WIDTH,
     backgroundColor: RP.bg,
-    borderRadius: RP.radiusM,
-    borderWidth: 1,
+    borderRadius: RP.radiusM + 2,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: RP.border,
-    padding: 10,
-    shadowColor: RP.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    elevation: 4,
   },
   imageWrap: {
     borderRadius: 14,
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: RP.surface,
   },
-  image: { width: '100%', aspectRatio: 1.08, backgroundColor: RP.surface },
+  image: { width: '100%', aspectRatio: 1.05, backgroundColor: RP.surface },
   imagePh: { alignItems: 'center', justifyContent: 'center' },
   imagePhTxt: { fontSize: 32 },
   offerBadge: {

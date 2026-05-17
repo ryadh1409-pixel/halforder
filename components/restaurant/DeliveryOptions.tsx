@@ -1,7 +1,14 @@
-import { RP } from '@/constants/restaurantPremiumTheme';
+import { UE } from '@/constants/uberEatsTheme';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -13,64 +20,97 @@ export type DeliveryMode = 'delivery' | 'pickup' | 'group';
 type Props = {
   mode: DeliveryMode;
   onChange: (m: DeliveryMode) => void;
+  onGroupOrder?: () => void;
 };
 
 const PAD = 16;
 
 function thumbX(mode: DeliveryMode, segW: number) {
-  const i = mode === 'delivery' ? 0 : mode === 'pickup' ? 1 : 2;
-  return 4 + i * segW;
+  return mode === 'pickup' ? 4 + segW : 4;
 }
 
-export function DeliveryOptions({ mode, onChange }: Props) {
+/** Delivery / Pickup pill + separate Group order CTA (Uber Eats action row). */
+export function DeliveryOptions({ mode, onChange, onGroupOrder }: Props) {
   const { width: winW } = useWindowDimensions();
   const trackInner = winW - PAD * 2 - 8;
-  const segW = trackInner / 3;
-  const x = useSharedValue(thumbX(mode, segW));
+  const segW = trackInner / 2;
+  const activeMode = mode === 'pickup' ? 'pickup' : 'delivery';
+  const x = useSharedValue(thumbX(activeMode, segW));
 
   React.useEffect(() => {
-    x.value = withSpring(thumbX(mode, segW), { damping: 18, stiffness: 220 });
-  }, [mode, segW, x]);
+    x.value = withSpring(thumbX(activeMode, segW), {
+      damping: 18,
+      stiffness: 220,
+    });
+  }, [activeMode, segW, x]);
 
   const pillStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }],
   }));
 
-  const select = (m: DeliveryMode) => {
+  const select = (m: 'delivery' | 'pickup') => {
     void Haptics.selectionAsync();
     onChange(m);
   };
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Order type</Text>
       <View style={styles.track}>
         <Animated.View style={[styles.thumb, { width: segW - 8 }, pillStyle]} />
         <View style={styles.row}>
-          <Pressable style={[styles.cell, { width: segW }]} onPress={() => select('delivery')}>
-            <Text style={[styles.label, mode === 'delivery' && styles.labelOn]}>Delivery</Text>
+          <Pressable
+            style={[styles.cell, { width: segW }]}
+            onPress={() => select('delivery')}
+          >
+            <Text
+              style={[
+                styles.label,
+                activeMode === 'delivery' && styles.labelOn,
+              ]}
+            >
+              Delivery
+            </Text>
           </Pressable>
-          <Pressable style={[styles.cell, { width: segW }]} onPress={() => select('pickup')}>
-            <Text style={[styles.label, mode === 'pickup' && styles.labelOn]}>Pickup</Text>
-          </Pressable>
-          <Pressable style={[styles.cell, { width: segW }]} onPress={() => select('group')}>
-            <Text style={[styles.label, mode === 'group' && styles.labelOn]}>Group order</Text>
+          <Pressable
+            style={[styles.cell, { width: segW }]}
+            onPress={() => select('pickup')}
+          >
+            <Text
+              style={[styles.label, activeMode === 'pickup' && styles.labelOn]}
+            >
+              Pickup
+            </Text>
           </Pressable>
         </View>
       </View>
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.groupBtn,
+          pressed && styles.groupBtnPressed,
+        ]}
+        onPress={() => {
+          void Haptics.selectionAsync();
+          onChange('group');
+          onGroupOrder?.();
+        }}
+      >
+        <Ionicons name="people-outline" size={18} color={UE.text} />
+        <Text style={styles.groupTxt}>Group order</Text>
+        <Ionicons name="chevron-forward" size={16} color={UE.textMuted} />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginHorizontal: PAD, marginTop: 18 },
-  title: { fontSize: 12, fontWeight: '800', color: RP.textMuted, marginBottom: 10, letterSpacing: 0.5 },
+  wrap: { marginHorizontal: PAD, marginTop: 16, gap: 10 },
   track: {
     height: 48,
-    borderRadius: 14,
-    backgroundColor: RP.surface,
+    borderRadius: UE.radiusPill,
+    backgroundColor: UE.surface,
     borderWidth: 1,
-    borderColor: RP.border,
+    borderColor: UE.borderLight,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -79,16 +119,29 @@ const styles = StyleSheet.create({
     left: 0,
     top: 4,
     height: 40,
-    borderRadius: 11,
-    backgroundColor: RP.bg,
+    borderRadius: UE.radiusPill,
+    backgroundColor: UE.bg,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   row: { flexDirection: 'row', height: '100%', zIndex: 1 },
   cell: { alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 14, fontWeight: '700', color: RP.textSecondary },
-  labelOn: { color: RP.text, fontWeight: '900' },
+  label: { fontSize: 15, fontWeight: '700', color: UE.textSecondary },
+  labelOn: { color: UE.text, fontWeight: '900' },
+  groupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 48,
+    paddingHorizontal: 16,
+    borderRadius: UE.radiusL,
+    borderWidth: 1,
+    borderColor: UE.borderLight,
+    backgroundColor: UE.bg,
+  },
+  groupBtnPressed: { opacity: 0.92 },
+  groupTxt: { flex: 1, fontSize: 15, fontWeight: '800', color: UE.text },
 });

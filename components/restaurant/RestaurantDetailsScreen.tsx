@@ -1,5 +1,5 @@
 import { MenuHorizontalCarousel } from '@/components/menu/MenuHorizontalCarousel';
-import { MenuItemCard } from '@/components/menu/MenuItemCard';
+import { MenuItemRowCard } from '@/components/menu/MenuItemRowCard';
 import { FloatingCartBar } from '@/components/cart/FloatingCartBar';
 import { CategoryTabs } from '@/components/restaurant/CategoryTabs';
 import {
@@ -208,18 +208,6 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         ? '30–45 min'
         : '25–40 min';
 
-  const rows = useMemo(() => {
-    const out: DisplayMenuItem[][] = [];
-    for (let i = 0; i < categoryItems.length; i += 2) {
-      out.push(
-        [categoryItems[i]!, categoryItems[i + 1]].filter(
-          Boolean,
-        ) as DisplayMenuItem[],
-      );
-    }
-    return out;
-  }, [categoryItems]);
-
   const addFromSheet = useCallback(
     (payload: ItemSheetAddPayload) => {
       const it = selectedItem;
@@ -286,7 +274,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         }
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: cartQty > 0 ? 128 : 36 },
+          { paddingBottom: cartQty > 0 ? 148 : 108 },
         ]}
       >
         <View>
@@ -320,7 +308,16 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                 etaRange={etaRange}
                 reorderCopy="800+ people in your neighborhood reordered last month"
               />
-              <DeliveryOptions mode={deliveryMode} onChange={setDeliveryMode} />
+              <DeliveryOptions
+                mode={deliveryMode}
+                onChange={setDeliveryMode}
+                onGroupOrder={() =>
+                  Alert.alert(
+                    'Group order',
+                    'Invite friends to split the bill — shipping soon.',
+                  )
+                }
+              />
               <QuickInfoCards
                 mode={deliveryMode}
                 deliveryFee={deliveryFee}
@@ -404,20 +401,14 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                 </Text>
               </View>
             ) : (
-              rows.map((pair, idx) => (
-                <View key={`${activeCat}-${idx}`} style={styles.menuRow}>
-                  {pair.map((it) => (
-                    <View key={it.id} style={styles.menuCell}>
-                      <MenuItemCard
-                        item={it}
-                        qty={qtyForBaseMenuItem(it.id)}
-                        onPress={() => openSheet(it)}
-                        onAdd={() => quickAdd(it)}
-                      />
-                    </View>
-                  ))}
-                  {pair.length === 1 ? <View style={styles.menuCell} /> : null}
-                </View>
+              categoryItems.map((it) => (
+                <MenuItemRowCard
+                  key={it.id}
+                  item={it}
+                  qty={qtyForBaseMenuItem(it.id)}
+                  onPress={() => openSheet(it)}
+                  onAdd={() => quickAdd(it)}
+                />
               ))
             )}
           </View>
@@ -461,14 +452,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   menuHeaderSub: { fontSize: 13, fontWeight: '700', color: RP.textMuted },
-  menuBlock: { paddingTop: 4, minHeight: 200 },
-  menuRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  menuCell: { flex: 1, minWidth: 0 },
+  menuBlock: { paddingTop: 0, minHeight: 200 },
   err: {
     paddingHorizontal: 16,
     color: RP.offer,
