@@ -1,6 +1,12 @@
 import { auth, db } from '@/services/firebase';
 import type { SwipeDirection } from '@/types/swipe';
-import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore';
 
 export type RecordSwipeInput = {
   orderId: string;
@@ -52,18 +58,44 @@ export async function createSharedOrderRoom(input: {
   participantIds: string[];
   foodTitle: string;
   splitPrice: number;
+  matchId?: string;
+  restaurantName?: string;
+  heroImageUri?: string;
 }): Promise<string | null> {
   const uid = auth.currentUser?.uid;
-  if (!uid || input.participantIds.length < 2) return null;
-  const roomId = `${input.orderId}_${[...input.participantIds].sort().join('_')}`;
+  const participantIds = Array.from(new Set(input.participantIds))
+    .filter(Boolean)
+    .sort();
+  if (!uid || participantIds.length < 2 || !participantIds.includes(uid)) {
+    return null;
+  }
+
+  const roomId =
+    input.matchId ?? `${input.orderId}_${participantIds.sort().join('_')}`;
+  const itemTotal =
+    Math.round(input.splitPrice * participantIds.length * 100) / 100;
+
   try {
     await setDoc(
       doc(db, 'sharedOrders', roomId),
       {
         orderId: input.orderId,
-        participantIds: input.participantIds,
+        matchId: input.matchId ?? roomId,
+        participantIds,
         foodTitle: input.foodTitle,
+        restaurantName: input.restaurantName ?? 'Nearby restaurant',
+        heroImageUri: input.heroImageUri ?? null,
         splitPrice: input.splitPrice,
+        cartSubtotal: itemTotal,
+        cartItems: [
+          {
+            id: input.orderId,
+            title: input.foodTitle,
+            quantity: participantIds.length,
+            pricePerPerson: input.splitPrice,
+            total: itemTotal,
+          },
+        ],
         status: 'open',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

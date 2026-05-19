@@ -49,11 +49,20 @@ function SwipeMatchSheetInner({
           <View style={styles.flameRing}>
             <Ionicons name="flame" size={48} color="#FF6B35" />
           </View>
-          <Text style={styles.title}>It&apos;s a food match!</Text>
+          <Text style={styles.title}>It&apos;s a match 🍕</Text>
           <Text style={styles.food}>{foodTitle}</Text>
           <Text style={styles.split}>{splitLabel}</Text>
+          <View style={styles.avatarRow}>
+            <View style={[styles.avatar, styles.avatarWarm]}>
+              <Text style={styles.avatarTxt}>Y</Text>
+            </View>
+            <View style={[styles.avatar, styles.avatarGreen]}>
+              <Text style={styles.avatarTxt}>J</Text>
+            </View>
+          </View>
           <Text style={styles.sub}>
-            You and someone nearby want to split this order.
+            You and someone nearby both want this food. Start a shared room,
+            split the cost, and coordinate pickup together.
           </Text>
           <Pressable
             style={styles.primary}
@@ -62,10 +71,10 @@ function SwipeMatchSheetInner({
               onCheckout();
             }}
           >
-            <Text style={styles.primaryTxt}>Checkout together</Text>
+            <Text style={styles.primaryTxt}>Create Shared Order</Text>
           </Pressable>
           <Pressable style={styles.secondary} onPress={onChat}>
-            <Text style={styles.secondaryTxt}>Open chat</Text>
+            <Text style={styles.secondaryTxt}>Start Chat</Text>
           </Pressable>
           <Pressable onPress={onDismiss} hitSlop={12}>
             <Text style={styles.dismiss}>Keep swiping</Text>
@@ -111,6 +120,22 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
   },
   split: { marginTop: 4, fontSize: 22, fontWeight: '900', color: '#7DFFB8' },
+  avatarRow: {
+    flexDirection: 'row',
+    marginTop: 18,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#171922',
+  },
+  avatarWarm: { backgroundColor: '#FF6B35' },
+  avatarGreen: { backgroundColor: '#06C167', marginLeft: -10 },
+  avatarTxt: { color: '#FFF', fontSize: 18, fontWeight: '900' },
   sub: {
     marginTop: 12,
     fontSize: 14,

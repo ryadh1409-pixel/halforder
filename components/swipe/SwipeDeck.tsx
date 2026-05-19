@@ -1,6 +1,6 @@
 import { SwipeFoodCard } from '@/components/swipe/SwipeFoodCard';
 import type { SwipeFoodCard as CardType } from '@/types/swipe';
-import React, { memo, useEffect } from 'react';
+import React, { memo, useCallback, useEffect, useRef } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -22,6 +22,7 @@ type Props = {
   current: CardType | undefined;
   next: CardType | undefined;
   cardMaxHeight: number;
+  actionSignal?: { id: number; direction: 'like' | 'pass' };
   onPass: () => void;
   onLike: () => void;
 };
@@ -30,16 +31,43 @@ function SwipeDeckInner({
   current,
   next,
   cardMaxHeight,
+  actionSignal,
   onPass,
   onLike,
 }: Props) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const lastActionId = useRef<number | null>(null);
 
   useEffect(() => {
     translateX.value = 0;
     translateY.value = 0;
   }, [current?.id, translateX, translateY]);
+
+  const swipeOut = useCallback(
+    (direction: 'like' | 'pass') => {
+      if (!current) return;
+      const callback = direction === 'like' ? onLike : onPass;
+      translateX.value = withTiming(
+        direction === 'like' ? SWIPE_OUT : -SWIPE_OUT,
+        { duration: REJECT_MS },
+        (done) => {
+          if (done) {
+            runOnJS(callback)();
+          }
+        },
+      );
+      translateY.value = withTiming(0, { duration: REJECT_MS });
+    },
+    [current, onLike, onPass, translateX, translateY],
+  );
+
+  useEffect(() => {
+    if (!actionSignal || !current) return;
+    if (lastActionId.current === actionSignal.id) return;
+    lastActionId.current = actionSignal.id;
+    swipeOut(actionSignal.direction);
+  }, [actionSignal, current, swipeOut]);
 
   const pan = Gesture.Pan()
     .activeOffsetX([-12, 12])
@@ -50,9 +78,14 @@ function SwipeDeckInner({
     })
     .onEnd(() => {
       if (translateX.value > SWIPE_TRIGGER) {
-        translateX.value = 0;
-        translateY.value = 0;
-        runOnJS(onLike)();
+        translateX.value = withTiming(
+          SWIPE_OUT,
+          { duration: REJECT_MS },
+          (done) => {
+            if (done) runOnJS(onLike)();
+          },
+        );
+        translateY.value = withTiming(0, { duration: REJECT_MS });
       } else if (translateX.value < -SWIPE_TRIGGER) {
         translateX.value = withTiming(
           -SWIPE_OUT,

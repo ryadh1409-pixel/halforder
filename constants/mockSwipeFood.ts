@@ -1,6 +1,14 @@
-export type SwipeMainTab = 'for-you' | 'pizza' | 'noodles';
+import type { SwipeFilterKey } from '@/constants/swipeDiscovery';
 
-export type FoodOrderType = 'pizza' | 'noodles';
+export type SwipeMainTab = SwipeFilterKey | 'noodles';
+
+export type FoodOrderType =
+  | 'pizza'
+  | 'noodles'
+  | 'burger'
+  | 'salad'
+  | 'dessert'
+  | 'other';
 
 /** High-quality hero images by food category (full-bleed cards). */
 export const FOOD_HERO_IMAGE_BY_TYPE: Record<FoodOrderType, string> = {
@@ -8,10 +16,18 @@ export const FOOD_HERO_IMAGE_BY_TYPE: Record<FoodOrderType, string> = {
     'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1600&q=85',
   noodles:
     'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=1600&q=85',
+  burger:
+    'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1600&q=85',
+  salad:
+    'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1600&q=85',
+  dessert:
+    'https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=1600&q=85',
+  other:
+    'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1600&q=85',
 };
 
 export function getHeroImageUrlForType(type: FoodOrderType): string {
-  return FOOD_HERO_IMAGE_BY_TYPE[type];
+  return FOOD_HERO_IMAGE_BY_TYPE[type] ?? FOOD_HERO_IMAGE_BY_TYPE.other;
 }
 
 /** Single swipe card — mock contract; hero image comes from `type` in UI. */
@@ -30,7 +46,11 @@ export type MockFoodCard = {
 export const SWIPE_MAIN_TABS: { key: SwipeMainTab; label: string }[] = [
   { key: 'for-you', label: 'For You' },
   { key: 'pizza', label: 'Pizza' },
-  { key: 'noodles', label: 'Noodles' },
+  { key: 'burgers', label: 'Burgers' },
+  { key: 'vegetarian', label: 'Vegetarian' },
+  { key: 'cheap-eats', label: 'Cheap Eats' },
+  { key: 'desserts', label: 'Desserts' },
+  { key: 'late-night', label: 'Late Night' },
 ];
 
 /** Exactly 10 items: 5 pizza, 5 noodles. */
@@ -66,7 +86,7 @@ export const mockOrders: MockFoodCard[] = [
     distance: '1 km',
     peopleJoined: 3,
     spotsLeft: 1,
-    categories: ['for-you', 'pizza'],
+    categories: ['for-you', 'pizza', 'vegetarian', 'cheap-eats'],
   },
   {
     id: '4',
@@ -88,62 +108,62 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.6 km',
     peopleJoined: 1,
     spotsLeft: 1,
-    categories: ['for-you', 'pizza'],
+    categories: ['for-you', 'pizza', 'cheap-eats'],
   },
   {
     id: '6',
-    title: 'Chicken Noodles',
-    type: 'noodles',
-    price: 9,
+    title: 'Smash Burger Combo',
+    type: 'burger',
+    price: 11,
     time: '15 min',
     distance: '0.4 km',
     peopleJoined: 2,
     spotsLeft: 1,
-    categories: ['for-you', 'noodles'],
+    categories: ['for-you', 'burgers', 'cheap-eats'],
   },
   {
     id: '7',
-    title: 'Beef Noodles',
-    type: 'noodles',
-    price: 11,
+    title: 'Truffle Cheeseburger',
+    type: 'burger',
+    price: 14,
     time: '18 min',
     distance: '0.9 km',
     peopleJoined: 1,
     spotsLeft: 2,
-    categories: ['for-you', 'noodles'],
+    categories: ['for-you', 'burgers', 'late-night'],
   },
   {
     id: '8',
-    title: 'Spicy Noodles',
+    title: 'Spicy Dan Dan Noodles',
     type: 'noodles',
     price: 10,
     time: '17 min',
     distance: '0.5 km',
     peopleJoined: 3,
     spotsLeft: 1,
-    categories: ['for-you', 'noodles'],
+    categories: ['for-you', 'late-night', 'cheap-eats'],
   },
   {
     id: '9',
-    title: 'Shrimp Noodles',
-    type: 'noodles',
+    title: 'Chocolate Lava Cake',
+    type: 'dessert',
     price: 12,
     time: '20 min',
     distance: '1.2 km',
     peopleJoined: 2,
     spotsLeft: 2,
-    categories: ['for-you', 'noodles'],
+    categories: ['for-you', 'desserts'],
   },
   {
     id: '10',
-    title: 'Veggie Noodles',
-    type: 'noodles',
+    title: 'Green Goddess Bowl',
+    type: 'salad',
     price: 8,
     time: '14 min',
     distance: '0.3 km',
     peopleJoined: 1,
     spotsLeft: 1,
-    categories: ['for-you', 'noodles'],
+    categories: ['for-you', 'vegetarian', 'cheap-eats'],
   },
 ];
 

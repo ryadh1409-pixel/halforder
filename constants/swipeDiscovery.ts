@@ -27,7 +27,11 @@ export function matchesSwipeFilter(
   const t = (card.title ?? '').toLowerCase();
   switch (filter) {
     case 'vegetarian':
-      return t.includes('veggie') || t.includes('vegetarian') || card.categories.includes('vegetarian');
+      return (
+        t.includes('veggie') ||
+        t.includes('vegetarian') ||
+        card.categories.includes('vegetarian')
+      );
     case 'pizza':
       return card.type === 'pizza' || t.includes('pizza');
     case 'burgers':
@@ -37,7 +41,11 @@ export function matchesSwipeFilter(
     case 'cheap-eats':
       return (card.price ?? 99) <= 12;
     case 'desserts':
-      return t.includes('dessert') || t.includes('cake') || card.categories.includes('desserts');
+      return (
+        t.includes('dessert') ||
+        t.includes('cake') ||
+        card.categories.includes('desserts')
+      );
     default:
       return false;
   }

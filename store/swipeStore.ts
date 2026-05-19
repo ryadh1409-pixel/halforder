@@ -1,12 +1,12 @@
 import type { SwipeFilterKey } from '@/constants/swipeDiscovery';
-import type { SwipeFoodCard } from '@/types/swipe';
+import type { SwipeFoodCard, SwipeMatchPreview } from '@/types/swipe';
 import { create } from 'zustand';
 
 type SwipeState = {
   activeFilter: SwipeFilterKey;
   deckIndex: number;
   cards: SwipeFoodCard[];
-  lastMatch: { matchId: string; orderId: string; foodTitle: string } | null;
+  lastMatch: SwipeMatchPreview | null;
   joiningOrderId: string | null;
   setFilter: (f: SwipeFilterKey) => void;
   setDeckIndex: (i: number) => void;

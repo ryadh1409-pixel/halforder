@@ -39,12 +39,63 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height: SCREEN_H } = Dimensions.get('window');
+
+function inferFoodType(raw: string): FoodOrderType {
+  if (raw.includes('burger')) return 'burger';
+  if (raw.includes('noodle') || raw.includes('ramen')) return 'noodles';
+  if (raw.includes('salad') || raw.includes('bowl') || raw.includes('veggie')) {
+    return 'salad';
+  }
+  if (
+    raw.includes('dessert') ||
+    raw.includes('cake') ||
+    raw.includes('sweet')
+  ) {
+    return 'dessert';
+  }
+  if (raw.includes('pizza')) return 'pizza';
+  return 'other';
+}
+
+function categoriesForCard(
+  title: string,
+  type: FoodOrderType,
+  price: number,
+  explicit: unknown,
+): SwipeFilterKey[] {
+  const categories = new Set<SwipeFilterKey>(['for-you']);
+  const add = (key: SwipeFilterKey) => categories.add(key);
+  if (Array.isArray(explicit)) {
+    explicit.forEach((value) => {
+      if (
+        value === 'vegetarian' ||
+        value === 'pizza' ||
+        value === 'burgers' ||
+        value === 'late-night' ||
+        value === 'cheap-eats' ||
+        value === 'desserts'
+      ) {
+        add(value);
+      }
+    });
+  }
+  const t = title.toLowerCase();
+  if (type === 'pizza') add('pizza');
+  if (type === 'burger') add('burgers');
+  if (type === 'dessert') add('desserts');
+  if (type === 'salad' || t.includes('veggie') || t.includes('vegetarian')) {
+    add('vegetarian');
+  }
+  if (price <= 12) add('cheap-eats');
+  if (t.includes('late') || t.includes('midnight')) add('late-night');
+  return [...categories];
+}
 
 function mapDocToCard(
   id: string,
@@ -58,8 +109,9 @@ function mapDocToCard(
       ? data.category.toLowerCase()
       : typeof data.mealType === 'string'
         ? data.mealType.toLowerCase()
-        : 'pizza';
-  const type: FoodOrderType = rawCategory === 'noodles' ? 'noodles' : 'pizza';
+        : typeof data.type === 'string'
+          ? data.type.toLowerCase()
+          : 'pizza';
   const plist = Array.isArray(data.participants)
     ? (data.participants as unknown[]).filter(
         (x): x is string => typeof x === 'string',
@@ -86,10 +138,19 @@ function mapDocToCard(
       : typeof data.title === 'string' && data.title.trim()
         ? data.title.trim()
         : 'Shared meal';
+  const type = inferFoodType(`${rawCategory} ${title}`);
   const restaurantName =
     typeof data.restaurantName === 'string' && data.restaurantName.trim()
       ? data.restaurantName.trim()
       : 'Nearby spot';
+  const restaurantId =
+    typeof data.restaurantId === 'string' && data.restaurantId.trim()
+      ? data.restaurantId.trim()
+      : typeof data.vendorId === 'string' && data.vendorId.trim()
+        ? data.vendorId.trim()
+        : typeof data.createdBy === 'string'
+          ? data.createdBy
+          : 'unknown';
   const lat =
     (data.location as { latitude?: number })?.latitude ?? data.latitude;
   const lng =
@@ -108,6 +169,7 @@ function mapDocToCard(
     id,
     title,
     restaurantName,
+    restaurantId,
     type,
     price,
     splitPriceLabel: `Split: $${price} each`,
@@ -120,7 +182,7 @@ function mapDocToCard(
     distance,
     peopleJoined,
     spotsLeft: Math.max(0, maxPeople - peopleJoined),
-    categories: ['for-you', type],
+    categories: categoriesForCard(title, type, price, data.categories),
     createdBy:
       typeof data.createdBy === 'string'
         ? data.createdBy
@@ -141,6 +203,7 @@ function mockToSwipeCards(): SwipeFoodCard[] {
     id: m.id,
     title: m.title,
     restaurantName: 'Queen St Kitchen',
+    restaurantId: 'mock-queen-st-kitchen',
     type: m.type,
     price: m.price,
     splitPriceLabel: `Split: $${m.price} each`,
@@ -164,6 +227,10 @@ function mockToSwipeCards(): SwipeFoodCard[] {
  */
 export function SwipeDiscoveryScreen() {
   const router = useRouter();
+  const [actionSignal, setActionSignal] = useState<{
+    id: number;
+    direction: 'like' | 'pass';
+  } | null>(null);
   const activeFilter = useSwipeStore((s) => s.activeFilter);
   const deckIndex = useSwipeStore((s) => s.deckIndex);
   const cards = useSwipeStore((s) => s.cards);
@@ -231,7 +298,7 @@ export function SwipeDiscoveryScreen() {
     void recordSwipe({
       orderId: current.id,
       foodId: current.id,
-      restaurantId: current.createdBy || 'unknown',
+      restaurantId: current.restaurantId,
       direction: 'pass',
     });
     advanceDeck();
@@ -254,7 +321,7 @@ export function SwipeDiscoveryScreen() {
     void recordSwipe({
       orderId: current.id,
       foodId: current.id,
-      restaurantId: current.createdBy || 'unknown',
+      restaurantId: current.restaurantId,
       direction: 'like',
     });
 
@@ -268,17 +335,27 @@ export function SwipeDiscoveryScreen() {
       });
 
       if (swipeResult.matched) {
-        await ensureOrderChatInitialized(current.id);
-        void createSharedOrderRoom({
+        try {
+          await ensureOrderChatInitialized(current.id);
+        } catch {
+          // Chat can still initialize when the shared room is opened.
+        }
+        const sharedOrderId = await createSharedOrderRoom({
           orderId: current.id,
+          matchId: swipeResult.matchId,
           participantIds: [user.uid, swipeResult.partnerUid],
           foodTitle: current.title,
+          restaurantName: current.restaurantName,
           splitPrice: current.price,
+          heroImageUri: current.heroImageUri,
         });
         setLastMatch({
           matchId: swipeResult.matchId,
           orderId: current.id,
           foodTitle: current.title,
+          splitPrice: current.price,
+          sharedOrderId,
+          partnerUid: swipeResult.partnerUid,
         });
         void Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success,
@@ -310,6 +387,7 @@ export function SwipeDiscoveryScreen() {
           current={current}
           next={next}
           cardMaxHeight={cardMaxH}
+          actionSignal={actionSignal ?? undefined}
           onPass={() => void handlePass()}
           onLike={() => void handleLike()}
         />
@@ -317,8 +395,8 @@ export function SwipeDiscoveryScreen() {
         <SwipeActionButtons
           disabled={!current}
           loading={!!joiningOrderId}
-          onPass={() => void handlePass()}
-          onLike={() => void handleLike()}
+          onPass={() => setActionSignal({ id: Date.now(), direction: 'pass' })}
+          onLike={() => setActionSignal({ id: Date.now(), direction: 'like' })}
         />
 
         {filtered.length === 0 && cards.length > 0 ? (
@@ -333,16 +411,25 @@ export function SwipeDiscoveryScreen() {
       <SwipeMatchSheet
         visible={lastMatch != null}
         foodTitle={lastMatch?.foodTitle ?? ''}
-        splitLabel={current ? `Split: $${current.price} each` : ''}
+        splitLabel={lastMatch ? `Split: $${lastMatch.splitPrice} each` : ''}
         onChat={() => {
           if (lastMatch) router.push(`/order/${lastMatch.orderId}` as never);
           setLastMatch(null);
+          advanceDeck();
         }}
         onCheckout={() => {
-          if (lastMatch) router.push(`/order/${lastMatch.orderId}` as never);
+          if (lastMatch?.sharedOrderId) {
+            router.push(`/shared-order/${lastMatch.sharedOrderId}` as never);
+          } else if (lastMatch) {
+            router.push(`/order/${lastMatch.orderId}` as never);
+          }
           setLastMatch(null);
+          advanceDeck();
         }}
-        onDismiss={() => setLastMatch(null)}
+        onDismiss={() => {
+          setLastMatch(null);
+          advanceDeck();
+        }}
       />
     </GestureHandlerRootView>
   );

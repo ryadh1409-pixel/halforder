@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import {
   addDoc,
   collection,
@@ -22,6 +22,8 @@ export async function ensureOrderChatInitialized(
 ): Promise<void> {
   const trimmed = orderId.trim();
   if (!trimmed) return;
+  const user = auth.currentUser;
+  if (!user) return;
 
   const existingQ = query(
     collection(db, 'orders', trimmed, 'messages'),
@@ -31,9 +33,9 @@ export async function ensureOrderChatInitialized(
   if (!existing.empty) return;
 
   await addDoc(collection(db, 'orders', trimmed, 'messages'), {
-    text: 'You both joined this order 🍕',
-    senderId: 'system',
-    senderName: 'System',
+    text: 'You both joined this order.',
+    senderId: user.uid,
+    senderName: user.displayName ?? 'Food match',
     type: 'system',
     createdAt: serverTimestamp(),
   });

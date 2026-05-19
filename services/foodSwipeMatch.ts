@@ -9,7 +9,11 @@ import {
 } from 'firebase/firestore';
 
 /** Deterministic match doc id: `{orderId}_{smallerUid}_{largerUid}` */
-export function foodMatchDocId(orderId: string, uidA: string, uidB: string): string {
+export function foodMatchDocId(
+  orderId: string,
+  uidA: string,
+  uidB: string,
+): string {
   const [a, b] = [uidA, uidB].sort();
   return `${orderId}_${a}_${b}`;
 }
@@ -32,7 +36,7 @@ function firebaseMessage(e: unknown): string {
 
 /**
  * Adds the current user to `orders/{orderId}.usersAccepted` (arrayUnion).
- * If at least two people liked this order, creates `matches/{matchId}` once (deduped).
+ * If at least two people liked this still-open order, creates `matches/{matchId}` once.
  */
 export async function acceptFoodSwipe(
   db: Firestore,
@@ -48,6 +52,10 @@ export async function acceptFoodSwipe(
         throw new Error('Order not found');
       }
       const data = snap.data();
+      const status = typeof data?.status === 'string' ? data.status : '';
+      if (!['open', 'waiting', 'active', 'matched'].includes(status)) {
+        throw new Error('This shared order is no longer available.');
+      }
       const maxPeople = Math.max(Number(data?.maxPeople ?? 2), 2);
       const accepted: string[] = Array.isArray(data?.usersAccepted)
         ? (data.usersAccepted as string[])
@@ -114,6 +122,8 @@ export async function acceptFoodSwipe(
       orderId,
       users: pair,
       status: 'matched',
+      matchSource: 'swipe',
+      matchWindowMinutes: 120,
       createdAt: serverTimestamp(),
     });
     console.log('[foodSwipeMatch] created match', matchId);
