@@ -281,7 +281,7 @@ async function ensureUserDocument(
         { merge: true },
       );
     } catch (e) {
-      console.warn('Referral credit/metrics update failed:', e);
+      console.error('[auth] referral credit/metrics update failed', e);
     }
   }
 }
@@ -455,7 +455,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         logError(e);
         if (__DEV__) {
-          console.warn('Profile image upload failed (continuing without photo):', e);
+          console.error('[auth] profile image upload failed (continuing without photo)', e);
         }
       }
     }
@@ -507,7 +507,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await ensureUserDocument(uid, nameTrim, trimmed, phoneFormatted, photoURL);
     } catch (e) {
       if (__DEV__) {
-        console.warn('ensureUserDocument failed (non-fatal):', e);
+        console.error('[auth] ensureUserDocument failed (non-fatal)', e);
       }
     }
 
@@ -524,7 +524,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       logError(e);
       if (__DEV__) {
-        console.warn('sendEmailVerification failed (user can resend from settings later):', e);
+        console.error('[auth] sendEmailVerification failed (user can resend from settings later)', e);
       }
     }
 
