@@ -1,4 +1,8 @@
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
+import {
+  evaluateMarketplaceOrderCreateRules,
+  logMarketplaceOrderRuleChecks,
+} from '@/lib/validateMarketplaceOrderCreate';
 import { auth, db, ensureAuthReady } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import type {
@@ -535,15 +539,6 @@ export async function createOrder(
     throw new Error('createOrder: signed-in user does not match payload.userId');
   }
 
-  if (__DEV__) {
-    console.warn('[RULE CHECK]', {
-      authUid: auth.currentUser?.uid,
-      payloadUserId: payload.userId,
-      matches: auth.currentUser?.uid === payload.userId,
-      projectId: db.app.options.projectId,
-    });
-  }
-
   const orderPayload = {
     userId: payload.userId,
     customerId: payload.userId,
@@ -598,26 +593,51 @@ export async function createOrder(
   };
 
   if (__DEV__) {
-    console.warn('[createOrder] writing', {
-      authUid: auth.currentUser.uid,
-      userId: orderPayload.userId,
-      restaurantId: orderPayload.restaurantId,
-      venueId: orderPayload.venueId,
-      status: orderPayload.status,
-      paymentStatus: orderPayload.paymentStatus,
-      deliveryType: orderPayload.deliveryType,
-    });
+    let userRole: string | null = null;
+    let restricted = false;
+    let banned = false;
+    let userProfileExists = false;
+    try {
+      const userSnap = await getDoc(doc(db, 'users', payload.userId));
+      userProfileExists = userSnap.exists();
+      if (userSnap.exists()) {
+        const u = userSnap.data() as Record<string, unknown>;
+        userRole = typeof u.role === 'string' ? u.role : null;
+        restricted = u.restricted === true;
+        banned = u.banned === true;
+      }
+    } catch (profileErr) {
+      console.warn('[createOrder][rules-debug] could not read users profile', profileErr);
+    }
+
+    const ruleChecks = evaluateMarketplaceOrderCreateRules(
+      {
+        userId: orderPayload.userId,
+        customerId: orderPayload.customerId,
+        restaurantId: orderPayload.restaurantId,
+        venueId: orderPayload.venueId,
+        status: orderPayload.status,
+        paymentStatus: orderPayload.paymentStatus,
+        deliveryType: orderPayload.deliveryType,
+        hasCreatedAt: true,
+      },
+      {
+        authUid: auth.currentUser?.uid ?? null,
+        userRole,
+        restricted,
+        banned,
+        userProfileExists,
+      },
+    );
+    logMarketplaceOrderRuleChecks(ruleChecks);
   }
 
   let ref;
   try {
     ref = await addDoc(collection(db, 'orders'), orderPayload);
-    if (__DEV__) {
-      console.warn('[createOrder] success', { orderId: ref.id });
-    }
   } catch (err) {
     if (__DEV__) {
-      console.warn('[createOrder]', {
+      console.warn('[createOrder] write failed', {
         code: (err as { code?: string })?.code,
         message: err instanceof Error ? err.message : String(err),
       });

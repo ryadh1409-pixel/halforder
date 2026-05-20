@@ -156,14 +156,32 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
-    it('denies marketplace order create for restaurant role', async () => {
+    it('allows marketplace order create for restaurant role (owner uid match)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'users', 'host1'), { role: 'restaurant' });
       });
       const db = te().authenticatedContext('host1').firestore();
-      await assertFails(
+      await assertSucceeds(
         addDoc(collection(db, 'orders'), {
           userId: 'host1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'unpaid',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          createdAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies marketplace order create for driver role', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', 'drv1'), { role: 'driver' });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertFails(
+        addDoc(collection(db, 'orders'), {
+          userId: 'drv1',
           restaurantId: 'rest_abc',
           venueId: 'rest_abc',
           paymentStatus: 'unpaid',

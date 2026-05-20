@@ -83,6 +83,22 @@ service cloud.firestore {
       return requestUserRoleRaw() == 'user'
         || requestUserRoleRaw() == 'customer';
     }
+    /**
+     * Marketplace checkout: owner uid must match auth.
+     * Allows customer + restaurant/host (e.g. owner testing checkout); blocks drivers only.
+     */
+    function requestUserRoleAllowsMarketplaceCheckout() {
+      let r = requestUserRoleRaw();
+      return r != 'driver'
+        && (
+          r == 'user'
+          || r == 'customer'
+          || r == ''
+          || r == 'restaurant'
+          || r == 'host'
+          || r == 'admin'
+        );
+    }
     function requestUserIsRestaurant() {
       return requestUserRoleRaw() == 'restaurant'
         || requestUserRoleRaw() == 'host';
@@ -92,7 +108,7 @@ service cloud.firestore {
     }
     function isValidMarketplaceOrderCreate() {
       return ordersCreateOwnerMatchesAuth()
-        && requestUserIsCustomer()
+        && requestUserRoleAllowsMarketplaceCheckout()
         && !isCurrentUserRestricted()
         && request.resource.data.restaurantId is string
         && request.resource.data.restaurantId.size() > 0
