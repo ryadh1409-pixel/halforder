@@ -1,4 +1,8 @@
 import SwipeWrapper from '@/components/SwipeWrapper';
+import {
+  ProfileMenuItem,
+  PROFILE_MENU_COLORS,
+} from '@/components/profile/ProfileMenuItem';
 import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '../../components/KeyboardToolbar';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { DeleteAccountModal } from '../../components/DeleteAccountModal';
@@ -41,6 +45,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
+import { Bike, Building2, Store } from 'lucide-react-native';
 import {
   deleteField,
   doc,
@@ -53,6 +58,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   ScrollView,
@@ -63,7 +69,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
 
@@ -227,6 +236,7 @@ function useProfilePalette(): Palette {
 export default function ProfileScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
   const pal = useProfilePalette();
   const isDark = true;
   const {
@@ -613,6 +623,18 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleBusinessAccount = useCallback(() => {
+    Alert.alert('Coming soon');
+  }, []);
+
+  const handleAddRestaurant = useCallback(() => {
+    Alert.alert('Coming soon');
+  }, []);
+
+  const handleDriverSignup = useCallback(() => {
+    Alert.alert('Coming soon');
+  }, []);
+
   const openSupportEmail = async () => {
     const url = `mailto:${SUPPORT_EMAIL}`;
     try {
@@ -651,6 +673,8 @@ export default function ProfileScreen() {
     () => createDynamicStyles(pal, isDark),
     [pal, isDark],
   );
+
+  const scrollBottomPadding = Math.max(insets.bottom + 88, 96);
 
   if (profileLoading && uid) {
     return (
@@ -721,7 +745,10 @@ export default function ProfileScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={2} />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: scrollBottomPadding },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.profileBody}>
@@ -1119,6 +1146,29 @@ export default function ProfileScreen() {
             ) : null}
           </View>
 
+          <Text style={dynamicStyles.sectionHeading}>Grow with Us</Text>
+          <View style={dynamicStyles.menuGroupCard}>
+            <ProfileMenuItem
+              title="Create a business account"
+              subtitle="Manage team and business orders"
+              icon={Building2}
+              onPress={handleBusinessAccount}
+            />
+            <ProfileMenuItem
+              title="Add your restaurant"
+              subtitle="Partner your restaurant with us"
+              icon={Store}
+              onPress={handleAddRestaurant}
+            />
+            <ProfileMenuItem
+              title="Sign up as driver"
+              subtitle="Earn by delivering orders"
+              icon={Bike}
+              onPress={handleDriverSignup}
+              isLast
+            />
+          </View>
+
           <View style={dynamicStyles.card}>
             <Text style={dynamicStyles.bodyMuted}>
               Users can report inappropriate behavior. To report or block someone you
@@ -1332,6 +1382,24 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       borderColor: pal.border,
       padding: 20,
       marginBottom: 12,
+    },
+    menuGroupCard: {
+      backgroundColor: PROFILE_MENU_COLORS.surface,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: pal.border,
+      marginBottom: 12,
+      overflow: 'hidden',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.22,
+          shadowRadius: 14,
+        },
+        android: { elevation: 4 },
+        default: {},
+      }),
     },
     label: {
       fontSize: 14,

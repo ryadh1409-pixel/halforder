@@ -231,6 +231,7 @@ export function SwipeDiscoveryScreen() {
     id: number;
     direction: 'like' | 'pass';
   } | null>(null);
+  const [loadingDeck, setLoadingDeck] = useState(true);
   const activeFilter = useSwipeStore((s) => s.activeFilter);
   const deckIndex = useSwipeStore((s) => s.deckIndex);
   const cards = useSwipeStore((s) => s.cards);
@@ -268,8 +269,12 @@ export function SwipeDiscoveryScreen() {
             ),
           );
           setCards(live.length > 0 ? live : mockToSwipeCards());
+          setLoadingDeck(false);
         },
-        () => setCards(mockToSwipeCards()),
+        () => {
+          setCards(mockToSwipeCards());
+          setLoadingDeck(false);
+        },
       );
     })();
 
@@ -387,6 +392,7 @@ export function SwipeDiscoveryScreen() {
           current={current}
           next={next}
           cardMaxHeight={cardMaxH}
+          loading={loadingDeck}
           actionSignal={actionSignal ?? undefined}
           onPass={() => void handlePass()}
           onLike={() => void handleLike()}

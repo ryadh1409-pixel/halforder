@@ -4,6 +4,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
@@ -76,32 +77,35 @@ export async function createSharedOrderRoom(input: {
     Math.round(input.splitPrice * participantIds.length * 100) / 100;
 
   try {
-    await setDoc(
-      doc(db, 'sharedOrders', roomId),
-      {
-        orderId: input.orderId,
-        matchId: input.matchId ?? roomId,
-        participantIds,
-        foodTitle: input.foodTitle,
-        restaurantName: input.restaurantName ?? 'Nearby restaurant',
-        heroImageUri: input.heroImageUri ?? null,
-        splitPrice: input.splitPrice,
-        cartSubtotal: itemTotal,
-        cartItems: [
-          {
-            id: input.orderId,
-            title: input.foodTitle,
-            quantity: participantIds.length,
-            pricePerPerson: input.splitPrice,
-            total: itemTotal,
-          },
-        ],
-        status: 'open',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+    const roomRef = doc(db, 'sharedOrders', roomId);
+    const existing = await getDoc(roomRef);
+    if (existing.exists()) {
+      if (__DEV__) console.log('[swipeService] sharedOrders/ exists', roomId);
+      return roomId;
+    }
+
+    await setDoc(roomRef, {
+      orderId: input.orderId,
+      matchId: input.matchId ?? roomId,
+      participantIds,
+      foodTitle: input.foodTitle,
+      restaurantName: input.restaurantName ?? 'Nearby restaurant',
+      heroImageUri: input.heroImageUri ?? null,
+      splitPrice: input.splitPrice,
+      cartSubtotal: itemTotal,
+      cartItems: [
+        {
+          id: input.orderId,
+          title: input.foodTitle,
+          quantity: participantIds.length,
+          pricePerPerson: input.splitPrice,
+          total: itemTotal,
+        },
+      ],
+      status: 'open',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     if (__DEV__) console.log('[swipeService] sharedOrders/', roomId);
     return roomId;
   } catch (e) {

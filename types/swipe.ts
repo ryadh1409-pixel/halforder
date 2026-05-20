@@ -25,6 +25,12 @@ export type SwipeFoodCard = {
   heroImageUri: string;
 };
 
+export type SwipeDeckLoadingCard = {
+  id: 'loading';
+  title: string;
+  subtitle: string;
+};
+
 export type SwipeRecord = {
   userId: string;
   foodId: string;

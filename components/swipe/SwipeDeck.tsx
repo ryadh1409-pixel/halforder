@@ -22,6 +22,7 @@ type Props = {
   current: CardType | undefined;
   next: CardType | undefined;
   cardMaxHeight: number;
+  loading?: boolean;
   actionSignal?: { id: number; direction: 'like' | 'pass' };
   onPass: () => void;
   onLike: () => void;
@@ -31,6 +32,7 @@ function SwipeDeckInner({
   current,
   next,
   cardMaxHeight,
+  loading,
   actionSignal,
   onPass,
   onLike,
@@ -138,10 +140,22 @@ function SwipeDeckInner({
   if (!current) {
     return (
       <View style={[styles.empty, { maxHeight: cardMaxHeight }]}>
-        <Text style={styles.emptyTitle}>No meals to swipe</Text>
-        <Text style={styles.emptySub}>
-          Check back soon — new split orders drop all day in Toronto.
-        </Text>
+        {loading ? (
+          <>
+            <View style={styles.loadingOrb} />
+            <Text style={styles.emptyTitle}>Finding meals nearby</Text>
+            <Text style={styles.emptySub}>
+              Loading split-ready food cards around you.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.emptyTitle}>No meals to swipe</Text>
+            <Text style={styles.emptySub}>
+              Check back soon — new split orders drop all day in Toronto.
+            </Text>
+          </>
+        )}
       </View>
     );
   }
@@ -243,6 +257,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 28,
+  },
+  loadingOrb: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    marginBottom: 16,
+    backgroundColor: 'rgba(6,193,103,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(125,255,184,0.35)',
+    shadowColor: '#06C167',
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   emptyTitle: {
     fontSize: 22,
