@@ -54,7 +54,7 @@ export function getRouteForRole(role: UserRole | null | undefined): AuthRoleRout
 
 export function logAuthRoleDetected(role: UserRole | null | undefined): void {
   if (!__DEV__) return;
-  console.warn(AUTH_ROLE_LOG, 'detected role:', normalizeRoleForRouting(role));
+  console.log(AUTH_ROLE_LOG, 'detected role:', normalizeRoleForRouting(role));
 }
 
 export function logAuthRoleRouted(
@@ -62,5 +62,5 @@ export function logAuthRoleRouted(
   route: AuthRoleRoute,
 ): void {
   if (!__DEV__) return;
-  console.warn(AUTH_ROLE_LOG, 'routed to:', route, { role: normalizeRoleForRouting(role) });
+  console.log(AUTH_ROLE_LOG, 'routed to:', route, { role: normalizeRoleForRouting(role) });
 }

@@ -292,7 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void ensureAuthReady().catch((e) => {
-      console.warn('[auth] ensureAuthReady bootstrap failed', e);
+      console.error('[auth] ensureAuthReady bootstrap failed', e);
     });
   }, []);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
@@ -316,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           location: '',
         });
       } catch (error) {
-        console.log('[auth] ensure restaurant profile failed', error);
+        console.error('[auth] ensure restaurant profile failed', error);
       }
     };
 
@@ -331,7 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (__DEV__) {
-        console.warn('[auth] user signed in', firebaseUser.uid);
+        console.log('[auth] user signed in', firebaseUser.uid);
       }
 
       try {

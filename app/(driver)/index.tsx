@@ -21,6 +21,7 @@ import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import {
   getDriverActiveOrders,
   subscribeAvailableOrders,
+  subscribeDriverDeliveryStats,
   updateDriverOnlineStatus,
   type DriverOrder,
 } from '../../services/driverService';
@@ -150,10 +151,13 @@ export default function DriverHubScreen() {
 
   const unsubAvailableRef = useRef<(() => void) | null>(null);
   const unsubActiveRef = useRef<(() => void) | null>(null);
+  const unsubStatsRef = useRef<(() => void) | null>(null);
+  const unsubDriverProfileRef = useRef<(() => void) | null>(null);
 
   const driverBootstrapUidRef = useRef<string | null>(null);
   const lastOnlineRef = useRef<boolean | null>(null);
   const lastStatsRef = useRef({ deliveries: 0, earnings: 0, rating: 5.0 });
+  const profileRatingRef = useRef(5.0);
   const availableSigRef = useRef('');
   const activeSigRef = useRef('');
   const acceptingIdRef = useRef<string | null>(null);
@@ -177,7 +181,7 @@ export default function DriverHubScreen() {
     }
 
     const driverRef = doc(db, 'drivers', uid);
-    const unsub = onSnapshot(driverRef, (snap) => {
+    unsubDriverProfileRef.current = onSnapshot(driverRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
       const online = data.isOnline === true || data.online === true;
@@ -185,21 +189,12 @@ export default function DriverHubScreen() {
         lastOnlineRef.current = online;
         setIsOnline(online);
       }
-
-      const nextStats = {
-        deliveries: typeof data.totalDeliveries === 'number' ? data.totalDeliveries : 0,
-        earnings: typeof data.totalEarnings === 'number' ? data.totalEarnings : 0,
-        rating: typeof data.rating === 'number' ? data.rating : 5.0,
-      };
-      const prev = lastStatsRef.current;
-      if (
-        prev.deliveries !== nextStats.deliveries ||
-        prev.earnings !== nextStats.earnings ||
-        prev.rating !== nextStats.rating
-      ) {
-        lastStatsRef.current = nextStats;
-        setStats(nextStats);
-      }
+      const rating =
+        typeof data.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0
+          ? data.rating
+          : 5.0;
+      profileRatingRef.current = rating;
+      setStats((prev) => ({ ...prev, rating }));
     });
 
     if (driverBootstrapUidRef.current !== uid) {
@@ -208,14 +203,35 @@ export default function DriverHubScreen() {
         driverRef,
         {
           isOnline: false,
+          online: false,
           name: user?.displayName?.trim() || 'Driver',
         },
         { merge: true },
       );
     }
 
+    unsubStatsRef.current = subscribeDriverDeliveryStats(uid, (deliveryStats) => {
+      const merged = {
+        deliveries: deliveryStats.deliveries,
+        earnings: deliveryStats.earnings,
+        rating: profileRatingRef.current > 0 ? profileRatingRef.current : 5.0,
+      };
+      const prev = lastStatsRef.current;
+      if (
+        prev.deliveries !== merged.deliveries ||
+        prev.earnings !== merged.earnings ||
+        prev.rating !== merged.rating
+      ) {
+        lastStatsRef.current = merged;
+        setStats(merged);
+      }
+    });
+
     return () => {
-      unsub();
+      unsubDriverProfileRef.current?.();
+      unsubDriverProfileRef.current = null;
+      unsubStatsRef.current?.();
+      unsubStatsRef.current = null;
     };
   }, [isFocused, uid, user?.displayName]);
 
@@ -226,7 +242,7 @@ export default function DriverHubScreen() {
       return undefined;
     }
 
-    const clearListeners = () => {
+    const clearOrderListeners = () => {
       unsubAvailableRef.current?.();
       unsubAvailableRef.current = null;
       unsubActiveRef.current?.();
@@ -234,7 +250,7 @@ export default function DriverHubScreen() {
     };
 
     if (!isFocused) {
-      clearListeners();
+      clearOrderListeners();
       availableSigRef.current = '';
       activeSigRef.current = '';
       setAvailableOrders([]);
@@ -243,7 +259,7 @@ export default function DriverHubScreen() {
     }
 
     if (!isOnline) {
-      clearListeners();
+      clearOrderListeners();
       availableSigRef.current = '';
       activeSigRef.current = '';
       setAvailableOrders([]);
@@ -269,19 +285,38 @@ export default function DriverHubScreen() {
     });
 
     return () => {
-      clearListeners();
+      clearOrderListeners();
     };
   }, [isFocused, isOnline, uid]);
+
+  useEffect(() => {
+    return () => {
+      unsubAvailableRef.current?.();
+      unsubActiveRef.current?.();
+      unsubStatsRef.current?.();
+      unsubDriverProfileRef.current?.();
+    };
+  }, []);
 
   const handleToggleOnline = useCallback(async () => {
     if (!uid || togglingOnline) return;
     const nextValue = !isOnline;
     setTogglingOnline(true);
-    setIsOnline(nextValue);
     try {
       await updateDriverOnlineStatus(uid, nextValue);
-    } catch {
-      setIsOnline(!nextValue);
+      setIsOnline(nextValue);
+      if (!nextValue) {
+        unsubAvailableRef.current?.();
+        unsubAvailableRef.current = null;
+        unsubActiveRef.current?.();
+        unsubActiveRef.current = null;
+        availableSigRef.current = '';
+        activeSigRef.current = '';
+        setAvailableOrders([]);
+        setActiveOrders([]);
+      }
+    } catch (e) {
+      console.error('[driver] updateDriverOnlineStatus failed', e);
       showError('Failed to update online status');
     } finally {
       setTogglingOnline(false);
@@ -306,7 +341,8 @@ export default function DriverHubScreen() {
         setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
         showSuccess('Order accepted');
         router.replace(`/driver/active/${encodeURIComponent(order.id)}` as never);
-      } catch {
+      } catch (e) {
+        console.error('[driver] accept order failed', e);
         showError('Failed to accept order');
       } finally {
         setAcceptingId(null);
@@ -328,7 +364,7 @@ export default function DriverHubScreen() {
           {togglingOnline ? <ActivityIndicator color="#fff" size="small" style={styles.toggleLoader} /> : null}
           <Switch
             value={isOnline}
-            onValueChange={handleToggleOnline}
+            onValueChange={() => void handleToggleOnline()}
             trackColor={{ false: '#3E3E5A', true: '#00C853' }}
             thumbColor="#fff"
             disabled={togglingOnline}
@@ -380,9 +416,16 @@ export default function DriverHubScreen() {
             <Text style={styles.stateTitle}>You are offline</Text>
             <Text style={styles.stateSub}>Go online to receive delivery offers.</Text>
           </View>
+        ) : togglingOnline ? (
+          <View style={styles.stateCard}>
+            <ActivityIndicator color="#00C853" size="large" />
+            <Text style={[styles.stateSub, { marginTop: 12 }]}>
+              Updating availability…
+            </Text>
+          </View>
         ) : availableOrders.length === 0 ? (
           <View style={styles.stateCard}>
-            <Text style={styles.stateTitle}>No orders right now</Text>
+            <Text style={styles.stateTitle}>No delivery requests nearby yet.</Text>
             <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
           </View>
         ) : (

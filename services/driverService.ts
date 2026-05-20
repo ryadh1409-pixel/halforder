@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -251,7 +252,6 @@ export function subscribeToDriverOrders(
   driverId: string,
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
-  console.log('[DRIVER FLOW] subscribeToDriverOrders', driverId);
   return onSnapshot(
     query(
       collection(db, 'orders'),
@@ -261,10 +261,9 @@ export function subscribeToDriverOrders(
     (snap) => {
       try {
         const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
-        console.log('[DRIVER FLOW] driver snapshot', rows.length);
         onData(rows);
       } catch (e) {
-        console.error('[DRIVER FLOW] subscribeToDriverOrders', e);
+        console.error('[driver] subscribeToDriverOrders', e);
         onData([]);
       }
     },
@@ -272,94 +271,75 @@ export function subscribeToDriverOrders(
   );
 }
 
-/** Orders released by restaurant, waiting for a driver claim. */
+export type DriverDeliveryStats = {
+  deliveries: number;
+  earnings: number;
+  rating: number;
+};
+
+/**
+ * Paid delivery queue: awaiting driver (`pending_driver`), unassigned, delivery only.
+ */
 export function subscribeAvailableOrders(
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
-  console.log('[DRIVER FLOW] subscribeAvailableOrders');
   return onSnapshot(
     query(
       collection(db, 'orders'),
-      where('status', 'in', ['pending_driver', 'ready_for_pickup', 'ready']),
+      where('status', '==', 'pending_driver'),
+      where('deliveryType', '==', 'delivery'),
       orderBy('createdAt', 'desc'),
+      limit(20),
     ),
-    async (snap) => {
+    (snap) => {
       try {
         const rows = snap.docs
           .map((docSnap) => mapDriverOrder(docSnap))
           .filter((o) => !o.driverId);
-        const enrichedRows = await Promise.all(
-          rows.map(async (order) => {
-            if (!order.restaurantId) return order;
-            try {
-              const restaurantDoc = await getDoc(doc(db, 'restaurants', order.restaurantId));
-              const restaurantData = restaurantDoc.exists()
-                ? (restaurantDoc.data() as Record<string, unknown>)
-                : null;
-              const location =
-                restaurantData?.location && typeof restaurantData.location === 'object'
-                  ? (restaurantData.location as Record<string, unknown>)
-                  : null;
-              const restaurantName =
-                typeof restaurantData?.name === 'string'
-                  ? restaurantData.name
-                  : typeof restaurantData?.restaurantName === 'string'
-                    ? restaurantData.restaurantName
-                    : order.restaurantName || 'Restaurant';
-              const restaurantPhone =
-                typeof restaurantData?.phone === 'string'
-                  ? restaurantData.phone
-                  : typeof restaurantData?.phoneNumber === 'string'
-                    ? restaurantData.phoneNumber
-                    : order.restaurantPhone ?? '';
-              const restaurantAddress =
-                typeof restaurantData?.address === 'string'
-                  ? restaurantData.address
-                  : typeof location?.address === 'string'
-                    ? location.address
-                    : order.restaurantAddress ?? '';
-              const restaurantImage =
-                typeof restaurantData?.image === 'string'
-                  ? restaurantData.image
-                  : typeof restaurantData?.logoUrl === 'string'
-                    ? restaurantData.logoUrl
-                    : order.restaurantImage ?? '';
-              const latFromLocation =
-                typeof location?.lat === 'number' ? Number(location.lat) : null;
-              const lngFromLocation =
-                typeof location?.lng === 'number' ? Number(location.lng) : null;
-              const restaurantLat =
-                latFromLocation ??
-                (typeof restaurantData?.lat === 'number'
-                  ? Number(restaurantData.lat)
-                  : order.restaurantLat);
-              const restaurantLng =
-                lngFromLocation ??
-                (typeof restaurantData?.lng === 'number'
-                  ? Number(restaurantData.lng)
-                  : order.restaurantLng);
-              return {
-                ...order,
-                restaurantName,
-                restaurantPhone,
-                restaurantAddress,
-                restaurantImage,
-                restaurantLat: Number.isFinite(restaurantLat as number) ? (restaurantLat as number) : null,
-                restaurantLng: Number.isFinite(restaurantLng as number) ? (restaurantLng as number) : null,
-              };
-            } catch {
-              return order;
-            }
-          }),
-        );
-        console.log('[DRIVER FLOW] available snapshot', enrichedRows.length);
-        onData(enrichedRows);
+        onData(rows);
       } catch (e) {
-        console.error('[DRIVER FLOW] subscribeAvailableOrders', e);
+        console.error('[driver] subscribeAvailableOrders', e);
         onData([]);
       }
     },
-    () => onData([]),
+    (err) => {
+      console.error('[driver] subscribeAvailableOrders listener', err);
+      onData([]);
+    },
+  );
+}
+
+/** Completed deliveries + earnings for driver dashboard stats. */
+export function subscribeDriverDeliveryStats(
+  driverId: string,
+  onStats: (stats: DriverDeliveryStats) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      collection(db, 'orders'),
+      where('driverId', '==', driverId),
+      where('status', '==', 'delivered'),
+    ),
+    (snap) => {
+      let earnings = 0;
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        const fee =
+          typeof data.deliveryFee === 'number' && Number.isFinite(data.deliveryFee)
+            ? data.deliveryFee
+            : 0;
+        earnings += fee;
+      }
+      onStats({
+        deliveries: snap.size,
+        earnings: Math.round(earnings * 100) / 100,
+        rating: 5.0,
+      });
+    },
+    (err) => {
+      console.error('[driver] subscribeDriverDeliveryStats', err);
+      onStats({ deliveries: 0, earnings: 0, rating: 5.0 });
+    },
   );
 }
 
@@ -626,11 +606,17 @@ export async function updateDriverOnlineStatus(
   driverId: string,
   isOnline: boolean,
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'drivers', driverId),
-    {
-      isOnline,
-    },
-    { merge: true },
-  );
+  const ts = serverTimestamp();
+  await Promise.all([
+    setDoc(
+      doc(db, 'drivers', driverId),
+      { isOnline, online: isOnline, lastActive: ts },
+      { merge: true },
+    ),
+    setDoc(
+      doc(db, 'users', driverId),
+      { online: isOnline, lastActive: ts },
+      { merge: true },
+    ),
+  ]);
 }

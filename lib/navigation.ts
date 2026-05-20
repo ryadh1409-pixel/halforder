@@ -13,13 +13,13 @@ export function navigateForRole(role: UserRole | null | undefined): void {
   const route = getRouteForRole(normalized);
   logAuthRoleRouted(normalized, route);
   if (__DEV__) {
-    console.warn('[nav] navigateForRole →', route, { role: normalized });
+    console.log('[nav] navigateForRole →', route, { role: normalized });
   }
   try {
     router.replace(route as never);
   } catch (e) {
     if (__DEV__) {
-      console.warn('[nav] navigateForRole failed', e);
+      console.error('[nav] navigateForRole failed', e);
     }
   }
 }
@@ -31,7 +31,7 @@ export function goHome(): void {
 
 export function goBackSafe(): void {
   if (__DEV__) {
-    console.warn('[nav] goBackSafe');
+    console.log('[nav] goBackSafe');
   }
   try {
     if (router.canGoBack()) {

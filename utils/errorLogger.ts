@@ -7,7 +7,7 @@ export function logError(error: unknown): void {
   if (error && typeof error === 'object') {
     const rec = error as { code?: string; message?: string };
     if (rec.code || rec.message) {
-      console.warn('[error]', {
+      console.error('[error]', {
         code: rec.code,
         message: rec.message,
       });
@@ -16,9 +16,9 @@ export function logError(error: unknown): void {
   }
 
   if (error instanceof Error) {
-    console.warn('[error]', { message: error.message });
+    console.error('[error]', error.message);
     return;
   }
 
-  console.warn('[error]', String(error));
+  console.error('[error]', String(error));
 }

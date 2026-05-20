@@ -53,7 +53,7 @@ export async function requestNotificationPermissionOnAppLaunch(): Promise<Notifi
     }
     return status;
   } catch (e) {
-    console.warn('[push] requestPermissionsAsync failed:', e);
+    console.error('[push] requestPermissionsAsync failed:', e);
     return Notifications.PermissionStatus.DENIED;
   }
 }
@@ -113,7 +113,7 @@ export async function registerExpoPushTokenAndSyncToFirestore(
     const perm = await Notifications.getPermissionsAsync();
     permission = perm.status;
   } catch (e) {
-    console.warn('[push] getPermissionsAsync failed:', e);
+    console.error('[push] getPermissionsAsync failed:', e);
     return;
   }
 
@@ -133,7 +133,7 @@ export async function registerExpoPushTokenAndSyncToFirestore(
     );
     token = result.data;
   } catch (e) {
-    console.warn('[push] getExpoPushTokenAsync failed:', e);
+    console.error('[push] getExpoPushTokenAsync failed:', e);
     return;
   }
 
@@ -154,6 +154,6 @@ export async function registerExpoPushTokenAndSyncToFirestore(
   try {
     await persistUserPushTokens(uid, token);
   } catch (e) {
-    console.warn('[push] Failed to save Expo token to Firestore:', e);
+    console.error('[push] Failed to save Expo token to Firestore:', e);
   }
 }

@@ -103,7 +103,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     (Platform.OS === 'android' || Platform.OS === 'ios') &&
     !Device.isDevice
   ) {
-    console.warn(
+    console.log(
       '[notifications] Push may not work on a simulator; use a physical device for reliable tokens.',
     );
   }
@@ -134,7 +134,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       return token;
     }
   } catch (e) {
-    console.warn('[notifications] getExpoPushTokenAsync failed:', e);
+    console.error('[notifications] getExpoPushTokenAsync failed:', e);
   }
 
   return null;
