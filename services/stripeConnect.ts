@@ -90,7 +90,6 @@ function parseHostCheckStatus(json: Record<string, unknown>): StripeConnectStatu
 async function callableCreateStripeAccount(): Promise<StripeConnectOnboardingResult> {
   await requireAuthReady();
   if (!auth.currentUser?.uid) throw new Error('Not signed in');
-  console.log('AUTH UID:', auth.currentUser.uid);
   const fn = httpsCallable(functions, 'startRestaurantStripeConnect');
   const response = await fn({});
   const result = (response.data ?? {}) as Record<string, unknown>;

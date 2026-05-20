@@ -23,7 +23,7 @@ import { isOwnerHost } from '../../services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '../../services/stripeOnboarding';
 import { alertFriendly } from '../../utils/friendlyAlert';
-import { showError } from '../../utils/toast';
+import { showError, showFriendlyError } from '../../utils/toast';
 
 export default function CartScreen() {
   const router = useRouter();
@@ -165,8 +165,7 @@ export default function CartScreen() {
         params: { orderId },
       } as never);
     } catch (error) {
-      console.log('[cart] failed to place order', error);
-      showError('Could not place order.');
+      showFriendlyError(error, 'order');
     } finally {
       setPlacing(false);
     }

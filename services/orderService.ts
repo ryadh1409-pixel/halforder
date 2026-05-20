@@ -1,5 +1,5 @@
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
-import { auth, db } from './firebase';
+import { auth, db, ensureAuthReady } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import type {
   CustomerSnapshot,
@@ -406,15 +406,27 @@ function mapDocToRestaurantOrder(
   };
 }
 
-export async function createOrder(payload: {
+export type MarketplaceOrderCreatePayload = {
   userId: string;
   restaurantId: string;
   items: OrderItem[];
   totalPrice: number;
+  deliveryType?: 'delivery' | 'pickup';
   driverId?: string | null;
   deliveryLocation: { lat: number; lng: number; address: string };
   restaurantLocation?: LatLng | null;
-}): Promise<string> {
+};
+
+export async function createOrder(
+  payload: MarketplaceOrderCreatePayload,
+): Promise<string> {
+  await ensureAuthReady();
+  if (!auth.currentUser?.uid) {
+    throw new Error('Please sign in first.');
+  }
+
+  const deliveryType = payload.deliveryType ?? 'delivery';
+
   let existingOrderId: string | null = null;
   try {
     const pendingSnap = await getDocs(
@@ -527,7 +539,6 @@ export async function createOrder(payload: {
     userId: payload.userId,
     customerId: payload.userId,
     restaurantId: payload.restaurantId,
-    // Backward/alt schema compatibility for dashboards or older clients.
     venueId: payload.restaurantId,
     items: payload.items,
     customerName: null,
@@ -537,7 +548,7 @@ export async function createOrder(payload: {
     deliveryFee: 0,
     totalPrice: payload.totalPrice,
     total: payload.totalPrice,
-    deliveryType: 'delivery',
+    deliveryType,
     estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',
     deliveryStatus: 'waiting_driver',
@@ -578,15 +589,14 @@ export async function createOrder(payload: {
   };
 
   if (__DEV__) {
-    console.log('[createOrder] writing orders/', {
-      collection: 'orders',
-      authUid: payload.userId,
+    console.warn('[createOrder] writing', {
+      authUid: auth.currentUser.uid,
       userId: orderPayload.userId,
       restaurantId: orderPayload.restaurantId,
       venueId: orderPayload.venueId,
+      status: orderPayload.status,
       paymentStatus: orderPayload.paymentStatus,
       deliveryType: orderPayload.deliveryType,
-      status: orderPayload.status,
     });
   }
 
@@ -594,14 +604,13 @@ export async function createOrder(payload: {
   try {
     ref = await addDoc(collection(db, 'orders'), orderPayload);
     if (__DEV__) {
-      console.log('[createOrder] success', { orderId: ref.id, path: `orders/${ref.id}` });
+      console.warn('[createOrder] success', { orderId: ref.id });
     }
   } catch (err) {
     if (__DEV__) {
-      console.error('[createOrder] permission or write failed', {
+      console.warn('[createOrder]', {
         code: (err as { code?: string })?.code,
         message: err instanceof Error ? err.message : String(err),
-        authUid: payload.userId,
       });
     }
     throw err;

@@ -41,6 +41,7 @@ const SAFE_MESSAGE_EXACT = new Set([
   'Order is not open',
   'Content not allowed',
   'Content not allowed.',
+  'Unable to place order right now',
 ]);
 
 const TECHNICAL_MESSAGE_RE =
@@ -132,6 +133,9 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
 
     case 'permission-denied':
     case 'firestore/permission-denied':
+      return context === 'order'
+        ? 'Unable to place order right now'
+        : "You don't have permission to do this";
     case 'storage/unauthorized':
       return "You don't have permission to do this";
 
@@ -211,7 +215,9 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
         return 'Check your internet connection';
       }
       if (normalized.includes('permission')) {
-        return "You don't have permission to do this";
+        return context === 'order'
+          ? 'Unable to place order right now'
+          : "You don't have permission to do this";
       }
       if (normalized.includes('auth/')) {
         return DEFAULT_MESSAGE;

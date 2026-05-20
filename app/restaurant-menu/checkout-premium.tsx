@@ -37,7 +37,7 @@ import {
   distanceKmBetween,
 } from '@/lib/restaurantStoreMetrics';
 import { alertFriendly } from '@/utils/friendlyAlert';
-import { showError } from '@/utils/toast';
+import { showError, showFriendlyError } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -267,6 +267,7 @@ export default function CheckoutPremiumScreen() {
         restaurantId,
         items: cartItems,
         totalPrice: total,
+        deliveryType: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
         deliveryLocation: {
           lat: DROP.lat,
           lng: DROP.lng,
@@ -279,8 +280,7 @@ export default function CheckoutPremiumScreen() {
         params: { orderId },
       } as never);
     } catch (error) {
-      console.log('[checkout-premium] place order', error);
-      showError('Could not place order.');
+      showFriendlyError(error, 'order');
     } finally {
       setPlacing(false);
     }

@@ -117,6 +117,60 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows marketplace create when user has activeOrderCount (checkout retry)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', 'cust1'), {
+          totalOrdersCompleted: 0,
+          activeOrderCount: 2,
+        });
+      });
+      const db = te().authenticatedContext('cust1').firestore();
+      await assertSucceeds(
+        addDoc(collection(db, 'orders'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'unpaid',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          totalPrice: 12,
+          createdAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('allows marketplace pickup order create', async () => {
+      const db = te().authenticatedContext('cust1').firestore();
+      await assertSucceeds(
+        setDoc(doc(db, 'orders', 'mkt_pickup'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'unpaid',
+          deliveryType: 'pickup',
+          status: 'awaiting_payment',
+          createdAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies marketplace create with paid paymentStatus', async () => {
+      const db = te().authenticatedContext('cust1').firestore();
+      await assertFails(
+        setDoc(doc(db, 'orders', 'mkt_paid'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          createdAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('allows customer to read own marketplace order', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'orders', 'mkt4'), {
