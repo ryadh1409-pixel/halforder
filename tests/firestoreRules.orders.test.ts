@@ -156,6 +156,24 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('denies marketplace order create for restaurant role', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', 'host1'), { role: 'restaurant' });
+      });
+      const db = te().authenticatedContext('host1').firestore();
+      await assertFails(
+        addDoc(collection(db, 'orders'), {
+          userId: 'host1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'unpaid',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          createdAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('denies marketplace create with paid paymentStatus', async () => {
       const db = te().authenticatedContext('cust1').firestore();
       await assertFails(

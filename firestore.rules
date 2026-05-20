@@ -55,14 +55,45 @@ service cloud.firestore {
           || currentUserData().get('activeOrderCount', 0) < 1
         );
     }
+    /** Owner uid must match auth (baseline for all customer order creates). */
+    function ordersCreateOwnerMatchesAuth() {
+      return request.auth != null
+        && request.resource.data.userId is string
+        && request.resource.data.userId == request.auth.uid;
+    }
+    /** Customer read: owner, assigned restaurant uid, or assigned driver uid. */
+    function ordersReadByParticipant() {
+      return request.auth != null
+        && (
+          resource.data.userId == request.auth.uid
+          || resource.data.restaurantId == request.auth.uid
+          || resource.data.driverId == request.auth.uid
+        );
+    }
+    function requestUserRoleRaw() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
+        : '';
+    }
     /**
      * Marketplace checkout (`restaurant-menu` cart → `orders/`).
      * Not subject to HalfOrder `activeOrderCount` limits (unpaid checkout may retry).
      */
+    function requestUserIsCustomer() {
+      return requestUserRoleRaw() == 'user'
+        || requestUserRoleRaw() == 'customer';
+    }
+    function requestUserIsRestaurant() {
+      return requestUserRoleRaw() == 'restaurant'
+        || requestUserRoleRaw() == 'host';
+    }
+    function requestUserIsDriver() {
+      return requestUserRoleRaw() == 'driver';
+    }
     function isValidMarketplaceOrderCreate() {
-      return isSignedIn()
+      return ordersCreateOwnerMatchesAuth()
+        && requestUserIsCustomer()
         && !isCurrentUserRestricted()
-        && request.resource.data.userId == request.auth.uid
         && request.resource.data.restaurantId is string
         && request.resource.data.restaurantId.size() > 0
         && request.resource.data.venueId is string
@@ -73,7 +104,10 @@ service cloud.firestore {
           request.resource.data.deliveryType == 'delivery'
           || request.resource.data.deliveryType == 'pickup'
         )
-        && request.resource.data.createdAt == request.time
+        && (
+          !request.resource.data.keys().hasAny(['createdAt'])
+          || request.resource.data.createdAt == request.time
+        )
         && (
           !request.resource.data.keys().hasAny(['customerId'])
           || request.resource.data.customerId == request.auth.uid
@@ -678,12 +712,26 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []).size() >= 2;
       allow update, delete: if isAdmin();
     }
+    function usersRoleSelfAssignOk() {
+      let before = resource.data.get('role', 'user');
+      let after = request.resource.data.get('role', 'user');
+      return (before == 'user' || before == 'customer' || before == '')
+        && (after == 'restaurant' || after == 'driver');
+    }
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if isAdmin()
         || (request.auth != null && request.auth.uid == userId && request.resource.data.get('stripeOnboardingComplete', false) == false);
       allow update: if isAdmin()
-        || (request.auth != null && request.auth.uid == userId && userStripeOnboardingCompleteNotForged());
+        || (
+          request.auth != null
+          && request.auth.uid == userId
+          && userStripeOnboardingCompleteNotForged()
+          && (
+            request.resource.data.role == resource.data.role
+            || usersRoleSelfAssignOk()
+          )
+        );
       allow delete: if (request.auth != null && request.auth.uid == userId) || isAdmin();
       match /splitPoke/{fromId} {
         allow create: if request.auth != null && request.auth.uid == fromId && fromId != userId && request.resource.data.fromUid == fromId;
@@ -929,14 +977,6 @@ service cloud.firestore {
     function marketplaceOrderPatchKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
-    function requestUserRoleRaw() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
-        : '';
-    }
-    function requestUserIsDriver() {
-      return requestUserRoleRaw() == 'driver';
-    }
     function isRestaurantVendorActor(d) {
       return d.restaurantId is string && d.restaurantId == request.auth.uid;
     }
@@ -1156,36 +1196,32 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
+      // Published baseline: owner / restaurant / driver may read their orders.
+      allow read: if ordersReadByParticipant();
+      // Marketplace checkout: auth uid must match payload userId + field guards.
+      allow create: if isValidMarketplaceOrderCreate();
+      // HalfOrder / legacy order creates (separate schema; no userId required).
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && canCreateOrderBySafetyLimits()
+        && (
+          isValidHalfOrderCreate()
+          || isValidOrderCreate()
+          || (
+            request.resource.data.creatorId == request.auth.uid
+            && request.resource.data.participants is list
+          )
+          || (
+            request.resource.data.users is list
+            && request.auth.uid in request.resource.data.users
+          )
+        );
+      // Extended read (admin, driver pool, HalfOrder discovery, members).
       allow read: if isSignedIn()
         && (isAdmin() || !isCurrentUserRestricted())
         && (
-          isMarketplaceOrderCustomer(resource.data)
-          || (
-            resource.data.driverId is string
-            && resource.data.driverId == request.auth.uid
-          )
-          || canAccessMarketplaceDeliveryOrder(resource.data)
+          canAccessMarketplaceDeliveryOrder(resource.data)
           || joinDiscoveryReadable(resource.data)
-        );
-      allow create: if isSignedIn()
-        && (
-          isValidMarketplaceOrderCreate()
-          || (
-            !isCurrentUserRestricted()
-            && canCreateOrderBySafetyLimits()
-            && (
-              isValidHalfOrderCreate()
-              || isValidOrderCreate()
-              || (
-                request.resource.data.creatorId == request.auth.uid
-                && request.resource.data.participants is list
-              )
-              || (
-                request.resource.data.users is list
-                && request.auth.uid in request.resource.data.users
-              )
-            )
-          )
         );
       allow update: if isSignedIn()
         && (
@@ -1301,12 +1337,28 @@ service cloud.firestore {
     }
     match /restaurants/{restaurantId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create, update, delete: if isAdmin()
+        || (
+          request.auth != null
+          && request.auth.uid == restaurantId
+          && requestUserIsRestaurant()
+        );
       match /orders/{orderId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAdmin()
+          || (
+            request.auth != null
+            && request.auth.uid == restaurantId
+            && requestUserIsRestaurant()
+          );
       }
       match /{sub=**} {
-        allow read, write: if request.auth != null;
+        allow read: if true;
+        allow write: if isAdmin()
+          || (
+            request.auth != null
+            && request.auth.uid == restaurantId
+            && requestUserIsRestaurant()
+          );
       }
     }
     match /menuItems/{itemId} {
@@ -1316,8 +1368,12 @@ service cloud.firestore {
         || (request.auth != null && resource.data.restaurantId is string && resource.data.restaurantId == request.auth.uid);
     }
     match /drivers/{driverId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == driverId;
+      allow read: if isAdmin()
+        || (request.auth != null && request.auth.uid == driverId && requestUserIsDriver())
+        || (request.auth != null && requestUserIsDriver());
+      allow create, update, delete: if request.auth != null
+        && request.auth.uid == driverId
+        && requestUserIsDriver();
     }
     match /app_sessions/{sessionId} {
       allow read, write: if request.auth != null;

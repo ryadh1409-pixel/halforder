@@ -535,6 +535,15 @@ export async function createOrder(
     throw new Error('createOrder: signed-in user does not match payload.userId');
   }
 
+  if (__DEV__) {
+    console.warn('[RULE CHECK]', {
+      authUid: auth.currentUser?.uid,
+      payloadUserId: payload.userId,
+      matches: auth.currentUser?.uid === payload.userId,
+      projectId: db.app.options.projectId,
+    });
+  }
+
   const orderPayload = {
     userId: payload.userId,
     customerId: payload.userId,

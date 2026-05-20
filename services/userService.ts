@@ -29,10 +29,19 @@ export type UserProfileDoc = {
 };
 
 function normalizeRole(value: unknown): UserRole {
-  if (value === 'customer' || value === USER_ROLE.CUSTOMER) return 'customer';
-  if (value === 'driver' || value === 'restaurant' || value === 'admin' || value === 'host') {
-    return value;
+  if (
+    value === 'user' ||
+    value === 'customer' ||
+    value === USER_ROLE.USER ||
+    value === USER_ROLE.CUSTOMER
+  ) {
+    return 'user';
   }
+  if (value === 'driver') return 'driver';
+  if (value === 'restaurant' || value === 'host' || value === USER_ROLE.HOST) {
+    return value === 'host' ? 'host' : 'restaurant';
+  }
+  if (value === 'admin') return 'admin';
   return 'user';
 }
 

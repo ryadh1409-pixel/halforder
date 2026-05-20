@@ -3,14 +3,15 @@
  * Prefer these over scattering string literals.
  */
 export const USER_ROLE = {
-  CUSTOMER: 'customer',
+  /** Default marketplace customer (`users.role`). */
+  USER: 'user',
+  /** @deprecated Use {@link USER_ROLE.USER} — kept for legacy reads. */
+  CUSTOMER: 'user',
   DRIVER: 'driver',
   RESTAURANT: 'restaurant',
   ADMIN: 'admin',
-  /** Stripe venue owner — treated like restaurant for order screens. */
+  /** Stripe venue owner — normalized to restaurant for routing. */
   HOST: 'host',
-  /** Legacy shoppers — equivalent to CUSTOMER for UX. */
-  USER: 'user',
 } as const;
 
 export type UserRoleConstant = (typeof USER_ROLE)[keyof typeof USER_ROLE];

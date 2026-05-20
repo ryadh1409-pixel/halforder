@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "jest --runInBand --forceExit",
+    "deploy:firestore-rules": "firebase deploy --only firestore:rules --project halforfer",
     "test:rules": "jest --runInBand tests/firestoreRules.orders.test.ts --forceExit",
     "test:payment": "bash scripts/test-payment.sh",
     "test:webhook": "bash scripts/test-webhook.sh",

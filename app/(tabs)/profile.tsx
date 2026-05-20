@@ -22,6 +22,8 @@ import {
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { useBlockedUsers } from '../../hooks/useBlockedUsers';
 import { useTrustScore } from '../../hooks/useTrustScore';
+import { navigateForRole } from '@/lib/navigation';
+import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
 import { auth, db, ensureAuthReady } from '../../services/firebase';
 import {
@@ -239,14 +241,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const pal = useProfilePalette();
   const isDark = true;
-  const {
-    user,
-    signOutUser,
-    reloadAuthUser,
-    firestoreUserRole,
-    appRole,
-    setTestingRole,
-  } = useAuth();
+  const { user, signOutUser, reloadAuthUser, firestoreUserRole } = useAuth();
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [phone, setPhone] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -628,12 +623,40 @@ export default function ProfileScreen() {
   }, []);
 
   const handleAddRestaurant = useCallback(() => {
-    Alert.alert('Coming soon');
-  }, []);
+    if (!user?.uid) {
+      router.push('/(auth)/register?intent=restaurant' as never);
+      return;
+    }
+    void (async () => {
+      try {
+        const role = await applySignupRole(user.uid, 'restaurant', {
+          displayName: user.displayName,
+        });
+        navigateForRole(role);
+      } catch (e) {
+        logError(e);
+        showError('Could not set up restaurant account. Try again.');
+      }
+    })();
+  }, [router, user?.displayName, user?.uid]);
 
   const handleDriverSignup = useCallback(() => {
-    Alert.alert('Coming soon');
-  }, []);
+    if (!user?.uid) {
+      router.push('/(auth)/register?intent=driver' as never);
+      return;
+    }
+    void (async () => {
+      try {
+        const role = await applySignupRole(user.uid, 'driver', {
+          displayName: user.displayName,
+        });
+        navigateForRole(role);
+      } catch (e) {
+        logError(e);
+        showError('Could not set up driver account. Try again.');
+      }
+    })();
+  }, [router, user?.displayName, user?.uid]);
 
   const openSupportEmail = async () => {
     const url = `mailto:${SUPPORT_EMAIL}`;
@@ -838,34 +861,16 @@ export default function ProfileScreen() {
             <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
           </TouchableOpacity>
 
-          <Text style={dynamicStyles.sectionHeading}>Role Testing</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.bodyMuted}>
-              Current role: {appRole}
-            </Text>
-            <View style={styles.roleRow}>
-              <TouchableOpacity
-                style={[
-                  dynamicStyles.outlineBtn,
-                  styles.roleButton,
-                  appRole === 'user' ? dynamicStyles.chipActive : null,
-                ]}
-                onPress={() => setTestingRole('user')}
-              >
-                <Text style={dynamicStyles.outlineBtnText}>Switch to User</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  dynamicStyles.outlineBtn,
-                  styles.roleButton,
-                  appRole === 'driver' ? dynamicStyles.chipActive : null,
-                ]}
-                onPress={() => setTestingRole('driver')}
-              >
-                <Text style={dynamicStyles.outlineBtnText}>Switch to Driver</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {__DEV__ && firestoreUserRole ? (
+            <>
+              <Text style={dynamicStyles.sectionHeading}>Account type</Text>
+              <View style={dynamicStyles.card}>
+                <Text style={dynamicStyles.bodyMuted}>
+                  Role: {firestoreUserRole}
+                </Text>
+              </View>
+            </>
+          ) : null}
 
           <Text style={dynamicStyles.sectionHeading}>Account</Text>
           <View style={dynamicStyles.card}>

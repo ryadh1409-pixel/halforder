@@ -45,6 +45,15 @@ import {
   formatProfileWhatsAppDisplay,
   profilePhoneDigitsOnly,
 } from '../lib/profileWhatsAppPhone';
+import {
+  logAuthRoleDetected,
+  roleForSignupIntent,
+  type SignupIntent,
+} from '@/lib/authRole';
+import {
+  applySignupRole,
+  migrateUserRoleIfNeeded,
+} from '@/services/authRoleAssignment';
 import { syncUserRoleToFirestore } from '../utils/admin';
 import { uploadImageAsync } from './uploadImage';
 import { claimReferralInboxRewards } from './referralRewards';
@@ -69,6 +78,8 @@ export type EmailSignUpPayload = {
   whatsappConsent: boolean;
   /** Local file URI from ImagePicker; uploaded to `users/{uid}/profile.jpg` */
   localPhotoUri?: string | null;
+  /** Account type from register URL or host/driver signup entry points. */
+  signupIntent?: SignupIntent;
 };
 
 type AuthContextValue = {
@@ -78,10 +89,6 @@ type AuthContextValue = {
   role: UserRole | null;
   /** `users/{uid}.role` from Firestore (for promoted admins). Always `null` when signed out. */
   firestoreUserRole: UserRole | null;
-  /** Global app role used by routing guards. */
-  appRole: 'user' | 'driver';
-  appUser: { uid: string; role: 'user' | 'driver' } | null;
-  setTestingRole: (role: 'user' | 'driver') => void;
   signUpWithEmail: (payload: EmailSignUpPayload) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithPhone: (phoneNumber: string) => Promise<void>;
@@ -151,7 +158,7 @@ async function ensureUserDocument(
     if (data?.uid === undefined) updates.uid = uid;
     if (data?.activeOrderId === undefined) updates.activeOrderId = null;
     if (data?.credits === undefined) updates.credits = 0;
-    if (data?.role === undefined) updates.role = USER_ROLE.CUSTOMER;
+    if (data?.role === undefined) updates.role = USER_ROLE.USER;
     if (data?.createdAt === undefined) updates.createdAt = serverTimestamp();
     if (data?.notificationsEnabled === undefined) updates.notificationsEnabled = true;
     if (data?.restaurantId === undefined) updates.restaurantId = null;
@@ -212,7 +219,7 @@ async function ensureUserDocument(
     activeOrderId: null,
     credits: referredBy ? REFERRAL_CREDIT : 0,
     referredBy: referredBy ?? null,
-    role: USER_ROLE.CUSTOMER,
+    role: USER_ROLE.USER,
     restaurantId: null,
     notificationsEnabled: true,
     ordersCount: 0,
@@ -288,7 +295,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn('[auth] ensureAuthReady bootstrap failed', e);
     });
   }, []);
-  const [testingRole, setTestingRole] = useState<'user' | 'driver' | null>(null);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const { role: firestoreRole, loading: roleLoading } = useUserRole(user?.uid);
@@ -324,7 +330,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      console.log('[auth] user signed in', firebaseUser.uid);
+      if (__DEV__) {
+        console.warn('[auth] user signed in', firebaseUser.uid);
+      }
 
       try {
         await reload(firebaseUser);
@@ -359,6 +367,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
           void claimReferralInboxRewards(firebaseUser.uid);
           void syncUserRoleToFirestore(firebaseUser);
+          void migrateUserRoleIfNeeded(firebaseUser.uid).then((r) => {
+            logAuthRoleDetected(r);
+          });
         }
         setLoading(false);
         return;
@@ -381,6 +392,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         registerExpoPushTokenAndSyncToFirestore(fresh.uid).catch(() => {});
         void claimReferralInboxRewards(fresh.uid);
         void syncUserRoleToFirestore(fresh);
+        void migrateUserRoleIfNeeded(fresh.uid).then((r) => {
+          logAuthRoleDetected(r);
+        });
       }
       setLoading(false);
     });
@@ -455,6 +469,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logError(e);
     }
 
+    const signupRole = roleForSignupIntent(payload.signupIntent ?? 'user');
+
     try {
       await setDoc(
         doc(db, 'users', uid),
@@ -468,7 +484,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           photo: photoURL?.trim() ?? '',
           photoURL: photoURL ?? null,
           avatar: photoURL ?? null,
-          role: USER_ROLE.CUSTOMER,
+          role: signupRole,
+          restaurantId: signupRole === 'restaurant' ? uid : null,
           rating: 5,
           reviewsCount: 0,
           averageRating: 5,
@@ -492,6 +509,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (__DEV__) {
         console.warn('ensureUserDocument failed (non-fatal):', e);
       }
+    }
+
+    try {
+      await applySignupRole(uid, payload.signupIntent ?? 'user', {
+        displayName: nameTrim,
+      });
+    } catch (e) {
+      logError(e);
     }
 
     try {
@@ -530,6 +555,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /* offline or missing doc */
         }
         void syncUserRoleToFirestore(cred.user);
+        const migrated = await migrateUserRoleIfNeeded(cred.user.uid);
+        logAuthRoleDetected(migrated);
       } catch (e) {
         logError(e);
         throw new Error(getUserFriendlyError(e));
@@ -630,15 +657,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo((): AuthContextValue => {
     const fur = firestoreRole ?? null;
-    const appRole = testingRole ?? (fur === 'driver' ? 'driver' : 'user');
     return {
       user,
       loading: loading || roleLoading,
       role: firestoreRole,
       firestoreUserRole: fur,
-      appRole,
-      appUser: user ? { uid: user.uid, role: appRole } : null,
-      setTestingRole,
       signUpWithEmail,
       signInWithEmail,
       signInWithPhone,
@@ -651,8 +674,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     roleLoading,
     firestoreRole,
-    testingRole,
-    setTestingRole,
     signUpWithEmail,
     signInWithEmail,
     signInWithPhone,

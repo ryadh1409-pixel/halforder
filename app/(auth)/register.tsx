@@ -5,7 +5,11 @@ import {
   profilePhoneForFirestore,
   profileWhatsAppOnChangeText,
 } from '../../lib/profileWhatsAppPhone';
+import { parseSignupIntent } from '@/lib/authRole';
+import { navigateForRole } from '@/lib/navigation';
+import { auth } from '@/services/firebase';
 import { useAuth } from '../../services/AuthContext';
+import { getUserRole } from '@/services/userService';
 import {
   ImagePickerPermissionError,
   pickImageFromLibrary,
@@ -13,7 +17,7 @@ import {
 } from '../../services/imagePicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -54,6 +58,8 @@ const AUTH = {
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { intent: intentParam } = useLocalSearchParams<{ intent?: string }>();
+  const signupIntent = parseSignupIntent(intentParam);
   const { signUpWithEmail } = useAuth();
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -193,9 +199,16 @@ export default function RegisterScreen() {
         whatsapp: profilePhoneForFirestore(whatsapp),
         whatsappConsent: true,
         localPhotoUri: photoUri,
+        signupIntent,
       });
       showSuccess('Account created successfully 🎉');
-      router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
+      const uid = auth.currentUser?.uid;
+      const role = uid ? await getUserRole(uid) : 'user';
+      if (signupIntent === 'user') {
+        router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
+      } else {
+        navigateForRole(role);
+      }
     } catch (err: unknown) {
       showError(getUserFriendlyError(err));
     } finally {
@@ -225,7 +238,13 @@ export default function RegisterScreen() {
             >
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Create account</Text>
-                <Text style={styles.cardSubtitle}>Add your details to get started</Text>
+                <Text style={styles.cardSubtitle}>
+                  {signupIntent === 'restaurant'
+                    ? 'Restaurant partner account'
+                    : signupIntent === 'driver'
+                      ? 'Driver account'
+                      : 'Add your details to get started'}
+                </Text>
 
                 <TouchableOpacity
                   style={styles.photoWrap}

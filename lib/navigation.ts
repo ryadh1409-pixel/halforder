@@ -1,24 +1,37 @@
 import { router } from 'expo-router';
 
-/** Main tab shell — same as app root redirect after terms (`/` → `/(tabs)`). */
-const TABS_ROOT = '/(tabs)' as const;
+import {
+  getRouteForRole,
+  logAuthRoleRouted,
+  normalizeRoleForRouting,
+} from '@/lib/authRole';
+import type { UserRole } from '@/services/userService';
 
-export function goHome(): void {
+/** Navigate to the correct home shell for a Firestore role. */
+export function navigateForRole(role: UserRole | null | undefined): void {
+  const normalized = normalizeRoleForRouting(role);
+  const route = getRouteForRole(normalized);
+  logAuthRoleRouted(normalized, route);
   if (__DEV__) {
-    console.log('[nav] goHome →', TABS_ROOT);
+    console.warn('[nav] navigateForRole →', route, { role: normalized });
   }
   try {
-    router.replace(TABS_ROOT as never);
+    router.replace(route as never);
   } catch (e) {
     if (__DEV__) {
-      console.warn('[nav] goHome failed', e);
+      console.warn('[nav] navigateForRole failed', e);
     }
   }
 }
 
+/** @deprecated Use {@link navigateForRole} after login when role is known. */
+export function goHome(): void {
+  navigateForRole('user');
+}
+
 export function goBackSafe(): void {
   if (__DEV__) {
-    console.log('[nav] goBackSafe');
+    console.warn('[nav] goBackSafe');
   }
   try {
     if (router.canGoBack()) {
@@ -28,5 +41,5 @@ export function goBackSafe(): void {
   } catch {
     /* navigation not ready */
   }
-  goHome();
+  navigateForRole('user');
 }

@@ -11,6 +11,12 @@ import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { LogBox, Platform, StyleSheet, View } from 'react-native';
 
+import {
+  getRouteForRole,
+  logAuthRoleDetected,
+  logAuthRoleRouted,
+  normalizeRoleForRouting,
+} from '@/lib/authRole';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
@@ -53,22 +59,11 @@ function RoleRouteGuard() {
       return;
     }
 
-    if (role === 'driver') {
-      router.replace('/home' as never);
-      return;
-    }
-    if (role === 'admin') {
-      router.replace('/admin' as never);
-      return;
-    }
-    if (role === 'restaurant' || role === 'host') {
-      router.replace('/(tabs)/host' as never);
-      return;
-    }
-    if (role === 'user' || role === 'customer') {
-      router.replace('/(tabs)' as never);
-      return;
-    }
+    const normalized = normalizeRoleForRouting(role);
+    logAuthRoleDetected(normalized);
+    const route = getRouteForRole(normalized);
+    logAuthRoleRouted(normalized, route);
+    router.replace(route as never);
   }, [authLoading, role, pathname, router, user, segments]);
 
   return null;

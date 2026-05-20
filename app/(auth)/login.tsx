@@ -1,6 +1,7 @@
 import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '../../components/KeyboardToolbar';
 import { userNeedsEmailVerification } from '../../lib/authEmailVerification';
-import { goHome } from '../../lib/navigation';
+import { navigateForRole } from '../../lib/navigation';
+import { getUserRole } from '@/services/userService';
 import { useAuth } from '../../services/AuthContext';
 import { auth } from '../../services/firebase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -114,7 +115,8 @@ export default function LoginScreen() {
       if (redirectTo) {
         router.replace(redirectTo as Parameters<typeof router.replace>[0]);
       } else {
-        goHome();
+        const role = signedIn?.uid ? await getUserRole(signedIn.uid) : 'user';
+        navigateForRole(role);
       }
     } catch (err: unknown) {
       errorHaptic();
