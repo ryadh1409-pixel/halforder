@@ -181,21 +181,27 @@ export default function DriverHubScreen() {
     }
 
     const driverRef = doc(db, 'drivers', uid);
-    unsubDriverProfileRef.current = onSnapshot(driverRef, (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      const online = data.isOnline === true || data.online === true;
-      if (lastOnlineRef.current !== online) {
-        lastOnlineRef.current = online;
-        setIsOnline(online);
-      }
-      const rating =
-        typeof data.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0
-          ? data.rating
-          : 5.0;
-      profileRatingRef.current = rating;
-      setStats((prev) => ({ ...prev, rating }));
-    });
+    unsubDriverProfileRef.current = onSnapshot(
+      driverRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const online = data.isOnline === true || data.online === true;
+        if (lastOnlineRef.current !== online) {
+          lastOnlineRef.current = online;
+          setIsOnline(online);
+        }
+        const rating =
+          typeof data.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0
+            ? data.rating
+            : 5.0;
+        profileRatingRef.current = rating;
+        setStats((prev) => ({ ...prev, rating }));
+      },
+      (e) => {
+        console.error('[driver] drivers profile listener failed', e);
+      },
+    );
 
     if (driverBootstrapUidRef.current !== uid) {
       driverBootstrapUidRef.current = uid;

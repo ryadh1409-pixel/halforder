@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { acceptOrderWithLock } from '@/services/delivery';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import type { OrderStatus } from './orderService';
 
 export type DriverProfile = {
@@ -284,12 +284,29 @@ export function subscribeAvailableOrders(
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
   console.log('[driver] available orders listener active');
+  if (__DEV__) {
+    console.log('[FIRESTORE QUERY]', {
+      collection: 'orders',
+      listener: 'driverService.subscribeAvailableOrders',
+      filters: [
+        ['status', '==', 'pending_driver'],
+        ['deliveryType', '==', 'delivery'],
+        ['driverId', '==', null],
+        ['assignedDriverId', '==', null],
+        ['orderBy', 'createdAt desc'],
+        ['limit', 20],
+      ],
+      authUid: auth.currentUser?.uid ?? null,
+      role: 'driver',
+    });
+  }
   return onSnapshot(
     query(
       collection(db, 'orders'),
       where('status', '==', 'pending_driver'),
       where('deliveryType', '==', 'delivery'),
       where('driverId', '==', null),
+      where('assignedDriverId', '==', null),
       orderBy('createdAt', 'desc'),
       limit(20),
     ),
@@ -303,7 +320,8 @@ export function subscribeAvailableOrders(
         onData([]);
       }
     },
-    () => {
+    (e) => {
+      console.error('[driver] subscribeAvailableOrders listener', e);
       onData([]);
     },
   );

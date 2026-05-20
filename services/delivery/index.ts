@@ -423,6 +423,7 @@ export function subscribeDriverQueue(
       where('status', '==', 'pending_driver'),
       where('deliveryType', '==', 'delivery'),
       where('driverId', '==', null),
+      where('assignedDriverId', '==', null),
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
@@ -444,6 +445,22 @@ export function subscribeDriverQueue(
       emit();
     },
   );
+
+  if (__DEV__) {
+    console.log('[FIRESTORE QUERY]', {
+      collection: 'orders',
+      listener: 'subscribeDriverQueue',
+      filters: [
+        ['status', '==', 'pending_driver'],
+        ['deliveryType', '==', 'delivery'],
+        ['driverId', '==', null],
+        ['assignedDriverId', '==', null],
+        ['orderBy', 'createdAt desc'],
+      ],
+      authUid: driverId,
+      role: 'driver',
+    });
+  }
 
   return () => {
     unsubDriver();
@@ -548,8 +565,26 @@ export function subscribeDriverActiveOrders(
   driverId: string,
   onData: (orders: ActiveDelivery[]) => void,
 ): Unsubscribe {
+  if (__DEV__) {
+    console.log('[FIRESTORE QUERY]', {
+      collection: 'orders',
+      listener: 'subscribeDriverActiveOrders',
+      filters: [
+        ['assignedDriverId', '==', driverId],
+        ['deliveryType', '==', 'delivery'],
+        ['orderBy', 'createdAt desc'],
+      ],
+      authUid: driverId,
+      role: 'driver',
+    });
+  }
   return onSnapshot(
-    query(collection(db, 'orders'), where('assignedDriverId', '==', driverId), orderBy('createdAt', 'desc')),
+    query(
+      collection(db, 'orders'),
+      where('assignedDriverId', '==', driverId),
+      where('deliveryType', '==', 'delivery'),
+      orderBy('createdAt', 'desc'),
+    ),
     (snap) => {
       try {
         const rows = snap.docs
