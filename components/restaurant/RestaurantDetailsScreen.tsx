@@ -34,6 +34,18 @@ import {
   itemsForCategory,
   type DisplayMenuItem,
 } from '@/utils/menuDisplayEnrich';
+import {
+  calculateDeliveryFee,
+  calculateETA,
+  calculateServiceFee,
+  distanceKmBetween,
+  formatDistanceKm,
+  pickActivePromotion,
+  resolveRatingDisplay,
+  resolveStoreStatusLabel,
+  resolveStoreStatusSubtext,
+} from '@/lib/restaurantStoreMetrics';
+import { getUserLocationSafe } from '@/services/location';
 import { showError } from '@/utils/toast';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -54,16 +66,6 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-
-const PLACEHOLDER_PROFILE = (id: string): RestaurantProfile => ({
-  id,
-  name: 'Restaurant',
-  image: null,
-  coverImage: null,
-  address: null,
-  rating: 4.85,
-  reviewCount: 1240,
-});
 
 type Props = {
   restaurantId: string;
@@ -109,12 +111,128 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     null,
   );
 
-  const resolvedProfile = profile ?? PLACEHOLDER_PROFILE(restaurantId);
+  const [userCoords, setUserCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const loc = await getUserLocationSafe();
+      if (cancelled) return;
+      if (loc) setUserCoords({ lat: loc.latitude, lng: loc.longitude });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resolvedProfile =
+    profile ??
+    ({
+      id: restaurantId,
+      name: 'Restaurant',
+      image: null,
+      coverImage: null,
+      address: null,
+      rating: null,
+      reviewCount: 0,
+      coords: null,
+      deliveryFee: null,
+      serviceFee: null,
+      raw: {},
+    } satisfies RestaurantProfile);
+
+  const distanceKm = useMemo(
+    () => distanceKmBetween(userCoords, resolvedProfile.coords),
+    [resolvedProfile.coords, userCoords],
+  );
+
+  const ratingDisplay = useMemo(
+    () => resolveRatingDisplay(resolvedProfile.rating, resolvedProfile.reviewCount),
+    [resolvedProfile.rating, resolvedProfile.reviewCount],
+  );
+
+  const deliveryFeeEstimate = useMemo(
+    () =>
+      calculateDeliveryFee({
+        mode: deliveryMode,
+        distanceKm,
+        firestoreFee: resolvedProfile.deliveryFee,
+      }),
+    [deliveryMode, distanceKm, resolvedProfile.deliveryFee],
+  );
+
+  const deliveryFeeLabel = deliveryFeeEstimate.label;
+
+  const etaLabel = useMemo(
+    () => calculateETA({ mode: deliveryMode, distanceKm }),
+    [deliveryMode, distanceKm],
+  );
+
+  const distanceLabel = useMemo(
+    () => formatDistanceKm(distanceKm),
+    [distanceKm],
+  );
 
   const displayItems = useMemo(
     () => items.filter((i) => i.available).map(enrichMenuItem),
     [items],
   );
+
+  const cartForRestaurant = useMemo(
+    () => cart.filter((c) => c.restaurantId === restaurantId),
+    [cart, restaurantId],
+  );
+
+  const subtotal = useMemo(
+    () => cartForRestaurant.reduce((s, c) => s + c.price * c.qty, 0),
+    [cartForRestaurant],
+  );
+
+  const serviceFeeLabel = useMemo(
+    () =>
+      calculateServiceFee({
+        subtotal,
+        firestoreFee: resolvedProfile.serviceFee,
+      }).label,
+    [subtotal, resolvedProfile.serviceFee],
+  );
+
+  const promoLabel = useMemo(
+    () =>
+      pickActivePromotion(
+        resolvedProfile.raw,
+        displayItems.map((i) => i.promotion),
+        {
+          reviewCount: resolvedProfile.reviewCount,
+          deliveryFeeAmount: deliveryFeeEstimate.amount,
+          isPopularNearby:
+            resolvedProfile.raw.popular === true &&
+            distanceKm != null &&
+            distanceKm <= 3,
+        },
+      ),
+    [
+      resolvedProfile.raw,
+      resolvedProfile.reviewCount,
+      displayItems,
+      deliveryFeeEstimate.amount,
+      distanceKm,
+    ],
+  );
+
+  const statusLabel = useMemo(
+    () => resolveStoreStatusLabel(resolvedProfile.raw, resolvedProfile.reviewCount),
+    [resolvedProfile.raw, resolvedProfile.reviewCount],
+  );
+
+  const statusSubtext = useMemo(
+    () => resolveStoreStatusSubtext(resolvedProfile.reviewCount),
+    [resolvedProfile.reviewCount],
+  );
+
   const categories = useMemo(() => defaultCategoriesFromItems(items), [items]);
   const sectionBuckets = useRestaurantMenuSections(displayItems);
 
@@ -129,22 +247,9 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     [displayItems, activeCat],
   );
 
-  const cartForRestaurant = useMemo(
-    () => cart.filter((c) => c.restaurantId === restaurantId),
-    [cart, restaurantId],
-  );
-
   const cartQty = useMemo(
     () => cartForRestaurant.reduce((s, c) => s + c.qty, 0),
     [cartForRestaurant],
-  );
-  const subtotal = useMemo(
-    () => cartForRestaurant.reduce((s, c) => s + c.price * c.qty, 0),
-    [cartForRestaurant],
-  );
-  const savings = useMemo(
-    () => (subtotal >= 25 ? Math.min(6.5, subtotal * 0.06) : 0),
-    [subtotal],
   );
 
   const loading = profileLoading || menuLoading;
@@ -198,15 +303,6 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       /* ignore */
     }
   }, [resolvedProfile.name]);
-
-  const deliveryFee = deliveryMode === 'pickup' ? 0 : 2.49;
-  const serviceFee = 0.99;
-  const etaRange =
-    deliveryMode === 'pickup'
-      ? '15–25 min'
-      : deliveryMode === 'group'
-        ? '30–45 min'
-        : '25–40 min';
 
   const addFromSheet = useCallback(
     (payload: ItemSheetAddPayload) => {
@@ -302,11 +398,14 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
               />
               <RestaurantInfo
                 profile={resolvedProfile}
-                deliveryFee={deliveryFee}
-                serviceFee={serviceFee}
-                distanceLabel="2.4 mi"
-                etaRange={etaRange}
-                reorderCopy="800+ people in your neighborhood reordered last month"
+                ratingDisplay={ratingDisplay}
+                deliveryFeeLabel={deliveryFeeLabel}
+                serviceFeeLabel={serviceFeeLabel}
+                distanceLabel={distanceLabel}
+                etaLabel={etaLabel}
+                statusLabel={statusLabel}
+                statusSubtext={statusSubtext}
+                promoLabel={promoLabel}
               />
               <DeliveryOptions
                 mode={deliveryMode}
@@ -320,8 +419,9 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
               />
               <QuickInfoCards
                 mode={deliveryMode}
-                deliveryFee={deliveryFee}
-                etaRange={etaRange}
+                deliveryFeeLabel={deliveryFeeLabel}
+                etaLabel={etaLabel}
+                promoLabel={promoLabel}
               />
             </>
           )}
@@ -330,15 +430,15 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         <View style={styles.featuredBlock}>
           <MenuHorizontalCarousel
             title="Popular items"
-            subtitle="Top picks near you"
+            subtitle="Marked popular on the menu"
             items={sectionBuckets.popular}
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
             onItemAdd={quickAdd}
           />
           <MenuHorizontalCarousel
-            title="Buy 1 Get 1"
-            subtitle="Deals on bundles"
+            title="Deals"
+            subtitle="Active promotions"
             items={sectionBuckets.deals}
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
@@ -346,7 +446,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
           />
           <MenuHorizontalCarousel
             title="Recommended"
-            subtitle="Because you order great food"
+            subtitle="Chef picks"
             items={sectionBuckets.recommended}
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
@@ -397,7 +497,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>Menu is empty</Text>
                 <Text style={styles.emptySub}>
-                  Check back soon for new dishes.
+                  {statusSubtext ?? 'Check back soon for new dishes.'}
                 </Text>
               </View>
             ) : (
@@ -418,7 +518,6 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       <FloatingCartBar
         visible={cartQty > 0}
         itemCount={cartQty}
-        savings={savings}
         total={subtotal}
         onCheckout={goCheckout}
       />

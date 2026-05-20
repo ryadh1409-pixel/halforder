@@ -10,6 +10,8 @@ import {
 } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getReadableErrorMessageOr } from '../utils/errorMessages';
+
 const DEFAULT_RADIUS_KM = 3;
 
 /** 500m for Live Demand Map and Auto-Match */
@@ -118,7 +120,7 @@ export function useNearbyOrders(radiusKm: number = DEFAULT_RADIUS_KM) {
       });
       setOrders(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setError(getReadableErrorMessageOr(e, 'Failed to load'));
       setOrders([]);
     } finally {
       setLoading(false);
@@ -157,7 +159,7 @@ export function useNearbyOrdersRealtime(
         setUserLocation(ul);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Location failed');
+          setError(getReadableErrorMessageOr(e, 'Location failed'));
           setLoading(false);
         }
         return;
@@ -256,7 +258,7 @@ export function useNearbyOrdersRealtime(
       const loc = await getUserLocation();
       setUserLocation({ latitude: loc.latitude, longitude: loc.longitude });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Location failed');
+      setError(getReadableErrorMessageOr(e, 'Location failed'));
     }
   }, []);
 

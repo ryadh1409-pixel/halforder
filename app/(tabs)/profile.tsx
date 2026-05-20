@@ -45,7 +45,6 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
-import { Bike, Building2, Store } from 'lucide-react-native';
 import {
   deleteField,
   doc,
@@ -69,6 +68,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -870,7 +870,7 @@ export default function ProfileScreen() {
           <Text style={dynamicStyles.sectionHeading}>Account</Text>
           <View style={dynamicStyles.card}>
             <Text style={dynamicStyles.label}>Display name</Text>
-            <TextInput
+            <AppTextInput
               ref={displayNameInputRef}
               style={dynamicStyles.input}
               value={displayNameInput}
@@ -891,7 +891,7 @@ export default function ProfileScreen() {
                 color="#25D366"
                 style={dynamicStyles.phoneFieldIcon}
               />
-              <TextInput
+              <AppTextInput
                 style={dynamicStyles.phoneFieldInput}
                 value={phone}
                 onChangeText={(t) => setPhone(profileWhatsAppOnChangeText(t))}
@@ -978,11 +978,7 @@ export default function ProfileScreen() {
           <Text style={dynamicStyles.sectionHeading}>Preferences</Text>
           <View style={dynamicStyles.card}>
             <Text style={dynamicStyles.label}>Language</Text>
-            <Text style={dynamicStyles.readOnlyValue}>
-              {Platform.OS === 'ios'
-                ? 'Follows iOS settings'
-                : 'Follows system language'}
-            </Text>
+            <Text style={dynamicStyles.readOnlyValue}>English</Text>
           </View>
 
           <Text style={dynamicStyles.sectionHeading}>Support & legal</Text>
@@ -1071,7 +1067,7 @@ export default function ProfileScreen() {
                 Report from Help &amp; past orders
               </Text>
             </TouchableOpacity>
-            <TextInput
+            <AppTextInput
               value={reportUserId}
               onChangeText={setReportUserId}
               placeholder="Reported user ID"
@@ -1121,7 +1117,7 @@ export default function ProfileScreen() {
           </View>
 
           <Text style={dynamicStyles.sectionHeading}>Blocked Users</Text>
-          <View style={dynamicStyles.card}>
+          <View style={[dynamicStyles.card, styles.blockedUsersCard]}>
             <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
               Accounts you block cannot see your activity or contact you. You can
               unblock them anytime.
@@ -1146,24 +1142,26 @@ export default function ProfileScreen() {
             ) : null}
           </View>
 
-          <Text style={dynamicStyles.sectionHeading}>Grow with Us</Text>
+          <Text style={[dynamicStyles.sectionHeading, styles.growSectionHeading]}>
+            Grow with Us
+          </Text>
           <View style={dynamicStyles.menuGroupCard}>
             <ProfileMenuItem
               title="Create a business account"
               subtitle="Manage team and business orders"
-              icon={Building2}
+              iconKind="business"
               onPress={handleBusinessAccount}
             />
             <ProfileMenuItem
               title="Add your restaurant"
               subtitle="Partner your restaurant with us"
-              icon={Store}
+              iconKind="restaurant"
               onPress={handleAddRestaurant}
             />
             <ProfileMenuItem
               title="Sign up as driver"
               subtitle="Earn by delivering orders"
-              icon={Bike}
+              iconKind="driver"
               onPress={handleDriverSignup}
               isLast
             />
@@ -1673,6 +1671,12 @@ const styles = StyleSheet.create({
   },
   roleButton: {
     flex: 1,
+  },
+  blockedUsersCard: {
+    overflow: 'hidden',
+  },
+  growSectionHeading: {
+    marginTop: 8,
   },
   inputMultiline: {
     minHeight: 88,

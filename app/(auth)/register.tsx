@@ -29,6 +29,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { systemActionSheet } from '../../components/SystemDialogHost';
 import { getUserFriendlyError } from '../../utils/errorHandler';
@@ -248,7 +249,7 @@ export default function RegisterScreen() {
                 <Text style={styles.photoCaption}>Add profile photo (optional)</Text>
 
                 <View style={styles.fields}>
-                  <TextInput
+                  <AppTextInput
                     ref={nameRef}
                     style={styles.fieldInput}
                     placeholder="Full name"
@@ -263,7 +264,7 @@ export default function RegisterScreen() {
                     onFocus={() => setFocusedIndex(0)}
                   />
 
-                  <TextInput
+                  <AppTextInput
                     ref={emailRef}
                     style={styles.fieldInput}
                     placeholder="Email"
@@ -280,7 +281,7 @@ export default function RegisterScreen() {
                     onFocus={() => setFocusedIndex(1)}
                   />
 
-                  <TextInput
+                  <AppTextInput
                     ref={whatsappRef}
                     style={styles.fieldInput}
                     placeholder="WhatsApp number"
@@ -320,7 +321,7 @@ export default function RegisterScreen() {
                     </Text>
                   </TouchableOpacity>
 
-                  <TextInput
+                  <AppTextInput
                     ref={passwordRef}
                     style={styles.fieldInput}
                     placeholder="Password"
@@ -335,7 +336,7 @@ export default function RegisterScreen() {
                     onFocus={() => setFocusedIndex(3)}
                   />
 
-                  <TextInput
+                  <AppTextInput
                     ref={confirmPasswordRef}
                     style={[styles.fieldInput, styles.lastField]}
                     placeholder="Confirm password"

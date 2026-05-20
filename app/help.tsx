@@ -77,7 +77,7 @@ export default function HelpScreen() {
         list.push({
           id: d.id,
           restaurantName: data?.restaurantName ?? 'Unknown',
-          date: new Date(createdAt).toLocaleDateString(undefined, {
+          date: new Date(createdAt).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',

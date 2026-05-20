@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getReadableErrorMessageOr } from '../../utils/errorMessages';
+
 const c = theme.colors;
 
 type UserMini = { uid: string; displayName: string; photoURL: string | null };
@@ -89,7 +91,9 @@ export default function FoodMatchScreen() {
         if (!cancelled) setUsers(metas);
       } catch (e) {
         console.error('[FoodMatchScreen]', e);
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load.');
+        if (!cancelled) {
+          setError(getReadableErrorMessageOr(e, 'Failed to load.'));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

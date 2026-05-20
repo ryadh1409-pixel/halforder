@@ -65,7 +65,7 @@ function resolveFoodName(
       ? data.restaurantName.trim()
       : '') ||
     fallback;
-  return n || 'طعام';
+  return n || 'Food';
 }
 
 function parseUserFoodPreference(d: Record<string, unknown>): string {
@@ -98,7 +98,7 @@ export async function autoInvite(input: AutoInviteOrderInput): Promise<void> {
     const snap = await getDoc(doc(db, 'orders', oid));
     if (!snap.exists()) return;
     const data = snap.data() as Record<string, unknown>;
-    if (!food) food = resolveFoodName(data, 'طعام');
+    if (!food) food = resolveFoodName(data, 'Food');
 
     if (lat == null || lng == null) {
       const la =
@@ -175,8 +175,8 @@ export async function autoInvite(input: AutoInviteOrderInput): Promise<void> {
       if (!Number.isFinite(dist) || dist > radiusM) continue;
 
       const token = row.expoPushToken;
-      const title = '🔥 Food Match قريب منك!';
-      const body = `${food} متوفر الآن`;
+      const title = '🔥 Food match near you!';
+      const body = `${food} is available now`;
 
       await sendPushNotification(token, title, body, {
         type: GROWTH_NEARBY_FOOD_PUSH_TYPE,

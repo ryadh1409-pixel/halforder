@@ -5,15 +5,8 @@
  */
 import { hasRatedOrderForUser, saveRating } from '../services/ratings';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from './AppTextInput';
 import { theme } from '../constants/theme';
 import { getUserFriendlyError } from '../utils/errorHandler';
 import { showError } from '../utils/toast';
@@ -108,7 +101,7 @@ export function RateOrderPartnerModal({
               </TouchableOpacity>
             ))}
           </View>
-          <TextInput
+          <AppTextInput
             value={comment}
             onChangeText={setComment}
             placeholder="Optional comment"

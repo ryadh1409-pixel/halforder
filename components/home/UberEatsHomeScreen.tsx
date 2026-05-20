@@ -53,13 +53,16 @@ export function UberEatsHomeScreen() {
 
   const featured = useMemo(() => filtered.slice(0, 8), [filtered]);
   const popular = useMemo(
-    () => [...filtered].sort((a, b) => b.rating - a.rating).slice(0, 10),
+    () =>
+      [...filtered]
+        .filter((r) => r.reviewCount > 0 && r.rating != null)
+        .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+        .slice(0, 10),
     [filtered],
   );
   const mightLike = useMemo(() => filtered.slice(2, 12), [filtered]);
   const offers = useMemo(
-    () =>
-      filtered.filter((r) => r.promoLabel || r.deliveryFee === 0).slice(0, 10),
+    () => filtered.filter((r) => r.promoLabel != null).slice(0, 10),
     [filtered],
   );
 
@@ -108,7 +111,6 @@ export function UberEatsHomeScreen() {
           <>
             <FeaturedSection
               title="Featured near you"
-              subtitle="Sponsored picks in your area"
               restaurants={featured}
               onRestaurantPress={openRestaurant}
             />
@@ -117,12 +119,14 @@ export function UberEatsHomeScreen() {
               restaurants={mightLike}
               onRestaurantPress={openRestaurant}
             />
-            <FeaturedSection
-              title="Popular now"
-              subtitle="Top rated this week"
-              restaurants={popular}
-              onRestaurantPress={openRestaurant}
-            />
+            {popular.length > 0 ? (
+              <FeaturedSection
+                title="Popular now"
+                subtitle="Highest rated with reviews"
+                restaurants={popular}
+                onRestaurantPress={openRestaurant}
+              />
+            ) : null}
             {offers.length > 0 ? (
               <FeaturedSection
                 title="Offers for you"

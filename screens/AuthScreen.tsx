@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getReadableErrorMessage } from '../utils/errorMessages';
+
 type Provider = 'google' | 'apple' | null;
 
 export default function AuthScreen() {
@@ -25,7 +27,7 @@ export default function AuthScreen() {
     try {
       await signInWithGoogle();
     } catch (e) {
-      setErrorText(e instanceof Error ? e.message : 'Google sign-in failed.');
+      setErrorText(getReadableErrorMessage(e));
     } finally {
       setLoadingProvider(null);
     }
@@ -37,7 +39,7 @@ export default function AuthScreen() {
     try {
       await signInWithApple();
     } catch (e) {
-      setErrorText(e instanceof Error ? e.message : 'Apple sign-in failed.');
+      setErrorText(getReadableErrorMessage(e));
     } finally {
       setLoadingProvider(null);
     }

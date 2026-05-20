@@ -28,22 +28,8 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -555,7 +541,7 @@ export default function HostDashboardScreen() {
                 </TouchableOpacity>
 
                 <Text style={styles.inputLabel}>Restaurant / truck name</Text>
-                <TextInput
+                <AppTextInput
                   style={styles.input}
                   value={nameDraft}
                   onChangeText={setNameDraft}
@@ -564,7 +550,7 @@ export default function HostDashboardScreen() {
                 />
 
                 <Text style={styles.inputLabel}>Location</Text>
-                <TextInput
+                <AppTextInput
                   style={[styles.input, styles.inputMulti]}
                   value={locationDraft}
                   onChangeText={setLocationDraft}
@@ -768,7 +754,7 @@ export default function HostDashboardScreen() {
                 <Image source={{ uri: itemImage }} style={styles.preview} />
               ) : null}
               <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
+              <AppTextInput
                 style={styles.input}
                 value={itemName}
                 onChangeText={setItemName}
@@ -776,7 +762,7 @@ export default function HostDashboardScreen() {
                 placeholderTextColor="#94a3b8"
               />
               <Text style={styles.inputLabel}>Price (USD)</Text>
-              <TextInput
+              <AppTextInput
                 style={styles.input}
                 value={itemPrice}
                 onChangeText={setItemPrice}

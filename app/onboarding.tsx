@@ -20,6 +20,7 @@ import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { goHome } from '../lib/navigation';
 import { useAuth } from '../services/AuthContext';
 import { startOnboarding } from '../services/stripeConnect';
+import { alertFriendly } from '../utils/friendlyAlert';
 
 const BG = '#0B0F14';
 const { width } = Dimensions.get('window');
@@ -65,7 +66,7 @@ export default function OnboardingScreen() {
         await Linking.openURL(url);
       }
     } catch (e) {
-      Alert.alert('Stripe', e instanceof Error ? e.message : 'Could not open Stripe setup.');
+      alertFriendly('Payout setup', e, 'payment');
     } finally {
       setStripeLoading(false);
     }

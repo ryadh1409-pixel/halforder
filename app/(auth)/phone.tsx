@@ -1,15 +1,8 @@
 import { goBackSafe, goHome } from '../../lib/navigation';
 import { useAuth } from '../../services/AuthContext';
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../services/firebase';
 import { theme } from '../../constants/theme';
@@ -79,7 +72,7 @@ export default function PhoneLoginScreen() {
         {step === 'phone' ? (
           <>
             <Text style={styles.label}>Phone number</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="+1 234 567 8900"
               placeholderTextColor={c.textMuted}
@@ -103,7 +96,7 @@ export default function PhoneLoginScreen() {
         ) : (
           <>
             <Text style={styles.label}>Verification code</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="123456"
               placeholderTextColor={c.textMuted}

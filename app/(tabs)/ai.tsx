@@ -36,18 +36,8 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export type AssistantMessageAction = 'join_order' | 'create_order' | 'none';
@@ -196,7 +186,7 @@ export default function ChatScreen() {
   const [step, setStep] = useState<'chat' | 'pizzaType'>('chat');
   const [showSplit, setShowSplit] = useState(false);
   const flatListRef = useRef<FlatList<Message> | null>(null);
-  const inputRef = useRef<TextInput | null>(null);
+  const inputRef = useRef<AppTextInput | null>(null);
   const assistantInFlightRef = useRef(false);
   const lastAssistantSendAtRef = useRef(0);
 
@@ -992,7 +982,7 @@ export default function ChatScreen() {
           <TouchableOpacity onPress={handleMicPress} style={styles.micButton}>
             <Text style={styles.micText}>🎤</Text>
           </TouchableOpacity>
-          <TextInput
+          <AppTextInput
             ref={inputRef}
             value={input}
             onChangeText={setInput}

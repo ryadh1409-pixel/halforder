@@ -1,3 +1,5 @@
+import { getReadableErrorMessageOr } from '../utils/errorMessages';
+
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 /** Expo accepts an array of messages per request; cap at 100. */
 export const EXPO_PUSH_BATCH_SIZE = 100;
@@ -71,7 +73,7 @@ export async function sendExpoPush(
       return {
         sent,
         failed,
-        error: e instanceof Error ? e.message : 'Request failed',
+        error: getReadableErrorMessageOr(e, 'Request failed'),
       };
     }
   }

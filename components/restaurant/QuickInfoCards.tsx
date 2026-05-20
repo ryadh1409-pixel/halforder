@@ -6,37 +6,38 @@ import type { DeliveryMode } from '@/components/restaurant/DeliveryOptions';
 
 type Props = {
   mode: DeliveryMode;
-  deliveryFee: number;
-  etaRange: string;
-  promoThreshold?: number;
+  deliveryFeeLabel: string;
+  etaLabel: string;
+  promoLabel: string | null;
 };
 
 /**
- * Two-up cards under order type switch (delivery fee ladder + ETA) — Uber Eats style.
+ * Two-up cards under order type switch — delivery fee + ETA (no invented promos).
  */
 export function QuickInfoCards({
   mode,
-  deliveryFee,
-  etaRange,
-  promoThreshold = 25,
+  deliveryFeeLabel,
+  etaLabel,
+  promoLabel,
 }: Props) {
-  const feeLine =
-    mode === 'delivery'
-      ? deliveryFee <= 0
-        ? `$0 delivery`
-        : `$${deliveryFee.toFixed(2)} delivery`
-      : 'Pickup — skip the fees';
+  const etaUnavailable = etaLabel === 'ETA unavailable';
 
   return (
     <View style={styles.row}>
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
         <View style={styles.pill}>
-          <Text style={styles.pillTxt}>Promo</Text>
+          <Text style={styles.pillTxt}>Delivery</Text>
         </View>
         <Text style={styles.title}>
-          {mode === 'delivery' ? `$0 delivery fee on $${promoThreshold}+` : 'Pickup ready faster'}
+          {promoLabel ?? (mode === 'pickup' ? 'Pickup order' : deliveryFeeLabel)}
         </Text>
-        <Text style={styles.sub}>{feeLine}</Text>
+        <Text style={styles.sub}>
+          {promoLabel
+            ? deliveryFeeLabel
+            : mode === 'pickup'
+              ? 'No delivery fee on pickup'
+              : 'Final fee confirmed at checkout'}
+        </Text>
         <View style={styles.accent} />
       </Pressable>
 
@@ -44,9 +45,15 @@ export function QuickInfoCards({
         <View style={[styles.pill, styles.pillNeutral]}>
           <Text style={styles.pillTxtNeutral}>Estimate</Text>
         </View>
-        <Text style={styles.title}>Arrives {etaRange}</Text>
+        <Text style={styles.title}>
+          {etaUnavailable ? 'ETA unavailable' : `Arrives ${etaLabel}`}
+        </Text>
         <Text style={styles.sub}>
-          {mode === 'group' ? 'Everyone pays their share separately' : 'Live updates once you order'}
+          {etaUnavailable
+            ? 'Enable location for a delivery estimate'
+            : mode === 'group'
+              ? 'Everyone pays their share separately'
+              : 'Updates once your order is placed'}
         </Text>
         <View style={[styles.accent, styles.accentMuted]} />
       </Pressable>
@@ -89,9 +96,20 @@ const styles = StyleSheet.create({
   },
   pillNeutral: { backgroundColor: RP.surface },
   pillTxt: { fontSize: 10, fontWeight: '900', color: RP.accent, letterSpacing: 0.6 },
-  pillTxtNeutral: { fontSize: 10, fontWeight: '900', color: RP.textMuted, letterSpacing: 0.6 },
+  pillTxtNeutral: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: RP.textMuted,
+    letterSpacing: 0.6,
+  },
   title: { fontSize: 14, fontWeight: '900', color: RP.text, lineHeight: 19 },
-  sub: { marginTop: 6, fontSize: 12, fontWeight: '600', color: RP.textSecondary, lineHeight: 16 },
+  sub: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: RP.textSecondary,
+    lineHeight: 16,
+  },
   accent: {
     position: 'absolute',
     bottom: 0,

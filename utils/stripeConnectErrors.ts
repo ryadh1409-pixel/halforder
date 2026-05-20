@@ -1,27 +1,23 @@
-import { getUserFriendlyError } from './errorHandler';
+import { getReadableErrorMessage } from './errorMessages';
 
 export function stripeConnectErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message && error.message.length < 220) {
-    const m = error.message.trim();
-    if (!/firebase|internal server/i.test(m)) return m;
-  }
   if (error && typeof error === 'object' && 'code' in error) {
     const code = String((error as { code: string }).code);
     if (code.includes('not-found')) {
-      return 'Stripe onboarding function is missing or not deployed in this region. Please redeploy Firebase Functions.';
+      return 'Payout setup is not available yet. Please try again later.';
     }
     if (code.includes('unauthenticated')) {
       return 'Please sign in again.';
     }
     if (code.includes('failed-precondition')) {
-      return 'Stripe is not configured on the server yet. Try again later or contact support.';
+      return 'Payout setup is not ready yet. Try again later.';
     }
     if (code.includes('permission-denied')) {
-      return 'You can only connect payouts for your own restaurant account.';
+      return "You don't have permission to manage payouts for this account.";
     }
     if (code.includes('internal') || code.includes('unavailable')) {
-      return 'Could not reach Stripe. Check your connection and try again.';
+      return 'Could not connect payouts. Check your connection and try again.';
     }
   }
-  return getUserFriendlyError(error);
+  return getReadableErrorMessage(error, 'payment');
 }

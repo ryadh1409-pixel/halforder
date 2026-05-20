@@ -8,16 +8,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { FlatList, Keyboard, KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatTorontoTime } from '../lib/format-toronto-time';
 import { auth, db } from '../services/firebase';
@@ -204,7 +196,7 @@ export default function SupportChatScreen() {
             backgroundColor: c.background,
           }}
         >
-          <TextInput
+          <AppTextInput
             value={text}
             onChangeText={setText}
             placeholder="Type your message..."

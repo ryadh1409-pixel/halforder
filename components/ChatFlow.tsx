@@ -40,20 +40,8 @@ import React, {
   useState,
 } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import {
-  ActivityIndicator,
-  Animated,
-  Easing,
-  FlatList,
-  type ListRenderItemInfo,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Animated, Easing, FlatList, type ListRenderItemInfo, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from './AppTextInput';
 
 const c = theme.colors;
 
@@ -716,7 +704,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
             <Text style={styles.panelText}>
               Add your area so we can search nearby — or enable profile location.
             </Text>
-            <TextInput
+            <AppTextInput
               value={manualArea}
               onChangeText={setManualArea}
               placeholder="e.g. Downtown Toronto"
@@ -737,7 +725,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         {aiChatUrl &&
         (step === 'chat' || step === 'pizzaType' || step === 'recommended') ? (
           <View style={styles.aiBar}>
-            <TextInput
+            <AppTextInput
               value={aiInput}
               onChangeText={setAiInput}
               placeholder="Ask the assistant…"

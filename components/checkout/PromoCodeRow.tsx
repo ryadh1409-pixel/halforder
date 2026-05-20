@@ -1,14 +1,8 @@
 import { CK } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppTextInput } from '../AppTextInput';
 
 type Props = {
   value: string;
@@ -27,7 +21,7 @@ function PromoCodeRowInner({ value, appliedLabel, onChange, hint }: Props) {
         <Text style={styles.eyebrow}>Promotions</Text>
         <View style={styles.outer}>
           <Ionicons name="prism-outline" size={20} color={CK.textSecondary} />
-          <TextInput
+          <AppTextInput
             value={value}
             placeholder="Enter promo code"
             placeholderTextColor={CK.textMuted}

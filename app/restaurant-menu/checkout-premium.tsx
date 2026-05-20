@@ -31,6 +31,12 @@ import { createOrder } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '@/services/stripeOnboarding';
+import {
+  calculateDeliveryFee,
+  calculateServiceFee,
+  distanceKmBetween,
+} from '@/lib/restaurantStoreMetrics';
+import { alertFriendly } from '@/utils/friendlyAlert';
 import { showError } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -103,13 +109,37 @@ export default function CheckoutPremiumScreen() {
     [cartItems],
   );
 
-  const deliveryFee = fulfillmentMode === 'pickup' ? 0 : 2.49;
+  const distanceKm = useMemo(
+    () => distanceKmBetween(DROP, profile?.coords ?? null),
+    [profile?.coords],
+  );
+
+  const deliveryFeeEstimate = useMemo(
+    () =>
+      calculateDeliveryFee({
+        mode: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
+        distanceKm,
+        firestoreFee: profile?.deliveryFee ?? null,
+      }),
+    [distanceKm, fulfillmentMode, profile?.deliveryFee],
+  );
+
+  const deliveryFee =
+    fulfillmentMode === 'pickup' ? 0 : (deliveryFeeEstimate.amount ?? 0);
+
   const priorityFee =
     fulfillmentMode === 'pickup' ? 0 : timing === 'priority' ? 2.49 : 0;
   const promoDiscount =
     promo.trim().toUpperCase() === 'HALF20' ? Math.min(subtotal * 0.2, 12) : 0;
 
-  const serviceFee = 0.99;
+  const serviceFee = useMemo(
+    () =>
+      calculateServiceFee({
+        subtotal,
+        firestoreFee: profile?.serviceFee ?? null,
+      }).amount ?? 0,
+    [subtotal, profile?.serviceFee],
+  );
   const preTax = Math.max(0, subtotal - promoDiscount + deliveryFee + priorityFee + serviceFee);
   const taxes = preTax * 0.13;
   const total = preTax + taxes;
@@ -177,7 +207,7 @@ export default function CheckoutPremiumScreen() {
       await Linking.openURL(url);
       void refreshStripeReadiness();
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to start onboarding');
+      alertFriendly('Checkout', e, 'payment');
     }
   }
 

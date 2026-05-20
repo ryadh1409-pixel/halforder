@@ -13,6 +13,8 @@ import {
   View,
 } from 'react-native';
 
+import { getReadableErrorMessageOr } from '../utils/errorMessages';
+
 export type ReportUserModalProps = {
   visible: boolean;
   onClose: () => void;
@@ -69,7 +71,7 @@ export default function ReportUserModal({
       onSubmitted?.();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not submit report.');
+      setError(getReadableErrorMessageOr(e, 'Could not submit report.'));
     } finally {
       setBusy(false);
     }

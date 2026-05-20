@@ -18,22 +18,8 @@ import {
 } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
-import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -2273,7 +2259,7 @@ export default function OrderRoomScreen() {
             backgroundColor: c.background,
           }}
         >
-          <TextInput
+          <AppTextInput
             value={text}
             onChangeText={setText}
             onFocus={() => setTyping(true)}

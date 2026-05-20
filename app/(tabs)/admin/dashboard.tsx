@@ -18,6 +18,7 @@ import { isAdminUser } from '../../../constants/adminUid';
 import { adminError, adminLog } from '../../../lib/admin/adminDebug';
 import { adminCardShell, adminColors as COLORS } from '../../../constants/adminTheme';
 import { theme } from '../../../constants/theme';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 
 function startOfTodayMs(): number {
   const d = new Date();
@@ -140,7 +141,7 @@ export default function AdminDashboardScreen() {
       } catch (e) {
         adminError('dashboard', 'fetchStats failed', e);
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load stats');
+          setError(getReadableErrorMessageOr(e, 'Failed to load stats'));
           setStats(null);
         }
       } finally {

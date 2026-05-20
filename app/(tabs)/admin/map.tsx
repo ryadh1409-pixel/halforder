@@ -22,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdminUser } from '../../../constants/adminUid';
 import { adminColors as COLORS } from '../../../constants/adminTheme';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 
 type ActivityPoint = {
   id: string;
@@ -89,7 +90,7 @@ export default function AdminActivityMapScreen() {
         setError(null);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load activity');
+          setError(getReadableErrorMessageOr(e, 'Failed to load activity'));
           setPoints([]);
         }
       } finally {

@@ -3,25 +3,8 @@ import * as Linking from 'expo-linking';
 import { Redirect } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-    ActivityIndicator,
-    AppState,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
-    type AppStateStatus,
-} from 'react-native';
+import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View, type AppStateStatus } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppHeader from '../components/AppHeader';
 import { AssignDriverModal } from '../components/AssignDriverModal';
@@ -323,7 +306,6 @@ export default function RestaurantDashboardScreen() {
       folder: 'menu-items',
     });
     if (result.error) {
-      console.log('[restaurant-dashboard] image upload error', result.error);
       showError(result.error);
       return;
     }
@@ -685,27 +667,27 @@ export default function RestaurantDashboardScreen() {
                 <Text style={styles.modalTitle}>
                   {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
                 </Text>
-                <TextInput
+                <AppTextInput
                   style={styles.input}
                   value={itemName}
                   onChangeText={setItemName}
                   placeholder="Item name"
                 />
-                <TextInput
+                <AppTextInput
                   style={styles.input}
                   value={itemPrice}
                   onChangeText={setItemPrice}
                   placeholder="Price"
                   keyboardType="decimal-pad"
                 />
-                <TextInput
+                <AppTextInput
                   style={[styles.input, styles.textArea]}
                   value={itemDescription}
                   onChangeText={setItemDescription}
                   placeholder="Description"
                   multiline
                 />
-                <TextInput
+                <AppTextInput
                   style={styles.input}
                   value={itemCategory}
                   onChangeText={setItemCategory}

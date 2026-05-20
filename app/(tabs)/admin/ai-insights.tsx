@@ -33,6 +33,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getUserFriendlyError } from '../../../utils/errorHandler';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 import { logError } from '../../../utils/errorLogger';
 import { showError, showSuccess } from '../../../utils/toast';
 
@@ -79,7 +80,7 @@ export default function AdminAiInsightsScreen() {
       setInsights(next);
     } catch (e) {
       setInsights(null);
-      setError(e instanceof Error ? e.message : 'Failed to load insights');
+      setError(getReadableErrorMessageOr(e, 'Failed to load insights'));
     } finally {
       setLoading(false);
       setRefreshing(false);

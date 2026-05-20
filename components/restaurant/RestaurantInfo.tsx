@@ -1,24 +1,36 @@
 import { RP } from '@/constants/restaurantPremiumTheme';
 import { RESTAURANT_INFO_OVERLAP } from '@/constants/restaurantLayout';
+import {
+  formatRatingCompact,
+  type RatingDisplay,
+} from '@/lib/restaurantStoreMetrics';
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
+import type { RestaurantProfile } from '@/hooks/useRestaurantProfile';
+
 type Props = {
   profile: RestaurantProfile;
-  deliveryFee: number;
-  serviceFee: number;
-  distanceLabel: string;
-  etaRange: string;
-  reorderCopy: string;
+  ratingDisplay: RatingDisplay;
+  deliveryFeeLabel: string;
+  serviceFeeLabel: string;
+  distanceLabel: string | null;
+  etaLabel: string;
+  statusLabel: string | null;
+  statusSubtext: string | null;
+  promoLabel: string | null;
 };
 
 export function RestaurantInfo({
   profile,
-  deliveryFee,
-  serviceFee,
+  ratingDisplay,
+  deliveryFeeLabel,
+  serviceFeeLabel,
   distanceLabel,
-  etaRange,
-  reorderCopy,
+  etaLabel,
+  statusLabel,
+  statusSubtext,
+  promoLabel,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -35,46 +47,54 @@ export function RestaurantInfo({
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{profile.name}</Text>
           <View style={styles.ratingRow}>
-            <Text style={styles.star}>★</Text>
-            <Text style={styles.ratingVal}>{profile.rating.toFixed(1)}</Text>
-            <Text style={styles.dot}>·</Text>
-            <Text style={styles.reviews}>{profile.reviewCount.toLocaleString()} reviews</Text>
+            {ratingDisplay.kind === 'rated' ? (
+              <Text style={styles.ratingCompact}>
+                {formatRatingCompact(
+                  ratingDisplay.rating,
+                  ratingDisplay.reviewCount,
+                )}
+              </Text>
+            ) : (
+              <Text style={styles.newLabel}>New</Text>
+            )}
           </View>
-          <View style={styles.badgeRow}>
-            <View style={styles.badgeGold}>
-              <Text style={styles.badgeGoldText}>HalfOrder+</Text>
+          {promoLabel ? (
+            <View style={styles.badgeRow}>
+              <View style={styles.badgePromo}>
+                <Text style={styles.badgePromoText}>{promoLabel}</Text>
+              </View>
             </View>
-            <View style={styles.badgeGreen}>
-              <Text style={styles.badgeGreenText}>Top rated</Text>
-            </View>
-            <View style={styles.badgeRed}>
-              <Text style={styles.badgeRedText}>BOGO</Text>
-            </View>
-          </View>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.metrics}>
         <View style={styles.metric}>
           <Text style={styles.metricLabel}>Delivery</Text>
-          <Text style={styles.metricVal}>
-            {deliveryFee <= 0 ? '$0' : `$${deliveryFee.toFixed(2)}`}
+          <Text style={styles.metricVal} numberOfLines={2}>
+            {deliveryFeeLabel}
           </Text>
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metric}>
           <Text style={styles.metricLabel}>Service</Text>
-          <Text style={styles.metricVal}>${serviceFee.toFixed(2)}</Text>
+          <Text style={styles.metricVal}>{serviceFeeLabel}</Text>
         </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Distance</Text>
-          <Text style={styles.metricVal}>{distanceLabel}</Text>
-        </View>
+        {distanceLabel ? (
+          <>
+            <View style={styles.metricDivider} />
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>Distance</Text>
+              <Text style={styles.metricVal}>{distanceLabel}</Text>
+            </View>
+          </>
+        ) : null}
         <View style={styles.metricDivider} />
         <View style={styles.metric}>
           <Text style={styles.metricLabel}>ETA</Text>
-          <Text style={styles.metricVal}>{etaRange}</Text>
+          <Text style={styles.metricVal} numberOfLines={2}>
+            {etaLabel}
+          </Text>
         </View>
       </View>
 
@@ -84,10 +104,14 @@ export function RestaurantInfo({
         </Text>
       ) : null}
 
-      <View style={styles.socialProof}>
-        <Text style={styles.socialStrong}>{reorderCopy}</Text>
-        <Text style={styles.socialSub}>Most liked items in your area</Text>
-      </View>
+      {statusLabel ? (
+        <View style={styles.statusBox}>
+          <Text style={styles.statusStrong}>{statusLabel}</Text>
+          {statusSubtext ? (
+            <Text style={styles.statusSub}>{statusSubtext}</Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -117,32 +141,33 @@ const styles = StyleSheet.create({
   },
   logoFallback: { alignItems: 'center', justifyContent: 'center' },
   logoLetter: { fontSize: 28, fontWeight: '900', color: RP.text },
-  name: { fontSize: RP.fontH1, fontWeight: '900', color: RP.text, letterSpacing: -0.6 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 },
-  star: { color: RP.gold, fontSize: 15 },
-  ratingVal: { fontWeight: '800', color: RP.text, fontSize: 15 },
-  dot: { color: RP.textMuted, fontWeight: '700' },
-  reviews: { color: RP.textSecondary, fontWeight: '600', fontSize: 14 },
+  name: {
+    fontSize: RP.fontH1,
+    fontWeight: '900',
+    color: RP.text,
+    letterSpacing: -0.6,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  ratingCompact: {
+    fontWeight: '800',
+    color: RP.text,
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  newLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: RP.textSecondary,
+    letterSpacing: -0.2,
+  },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  badgeGold: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(201,162,39,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.35)',
-  },
-  badgeGoldText: { fontSize: 11, fontWeight: '900', color: RP.gold },
-  badgeGreen: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,200,83,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,200,83,0.25)',
-  },
-  badgeGreenText: { fontSize: 11, fontWeight: '900', color: RP.accent },
-  badgeRed: {
+  badgePromo: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
@@ -150,7 +175,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(229,57,53,0.25)',
   },
-  badgeRedText: { fontSize: 11, fontWeight: '900', color: RP.offer },
+  badgePromoText: { fontSize: 11, fontWeight: '900', color: RP.offer },
   metrics: {
     flexDirection: 'row',
     marginTop: 18,
@@ -158,10 +183,22 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: RP.border,
   },
-  metric: { flex: 1, alignItems: 'center' },
+  metric: { flex: 1, alignItems: 'center', minWidth: 0, paddingHorizontal: 4 },
   metricDivider: { width: 1, backgroundColor: RP.border },
-  metricLabel: { fontSize: 11, fontWeight: '700', color: RP.textMuted, textTransform: 'uppercase' },
-  metricVal: { marginTop: 4, fontSize: 15, fontWeight: '900', color: RP.text },
+  metricLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: RP.textMuted,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  metricVal: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '900',
+    color: RP.text,
+    textAlign: 'center',
+  },
   address: {
     marginTop: 14,
     fontSize: 14,
@@ -169,12 +206,17 @@ const styles = StyleSheet.create({
     color: RP.textSecondary,
     lineHeight: 20,
   },
-  socialProof: {
+  statusBox: {
     marginTop: 16,
     padding: 12,
     borderRadius: RP.radiusM,
     backgroundColor: RP.surface,
   },
-  socialStrong: { fontSize: 15, fontWeight: '900', color: RP.text },
-  socialSub: { marginTop: 4, fontSize: 13, fontWeight: '600', color: RP.textSecondary },
+  statusStrong: { fontSize: 15, fontWeight: '900', color: RP.text },
+  statusSub: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: RP.textSecondary,
+  },
 });

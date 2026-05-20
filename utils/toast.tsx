@@ -3,7 +3,15 @@ import { Text, View, type ViewStyle } from 'react-native';
 import Toast, { type ToastConfig } from 'react-native-toast-message';
 
 import { palette } from '../constants/theme';
+import {
+  getReadableErrorMessage,
+  type ReadableErrorContext,
+} from './errorMessages';
+import { logError } from './errorLogger';
 import { platformElevation } from './platformElevation';
+
+let lastFriendlyError: { message: string; at: number } | null = null;
+const ERROR_DEDUP_MS = 2500;
 
 const VISIBILITY_MS = 3000;
 
@@ -79,6 +87,25 @@ export function showError(message: string): void {
     visibilityTime: VISIBILITY_MS,
     autoHide: true,
   });
+}
+
+/** Log in dev only, map to friendly copy, dedupe rapid repeats. */
+export function showFriendlyError(
+  error: unknown,
+  context: ReadableErrorContext = 'default',
+): void {
+  logError(error);
+  const message = getReadableErrorMessage(error, context);
+  const now = Date.now();
+  if (
+    lastFriendlyError &&
+    lastFriendlyError.message === message &&
+    now - lastFriendlyError.at < ERROR_DEDUP_MS
+  ) {
+    return;
+  }
+  lastFriendlyError = { message, at: now };
+  showError(message);
 }
 
 export function showSuccess(message: string): void {

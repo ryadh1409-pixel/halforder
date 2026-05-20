@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, signInWithCredential, type User } from 'firebase/auth';
 import { useCallback, useMemo, useState } from 'react';
 
+import { getReadableErrorMessage } from '../utils/errorMessages';
 import { auth } from './firebase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -63,8 +64,7 @@ export function useGoogleAuth() {
       const userCredential = await signInWithCredential(auth, credential);
       return { user: mapUser(userCredential.user) };
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Google sign-in failed. Please try again.';
+      const message = getReadableErrorMessage(e);
       setError(message);
       throw new Error(message);
     } finally {

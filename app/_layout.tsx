@@ -1,6 +1,7 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import 'react-native-svg';
 
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
@@ -8,11 +9,14 @@ import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
-import { LogBox, Platform } from 'react-native';
+import { LogBox, Platform, StyleSheet, View } from 'react-native';
 
+import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
+
+forceEnglishLayout();
 
 /** Production: suppress noisy redbox logs. Development: keep logs visible for debugging. */
 if (!__DEV__) {
@@ -123,14 +127,23 @@ export default function RootLayout() {
         urlScheme="halforder"
       >
         <ThemeProvider value={DarkTheme}>
-          <AuthProvider>
-            <CartProvider>
-              <RoleRouteGuard />
-              <Slot />
-            </CartProvider>
-          </AuthProvider>
+          <View style={styles.ltrRoot}>
+            <AuthProvider>
+              <CartProvider>
+                <RoleRouteGuard />
+                <Slot />
+              </CartProvider>
+            </AuthProvider>
+          </View>
         </ThemeProvider>
       </AppStripeProvider>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  ltrRoot: {
+    flex: 1,
+    direction: 'ltr',
+  },
+});

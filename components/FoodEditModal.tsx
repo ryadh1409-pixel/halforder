@@ -1,18 +1,6 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from './AppTextInput';
 
 const BG = '#f8fafc';
 const CARD = '#ffffff';
@@ -103,7 +91,7 @@ export function FoodEditModal({
               <Image source={{ uri: imageUrl }} style={styles.preview} />
             ) : null}
             <Text style={styles.fieldLabel}>Title</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="Name"
               placeholderTextColor={MUTED}
@@ -111,7 +99,7 @@ export function FoodEditModal({
               onChangeText={onChangeName}
             />
             <Text style={styles.fieldLabel}>Description</Text>
-            <TextInput
+            <AppTextInput
               style={[styles.input, styles.inputMulti]}
               placeholder="Description"
               placeholderTextColor={MUTED}
@@ -120,7 +108,7 @@ export function FoodEditModal({
               multiline
             />
             <Text style={styles.fieldLabel}>Price (USD)</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="0.00"
               placeholderTextColor={MUTED}

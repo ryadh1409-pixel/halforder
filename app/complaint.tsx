@@ -3,15 +3,8 @@ import { moderateUserContent } from '../utils/contentModeration';
 import { useAuth } from '../services/AuthContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../constants/theme';
 import { getUserFriendlyError } from '../utils/errorHandler';
@@ -88,7 +81,7 @@ export default function ComplaintScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <Text style={styles.label}>Your message</Text>
-        <TextInput
+        <AppTextInput
           value={message}
           onChangeText={setMessage}
           placeholder="Describe your complaint or inquiry..."

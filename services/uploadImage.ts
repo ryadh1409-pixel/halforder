@@ -4,6 +4,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
+import { getReadableErrorMessage } from '../utils/errorMessages';
 import { storage } from './firebase';
 import { uploadUserProfileImage } from './profilePhoto';
 
@@ -54,9 +55,10 @@ export async function pickAndUploadImage(
     const url = await getDownloadURL(storageRef);
     return { url };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Upload failed';
-    console.warn('[uploadImage]', msg);
-    return { url: null, error: msg };
+    if (__DEV__) {
+      console.warn('[uploadImage]', e);
+    }
+    return { url: null, error: getReadableErrorMessage(e, 'upload') };
   }
 }
 

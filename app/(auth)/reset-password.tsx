@@ -2,16 +2,8 @@ import { auth } from '../../services/firebase';
 import { sendPasswordResetEmail } from '@firebase/auth';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '../../constants/theme';
@@ -59,7 +51,7 @@ export default function ResetPasswordScreen() {
 
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
-            <TextInput
+            <AppTextInput
               style={[styles.input, { fontSize: 16 }]}
               placeholder="you@example.com"
               placeholderTextColor={theme.colors.textMuted}

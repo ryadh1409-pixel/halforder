@@ -34,6 +34,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 
 function startOfTodayMs(): number {
   const d = new Date();
@@ -163,7 +164,7 @@ export default function AdminScreen() {
     } catch (e) {
       adminError('admin-home', 'fetchMetrics failed', e);
       setMetrics(null);
-      setError(e instanceof Error ? e.message : 'Failed to load metrics');
+      setError(getReadableErrorMessageOr(e, 'Failed to load metrics'));
     } finally {
       setLoading(false);
       setRefreshing(false);

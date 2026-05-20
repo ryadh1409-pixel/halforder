@@ -22,6 +22,7 @@ import { createOrder } from '../../services/orderService';
 import { isOwnerHost } from '../../services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '../../services/stripeOnboarding';
+import { alertFriendly } from '../../utils/friendlyAlert';
 import { showError } from '../../utils/toast';
 
 export default function CartScreen() {
@@ -113,7 +114,7 @@ export default function CartScreen() {
       await Linking.openURL(url);
       void refreshStripeReadiness();
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to start onboarding');
+      alertFriendly('Checkout', e, 'payment');
     }
   }
 

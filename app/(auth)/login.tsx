@@ -17,11 +17,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getUserFriendlyError } from '../../utils/errorHandler';
 import { errorHaptic, successHaptic } from '../../utils/haptics';
-import { showError, showSuccess } from '../../utils/toast';
+import { showError, showFriendlyError, showSuccess } from '../../utils/toast';
 
 const LOGIN_INPUTS = 2;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -117,9 +117,8 @@ export default function LoginScreen() {
         goHome();
       }
     } catch (err: unknown) {
-      const message = getUserFriendlyError(err);
       errorHaptic();
-      showError(message);
+      showFriendlyError(err);
     } finally {
       setLoading(false);
     }
@@ -149,7 +148,7 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Split meals. Pay half.</Text>
 
             <View style={styles.form}>
-            <TextInput
+            <AppTextInput
               ref={emailRef}
               style={styles.input}
               placeholder="Email"
@@ -157,15 +156,15 @@ export default function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
+              textContentType="emailAddress"
+              autoComplete="email"
               editable={!loading}
               inputAccessoryViewID={
                 Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
               }
               onFocus={() => setFocusedIndex(0)}
             />
-            <TextInput
+            <AppTextInput
               ref={passwordRef}
               style={[styles.input, styles.passwordInput]}
               placeholder="Password"
@@ -173,8 +172,8 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
+              textContentType="password"
+              autoComplete="password"
               editable={!loading}
               inputAccessoryViewID={
                 Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
@@ -275,6 +274,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     backgroundColor: '#1F2937',
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   passwordInput: {
     marginBottom: 4,

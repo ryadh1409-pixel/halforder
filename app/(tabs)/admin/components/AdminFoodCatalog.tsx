@@ -34,6 +34,7 @@ import {
 } from 'react-native';
 
 import { getUserFriendlyError } from '../../../../utils/errorHandler';
+import { getReadableErrorMessageOr } from '../../../../utils/errorMessages';
 import { showError, showSuccess } from '../../../../utils/toast';
 
 const PRIMARY = '#16a34a';
@@ -94,7 +95,7 @@ export function AdminFoodCatalogProvider({
         setLoading(false);
       },
       (e) => {
-        setError(e.message);
+        setError(getReadableErrorMessageOr(e, 'Failed to load catalog.'));
         setLoading(false);
       },
     );

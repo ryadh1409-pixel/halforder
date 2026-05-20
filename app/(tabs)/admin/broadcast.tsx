@@ -18,14 +18,8 @@ import {
 } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getUserFriendlyError } from '../../../utils/errorHandler';
@@ -182,7 +176,7 @@ export default function AdminSendNotificationScreen() {
         </View>
 
         <Text style={styles.label}>Title</Text>
-        <TextInput
+        <AppTextInput
           value={title}
           onChangeText={setTitle}
           placeholder="Notification title"
@@ -192,7 +186,7 @@ export default function AdminSendNotificationScreen() {
         />
 
         <Text style={styles.label}>Message</Text>
-        <TextInput
+        <AppTextInput
           value={message}
           onChangeText={setMessage}
           placeholder="What should users hear?"
@@ -244,7 +238,7 @@ export default function AdminSendNotificationScreen() {
         </Text>
 
         <Text style={styles.label}>Optional: within km of you</Text>
-        <TextInput
+        <AppTextInput
           value={radiusKmText}
           onChangeText={setRadiusKmText}
           placeholder="e.g. 25 (leave empty for worldwide)"

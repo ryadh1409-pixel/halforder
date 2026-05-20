@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminColors as C } from '../../../constants/adminTheme';
+import { getReadableErrorMessage } from '../../../utils/errorMessages';
 import { showError, showSuccess } from '../../../utils/toast';
 
 function TestOrderFlowScreenDev() {
@@ -84,9 +85,9 @@ function TestOrderFlowScreenDev() {
       setErrorDetail(null);
       showSuccess('Order flow test passed');
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = getReadableErrorMessage(e, 'order');
       setResult('Order flow test failed');
-      setErrorDetail(message);
+      setErrorDetail(__DEV__ && e instanceof Error ? e.message : null);
       showError(message);
     } finally {
       setRunning(false);

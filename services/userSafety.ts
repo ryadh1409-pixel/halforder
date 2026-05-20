@@ -1,6 +1,7 @@
 /**
  * UGC safety: Firestore `reports` + `users/.../blockedUsers`.
  */
+import { getReadableErrorMessage } from '../utils/errorMessages';
 import { logError } from '../utils/errorLogger';
 import { blockUser as persistBlock } from './blockService';
 import {
@@ -68,6 +69,9 @@ export async function blockUser(
 
 export function handleSafetyError(error: unknown, fallback: string): string {
   logError(error);
-  if (error instanceof Error && error.message) return error.message;
+  const friendly = getReadableErrorMessage(error);
+  if (friendly !== 'Something went wrong. Please try again.') {
+    return friendly;
+  }
   return fallback;
 }

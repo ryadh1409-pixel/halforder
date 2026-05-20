@@ -3,6 +3,8 @@
  * or raw OpenAI Responses JSON. Set EXPO_PUBLIC_AI_CHAT_URL e.g. http://192.168.1.10:3000/chat
  */
 
+import { getReadableErrorMessageOr } from '../utils/errorMessages';
+
 export type AiDecision = {
   intent?: string;
   message?: string;
@@ -139,8 +141,10 @@ export async function sendMessageToAI(
     const { decision, rawText } = parseDecisionFromChatResponse(data);
     return { ok: true, data, decision, rawText };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Network error';
-    return { ok: false, error: msg };
+    return {
+      ok: false,
+      error: getReadableErrorMessageOr(e, 'Check your internet connection'),
+    };
   }
 }
 

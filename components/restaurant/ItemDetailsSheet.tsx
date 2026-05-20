@@ -4,17 +4,8 @@ import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Dimensions,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Dimensions, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppTextInput } from '../AppTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -175,13 +166,6 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
               <Text style={styles.itemTitle}>{item.name}</Text>
               <Text style={styles.desc}>{item.description || item.shortIngredients}</Text>
 
-              {item.previouslyOrdered ? (
-                <View style={styles.prevBanner}>
-                  <Text style={styles.prevStrong}>Previously ordered</Text>
-                  <Text style={styles.prevSub}>Guests reorder this item often.</Text>
-                </View>
-              ) : null}
-
               <Section title="Bread" required>
                 {BREAD.map((b) => (
                   <RadioRow key={b} label={b} on={bread === b} onPress={() => setBread(b)} />
@@ -229,7 +213,7 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
 
               <View style={styles.notesBlock}>
                 <Text style={styles.notesLabel}>Special instructions</Text>
-                <TextInput
+                <AppTextInput
                   value={notes}
                   onChangeText={setNotes}
                   placeholder="Add a note (allergies, spice level…)"

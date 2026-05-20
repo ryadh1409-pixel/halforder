@@ -94,13 +94,15 @@ export async function initializePaymentSheet(
         }),
       );
     } catch (e) {
-      console.warn(
-        JSON.stringify({
-          msg: 'payment_flow_processing_patch_failed',
-          orderId: params.orderId,
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+      if (__DEV__) {
+        console.warn(
+          JSON.stringify({
+            msg: 'payment_flow_processing_patch_failed',
+            orderId: params.orderId,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
     }
   }
 

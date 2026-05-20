@@ -12,18 +12,8 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActionSheetIOS,
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -51,7 +41,7 @@ function formatMessageTime(createdAt: unknown): string {
       : null;
   if (n == null) return '';
   try {
-    return new Date(n).toLocaleTimeString(undefined, {
+    return new Date(n).toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -495,7 +485,7 @@ export default function ChatByIdScreen() {
         )}
 
         <View style={styles.inputRow}>
-          <TextInput
+          <AppTextInput
             value={text}
             onChangeText={setText}
             placeholder={

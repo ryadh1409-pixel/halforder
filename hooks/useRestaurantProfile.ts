@@ -1,4 +1,11 @@
 import { db } from '@/services/firebase';
+import {
+  extractRestaurantCoords,
+  pickFirestoreDeliveryFee,
+  pickFirestoreServiceFee,
+  pickRatingAverage,
+  pickReviewCount,
+} from '@/lib/restaurantStoreMetrics';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -10,11 +17,19 @@ export type RestaurantProfile = {
   /** Wide hero / cover */
   coverImage: string | null;
   address: string | null;
-  rating: number;
+  rating: number | null;
   reviewCount: number;
+  coords: { lat: number; lng: number } | null;
+  deliveryFee: number | null;
+  serviceFee: number | null;
+  /** Raw Firestore fields for status / promo helpers */
+  raw: Record<string, unknown>;
 };
 
-function parseProfile(id: string, data: Record<string, unknown> | undefined): RestaurantProfile {
+function parseProfile(
+  id: string,
+  data: Record<string, unknown> | undefined,
+): RestaurantProfile {
   if (!data) {
     return {
       id,
@@ -22,11 +37,19 @@ function parseProfile(id: string, data: Record<string, unknown> | undefined): Re
       image: null,
       coverImage: null,
       address: null,
-      rating: 4.8,
-      reviewCount: 1240,
+      rating: null,
+      reviewCount: 0,
+      coords: null,
+      deliveryFee: null,
+      serviceFee: null,
+      raw: {},
     };
   }
-  const loc = data.location && typeof data.location === 'object' ? (data.location as Record<string, unknown>) : null;
+
+  const loc =
+    data.location && typeof data.location === 'object'
+      ? (data.location as Record<string, unknown>)
+      : null;
   const addr =
     typeof data.address === 'string'
       ? data.address
@@ -47,6 +70,10 @@ function parseProfile(id: string, data: Record<string, unknown> | undefined): Re
       : typeof data.bannerUrl === 'string'
         ? data.bannerUrl
         : img;
+
+  const reviewCount = pickReviewCount(data);
+  const rating = pickRatingAverage(data, reviewCount);
+
   return {
     id,
     name:
@@ -56,13 +83,12 @@ function parseProfile(id: string, data: Record<string, unknown> | undefined): Re
     image: img,
     coverImage: cover,
     address: addr,
-    rating: typeof data.rating === 'number' && Number.isFinite(data.rating) ? data.rating : 4.8,
-    reviewCount:
-      typeof data.reviewsCount === 'number'
-        ? data.reviewsCount
-        : typeof data.reviewCount === 'number'
-          ? data.reviewCount
-          : 1240,
+    rating,
+    reviewCount,
+    coords: extractRestaurantCoords(data),
+    deliveryFee: pickFirestoreDeliveryFee(data),
+    serviceFee: pickFirestoreServiceFee(data),
+    raw: data,
   };
 }
 
@@ -81,7 +107,12 @@ export function useRestaurantProfile(restaurantId: string | null) {
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        setProfile(parseProfile(restaurantId, snap.exists() ? (snap.data() as Record<string, unknown>) : undefined));
+        setProfile(
+          parseProfile(
+            restaurantId,
+            snap.exists() ? (snap.data() as Record<string, unknown>) : undefined,
+          ),
+        );
         setLoading(false);
       },
       () => {

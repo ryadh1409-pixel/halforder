@@ -3,6 +3,8 @@ import { db } from '../services/firebase';
 import { getUserLocation } from '../services/location';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
+
+import { getReadableErrorMessageOr } from '../utils/errorMessages';
 import { safeToMillis } from '../utils/safeToMillis';
 
 const AUTO_MATCH_RADIUS_KM = 1;
@@ -93,7 +95,7 @@ export function useAutoMatchOrders() {
       });
       setOrders(list.slice(0, AUTO_MATCH_TOP));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setError(getReadableErrorMessageOr(e, 'Failed to load'));
       setOrders([]);
     } finally {
       setLoading(false);

@@ -12,6 +12,7 @@ import {
 import { hasBlockConflict } from '../services/report-block';
 import { blockUser, submitUserReport } from '../services/userSafety';
 import { systemActionSheet, systemConfirm } from '../components/SystemDialogHost';
+import { getReadableErrorMessageOr } from '../utils/errorMessages';
 import { getUserFriendlyError } from '../utils/errorHandler';
 import { logError } from '../utils/errorLogger';
 import { showError, showSuccess } from '../utils/toast';
@@ -403,7 +404,7 @@ export default function JoinScreen() {
       showSuccess('You left the order');
     } catch (e) {
       logError(e);
-      const msg = e instanceof Error ? e.message : 'Failed to leave';
+      const msg = getReadableErrorMessageOr(e, 'Failed to leave');
       if (msg === 'Not in order') {
         showError('You are not in this order');
       } else {

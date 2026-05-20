@@ -54,6 +54,7 @@ export function logFirestoreIndexError(
   context: string,
   error: unknown,
 ): void {
+  if (!__DEV__) return;
   const msg =
     error instanceof Error
       ? error.message.split('\n')[0]

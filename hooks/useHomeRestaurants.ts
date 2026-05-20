@@ -1,4 +1,5 @@
 import { db } from '@/services/firebase';
+import { getUserLocationSafe } from '@/services/location';
 import { mapFirestoreRestaurant, type HomeRestaurant } from '@/types/homeRestaurant';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
@@ -14,6 +15,22 @@ export function useHomeRestaurants(): State {
   const [restaurants, setRestaurants] = useState<HomeRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userCoords, setUserCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const loc = await getUserLocationSafe();
+      if (cancelled) return;
+      if (loc) setUserCoords({ lat: loc.latitude, lng: loc.longitude });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -22,7 +39,11 @@ export function useHomeRestaurants(): State {
       q,
       (snap) => {
         const rows = snap.docs.map((d) =>
-          mapFirestoreRestaurant(d.id, d.data() as Record<string, unknown>),
+          mapFirestoreRestaurant(
+            d.id,
+            d.data() as Record<string, unknown>,
+            userCoords,
+          ),
         );
         rows.sort((a, b) => a.name.localeCompare(b.name));
         setRestaurants(rows);
@@ -37,7 +58,7 @@ export function useHomeRestaurants(): State {
       },
     );
     return () => unsub();
-  }, []);
+  }, [userCoords]);
 
   return { restaurants, loading, error };
 }

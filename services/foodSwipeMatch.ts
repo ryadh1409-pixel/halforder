@@ -8,6 +8,8 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
+import { getReadableErrorMessage } from '../utils/errorMessages';
+
 /** Deterministic match doc id: `{orderId}_{smallerUid}_{largerUid}` */
 export function foodMatchDocId(
   orderId: string,
@@ -30,8 +32,7 @@ export type AcceptSwipeResult =
   | { ok: false; error: string };
 
 function firebaseMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return 'Unknown error';
+  return getReadableErrorMessage(e);
 }
 
 /**

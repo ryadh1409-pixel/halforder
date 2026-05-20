@@ -5,20 +5,8 @@ import { requireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
 import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-    ActivityIndicator,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableWithoutFeedback,
-    View,
-} from 'react-native';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
+import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function RestaurantOnboardingScreen() {
@@ -153,13 +141,13 @@ export default function RestaurantOnboardingScreen() {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>Restaurant Profile Setup</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="Restaurant name"
               value={name}
               onChangeText={setName}
             />
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="Search location"
               value={query}
@@ -182,7 +170,7 @@ export default function RestaurantOnboardingScreen() {
                 <Text style={styles.suggestionText}>{prediction}</Text>
               </Pressable>
             ))}
-            <TextInput
+            <AppTextInput
               style={[styles.input, styles.textArea]}
               placeholder="Short description"
               value={description}

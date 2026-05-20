@@ -17,32 +17,31 @@ export type MenuSectionBuckets = {
 };
 
 /**
- * Derives horizontal “rails” (Uber Eats style) from live menu + enrichment.
+ * Horizontal rails from live Firestore menu flags only (no synthetic popularity).
  */
 export function useRestaurantMenuSections(items: DisplayMenuItem[]): MenuSectionBuckets {
   return useMemo(() => {
     const open = items.filter((i) => i.available);
 
-    const byPopularity = [...open].sort((a, b) => b.likedPct - a.likedPct);
-    const flaggedPopular = open.filter(
-      (i) => i.popular || i.tags.some((t) => t.toLowerCase() === 'popular'),
-    );
-    const popular =
-      flaggedPopular.length >= 2
-        ? [...flaggedPopular].sort((a, b) => b.likedPct - a.likedPct).slice(0, 10)
-        : byPopularity.slice(0, 8);
+    const popular = open
+      .filter(
+        (i) =>
+          i.popular || i.tags.some((t) => t.toLowerCase() === 'popular'),
+      )
+      .slice(0, 10);
 
-    const deals = open.filter(
-      (i) =>
-        Boolean(i.offerLabel) ||
-        i.tags.some((t) => ['bogo', 'deal', 'promo'].includes(t.toLowerCase())),
-    );
+    const deals = open.filter((i) => {
+      if (i.offerLabel) return true;
+      return i.tags.some((t) => {
+        const tag = t.toLowerCase();
+        return tag === 'deal' || tag === 'promo' || tag === 'promotion';
+      });
+    });
 
     const recommended = open
       .filter(
         (i) =>
           i.recommended ||
-          i.mostLiked ||
           i.tags.some((t) => t.toLowerCase() === 'recommended'),
       )
       .slice(0, 10);

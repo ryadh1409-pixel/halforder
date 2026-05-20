@@ -11,18 +11,12 @@ import {
   where,
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdminUser } from '../constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '../constants/adminTheme';
+import { getReadableErrorMessage } from '../utils/errorMessages';
 import { showError } from '../utils/toast';
 
 function getToken(data: {
@@ -104,7 +98,7 @@ export default function AdminNotificationsScreen() {
       );
       if (result.error) setError(result.error);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to send';
+      const msg = getReadableErrorMessage(e);
       setError(msg);
       showFeedback(msg);
     } finally {
@@ -155,7 +149,7 @@ export default function AdminNotificationsScreen() {
       );
       if (result.error) setError(result.error);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to send';
+      const msg = getReadableErrorMessage(e);
       setError(msg);
       showFeedback(msg);
     } finally {
@@ -212,7 +206,7 @@ export default function AdminNotificationsScreen() {
       );
       if (result.error) setError(result.error);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to send';
+      const msg = getReadableErrorMessage(e);
       setError(msg);
       showFeedback(msg);
     } finally {
@@ -274,7 +268,7 @@ export default function AdminNotificationsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>1. Send to ALL users</Text>
           <Text style={styles.label}>Title</Text>
-          <TextInput
+          <AppTextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
@@ -282,7 +276,7 @@ export default function AdminNotificationsScreen() {
             placeholderTextColor={COLORS.textMuted}
           />
           <Text style={styles.label}>Message</Text>
-          <TextInput
+          <AppTextInput
             style={[styles.input, styles.inputMultiline]}
             value={message}
             onChangeText={setMessage}
@@ -306,7 +300,7 @@ export default function AdminNotificationsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>2. Send to ONE user</Text>
           <Text style={styles.label}>User email</Text>
-          <TextInput
+          <AppTextInput
             style={styles.input}
             value={userEmail}
             onChangeText={setUserEmail}

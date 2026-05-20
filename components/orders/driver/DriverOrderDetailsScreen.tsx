@@ -19,16 +19,8 @@ import { updateDriverLiveLocation } from '@/services/delivery';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppTextInput } from '../../AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 function navUrl(lat: number, lng: number, label: string) {
@@ -219,7 +211,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
         {primaryAction?.next === 'delivered' && order.deliveryPin ? (
           <View style={styles.pinBox}>
             <Text style={styles.pinLabel}>Customer delivery PIN</Text>
-            <TextInput
+            <AppTextInput
               value={deliverPin}
               onChangeText={setDeliverPin}
               keyboardType="number-pad"

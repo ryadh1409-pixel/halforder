@@ -15,17 +15,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -1158,7 +1149,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
             <Text style={styles.emailModalHint}>
               We’ll email them a link to this order (requires mail setup in Firebase).
             </Text>
-            <TextInput
+            <AppTextInput
               style={styles.emailModalInput}
               placeholder="friend@example.com"
               placeholderTextColor="#64748B"

@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdminUser } from '../../../constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '../../../constants/adminTheme';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 
 type NotificationItem = {
   id: string;
@@ -91,7 +92,7 @@ export default function AdminNotificationsTrackingScreen() {
         setError(null);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load');
+          setError(getReadableErrorMessageOr(e, 'Failed to load'));
           setItems([]);
         }
       } finally {

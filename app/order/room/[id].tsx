@@ -10,6 +10,7 @@ import { useAuth } from '@/services/AuthContext';
 import { auth, db } from '../../../services/firebase';
 import type { UserRole } from '@/services/userService';
 import { CONTENT_NOT_ALLOWED, moderateChatMessage } from '../../../utils/contentModeration';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 import { showError } from '../../../utils/toast';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -21,18 +22,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /** Align with `OrderRoomScreen` / `chatSecurity` order chat limits. */
@@ -122,7 +113,7 @@ export default function OrderChatScreen() {
         setLoading(false);
       },
       (e) => {
-        setError(e instanceof Error ? e.message : 'Failed to load messages');
+        setError(getReadableErrorMessageOr(e, 'Failed to load messages'));
         setLoading(false);
       },
     );
@@ -169,7 +160,7 @@ export default function OrderChatScreen() {
       });
       setInput('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send message');
+      setError(getReadableErrorMessageOr(e, 'Failed to send message'));
     } finally {
       setSending(false);
     }
@@ -233,7 +224,7 @@ export default function OrderChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.inputRow}>
-          <TextInput
+          <AppTextInput
             value={input}
             onChangeText={setInput}
             placeholder="Write a message..."

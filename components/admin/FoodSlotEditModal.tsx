@@ -1,18 +1,6 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { AppTextInput } from '../AppTextInput';
 
 const BG = '#f8fafc';
 const CARD = '#ffffff';
@@ -115,7 +103,7 @@ export function FoodSlotEditModal({
             ) : null}
 
             <Text style={styles.fieldLabel}>Title</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="Title"
               placeholderTextColor={MUTED}
@@ -123,7 +111,7 @@ export function FoodSlotEditModal({
               onChangeText={(t) => onChange({ title: t })}
             />
             <Text style={styles.fieldLabel}>Restaurant / venue label</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="Restaurant name"
               placeholderTextColor={MUTED}
@@ -131,7 +119,7 @@ export function FoodSlotEditModal({
               onChangeText={(t) => onChange({ restaurantName: t })}
             />
             <Text style={styles.fieldLabel}>Total price (USD)</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="0.00"
               placeholderTextColor={MUTED}
@@ -140,7 +128,7 @@ export function FoodSlotEditModal({
               keyboardType="decimal-pad"
             />
             <Text style={styles.fieldLabel}>Price per person (sharing)</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="0.00"
               placeholderTextColor={MUTED}
@@ -149,7 +137,7 @@ export function FoodSlotEditModal({
               keyboardType="decimal-pad"
             />
             <Text style={styles.fieldLabel}>Location</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="Venue location"
               placeholderTextColor={MUTED}
@@ -157,7 +145,7 @@ export function FoodSlotEditModal({
               onChangeText={(t) => onChange({ venueLocation: t })}
             />
             <Text style={styles.fieldLabel}>AI description (optional)</Text>
-            <TextInput
+            <AppTextInput
               style={[styles.input, styles.inputMulti]}
               placeholder="Description"
               placeholderTextColor={MUTED}

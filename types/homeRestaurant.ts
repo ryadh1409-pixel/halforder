@@ -1,26 +1,41 @@
+import {
+  calculateDeliveryFee,
+  calculateETA,
+  distanceKmBetween,
+  extractRestaurantCoords,
+  formatDistanceKm,
+  pickFirestoreDeliveryFee,
+  pickRatingAverage,
+  pickReviewCount,
+  resolvePromoTags,
+} from '@/lib/restaurantStoreMetrics';
+
 /** Normalized restaurant card for Uber Eats–style home feed (Firestore `restaurants`). */
 export type HomeRestaurant = {
   id: string;
   name: string;
   image: string | null;
   coverImage: string | null;
-  rating: number;
+  rating: number | null;
   reviewCount: number;
-  etaMin: number;
-  etaMax: number;
-  deliveryFee: number;
+  etaLabel: string;
+  deliveryFeeLabel: string;
   promoLabel: string | null;
   cuisine: string | null;
   isOpen: boolean;
-  distanceMi: number;
+  /** Pre-formatted e.g. `2.4 km`; null when user location unavailable */
+  distanceKmLabel: string | null;
 };
 
 export function mapFirestoreRestaurant(
   id: string,
   data: Record<string, unknown>,
+  userCoords?: { lat: number; lng: number } | null,
 ): HomeRestaurant {
   const name =
-    typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'Restaurant';
+    typeof data.name === 'string' && data.name.trim()
+      ? data.name.trim()
+      : 'Restaurant';
   const image =
     (typeof data.image === 'string' && data.image) ||
     (typeof data.logo === 'string' && data.logo) ||
@@ -29,13 +44,36 @@ export function mapFirestoreRestaurant(
     (typeof data.coverImage === 'string' && data.coverImage) ||
     (typeof data.cover === 'string' && data.cover) ||
     image;
-  const rating = typeof data.rating === 'number' ? data.rating : 4.7;
-  const reviewCount =
-    typeof data.reviewCount === 'number'
-      ? data.reviewCount
-      : typeof data.reviews === 'number'
-        ? data.reviews
-        : 200;
+
+  const reviewCount = pickReviewCount(data);
+  const rating = pickRatingAverage(data, reviewCount);
+
+  const restaurantCoords = extractRestaurantCoords(data);
+  const distanceKm = distanceKmBetween(userCoords ?? null, restaurantCoords);
+  const distanceKmLabel = formatDistanceKm(distanceKm);
+
+  const firestoreFee = pickFirestoreDeliveryFee(data);
+  const deliveryFee = calculateDeliveryFee({
+    mode: 'delivery',
+    distanceKm,
+    firestoreFee,
+  });
+
+  const etaLabel = calculateETA({ mode: 'delivery', distanceKm });
+
+  const isPopularNearby =
+    data.popular === true &&
+    distanceKm != null &&
+    distanceKm <= 3;
+
+  const promoTags = resolvePromoTags({
+    data,
+    menuPromotions: [],
+    reviewCount,
+    deliveryFeeAmount: deliveryFee.amount,
+    isPopularNearby,
+  });
+
   return {
     id,
     name,
@@ -43,17 +81,11 @@ export function mapFirestoreRestaurant(
     coverImage,
     rating,
     reviewCount,
-    etaMin: 20,
-    etaMax: 35,
-    deliveryFee: typeof data.deliveryFee === 'number' ? data.deliveryFee : 2.49,
-    promoLabel:
-      typeof data.promoLabel === 'string'
-        ? data.promoLabel
-        : data.hasOffer === true
-          ? 'Offer'
-          : null,
+    etaLabel,
+    deliveryFeeLabel: deliveryFee.label,
+    promoLabel: promoTags[0] ?? null,
     cuisine: typeof data.cuisine === 'string' ? data.cuisine : null,
     isOpen: data.isOpen !== false,
-    distanceMi: typeof data.distanceMi === 'number' ? data.distanceMi : 2.1,
+    distanceKmLabel,
   };
 }

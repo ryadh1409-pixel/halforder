@@ -1,12 +1,9 @@
-import type { LucideIcon } from 'lucide-react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-/** Muted orange/gold — matches HalfOrder primary without harsh saturation. */
-const ICON_TINT = '#F0A050';
-const ICON_BG = 'rgba(255, 158, 64, 0.12)';
-const ICON_BORDER = 'rgba(255, 158, 64, 0.2)';
+import { ProfileGrowIcon } from './ProfileGrowIcon';
+import type { ProfileGrowIconKind } from './profileGrowIconShared';
 
 export const PROFILE_MENU_COLORS = {
   surface: '#1C1C1E',
@@ -14,15 +11,12 @@ export const PROFILE_MENU_COLORS = {
   textSecondary: 'rgba(255,255,255,0.65)',
   textTertiary: 'rgba(255,255,255,0.42)',
   border: 'rgba(255,255,255,0.12)',
-  iconTint: ICON_TINT,
-  iconBg: ICON_BG,
-  iconBorder: ICON_BORDER,
 } as const;
 
 export type ProfileMenuItemProps = {
   title: string;
   subtitle: string;
-  icon: LucideIcon;
+  iconKind: ProfileGrowIconKind;
   onPress: () => void;
   /** Hide bottom divider (use on last item in a group). */
   isLast?: boolean;
@@ -31,7 +25,7 @@ export type ProfileMenuItemProps = {
 export function ProfileMenuItem({
   title,
   subtitle,
-  icon: Icon,
+  iconKind,
   onPress,
   isLast = false,
 }: ProfileMenuItemProps) {
@@ -43,14 +37,7 @@ export function ProfileMenuItem({
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
-      <View style={styles.iconWrap}>
-        <Icon
-          size={22}
-          color={ICON_TINT}
-          strokeWidth={1.75}
-          fill="none"
-        />
-      </View>
+      <ProfileGrowIcon kind={iconKind} />
       <View style={styles.textCol}>
         <Text style={styles.title} numberOfLines={2}>
           {title}
@@ -63,6 +50,7 @@ export function ProfileMenuItem({
         name="chevron-right"
         size={22}
         color={PROFILE_MENU_COLORS.textTertiary}
+        style={styles.chevron}
       />
       {!isLast ? <View style={styles.divider} pointerEvents="none" /> : null}
     </Pressable>
@@ -82,21 +70,10 @@ function createStyles() {
     rowPressed: {
       opacity: 0.88,
     },
-    iconWrap: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
-      backgroundColor: ICON_BG,
-      borderWidth: 1,
-      borderColor: ICON_BORDER,
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-    },
     textCol: {
       flex: 1,
       minWidth: 0,
-      paddingRight: 6,
+      paddingRight: 4,
     },
     title: {
       fontSize: 16,
@@ -110,6 +87,9 @@ function createStyles() {
       fontWeight: '400',
       color: PROFILE_MENU_COLORS.textTertiary,
       lineHeight: 18,
+    },
+    chevron: {
+      marginLeft: 2,
     },
     divider: {
       position: 'absolute',

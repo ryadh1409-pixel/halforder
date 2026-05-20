@@ -74,11 +74,6 @@ export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
       <Text style={styles.ing} numberOfLines={2}>
         {item.shortIngredients}
       </Text>
-      <View style={styles.metaRow}>
-        <Text style={styles.like}>{item.likedPct}% rated this</Text>
-        {item.mostLiked ? <Text style={styles.pill}>Most liked</Text> : null}
-        {item.previouslyOrdered ? <Text style={styles.pill2}>Ordered before</Text> : null}
-      </View>
       {qty > 0 ? (
         <View style={styles.qtyPill}>
           <Text style={styles.qtyPillTxt}>{qty} in cart</Text>

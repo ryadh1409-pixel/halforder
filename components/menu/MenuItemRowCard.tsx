@@ -50,25 +50,17 @@ function MenuItemRowCardInner({ item, qty, onPress, onAdd }: Props) {
         <Text style={styles.desc} numberOfLines={3}>
           {item.shortIngredients}
         </Text>
-        <View style={styles.tagRow}>
-          {item.mostLiked ? (
-            <View style={styles.tag}>
-              <Text style={styles.tagTxt}>#1 most liked</Text>
-            </View>
-          ) : null}
-          {item.offerLabel ? (
+        {item.offerLabel ? (
+          <View style={styles.tagRow}>
             <View style={[styles.tag, styles.tagPromo]}>
               <Text style={[styles.tagTxt, styles.tagPromoTxt]}>
                 {item.offerLabel}
               </Text>
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
         <View style={styles.priceRow}>
           <Text style={styles.price}>${item.price.toFixed(2)}</Text>
-          {item.likedPct > 0 ? (
-            <Text style={styles.liked}>{item.likedPct}% (120+)</Text>
-          ) : null}
         </View>
         {qty > 0 ? <Text style={styles.inCart}>{qty} in cart</Text> : null}
       </View>

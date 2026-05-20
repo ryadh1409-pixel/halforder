@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 
 type AnalyticsState = {
   users: number;
@@ -59,7 +60,7 @@ export default function AdminAnalyticsScreen() {
       setError(null);
     } catch (e) {
       adminError('analytics', 'load failed', e);
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setError(getReadableErrorMessageOr(e, 'Failed to load'));
       setData(null);
     } finally {
       setLoading(false);

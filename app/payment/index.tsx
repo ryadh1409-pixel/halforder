@@ -1,6 +1,7 @@
 import { db } from '@/services/firebase';
 import { openPaymentSheet } from '@/services/stripe';
 import { useAuth } from '@/services/auth/useAuth';
+import { alertFriendly } from '@/utils/friendlyAlert';
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -48,7 +49,11 @@ export default function PaymentScreen() {
       }
 
       if (result.status === 'failed') {
-        showError(result.message || 'Payment failed. Please try again.');
+        showError(
+          result.message && !/firebase|auth\/|stripe/i.test(result.message)
+            ? result.message
+            : 'Payment failed. Please try again.',
+        );
         return;
       }
 
@@ -66,12 +71,14 @@ export default function PaymentScreen() {
 
       showSuccess('Payment successful.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Payment failed. Please try again.';
-      console.error('[payment] caught error:', error);
-      if (message === 'Please sign in to complete payment') {
+      if (
+        error instanceof Error &&
+        error.message === 'Please sign in to complete payment'
+      ) {
         router.replace('/(auth)/login');
+        return;
       }
-      Alert.alert('Payment failed', message);
+      alertFriendly('Payment failed', error, 'payment');
     } finally {
       setLoading(false);
     }

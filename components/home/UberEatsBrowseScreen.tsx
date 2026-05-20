@@ -4,15 +4,8 @@ import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, StyleSheet, Text, View } from 'react-native';
+import { AppTextInput } from '../AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CARD_W = Dimensions.get('window').width - 32;
@@ -45,7 +38,7 @@ export function UberEatsBrowseScreen() {
       <Text style={styles.title}>Search</Text>
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={20} color={UE.textMuted} />
-        <TextInput
+        <AppTextInput
           value={query}
           onChangeText={setQuery}
           placeholder="Search restaurants or cuisines"
