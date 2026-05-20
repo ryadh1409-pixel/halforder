@@ -420,7 +420,9 @@ export function subscribeDriverQueue(
   const unsubOrders = onSnapshot(
     query(
       collection(db, 'orders'),
-      where('status', 'in', ['pending_driver', 'ready_for_pickup', 'ready']),
+      where('status', '==', 'pending_driver'),
+      where('deliveryType', '==', 'delivery'),
+      where('driverId', '==', null),
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {

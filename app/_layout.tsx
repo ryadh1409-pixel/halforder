@@ -9,7 +9,7 @@ import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
-import { LogBox, Platform, StyleSheet, View } from 'react-native';
+import { LogBox, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   getRouteForRole,
@@ -52,6 +52,7 @@ function RoleRouteGuard() {
     if (
       root === '(tabs)' ||
       root === '(driver)' ||
+      root === '(host)' ||
       root === '(auth)' ||
       root === '(customer)' ||
       root === '(restaurant)'
@@ -67,6 +68,60 @@ function RoleRouteGuard() {
   }, [authLoading, role, pathname, router, user, segments]);
 
   return null;
+}
+
+function SessionQuickActions() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, firestoreUserRole, signOutUser, switchRoleMode } = useAuth();
+
+  if (!user?.uid) return null;
+  if (pathname.startsWith('/(auth)')) return null;
+
+  const role = normalizeRoleForRouting(firestoreUserRole ?? 'user');
+
+  return (
+    <View style={styles.sessionFab}>
+      <Text style={styles.sessionRole}>{role.toUpperCase()}</Text>
+      <Pressable
+        style={styles.sessionBtn}
+        onPress={() => {
+          void signOutUser();
+          router.replace('/(auth)/login' as never);
+        }}
+      >
+        <Text style={styles.sessionBtnTxt}>Logout</Text>
+      </Pressable>
+      {__DEV__ ? (
+        <View style={styles.devRow}>
+          <Pressable
+            style={styles.devBtn}
+            onPress={() => {
+              void switchRoleMode('user').then(() => router.replace('/(tabs)' as never));
+            }}
+          >
+            <Text style={styles.devTxt}>USER</Text>
+          </Pressable>
+          <Pressable
+            style={styles.devBtn}
+            onPress={() => {
+              void switchRoleMode('driver').then(() => router.replace('/(driver)' as never));
+            }}
+          >
+            <Text style={styles.devTxt}>DRIVER</Text>
+          </Pressable>
+          <Pressable
+            style={styles.devBtn}
+            onPress={() => {
+              void switchRoleMode('restaurant').then(() => router.replace('/(host)' as never));
+            }}
+          >
+            <Text style={styles.devTxt}>RESTAURANT</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 export const unstable_settings = {
@@ -127,6 +182,7 @@ export default function RootLayout() {
               <CartProvider>
                 <RoleRouteGuard />
                 <Slot />
+                <SessionQuickActions />
               </CartProvider>
             </AuthProvider>
           </View>
@@ -141,4 +197,33 @@ const styles = StyleSheet.create({
     flex: 1,
     direction: 'ltr',
   },
+  sessionFab: {
+    position: 'absolute',
+    right: 14,
+    top: 56,
+    backgroundColor: 'rgba(17,24,39,0.92)',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    gap: 6,
+  },
+  sessionRole: { color: '#93C5FD', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  sessionBtn: {
+    backgroundColor: '#111827',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  sessionBtnTxt: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  devRow: { gap: 4 },
+  devBtn: {
+    backgroundColor: '#1F2937',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  devTxt: { color: '#D1D5DB', fontSize: 10, fontWeight: '800' },
 });

@@ -52,6 +52,7 @@ import {
 } from '@/lib/authRole';
 import {
   applySignupRole,
+  assignUserRole,
   migrateUserRoleIfNeeded,
 } from '@/services/authRoleAssignment';
 import { syncUserRoleToFirestore } from '../utils/admin';
@@ -96,6 +97,7 @@ type AuthContextValue = {
   /** Reload current user from server (e.g. after email verification). */
   reloadAuthUser: () => Promise<void>;
   signOutUser: () => Promise<void>;
+  switchRoleMode: (role: 'user' | 'driver' | 'restaurant') => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -655,6 +657,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await firebaseSignOut(auth);
   }, []);
 
+  const switchRoleMode = useCallback(
+    async (role: 'user' | 'driver' | 'restaurant') => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Not signed in');
+      if (role === 'driver' || role === 'restaurant') {
+        await applySignupRole(uid, role, {
+          displayName: auth.currentUser?.displayName,
+        });
+        return;
+      }
+      await assignUserRole(uid, 'user', { restaurantId: null });
+    },
+    [],
+  );
+
   const value = useMemo((): AuthContextValue => {
     const fur = firestoreRole ?? null;
     return {
@@ -668,6 +685,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       confirmPhoneCode,
       reloadAuthUser,
       signOutUser,
+      switchRoleMode,
     };
   }, [
     user,
@@ -680,6 +698,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     confirmPhoneCode,
     reloadAuthUser,
     signOutUser,
+    switchRoleMode,
   ]);
 
   return (

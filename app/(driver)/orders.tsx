@@ -31,11 +31,24 @@ export default function DriverOrdersScreen() {
       return;
     }
     setLoading(true);
-    const unsub = subscribeDriverQueue(user.uid, (rows) => {
-      setOrders(rows);
+    let unsub: (() => void) | null = null;
+    try {
+      unsub = subscribeDriverQueue(user.uid, (rows) => {
+        setOrders(rows);
+        setLoading(false);
+      });
+    } catch (e) {
+      console.error('[driver] subscribeDriverQueue setup failed', e);
+      setOrders([]);
       setLoading(false);
-    });
-    return () => unsub();
+    }
+    return () => {
+      try {
+        unsub?.();
+      } catch (e) {
+        console.error('[driver] subscribeDriverQueue cleanup failed', e);
+      }
+    };
   }, [user?.uid]);
 
   const maskPhone = (phone: string | null) => {

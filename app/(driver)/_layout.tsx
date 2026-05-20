@@ -1,7 +1,20 @@
-import { Stack } from 'expo-router';
-
-const DRIVER_STACK_SCREEN_OPTIONS = { headerShown: false, animation: 'slide_from_right' } as const;
+import { Tabs } from 'expo-router';
+import React from 'react';
 
 export default function DriverLayout() {
-  return <Stack screenOptions={DRIVER_STACK_SCREEN_OPTIONS} />;
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
+      <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
+      <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+      <Tabs.Screen name="dashboard" options={{ href: null }} />
+      <Tabs.Screen name="active" options={{ href: null }} />
+      <Tabs.Screen name="order/[id]" options={{ href: null }} />
+    </Tabs>
+  );
 }

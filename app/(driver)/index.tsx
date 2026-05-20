@@ -139,7 +139,7 @@ function ordersListSignature(orders: DriverOrder[]): string {
 }
 
 export default function DriverHubScreen() {
-  const { user } = useAuth();
+  const { user, signOutUser, switchRoleMode } = useAuth();
   const isFocused = useIsFocused();
   const uid = user?.uid ?? '';
   const [isOnline, setIsOnline] = useState(false);
@@ -353,14 +353,55 @@ export default function DriverHubScreen() {
 
   const pinnedActiveOrder = activeOrders[0] ?? null;
 
+  const handleSwitchRole = useCallback(
+    async (target: 'user' | 'restaurant' | 'driver') => {
+      try {
+        await switchRoleMode(target);
+        if (target === 'user') {
+          router.replace('/(tabs)' as never);
+          return;
+        }
+        if (target === 'restaurant') {
+          router.replace('/(host)' as never);
+          return;
+        }
+        router.replace('/(driver)' as never);
+      } catch (e) {
+        console.error('[driver] switch role failed', e);
+        showError('Could not switch mode right now');
+      }
+    },
+    [router, switchRoleMode],
+  );
+
+  const openDriverSettings = useCallback(() => {
+    Alert.alert('Driver settings', 'Choose an action', [
+      { text: 'Switch to User Mode', onPress: () => void handleSwitchRole('user') },
+      { text: 'Switch to Restaurant Mode', onPress: () => void handleSwitchRole('restaurant') },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: () => {
+          void signOutUser();
+          router.replace('/(auth)/login' as never);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [handleSwitchRole, router, signOutUser]);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Driver Hub</Text>
+          <Text style={styles.roleBadge}>DRIVER</Text>
           <Text style={styles.headerSub}>{isOnline ? 'Online and receiving orders' : 'Offline'}</Text>
         </View>
         <View style={styles.onlineRow}>
+          <Pressable style={styles.settingsBtn} onPress={openDriverSettings}>
+            <Text style={styles.settingsBtnText}>Profile</Text>
+          </Pressable>
           {togglingOnline ? <ActivityIndicator color="#fff" size="small" style={styles.toggleLoader} /> : null}
           <Switch
             value={isOnline}
@@ -545,8 +586,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  roleBadge: {
+    color: '#93C5FD',
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 0.6,
+    marginTop: 2,
+  },
   headerSub: { color: '#9CA3AF', marginTop: 2, fontWeight: '600' },
   onlineRow: { flexDirection: 'row', alignItems: 'center' },
+  settingsBtn: {
+    borderWidth: 1,
+    borderColor: '#3A3A5A',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+    backgroundColor: '#151526',
+  },
+  settingsBtnText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
   toggleLoader: { marginRight: 8 },
   scroll: { padding: 14, paddingBottom: 36 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },

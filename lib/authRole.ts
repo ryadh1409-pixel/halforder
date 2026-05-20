@@ -5,7 +5,7 @@ export type SignupIntent = 'user' | 'restaurant' | 'driver';
 
 export type AuthRoleRoute =
   | '/(tabs)'
-  | '/(tabs)/host'
+  | '/(host)'
   | '/(driver)'
   | '/admin';
 
@@ -45,7 +45,7 @@ export function getRouteForRole(role: UserRole | null | undefined): AuthRoleRout
     case 'admin':
       return '/admin';
     case 'restaurant':
-      return '/(tabs)/host';
+      return '/(host)';
     case 'user':
     default:
       return '/(tabs)';

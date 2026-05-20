@@ -983,6 +983,12 @@ service cloud.firestore {
           || d.status == 'awaiting_driver'
         );
     }
+    /** Active delivery order already assigned to current driver. */
+    function driverAssignedDeliveryReadable(d) {
+      return isDriver()
+        && d.get('deliveryType', '') == 'delivery'
+        && driverAssignedToMarketplaceOrder(d);
+    }
     function canAccessMarketplaceDeliveryOrder(d) {
       return isAdmin()
         || (
@@ -990,7 +996,7 @@ service cloud.firestore {
           && primaryUidFromOrder(d) == request.auth.uid
         )
         || (d.restaurantId is string && d.restaurantId == request.auth.uid)
-        || driverAssignedToMarketplaceOrder(d)
+        || driverAssignedDeliveryReadable(d)
         || isOrderMember(d)
         || driverPoolOrderReadable(d);
     }
