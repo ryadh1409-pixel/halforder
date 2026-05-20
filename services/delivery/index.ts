@@ -440,6 +440,19 @@ export function subscribeDriverQueue(
       emit();
     },
     (error) => {
+      console.error('[QUERY FAILED]', {
+        file: 'services/delivery/index.ts',
+        collection: 'orders',
+        listener: 'subscribeDriverQueue',
+        filters: [
+          ['status', '==', 'pending_driver'],
+          ['deliveryType', '==', 'delivery'],
+          ['driverId', '==', null],
+          ['assignedDriverId', '==', null],
+          ['orderBy', 'createdAt desc'],
+        ],
+        error,
+      });
       logDeliveryListenError('subscribeDriverQueue orders query', error);
       cache = [];
       emit();
@@ -447,8 +460,9 @@ export function subscribeDriverQueue(
   );
 
   if (__DEV__) {
-    console.log('[FIRESTORE QUERY]', {
+    console.log('[QUERY START]', {
       collection: 'orders',
+      file: 'services/delivery/index.ts',
       listener: 'subscribeDriverQueue',
       filters: [
         ['status', '==', 'pending_driver'],
@@ -566,8 +580,9 @@ export function subscribeDriverActiveOrders(
   onData: (orders: ActiveDelivery[]) => void,
 ): Unsubscribe {
   if (__DEV__) {
-    console.log('[FIRESTORE QUERY]', {
+    console.log('[QUERY START]', {
       collection: 'orders',
+      file: 'services/delivery/index.ts',
       listener: 'subscribeDriverActiveOrders',
       filters: [
         ['assignedDriverId', '==', driverId],
@@ -604,7 +619,17 @@ export function subscribeDriverActiveOrders(
       }
     },
     (error) => {
-      logDeliveryListenError(`subscribeDriverActiveOrders driverId=${driverId}`, error);
+      console.error('[QUERY FAILED]', {
+        file: 'services/delivery/index.ts',
+        collection: 'orders',
+        listener: 'subscribeDriverActiveOrders',
+        filters: [
+          ['assignedDriverId', '==', driverId],
+          ['deliveryType', '==', 'delivery'],
+          ['orderBy', 'createdAt desc'],
+        ],
+        error,
+      });
       onData([]);
     },
   );

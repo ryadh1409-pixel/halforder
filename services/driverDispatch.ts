@@ -176,9 +176,10 @@ export function subscribeAvailableOrders(
       driverId,
       driverOnline,
       filters: {
-        status: 'ready_for_pickup',
-        deliveryStatus: 'waiting_driver',
+        status: 'pending_driver',
+        deliveryType: 'delivery',
         driverId: null,
+        assignedDriverId: null,
       },
       count: available.length,
     });
@@ -207,9 +208,10 @@ export function subscribeAvailableOrders(
   const unsubOrders = onSnapshot(
     query(
       collection(db, 'orders'),
-      where('status', '==', 'ready_for_pickup'),
-      where('deliveryStatus', '==', 'waiting_driver'),
+      where('status', '==', 'pending_driver'),
+      where('deliveryType', '==', 'delivery'),
       where('driverId', '==', null),
+      where('assignedDriverId', '==', null),
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
@@ -226,11 +228,41 @@ export function subscribeAvailableOrders(
       });
       emit();
     },
-    () => {
+    (error) => {
+      console.error('[QUERY FAILED]', {
+        file: 'services/driverDispatch.ts',
+        collection: 'orders',
+        listener: 'driverDispatch.subscribeAvailableOrders',
+        filters: [
+          ['status', '==', 'pending_driver'],
+          ['deliveryType', '==', 'delivery'],
+          ['driverId', '==', null],
+          ['assignedDriverId', '==', null],
+          ['orderBy', 'createdAt desc'],
+        ],
+        error,
+      });
       ordersCache = [];
       emit();
     },
   );
+
+  if (__DEV__) {
+    console.log('[QUERY START]', {
+      file: 'services/driverDispatch.ts',
+      collection: 'orders',
+      listener: 'driverDispatch.subscribeAvailableOrders',
+      filters: [
+        ['status', '==', 'pending_driver'],
+        ['deliveryType', '==', 'delivery'],
+        ['driverId', '==', null],
+        ['assignedDriverId', '==', null],
+        ['orderBy', 'createdAt desc'],
+      ],
+      authUid: driverId,
+      role: 'driver',
+    });
+  }
 
   return () => {
     unsubDriver();

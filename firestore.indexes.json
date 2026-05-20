@@ -79,6 +79,15 @@
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "driverId", "order": "ASCENDING" },
+        { "fieldPath": "deliveryType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "assignedDriverId", "order": "ASCENDING" },
         { "fieldPath": "deliveryType", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }

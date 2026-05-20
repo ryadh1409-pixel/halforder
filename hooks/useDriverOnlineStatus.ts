@@ -13,6 +13,16 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
       setLoading(false);
       return;
     }
+    if (__DEV__) {
+      console.log('[QUERY START]', {
+        file: 'hooks/useDriverOnlineStatus.ts',
+        collection: 'drivers',
+        listener: 'useDriverOnlineStatus',
+        filters: [['docId', '==', driverId]],
+        authUid: driverId,
+        role: 'driver',
+      });
+    }
     const unsub = onSnapshot(
       driverPresenceDoc(driverId),
       (snap) => {
@@ -27,7 +37,14 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
         setOnline(resolvedIsOnline);
         setLoading(false);
       },
-      () => {
+      (error) => {
+        console.error('[QUERY FAILED]', {
+          file: 'hooks/useDriverOnlineStatus.ts',
+          collection: 'drivers',
+          listener: 'useDriverOnlineStatus',
+          filters: [['docId', '==', driverId]],
+          error,
+        });
         setOnline(false);
         setLoading(false);
       },

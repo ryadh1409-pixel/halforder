@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -252,10 +251,25 @@ export function subscribeToDriverOrders(
   driverId: string,
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
+  if (__DEV__) {
+    console.log('[QUERY START]', {
+      file: 'services/driverService.ts',
+      collection: 'orders',
+      listener: 'subscribeToDriverOrders',
+      filters: [
+        ['driverId', '==', driverId],
+        ['deliveryType', '==', 'delivery'],
+        ['orderBy', 'createdAt desc'],
+      ],
+      authUid: auth.currentUser?.uid ?? null,
+      role: 'driver',
+    });
+  }
   return onSnapshot(
     query(
       collection(db, 'orders'),
       where('driverId', '==', driverId),
+      where('deliveryType', '==', 'delivery'),
       orderBy('createdAt', 'desc'),
     ),
     (snap) => {
@@ -263,11 +277,34 @@ export function subscribeToDriverOrders(
         const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
         onData(rows);
       } catch (e) {
-        console.error('[driver] subscribeToDriverOrders', e);
+        console.error('[QUERY FAILED]', {
+          file: 'services/driverService.ts',
+          collection: 'orders',
+          listener: 'subscribeToDriverOrders',
+          filters: [
+            ['driverId', '==', driverId],
+            ['deliveryType', '==', 'delivery'],
+            ['orderBy', 'createdAt desc'],
+          ],
+          error: e,
+        });
         onData([]);
       }
     },
-    () => onData([]),
+    (error) => {
+      console.error('[QUERY FAILED]', {
+        file: 'services/driverService.ts',
+        collection: 'orders',
+        listener: 'subscribeToDriverOrders',
+        filters: [
+          ['driverId', '==', driverId],
+          ['deliveryType', '==', 'delivery'],
+          ['orderBy', 'createdAt desc'],
+        ],
+        error,
+      });
+      onData([]);
+    },
   );
 }
 
@@ -315,7 +352,7 @@ export function subscribeAvailableOrders(
         const rows = snap.docs
           .map((docSnap) => mapDriverOrder(docSnap));
         onData(rows);
-      } catch (e) {
+      } catch {
         console.log('[driver] available orders fallback');
         onData([]);
       }
@@ -332,11 +369,26 @@ export function subscribeDriverDeliveryStats(
   driverId: string,
   onStats: (stats: DriverDeliveryStats) => void,
 ): Unsubscribe {
+  if (__DEV__) {
+    console.log('[QUERY START]', {
+      file: 'services/driverService.ts',
+      collection: 'orders',
+      listener: 'subscribeDriverDeliveryStats',
+      filters: [
+        ['driverId', '==', driverId],
+        ['status', '==', 'delivered'],
+        ['deliveryType', '==', 'delivery'],
+      ],
+      authUid: auth.currentUser?.uid ?? null,
+      role: 'driver',
+    });
+  }
   return onSnapshot(
     query(
       collection(db, 'orders'),
       where('driverId', '==', driverId),
       where('status', '==', 'delivered'),
+      where('deliveryType', '==', 'delivery'),
     ),
     (snap) => {
       let earnings = 0;
@@ -355,7 +407,17 @@ export function subscribeDriverDeliveryStats(
       });
     },
     (err) => {
-      console.error('[driver] subscribeDriverDeliveryStats', err);
+      console.error('[QUERY FAILED]', {
+        file: 'services/driverService.ts',
+        collection: 'orders',
+        listener: 'subscribeDriverDeliveryStats',
+        filters: [
+          ['driverId', '==', driverId],
+          ['status', '==', 'delivered'],
+          ['deliveryType', '==', 'delivery'],
+        ],
+        error: err,
+      });
       onStats({ deliveries: 0, earnings: 0, rating: 5.0 });
     },
   );

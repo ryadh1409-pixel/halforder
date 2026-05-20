@@ -181,6 +181,16 @@ export default function DriverHubScreen() {
     }
 
     const driverRef = doc(db, 'drivers', uid);
+    if (__DEV__) {
+      console.log('[QUERY START]', {
+        file: 'app/(driver)/index.tsx',
+        collection: 'drivers',
+        listener: 'driver profile onSnapshot',
+        filters: [['docId', '==', uid]],
+        authUid: user?.uid ?? null,
+        role: 'driver',
+      });
+    }
     unsubDriverProfileRef.current = onSnapshot(
       driverRef,
       (snap) => {
