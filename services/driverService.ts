@@ -283,27 +283,27 @@ export type DriverDeliveryStats = {
 export function subscribeAvailableOrders(
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
+  console.log('[driver] available orders listener active');
   return onSnapshot(
     query(
       collection(db, 'orders'),
       where('status', '==', 'pending_driver'),
       where('deliveryType', '==', 'delivery'),
+      where('driverId', '==', null),
       orderBy('createdAt', 'desc'),
       limit(20),
     ),
     (snap) => {
       try {
         const rows = snap.docs
-          .map((docSnap) => mapDriverOrder(docSnap))
-          .filter((o) => !o.driverId);
+          .map((docSnap) => mapDriverOrder(docSnap));
         onData(rows);
       } catch (e) {
-        console.error('[driver] subscribeAvailableOrders', e);
+        console.log('[driver] available orders fallback');
         onData([]);
       }
     },
-    (err) => {
-      console.error('[driver] subscribeAvailableOrders listener', err);
+    () => {
       onData([]);
     },
   );

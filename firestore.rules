@@ -968,13 +968,20 @@ service cloud.firestore {
       return !(d.driverId is string && d.driverId.size() > 0)
         && !(d.get('assignedDriverId', '') is string && d.get('assignedDriverId', '').size() > 0);
     }
-    /** Paid orders in the driver queue (no assignee yet) — readable by driver role for claiming. */
+    function isDriver() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver';
+    }
+    /** Unassigned marketplace delivery orders visible to authenticated drivers. */
     function driverPoolOrderReadable(d) {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver'
-        && d.paymentStatus == 'paid'
+      return isDriver()
         && noDriverAssignedYet(d)
-        && (d.status == 'pending_driver' || d.status == 'ready_for_pickup' || d.status == 'ready');
+        && d.get('deliveryType', '') == 'delivery'
+        && (
+          d.status == 'pending_driver'
+          || d.status == 'awaiting_driver'
+        );
     }
     function canAccessMarketplaceDeliveryOrder(d) {
       return isAdmin()
