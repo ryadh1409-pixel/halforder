@@ -65,10 +65,8 @@ export async function updateDriverOnlineStatus(
   }
 
   const path = `${DRIVER_PRESENCE_COLLECTION}/${uid}`;
-  if (__DEV__) {
-    // eslint-disable-next-line no-console
-    console.log('[ONLINE WRITE START]', { uid, nextValue, path });
-  }
+  // eslint-disable-next-line no-console
+  console.log('[ONLINE WRITE START]', { uid, nextValue, path });
 
   try {
     const ref = driverPresenceDoc(uid);
@@ -84,10 +82,8 @@ export async function updateDriverOnlineStatus(
       },
       { merge: true },
     );
-    if (__DEV__) {
-      // eslint-disable-next-line no-console
-      console.log('[ONLINE WRITE SUCCESS]', { uid, nextValue, path });
-    }
+    // eslint-disable-next-line no-console
+    console.log('[ONLINE WRITE SUCCESS]', { uid, nextValue, path });
   } catch (error) {
     console.error('[ONLINE WRITE ERROR]', { uid, nextValue, path, error });
     throw error;

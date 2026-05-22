@@ -12,10 +12,10 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
   const [online, setOnline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
-  const lastLogSignatureRef = useRef('');
-  /** Bumped on each [uid] subscription so stale snapshot callbacks are ignored. */
   const listenerEpochRef = useRef(0);
   const presenceBootstrappedRef = useRef<string | null>(null);
+  const pendingOnlineRef = useRef<boolean | null>(null);
+  const togglingRef = useRef(false);
 
   useEffect(() => {
     if (!uid) {
@@ -44,32 +44,17 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
         if (listenerEpochRef.current !== epoch) return;
 
         const data = snap.data() as Record<string, unknown> | undefined;
-        const resolved = snap.exists();
         const isOnlineLive = resolveDriverOnline(data);
+        const pending = pendingOnlineRef.current;
 
-        if (__DEV__) {
-          const signature = JSON.stringify({
-            exists: snap.exists(),
-            online: data?.online,
-            isOnline: data?.isOnline,
-            resolved,
-            isOnlineLive,
-          });
-          if (signature !== lastLogSignatureRef.current) {
-            lastLogSignatureRef.current = signature;
-            // eslint-disable-next-line no-console
-            console.log('[ONLINE READ]', {
-              path,
-              online: data?.online,
-              isOnline: data?.isOnline,
-              resolved,
-              isOnlineLive,
-              exists: snap.exists(),
-            });
+        if (pending !== null) {
+          if (isOnlineLive === pending) {
+            setOnline(isOnlineLive);
+            pendingOnlineRef.current = null;
           }
+        } else {
+          setOnline((prev) => (prev === isOnlineLive ? prev : isOnlineLive));
         }
-
-        setOnline((prev) => (prev === isOnlineLive ? prev : isOnlineLive));
         setLoading((prev) => (prev ? false : prev));
       },
       (error) => {
@@ -84,27 +69,37 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
       if (listenerEpochRef.current === epoch) {
         listenerEpochRef.current = 0;
       }
-      lastLogSignatureRef.current = '';
       unsub();
     };
   }, [uid]);
 
   const setOnlineStatus = useCallback(
     async (nextValue: boolean) => {
-      if (!uid || toggling) return;
+      if (!uid || togglingRef.current) return;
+
+      // eslint-disable-next-line no-console
+      console.log('[TOGGLE PRESSED]', nextValue);
+
+      togglingRef.current = true;
       setToggling(true);
+      pendingOnlineRef.current = nextValue;
       setOnline(nextValue);
+
       try {
         await updateDriverOnlineStatus(uid, nextValue);
+        if (!nextValue) {
+          pendingOnlineRef.current = null;
+        }
       } catch (error) {
-        console.error('[ONLINE WRITE ERROR]', { uid, nextValue, error });
+        pendingOnlineRef.current = null;
         setOnline(!nextValue);
         throw error;
       } finally {
+        togglingRef.current = false;
         setToggling(false);
       }
     },
-    [uid, toggling],
+    [uid],
   );
 
   return { online, loading, toggling, setOnlineStatus };

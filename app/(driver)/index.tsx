@@ -160,6 +160,8 @@ export default function DriverHubScreen() {
 
   const presenceBootstrappedRef = useRef(false);
   const lastOnlineRef = useRef<boolean | null>(null);
+  const pendingOnlineRef = useRef<boolean | null>(null);
+  const togglingOnlineRef = useRef(false);
   const lastStatsRef = useRef({ deliveries: 0, earnings: 0, rating: 5.0 });
   const profileRatingRef = useRef(5.0);
   const availableSigRef = useRef('');
@@ -193,22 +195,17 @@ export default function DriverHubScreen() {
       driverRef,
       (snap) => {
         const data = snap.data();
-        const resolved = snap.exists();
         const isOnlineLive = resolveDriverOnline(
           data as Record<string, unknown> | undefined,
         );
-        if (__DEV__) {
-          // eslint-disable-next-line no-console
-          console.log('[ONLINE READ]', {
-            path,
-            online: data?.online,
-            isOnline: data?.isOnline,
-            resolved,
-            isOnlineLive,
-            exists: snap.exists(),
-          });
-        }
-        if (lastOnlineRef.current !== isOnlineLive) {
+        const pending = pendingOnlineRef.current;
+        if (pending !== null) {
+          if (isOnlineLive === pending) {
+            lastOnlineRef.current = isOnlineLive;
+            setIsOnline(isOnlineLive);
+            pendingOnlineRef.current = null;
+          }
+        } else if (lastOnlineRef.current !== isOnlineLive) {
           lastOnlineRef.current = isOnlineLive;
           setIsOnline(isOnlineLive);
         }
@@ -315,13 +312,21 @@ export default function DriverHubScreen() {
 
   const handleToggleOnline = useCallback(
     async (nextValue: boolean) => {
-      if (!uid || togglingOnline) return;
+      if (!uid || togglingOnlineRef.current) return;
+
+      // eslint-disable-next-line no-console
+      console.log('[TOGGLE PRESSED]', nextValue);
+
+      togglingOnlineRef.current = true;
       setTogglingOnline(true);
+      pendingOnlineRef.current = nextValue;
       lastOnlineRef.current = nextValue;
       setIsOnline(nextValue);
+
       try {
         await updateDriverOnlineStatus(uid, nextValue);
         if (!nextValue) {
+          pendingOnlineRef.current = null;
           unsubAvailableRef.current?.();
           unsubAvailableRef.current = null;
           unsubActiveRef.current?.();
@@ -332,16 +337,17 @@ export default function DriverHubScreen() {
           setActiveOrders([]);
         }
       } catch (e) {
+        pendingOnlineRef.current = null;
         const reverted = !nextValue;
         lastOnlineRef.current = reverted;
         setIsOnline(reverted);
-        console.error('[driver] updateDriverOnlineStatus failed', e);
         showError('Failed to update online status');
       } finally {
+        togglingOnlineRef.current = false;
         setTogglingOnline(false);
       }
     },
-    [togglingOnline, uid],
+    [uid],
   );
 
   const handleAccept = useCallback(
@@ -419,20 +425,22 @@ export default function DriverHubScreen() {
           <Text style={styles.roleBadge}>DRIVER</Text>
           <Text style={styles.headerSub}>{isOnline ? 'Online and receiving orders' : 'Offline'}</Text>
         </View>
-        <View style={styles.onlineRow}>
+        <View style={styles.onlineRow} pointerEvents="box-none">
           <Pressable style={styles.settingsBtn} onPress={openDriverSettings}>
             <Text style={styles.settingsBtnText}>Profile</Text>
           </Pressable>
           {togglingOnline ? <ActivityIndicator color="#fff" size="small" style={styles.toggleLoader} /> : null}
-          <Switch
-            value={isOnline}
-            onValueChange={(value) => {
-              void handleToggleOnline(value);
-            }}
-            trackColor={{ false: '#3E3E5A', true: '#00C853' }}
-            thumbColor="#fff"
-            disabled={!uid || togglingOnline}
-          />
+          <View style={styles.switchWrap} pointerEvents="auto">
+            <Switch
+              value={isOnline}
+              onValueChange={(value) => {
+                void handleToggleOnline(value);
+              }}
+              trackColor={{ false: '#3E3E5A', true: '#00C853' }}
+              thumbColor="#fff"
+              disabled={!uid}
+            />
+          </View>
         </View>
       </View>
 
@@ -617,7 +625,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   headerSub: { color: '#9CA3AF', marginTop: 2, fontWeight: '600' },
-  onlineRow: { flexDirection: 'row', alignItems: 'center' },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', zIndex: 2 },
+  switchWrap: { zIndex: 3 },
   settingsBtn: {
     borderWidth: 1,
     borderColor: '#3A3A5A',
