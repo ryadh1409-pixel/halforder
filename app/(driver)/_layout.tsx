@@ -1,3 +1,4 @@
+import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
 import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { useAuth } from '@/services/AuthContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
@@ -30,18 +31,20 @@ export default function DriverLayout() {
   }, [authLoading, user?.uid]);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
-      <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
-      <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-      <Tabs.Screen name="dashboard" options={{ href: null }} />
-      <Tabs.Screen name="active" options={{ href: null }} />
-      <Tabs.Screen name="order/[id]" options={{ href: null }} />
-    </Tabs>
+    <DriverPresenceProvider>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
+        <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
+        <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
+        <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+        <Tabs.Screen name="dashboard" options={{ href: null }} />
+        <Tabs.Screen name="active" options={{ href: null }} />
+        <Tabs.Screen name="order/[id]" options={{ href: null }} />
+      </Tabs>
+    </DriverPresenceProvider>
   );
 }

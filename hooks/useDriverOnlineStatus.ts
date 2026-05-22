@@ -1,18 +1,10 @@
-import { useDriverPresence } from '@/hooks/useDriverPresence';
-
-type UseDriverOnlineStatusOptions = {
-  enabled?: boolean;
-  displayName?: string | null;
-};
+import { useDriverPresenceContext } from '@/contexts/DriverPresenceContext';
 
 /**
- * Thin alias for screens that only need online status + toggle (e.g. Orders tab).
+ * Driver online status from the shared DriverPresenceProvider (Orders tab, etc.).
  */
-export function useDriverOnlineStatus(
-  driverId: string | null | undefined,
-  options: UseDriverOnlineStatusOptions = {},
-) {
-  const { isOnline, loading, toggling, setOnlineStatus } = useDriverPresence(driverId, options);
+export function useDriverOnlineStatus() {
+  const { isOnline, loading, toggling, setOnlineStatus } = useDriverPresenceContext();
   return {
     online: isOnline,
     loading,

@@ -18,7 +18,7 @@ import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
-import { useDriverPresence } from '../../hooks/useDriverPresence';
+import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
 import {
   getDriverActiveOrders,
   subscribeAvailableOrders,
@@ -145,7 +145,7 @@ export default function DriverHubScreen() {
     toggling: togglingOnline,
     rating: profileRating,
     setOnlineStatus: toggleOnline,
-  } = useDriverPresence(uid, { enabled: isFocused, displayName: user?.displayName });
+  } = useDriverPresenceContext();
   const [availableOrders, setAvailableOrders] = useState<DriverOrder[]>([]);
   const [activeOrders, setActiveOrders] = useState<DriverOrder[]>([]);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -252,6 +252,7 @@ export default function DriverHubScreen() {
 
   const handleToggleOnline = useCallback(
     async (nextValue: boolean) => {
+      console.log('[TOGGLE PRESSED]', { nextValue, uid });
       try {
         await toggleOnline(nextValue);
         if (!nextValue) {
@@ -268,7 +269,7 @@ export default function DriverHubScreen() {
         showError('Failed to update online status');
       }
     },
-    [toggleOnline],
+    [toggleOnline, uid],
   );
 
   const handleAccept = useCallback(
@@ -357,26 +358,29 @@ export default function DriverHubScreen() {
             <Text style={styles.onlineCardTitle}>{isOnline ? 'Online' : 'Offline'}</Text>
             <Text style={styles.onlineCardSub}>
               {isOnline
-                ? 'You are online and receiving deliveries'
-                : 'You are offline — go online to receive orders'}
+                ? 'You are online and receiving delivery requests'
+                : 'You are offline'}
             </Text>
           </View>
         </View>
         <View style={styles.onlineCardRight}>
           {togglingOnline ? (
-            <ActivityIndicator color={isOnline ? '#00C853' : '#9CA3AF'} size="small" />
-          ) : (
-            <Switch
-              value={isOnline}
-              onValueChange={(value) => {
-                void handleToggleOnline(value);
-              }}
-              trackColor={{ false: '#3E3E5A', true: '#00C853' }}
-              thumbColor="#FFFFFF"
-              ios_backgroundColor="#3E3E5A"
-              disabled={!uid || togglingOnline}
+            <ActivityIndicator
+              color={isOnline ? '#00C853' : '#9CA3AF'}
+              size="small"
+              style={styles.toggleSpinner}
             />
-          )}
+          ) : null}
+          <Switch
+            value={isOnline}
+            onValueChange={(value) => {
+              void handleToggleOnline(value);
+            }}
+            trackColor={{ false: '#3E3E5A', true: '#00C853' }}
+            thumbColor="#FFFFFF"
+            ios_backgroundColor="#3E3E5A"
+            disabled={!uid || togglingOnline}
+          />
         </View>
       </View>
 
@@ -577,7 +581,14 @@ const styles = StyleSheet.create({
   onlineCardText: { flex: 1 },
   onlineCardTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   onlineCardSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12, fontWeight: '600' },
-  onlineCardRight: { minWidth: 52, alignItems: 'center', justifyContent: 'center' },
+  onlineCardRight: {
+    minWidth: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  toggleSpinner: { marginRight: 2 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusDotOnline: { backgroundColor: '#00E676' },
   statusDotOffline: { backgroundColor: '#6B7280' },

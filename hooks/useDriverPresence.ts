@@ -1,9 +1,8 @@
 import {
   driverPresenceDoc,
-  ensureDriverPresenceDoc,
   logDriverPresenceRead,
   resolveDriverOnline,
-  updateDriverOnlineStatus,
+  writeDriverOnlinePresence,
 } from '@/services/driverPresence';
 import { auth } from '@/services/firebase';
 import { onSnapshot } from 'firebase/firestore';
@@ -24,6 +23,7 @@ type UseDriverPresenceOptions = {
 
 /**
  * Canonical driver online presence: single Firestore listener + optimistic toggle.
+ * Bootstrap `ensureDriverPresenceDoc` runs in DriverPresenceProvider, not here.
  */
 export function useDriverPresence(
   driverId: string | null | undefined,
@@ -39,7 +39,6 @@ export function useDriverPresence(
   const togglingRef = useRef(false);
   const pendingOnlineRef = useRef<boolean | null>(null);
   const lastResolvedRef = useRef<boolean | null>(null);
-  const bootstrappedRef = useRef<string | null>(null);
   const [rating, setRating] = useState(5.0);
 
   useEffect(() => {
@@ -47,14 +46,6 @@ export function useDriverPresence(
       setIsOnline(false);
       setLoading(false);
       return undefined;
-    }
-
-    if (bootstrappedRef.current !== uid) {
-      bootstrappedRef.current = uid;
-      void ensureDriverPresenceDoc(uid, options.displayName).catch((error) => {
-        console.error('[driver] ensureDriverPresenceDoc failed', error);
-        bootstrappedRef.current = null;
-      });
     }
 
     const epoch = listenerEpochRef.current + 1;
@@ -72,8 +63,10 @@ export function useDriverPresence(
         const resolved = resolveDriverOnline(data);
         const pending = pendingOnlineRef.current;
 
-        if (pending !== null) {
-          if (resolved !== pending) return;
+        if (pending !== null && resolved !== pending) {
+          return;
+        }
+        if (pending !== null && resolved === pending) {
           pendingOnlineRef.current = null;
         }
 
@@ -108,42 +101,42 @@ export function useDriverPresence(
       }
       unsub();
     };
-  }, [uid, enabled, options.displayName]);
+  }, [uid, enabled]);
 
-  const setOnlineStatus = useCallback(
-    async (nextValue: boolean) => {
-      if (!uid || togglingRef.current) return;
+  const setOnlineStatus = useCallback(async (nextValue: boolean) => {
+    if (togglingRef.current) return;
 
-      // eslint-disable-next-line no-console
-      console.log('[TOGGLE PRESSED]', {
-        nextValue,
-        uid: auth.currentUser?.uid ?? null,
-      });
+    const authUid = auth.currentUser?.uid?.trim() ?? null;
+    if (!authUid) {
+      console.error('[ONLINE WRITE ERROR] no auth.currentUser');
+      throw new Error('Not signed in');
+    }
 
-      togglingRef.current = true;
-      pendingOnlineRef.current = nextValue;
-      setToggling(true);
+    console.log('[TOGGLE PRESSED]', { nextValue, uid: authUid });
 
+    togglingRef.current = true;
+    pendingOnlineRef.current = nextValue;
+    setToggling(true);
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    lastResolvedRef.current = nextValue;
+    setIsOnline(nextValue);
+
+    try {
+      await writeDriverOnlinePresence(nextValue);
+    } catch (error) {
+      pendingOnlineRef.current = null;
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      lastResolvedRef.current = nextValue;
-      setIsOnline(nextValue);
-
-      try {
-        await updateDriverOnlineStatus(uid, nextValue);
-      } catch (error) {
-        pendingOnlineRef.current = null;
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        const reverted = !nextValue;
-        lastResolvedRef.current = reverted;
-        setIsOnline(reverted);
-        throw error;
-      } finally {
-        togglingRef.current = false;
-        setToggling(false);
-      }
-    },
-    [uid],
-  );
+      const reverted = !nextValue;
+      lastResolvedRef.current = reverted;
+      setIsOnline(reverted);
+      console.error('[ONLINE WRITE ERROR]', error);
+      throw error;
+    } finally {
+      togglingRef.current = false;
+      setToggling(false);
+    }
+  }, []);
 
   return {
     isOnline,

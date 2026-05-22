@@ -50,7 +50,6 @@ export function logDriverPresenceRead(
   resolved: boolean,
 ): void {
   if (!__DEV__) return;
-  // eslint-disable-next-line no-console
   console.log('[ONLINE READ]', {
     path,
     online: data?.online,
@@ -61,54 +60,61 @@ export function logDriverPresenceRead(
 }
 
 /**
+ * Direct Firestore write for driver online status (`drivers/{auth.uid}`).
+ */
+export async function writeDriverOnlinePresence(nextValue: boolean): Promise<string> {
+  await syncAuthForFirestoreReads();
+  const uid = auth.currentUser?.uid?.trim();
+  if (!uid) {
+    throw new Error('writeDriverOnlinePresence: not signed in');
+  }
+
+  console.log('[ONLINE WRITE START]', { uid, nextValue });
+
+  const ref = driverPresenceDoc(uid);
+  const ts = serverTimestamp();
+  await setDoc(
+    ref,
+    {
+      online: nextValue,
+      isOnline: nextValue,
+      isOnlineLive: nextValue,
+      updatedAt: ts,
+      lastActive: ts,
+      lastSeenAt: ts,
+    },
+    { merge: true },
+  );
+
+  console.log('[ONLINE WRITE SUCCESS]', { uid, nextValue });
+  return uid;
+}
+
+/**
  * Writes driver online status to `drivers/{auth.uid}` (canonical presence doc).
  */
 export async function updateDriverOnlineStatus(
   driverId: string,
   nextValue: boolean,
 ): Promise<void> {
-  const uid = driverId?.trim();
-  if (!uid) {
-    throw new Error('updateDriverOnlineStatus: missing driver id');
-  }
-
+  const paramUid = driverId?.trim();
   await syncAuthForFirestoreReads();
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid || currentUid !== uid) {
-    throw new Error('updateDriverOnlineStatus: signed-in user does not match driver id');
+  const authUid = auth.currentUser?.uid?.trim();
+  if (!authUid) {
+    throw new Error('updateDriverOnlineStatus: not signed in');
   }
-
-  if (__DEV__) {
-    // eslint-disable-next-line no-console
-    console.log('[ONLINE WRITE START]', { uid, nextValue });
+  if (paramUid && paramUid !== authUid) {
+    console.warn('[ONLINE WRITE] driverId param does not match auth uid; using auth uid', {
+      paramUid,
+      authUid,
+    });
   }
-
-  try {
-    const ref = driverPresenceDoc(uid);
-    const ts = serverTimestamp();
-    await setDoc(
-      ref,
-      {
-        online: nextValue,
-        isOnline: nextValue,
-        isOnlineLive: nextValue,
-        updatedAt: ts,
-        lastActive: ts,
-        lastSeenAt: ts,
-      },
-      { merge: true },
-    );
-    if (__DEV__) {
-      // eslint-disable-next-line no-console
-      console.log('[ONLINE WRITE SUCCESS]', { uid, nextValue });
-    }
-  } catch (error) {
-    console.error('[ONLINE WRITE ERROR]', error);
-    throw error;
-  }
+  await writeDriverOnlinePresence(nextValue);
 }
 
-/** Ensures `drivers/{uid}` exists without forcing offline when already present. */
+/**
+ * Ensures `drivers/{uid}` exists without clobbering online flags (avoids toggle races).
+ */
 export async function ensureDriverPresenceDoc(
   driverId: string,
   displayName?: string | null,
@@ -129,9 +135,6 @@ export async function ensureDriverPresenceDoc(
     ref,
     {
       name: displayName?.trim() || 'Driver',
-      online: false,
-      isOnline: false,
-      isOnlineLive: false,
       updatedAt: serverTimestamp(),
       lastActive: serverTimestamp(),
     },
