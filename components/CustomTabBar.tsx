@@ -48,7 +48,7 @@ function hrefForTabRoute(routeName: string): Href {
     case 'host':
       return '/(tabs)/host' as Href;
     case 'driver':
-      return '/(tabs)/driver' as Href;
+      return '/(driver)' as Href;
     case 'ai':
       return '/(tabs)/ai' as Href;
     case 'admin':

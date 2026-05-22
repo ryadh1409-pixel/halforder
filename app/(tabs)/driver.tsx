@@ -1,11 +1,16 @@
 import { DRIVER_TAB_ROLES } from '@/services/roles';
 import { useAuth } from '@/services/AuthContext';
 import type { UserRole } from '@/services/userService';
-import DriverHubScreen from '../(driver)/index';
+import { Redirect } from 'expo-router';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-/** Driver tab: wrong-role UI only; role landing from `/` is in `app/_layout.tsx`. */
+const DRIVER_STACK_HREF = '/(driver)' as const;
+
+/**
+ * Main-tabs driver entry: redirect into the canonical driver stack so
+ * `DriverPresenceProvider` in `app/(driver)/_layout.tsx` wraps all driver UI.
+ */
 export default function DriverTabScreen() {
   const { user, loading, firestoreUserRole } = useAuth();
   const effectiveRole = (firestoreUserRole ?? 'user') as UserRole;
@@ -22,5 +27,5 @@ export default function DriverTabScreen() {
     );
   }
 
-  return <DriverHubScreen />;
+  return <Redirect href={DRIVER_STACK_HREF} />;
 }
