@@ -30,6 +30,8 @@ export async function payOrderWithStripe(params: {
     amount,
     status: 'pending_driver',
     deliveryStatus: 'waiting_driver',
+    driverId: null,
+    assignedDriverId: null,
     updatedAt: serverTimestamp(),
   });
 }

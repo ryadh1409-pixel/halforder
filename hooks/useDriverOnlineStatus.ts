@@ -1,6 +1,6 @@
 import { db } from '@/services/firebase';
 import { DRIVER_PRESENCE_COLLECTION, driverPresenceDoc } from '@/services/driverDispatch';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
 export function useDriverOnlineStatus(driverId: string | null | undefined) {
@@ -13,38 +13,15 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
       setLoading(false);
       return;
     }
-    if (__DEV__) {
-      console.log('[QUERY START]', {
-        file: 'hooks/useDriverOnlineStatus.ts',
-        collection: 'drivers',
-        listener: 'useDriverOnlineStatus',
-        filters: [['docId', '==', driverId]],
-        authUid: driverId,
-        role: 'driver',
-      });
-    }
     const unsub = onSnapshot(
       driverPresenceDoc(driverId),
       (snap) => {
         const data = snap.data();
         const resolvedIsOnline = data?.isOnline === true || data?.online === true;
-        console.log('[ONLINE READ]', {
-          driverId,
-          path: `${DRIVER_PRESENCE_COLLECTION}/${driverId}`,
-          snapshot: data ?? null,
-          resolvedIsOnline,
-        });
         setOnline(resolvedIsOnline);
         setLoading(false);
       },
-      (error) => {
-        console.error('[QUERY FAILED]', {
-          file: 'hooks/useDriverOnlineStatus.ts',
-          collection: 'drivers',
-          listener: 'useDriverOnlineStatus',
-          filters: [['docId', '==', driverId]],
-          error,
-        });
+      () => {
         setOnline(false);
         setLoading(false);
       },

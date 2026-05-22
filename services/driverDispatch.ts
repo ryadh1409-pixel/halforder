@@ -1,3 +1,4 @@
+import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { db } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
@@ -165,108 +166,66 @@ export function subscribeAvailableOrders(
 ): Unsubscribe {
   let driverOnline = false;
   let ordersCache: DispatchOrder[] = [];
+  let unsubDriver: Unsubscribe | null = null;
+  let unsubOrders: Unsubscribe | null = null;
+  let cancelled = false;
   const emit = () => {
     if (!driverOnline) {
-      console.log('[DRIVER FLOW] driver offline, available queue hidden', { driverId });
       onData([]);
       return;
     }
     const available = ordersCache.filter((order) => !order.driverId);
-    console.log('[DRIVER FLOW] available queue emit', {
-      driverId,
-      driverOnline,
-      filters: {
-        status: 'pending_driver',
-        deliveryType: 'delivery',
-        driverId: null,
-        assignedDriverId: null,
-      },
-      count: available.length,
-    });
     onData(available);
   };
 
-  const unsubDriver = onSnapshot(
-    driverPresenceDoc(driverId),
-    (snap) => {
-      const data = snap.data();
-      driverOnline = data?.isOnline === true;
-      console.log('[ONLINE READ]', {
-        driverId,
-        path: `${DRIVER_PRESENCE_COLLECTION}/${driverId}`,
-        snapshot: data ?? null,
-        resolvedIsOnline: driverOnline,
-      });
-      emit();
-    },
-    () => {
-      driverOnline = false;
-      emit();
-    },
-  );
+  void (async () => {
+    try {
+      await ensureAuthRoleClaim('driver');
+    } catch {
+      /* best-effort */
+    }
+    if (cancelled) return;
 
-  const unsubOrders = onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('status', '==', 'pending_driver'),
-      where('deliveryType', '==', 'delivery'),
-      where('driverId', '==', null),
-      where('assignedDriverId', '==', null),
-      orderBy('createdAt', 'desc'),
-    ),
-    (snap) => {
-      ordersCache = snap.docs.map((orderDoc) => mapDispatchOrder(orderDoc));
-      console.log('[DRIVER FLOW] dispatch snapshot', {
-        count: ordersCache.length,
-        statuses: ordersCache.map((o) => ({
-          id: o.id,
-          status: o.status,
-          deliveryStatus: o.deliveryStatus,
-          driverId: o.driverId,
-          acceptedAtMs: o.acceptedAtMs,
-        })),
-      });
-      emit();
-    },
-    (error) => {
-      console.error('[QUERY FAILED]', {
-        file: 'services/driverDispatch.ts',
-        collection: 'orders',
-        listener: 'driverDispatch.subscribeAvailableOrders',
-        filters: [
-          ['status', '==', 'pending_driver'],
-          ['deliveryType', '==', 'delivery'],
-          ['driverId', '==', null],
-          ['assignedDriverId', '==', null],
-          ['orderBy', 'createdAt desc'],
-        ],
-        error,
-      });
-      ordersCache = [];
-      emit();
-    },
-  );
+    unsubDriver = onSnapshot(
+      driverPresenceDoc(driverId),
+      (snap) => {
+        const data = snap.data();
+        driverOnline = data?.isOnline === true;
+        emit();
+      },
+      () => {
+        driverOnline = false;
+        emit();
+      },
+    );
 
-  if (__DEV__) {
-    console.log('[QUERY START]', {
-      file: 'services/driverDispatch.ts',
-      collection: 'orders',
-      listener: 'driverDispatch.subscribeAvailableOrders',
-      filters: [
-        ['status', '==', 'pending_driver'],
-        ['deliveryType', '==', 'delivery'],
-        ['driverId', '==', null],
-        ['assignedDriverId', '==', null],
-        ['orderBy', 'createdAt desc'],
-      ],
-      authUid: driverId,
-      role: 'driver',
-    });
-  }
+    unsubOrders = onSnapshot(
+      query(
+        collection(db, 'orders'),
+        where('status', '==', 'pending_driver'),
+        where('deliveryType', '==', 'delivery'),
+        where('driverId', '==', null),
+        where('assignedDriverId', '==', null),
+        orderBy('createdAt', 'desc'),
+      ),
+      (snap) => {
+        ordersCache = snap.docs.map((orderDoc) => mapDispatchOrder(orderDoc));
+        emit();
+      },
+      () => {
+        ordersCache = [];
+        emit();
+      },
+    );
+  })().catch(() => {
+    ordersCache = [];
+    emit();
+  });
 
   return () => {
-    unsubDriver();
-    unsubOrders();
+    cancelled = true;
+    unsubDriver?.();
+    unsubOrders?.();
   };
 }
 

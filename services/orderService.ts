@@ -559,6 +559,7 @@ export async function createOrder(
     groupId,
     estimatedDeliveryTime,
     driverId: payload.driverId ?? null,
+    assignedDriverId: null,
     driverName: null,
     driverPhone: null,
     driverVehicle: null,

@@ -12,10 +12,14 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 
 /** Run with: `RUN_FIRESTORE_RULES_TESTS=1 firebase emulators:exec --only firestore -- npm test` */
@@ -648,6 +652,62 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           joinedAt: Timestamp.now(),
           location: { lat: 1, lng: 2 },
         }),
+      );
+    });
+
+    it('allows driver marketplace pool list when auth token role is driver', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', 'drv1'), { role: 'driver' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'pool1'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          status: 'pending_driver',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          createdAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1', { role: 'driver' }).firestore();
+      await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'orders'),
+            where('status', '==', 'pending_driver'),
+            where('deliveryType', '==', 'delivery'),
+            where('driverId', '==', null),
+            where('assignedDriverId', '==', null),
+            orderBy('createdAt', 'desc'),
+          ),
+        ),
+      );
+    });
+
+    it('denies marketplace pool list for customer role token', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'pool2'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          status: 'pending_driver',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          createdAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust1', { role: 'user' }).firestore();
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'orders'),
+            where('status', '==', 'pending_driver'),
+            where('deliveryType', '==', 'delivery'),
+            where('driverId', '==', null),
+            where('assignedDriverId', '==', null),
+            orderBy('createdAt', 'desc'),
+          ),
+        ),
       );
     });
 

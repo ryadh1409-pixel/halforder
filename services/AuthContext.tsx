@@ -55,6 +55,7 @@ import {
   assignUserRole,
   migrateUserRoleIfNeeded,
 } from '@/services/authRoleAssignment';
+import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { syncUserRoleToFirestore } from '../utils/admin';
 import { uploadImageAsync } from './uploadImage';
 import { claimReferralInboxRewards } from './referralRewards';
@@ -324,6 +325,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     void ensureRestaurantProfile();
   }, [user?.uid, user?.displayName, firestoreRole]);
+
+  /** Keep Auth custom claims aligned with Firestore role (driver pool queries). */
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid || user?.isAnonymous) return;
+    if (firestoreRole !== 'driver' && firestoreRole !== 'admin') return;
+    void refreshAuthRoleClaims();
+  }, [user?.uid, user?.isAnonymous, firestoreRole]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -665,9 +674,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await applySignupRole(uid, role, {
           displayName: auth.currentUser?.displayName,
         });
+        await refreshAuthRoleClaims();
         return;
       }
       await assignUserRole(uid, 'user', { restaurantId: null });
+      await refreshAuthRoleClaims();
     },
     [],
   );

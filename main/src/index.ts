@@ -8,3 +8,4 @@ import {initializeApp} from "firebase-admin/app";
 initializeApp();
 
 export {syncPublicMatchableOrder} from "./publicMatchableSync.js";
+export {refreshUserRoleClaims, syncUserRoleClaims} from "./syncUserRoleClaims.js";

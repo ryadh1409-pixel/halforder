@@ -8,6 +8,7 @@ import { createRestaurant } from '@/services/restaurantService';
 import type { UserRole } from '@/services/userService';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { db } from './firebase';
 
 const LEGACY_CUSTOMER_ROLES = new Set(['customer', '', undefined, null]);
@@ -71,6 +72,7 @@ export async function assignUserRole(
     payload.restaurantId = null;
   }
   await setDoc(doc(db, 'users', uid), payload, { merge: true });
+  void refreshAuthRoleClaims();
 }
 
 export async function applySignupRole(

@@ -119,6 +119,8 @@ function mergeOrderPaidSync(
     paymentStatus: "paid",
     status: "pending_driver",
     deliveryStatus: "waiting_driver",
+    driverId: null,
+    assignedDriverId: null,
     paidAt: admin.firestore.FieldValue.serverTimestamp(),
     stripeWebhookLastEventType: sourceEventType,
     stripeWebhookLastEventId: stripeEventId,

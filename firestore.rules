@@ -68,7 +68,24 @@ service cloud.firestore {
           resource.data.userId == request.auth.uid
           || resource.data.restaurantId == request.auth.uid
           || resource.data.driverId == request.auth.uid
+          || resource.data.get('assignedDriverId', '') == request.auth.uid
         );
+    }
+    /** Role from Auth custom claims (query-safe; set by syncUserRoleClaims). */
+    function authTokenRoleIsDriver() {
+      return isSignedIn()
+        && request.auth.token.get('role', '') == 'driver';
+    }
+    /**
+     * Driver marketplace pool — must mirror client queries exactly (equality on each field).
+     * Uses custom claims only (no get/exists) so collection listeners are allowed.
+     */
+    function driverMarketplacePoolReadable() {
+      return authTokenRoleIsDriver()
+        && resource.data.status == 'pending_driver'
+        && resource.data.deliveryType == 'delivery'
+        && resource.data.driverId == null
+        && resource.data.assignedDriverId == null;
     }
     function requestUserRoleRaw() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -965,19 +982,22 @@ service cloud.firestore {
         );
     }
     function noDriverAssignedYet(d) {
-      return !(d.driverId is string && d.driverId.size() > 0)
-        && !(d.get('assignedDriverId', '') is string && d.get('assignedDriverId', '').size() > 0);
+      return d.driverId == null
+        && d.get('assignedDriverId', null) == null;
     }
     function isDriver() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver';
+      return authTokenRoleIsDriver()
+        || (
+          isSignedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver'
+        );
     }
-    /** Unassigned marketplace delivery orders visible to authenticated drivers. */
+    /** Unassigned marketplace delivery orders (single-doc reads / updates). */
     function driverPoolOrderReadable(d) {
       return isDriver()
         && noDriverAssignedYet(d)
-        && d.get('deliveryType', '') == 'delivery'
+        && d.deliveryType == 'delivery'
         && (
           d.status == 'pending_driver'
           || d.status == 'awaiting_driver'
@@ -1227,6 +1247,8 @@ service cloud.firestore {
     match /orders/{orderId} {
       // Published baseline: owner / restaurant / driver may read their orders.
       allow read: if ordersReadByParticipant();
+      // Driver marketplace pool (query-safe; mirrors subscribeDriverQueue filters).
+      allow read: if driverMarketplacePoolReadable();
       // Marketplace checkout: auth uid must match payload userId + field guards.
       allow create: if isValidMarketplaceOrderCreate();
       // HalfOrder / legacy order creates (separate schema; no userId required).

@@ -4,6 +4,7 @@ import {
   type DeliveryLifecycleStatus,
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
+import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { db } from '@/services/firebase';
 import { warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import {
@@ -375,6 +376,9 @@ export function subscribeDriverQueue(
 ): Unsubscribe {
   let online = false;
   let cache: DeliveryQueueOrder[] = [];
+  let unsubDriver: Unsubscribe | null = null;
+  let unsubOrders: Unsubscribe | null = null;
+  let cancelled = false;
   const emit = () => {
     if (!online) {
       onData([]);
@@ -392,93 +396,71 @@ export function subscribeDriverQueue(
     onData(unique);
   };
 
-  const unsubDriver = onSnapshot(
-    doc(db, 'drivers', driverId),
-    (snap) => {
-      try {
-        const data = snap.data();
-        online = data?.isOnline === true || data?.online === true;
-      } catch (err) {
-        warnMalformedDeliveryDoc(driverId, 'subscribeDriverQueue driver doc', err);
+  void (async () => {
+    try {
+      await ensureAuthRoleClaim('driver');
+    } catch (err) {
+      logDeliveryListenError('subscribeDriverQueue ensureAuthRoleClaim', err);
+    }
+    if (cancelled) return;
+
+    unsubDriver = onSnapshot(
+      doc(db, 'drivers', driverId),
+      (snap) => {
+        try {
+          const data = snap.data();
+          online = data?.isOnline === true || data?.online === true;
+        } catch (err) {
+          warnMalformedDeliveryDoc(driverId, 'subscribeDriverQueue driver doc', err);
+          online = false;
+        }
+        emit();
+      },
+      (error) => {
+        logDeliveryListenError(`subscribeDriverQueue drivers/${driverId}`, error);
         online = false;
-      }
-      emit();
-    },
-    (error) => {
-      logDeliveryListenError(`subscribeDriverQueue drivers/${driverId}`, error);
-      if (isPermissionDeniedError(error) && __DEV__) {
-        // eslint-disable-next-line no-console
-        console.warn('[delivery] Driver presence may be unreadable with current rules.', {
-          driverId,
-        });
-      }
-      online = false;
-      emit();
-    },
-  );
+        emit();
+      },
+    );
 
-  const unsubOrders = onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('status', '==', 'pending_driver'),
-      where('deliveryType', '==', 'delivery'),
-      where('driverId', '==', null),
-      where('assignedDriverId', '==', null),
-      orderBy('createdAt', 'desc'),
-    ),
-    (snap) => {
-      try {
-        cache = snap.docs
-          .map((row) => safeMapQueueOrder(row))
-          .filter((row): row is DeliveryQueueOrder => row != null)
-          .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
-          .filter((row) => row.status !== 'cancelled');
-      } catch (err) {
-        warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue orders map', err);
+    unsubOrders = onSnapshot(
+      query(
+        collection(db, 'orders'),
+        where('status', '==', 'pending_driver'),
+        where('deliveryType', '==', 'delivery'),
+        where('driverId', '==', null),
+        where('assignedDriverId', '==', null),
+        orderBy('createdAt', 'desc'),
+      ),
+      (snap) => {
+        try {
+          cache = snap.docs
+            .map((row) => safeMapQueueOrder(row))
+            .filter((row): row is DeliveryQueueOrder => row != null)
+            .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
+            .filter((row) => row.status !== 'cancelled');
+        } catch (err) {
+          warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue orders map', err);
+          cache = [];
+        }
+        emit();
+      },
+      (error) => {
+        logDeliveryListenError('subscribeDriverQueue orders query', error);
         cache = [];
-      }
-      emit();
-    },
-    (error) => {
-      console.error('[QUERY FAILED]', {
-        file: 'services/delivery/index.ts',
-        collection: 'orders',
-        listener: 'subscribeDriverQueue',
-        filters: [
-          ['status', '==', 'pending_driver'],
-          ['deliveryType', '==', 'delivery'],
-          ['driverId', '==', null],
-          ['assignedDriverId', '==', null],
-          ['orderBy', 'createdAt desc'],
-        ],
-        error,
-      });
-      logDeliveryListenError('subscribeDriverQueue orders query', error);
-      cache = [];
-      emit();
-    },
-  );
-
-  if (__DEV__) {
-    console.log('[QUERY START]', {
-      collection: 'orders',
-      file: 'services/delivery/index.ts',
-      listener: 'subscribeDriverQueue',
-      filters: [
-        ['status', '==', 'pending_driver'],
-        ['deliveryType', '==', 'delivery'],
-        ['driverId', '==', null],
-        ['assignedDriverId', '==', null],
-        ['orderBy', 'createdAt desc'],
-      ],
-      authUid: driverId,
-      role: 'driver',
-    });
-  }
+        emit();
+      },
+    );
+  })().catch((err) => {
+    logDeliveryListenError('subscribeDriverQueue bootstrap', err);
+    cache = [];
+    emit();
+  });
 
   return () => {
-    unsubDriver();
-    unsubOrders();
+    cancelled = true;
+    unsubDriver?.();
+    unsubOrders?.();
   };
 }
 
@@ -579,60 +561,56 @@ export function subscribeDriverActiveOrders(
   driverId: string,
   onData: (orders: ActiveDelivery[]) => void,
 ): Unsubscribe {
-  if (__DEV__) {
-    console.log('[QUERY START]', {
-      collection: 'orders',
-      file: 'services/delivery/index.ts',
-      listener: 'subscribeDriverActiveOrders',
-      filters: [
-        ['assignedDriverId', '==', driverId],
-        ['deliveryType', '==', 'delivery'],
-        ['orderBy', 'createdAt desc'],
-      ],
-      authUid: driverId,
-      role: 'driver',
-    });
-  }
-  return onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('assignedDriverId', '==', driverId),
-      where('deliveryType', '==', 'delivery'),
-      orderBy('createdAt', 'desc'),
-    ),
-    (snap) => {
-      try {
-        const rows = snap.docs
-          .map((d) => safeMapActiveDelivery(d))
-          .filter((order): order is ActiveDelivery => order != null)
-          .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
-        rows.sort((a, b) => {
-          const ca = a.createdAtMs ?? 0;
-          const cb = b.createdAtMs ?? 0;
-          if (ca !== cb) return cb - ca;
-          return a.id.localeCompare(b.id);
-        });
-        onData(rows);
-      } catch (err) {
-        warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
+  let unsub: Unsubscribe | null = null;
+  let cancelled = false;
+
+  void (async () => {
+    try {
+      await ensureAuthRoleClaim('driver');
+    } catch (err) {
+      logDeliveryListenError('subscribeDriverActiveOrders ensureAuthRoleClaim', err);
+    }
+    if (cancelled) return;
+
+    unsub = onSnapshot(
+      query(
+        collection(db, 'orders'),
+        where('assignedDriverId', '==', driverId),
+        where('deliveryType', '==', 'delivery'),
+        orderBy('createdAt', 'desc'),
+      ),
+      (snap) => {
+        try {
+          const rows = snap.docs
+            .map((d) => safeMapActiveDelivery(d))
+            .filter((order): order is ActiveDelivery => order != null)
+            .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
+          rows.sort((a, b) => {
+            const ca = a.createdAtMs ?? 0;
+            const cb = b.createdAtMs ?? 0;
+            if (ca !== cb) return cb - ca;
+            return a.id.localeCompare(b.id);
+          });
+          onData(rows);
+        } catch (err) {
+          warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
+          onData([]);
+        }
+      },
+      (error) => {
+        logDeliveryListenError('subscribeDriverActiveOrders orders query', error);
         onData([]);
-      }
-    },
-    (error) => {
-      console.error('[QUERY FAILED]', {
-        file: 'services/delivery/index.ts',
-        collection: 'orders',
-        listener: 'subscribeDriverActiveOrders',
-        filters: [
-          ['assignedDriverId', '==', driverId],
-          ['deliveryType', '==', 'delivery'],
-          ['orderBy', 'createdAt desc'],
-        ],
-        error,
-      });
-      onData([]);
-    },
-  );
+      },
+    );
+  })().catch((err) => {
+    logDeliveryListenError('subscribeDriverActiveOrders bootstrap', err);
+    onData([]);
+  });
+
+  return () => {
+    cancelled = true;
+    unsub?.();
+  };
 }
 
 export async function updateDeliveryStatus(
