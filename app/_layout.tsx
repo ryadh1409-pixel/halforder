@@ -8,7 +8,7 @@ import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { LogBox, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -43,6 +43,7 @@ function RoleRouteGuard() {
   const segments = useSegments();
   const router = useRouter();
   const { loading: authLoading, firestoreUserRole: role, user } = useAuth();
+  const roleLandingRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (authLoading || !role || pathname !== '/') return;
@@ -60,12 +61,22 @@ function RoleRouteGuard() {
       return;
     }
 
+    const landingKey = `${user.uid}:${role}`;
+    if (roleLandingRef.current === landingKey) return;
+
     const normalized = normalizeRoleForRouting(role);
     logAuthRoleDetected(normalized);
     const route = getRouteForRole(normalized);
     logAuthRoleRouted(normalized, route);
+    roleLandingRef.current = landingKey;
     router.replace(route as never);
   }, [authLoading, role, pathname, router, user, segments]);
+
+  useEffect(() => {
+    if (pathname !== '/') {
+      roleLandingRef.current = null;
+    }
+  }, [pathname]);
 
   return null;
 }

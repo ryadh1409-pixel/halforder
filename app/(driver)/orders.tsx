@@ -10,19 +10,19 @@ import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
-import { useIsFocused } from '@react-navigation/native';
+import { useDriverMountLog } from '../../utils/driverMountLog';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DriverOrdersScreen() {
+  useDriverMountLog('DriverOrders');
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const router = useRouter();
-  const isFocused = useIsFocused();
   const uid = user?.uid?.trim() ?? '';
-  const { online, loading: onlineLoading } = useDriverOnlineStatus();
+  const { online } = useDriverOnlineStatus();
   const [orders, setOrders] = useState<DeliveryQueueOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export default function DriverOrdersScreen() {
   }, []);
 
   useEffect(() => {
-    if (!uid || !isFocused || onlineLoading || !online) {
+    if (!uid || !online) {
       setOrders([]);
       setLoading(false);
       return undefined;
@@ -60,7 +60,7 @@ export default function DriverOrdersScreen() {
         console.error('[driver] subscribeDriverQueue cleanup failed', e);
       }
     };
-  }, [uid, isFocused, online, onlineLoading, applyQueueOrders]);
+  }, [uid, online, applyQueueOrders]);
 
   const maskPhone = (phone: string | null) => {
     if (!phone) return 'Phone unavailable';

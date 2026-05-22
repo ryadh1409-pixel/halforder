@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
@@ -26,6 +25,7 @@ import {
   type DriverOrder,
 } from '../../services/driverService';
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
+import { useDriverMountLog } from '../../utils/driverMountLog';
 import { showError, showSuccess } from '../../utils/toast';
 
 function formatOrderTime(value: number | null): string {
@@ -138,8 +138,8 @@ function ordersListSignature(orders: DriverOrder[]): string {
 }
 
 export default function DriverHubScreen() {
+  useDriverMountLog('DriverHub');
   const { user, signOutUser, switchRoleMode } = useAuth();
-  const isFocused = useIsFocused();
   const uid = user?.uid ?? '';
   const {
     isOnline,
@@ -184,7 +184,7 @@ export default function DriverHubScreen() {
   }, []);
 
   useEffect(() => {
-    if (!uid || !isFocused || !isOnline) {
+    if (!uid || !isOnline) {
       availableSigRef.current = '';
       activeSigRef.current = '';
       setAvailableOrders([]);
@@ -204,7 +204,7 @@ export default function DriverHubScreen() {
       logListenerUnsubscribe('hub.activeOrders');
       unsubActive();
     };
-  }, [uid, isFocused, isOnline, applyAvailableOrders, applyActiveOrders]);
+  }, [uid, isOnline, applyAvailableOrders, applyActiveOrders]);
 
   const handleToggleOnline = useCallback(
     async (nextValue: boolean) => {

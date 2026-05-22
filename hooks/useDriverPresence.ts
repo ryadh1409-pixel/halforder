@@ -17,21 +17,15 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type UseDriverPresenceOptions = {
-  enabled?: boolean;
-  displayName?: string | null;
-};
-
 /**
  * Canonical driver online presence: single Firestore listener + optimistic toggle.
  * Bootstrap `ensureDriverPresenceDoc` runs in DriverPresenceProvider, not here.
  */
 export function useDriverPresence(
   driverId: string | null | undefined,
-  options: UseDriverPresenceOptions = {},
+  enabled = true,
 ) {
   const uid = typeof driverId === 'string' ? driverId.trim() || null : null;
-  const enabled = options.enabled !== false;
   const [isOnline, setIsOnline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
