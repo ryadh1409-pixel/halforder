@@ -545,23 +545,34 @@ export function subscribeDriverDeliveryStats(
           },
           (error) => {
             if (cancelled) return;
-            logDriverQueryError('subscribeDriverDeliveryStats', error);
             if (isFirestorePermissionDenied(error)) {
+              // eslint-disable-next-line no-console
+              console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
               emitEmpty();
               return;
             }
+            logDriverQueryError('subscribeDriverDeliveryStats', error);
             safeListenerError('subscribeDriverDeliveryStats orders', emitEmpty)(error);
           },
         );
       } catch (error) {
-        logDriverQueryError('subscribeDriverDeliveryStats.setup', error);
         if (isFirestorePermissionDenied(error)) {
+          // eslint-disable-next-line no-console
+          console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
           emitEmpty();
           return;
         }
+        logDriverQueryError('subscribeDriverDeliveryStats.setup', error);
+        emitEmpty();
       }
     }, emitEmpty);
   } catch (error) {
+    if (isFirestorePermissionDenied(error)) {
+      // eslint-disable-next-line no-console
+      console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
+      emitEmpty();
+      return noopUnsub;
+    }
     logDriverQueryError('subscribeDriverDeliveryStats.bootstrap', error);
     emitEmpty();
     return noopUnsub;

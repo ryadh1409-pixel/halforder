@@ -1,5 +1,6 @@
 import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { useAuth } from '@/services/AuthContext';
+import { auth, ensureAuthReady } from '@/services/firebase';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 
@@ -13,10 +14,19 @@ export default function DriverLayout() {
     if (claimsSyncedForUidRef.current === uid) return;
 
     claimsSyncedForUidRef.current = uid;
-    void refreshAuthRoleClaims().catch((err) => {
-      claimsSyncedForUidRef.current = null;
-      console.error('[driver] refreshAuthRoleClaims failed', err);
-    });
+    void (async () => {
+      try {
+        await ensureAuthReady();
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          await currentUser.getIdToken(true);
+        }
+        await refreshAuthRoleClaims();
+      } catch (err) {
+        claimsSyncedForUidRef.current = null;
+        console.error('[driver] driver auth token refresh failed', err);
+      }
+    })();
   }, [authLoading, user?.uid]);
 
   return (
