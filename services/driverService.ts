@@ -17,14 +17,39 @@ import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import {
   DRIVER_PRESENCE_COLLECTION,
   driverPresenceDoc,
+  ensureDriverPresenceDoc,
   resolveDriverOnline,
   updateDriverOnlineStatus,
 } from '@/services/driverPresence';
 import { acceptOrderWithLock } from '@/services/delivery';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
-import { db } from './firebase';
+import {
+  isFirestorePermissionDenied,
+  logDriverQueryError,
+  logDriverQueryStart,
+} from './firestoreDriverQueryLog';
+import { auth, db, syncAuthForFirestoreReads } from './firebase';
 import type { OrderStatus } from './orderService';
+
+async function prepareDriverFirestoreAccess(driverId: string): Promise<string | null> {
+  const uid = driverId?.trim() ?? '';
+  if (!uid) return null;
+  await syncAuthForFirestoreReads();
+  const authUid = auth.currentUser?.uid?.trim() ?? '';
+  if (!authUid || authUid !== uid) return null;
+  try {
+    await ensureAuthRoleClaim('driver');
+  } catch {
+    /* list rules also allow hasDriverAccountDoc() */
+  }
+  try {
+    await ensureDriverPresenceDoc(authUid);
+  } catch {
+    /* non-fatal; pool/list may still fail until doc exists */
+  }
+  return authUid;
+}
 
 export type DriverProfile = {
   id: string;
@@ -259,39 +284,134 @@ export function subscribeToDriverOrders(
   driverId: string,
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
-  let unsub: Unsubscribe | null = null;
+  const noopUnsub = () => {};
+  let unsubs: Unsubscribe[] = [];
   let cancelled = false;
+  let byDriverId: DriverOrder[] = [];
+  let byAssignedId: DriverOrder[] = [];
+
+  const emitMerged = () => {
+    if (cancelled) return;
+    try {
+      const merged = new Map<string, DriverOrder>();
+      for (const row of [...byDriverId, ...byAssignedId]) merged.set(row.id, row);
+      const rows = Array.from(merged.values()).sort(
+        (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
+      );
+      onData(rows);
+    } catch {
+      onData([]);
+    }
+  };
 
   runListenerBootstrap('subscribeToDriverOrders', async () => {
-    try {
-      await ensureAuthRoleClaim('driver');
-    } catch {
-      /* assigned-order reads use driverId rule */
+    const authUid = await prepareDriverFirestoreAccess(driverId);
+    if (cancelled || !authUid) {
+      onData([]);
+      return;
     }
-    if (cancelled) return;
 
-    unsub = onSnapshot(
-      query(
-        collection(db, 'orders'),
-        where('driverId', '==', driverId),
-        where('deliveryType', '==', 'delivery'),
-        orderBy('createdAt', 'desc'),
-      ),
-      (snap) => {
-        try {
-          const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
-          onData(rows);
-        } catch {
-          onData([]);
-        }
-      },
-      safeListenerError('subscribeToDriverOrders', () => onData([])),
-    );
+    const driverIdFilters = {
+      driverId: authUid,
+      deliveryType: 'delivery',
+      orderBy: 'createdAt desc',
+    };
+    await logDriverQueryStart({
+      listener: 'subscribeToDriverOrders',
+      collection: 'orders',
+      filters: driverIdFilters,
+    });
+
+    try {
+      const unsubDriverId = onSnapshot(
+        query(
+          collection(db, 'orders'),
+          where('driverId', '==', authUid),
+          where('deliveryType', '==', 'delivery'),
+          orderBy('createdAt', 'desc'),
+        ),
+        (snap) => {
+          if (cancelled) return;
+          try {
+            byDriverId = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
+            emitMerged();
+          } catch (err) {
+            logDriverQueryError('subscribeToDriverOrders.driverId', err);
+            byDriverId = [];
+            emitMerged();
+          }
+        },
+        (error) => {
+          logDriverQueryError('subscribeToDriverOrders.driverId', error);
+          if (isFirestorePermissionDenied(error)) {
+            byDriverId = [];
+            emitMerged();
+            return;
+          }
+          safeListenerError('subscribeToDriverOrders.driverId', () => {
+            byDriverId = [];
+            emitMerged();
+          })(error);
+        },
+      );
+      unsubs.push(unsubDriverId);
+    } catch (error) {
+      logDriverQueryError('subscribeToDriverOrders.driverId.setup', error);
+    }
+
+    const assignedFilters = {
+      assignedDriverId: authUid,
+      deliveryType: 'delivery',
+      orderBy: 'createdAt desc',
+    };
+    await logDriverQueryStart({
+      listener: 'subscribeToDriverOrders.assignedDriverId',
+      collection: 'orders',
+      filters: assignedFilters,
+    });
+
+    try {
+      const unsubAssigned = onSnapshot(
+        query(
+          collection(db, 'orders'),
+          where('assignedDriverId', '==', authUid),
+          where('deliveryType', '==', 'delivery'),
+          orderBy('createdAt', 'desc'),
+        ),
+        (snap) => {
+          if (cancelled) return;
+          try {
+            byAssignedId = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
+            emitMerged();
+          } catch (err) {
+            logDriverQueryError('subscribeToDriverOrders.assignedDriverId', err);
+            byAssignedId = [];
+            emitMerged();
+          }
+        },
+        (error) => {
+          logDriverQueryError('subscribeToDriverOrders.assignedDriverId', error);
+          if (isFirestorePermissionDenied(error)) {
+            byAssignedId = [];
+            emitMerged();
+            return;
+          }
+          safeListenerError('subscribeToDriverOrders.assignedDriverId', () => {
+            byAssignedId = [];
+            emitMerged();
+          })(error);
+        },
+      );
+      unsubs.push(unsubAssigned);
+    } catch (error) {
+      logDriverQueryError('subscribeToDriverOrders.assignedDriverId.setup', error);
+    }
   }, () => onData([]));
 
   return () => {
     cancelled = true;
-    unsub?.();
+    for (const unsub of unsubs) unsub();
+    unsubs = [];
   };
 }
 
@@ -299,6 +419,12 @@ export type DriverDeliveryStats = {
   deliveries: number;
   earnings: number;
   rating: number;
+};
+
+const EMPTY_DRIVER_STATS: DriverDeliveryStats = {
+  deliveries: 0,
+  earnings: 0,
+  rating: 5.0,
 };
 
 /**
@@ -311,25 +437,49 @@ export function subscribeAvailableOrders(
   let cancelled = false;
 
   runListenerBootstrap('subscribeAvailableOrders', async () => {
-    try {
-      await ensureAuthRoleClaim('driver');
-    } catch {
-      /* pool collection uses drivers/{uid} membership */
+    const authUid = auth.currentUser?.uid?.trim() ?? '';
+    if (cancelled || !authUid) {
+      onData([]);
+      return;
     }
+    await prepareDriverFirestoreAccess(authUid);
     if (cancelled) return;
 
-    unsub = onSnapshot(
-      query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
-      (snap) => {
-        try {
-          const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
-          onData(rows);
-        } catch {
-          onData([]);
-        }
-      },
-      safeListenerError('subscribeAvailableOrders', () => onData([])),
-    );
+    const poolFilters = { orderBy: 'createdAt desc', limit: 20 };
+    await logDriverQueryStart({
+      listener: 'subscribeAvailableOrders',
+      collection: 'driver_marketplace_pool',
+      filters: poolFilters,
+    });
+
+    try {
+      unsub = onSnapshot(
+        query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
+        (snap) => {
+          if (cancelled) return;
+          try {
+            const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
+            onData(rows);
+          } catch (err) {
+            logDriverQueryError('subscribeAvailableOrders', err);
+            onData([]);
+          }
+        },
+        (error) => {
+          logDriverQueryError('subscribeAvailableOrders', error);
+          if (isFirestorePermissionDenied(error)) {
+            onData([]);
+            return;
+          }
+          safeListenerError('subscribeAvailableOrders driver_marketplace_pool', () => onData([]))(
+            error,
+          );
+        },
+      );
+    } catch (error) {
+      logDriverQueryError('subscribeAvailableOrders.setup', error);
+      onData([]);
+    }
   }, () => onData([]));
 
   return () => {
@@ -343,33 +493,84 @@ export function subscribeDriverDeliveryStats(
   driverId: string,
   onStats: (stats: DriverDeliveryStats) => void,
 ): Unsubscribe {
-  return onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('driverId', '==', driverId),
-      where('status', '==', 'delivered'),
-      where('deliveryType', '==', 'delivery'),
-    ),
-    (snap) => {
-      let earnings = 0;
-      for (const docSnap of snap.docs) {
-        const data = docSnap.data();
-        const fee =
-          typeof data.deliveryFee === 'number' && Number.isFinite(data.deliveryFee)
-            ? data.deliveryFee
-            : 0;
-        earnings += fee;
+  const noopUnsub = () => {};
+  let unsub: Unsubscribe | null = null;
+  let cancelled = false;
+
+  const emitEmpty = () => onStats(EMPTY_DRIVER_STATS);
+
+  try {
+    runListenerBootstrap('subscribeDriverDeliveryStats', async () => {
+      const authUid = await prepareDriverFirestoreAccess(driverId);
+      if (cancelled || !authUid) {
+        emitEmpty();
+        return;
       }
-      onStats({
-        deliveries: snap.size,
-        earnings: Math.round(earnings * 100) / 100,
-        rating: 5.0,
+
+      const statsFilters = {
+        driverId: authUid,
+        status: 'delivered',
+        deliveryType: 'delivery',
+      };
+      await logDriverQueryStart({
+        listener: 'subscribeDriverDeliveryStats',
+        collection: 'orders',
+        filters: statsFilters,
       });
-    },
-    () => {
-      onStats({ deliveries: 0, earnings: 0, rating: 5.0 });
-    },
-  );
+
+      try {
+        unsub = onSnapshot(
+          query(
+            collection(db, 'orders'),
+            where('driverId', '==', authUid),
+            where('status', '==', 'delivered'),
+            where('deliveryType', '==', 'delivery'),
+          ),
+          (snap) => {
+            if (cancelled) return;
+            let earnings = 0;
+            for (const docSnap of snap.docs) {
+              const data = docSnap.data();
+              const fee =
+                typeof data.deliveryFee === 'number' && Number.isFinite(data.deliveryFee)
+                  ? data.deliveryFee
+                  : 0;
+              earnings += fee;
+            }
+            onStats({
+              deliveries: snap.size,
+              earnings: Math.round(earnings * 100) / 100,
+              rating: 5.0,
+            });
+          },
+          (error) => {
+            if (cancelled) return;
+            logDriverQueryError('subscribeDriverDeliveryStats', error);
+            if (isFirestorePermissionDenied(error)) {
+              emitEmpty();
+              return;
+            }
+            safeListenerError('subscribeDriverDeliveryStats orders', emitEmpty)(error);
+          },
+        );
+      } catch (error) {
+        logDriverQueryError('subscribeDriverDeliveryStats.setup', error);
+        if (isFirestorePermissionDenied(error)) {
+          emitEmpty();
+          return;
+        }
+      }
+    }, emitEmpty);
+  } catch (error) {
+    logDriverQueryError('subscribeDriverDeliveryStats.bootstrap', error);
+    emitEmpty();
+    return noopUnsub;
+  }
+
+  return () => {
+    cancelled = true;
+    unsub?.();
+  };
 }
 
 export async function assignDriverToOrder(

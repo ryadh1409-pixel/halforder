@@ -5,8 +5,17 @@ import {
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
-import { driverPresenceDoc, resolveDriverOnline } from '@/services/driverPresence';
-import { db } from '@/services/firebase';
+import {
+  driverPresenceDoc,
+  ensureDriverPresenceDoc,
+  resolveDriverOnline,
+} from '@/services/driverPresence';
+import {
+  isFirestorePermissionDenied,
+  logDriverQueryError,
+  logDriverQueryStart,
+} from '@/services/firestoreDriverQueryLog';
+import { auth, db } from '@/services/firebase';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import {
@@ -381,6 +390,7 @@ export function subscribeDriverQueue(
   let unsubDriver: Unsubscribe | null = null;
   let unsubOrders: Unsubscribe | null = null;
   let cancelled = false;
+
   const emit = () => {
     if (!online) {
       onData([]);
@@ -398,6 +408,61 @@ export function subscribeDriverQueue(
     onData(unique);
   };
 
+  const detachPoolListener = () => {
+    unsubOrders?.();
+    unsubOrders = null;
+    cache = [];
+  };
+
+  const attachPoolListener = async () => {
+    if (cancelled || unsubOrders) return;
+    const authUid = auth.currentUser?.uid?.trim() ?? '';
+    if (!authUid || authUid !== driverId.trim()) return;
+
+    const poolFilters = { orderBy: 'createdAt desc' };
+    await logDriverQueryStart({
+      listener: 'subscribeDriverQueue',
+      collection: 'driver_marketplace_pool',
+      filters: poolFilters,
+    });
+
+    try {
+      unsubOrders = onSnapshot(
+        query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc')),
+        (snap) => {
+          if (cancelled) return;
+          try {
+            cache = snap.docs
+              .map((row) => safeMapQueueOrder(row))
+              .filter((row): row is DeliveryQueueOrder => row != null)
+              .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
+              .filter((row) => row.status !== 'cancelled');
+          } catch (err) {
+            warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue pool map', err);
+            cache = [];
+          }
+          emit();
+        },
+        (error) => {
+          logDriverQueryError('subscribeDriverQueue.driver_marketplace_pool', error);
+          if (isFirestorePermissionDenied(error)) {
+            cache = [];
+            emit();
+            return;
+          }
+          safeListenerError('subscribeDriverQueue driver_marketplace_pool', () => {
+            cache = [];
+            emit();
+          })(error);
+        },
+      );
+    } catch (error) {
+      logDriverQueryError('subscribeDriverQueue.driver_marketplace_pool.setup', error);
+      cache = [];
+      emit();
+    }
+  };
+
   runListenerBootstrap('subscribeDriverQueue', async () => {
     try {
       await ensureAuthRoleClaim('driver');
@@ -406,56 +471,63 @@ export function subscribeDriverQueue(
     }
     if (cancelled) return;
 
-    unsubDriver = onSnapshot(
-      driverPresenceDoc(driverId),
-      (snap) => {
-        try {
-          const data = snap.data();
-          online = resolveDriverOnline(data);
-        } catch (err) {
-          warnMalformedDeliveryDoc(driverId, 'subscribeDriverQueue driver doc', err);
-          online = false;
-        }
-        emit();
-      },
-      safeListenerError(`subscribeDriverQueue drivers/${driverId}`, () => {
-        online = false;
-        emit();
-      }),
-    );
+    try {
+      await ensureDriverPresenceDoc(driverId);
+    } catch (err) {
+      logDeliveryListenError('subscribeDriverQueue ensureDriverPresenceDoc', err);
+    }
+    if (cancelled) return;
 
-    unsubOrders = onSnapshot(
-      query(
-        collection(db, 'driver_marketplace_pool'),
-        orderBy('createdAt', 'desc'),
-      ),
-      (snap) => {
-        try {
-          cache = snap.docs
-            .map((row) => safeMapQueueOrder(row))
-            .filter((row): row is DeliveryQueueOrder => row != null)
-            .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
-            .filter((row) => row.status !== 'cancelled');
-        } catch (err) {
-          warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue pool map', err);
-          cache = [];
-        }
-        emit();
-      },
-      safeListenerError('subscribeDriverQueue driver_marketplace_pool', () => {
-        cache = [];
-        emit();
-      }),
-    );
+    const presenceFilters = { path: `drivers/${driverId}` };
+    await logDriverQueryStart({
+      listener: 'subscribeDriverQueue',
+      collection: 'drivers',
+      filters: presenceFilters,
+    });
+
+    try {
+      unsubDriver = onSnapshot(
+        driverPresenceDoc(driverId),
+        (snap) => {
+          try {
+            const data = snap.data();
+            const nextOnline = resolveDriverOnline(data);
+            if (nextOnline !== online) {
+              online = nextOnline;
+              if (online) {
+                void attachPoolListener();
+              } else {
+                detachPoolListener();
+              }
+            }
+          } catch (err) {
+            warnMalformedDeliveryDoc(driverId, 'subscribeDriverQueue driver doc', err);
+            online = false;
+            detachPoolListener();
+          }
+          emit();
+        },
+        (error) => {
+          logDriverQueryError('subscribeDriverQueue.drivers', error);
+          online = false;
+          detachPoolListener();
+          safeListenerError(`subscribeDriverQueue drivers/${driverId}`, () => emit())(error);
+        },
+      );
+    } catch (error) {
+      logDriverQueryError('subscribeDriverQueue.drivers.setup', error);
+      online = false;
+      emit();
+    }
   }, () => {
     cache = [];
-    emit();
+    onData([]);
   });
 
   return () => {
     cancelled = true;
     unsubDriver?.();
-    unsubOrders?.();
+    detachPoolListener();
   };
 }
 
@@ -567,33 +639,70 @@ export function subscribeDriverActiveOrders(
     }
     if (cancelled) return;
 
-    unsub = onSnapshot(
-      query(
-        collection(db, 'orders'),
-        where('assignedDriverId', '==', driverId),
-        where('deliveryType', '==', 'delivery'),
-        orderBy('createdAt', 'desc'),
-      ),
-      (snap) => {
-        try {
-          const rows = snap.docs
-            .map((d) => safeMapActiveDelivery(d))
-            .filter((order): order is ActiveDelivery => order != null)
-            .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
-          rows.sort((a, b) => {
-            const ca = a.createdAtMs ?? 0;
-            const cb = b.createdAtMs ?? 0;
-            if (ca !== cb) return cb - ca;
-            return a.id.localeCompare(b.id);
-          });
-          onData(rows);
-        } catch (err) {
-          warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
-          onData([]);
-        }
-      },
-      safeListenerError('subscribeDriverActiveOrders', () => onData([])),
-    );
+    try {
+      await ensureDriverPresenceDoc(driverId);
+    } catch (err) {
+      logDeliveryListenError('subscribeDriverActiveOrders ensureDriverPresenceDoc', err);
+    }
+    if (cancelled) return;
+
+    const authUid = auth.currentUser?.uid?.trim() ?? '';
+    if (!authUid || authUid !== driverId.trim()) {
+      onData([]);
+      return;
+    }
+
+    const activeFilters = {
+      assignedDriverId: authUid,
+      deliveryType: 'delivery',
+      orderBy: 'createdAt desc',
+    };
+    await logDriverQueryStart({
+      listener: 'subscribeDriverActiveOrders',
+      collection: 'orders',
+      filters: activeFilters,
+    });
+
+    try {
+      unsub = onSnapshot(
+        query(
+          collection(db, 'orders'),
+          where('assignedDriverId', '==', authUid),
+          where('deliveryType', '==', 'delivery'),
+          orderBy('createdAt', 'desc'),
+        ),
+        (snap) => {
+          if (cancelled) return;
+          try {
+            const rows = snap.docs
+              .map((d) => safeMapActiveDelivery(d))
+              .filter((order): order is ActiveDelivery => order != null)
+              .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
+            rows.sort((a, b) => {
+              const ca = a.createdAtMs ?? 0;
+              const cb = b.createdAtMs ?? 0;
+              if (ca !== cb) return cb - ca;
+              return a.id.localeCompare(b.id);
+            });
+            onData(rows);
+          } catch (err) {
+            warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
+            onData([]);
+          }
+        },
+        (error) => {
+          logDriverQueryError('subscribeDriverActiveOrders', error);
+          if (isFirestorePermissionDenied(error)) {
+            onData([]);
+            return;
+          }
+          safeListenerError('subscribeDriverActiveOrders', () => onData([]))(error);
+        },
+      );
+    } catch (error) {
+      logDriverQueryError('subscribeDriverActiveOrders.setup', error);
+      onData([]);
+    }
   }, () => onData([]));
 
   return () => {

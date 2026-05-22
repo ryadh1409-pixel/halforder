@@ -1,6 +1,7 @@
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import {
   driverPresenceDoc,
+  ensureDriverPresenceDoc,
   resolveDriverOnline,
 } from '@/services/driverPresence';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
@@ -173,6 +174,13 @@ export function subscribeAvailableOrders(
       await ensureAuthRoleClaim('driver');
     } catch {
       /* pool collection uses drivers/{uid} membership */
+    }
+    if (cancelled) return;
+
+    try {
+      await ensureDriverPresenceDoc(driverId);
+    } catch {
+      /* pool read requires exists(drivers/{auth.uid}) */
     }
     if (cancelled) return;
 

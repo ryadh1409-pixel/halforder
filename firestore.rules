@@ -112,6 +112,25 @@ service cloud.firestore {
         && resource.data.driverId == null
         && resource.data.assignedDriverId == null;
     }
+    /** Driver delivered-stats list — mirrors subscribeDriverDeliveryStats filters. */
+    function driverDeliveredStatsListReadable() {
+      return hasDriverAccountDoc()
+        && resource.data.driverId == request.auth.uid
+        && resource.data.status == 'delivered'
+        && resource.data.deliveryType == 'delivery';
+    }
+    /** Driver active/assigned orders by driverId — mirrors subscribeToDriverOrders. */
+    function driverOrdersByDriverIdListReadable() {
+      return hasDriverAccountDoc()
+        && resource.data.driverId == request.auth.uid
+        && resource.data.deliveryType == 'delivery';
+    }
+    /** Driver active/assigned orders by assignedDriverId. */
+    function driverOrdersByAssignedDriverIdListReadable() {
+      return hasDriverAccountDoc()
+        && resource.data.get('assignedDriverId', '') == request.auth.uid
+        && resource.data.deliveryType == 'delivery';
+    }
     function requestUserRoleRaw() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
@@ -1280,8 +1299,17 @@ service cloud.firestore {
     match /orders/{orderId} {
       // Published baseline: owner / restaurant / driver may read their orders.
       allow read: if ordersReadByParticipant();
-      // Driver marketplace pool list (custom claim; mirrors orders pool query).
+      // List queries do not use allow read when allow list is present (Firestore rules v2).
+      allow list: if ordersReadByParticipant();
+      // Driver marketplace pool list on orders (legacy); mirrors pending_driver pool filters.
       allow read: if driverMarketplacePoolReadable();
+      allow list: if driverMarketplacePoolReadable();
+      // Driver list queries (query-safe via drivers/{auth.uid} membership; no custom claim).
+      allow list: if driverDeliveredStatsListReadable();
+      allow list: if driverOrdersByDriverIdListReadable();
+      allow list: if driverOrdersByAssignedDriverIdListReadable();
+      // Fallback when custom claim is present (refreshUserRoleClaims).
+      allow list: if isSignedIn() && authTokenRoleIsDriver();
       // Driver getDoc on a single unassigned pool order (accept / preview).
       allow read: if driverPoolOrderSingleRead();
       // Marketplace checkout: auth uid must match payload userId + field guards.
@@ -1458,7 +1486,7 @@ service cloud.firestore {
      * List queries use exists(drivers/{auth.uid}) only — no custom claims required.
      */
     match /driver_marketplace_pool/{orderId} {
-      allow read: if isAdmin() || hasDriverAccountDoc();
+      allow read, list: if isAdmin() || hasDriverAccountDoc();
       allow write: if false;
     }
     match /drivers/{driverId} {

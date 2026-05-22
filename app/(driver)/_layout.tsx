@@ -1,11 +1,23 @@
-import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
+import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
+import { useAuth } from '@/services/AuthContext';
 import { Tabs } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 export default function DriverLayout() {
+  const { user, loading: authLoading } = useAuth();
+  const claimsSyncedForUidRef = useRef<string | null>(null);
+
   useEffect(() => {
-    void ensureAuthRoleClaim('driver');
-  }, []);
+    const uid = user?.uid?.trim() ?? '';
+    if (authLoading || !uid) return;
+    if (claimsSyncedForUidRef.current === uid) return;
+
+    claimsSyncedForUidRef.current = uid;
+    void refreshAuthRoleClaims().catch((err) => {
+      claimsSyncedForUidRef.current = null;
+      console.error('[driver] refreshAuthRoleClaims failed', err);
+    });
+  }, [authLoading, user?.uid]);
 
   return (
     <Tabs
