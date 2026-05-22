@@ -9,8 +9,10 @@ import {
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
+import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,47 +20,47 @@ export default function DriverOrdersScreen() {
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const router = useRouter();
+  const isFocused = useIsFocused();
+  const uid = user?.uid?.trim() ?? '';
   const { online, loading: onlineLoading } = useDriverOnlineStatus();
   const [orders, setOrders] = useState<DeliveryQueueOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
   const [decliningOrderId, setDecliningOrderId] = useState<string | null>(null);
 
+  const applyQueueOrders = useCallback((rows: DeliveryQueueOrder[]) => {
+    setOrders(rows);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
-    if (!user?.uid) {
+    if (!uid || !isFocused || onlineLoading || !online) {
       setOrders([]);
       setLoading(false);
-      return;
-    }
-    if (onlineLoading) {
-      return;
-    }
-    if (!online) {
-      setOrders([]);
-      setLoading(false);
-      return;
+      return undefined;
     }
 
+    logListenerSubscribe('orders.driverQueue');
     setLoading(true);
+
     let unsub: (() => void) | null = null;
     try {
-      unsub = subscribeDriverQueue(user.uid, (rows) => {
-        setOrders(rows);
-        setLoading(false);
-      });
+      unsub = subscribeDriverQueue(uid, applyQueueOrders);
     } catch (e) {
       console.error('[driver] subscribeDriverQueue setup failed', e);
       setOrders([]);
       setLoading(false);
     }
+
     return () => {
+      logListenerUnsubscribe('orders.driverQueue');
       try {
         unsub?.();
       } catch (e) {
         console.error('[driver] subscribeDriverQueue cleanup failed', e);
       }
     };
-  }, [user?.uid, online, onlineLoading]);
+  }, [uid, isFocused, online, onlineLoading, applyQueueOrders]);
 
   const maskPhone = (phone: string | null) => {
     if (!phone) return 'Phone unavailable';

@@ -5,8 +5,9 @@ import {
   writeDriverOnlinePresence,
 } from '@/services/driverPresence';
 import { auth } from '@/services/firebase';
+import { logListenerSubscribe, logListenerUnsubscribe } from '@/utils/driverListenerLog';
 import { onSnapshot } from 'firebase/firestore';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Platform, UIManager } from 'react-native';
 
 if (
@@ -54,6 +55,7 @@ export function useDriverPresence(
 
     setLoading(true);
 
+    logListenerSubscribe('driver.presence');
     const unsub = onSnapshot(
       driverPresenceDoc(uid),
       (snap) => {
@@ -96,6 +98,7 @@ export function useDriverPresence(
     );
 
     return () => {
+      logListenerUnsubscribe('driver.presence');
       if (listenerEpochRef.current === epoch) {
         listenerEpochRef.current = 0;
       }
@@ -138,12 +141,15 @@ export function useDriverPresence(
     }
   }, []);
 
-  return {
-    isOnline,
-    loading,
-    toggling,
-    rating,
-    setOnlineStatus,
-    toggleOnline: setOnlineStatus,
-  };
+  return useMemo(
+    () => ({
+      isOnline,
+      loading,
+      toggling,
+      rating,
+      setOnlineStatus,
+      toggleOnline: setOnlineStatus,
+    }),
+    [isOnline, loading, toggling, rating, setOnlineStatus],
+  );
 }

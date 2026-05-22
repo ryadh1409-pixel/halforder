@@ -1,37 +1,20 @@
-import { subscribeDriverDeliveryStats } from '@/services/driverService';
-import { useAuth } from '@/services/AuthContext';
-import React, { useEffect, useState } from 'react';
+import { useDriverDeliveryStats } from '@/contexts/DriverRealtimeContext';
+import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DriverEarningsScreen() {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [deliveries, setDeliveries] = useState(0);
-  const [earnings, setEarnings] = useState(0);
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setLoading(false);
-      return;
-    }
-    const unsub = subscribeDriverDeliveryStats(user.uid, (stats) => {
-      setDeliveries(stats.deliveries);
-      setEarnings(stats.earnings);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [user?.uid]);
+  const { stats, statsLoading } = useDriverDeliveryStats();
 
   return (
     <SafeAreaView style={styles.screen}>
-      {loading ? (
+      {statsLoading ? (
         <ActivityIndicator size="large" color="#00C853" />
       ) : (
         <View style={styles.card}>
           <Text style={styles.title}>Earnings</Text>
-          <Text style={styles.value}>${earnings.toFixed(2)}</Text>
-          <Text style={styles.meta}>Completed deliveries: {deliveries}</Text>
+          <Text style={styles.value}>${stats.earnings.toFixed(2)}</Text>
+          <Text style={styles.meta}>Completed deliveries: {stats.deliveries}</Text>
         </View>
       )}
     </SafeAreaView>

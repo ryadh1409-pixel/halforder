@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   ActivityIndicator,
@@ -18,13 +18,14 @@ import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
+import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
 import {
   getDriverActiveOrders,
   subscribeAvailableOrders,
-  subscribeDriverDeliveryStats,
   type DriverOrder,
 } from '../../services/driverService';
+import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
 import { showError, showSuccess } from '../../utils/toast';
 
 function formatOrderTime(value: number | null): string {
@@ -148,123 +149,68 @@ export default function DriverHubScreen() {
   } = useDriverPresenceContext();
   const [availableOrders, setAvailableOrders] = useState<DriverOrder[]>([]);
   const [activeOrders, setActiveOrders] = useState<DriverOrder[]>([]);
-  const [acceptingId, setAcceptingId] = useState<string | null>(null);
-  const [stats, setStats] = useState({ deliveries: 0, earnings: 0, rating: 5.0 });
+  const { stats: deliveryStats } = useDriverDeliveryStats();
+  const stats = useMemo(
+    () => ({
+      deliveries: deliveryStats.deliveries,
+      earnings: deliveryStats.earnings,
+      rating: profileRating > 0 ? profileRating : deliveryStats.rating,
+    }),
+    [deliveryStats, profileRating],
+  );
 
-  const unsubAvailableRef = useRef<(() => void) | null>(null);
-  const unsubActiveRef = useRef<(() => void) | null>(null);
-  const unsubStatsRef = useRef<(() => void) | null>(null);
-  const lastStatsRef = useRef({ deliveries: 0, earnings: 0, rating: 5.0 });
-  const profileRatingRef = useRef(profileRating);
-  profileRatingRef.current = profileRating;
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
   const availableSigRef = useRef('');
   const activeSigRef = useRef('');
   const acceptingIdRef = useRef<string | null>(null);
   acceptingIdRef.current = acceptingId;
 
-  useEffect(() => {
-    if (!uid || !isFocused) return undefined;
-
-    unsubStatsRef.current = subscribeDriverDeliveryStats(uid, (deliveryStats) => {
-      const merged = {
-        deliveries: deliveryStats.deliveries,
-        earnings: deliveryStats.earnings,
-        rating: profileRatingRef.current > 0 ? profileRatingRef.current : 5.0,
-      };
-      const prev = lastStatsRef.current;
-      if (
-        prev.deliveries !== merged.deliveries ||
-        prev.earnings !== merged.earnings ||
-        prev.rating !== merged.rating
-      ) {
-        lastStatsRef.current = merged;
-        setStats(merged);
-      }
-    });
-
-    return () => {
-      unsubStatsRef.current?.();
-      unsubStatsRef.current = null;
-    };
-  }, [isFocused, uid]);
-
-  useEffect(() => {
-    if (!uid) {
-      availableSigRef.current = '';
-      activeSigRef.current = '';
-      return undefined;
-    }
-
-    const clearOrderListeners = () => {
-      unsubAvailableRef.current?.();
-      unsubAvailableRef.current = null;
-      unsubActiveRef.current?.();
-      unsubActiveRef.current = null;
-    };
-
-    if (!isFocused) {
-      clearOrderListeners();
-      availableSigRef.current = '';
-      activeSigRef.current = '';
-      setAvailableOrders([]);
-      setActiveOrders([]);
-      return undefined;
-    }
-
-    if (!isOnline) {
-      clearOrderListeners();
-      availableSigRef.current = '';
-      activeSigRef.current = '';
-      setAvailableOrders([]);
-      setActiveOrders([]);
-      return undefined;
-    }
-
-    unsubAvailableRef.current = subscribeAvailableOrders((orders) => {
-      const unique = Array.from(
-        new Map(orders.filter((o) => !o.driverId).map((o) => [o.id, o])).values(),
-      );
-      const sig = ordersListSignature(unique);
-      if (sig === availableSigRef.current) return;
-      availableSigRef.current = sig;
-      setAvailableOrders(unique);
-    });
-
-    unsubActiveRef.current = getDriverActiveOrders(uid, (rows) => {
-      const sig = ordersListSignature(rows);
-      if (sig === activeSigRef.current) return;
-      activeSigRef.current = sig;
-      setActiveOrders(rows);
-    });
-
-    return () => {
-      clearOrderListeners();
-    };
-  }, [isFocused, isOnline, uid]);
-
-  useEffect(() => {
-    return () => {
-      unsubAvailableRef.current?.();
-      unsubActiveRef.current?.();
-      unsubStatsRef.current?.();
-    };
+  const applyAvailableOrders = useCallback((orders: DriverOrder[]) => {
+    const unique = Array.from(
+      new Map(orders.filter((o) => !o.driverId).map((o) => [o.id, o])).values(),
+    );
+    const sig = ordersListSignature(unique);
+    if (sig === availableSigRef.current) return;
+    availableSigRef.current = sig;
+    setAvailableOrders(unique);
   }, []);
+
+  const applyActiveOrders = useCallback((rows: DriverOrder[]) => {
+    const sig = ordersListSignature(rows);
+    if (sig === activeSigRef.current) return;
+    activeSigRef.current = sig;
+    setActiveOrders(rows);
+  }, []);
+
+  useEffect(() => {
+    if (!uid || !isFocused || !isOnline) {
+      availableSigRef.current = '';
+      activeSigRef.current = '';
+      setAvailableOrders([]);
+      setActiveOrders([]);
+      return undefined;
+    }
+
+    logListenerSubscribe('hub.availableOrders');
+    const unsubAvailable = subscribeAvailableOrders(applyAvailableOrders);
+
+    logListenerSubscribe('hub.activeOrders');
+    const unsubActive = getDriverActiveOrders(uid, applyActiveOrders);
+
+    return () => {
+      logListenerUnsubscribe('hub.availableOrders');
+      unsubAvailable();
+      logListenerUnsubscribe('hub.activeOrders');
+      unsubActive();
+    };
+  }, [uid, isFocused, isOnline, applyAvailableOrders, applyActiveOrders]);
 
   const handleToggleOnline = useCallback(
     async (nextValue: boolean) => {
       console.log('[TOGGLE PRESSED]', { nextValue, uid });
       try {
         await toggleOnline(nextValue);
-        if (!nextValue) {
-          unsubAvailableRef.current?.();
-          unsubAvailableRef.current = null;
-          unsubActiveRef.current?.();
-          unsubActiveRef.current = null;
-          availableSigRef.current = '';
-          activeSigRef.current = '';
-          setAvailableOrders([]);
-          setActiveOrders([]);
-        }
       } catch {
         showError('Failed to update online status');
       }

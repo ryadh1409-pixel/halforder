@@ -452,6 +452,8 @@ export function subscribeAvailableOrders(
       filters: poolFilters,
     });
 
+    if (cancelled) return;
+
     try {
       unsub = onSnapshot(
         query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
@@ -507,6 +509,11 @@ export function subscribeDriverDeliveryStats(
         return;
       }
 
+      if (cancelled) {
+        emitEmpty();
+        return;
+      }
+
       const statsFilters = {
         driverId: authUid,
         status: 'delivered',
@@ -517,6 +524,11 @@ export function subscribeDriverDeliveryStats(
         collection: 'orders',
         filters: statsFilters,
       });
+
+      if (cancelled) {
+        emitEmpty();
+        return;
+      }
 
       try {
         unsub = onSnapshot(
