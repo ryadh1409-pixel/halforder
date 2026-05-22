@@ -18,12 +18,7 @@ import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
-import {
-  ensureDriverPresenceDoc,
-  driverPresenceDoc,
-  resolveDriverOnline,
-  updateDriverOnlineStatus,
-} from '../../services/driverPresence';
+import { useDriverPresence } from '../../hooks/useDriverPresence';
 import {
   getDriverActiveOrders,
   subscribeAvailableOrders,
@@ -31,7 +26,6 @@ import {
   type DriverOrder,
 } from '../../services/driverService';
 import { showError, showSuccess } from '../../utils/toast';
-import { onSnapshot } from 'firebase/firestore';
 
 function formatOrderTime(value: number | null): string {
   if (!value) return 'Now';
@@ -146,8 +140,12 @@ export default function DriverHubScreen() {
   const { user, signOutUser, switchRoleMode } = useAuth();
   const isFocused = useIsFocused();
   const uid = user?.uid ?? '';
-  const [isOnline, setIsOnline] = useState(false);
-  const [togglingOnline, setTogglingOnline] = useState(false);
+  const {
+    isOnline,
+    toggling: togglingOnline,
+    rating: profileRating,
+    setOnlineStatus: toggleOnline,
+  } = useDriverPresence(uid, { enabled: isFocused, displayName: user?.displayName });
   const [availableOrders, setAvailableOrders] = useState<DriverOrder[]>([]);
   const [activeOrders, setActiveOrders] = useState<DriverOrder[]>([]);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -156,71 +154,16 @@ export default function DriverHubScreen() {
   const unsubAvailableRef = useRef<(() => void) | null>(null);
   const unsubActiveRef = useRef<(() => void) | null>(null);
   const unsubStatsRef = useRef<(() => void) | null>(null);
-  const unsubDriverProfileRef = useRef<(() => void) | null>(null);
-
-  const presenceBootstrappedRef = useRef(false);
-  const lastOnlineRef = useRef<boolean | null>(null);
-  const pendingOnlineRef = useRef<boolean | null>(null);
-  const togglingOnlineRef = useRef(false);
   const lastStatsRef = useRef({ deliveries: 0, earnings: 0, rating: 5.0 });
-  const profileRatingRef = useRef(5.0);
+  const profileRatingRef = useRef(profileRating);
+  profileRatingRef.current = profileRating;
   const availableSigRef = useRef('');
   const activeSigRef = useRef('');
   const acceptingIdRef = useRef<string | null>(null);
   acceptingIdRef.current = acceptingId;
 
   useEffect(() => {
-    if (!isFocused || !uid) return;
-    if (presenceBootstrappedRef.current) return;
-    presenceBootstrappedRef.current = true;
-    void ensureDriverPresenceDoc(uid, user?.displayName).catch((e) => {
-      console.error('[driver] ensureDriverPresenceDoc failed', e);
-      presenceBootstrappedRef.current = false;
-    });
-  }, [isFocused, uid, user?.displayName]);
-
-  useEffect(() => {
-    if (!uid) {
-      lastOnlineRef.current = null;
-      presenceBootstrappedRef.current = false;
-      return undefined;
-    }
-    if (!isFocused) {
-      return undefined;
-    }
-
-    const driverRef = driverPresenceDoc(uid);
-    const path = `drivers/${uid}`;
-    unsubDriverProfileRef.current = onSnapshot(
-      driverRef,
-      (snap) => {
-        const data = snap.data();
-        const isOnlineLive = resolveDriverOnline(
-          data as Record<string, unknown> | undefined,
-        );
-        const pending = pendingOnlineRef.current;
-        if (pending !== null) {
-          if (isOnlineLive === pending) {
-            lastOnlineRef.current = isOnlineLive;
-            setIsOnline(isOnlineLive);
-            pendingOnlineRef.current = null;
-          }
-        } else if (lastOnlineRef.current !== isOnlineLive) {
-          lastOnlineRef.current = isOnlineLive;
-          setIsOnline(isOnlineLive);
-        }
-        if (!snap.exists()) return;
-        const rating =
-          typeof data?.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0
-            ? data.rating
-            : 5.0;
-        profileRatingRef.current = rating;
-        setStats((prev) => ({ ...prev, rating }));
-      },
-      (e) => {
-        console.error('[driver] drivers profile listener failed', e);
-      },
-    );
+    if (!uid || !isFocused) return undefined;
 
     unsubStatsRef.current = subscribeDriverDeliveryStats(uid, (deliveryStats) => {
       const merged = {
@@ -240,12 +183,10 @@ export default function DriverHubScreen() {
     });
 
     return () => {
-      unsubDriverProfileRef.current?.();
-      unsubDriverProfileRef.current = null;
       unsubStatsRef.current?.();
       unsubStatsRef.current = null;
     };
-  }, [isFocused, uid, user?.displayName]);
+  }, [isFocused, uid]);
 
   useEffect(() => {
     if (!uid) {
@@ -306,27 +247,14 @@ export default function DriverHubScreen() {
       unsubAvailableRef.current?.();
       unsubActiveRef.current?.();
       unsubStatsRef.current?.();
-      unsubDriverProfileRef.current?.();
     };
   }, []);
 
   const handleToggleOnline = useCallback(
     async (nextValue: boolean) => {
-      if (!uid || togglingOnlineRef.current) return;
-
-      // eslint-disable-next-line no-console
-      console.log('[TOGGLE PRESSED]', nextValue);
-
-      togglingOnlineRef.current = true;
-      setTogglingOnline(true);
-      pendingOnlineRef.current = nextValue;
-      lastOnlineRef.current = nextValue;
-      setIsOnline(nextValue);
-
       try {
-        await updateDriverOnlineStatus(uid, nextValue);
+        await toggleOnline(nextValue);
         if (!nextValue) {
-          pendingOnlineRef.current = null;
           unsubAvailableRef.current?.();
           unsubAvailableRef.current = null;
           unsubActiveRef.current?.();
@@ -336,18 +264,11 @@ export default function DriverHubScreen() {
           setAvailableOrders([]);
           setActiveOrders([]);
         }
-      } catch (e) {
-        pendingOnlineRef.current = null;
-        const reverted = !nextValue;
-        lastOnlineRef.current = reverted;
-        setIsOnline(reverted);
+      } catch {
         showError('Failed to update online status');
-      } finally {
-        togglingOnlineRef.current = false;
-        setTogglingOnline(false);
       }
     },
-    [uid],
+    [toggleOnline],
   );
 
   const handleAccept = useCallback(
@@ -420,27 +341,42 @@ export default function DriverHubScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Driver Hub</Text>
           <Text style={styles.roleBadge}>DRIVER</Text>
-          <Text style={styles.headerSub}>{isOnline ? 'Online and receiving orders' : 'Offline'}</Text>
         </View>
-        <View style={styles.onlineRow} pointerEvents="box-none">
-          <Pressable style={styles.settingsBtn} onPress={openDriverSettings}>
-            <Text style={styles.settingsBtnText}>Profile</Text>
-          </Pressable>
-          {togglingOnline ? <ActivityIndicator color="#fff" size="small" style={styles.toggleLoader} /> : null}
-          <View style={styles.switchWrap} pointerEvents="auto">
+        <Pressable style={styles.settingsBtn} onPress={openDriverSettings}>
+          <Text style={styles.settingsBtnText}>Profile</Text>
+        </Pressable>
+      </View>
+
+      <View style={[styles.onlineCard, isOnline ? styles.onlineCardActive : styles.onlineCardOffline]}>
+        <View style={styles.onlineCardLeft}>
+          <View style={[styles.statusDot, isOnline ? styles.statusDotOnline : styles.statusDotOffline]} />
+          <View style={styles.onlineCardText}>
+            <Text style={styles.onlineCardTitle}>{isOnline ? 'Online' : 'Offline'}</Text>
+            <Text style={styles.onlineCardSub}>
+              {isOnline
+                ? 'You are online and receiving deliveries'
+                : 'You are offline — go online to receive orders'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.onlineCardRight}>
+          {togglingOnline ? (
+            <ActivityIndicator color={isOnline ? '#00C853' : '#9CA3AF'} size="small" />
+          ) : (
             <Switch
               value={isOnline}
               onValueChange={(value) => {
                 void handleToggleOnline(value);
               }}
               trackColor={{ false: '#3E3E5A', true: '#00C853' }}
-              thumbColor="#fff"
-              disabled={!uid}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#3E3E5A"
+              disabled={!uid || togglingOnline}
             />
-          </View>
+          )}
         </View>
       </View>
 
@@ -486,14 +422,7 @@ export default function DriverHubScreen() {
         {!isOnline ? (
           <View style={styles.stateCard}>
             <Text style={styles.stateTitle}>You are offline</Text>
-            <Text style={styles.stateSub}>Go online to receive delivery offers.</Text>
-          </View>
-        ) : togglingOnline ? (
-          <View style={styles.stateCard}>
-            <ActivityIndicator color="#00C853" size="large" />
-            <Text style={[styles.stateSub, { marginTop: 12 }]}>
-              Updating availability…
-            </Text>
+            <Text style={styles.stateSub}>Turn on the switch above to start receiving delivery offers.</Text>
           </View>
         ) : availableOrders.length === 0 ? (
           <View style={styles.stateCard}>
@@ -609,13 +538,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#1a1a2e' },
   header: {
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A45',
+    paddingTop: 14,
+    paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerLeft: { flex: 1 },
   headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   roleBadge: {
     color: '#93C5FD',
@@ -624,20 +553,43 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginTop: 2,
   },
-  headerSub: { color: '#9CA3AF', marginTop: 2, fontWeight: '600' },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', zIndex: 2 },
-  switchWrap: { zIndex: 3 },
+  onlineCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  onlineCardActive: {
+    backgroundColor: '#132B1E',
+    borderColor: '#00C853',
+  },
+  onlineCardOffline: {
+    backgroundColor: '#22223A',
+    borderColor: '#3A3A5A',
+  },
+  onlineCardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onlineCardText: { flex: 1 },
+  onlineCardTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  onlineCardSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12, fontWeight: '600' },
+  onlineCardRight: { minWidth: 52, alignItems: 'center', justifyContent: 'center' },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusDotOnline: { backgroundColor: '#00E676' },
+  statusDotOffline: { backgroundColor: '#6B7280' },
   settingsBtn: {
     borderWidth: 1,
     borderColor: '#3A3A5A',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    marginRight: 8,
     backgroundColor: '#151526',
   },
   settingsBtnText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
-  toggleLoader: { marginRight: 8 },
   scroll: { padding: 14, paddingBottom: 36 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statCard: {

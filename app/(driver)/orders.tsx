@@ -9,6 +9,7 @@ import {
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -18,7 +19,11 @@ export default function DriverOrdersScreen() {
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const router = useRouter();
-  const { online, loading: onlineLoading } = useDriverOnlineStatus(user?.uid);
+  const isFocused = useIsFocused();
+  const { online, loading: onlineLoading } = useDriverOnlineStatus(user?.uid, {
+    enabled: isFocused,
+    displayName: user?.displayName,
+  });
   const [orders, setOrders] = useState<DeliveryQueueOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
