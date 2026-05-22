@@ -26,7 +26,6 @@ import {
   resetRoleShellLanding,
   roleLandingKey,
 } from '@/lib/roleRouteGuard';
-import { DriverRouteShell } from '@/contexts/DriverRouteShell';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { logAuthReady, logRouteRedirect } from '@/utils/routeDiagnostics';
 import { AuthProvider, useAuth } from '../services/AuthContext';
@@ -221,9 +220,7 @@ export default function RootLayout() {
             <AuthProvider>
               <CartProvider>
                 <RoleRouteGuard />
-                <DriverRouteShell>
-                  <Slot />
-                </DriverRouteShell>
+                <Slot />
                 <SessionQuickActions />
               </CartProvider>
             </AuthProvider>

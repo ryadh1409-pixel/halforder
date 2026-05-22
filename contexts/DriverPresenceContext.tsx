@@ -1,6 +1,7 @@
 import { useDriverPresence } from '@/hooks/useDriverPresence';
 import { useAuth } from '@/services/AuthContext';
 import { ensureDriverPresenceDoc } from '@/services/driverPresence';
+import { useDriverMountLog } from '@/utils/driverMountLog';
 import React, { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 
 type DriverPresenceValue = ReturnType<typeof useDriverPresence>;
@@ -9,6 +10,7 @@ const DriverPresenceContext = createContext<DriverPresenceValue | null>(null);
 
 /** One presence listener + toggle for the entire driver tab stack. */
 export function DriverPresenceProvider({ children }: { children: ReactNode }) {
+  useDriverMountLog('DriverPresenceProvider');
   const { user } = useAuth();
   const uid = user?.uid?.trim() ?? '';
   const displayName = user?.displayName ?? null;
