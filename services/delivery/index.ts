@@ -6,6 +6,7 @@ import {
 } from '@/constants/deliveryStatus';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { db } from '@/services/firebase';
+import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import {
   arrayUnion,
@@ -396,7 +397,7 @@ export function subscribeDriverQueue(
     onData(unique);
   };
 
-  void (async () => {
+  runListenerBootstrap('subscribeDriverQueue', async () => {
     try {
       await ensureAuthRoleClaim('driver');
     } catch (err) {
@@ -416,20 +417,15 @@ export function subscribeDriverQueue(
         }
         emit();
       },
-      (error) => {
-        logDeliveryListenError(`subscribeDriverQueue drivers/${driverId}`, error);
+      safeListenerError(`subscribeDriverQueue drivers/${driverId}`, () => {
         online = false;
         emit();
-      },
+      }),
     );
 
     unsubOrders = onSnapshot(
       query(
-        collection(db, 'orders'),
-        where('status', '==', 'pending_driver'),
-        where('deliveryType', '==', 'delivery'),
-        where('driverId', '==', null),
-        where('assignedDriverId', '==', null),
+        collection(db, 'driver_marketplace_pool'),
         orderBy('createdAt', 'desc'),
       ),
       (snap) => {
@@ -440,19 +436,17 @@ export function subscribeDriverQueue(
             .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
             .filter((row) => row.status !== 'cancelled');
         } catch (err) {
-          warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue orders map', err);
+          warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue pool map', err);
           cache = [];
         }
         emit();
       },
-      (error) => {
-        logDeliveryListenError('subscribeDriverQueue orders query', error);
+      safeListenerError('subscribeDriverQueue driver_marketplace_pool', () => {
         cache = [];
         emit();
-      },
+      }),
     );
-  })().catch((err) => {
-    logDeliveryListenError('subscribeDriverQueue bootstrap', err);
+  }, () => {
     cache = [];
     emit();
   });
@@ -564,7 +558,7 @@ export function subscribeDriverActiveOrders(
   let unsub: Unsubscribe | null = null;
   let cancelled = false;
 
-  void (async () => {
+  runListenerBootstrap('subscribeDriverActiveOrders', async () => {
     try {
       await ensureAuthRoleClaim('driver');
     } catch (err) {
@@ -597,15 +591,9 @@ export function subscribeDriverActiveOrders(
           onData([]);
         }
       },
-      (error) => {
-        logDeliveryListenError('subscribeDriverActiveOrders orders query', error);
-        onData([]);
-      },
+      safeListenerError('subscribeDriverActiveOrders', () => onData([])),
     );
-  })().catch((err) => {
-    logDeliveryListenError('subscribeDriverActiveOrders bootstrap', err);
-    onData([]);
-  });
+  }, () => onData([]));
 
   return () => {
     cancelled = true;

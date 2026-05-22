@@ -16,6 +16,7 @@ import {
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { acceptOrderWithLock } from '@/services/delivery';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
+import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { db } from './firebase';
 import type { OrderStatus } from './orderService';
 
@@ -231,7 +232,7 @@ export function subscribeDrivers(
   onData: (drivers: DriverProfile[]) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(collection(db, 'drivers'), orderBy('name', 'asc')),
+    query(collection(db, 'drivers'), where('isOnline', '==', true)),
     (snap) => {
       const rows: DriverProfile[] = snap.docs.map((docSnap) => {
         const data = docSnap.data();
@@ -255,11 +256,11 @@ export function subscribeToDriverOrders(
   let unsub: Unsubscribe | null = null;
   let cancelled = false;
 
-  void (async () => {
+  runListenerBootstrap('subscribeToDriverOrders', async () => {
     try {
       await ensureAuthRoleClaim('driver');
     } catch {
-      /* listener may still work for assigned orders via driverId rule */
+      /* assigned-order reads use driverId rule */
     }
     if (cancelled) return;
 
@@ -278,13 +279,9 @@ export function subscribeToDriverOrders(
           onData([]);
         }
       },
-      () => {
-        onData([]);
-      },
+      safeListenerError('subscribeToDriverOrders', () => onData([])),
     );
-  })().catch(() => {
-    onData([]);
-  });
+  }, () => onData([]));
 
   return () => {
     cancelled = true;
@@ -307,24 +304,16 @@ export function subscribeAvailableOrders(
   let unsub: Unsubscribe | null = null;
   let cancelled = false;
 
-  void (async () => {
+  runListenerBootstrap('subscribeAvailableOrders', async () => {
     try {
       await ensureAuthRoleClaim('driver');
     } catch {
-      /* claims refresh best-effort */
+      /* pool collection uses drivers/{uid} membership */
     }
     if (cancelled) return;
 
     unsub = onSnapshot(
-      query(
-        collection(db, 'orders'),
-        where('status', '==', 'pending_driver'),
-        where('deliveryType', '==', 'delivery'),
-        where('driverId', '==', null),
-        where('assignedDriverId', '==', null),
-        orderBy('createdAt', 'desc'),
-        limit(20),
-      ),
+      query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
       (snap) => {
         try {
           const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
@@ -333,13 +322,9 @@ export function subscribeAvailableOrders(
           onData([]);
         }
       },
-      () => {
-        onData([]);
-      },
+      safeListenerError('subscribeAvailableOrders', () => onData([])),
     );
-  })().catch(() => {
-    onData([]);
-  });
+  }, () => onData([]));
 
   return () => {
     cancelled = true;

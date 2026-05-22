@@ -12,7 +12,7 @@ export async function refreshAuthRoleClaims(): Promise<string | null> {
   if (!user) return null;
 
   try {
-    const refresh = httpsCallable<{ role?: string }, { role?: string }>(
+    const refresh = httpsCallable<Record<string, never>, { role?: string }>(
       functions,
       'refreshUserRoleClaims',
     );
@@ -29,6 +29,18 @@ export async function refreshAuthRoleClaims(): Promise<string | null> {
       console.warn('[auth] refreshAuthRoleClaims failed', err);
     }
     return null;
+  }
+}
+
+/** True when the current ID token carries role=driver (after refreshUserRoleClaims). */
+export async function hasDriverRoleClaim(): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) return false;
+  try {
+    const token = await user.getIdTokenResult();
+    return token.claims.role === 'driver';
+  } catch {
+    return false;
   }
 }
 

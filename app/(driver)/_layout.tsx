@@ -1,7 +1,12 @@
+import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 
 export default function DriverLayout() {
+  useEffect(() => {
+    void ensureAuthRoleClaim('driver');
+  }, []);
+
   return (
     <Tabs
       screenOptions={{

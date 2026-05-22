@@ -326,11 +326,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void ensureRestaurantProfile();
   }, [user?.uid, user?.displayName, firestoreRole]);
 
-  /** Keep Auth custom claims aligned with Firestore role (driver pool queries). */
+  /** Keep Auth custom claims aligned with Firestore `users/{uid}.role`. */
   useEffect(() => {
     const uid = user?.uid;
     if (!uid || user?.isAnonymous) return;
-    if (firestoreRole !== 'driver' && firestoreRole !== 'admin') return;
     void refreshAuthRoleClaims();
   }, [user?.uid, user?.isAnonymous, firestoreRole]);
 

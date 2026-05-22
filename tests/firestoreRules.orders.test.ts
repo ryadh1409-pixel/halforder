@@ -655,6 +655,29 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows driver_marketplace_pool list for driver account doc', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), {
+          name: 'Driver One',
+          isOnline: true,
+        });
+        await setDoc(doc(ctx.firestore(), 'driver_marketplace_pool', 'pool1'), {
+          orderId: 'pool1',
+          status: 'pending_driver',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          createdAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        getDocs(
+          query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc')),
+        ),
+      );
+    });
+
     it('allows driver marketplace pool list when auth token role is driver', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'users', 'drv1'), { role: 'driver' });

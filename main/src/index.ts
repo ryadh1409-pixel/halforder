@@ -9,3 +9,4 @@ initializeApp();
 
 export {syncPublicMatchableOrder} from "./publicMatchableSync.js";
 export {refreshUserRoleClaims, syncUserRoleClaims} from "./syncUserRoleClaims.js";
+export {syncDriverMarketplacePool} from "./syncDriverMarketplacePool.js";

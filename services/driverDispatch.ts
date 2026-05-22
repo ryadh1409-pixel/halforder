@@ -1,5 +1,6 @@
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
+import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { db } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
 import {
@@ -178,11 +179,11 @@ export function subscribeAvailableOrders(
     onData(available);
   };
 
-  void (async () => {
+  runListenerBootstrap('driverDispatch.subscribeAvailableOrders', async () => {
     try {
       await ensureAuthRoleClaim('driver');
     } catch {
-      /* best-effort */
+      /* pool collection uses drivers/{uid} membership */
     }
     if (cancelled) return;
 
@@ -193,31 +194,24 @@ export function subscribeAvailableOrders(
         driverOnline = data?.isOnline === true;
         emit();
       },
-      () => {
+      safeListenerError('driverDispatch driver presence', () => {
         driverOnline = false;
         emit();
-      },
+      }),
     );
 
     unsubOrders = onSnapshot(
-      query(
-        collection(db, 'orders'),
-        where('status', '==', 'pending_driver'),
-        where('deliveryType', '==', 'delivery'),
-        where('driverId', '==', null),
-        where('assignedDriverId', '==', null),
-        orderBy('createdAt', 'desc'),
-      ),
+      query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc')),
       (snap) => {
         ordersCache = snap.docs.map((orderDoc) => mapDispatchOrder(orderDoc));
         emit();
       },
-      () => {
+      safeListenerError('driverDispatch driver_marketplace_pool', () => {
         ordersCache = [];
         emit();
-      },
+      }),
     );
-  })().catch(() => {
+  }, () => {
     ordersCache = [];
     emit();
   });

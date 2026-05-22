@@ -1,21 +1,11 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Profile photos: one file per signed-in user — `{uid}.jpg` only
-    match /profiles/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && fileName == auth.uid + '.jpg';
+    function isSignedIn() {
+      return request.auth != null;
     }
-
-    match /users/{userId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    /** Admin catalog images (`services/uploadImage.ts` → foodTemplates/). */
-    match /foodTemplates/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
+    function isAdmin() {
+      return isSignedIn()
         && (
           request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
           || (
@@ -27,6 +17,61 @@ service firebase.storage {
             )
           )
         );
+    }
+    function isValidImageUpload() {
+      return request.resource.size < 12 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** Profile avatar — public read, owner-only write (`profiles/{uid}.jpg`). */
+    match /profiles/{fileName} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && isValidImageUpload()
+        && fileName == request.auth.uid + '.jpg';
+      allow delete: if isSignedIn() && fileName == request.auth.uid + '.jpg';
+    }
+
+    /** Per-user private uploads (`users/{uid}/...`). */
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) && isValidImageUpload();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    /** Driver-owned assets (`drivers/{uid}/...`). */
+    match /drivers/{driverId}/{allPaths=**} {
+      allow read: if isOwner(driverId) || isAdmin();
+      allow create, update: if isOwner(driverId) && isValidImageUpload();
+      allow delete: if isOwner(driverId) || isAdmin();
+    }
+
+    /** Restaurant-owned assets (`restaurants/{uid}/...`). */
+    match /restaurants/{restaurantId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isOwner(restaurantId) && isValidImageUpload();
+      allow delete: if isOwner(restaurantId) || isAdmin();
+    }
+
+    /** Legacy generic uploads — namespaced by uid folder. */
+    match /uploads/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) && isValidImageUpload();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    /** Admin catalog images (`services/uploadImage.ts` → foodTemplates/). */
+    match /foodTemplates/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin() && isValidImageUpload();
+    }
+
+    /** Deny all other paths by default. */
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
