@@ -25,7 +25,6 @@ import {
   type DriverOrder,
 } from '../../services/driverService';
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
-import { useDriverMountLog } from '../../utils/driverMountLog';
 import { showError, showSuccess } from '../../utils/toast';
 
 function formatOrderTime(value: number | null): string {
@@ -138,7 +137,6 @@ function ordersListSignature(orders: DriverOrder[]): string {
 }
 
 export default function DriverHubScreen() {
-  useDriverMountLog('DriverHub');
   const { user, signOutUser, switchRoleMode } = useAuth();
   const uid = user?.uid ?? '';
   const {
@@ -235,7 +233,7 @@ export default function DriverHubScreen() {
         }
         setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
         showSuccess('Order accepted');
-        router.replace(`/driver/active/${encodeURIComponent(order.id)}` as never);
+        router.replace(`/(driver)/active/${encodeURIComponent(order.id)}` as never);
       } catch (e) {
         console.error('[driver] accept order failed', e);
         showError('Failed to accept order');
@@ -349,7 +347,7 @@ export default function DriverHubScreen() {
         {pinnedActiveOrder ? (
           <Pressable
             style={styles.activeCard}
-            onPress={() => router.push(`/driver/active/${encodeURIComponent(pinnedActiveOrder.id)}` as never)}
+            onPress={() => router.push(`/(driver)/active/${encodeURIComponent(pinnedActiveOrder.id)}` as never)}
           >
             <View style={styles.activeRow}>
               <Text style={styles.activeTitle}>Active Delivery</Text>

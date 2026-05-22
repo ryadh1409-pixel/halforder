@@ -10,14 +10,12 @@ import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { requireRole } from '../../utils/requireRole';
 import { showError, showSuccess } from '../../utils/toast';
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
-import { useDriverMountLog } from '../../utils/driverMountLog';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function DriverOrdersScreen() {
-  useDriverMountLog('DriverOrders');
+export default function DriverDispatchScreen() {
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const router = useRouter();
@@ -91,7 +89,7 @@ export default function DriverOrdersScreen() {
       }
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
       showSuccess('Order assigned to you');
-      router.push(`/driver/active/${encodeURIComponent(orderId)}` as never);
+      router.push(`/(driver)/active/${encodeURIComponent(orderId)}` as never);
     } catch {
       showError('Could not accept order.');
     } finally {

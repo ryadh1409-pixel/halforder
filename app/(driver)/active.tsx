@@ -22,7 +22,7 @@ export default function DriverActiveScreen() {
     }
     if (redirectedForIdRef.current === firstOrderId) return;
     redirectedForIdRef.current = firstOrderId;
-    router.replace(`/driver/active/${encodeURIComponent(firstOrderId)}` as never);
+    router.replace(`/(driver)/active/${encodeURIComponent(firstOrderId)}` as never);
   }, [loading, firstOrderId]);
 
   if (roleLoading || !authorized) {
@@ -46,7 +46,7 @@ export default function DriverActiveScreen() {
               <Text style={styles.emptyIcon}>🚚</Text>
               <Text style={styles.emptyTitle}>No active deliveries</Text>
               <Text style={styles.emptySub}>Accept an order from the queue first.</Text>
-              <Pressable style={styles.secondary} onPress={() => router.push('/(driver)/orders' as never)}>
+              <Pressable style={styles.secondary} onPress={() => router.push('/(driver)/dispatch' as never)}>
                 <Text style={styles.secondaryText}>Browse available</Text>
               </Pressable>
             </View>

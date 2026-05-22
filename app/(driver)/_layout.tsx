@@ -1,20 +1,31 @@
+import DriverTabBar from '@/components/driver/DriverTabBar';
 import { DriverShellProvider } from '@/contexts/DriverShellContext';
 import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { useAuth } from '@/services/AuthContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { useDriverMountLog } from '@/utils/driverMountLog';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 
 const DRIVER_TAB_SCREEN_OPTIONS = {
   headerShown: false,
+  lazy: false,
 } as const;
+
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
 
 export default function DriverLayout() {
   useDriverMountLog('DriverLayout');
   const { user, loading: authLoading } = useAuth();
   const claimsSyncedForUidRef = useRef<string | null>(null);
   const screenOptions = useMemo(() => DRIVER_TAB_SCREEN_OPTIONS, []);
+  const renderTabBar = useCallback(
+    (props: BottomTabBarProps) => <DriverTabBar {...props} />,
+    [],
+  );
 
   useEffect(() => {
     const uid = user?.uid?.trim() ?? '';
@@ -39,13 +50,18 @@ export default function DriverLayout() {
 
   return (
     <DriverShellProvider>
-      <Tabs screenOptions={screenOptions}>
+      <Tabs
+        tabBar={renderTabBar}
+        detachInactiveScreens={false}
+        screenOptions={screenOptions}
+      >
         <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
-        <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
+        <Tabs.Screen name="dispatch" options={{ title: 'Orders' }} />
         <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
         <Tabs.Screen name="dashboard" options={{ href: null }} />
         <Tabs.Screen name="active" options={{ href: null }} />
+        <Tabs.Screen name="active/[id]" options={{ href: null }} />
         <Tabs.Screen name="order/[id]" options={{ href: null }} />
       </Tabs>
     </DriverShellProvider>
