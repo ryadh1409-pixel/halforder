@@ -1,17 +1,19 @@
 import { DRIVER_TAB_ROLES } from '@/services/roles';
 import { useAuth } from '@/services/AuthContext';
 import type { UserRole } from '@/services/userService';
-import { Redirect } from 'expo-router';
-import React, { useMemo } from 'react';
+import { logRouteRedirect } from '@/utils/routeDiagnostics';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 const DRIVER_STACK_HREF = '/(driver)' as const;
 
 /**
- * Main-tabs driver entry: redirect into the canonical driver stack so
- * `DriverPresenceProvider` in `app/(driver)/_layout.tsx` wraps all driver UI.
+ * Main-tabs driver entry: one-time redirect into canonical `/(driver)` stack.
  */
 export default function DriverTabScreen() {
+  const router = useRouter();
+  const hasRedirectedRef = useRef(false);
   const { user, loading, firestoreUserRole } = useAuth();
   const effectiveRole = (firestoreUserRole ?? 'user') as UserRole;
   const authorized = useMemo(
@@ -19,13 +21,16 @@ export default function DriverTabScreen() {
     [user, loading, effectiveRole],
   );
 
-  if (loading || !authorized) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (!authorized || hasRedirectedRef.current) return;
+    hasRedirectedRef.current = true;
+    logRouteRedirect('/(tabs)/driver', DRIVER_STACK_HREF);
+    router.replace(DRIVER_STACK_HREF);
+  }, [authorized, router]);
 
-  return <Redirect href={DRIVER_STACK_HREF} />;
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" />
+    </View>
+  );
 }

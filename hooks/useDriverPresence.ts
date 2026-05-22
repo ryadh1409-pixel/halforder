@@ -47,7 +47,10 @@ export function useDriverPresence(
     listenerEpochRef.current = epoch;
     const path = `drivers/${uid}`;
 
-    setLoading(true);
+    const shouldShowLoading = lastResolvedRef.current === null;
+    if (shouldShowLoading) {
+      setLoading(true);
+    }
 
     logListenerSubscribe('driver.presence');
     const unsub = onSnapshot(

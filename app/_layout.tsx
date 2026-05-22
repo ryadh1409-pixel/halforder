@@ -17,8 +17,18 @@ import {
   logAuthRoleRouted,
   normalizeRoleForRouting,
 } from '@/lib/authRole';
-import { isAtAppEntryPoint, roleLandingKey } from '@/lib/roleRouteGuard';
+import {
+  hasRoleShellLandingCompleted,
+  isAlreadyOnRoleRoute,
+  isAtAppEntryPoint,
+  isInsideRoleShell,
+  markRoleShellLandingComplete,
+  resetRoleShellLanding,
+  roleLandingKey,
+} from '@/lib/roleRouteGuard';
+import { DriverRouteShell } from '@/contexts/DriverRouteShell';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
+import { logAuthReady, logRouteRedirect } from '@/utils/routeDiagnostics';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
@@ -47,28 +57,55 @@ function RoleRouteGuard() {
   const hasRoutedRef = useRef(false);
   const routedKeyRef = useRef<string | null>(null);
 
+  const segmentList = segments as string[];
+
+  useEffect(() => {
+    logAuthReady(!authLoading && Boolean(role), { uid: user?.uid ?? null });
+  }, [authLoading, role, user?.uid]);
+
   useEffect(() => {
     if (!user?.uid) {
       hasRoutedRef.current = false;
       routedKeyRef.current = null;
+      resetRoleShellLanding();
       return;
     }
     if (authLoading || !role) return;
+
+    if (hasRoleShellLandingCompleted()) {
+      hasRoutedRef.current = true;
+      return;
+    }
+
+    if (isInsideRoleShell(segmentList, pathname)) {
+      hasRoutedRef.current = true;
+      return;
+    }
+
     if (hasRoutedRef.current) return;
-    if (!isAtAppEntryPoint(pathname, segments as string[])) return;
+
+    const normalized = normalizeRoleForRouting(role);
+    if (isAlreadyOnRoleRoute(pathname, segmentList, normalized)) {
+      markRoleShellLandingComplete();
+      hasRoutedRef.current = true;
+      return;
+    }
+
+    if (!isAtAppEntryPoint(pathname, segmentList)) return;
 
     const key = roleLandingKey(user.uid, role);
     if (routedKeyRef.current === key) return;
 
-    const normalized = normalizeRoleForRouting(role);
     const route = getRouteForRole(normalized);
     logAuthRoleDetected(normalized);
     logAuthRoleRouted(normalized, route);
+    logRouteRedirect(pathname, route, { role: normalized, segments: segmentList });
 
     hasRoutedRef.current = true;
     routedKeyRef.current = key;
+    markRoleShellLandingComplete();
     router.replace(route as never);
-  }, [authLoading, role, pathname, router, user?.uid, segments]);
+  }, [authLoading, role, pathname, router, user?.uid, segmentList]);
 
   return null;
 }
@@ -184,7 +221,9 @@ export default function RootLayout() {
             <AuthProvider>
               <CartProvider>
                 <RoleRouteGuard />
-                <Slot />
+                <DriverRouteShell>
+                  <Slot />
+                </DriverRouteShell>
                 <SessionQuickActions />
               </CartProvider>
             </AuthProvider>
