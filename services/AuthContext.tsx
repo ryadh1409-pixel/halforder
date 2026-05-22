@@ -326,12 +326,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void ensureRestaurantProfile();
   }, [user?.uid, user?.displayName, firestoreRole]);
 
-  /** Keep Auth custom claims aligned with Firestore `users/{uid}.role`. */
+  /** Refresh custom claims once per signed-in uid (not on every firestoreRole snapshot). */
+  const claimsRefreshedForUidRef = useRef<string | null>(null);
   useEffect(() => {
     const uid = user?.uid;
-    if (!uid || user?.isAnonymous) return;
+    if (!uid || user?.isAnonymous) {
+      claimsRefreshedForUidRef.current = null;
+      return;
+    }
+    if (claimsRefreshedForUidRef.current === uid) return;
+    claimsRefreshedForUidRef.current = uid;
     void refreshAuthRoleClaims();
-  }, [user?.uid, user?.isAnonymous, firestoreRole]);
+  }, [user?.uid, user?.isAnonymous]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {

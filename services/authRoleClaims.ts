@@ -44,6 +44,8 @@ export async function hasDriverRoleClaim(): Promise<boolean> {
   }
 }
 
+let ensureClaimRefreshInFlight: Promise<void> | null = null;
+
 /** Refresh claims when token role is missing or stale vs expected Firestore role. */
 export async function ensureAuthRoleClaim(expectedRole?: string): Promise<void> {
   await syncAuthForFirestoreReads();
@@ -56,8 +58,19 @@ export async function ensureAuthRoleClaim(expectedRole?: string): Promise<void> 
       typeof token.claims.role === 'string' ? token.claims.role : '';
     if (expectedRole && claimRole === expectedRole) return;
     if (!expectedRole && claimRole) return;
-    await refreshAuthRoleClaims();
   } catch {
-    await refreshAuthRoleClaims();
+    /* fall through to single shared refresh */
+  }
+
+  if (ensureClaimRefreshInFlight) {
+    await ensureClaimRefreshInFlight;
+    return;
+  }
+
+  ensureClaimRefreshInFlight = refreshAuthRoleClaims().then(() => undefined);
+  try {
+    await ensureClaimRefreshInFlight;
+  } finally {
+    ensureClaimRefreshInFlight = null;
   }
 }

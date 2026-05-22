@@ -5,13 +5,29 @@ import {
 import { useAuth } from '@/services/AuthContext';
 import { logListenerSubscribe, logListenerUnsubscribe } from '@/utils/driverListenerLog';
 import { useDriverMountLog } from '@/utils/driverMountLog';
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
 const EMPTY_STATS: DriverDeliveryStats = {
   deliveries: 0,
   earnings: 0,
   rating: 5.0,
 };
+
+function statsEqual(a: DriverDeliveryStats, b: DriverDeliveryStats): boolean {
+  return (
+    a.deliveries === b.deliveries &&
+    a.earnings === b.earnings &&
+    a.rating === b.rating
+  );
+}
 
 type DriverRealtimeValue = {
   stats: DriverDeliveryStats;
@@ -28,14 +44,10 @@ export function DriverRealtimeProvider({ children }: { children: ReactNode }) {
   const [stats, setStats] = useState<DriverDeliveryStats>(EMPTY_STATS);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const onStatsRef = useRef((next: DriverDeliveryStats) => {
-    setStats(next);
-    setStatsLoading(false);
-  });
-  onStatsRef.current = (next: DriverDeliveryStats) => {
-    setStats(next);
-    setStatsLoading(false);
-  };
+  const applyStats = useCallback((next: DriverDeliveryStats) => {
+    setStats((prev) => (statsEqual(prev, next) ? prev : next));
+    setStatsLoading((prev) => (prev ? false : prev));
+  }, []);
 
   useEffect(() => {
     if (!uid) {
@@ -48,15 +60,13 @@ export function DriverRealtimeProvider({ children }: { children: ReactNode }) {
     logListenerSubscribe(listenerName);
     setStatsLoading(true);
 
-    const unsub = subscribeDriverDeliveryStats(uid, (next) => {
-      onStatsRef.current(next);
-    });
+    const unsub = subscribeDriverDeliveryStats(uid, applyStats);
 
     return () => {
       logListenerUnsubscribe(listenerName);
       unsub();
     };
-  }, [uid]);
+  }, [uid, applyStats]);
 
   const value = useMemo(
     () => ({
