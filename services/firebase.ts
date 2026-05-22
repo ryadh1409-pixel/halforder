@@ -78,6 +78,30 @@ export { app };
 export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);
 
+let ensureAuthReadyForced = false;
+
+/** Reset forced token refresh flags (sign-out / new session). */
+export function resetAuthTokenRefreshSession(): void {
+  ensureAuthReadyForced = false;
+}
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    resetAuthTokenRefreshSession();
+    void import('./authTokenRefresh').then((m) => m.resetForcedTokenRefreshUid());
+  }
+});
+
+async function getIdTokenForEnsureAuthReady(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) return '';
+  if (ensureAuthReadyForced) {
+    return user.getIdToken();
+  }
+  ensureAuthReadyForced = true;
+  return user.getIdToken(true);
+}
+
 /**
  * Ensures the Auth session has finished restoring before Firestore reads.
  * Avoids `permission-denied` when rules require `request.auth != null` but
@@ -147,7 +171,7 @@ export async function ensureAuthReady(): Promise<void> {
   }
 
   const user = auth.currentUser;
-  await user.getIdToken(true);
+  await getIdTokenForEnsureAuthReady();
   if (__DEV__) {
     console.log(
       '[auth] ensureAuthReady ok',

@@ -55,6 +55,7 @@ import {
   assignUserRole,
   migrateUserRoleIfNeeded,
 } from '@/services/authRoleAssignment';
+import { resetForcedTokenRefreshUid } from '@/services/authTokenRefresh';
 import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { syncUserRoleToFirestore } from '../utils/admin';
 import { uploadImageAsync } from './uploadImage';
@@ -342,6 +343,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
+        resetForcedTokenRefreshUid();
         setUser(null);
         setLoading(false);
         return;

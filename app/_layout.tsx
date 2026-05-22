@@ -17,6 +17,7 @@ import {
   logAuthRoleRouted,
   normalizeRoleForRouting,
 } from '@/lib/authRole';
+import { isAtAppEntryPoint, roleLandingKey } from '@/lib/roleRouteGuard';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
@@ -43,40 +44,31 @@ function RoleRouteGuard() {
   const segments = useSegments();
   const router = useRouter();
   const { loading: authLoading, firestoreUserRole: role, user } = useAuth();
-  const roleLandingRef = useRef<string | null>(null);
+  const hasRoutedRef = useRef(false);
+  const routedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (authLoading || !role || pathname !== '/') return;
-    if (!user) return;
-    // `usePathname()` can be `/` for tab screens in some Expo Router builds; never role-redirect from inside these shells.
-    const root = segments[0];
-    if (
-      root === '(tabs)' ||
-      root === '(driver)' ||
-      root === '(host)' ||
-      root === '(auth)' ||
-      root === '(customer)' ||
-      root === '(restaurant)'
-    ) {
+    if (!user?.uid) {
+      hasRoutedRef.current = false;
+      routedKeyRef.current = null;
       return;
     }
+    if (authLoading || !role) return;
+    if (hasRoutedRef.current) return;
+    if (!isAtAppEntryPoint(pathname, segments as string[])) return;
 
-    const landingKey = `${user.uid}:${role}`;
-    if (roleLandingRef.current === landingKey) return;
+    const key = roleLandingKey(user.uid, role);
+    if (routedKeyRef.current === key) return;
 
     const normalized = normalizeRoleForRouting(role);
-    logAuthRoleDetected(normalized);
     const route = getRouteForRole(normalized);
+    logAuthRoleDetected(normalized);
     logAuthRoleRouted(normalized, route);
-    roleLandingRef.current = landingKey;
-    router.replace(route as never);
-  }, [authLoading, role, pathname, router, user, segments]);
 
-  useEffect(() => {
-    if (pathname !== '/') {
-      roleLandingRef.current = null;
-    }
-  }, [pathname]);
+    hasRoutedRef.current = true;
+    routedKeyRef.current = key;
+    router.replace(route as never);
+  }, [authLoading, role, pathname, router, user?.uid, segments]);
 
   return null;
 }

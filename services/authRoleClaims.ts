@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 
+import { getIdTokenForceOnce } from './authTokenRefresh';
 import { auth, functions, syncAuthForFirestoreReads } from './firebase';
 
 /**
@@ -17,7 +18,7 @@ export async function refreshAuthRoleClaims(): Promise<string | null> {
       'refreshUserRoleClaims',
     );
     const res = await refresh({});
-    await user.getIdToken(true);
+    await getIdTokenForceOnce(user.uid);
     const role =
       typeof res.data?.role === 'string' && res.data.role.trim()
         ? res.data.role.trim()
