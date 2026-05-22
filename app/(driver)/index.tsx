@@ -193,20 +193,22 @@ export default function DriverHubScreen() {
       driverRef,
       (snap) => {
         const data = snap.data();
-        const resolved = resolveDriverOnline(data);
+        const resolvedOnline = resolveDriverOnline(
+          data as Record<string, unknown> | undefined,
+        );
         if (__DEV__) {
           // eslint-disable-next-line no-console
           console.log('[ONLINE READ]', {
             path,
             online: data?.online,
             isOnline: data?.isOnline,
-            resolved,
+            resolvedOnline,
             exists: snap.exists(),
           });
         }
-        if (lastOnlineRef.current !== resolved) {
-          lastOnlineRef.current = resolved;
-          setIsOnline(resolved);
+        if (lastOnlineRef.current !== resolvedOnline) {
+          lastOnlineRef.current = resolvedOnline;
+          setIsOnline(resolvedOnline);
         }
         if (!snap.exists()) return;
         const rating =

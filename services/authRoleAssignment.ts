@@ -63,6 +63,7 @@ export async function assignUserRole(
       doc(db, 'drivers', uid),
       {
         name: options?.displayName?.trim() || 'Driver',
+        online: false,
         isOnline: false,
         updatedAt: serverTimestamp(),
       },

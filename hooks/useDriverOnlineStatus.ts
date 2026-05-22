@@ -4,12 +4,13 @@ import {
   updateDriverOnlineStatus,
 } from '@/services/driverPresence';
 import { onSnapshot } from 'firebase/firestore';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useDriverOnlineStatus(driverId: string | null | undefined) {
   const [online, setOnline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const lastLogSignatureRef = useRef('');
 
   useEffect(() => {
     if (!driverId) {
@@ -23,20 +24,36 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
 
     const unsub = onSnapshot(
       ref,
+      { includeMetadataChanges: __DEV__ },
       (snap) => {
-        const data = snap.data();
-        const resolved = resolveDriverOnline(data);
+        const data = snap.data() as Record<string, unknown> | undefined;
+        const resolvedOnline = resolveDriverOnline(data);
+
         if (__DEV__) {
-          // eslint-disable-next-line no-console
-          console.log('[ONLINE READ]', {
-            path,
+          const signature = JSON.stringify({
+            exists: snap.exists(),
             online: data?.online,
             isOnline: data?.isOnline,
-            resolved,
-            exists: snap.exists(),
+            resolvedOnline,
+            fromCache: snap.metadata.fromCache,
+            hasPendingWrites: snap.metadata.hasPendingWrites,
           });
+          if (signature !== lastLogSignatureRef.current) {
+            lastLogSignatureRef.current = signature;
+            // eslint-disable-next-line no-console
+            console.log('[ONLINE READ]', {
+              path,
+              online: data?.online,
+              isOnline: data?.isOnline,
+              resolvedOnline,
+              exists: snap.exists(),
+              fromCache: snap.metadata.fromCache,
+              hasPendingWrites: snap.metadata.hasPendingWrites,
+            });
+          }
         }
-        setOnline(resolved);
+
+        setOnline(resolvedOnline);
         setLoading(false);
       },
       (error) => {
@@ -46,7 +63,10 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
       },
     );
 
-    return () => unsub();
+    return () => {
+      lastLogSignatureRef.current = '';
+      unsub();
+    };
   }, [driverId]);
 
   const setOnlineStatus = useCallback(

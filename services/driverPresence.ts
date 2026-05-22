@@ -8,9 +8,42 @@ export function driverPresenceDoc(driverId: string) {
   return doc(db, DRIVER_PRESENCE_COLLECTION, driverId.trim());
 }
 
+/** Normalize Firestore / legacy values to a strict boolean. */
+export function coerceDriverOnlineFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
+
+function readDriverPresenceField(
+  data: Record<string, unknown>,
+  key: 'isOnline' | 'online',
+): unknown {
+  if (Object.prototype.hasOwnProperty.call(data, key)) {
+    return data[key];
+  }
+  const alt = Object.keys(data).find((k) => k.toLowerCase() === key.toLowerCase());
+  return alt ? data[alt] : undefined;
+}
+
+/**
+ * True only when either presence flag is explicitly online.
+ * Document existence alone is not enough (offline drivers still have a doc).
+ */
 export function resolveDriverOnline(data: Record<string, unknown> | undefined): boolean {
   if (!data) return false;
-  return data.isOnline === true || data.online === true;
+  const isOnline = coerceDriverOnlineFlag(readDriverPresenceField(data, 'isOnline'));
+  const online = coerceDriverOnlineFlag(readDriverPresenceField(data, 'online'));
+  return isOnline || online;
 }
 
 /**
