@@ -1,15 +1,24 @@
 import { useEffect } from 'react';
 
-/** Dev-only mount/unmount diagnostics for driver tree lifecycle. */
-export function useDriverMountLog(componentName: string): void {
+/** Dev-only: one [MOUNT] line per component + uid per session. */
+const mountedKeys = new Set<string>();
+
+export function resetDriverMountLogs(): void {
+  mountedKeys.clear();
+}
+
+export function useDriverMountLog(componentName: string, uid?: string | null): void {
+  const mountKey = `${componentName}:${uid?.trim() || 'no-uid'}`;
+
   useEffect(() => {
-    if (__DEV__) {
-      console.log('[MOUNT]', componentName);
-    }
+    if (!__DEV__) return undefined;
+    if (mountedKeys.has(mountKey)) return undefined;
+    mountedKeys.add(mountKey);
+    console.log('[MOUNT]', componentName, uid?.trim() || 'no-uid');
     return () => {
       if (__DEV__) {
-        console.log('[UNMOUNT]', componentName);
+        console.log('[UNMOUNT]', componentName, uid?.trim() || 'no-uid');
       }
     };
-  }, [componentName]);
+  }, [componentName, mountKey, uid]);
 }

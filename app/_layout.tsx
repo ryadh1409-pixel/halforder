@@ -18,12 +18,13 @@ import {
   normalizeRoleForRouting,
 } from '@/lib/authRole';
 import {
-  hasRoleShellLandingCompleted,
+  clearRoleRedirectGuards,
+  completedRoleRedirects,
+  hasRedirectCompleted,
   isAlreadyOnRoleRoute,
   isAtAppEntryPoint,
   isInsideRoleShell,
-  markRoleShellLandingComplete,
-  resetRoleShellLanding,
+  markRedirectCompleted,
   roleLandingKey,
 } from '@/lib/roleRouteGuard';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
@@ -53,59 +54,56 @@ function RoleRouteGuard() {
   const segments = useSegments();
   const router = useRouter();
   const { loading: authLoading, firestoreUserRole: role, user } = useAuth();
-  const hasRoutedRef = useRef(false);
-  const routedKeyRef = useRef<string | null>(null);
-
-  const segmentList = segments as string[];
+  const isReady = !authLoading && Boolean(user?.uid) && Boolean(role);
+  const pathnameRef = useRef(pathname);
+  const segmentsRef = useRef(segments);
+  pathnameRef.current = pathname;
+  segmentsRef.current = segments;
 
   useEffect(() => {
-    logAuthReady(!authLoading && Boolean(role), { uid: user?.uid ?? null });
-  }, [authLoading, role, user?.uid]);
+    logAuthReady(isReady, { uid: user?.uid ?? null });
+  }, [isReady, user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
-      hasRoutedRef.current = false;
-      routedKeyRef.current = null;
-      resetRoleShellLanding();
+      clearRoleRedirectGuards();
       return;
     }
-    if (authLoading || !role) return;
+    if (!isReady || !role) return;
 
-    if (hasRoleShellLandingCompleted()) {
-      hasRoutedRef.current = true;
-      return;
-    }
-
-    if (isInsideRoleShell(segmentList, pathname)) {
-      hasRoutedRef.current = true;
-      return;
-    }
-
-    if (hasRoutedRef.current) return;
+    const currentPathname = pathnameRef.current;
+    const segmentList = segmentsRef.current as string[];
+    const sessionKey = roleLandingKey(user.uid, role);
+    if (completedRoleRedirects.has(sessionKey)) return;
 
     const normalized = normalizeRoleForRouting(role);
-    if (isAlreadyOnRoleRoute(pathname, segmentList, normalized)) {
-      markRoleShellLandingComplete();
-      hasRoutedRef.current = true;
+    const targetRoute = getRouteForRole(normalized);
+
+    if (isInsideRoleShell(segmentList, currentPathname)) {
+      markRedirectCompleted(targetRoute, sessionKey);
       return;
     }
 
-    if (!isAtAppEntryPoint(pathname, segmentList)) return;
+    if (isAlreadyOnRoleRoute(currentPathname, segmentList, normalized)) {
+      markRedirectCompleted(targetRoute, sessionKey);
+      return;
+    }
 
-    const key = roleLandingKey(user.uid, role);
-    if (routedKeyRef.current === key) return;
+    if (!isAtAppEntryPoint(currentPathname, segmentList)) return;
 
-    const route = getRouteForRole(normalized);
+    if (hasRedirectCompleted(targetRoute)) {
+      completedRoleRedirects.add(sessionKey);
+      return;
+    }
+
+    markRedirectCompleted(targetRoute, sessionKey);
     logAuthRoleDetected(normalized);
-    logAuthRoleRouted(normalized, route);
-    logRouteRedirect(pathname, route, { role: normalized, segments: segmentList });
+    logAuthRoleRouted(normalized, targetRoute);
+    logRouteRedirect(currentPathname, targetRoute, { role: normalized, segments: segmentList });
+    router.replace(targetRoute as never);
+  }, [isReady, role, router, user?.uid]);
 
-    hasRoutedRef.current = true;
-    routedKeyRef.current = key;
-    markRoleShellLandingComplete();
-    router.replace(route as never);
-  }, [authLoading, role, pathname, router, user?.uid, segmentList]);
-
+  if (!isReady) return null;
   return null;
 }
 

@@ -10,21 +10,22 @@ const DriverPresenceContext = createContext<DriverPresenceValue | null>(null);
 
 /** One presence listener + toggle for the entire driver tab stack. */
 export function DriverPresenceProvider({ children }: { children: ReactNode }) {
-  useDriverMountLog('DriverPresenceProvider');
   const { user } = useAuth();
   const uid = user?.uid?.trim() ?? '';
-  const displayName = user?.displayName ?? null;
+  useDriverMountLog('DriverPresenceProvider', uid || null);
   const presenceEnabled = Boolean(uid);
   const ensuredRef = useRef<string | null>(null);
+  const displayNameRef = useRef(user?.displayName ?? null);
+  displayNameRef.current = user?.displayName ?? null;
 
   useEffect(() => {
     if (!uid || ensuredRef.current === uid) return;
     ensuredRef.current = uid;
-    void ensureDriverPresenceDoc(uid, displayName).catch((error) => {
+    void ensureDriverPresenceDoc(uid, displayNameRef.current).catch((error) => {
       console.error('[driver] ensureDriverPresenceDoc failed', error);
       ensuredRef.current = null;
     });
-  }, [uid, displayName]);
+  }, [uid]);
 
   const value = useDriverPresence(uid || null, presenceEnabled);
 

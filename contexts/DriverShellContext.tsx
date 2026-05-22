@@ -1,14 +1,10 @@
-import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
-import { DriverRealtimeProvider } from '@/contexts/DriverRealtimeContext';
+import { useAuth } from '@/services/AuthContext';
 import { useDriverMountLog } from '@/utils/driverMountLog';
 import React, { type ReactNode } from 'react';
 
-/** Single mount point for all driver-stack providers (realtime + presence). */
+/** Inner driver shell wrapper (tabs + screens). Presence/realtime wrap this from the layout. */
 export function DriverShellProvider({ children }: { children: ReactNode }) {
-  useDriverMountLog('DriverShellProvider');
-  return (
-    <DriverRealtimeProvider>
-      <DriverPresenceProvider>{children}</DriverPresenceProvider>
-    </DriverRealtimeProvider>
-  );
+  const uid = useAuth().user?.uid?.trim() ?? '';
+  useDriverMountLog('DriverShellProvider', uid || null);
+  return <>{children}</>;
 }

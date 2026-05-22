@@ -1,4 +1,5 @@
 import type { UserRole } from '@/services/userService';
+import { resetDriverMountLogs } from '@/utils/driverMountLog';
 
 const ROLE_SHELLS = new Set([
   '(tabs)',
@@ -22,6 +23,31 @@ export function hasRoleShellLandingCompleted(): boolean {
 
 export function resetRoleShellLanding(): void {
   roleShellLandingComplete = false;
+}
+
+/** Completed `router.replace` targets — never redirect to the same route twice. */
+export const completedRedirects = new Set<string>();
+
+/** Completed role landing per uid+role — one redirect per role per session. */
+export const completedRoleRedirects = new Set<string>();
+
+export function clearRoleRedirectGuards(): void {
+  completedRedirects.clear();
+  completedRoleRedirects.clear();
+  resetRoleShellLanding();
+  resetDriverMountLogs();
+}
+
+export function markRedirectCompleted(targetRoute: string, sessionKey?: string): void {
+  completedRedirects.add(targetRoute);
+  if (sessionKey) {
+    completedRoleRedirects.add(sessionKey);
+  }
+  markRoleShellLandingComplete();
+}
+
+export function hasRedirectCompleted(targetRoute: string): boolean {
+  return completedRedirects.has(targetRoute);
 }
 
 /** True when navigation is already inside a role shell (driver, tabs, etc.). */
