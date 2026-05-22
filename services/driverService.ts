@@ -14,6 +14,12 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
+import {
+  DRIVER_PRESENCE_COLLECTION,
+  driverPresenceDoc,
+  resolveDriverOnline,
+  updateDriverOnlineStatus,
+} from '@/services/driverPresence';
 import { acceptOrderWithLock } from '@/services/delivery';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
@@ -625,21 +631,4 @@ export function getDriverActiveOrders(
 // Backward compatible alias
 export const subscribeDriverOrders = subscribeToDriverOrders;
 
-export async function updateDriverOnlineStatus(
-  driverId: string,
-  isOnline: boolean,
-): Promise<void> {
-  const ts = serverTimestamp();
-  await Promise.all([
-    setDoc(
-      doc(db, 'drivers', driverId),
-      { isOnline, online: isOnline, lastActive: ts },
-      { merge: true },
-    ),
-    setDoc(
-      doc(db, 'users', driverId),
-      { online: isOnline, lastActive: ts },
-      { merge: true },
-    ),
-  ]);
-}
+export { updateDriverOnlineStatus, driverPresenceDoc, resolveDriverOnline, DRIVER_PRESENCE_COLLECTION };

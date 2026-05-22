@@ -1,4 +1,8 @@
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
+import {
+  driverPresenceDoc,
+  resolveDriverOnline,
+} from '@/services/driverPresence';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { db } from './firebase';
@@ -62,11 +66,13 @@ function distanceKm(a: LatLng | null, b: LatLng | null): number | null {
   return Number((2 * earthKm * Math.atan2(Math.sqrt(i), Math.sqrt(1 - i))).toFixed(1));
 }
 
-export const DRIVER_PRESENCE_COLLECTION = 'drivers';
-
-export function driverPresenceDoc(driverId: string) {
-  return doc(db, DRIVER_PRESENCE_COLLECTION, driverId);
-}
+export {
+  DRIVER_PRESENCE_COLLECTION,
+  driverPresenceDoc,
+  resolveDriverOnline,
+  updateDriverOnlineStatus,
+} from '@/services/driverPresence';
+// re-export for legacy imports from ./driverDispatch
 
 function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }): DispatchOrder {
   const data = d.data();
@@ -144,23 +150,6 @@ function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }
   };
 }
 
-export async function updateDriverOnlineStatus(driverId: string, isOnline: boolean): Promise<void> {
-  const ref = driverPresenceDoc(driverId);
-  console.log('[ONLINE WRITE]', {
-    driverId,
-    path: `${DRIVER_PRESENCE_COLLECTION}/${driverId}`,
-    isOnline,
-  });
-  await setDoc(
-    ref,
-    {
-      isOnline,
-      lastSeenAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-}
-
 export function subscribeAvailableOrders(
   driverId: string,
   onData: (orders: DispatchOrder[]) => void,
@@ -191,7 +180,7 @@ export function subscribeAvailableOrders(
       driverPresenceDoc(driverId),
       (snap) => {
         const data = snap.data();
-        driverOnline = data?.isOnline === true;
+        driverOnline = resolveDriverOnline(data);
         emit();
       },
       safeListenerError('driverDispatch driver presence', () => {

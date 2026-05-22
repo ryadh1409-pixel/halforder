@@ -5,6 +5,7 @@ import {
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
+import { driverPresenceDoc, resolveDriverOnline } from '@/services/driverPresence';
 import { db } from '@/services/firebase';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
@@ -406,11 +407,11 @@ export function subscribeDriverQueue(
     if (cancelled) return;
 
     unsubDriver = onSnapshot(
-      doc(db, 'drivers', driverId),
+      driverPresenceDoc(driverId),
       (snap) => {
         try {
           const data = snap.data();
-          online = data?.isOnline === true || data?.online === true;
+          online = resolveDriverOnline(data);
         } catch (err) {
           warnMalformedDeliveryDoc(driverId, 'subscribeDriverQueue driver doc', err);
           online = false;

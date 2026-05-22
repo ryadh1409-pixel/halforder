@@ -19,15 +19,19 @@ import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import {
+  ensureDriverPresenceDoc,
+  driverPresenceDoc,
+  resolveDriverOnline,
+  updateDriverOnlineStatus,
+} from '../../services/driverPresence';
+import {
   getDriverActiveOrders,
   subscribeAvailableOrders,
   subscribeDriverDeliveryStats,
-  updateDriverOnlineStatus,
   type DriverOrder,
 } from '../../services/driverService';
 import { showError, showSuccess } from '../../utils/toast';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { onSnapshot } from 'firebase/firestore';
 
 function formatOrderTime(value: number | null): string {
   if (!value) return 'Now';
@@ -154,7 +158,7 @@ export default function DriverHubScreen() {
   const unsubStatsRef = useRef<(() => void) | null>(null);
   const unsubDriverProfileRef = useRef<(() => void) | null>(null);
 
-  const driverBootstrapUidRef = useRef<string | null>(null);
+  const presenceBootstrappedRef = useRef(false);
   const lastOnlineRef = useRef<boolean | null>(null);
   const lastStatsRef = useRef({ deliveries: 0, earnings: 0, rating: 5.0 });
   const profileRatingRef = useRef(5.0);
@@ -163,36 +167,50 @@ export default function DriverHubScreen() {
   const acceptingIdRef = useRef<string | null>(null);
   acceptingIdRef.current = acceptingId;
 
-  /** Sync display name only — never rewrite `isOnline` here (avoids fighting the hub / snapshots). */
   useEffect(() => {
     if (!isFocused || !uid) return;
-    const name = user?.displayName?.trim() || 'Driver';
-    void setDoc(doc(db, 'drivers', uid), { name }, { merge: true });
+    if (presenceBootstrappedRef.current) return;
+    presenceBootstrappedRef.current = true;
+    void ensureDriverPresenceDoc(uid, user?.displayName).catch((e) => {
+      console.error('[driver] ensureDriverPresenceDoc failed', e);
+      presenceBootstrappedRef.current = false;
+    });
   }, [isFocused, uid, user?.displayName]);
 
   useEffect(() => {
     if (!uid) {
       lastOnlineRef.current = null;
-      driverBootstrapUidRef.current = null;
+      presenceBootstrappedRef.current = false;
       return undefined;
     }
     if (!isFocused) {
       return undefined;
     }
 
-    const driverRef = doc(db, 'drivers', uid);
+    const driverRef = driverPresenceDoc(uid);
+    const path = `drivers/${uid}`;
     unsubDriverProfileRef.current = onSnapshot(
       driverRef,
       (snap) => {
-        if (!snap.exists()) return;
         const data = snap.data();
-        const online = data.isOnline === true || data.online === true;
-        if (lastOnlineRef.current !== online) {
-          lastOnlineRef.current = online;
-          setIsOnline(online);
+        const resolved = resolveDriverOnline(data);
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[ONLINE READ]', {
+            path,
+            online: data?.online,
+            isOnline: data?.isOnline,
+            resolved,
+            exists: snap.exists(),
+          });
         }
+        if (lastOnlineRef.current !== resolved) {
+          lastOnlineRef.current = resolved;
+          setIsOnline(resolved);
+        }
+        if (!snap.exists()) return;
         const rating =
-          typeof data.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0
+          typeof data?.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0
             ? data.rating
             : 5.0;
         profileRatingRef.current = rating;
@@ -202,19 +220,6 @@ export default function DriverHubScreen() {
         console.error('[driver] drivers profile listener failed', e);
       },
     );
-
-    if (driverBootstrapUidRef.current !== uid) {
-      driverBootstrapUidRef.current = uid;
-      void setDoc(
-        driverRef,
-        {
-          isOnline: false,
-          online: false,
-          name: user?.displayName?.trim() || 'Driver',
-        },
-        { merge: true },
-      );
-    }
 
     unsubStatsRef.current = subscribeDriverDeliveryStats(uid, (deliveryStats) => {
       const merged = {
@@ -304,30 +309,36 @@ export default function DriverHubScreen() {
     };
   }, []);
 
-  const handleToggleOnline = useCallback(async () => {
-    if (!uid || togglingOnline) return;
-    const nextValue = !isOnline;
-    setTogglingOnline(true);
-    try {
-      await updateDriverOnlineStatus(uid, nextValue);
+  const handleToggleOnline = useCallback(
+    async (nextValue: boolean) => {
+      if (!uid || togglingOnline) return;
+      setTogglingOnline(true);
+      lastOnlineRef.current = nextValue;
       setIsOnline(nextValue);
-      if (!nextValue) {
-        unsubAvailableRef.current?.();
-        unsubAvailableRef.current = null;
-        unsubActiveRef.current?.();
-        unsubActiveRef.current = null;
-        availableSigRef.current = '';
-        activeSigRef.current = '';
-        setAvailableOrders([]);
-        setActiveOrders([]);
+      try {
+        await updateDriverOnlineStatus(uid, nextValue);
+        if (!nextValue) {
+          unsubAvailableRef.current?.();
+          unsubAvailableRef.current = null;
+          unsubActiveRef.current?.();
+          unsubActiveRef.current = null;
+          availableSigRef.current = '';
+          activeSigRef.current = '';
+          setAvailableOrders([]);
+          setActiveOrders([]);
+        }
+      } catch (e) {
+        const reverted = !nextValue;
+        lastOnlineRef.current = reverted;
+        setIsOnline(reverted);
+        console.error('[driver] updateDriverOnlineStatus failed', e);
+        showError('Failed to update online status');
+      } finally {
+        setTogglingOnline(false);
       }
-    } catch (e) {
-      console.error('[driver] updateDriverOnlineStatus failed', e);
-      showError('Failed to update online status');
-    } finally {
-      setTogglingOnline(false);
-    }
-  }, [isOnline, togglingOnline, uid]);
+    },
+    [togglingOnline, uid],
+  );
 
   const handleAccept = useCallback(
     async (order: DriverOrder) => {
@@ -411,10 +422,12 @@ export default function DriverHubScreen() {
           {togglingOnline ? <ActivityIndicator color="#fff" size="small" style={styles.toggleLoader} /> : null}
           <Switch
             value={isOnline}
-            onValueChange={() => void handleToggleOnline()}
+            onValueChange={(value) => {
+              void handleToggleOnline(value);
+            }}
             trackColor={{ false: '#3E3E5A', true: '#00C853' }}
             thumbColor="#fff"
-            disabled={togglingOnline}
+            disabled={!uid || togglingOnline}
           />
         </View>
       </View>

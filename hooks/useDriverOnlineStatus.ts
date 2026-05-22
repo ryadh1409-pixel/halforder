@@ -1,11 +1,15 @@
-import { db } from '@/services/firebase';
-import { DRIVER_PRESENCE_COLLECTION, driverPresenceDoc } from '@/services/driverDispatch';
+import {
+  driverPresenceDoc,
+  resolveDriverOnline,
+  updateDriverOnlineStatus,
+} from '@/services/driverPresence';
 import { onSnapshot } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export function useDriverOnlineStatus(driverId: string | null | undefined) {
   const [online, setOnline] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
     if (!driverId) {
@@ -13,21 +17,55 @@ export function useDriverOnlineStatus(driverId: string | null | undefined) {
       setLoading(false);
       return;
     }
+
+    const ref = driverPresenceDoc(driverId);
+    const path = `drivers/${driverId}`;
+
     const unsub = onSnapshot(
-      driverPresenceDoc(driverId),
+      ref,
       (snap) => {
         const data = snap.data();
-        const resolvedIsOnline = data?.isOnline === true || data?.online === true;
-        setOnline(resolvedIsOnline);
+        const resolved = resolveDriverOnline(data);
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[ONLINE READ]', {
+            path,
+            online: data?.online,
+            isOnline: data?.isOnline,
+            resolved,
+            exists: snap.exists(),
+          });
+        }
+        setOnline(resolved);
         setLoading(false);
       },
-      () => {
+      (error) => {
+        console.error('[ONLINE READ ERROR]', { path, error });
         setOnline(false);
         setLoading(false);
       },
     );
+
     return () => unsub();
   }, [driverId]);
 
-  return { online, loading };
+  const setOnlineStatus = useCallback(
+    async (nextValue: boolean) => {
+      if (!driverId || toggling) return;
+      setToggling(true);
+      setOnline(nextValue);
+      try {
+        await updateDriverOnlineStatus(driverId, nextValue);
+      } catch (error) {
+        console.error('[ONLINE WRITE ERROR]', { uid: driverId, nextValue, error });
+        setOnline(!nextValue);
+        throw error;
+      } finally {
+        setToggling(false);
+      }
+    },
+    [driverId, toggling],
+  );
+
+  return { online, loading, toggling, setOnlineStatus };
 }

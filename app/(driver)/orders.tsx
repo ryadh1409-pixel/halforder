@@ -30,6 +30,15 @@ export default function DriverOrdersScreen() {
       setLoading(false);
       return;
     }
+    if (onlineLoading) {
+      return;
+    }
+    if (!online) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     let unsub: (() => void) | null = null;
     try {
@@ -49,7 +58,7 @@ export default function DriverOrdersScreen() {
         console.error('[driver] subscribeDriverQueue cleanup failed', e);
       }
     };
-  }, [user?.uid]);
+  }, [user?.uid, online, onlineLoading]);
 
   const maskPhone = (phone: string | null) => {
     if (!phone) return 'Phone unavailable';
