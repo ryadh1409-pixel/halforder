@@ -22,7 +22,7 @@ export default function DriverOrdersScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const uid = user?.uid?.trim() ?? '';
-  const { online } = useDriverOnlineStatus();
+  const { online, loading: presenceLoading } = useDriverOnlineStatus();
   const [orders, setOrders] = useState<DeliveryQueueOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export default function DriverOrdersScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <AppHeader title="Available" />
-      {loading || onlineLoading ? (
+      {loading || presenceLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#16A34A" />
         </View>
