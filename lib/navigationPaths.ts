@@ -34,5 +34,7 @@ export const TABS_ROUTES = {
   explore: '/(tabs)/explore',
   search: '/(tabs)/search',
   driverEntry: '/(tabs)/driver',
+  host: '/(tabs)/host',
+  menu: '/(tabs)/menu',
   ai: '/(tabs)/ai',
 } as const;

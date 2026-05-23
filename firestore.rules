@@ -4,23 +4,32 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
-    function isAdmin() {
+    /** `users/{uid}.role` — checked after email/uid allowlist (no get when already admin). */
+    function roleIsAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
+    }
+    function isAdminEmailToken() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && (
+          request.auth.token.email.lower() == 'ryadh1409@gmail.com'
+          || request.auth.token.email.lower() == 'admin@ourfood.com'
+          || request.auth.token.email.lower() == 'support@halforder.app'
+        );
+    }
+    function isAdminUidAllowlist() {
       return isSignedIn()
         && (
           request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
-          || (
-            request.auth.token.email is string
-            && (
-              request.auth.token.email == 'admin@ourfood.com'
-              || request.auth.token.email == 'support@halforder.app'
-              || request.auth.token.email == 'ryadh1409@gmail.com'
-            )
-          )
-          || (
-            exists(/databases/$(database)/documents/users/$(request.auth.uid))
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'
-          )
+          || request.auth.uid == 'Gjj6x4OU4OQmsnplollo9PLLpxt2'
         );
+    }
+    function isAdmin() {
+      return isAdminEmailToken()
+        || isAdminUidAllowlist()
+        || roleIsAdmin();
     }
     function userStripeOnboardingCompleteNotForged() {
       return !(request.resource.data.get('stripeOnboardingComplete', false) == true
@@ -796,6 +805,7 @@ service cloud.firestore {
         && (after == 'restaurant' || after == 'driver');
     }
     match /users/{userId} {
+      allow read, list: if isAdmin();
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if isAdmin()
         || (request.auth != null && request.auth.uid == userId && request.resource.data.get('stripeOnboardingComplete', false) == false);
@@ -1297,6 +1307,7 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
+      allow read, list: if isAdmin();
       // Published baseline: owner / restaurant / driver may read their orders.
       allow read: if ordersReadByParticipant();
       // List queries do not use allow read when allow list is present (Firestore rules v2).
@@ -1412,6 +1423,7 @@ service cloud.firestore {
       }
     }
     match /food_cards/{cardId} {
+      allow read, list: if isAdmin();
       allow read: if isSignedIn();
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || isValidFoodCardOrderIdLink(cardId) || isValidFoodCardJoinUpdate();

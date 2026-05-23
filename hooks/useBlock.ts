@@ -30,7 +30,9 @@ export type UseBlockResult = {
 };
 
 export function useBlock(): UseBlockResult {
-  const uid = auth.currentUser?.uid ?? null;
+  const currentUser = auth.currentUser;
+  const uid =
+    currentUser?.uid && !currentUser.isAnonymous ? currentUser.uid : null;
   const hiddenUserIds = useHiddenUserIds();
   const [blockedByMeIds, setBlockedByMeIds] = useState<string[]>([]);
 

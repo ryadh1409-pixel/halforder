@@ -1,5 +1,10 @@
 import { UE } from '@/constants/uberEatsTheme';
-import { DRIVER_ROUTES, TABS_ROUTES } from '@/lib/navigationPaths';
+import { adminRoutes } from '@/constants/adminRoutes';
+import { TABS_ROUTES } from '@/lib/navigationPaths';
+import {
+  resolveTabsShellRole,
+  visibleTabNamesForRole,
+} from '@/lib/tabsRoleVisibility';
 import { useAuth } from '@/services/AuthContext';
 import { selectCartTotals, useCartStore } from '@/store/cartStore';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,16 +26,7 @@ const ACTIVE = UE.text;
 const INACTIVE = UE.textMuted;
 const ICON_SIZE = 26;
 
-const VISIBLE_TAB_ORDER = [
-  'index',
-  'swipe',
-  'explore',
-  'search',
-  'cart',
-  'profile',
-] as const;
-
-function hrefForTabRoute(routeName: string, role: string): Href {
+function hrefForTabRoute(routeName: string): Href {
   switch (routeName) {
     case 'index':
       return TABS_ROUTES.hub as Href;
@@ -41,21 +37,17 @@ function hrefForTabRoute(routeName: string, role: string): Href {
     case 'cart':
       return TABS_ROUTES.cart as Href;
     case 'profile':
-      return role === 'driver'
-        ? (DRIVER_ROUTES.profile as Href)
-        : (TABS_ROUTES.profile as Href);
+      return TABS_ROUTES.profile as Href;
     case 'orders':
       return TABS_ROUTES.orders as Href;
-    case 'home':
-      return '/(tabs)/home' as Href;
     case 'host':
-      return '/(tabs)/host' as Href;
-    case 'driver':
-      return DRIVER_ROUTES.hub as Href;
+      return TABS_ROUTES.host as Href;
+    case 'menu':
+      return TABS_ROUTES.menu as Href;
+    case 'admin':
+      return adminRoutes.home as Href;
     case 'ai':
       return TABS_ROUTES.ai as Href;
-    case 'admin':
-      return '/(tabs)/admin' as Href;
     default:
       return `/(tabs)/${routeName}` as Href;
   }
@@ -85,14 +77,12 @@ function iconGlyph(
       return pick('person', 'person-outline');
     case 'orders':
       return pick('receipt', 'receipt-outline');
-    case 'home':
-      return pick('car', 'car-outline');
     case 'host':
       return pick('storefront', 'storefront-outline');
-    case 'driver':
-      return pick('navigate-circle', 'navigate-circle-outline');
-    case 'ai':
-      return pick('sparkles', 'sparkles-outline');
+    case 'menu':
+      return pick('restaurant', 'restaurant-outline');
+    case 'admin':
+      return pick('shield', 'shield-outline');
     default:
       return 'ellipse';
   }
@@ -112,6 +102,14 @@ function tabLabel(routeName: string): string {
       return 'Cart';
     case 'profile':
       return 'Profile';
+    case 'orders':
+      return 'Orders';
+    case 'host':
+      return 'Dashboard';
+    case 'menu':
+      return 'Menu';
+    case 'admin':
+      return 'Admin';
     default:
       return routeName;
   }
@@ -186,22 +184,20 @@ function CustomTabBar(props: CustomTabBarProps) {
   const cartQty = useCartStore((s) => selectCartTotals(s.items).qty);
 
   const role = useMemo(
-    () => (loading ? 'user' : (firestoreUserRole ?? 'user')),
+    () => resolveTabsShellRole(firestoreUserRole, loading),
     [loading, firestoreUserRole],
   );
 
   if (!props?.state?.routes?.length) return null;
+  if (role === 'driver') return null;
 
   const { state } = props;
   const tabIndex = typeof state.index === 'number' ? state.index : 0;
   const activeRoute = state.routes[tabIndex]?.name;
 
-  const showHost = role === 'restaurant' || role === 'host';
-  const showDriver = role === 'driver' || role === 'admin';
+  const visibleTabNames = visibleTabNamesForRole(role);
 
-  const visibleRoutes = VISIBLE_TAB_ORDER.filter(
-    (name) => !(name === 'profile' && role === 'driver'),
-  )
+  const visibleRoutes = visibleTabNames
     .map((name) => state.routes.find((r) => r.name === name))
     .filter(Boolean) as BottomTabBarProps['state']['routes'];
 
@@ -221,7 +217,7 @@ function CustomTabBar(props: CustomTabBarProps) {
         {visibleRoutes.map((route) => {
           if (!route?.key) return null;
           const isFocused = activeRoute === route.name;
-          const href = hrefForTabRoute(route.name, role);
+          const href = hrefForTabRoute(route.name);
           const badge = route.name === 'cart' ? cartQty : undefined;
           return (
             <TabBarItem
@@ -233,20 +229,6 @@ function CustomTabBar(props: CustomTabBarProps) {
             />
           );
         })}
-        {showHost ? (
-          <TabBarItem
-            route={{ key: 'host-link', name: 'host' } as never}
-            focused={activeRoute === 'host'}
-            href={hrefForTabRoute('host', role)}
-          />
-        ) : null}
-        {showDriver ? (
-          <TabBarItem
-            route={{ key: 'driver-link', name: 'driver' } as never}
-            focused={activeRoute === 'driver'}
-            href={hrefForTabRoute('driver', role)}
-          />
-        ) : null}
       </View>
     </View>
   );

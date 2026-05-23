@@ -48,10 +48,11 @@ import {
   shouldRunAuthSessionBootstrap,
 } from '@/lib/authSessionBootstrap';
 import { normalizeRoleForRouting } from '@/lib/authRole';
+import { isRegisteredAuthUser } from '@/lib/authSession';
 import { markDriverOffline } from '@/services/driverPresence';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { logRootBootstrapState } from '@/utils/driverLifecycleLog';
-import { auth, db, ensureAuthReadyOnce } from './firebase';
+import { auth, db } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
   profilePhoneDigitsOnly,
@@ -339,16 +340,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const settledAuthUidRef = useRef<string | null>(null);
-  const ensureAuthReadyStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (ensureAuthReadyStartedRef.current) return;
-    ensureAuthReadyStartedRef.current = true;
-    void ensureAuthReadyOnce().catch((e) => {
-      console.error('[auth] ensureAuthReady bootstrap failed', e);
-      ensureAuthReadyStartedRef.current = false;
-    });
-  }, []);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const { role: firestoreRole, loading: roleLoading } = useUserRole(user?.uid);
@@ -405,6 +396,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (settledAuthUidRef.current === firebaseUser.uid) {
+        return;
+      }
+
+      if (firebaseUser.isAnonymous) {
+        settledAuthUidRef.current = firebaseUser.uid;
+        setUser(firebaseUser);
+        setLoading(false);
+        setAuthReady(true);
         return;
       }
 
@@ -717,7 +716,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('[driver] mark offline on sign-out failed', error);
       }
     }
-    await firebaseSignOut(auth);
+    try {
+      await firebaseSignOut(auth);
+    } finally {
+      settledAuthUidRef.current = null;
+      claimsRefreshedForUidRef.current = null;
+      resetForcedTokenRefreshUid();
+      resetAuthSessionBootstrap();
+      setUser(null);
+      setLoading(false);
+      setAuthReady(true);
+    }
   }, []);
 
   const switchRoleMode = useCallback(
@@ -737,8 +746,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const roleResolved = !user?.uid || !roleLoading;
-  const bootstrapLoading = loading || (Boolean(user?.uid) && roleLoading);
+  const roleResolved = !isRegisteredAuthUser(user) || !roleLoading;
+  const bootstrapLoading =
+    loading || (isRegisteredAuthUser(user) && roleLoading);
 
   useEffect(() => {
     logRootBootstrapState({
@@ -761,13 +771,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.uid, authReady, roleResolved, bootstrapLoading, firestoreRole]);
 
   const value = useMemo((): AuthContextValue => {
-    const fur = firestoreRole ?? null;
+    const fur = isRegisteredAuthUser(user) ? (firestoreRole ?? null) : null;
     return {
       user,
       loading: bootstrapLoading,
       authReady,
       roleResolved,
-      role: firestoreRole,
+      role: fur,
       firestoreUserRole: fur,
       signUpWithEmail,
       signInWithEmail,

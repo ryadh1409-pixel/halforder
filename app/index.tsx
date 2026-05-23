@@ -1,6 +1,7 @@
 import AppLogo from '../components/AppLogo';
 import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
+import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '../services/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
@@ -48,7 +49,7 @@ export default function Index() {
   }, []);
 
   const waitingForTerms =
-    Boolean(user) && !termsReady && gate.phase === 'ready';
+    isRegisteredAuthUser(user) && !termsReady && gate.phase === 'ready';
   const gateReady = gate.phase === 'ready';
   const onboardingDone = gateReady ? gate.onboardingDone : false;
 
@@ -60,12 +61,12 @@ export default function Index() {
       return;
     }
     if (waitingForTerms) return;
-    if (user && termsReady && !termsAccepted) {
+    if (isRegisteredAuthUser(user) && termsReady && !termsAccepted) {
       router.replace('/terms-acceptance?returnTo=/(tabs)' as never);
       return;
     }
-    /** Signed-in role landing is handled by `RoleRouteGuard` in `app/_layout.tsx` when `pathname === '/'`. */
-    if (user) return;
+    /** Registered users: role landing via `RoleRouteGuard` at `/`. Guests → tabs browse. */
+    if (isRegisteredAuthUser(user)) return;
     router.replace('/(tabs)' as never);
   }, [
     loading,

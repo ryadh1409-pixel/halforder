@@ -1,25 +1,26 @@
+import { normalizeRoleForRouting } from '@/lib/authRole';
+import { isRegisteredAuthUser } from '@/lib/authSession';
 import HostDashboardScreen from '@/screens/HostDashboardScreen';
-import { HOST_TAB_ROLES } from '@/services/roles';
 import { useAuth } from '@/services/AuthContext';
-import type { UserRole } from '@/services/userService';
-import React, { useMemo } from 'react';
+import { Redirect } from 'expo-router';
+import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-/** Host tab: wrong-role UI only; role landing from `/` is in `app/_layout.tsx`. */
+/** Restaurant dashboard tab — only `restaurant` / legacy `host` roles. */
 export default function HostTabScreen() {
   const { user, loading, firestoreUserRole } = useAuth();
-  const effectiveRole = (firestoreUserRole ?? 'user') as UserRole;
-  const authorized = useMemo(
-    () => !loading && Boolean(user) && HOST_TAB_ROLES.includes(effectiveRole),
-    [user, loading, effectiveRole],
-  );
+  const role = normalizeRoleForRouting(loading ? null : firestoreUserRole);
 
-  if (loading || !authorized) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
       </View>
     );
+  }
+
+  if (!isRegisteredAuthUser(user) || role !== 'restaurant') {
+    return <Redirect href="/(tabs)" />;
   }
 
   return <HostDashboardScreen />;

@@ -1,4 +1,5 @@
 import { subscribeUserRole, type UserRole } from '../services/userService';
+import { auth } from '../services/firebase';
 import { useEffect, useMemo, useState } from 'react';
 
 export function useUserRole(uid: string | null | undefined) {
@@ -7,7 +8,7 @@ export function useUserRole(uid: string | null | undefined) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!uid) {
+    if (!uid || auth.currentUser?.isAnonymous) {
       setRole(null);
       setLoading(false);
       setError(null);

@@ -1,10 +1,13 @@
 import { isAdminEmail } from '../utils/admin';
 
-/**
- * Firebase Auth uid for the admin account. Must match `isAdmin()` in
- * `firestore.rules`.
- */
-export const ADMIN_UID = 'KT3LfXRsVgaH4LfRTQaexvj3CRn1';
+/** Firebase Auth uids with admin access. Must match `isAdmin()` in `firestore.rules`. */
+export const ADMIN_UIDS = [
+  'KT3LfXRsVgaH4LfRTQaexvj3CRn1',
+  'Gjj6x4OU4OQmsnplollo9PLLpxt2',
+] as const;
+
+/** @deprecated Use {@link ADMIN_UIDS} */
+export const ADMIN_UID = ADMIN_UIDS[0];
 
 /** Email admins may sign in with (must match Storage/Firestore rules). */
 export const ADMIN_PANEL_EMAIL = 'admin@ourfood.com';
@@ -25,7 +28,7 @@ export function isAdminUser(
   if (typeof firestoreRole === 'string' && firestoreRole.trim() === 'admin') {
     return true;
   }
-  if (user.uid === ADMIN_UID) return true;
+  if ((ADMIN_UIDS as readonly string[]).includes(user.uid)) return true;
   if (normalizeEmail(user.email) === ADMIN_PANEL_EMAIL) return true;
   if (isAdminEmail(user.email)) return true;
   return false;

@@ -22,6 +22,7 @@ import {
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { useBlockedUsers } from '../../hooks/useBlockedUsers';
 import { useTrustScore } from '../../hooks/useTrustScore';
+import { isRegisteredAuthUser } from '@/lib/authSession';
 import { navigateForRole } from '@/lib/navigation';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
@@ -270,7 +271,8 @@ export default function ProfileScreen() {
   const displayNameInputRef = useRef<TextInput>(null);
   const nameFeedbackClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const uid = user?.uid ?? null;
+  const registered = isRegisteredAuthUser(user);
+  const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
   const {
     blockedUsers,
@@ -310,7 +312,7 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    if (!uid) {
+    if (!uid || user?.isAnonymous) {
       setEmailFromFirestore(null);
       setPhotoURL(null);
       setProfileLoading(false);
@@ -377,7 +379,7 @@ export default function ProfileScreen() {
       cancelled = true;
       unsubscribe();
     };
-  }, [uid, isFocused]);
+  }, [uid, isFocused, user?.isAnonymous]);
 
   useEffect(() => {
     return () => {

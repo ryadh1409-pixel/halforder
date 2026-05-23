@@ -1,4 +1,5 @@
 import AppLogo from '@/components/AppLogo';
+import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { logRootBootstrapState } from '@/utils/driverLifecycleLog';
@@ -27,7 +28,8 @@ function resolvePhase(
   if (appReadyLatched) return 'appReady';
   if (!hasUser) {
     if (!authReady || loading) return 'bootstrapping';
-    return 'authReady';
+    /** Signed out — auth settled; show router (login, register, etc.). */
+    return 'appReady';
   }
   if (!authReady || loading) return 'bootstrapping';
   if (!roleResolved) return 'roleReady';
@@ -46,11 +48,11 @@ export function AppBootstrapGate({ children }: AppBootstrapGateProps) {
   const { user, loading, authReady, roleResolved, firestoreUserRole } = useAuth();
   const [appReadyLatched, setAppReadyLatched] = useState(false);
 
-  const hasUser = Boolean(user?.uid);
+  const hasUser = isRegisteredAuthUser(user);
   const phase = resolvePhase(appReadyLatched, authReady, roleResolved, loading, hasUser);
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!isRegisteredAuthUser(user)) {
       setAppReadyLatched(false);
       return;
     }

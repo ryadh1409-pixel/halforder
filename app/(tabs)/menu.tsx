@@ -1,14 +1,13 @@
 import { normalizeRoleForRouting } from '@/lib/authRole';
 import { isRegisteredAuthUser } from '@/lib/authSession';
-import SwipeWrapper from '@/components/SwipeWrapper';
-import MarketplaceOrdersScreen from '@/screens/MarketplaceOrdersScreen';
+import HostDashboardScreen from '@/screens/HostDashboardScreen';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-/** Restaurant orders tab — `restaurant` role only (hidden from customer tab bar). */
-export default function OrdersTab() {
+/** Restaurant menu tab — venue menu management (restaurant role only). */
+export default function RestaurantMenuTab() {
   const { user, loading, firestoreUserRole } = useAuth();
   const role = normalizeRoleForRouting(loading ? null : firestoreUserRole);
 
@@ -24,9 +23,5 @@ export default function OrdersTab() {
     return <Redirect href="/(tabs)" />;
   }
 
-  return (
-    <SwipeWrapper currentIndex={0}>
-      <MarketplaceOrdersScreen />
-    </SwipeWrapper>
-  );
+  return <HostDashboardScreen />;
 }

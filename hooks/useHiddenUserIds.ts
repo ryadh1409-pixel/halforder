@@ -13,7 +13,9 @@ import { useEffect, useMemo, useState } from 'react';
  * @param enabled When false, skips Firestore listeners (e.g. explore tab not focused).
  */
 export function useHiddenUserIds(enabled: boolean = true): Set<string> {
-  const uid = auth.currentUser?.uid ?? null;
+  const currentUser = auth.currentUser;
+  const uid =
+    currentUser?.uid && !currentUser.isAnonymous ? currentUser.uid : null;
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
   const [blockerIds, setBlockerIds] = useState<string[]>([]);
 

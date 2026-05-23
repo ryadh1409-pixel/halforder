@@ -1,50 +1,102 @@
 import CustomTabBar from '@/components/CustomTabBar';
-import { normalizeRoleForRouting } from '@/lib/authRole';
+import { tabHrefForRole, resolveTabsShellRole } from '@/lib/tabsRoleVisibility';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { Tabs } from 'expo-router';
 import React, { useMemo } from 'react';
 
+const HIDDEN_TAB = { href: null } as const;
+
 /**
  * Custom tab bar: `onPress` → `router.navigate(href)` only (see `components/CustomTabBar.tsx`).
- * No `initialRouteName` / `initialLayout` / extra `defaultScreenOptions` here — those can
- * interact badly with lazy tabs.
+ * Tab visibility is role-scoped via `href: null` (driver never uses this navigator).
  */
 export default function TabLayout() {
   const { firestoreUserRole, loading } = useAuth();
   const role = useMemo(
-    () => normalizeRoleForRouting(loading ? null : firestoreUserRole),
+    () => resolveTabsShellRole(firestoreUserRole, loading),
     [firestoreUserRole, loading],
   );
-  const isDriver = role === 'driver';
+
+  const customerTabs = { allow: ['user', 'admin'] as const };
+  const restaurantTabs = { allow: ['restaurant'] as const };
 
   return (
     <Tabs
       id="main"
       screenOptions={{
         headerShown: false,
-        /** Mount tab screens on demand so inactive tabs do not run effects at startup. */
         lazy: true,
       }}
       tabBar={(props) => <CustomTabBar {...props} />}
     >
-      <Tabs.Screen name="index" options={{ href: TABS_ROUTES.hub }} />
-      <Tabs.Screen name="swipe" options={{ href: TABS_ROUTES.swipe }} />
-      <Tabs.Screen name="explore" options={{ href: TABS_ROUTES.explore }} />
-      <Tabs.Screen name="search" options={{ href: TABS_ROUTES.search }} />
-      <Tabs.Screen name="cart" options={{ href: TABS_ROUTES.cart }} />
-      <Tabs.Screen name="ai" options={{ href: null }} />
-      <Tabs.Screen name="orders" options={{ href: TABS_ROUTES.orders }} />
-      <Tabs.Screen name="home" options={{ href: null }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.hub, customerTabs),
+        }}
+      />
+      <Tabs.Screen
+        name="swipe"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.swipe, customerTabs),
+        }}
+      />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.explore, customerTabs),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.search, customerTabs),
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.cart, customerTabs),
+        }}
+      />
+      <Tabs.Screen name="ai" options={HIDDEN_TAB} />
+      <Tabs.Screen
+        name="orders"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.orders, restaurantTabs),
+        }}
+      />
+      <Tabs.Screen name="home" options={HIDDEN_TAB} />
       <Tabs.Screen
         name="profile"
         options={{
-          href: isDriver ? null : TABS_ROUTES.profile,
+          href: tabHrefForRole(role, TABS_ROUTES.profile, {
+            allow: ['user', 'admin', 'restaurant'],
+          }),
         }}
       />
-      <Tabs.Screen name="admin" options={{ href: null }} />
-      <Tabs.Screen name="host" />
-      <Tabs.Screen name="driver" options={{ href: TABS_ROUTES.driverEntry }} />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          href: tabHrefForRole(role, '/(tabs)/admin' as const, {
+            allow: ['admin'],
+          }),
+        }}
+      />
+      <Tabs.Screen
+        name="host"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.host, restaurantTabs),
+        }}
+      />
+      <Tabs.Screen name="driver" options={HIDDEN_TAB} />
+      <Tabs.Screen
+        name="menu"
+        options={{
+          href: tabHrefForRole(role, TABS_ROUTES.menu, restaurantTabs),
+        }}
+      />
     </Tabs>
   );
 }

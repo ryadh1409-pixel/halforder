@@ -3,7 +3,7 @@ import {
   FOOD_CARD_ORDER_MAX_USERS,
   isAdminFoodCardSlotId,
 } from '../constants/adminFoodCards';
-import { ADMIN_UID } from '../constants/adminUid';
+import { ADMIN_UIDS } from '../constants/adminUid';
 import { PAYMENT_DISCLAIMER_CHAT_MATCHED } from '../constants/paymentDisclaimer';
 import {
   HALF_ORDER_MATCH_WAIT_MS,
@@ -514,7 +514,7 @@ export function isFoodCardJoinDisabled(
   orderUsersHint?: string[] | null,
 ): boolean {
   if (!uid) return true;
-  if (uid === ADMIN_UID) return true;
+  if ((ADMIN_UIDS as readonly string[]).includes(uid)) return true;
   const slot = isAdminFoodCardSlotId(card.id);
   if (!slot && isCardOwnedByUser(card, uid)) return true;
   if (card.active === false) return true;

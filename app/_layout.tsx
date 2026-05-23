@@ -34,6 +34,7 @@ import {
   isInsideCorrectRoleShell,
   isWrongGroupForRole,
 } from '@/lib/routeGroups';
+import { isOnAuthRoute, isRegisteredAuthUser } from '@/lib/authSession';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { logRedirectDecision } from '@/utils/driverLifecycleLog';
@@ -58,6 +59,41 @@ if (Platform.OS !== 'web' && !isExpoGo) {
   configureExpoPushNotificationHandler();
 }
 
+/** After sign-out, leave protected shells and land on login once auth has settled. */
+function SignedOutRouteGuard() {
+  const pathname = usePathname();
+  const segments = useSegments();
+  const router = useRouter();
+  const { user, authReady, loading } = useAuth();
+  const hasRedirectedToLoginRef = useRef(false);
+  const pathnameRef = useRef(pathname);
+  const segmentsRef = useRef(segments);
+  pathnameRef.current = pathname;
+  segmentsRef.current = segments;
+
+  useEffect(() => {
+    if (isRegisteredAuthUser(user)) {
+      hasRedirectedToLoginRef.current = false;
+      return;
+    }
+    if (!authReady || loading) return;
+
+    const currentPath = pathnameRef.current;
+    const segmentList = segmentsRef.current as string[];
+    if (isOnAuthRoute(currentPath, segmentList)) return;
+
+    if (hasRedirectedToLoginRef.current) return;
+    hasRedirectedToLoginRef.current = true;
+
+    logRouteRedirect(currentPath, '/(auth)/login', {
+      reason: user?.isAnonymous ? 'anonymous-session' : 'signed-out',
+    });
+    router.replace('/(auth)/login' as never);
+  }, [authReady, loading, router, user]);
+
+  return null;
+}
+
 /**
  * Sole role-based `router.replace` for signed-in entry from `/`.
  * Runs only after auth + role are resolved and only when outside the target role shell.
@@ -73,7 +109,8 @@ function RoleRouteGuard() {
   pathnameRef.current = pathname;
   segmentsRef.current = segments;
 
-  const isReady = authReady && roleResolved && Boolean(user?.uid) && Boolean(role);
+  const isReady =
+    authReady && roleResolved && isRegisteredAuthUser(user) && Boolean(role);
 
   useEffect(() => {
     logAuthReady(isReady, { uid: user?.uid ?? null, role: role ?? null });
@@ -283,6 +320,7 @@ export default function RootLayout() {
             <AuthProvider>
               <CartProvider>
                 <AppBootstrapGate>
+                  <SignedOutRouteGuard />
                   <RoleRouteGuard />
                   <RouteGroupMonitor />
                   <Slot />
