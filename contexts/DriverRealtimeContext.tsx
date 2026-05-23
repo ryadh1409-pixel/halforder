@@ -2,15 +2,15 @@ import {
   subscribeDriverDeliveryStats,
   type DriverDeliveryStats,
 } from '@/services/driverService';
-import { useAuth } from '@/services/AuthContext';
+import { useAuthUid } from '@/hooks/useAuthUid';
 import { logListenerSubscribe, logListenerUnsubscribe } from '@/utils/driverListenerLog';
 import { useDriverMountLog } from '@/utils/driverMountLog';
 import React, {
   createContext,
+  memo,
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -36,31 +36,27 @@ type DriverRealtimeValue = {
 
 const DriverRealtimeContext = createContext<DriverRealtimeValue | null>(null);
 
-/** One delivery-stats listener for the entire driver stack (Hub + Earnings). */
-export function DriverRealtimeProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const uid = user?.uid?.trim() ?? '';
+type DriverRealtimeProviderProps = {
+  children: ReactNode;
+  uid?: string;
+};
+
+function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeProviderProps) {
+  const authUid = useAuthUid();
+  const uid = (uidProp ?? authUid).trim();
   useDriverMountLog('DriverRealtimeProvider', uid || null);
+
   const [stats, setStats] = useState<DriverDeliveryStats>(EMPTY_STATS);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const subscribedUidRef = useRef<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState(() => !uid);
 
   useEffect(() => {
     if (!uid) {
-      subscribedUidRef.current = null;
-      setStats(EMPTY_STATS);
-      setStatsLoading(false);
       return undefined;
     }
 
-    const uidChanged = subscribedUidRef.current !== uid;
-    subscribedUidRef.current = uid;
-
     const listenerName = 'driver.deliveryStats';
-    logListenerSubscribe(listenerName);
-    if (uidChanged) {
-      setStatsLoading(true);
-    }
+    logListenerSubscribe(listenerName, uid);
+    setStatsLoading(true);
 
     const unsub = subscribeDriverDeliveryStats(uid, (next) => {
       setStats((prev) => (statsEqual(prev, next) ? prev : next));
@@ -68,26 +64,31 @@ export function DriverRealtimeProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      logListenerUnsubscribe(listenerName);
-      if (subscribedUidRef.current === uid) {
-        subscribedUidRef.current = null;
-      }
+      logListenerUnsubscribe(listenerName, uid);
       unsub();
     };
   }, [uid]);
+
+  useEffect(() => {
+    if (uid) return;
+    setStats(EMPTY_STATS);
+    setStatsLoading(false);
+  }, [uid]); // not in listener cleanup — avoids setState during teardown
 
   const value = useMemo(
     () => ({
       stats,
       statsLoading,
     }),
-    [stats, statsLoading],
+    [stats.deliveries, stats.earnings, stats.rating, statsLoading],
   );
 
   return (
     <DriverRealtimeContext.Provider value={value}>{children}</DriverRealtimeContext.Provider>
   );
 }
+
+export const DriverRealtimeProvider = memo(DriverRealtimeProviderInner);
 
 export function useDriverDeliveryStats(): DriverRealtimeValue {
   const ctx = useContext(DriverRealtimeContext);

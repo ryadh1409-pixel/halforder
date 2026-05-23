@@ -1,22 +1,33 @@
 import { useDriverPresence } from '@/hooks/useDriverPresence';
-import { useAuth } from '@/services/AuthContext';
+import { useAuthUid } from '@/hooks/useAuthUid';
 import { ensureDriverPresenceDoc } from '@/services/driverPresence';
 import { useDriverMountLog } from '@/utils/driverMountLog';
-import React, { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import React, {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from 'react';
 
 type DriverPresenceValue = ReturnType<typeof useDriverPresence>;
 
 const DriverPresenceContext = createContext<DriverPresenceValue | null>(null);
 
-/** One presence listener + toggle for the entire driver tab stack. */
-export function DriverPresenceProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const uid = user?.uid?.trim() ?? '';
+type DriverPresenceProviderProps = {
+  children: ReactNode;
+  uid?: string;
+};
+
+function DriverPresenceProviderInner({ children, uid: uidProp }: DriverPresenceProviderProps) {
+  const authUid = useAuthUid();
+  const uid = (uidProp ?? authUid).trim();
   useDriverMountLog('DriverPresenceProvider', uid || null);
-  const presenceEnabled = Boolean(uid);
+
   const ensuredRef = useRef<string | null>(null);
-  const displayNameRef = useRef(user?.displayName ?? null);
-  displayNameRef.current = user?.displayName ?? null;
+  const displayNameRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!uid || ensuredRef.current === uid) return;
@@ -27,12 +38,24 @@ export function DriverPresenceProvider({ children }: { children: ReactNode }) {
     });
   }, [uid]);
 
-  const value = useDriverPresence(uid || null, presenceEnabled);
+  const presence = useDriverPresence(uid || null, Boolean(uid));
+  const value = useMemo(
+    () => presence,
+    [
+      presence.isOnline,
+      presence.loading,
+      presence.toggling,
+      presence.rating,
+      presence.setOnlineStatus,
+    ],
+  );
 
   return (
     <DriverPresenceContext.Provider value={value}>{children}</DriverPresenceContext.Provider>
   );
 }
+
+export const DriverPresenceProvider = memo(DriverPresenceProviderInner);
 
 export function useDriverPresenceContext(): DriverPresenceValue {
   const ctx = useContext(DriverPresenceContext);

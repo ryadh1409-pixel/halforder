@@ -1,53 +1,43 @@
-import DriverTabBar from '@/components/driver/DriverTabBar';
+import DriverTabsNavigator from '@/components/driver/DriverTabsNavigator';
 import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
 import { DriverRealtimeProvider } from '@/contexts/DriverRealtimeContext';
 import { DriverShellProvider } from '@/contexts/DriverShellContext';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Tabs } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
-import { useAuth } from '@/services/AuthContext';
+import { useAuthUid } from '@/hooks/useAuthUid';
+import { markDriverStackMounted } from '@/lib/driverStack';
+import { ActivityIndicator, View } from 'react-native';
 import { useDriverMountLog } from '@/utils/driverMountLog';
-
-const DRIVER_TAB_SCREEN_OPTIONS = {
-  headerShown: false,
-  lazy: false,
-} as const;
+import { useEffect } from 'react';
 
 export const unstable_settings = {
   initialRouteName: 'index',
 };
 
 /**
- * All `/(driver)` tab screens inside providers (stateless re: auth token refresh).
- * Nesting: Realtime → Presence → Shell → Tabs.
+ * Driver stack layout: stable provider tree + memoized tabs (Realtime → Presence → Shell → Tabs).
+ * Latch driver stack on mount; reset only on sign-out (see lib/driverStack.ts).
  */
 export default function DriverLayout() {
-  const uid = useAuth().user?.uid?.trim() ?? '';
+  const uid = useAuthUid();
   useDriverMountLog('DriverLayout', uid || null);
-  const screenOptions = useMemo(() => DRIVER_TAB_SCREEN_OPTIONS, []);
-  const renderTabBar = useCallback(
-    (props: BottomTabBarProps) => <DriverTabBar {...props} />,
-    [],
-  );
+
+  useEffect(() => {
+    markDriverStackMounted();
+    // Do not clear latch on cleanup — prevents duplicate role redirects during dev StrictMode remount.
+  }, []);
+
+  if (!uid) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#00C853" />
+      </View>
+    );
+  }
 
   return (
-    <DriverRealtimeProvider>
-      <DriverPresenceProvider>
+    <DriverRealtimeProvider uid={uid}>
+      <DriverPresenceProvider uid={uid}>
         <DriverShellProvider>
-          <Tabs
-            tabBar={renderTabBar}
-            detachInactiveScreens={false}
-            screenOptions={screenOptions}
-          >
-            <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
-            <Tabs.Screen name="dispatch" options={{ title: 'Orders' }} />
-            <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
-            <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-            <Tabs.Screen name="dashboard" options={{ href: null }} />
-            <Tabs.Screen name="active" options={{ href: null }} />
-            <Tabs.Screen name="active/[id]" options={{ href: null }} />
-            <Tabs.Screen name="order/[id]" options={{ href: null }} />
-          </Tabs>
+          <DriverTabsNavigator />
         </DriverShellProvider>
       </DriverPresenceProvider>
     </DriverRealtimeProvider>

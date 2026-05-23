@@ -38,8 +38,6 @@ export function useDriverPresence(
 
   useEffect(() => {
     if (!uid || !enabled) {
-      setIsOnline(false);
-      setLoading(false);
       return undefined;
     }
 
@@ -52,7 +50,7 @@ export function useDriverPresence(
       setLoading(true);
     }
 
-    logListenerSubscribe('driver.presence');
+    logListenerSubscribe('driver.presence', uid);
     const unsub = onSnapshot(
       driverPresenceDoc(uid),
       (snap) => {
@@ -95,12 +93,18 @@ export function useDriverPresence(
     );
 
     return () => {
-      logListenerUnsubscribe('driver.presence');
+      logListenerUnsubscribe('driver.presence', uid);
       if (listenerEpochRef.current === epoch) {
         listenerEpochRef.current = 0;
       }
       unsub();
     };
+  }, [uid, enabled]);
+
+  useEffect(() => {
+    if (uid && enabled) return;
+    setIsOnline(false);
+    setLoading(false);
   }, [uid, enabled]);
 
   const setOnlineStatus = useCallback(async (nextValue: boolean) => {

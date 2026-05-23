@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
@@ -137,6 +137,7 @@ function ordersListSignature(orders: DriverOrder[]): string {
 }
 
 export default function DriverHubScreen() {
+  const pathname = usePathname();
   const { user, signOutUser, switchRoleMode } = useAuth();
   const uid = user?.uid ?? '';
   const {
@@ -258,13 +259,15 @@ export default function DriverHubScreen() {
           router.replace('/(host)' as never);
           return;
         }
-        router.replace('/(driver)' as never);
+        if (!pathname.includes('(driver)')) {
+          router.replace('/(driver)' as never);
+        }
       } catch (e) {
         console.error('[driver] switch role failed', e);
         showError('Could not switch mode right now');
       }
     },
-    [router, switchRoleMode],
+    [pathname, switchRoleMode],
   );
 
   const openDriverSettings = useCallback(() => {

@@ -89,6 +89,10 @@ type AuthContextValue = {
   user: User | null;
   /** Auth + Firestore role subscription — false before navigation should run from `/`. */
   loading: boolean;
+  /** Firebase auth listener has settled (signed-in or signed-out). */
+  authReady: boolean;
+  /** Firestore role subscription finished when `user` is set. */
+  roleResolved: boolean;
   role: UserRole | null;
   /** `users/{uid}.role` from Firestore (for promoted admins). Always `null` when signed out. */
   firestoreUserRole: UserRole | null;
@@ -292,6 +296,7 @@ async function ensureUserDocument(
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
+  const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -346,6 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resetForcedTokenRefreshUid();
         setUser(null);
         setLoading(false);
+        setAuthReady(true);
         return;
       }
       if (__DEV__) {
@@ -364,6 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setUser(null);
           setLoading(false);
+          setAuthReady(true);
           return;
         }
         // Network / transient: keep local session; user can retry when online.
@@ -386,10 +393,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void claimReferralInboxRewards(firebaseUser.uid);
           void syncUserRoleToFirestore(firebaseUser);
           void migrateUserRoleIfNeeded(firebaseUser.uid).then((r) => {
-            logAuthRoleDetected(r);
+            logAuthRoleDetected(r, firebaseUser.uid);
           });
         }
         setLoading(false);
+        setAuthReady(true);
         return;
       }
 
@@ -411,10 +419,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void claimReferralInboxRewards(fresh.uid);
         void syncUserRoleToFirestore(fresh);
         void migrateUserRoleIfNeeded(fresh.uid).then((r) => {
-          logAuthRoleDetected(r);
+          logAuthRoleDetected(r, fresh.uid);
         });
       }
       setLoading(false);
+      setAuthReady(true);
     });
     return () => unsub();
   }, []);
@@ -574,7 +583,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         void syncUserRoleToFirestore(cred.user);
         const migrated = await migrateUserRoleIfNeeded(cred.user.uid);
-        logAuthRoleDetected(migrated);
+        logAuthRoleDetected(migrated, cred.user.uid);
       } catch (e) {
         logError(e);
         throw new Error(getUserFriendlyError(e));
@@ -690,11 +699,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const roleResolved = !user?.uid || !roleLoading;
+  const bootstrapLoading = loading || (Boolean(user?.uid) && roleLoading);
+
   const value = useMemo((): AuthContextValue => {
     const fur = firestoreRole ?? null;
     return {
       user,
-      loading: loading || roleLoading,
+      loading: bootstrapLoading,
+      authReady,
+      roleResolved,
       role: firestoreRole,
       firestoreUserRole: fur,
       signUpWithEmail,
@@ -707,8 +721,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [
     user,
-    loading,
-    roleLoading,
+    bootstrapLoading,
+    authReady,
+    roleResolved,
     firestoreRole,
     signUpWithEmail,
     signInWithEmail,

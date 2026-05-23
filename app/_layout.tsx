@@ -3,6 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import 'react-native-svg';
 
+import { AuthBootstrapGate } from '@/components/AuthBootstrapGate';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
@@ -27,6 +28,7 @@ import {
   markRedirectCompleted,
   roleLandingKey,
 } from '@/lib/roleRouteGuard';
+import { isDriverStackMounted } from '@/lib/driverStack';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { logAuthReady, logRouteRedirect } from '@/utils/routeDiagnostics';
 import { AuthProvider, useAuth } from '../services/AuthContext';
@@ -48,36 +50,53 @@ if (Platform.OS !== 'web' && !isExpoGo) {
   configureExpoPushNotificationHandler();
 }
 
-/** Sole role-based `router.replace`: root `/` landing by role (see `app/index.tsx` for onboarding / terms). */
+/**
+ * Sole role-based `router.replace` for signed-in entry from `/`.
+ * Runs only after auth + role are resolved and only when outside the target role shell.
+ */
 function RoleRouteGuard() {
   const pathname = usePathname();
   const segments = useSegments();
   const router = useRouter();
-  const { loading: authLoading, firestoreUserRole: role, user } = useAuth();
-  const isReady = !authLoading && Boolean(user?.uid) && Boolean(role);
+  const { authReady, roleResolved, firestoreUserRole: role, user } = useAuth();
+  const prevUidRef = useRef<string | null>(null);
   const pathnameRef = useRef(pathname);
   const segmentsRef = useRef(segments);
   pathnameRef.current = pathname;
   segmentsRef.current = segments;
 
-  useEffect(() => {
-    logAuthReady(isReady, { uid: user?.uid ?? null });
-  }, [isReady, user?.uid]);
+  const isReady = authReady && roleResolved && Boolean(user?.uid) && Boolean(role);
 
   useEffect(() => {
-    if (!user?.uid) {
-      clearRoleRedirectGuards();
+    logAuthReady(isReady, { uid: user?.uid ?? null, role: role ?? null });
+  }, [isReady, role, user?.uid]);
+
+  useEffect(() => {
+    const uid = user?.uid ?? null;
+    const prevUid = prevUidRef.current;
+    prevUidRef.current = uid;
+
+    if (!uid) {
+      if (prevUid) {
+        clearRoleRedirectGuards();
+      }
       return;
     }
+
     if (!isReady || !role) return;
 
     const currentPathname = pathnameRef.current;
     const segmentList = segmentsRef.current as string[];
-    const sessionKey = roleLandingKey(user.uid, role);
+    const sessionKey = roleLandingKey(uid, role);
     if (completedRoleRedirects.has(sessionKey)) return;
 
     const normalized = normalizeRoleForRouting(role);
     const targetRoute = getRouteForRole(normalized);
+
+    if (isDriverStackMounted()) {
+      markRedirectCompleted(targetRoute, sessionKey);
+      return;
+    }
 
     if (isInsideRoleShell(segmentList, currentPathname)) {
       markRedirectCompleted(targetRoute, sessionKey);
@@ -97,13 +116,12 @@ function RoleRouteGuard() {
     }
 
     markRedirectCompleted(targetRoute, sessionKey);
-    logAuthRoleDetected(normalized);
-    logAuthRoleRouted(normalized, targetRoute);
+    logAuthRoleDetected(normalized, uid);
+    logAuthRoleRouted(normalized, targetRoute, uid);
     logRouteRedirect(currentPathname, targetRoute, { role: normalized, segments: segmentList });
     router.replace(targetRoute as never);
   }, [isReady, role, router, user?.uid]);
 
-  if (!isReady) return null;
   return null;
 }
 
@@ -195,7 +213,7 @@ export const linking = {
 /**
  * Root: providers + `<Slot />` — `RoleRouteGuard` is the only role-based navigation.
  *
- * `CartProvider` wraps `Slot` so `useCart()` works on stack routes; it is not navigation logic.
+ * `AuthBootstrapGate` holds a single splash until auth + role resolve (prevents shell flash).
  */
 export default function RootLayout() {
   if (Platform.OS !== 'web' && isExpoGo) {
@@ -217,9 +235,11 @@ export default function RootLayout() {
           <View style={styles.ltrRoot}>
             <AuthProvider>
               <CartProvider>
-                <RoleRouteGuard />
-                <Slot />
-                <SessionQuickActions />
+                <AuthBootstrapGate>
+                  <RoleRouteGuard />
+                  <Slot />
+                  <SessionQuickActions />
+                </AuthBootstrapGate>
               </CartProvider>
             </AuthProvider>
           </View>

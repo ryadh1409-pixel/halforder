@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,21 +19,24 @@ const TABS: { name: DriverTabKey; label: string; icon: keyof typeof Ionicons.gly
 function DriverTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index]?.name as DriverTabKey | undefined;
+  const routesRef = useRef(state.routes);
+  routesRef.current = state.routes;
 
   const onPress = useCallback(
     (name: DriverTabKey) => {
-      const route = state.routes.find((r) => r.name === name);
+      if (activeRoute === name) return;
+      const route = routesRef.current.find((r) => r.name === name);
       if (!route) return;
       const event = navigation.emit({
         type: 'tabPress',
         target: route.key,
         canPreventDefault: true,
       });
-      if (!event.defaultPrevented && activeRoute !== name) {
+      if (!event.defaultPrevented) {
         navigation.navigate(name);
       }
     },
-    [activeRoute, navigation, state.routes],
+    [activeRoute, navigation],
   );
 
   return (

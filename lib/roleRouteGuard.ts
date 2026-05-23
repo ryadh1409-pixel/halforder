@@ -1,4 +1,7 @@
+import { resetAuthRoleLogs } from '@/lib/authRole';
+import { resetDriverStackLatch } from '@/lib/driverStack';
 import type { UserRole } from '@/services/userService';
+import { resetDriverListenerLogs } from '@/utils/driverListenerLog';
 import { resetDriverMountLogs } from '@/utils/driverMountLog';
 
 const ROLE_SHELLS = new Set([
@@ -35,7 +38,10 @@ export function clearRoleRedirectGuards(): void {
   completedRedirects.clear();
   completedRoleRedirects.clear();
   resetRoleShellLanding();
+  resetDriverStackLatch();
   resetDriverMountLogs();
+  resetDriverListenerLogs();
+  resetAuthRoleLogs();
 }
 
 export function markRedirectCompleted(targetRoute: string, sessionKey?: string): void {
@@ -50,26 +56,20 @@ export function hasRedirectCompleted(targetRoute: string): boolean {
   return completedRedirects.has(targetRoute);
 }
 
-/** True when navigation is already inside a role shell (driver, tabs, etc.). */
+/** Pure check — no side effects (call markRoleShellLandingComplete at redirect sites). */
 export function isInsideRoleShell(segments: string[], pathname: string): boolean {
   const root = segments[0];
   if (root && ROLE_SHELLS.has(root)) {
-    markRoleShellLandingComplete();
     return true;
   }
 
-  if (
+  return (
     pathname.includes('(driver)') ||
     pathname.includes('(tabs)') ||
     pathname.includes('(host)') ||
     pathname.includes('(auth)') ||
     pathname.startsWith('/driver')
-  ) {
-    markRoleShellLandingComplete();
-    return true;
-  }
-
-  return false;
+  );
 }
 
 /** True only at bare app entry — not when Expo reports `/` while a shell is active. */
@@ -81,7 +81,6 @@ export function isAtAppEntryPoint(pathname: string, segments: string[]): boolean
     return false;
   }
 
-  // Any segment means a stack/group is already mounted.
   if (segments.length > 0) {
     return false;
   }
