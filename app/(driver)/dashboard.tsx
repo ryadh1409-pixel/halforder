@@ -1,6 +1,7 @@
+import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import { Redirect } from 'expo-router';
 
 /** Legacy path — canonical driver UI is `/(driver)` (index). */
 export default function DriverDashboardAlias() {
-  return <Redirect href="/(driver)" />;
+  return <Redirect href={DRIVER_ROUTES.hub} />;
 }

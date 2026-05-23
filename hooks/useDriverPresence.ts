@@ -6,7 +6,7 @@ import {
 } from '@/services/driverPresence';
 import { auth } from '@/services/firebase';
 import { logListenerSubscribe, logListenerUnsubscribe } from '@/utils/driverListenerLog';
-import { onSnapshot } from 'firebase/firestore';
+import { safeOnSnapshotDoc, safeUnsubscribe } from '@/utils/safeOnSnapshot';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Platform, UIManager } from 'react-native';
 
@@ -26,7 +26,7 @@ export function useDriverPresence(
   enabled = true,
 ) {
   const uid = typeof driverId === 'string' ? driverId.trim() || null : null;
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => Boolean(uid && enabled));
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
 
@@ -51,7 +51,7 @@ export function useDriverPresence(
     }
 
     logListenerSubscribe('driver.presence', uid);
-    const unsub = onSnapshot(
+    const unsub = safeOnSnapshotDoc(
       driverPresenceDoc(uid),
       (snap) => {
         if (listenerEpochRef.current !== epoch) return;
@@ -90,6 +90,7 @@ export function useDriverPresence(
         console.error('[ONLINE READ ERROR]', { path, error });
         setLoading(false);
       },
+      'driver.presence',
     );
 
     return () => {
@@ -97,14 +98,17 @@ export function useDriverPresence(
       if (listenerEpochRef.current === epoch) {
         listenerEpochRef.current = 0;
       }
-      unsub();
+      safeUnsubscribe(unsub, 'driver.presence');
     };
   }, [uid, enabled]);
 
   useEffect(() => {
-    if (uid && enabled) return;
-    setIsOnline(false);
-    setLoading(false);
+    if (!uid || !enabled) {
+      setIsOnline(false);
+      setLoading(false);
+      return;
+    }
+    setIsOnline(true);
   }, [uid, enabled]);
 
   const setOnlineStatus = useCallback(async (nextValue: boolean) => {

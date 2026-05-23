@@ -1,3 +1,4 @@
+import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import { useDriverOrders } from '../../hooks/useDriverOrders';
 import { useAuth } from '../../services/AuthContext';
 import { requireRole } from '../../utils/requireRole';
@@ -22,7 +23,7 @@ export default function DriverActiveScreen() {
     }
     if (redirectedForIdRef.current === firstOrderId) return;
     redirectedForIdRef.current = firstOrderId;
-    router.replace(`/(driver)/active/${encodeURIComponent(firstOrderId)}` as never);
+    router.replace(DRIVER_ROUTES.activeOrder(firstOrderId) as never);
   }, [loading, firstOrderId]);
 
   if (roleLoading || !authorized) {
@@ -46,7 +47,7 @@ export default function DriverActiveScreen() {
               <Text style={styles.emptyIcon}>🚚</Text>
               <Text style={styles.emptyTitle}>No active deliveries</Text>
               <Text style={styles.emptySub}>Accept an order from the queue first.</Text>
-              <Pressable style={styles.secondary} onPress={() => router.push('/(driver)/dispatch' as never)}>
+              <Pressable style={styles.secondary} onPress={() => router.push(DRIVER_ROUTES.dispatch as never)}>
                 <Text style={styles.secondaryText}>Browse available</Text>
               </Pressable>
             </View>

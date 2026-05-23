@@ -1,11 +1,14 @@
 import { resetAuthSessionBootstrap } from '@/lib/authSessionBootstrap';
 import { resetAuthRoleLogs } from '@/lib/authRole';
 import { resetDriverStackLatch } from '@/lib/driverStack';
+import { isInDriverGroup, isInTabsGroup } from '@/lib/routeGroups';
 import type { UserRole } from '@/services/userService';
 import { resetDevProviderMountCounts } from '@/utils/devBootstrapDiagnostics';
 import { resetDriverListenerLogs } from '@/utils/driverListenerLog';
 import { resetDriverMountLogs } from '@/utils/driverMountLog';
+import { resetDriverLifecycleLogs, resetRedirectDecisionLogs } from '@/utils/driverLifecycleLog';
 import { resetRouteDiagnostics } from '@/utils/routeDiagnostics';
+import { resetRouteGroupCheckLogs } from '@/utils/routeGroupCheck';
 
 const ROLE_SHELLS = new Set([
   '(tabs)',
@@ -47,7 +50,10 @@ export function clearRoleRedirectGuards(): void {
   resetAuthRoleLogs();
   resetAuthSessionBootstrap();
   resetRouteDiagnostics();
+  resetRouteGroupCheckLogs();
   resetDevProviderMountCounts();
+  resetDriverLifecycleLogs();
+  resetRedirectDecisionLogs();
 }
 
 export function markRedirectCompleted(targetRoute: string, sessionKey?: string): void {
@@ -74,7 +80,7 @@ export function isInsideRoleShell(segments: string[], pathname: string): boolean
     pathname.includes('(tabs)') ||
     pathname.includes('(host)') ||
     pathname.includes('(auth)') ||
-    pathname.startsWith('/driver')
+    /^\/driver\//.test(pathname)
   );
 }
 
@@ -101,7 +107,7 @@ export function roleLandingKey(uid: string, role: UserRole): string {
 export function isAlreadyOnRoleRoute(pathname: string, segments: string[], role: UserRole): boolean {
   const normalized = role === 'customer' ? 'user' : role === 'host' ? 'restaurant' : role;
   if (normalized === 'driver') {
-    return segments[0] === '(driver)' || pathname.includes('(driver)') || pathname.startsWith('/driver');
+    return isInDriverGroup(segments, pathname);
   }
   if (normalized === 'restaurant') {
     return segments[0] === '(host)' || pathname.includes('(host)');
@@ -109,5 +115,5 @@ export function isAlreadyOnRoleRoute(pathname: string, segments: string[], role:
   if (normalized === 'admin') {
     return pathname.startsWith('/admin') || segments[0] === 'admin';
   }
-  return segments[0] === '(tabs)' || pathname.includes('(tabs)');
+  return isInTabsGroup(segments, pathname);
 }

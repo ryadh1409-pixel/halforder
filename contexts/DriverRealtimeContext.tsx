@@ -4,7 +4,10 @@ import {
 } from '@/services/driverService';
 import { useAuthUid } from '@/hooks/useAuthUid';
 import { logListenerSubscribe, logListenerUnsubscribe } from '@/utils/driverListenerLog';
+import { logDriverLayoutState } from '@/utils/driverLifecycleLog';
 import { useDriverMountLog } from '@/utils/driverMountLog';
+import { safeUnsubscribe } from '@/utils/safeOnSnapshot';
+import { usePathname, useSegments } from 'expo-router';
 import React, {
   createContext,
   memo,
@@ -42,9 +45,25 @@ type DriverRealtimeProviderProps = {
 };
 
 function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeProviderProps) {
+  const pathname = usePathname();
+  const segments = useSegments();
   const authUid = useAuthUid();
   const uid = (uidProp ?? authUid).trim();
   useDriverMountLog('DriverRealtimeProvider', uid || null);
+
+  useEffect(() => {
+    logDriverLayoutState({
+      pathname,
+      segments: segments as string[],
+      routeGroup: '(driver)',
+      role: 'driver',
+      authReady: true,
+      roleResolved: true,
+      uid: uid || null,
+      providerReady: Boolean(uid),
+      reason: 'DriverRealtimeProvider-mounted',
+    });
+  }, [pathname, segments, uid]);
 
   const [stats, setStats] = useState<DriverDeliveryStats>(EMPTY_STATS);
   const [statsLoading, setStatsLoading] = useState(() => !uid);
@@ -65,7 +84,7 @@ function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeP
 
     return () => {
       logListenerUnsubscribe(listenerName, uid);
-      unsub();
+      safeUnsubscribe(unsub, listenerName);
     };
   }, [uid]);
 

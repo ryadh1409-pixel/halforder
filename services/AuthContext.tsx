@@ -47,7 +47,10 @@ import {
   resetAuthSessionBootstrap,
   shouldRunAuthSessionBootstrap,
 } from '@/lib/authSessionBootstrap';
+import { normalizeRoleForRouting } from '@/lib/authRole';
+import { markDriverOffline } from '@/services/driverPresence';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
+import { logRootBootstrapState } from '@/utils/driverLifecycleLog';
 import { auth, db, ensureAuthReadyOnce } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
@@ -349,6 +352,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const { role: firestoreRole, loading: roleLoading } = useUserRole(user?.uid);
+  const firestoreRoleRef = useRef(firestoreRole);
+  firestoreRoleRef.current = firestoreRole;
 
   useEffect(() => {
     const uid = user?.uid;
@@ -704,6 +709,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOutUser = useCallback(async () => {
+    const role = normalizeRoleForRouting(firestoreRoleRef.current);
+    if (role === 'driver') {
+      try {
+        await markDriverOffline();
+      } catch (error) {
+        console.warn('[driver] mark offline on sign-out failed', error);
+      }
+    }
     await firebaseSignOut(auth);
   }, []);
 
@@ -726,6 +739,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const roleResolved = !user?.uid || !roleLoading;
   const bootstrapLoading = loading || (Boolean(user?.uid) && roleLoading);
+
+  useEffect(() => {
+    logRootBootstrapState({
+      pathname: 'AuthProvider',
+      segments: [],
+      role: firestoreRole ?? null,
+      authReady,
+      roleResolved,
+      uid: user?.uid ?? null,
+      loading: bootstrapLoading,
+      bootstrapPhase: authReady
+        ? roleResolved
+          ? bootstrapLoading
+            ? 'roleReady'
+            : 'appReady'
+          : 'roleReady'
+        : 'bootstrapping',
+      reason: 'auth-context-state',
+    });
+  }, [user?.uid, authReady, roleResolved, bootstrapLoading, firestoreRole]);
 
   const value = useMemo((): AuthContextValue => {
     const fur = firestoreRole ?? null;

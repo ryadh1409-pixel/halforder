@@ -1,42 +1,37 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import React, { memo, useCallback, useRef } from 'react';
+import { DRIVER_ROUTES, type DriverTabKey, DRIVER_TAB_HREFS } from '@/lib/navigationPaths';
+import { useRouter } from 'expo-router';
+import React, { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-type DriverTabKey = 'index' | 'dispatch' | 'earnings' | 'profile';
 
 const TABS: { name: DriverTabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { name: 'index', label: 'Hub', icon: 'grid' },
   { name: 'dispatch', label: 'Orders', icon: 'list' },
   { name: 'earnings', label: 'Earnings', icon: 'cash' },
-  { name: 'profile', label: 'Profile', icon: 'person' },
+  { name: 'driver-profile', label: 'Profile', icon: 'person' },
 ];
 
 /**
- * In-stack tab bar — uses React Navigation tab navigation only (never `/orders` root href).
+ * Driver-only tab bar — always `router.push('/(driver)/…')`.
+ * Never `navigation.navigate('profile')` (merges with the `(tabs)` navigator).
  */
-function DriverTabBar({ state, navigation }: BottomTabBarProps) {
+function DriverTabBar({ state }: BottomTabBarProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index]?.name as DriverTabKey | undefined;
-  const routesRef = useRef(state.routes);
-  routesRef.current = state.routes;
 
   const onPress = useCallback(
     (name: DriverTabKey) => {
       if (activeRoute === name) return;
-      const route = routesRef.current.find((r) => r.name === name);
-      if (!route) return;
-      const event = navigation.emit({
-        type: 'tabPress',
-        target: route.key,
-        canPreventDefault: true,
-      });
-      if (!event.defaultPrevented) {
-        navigation.navigate(name);
+      if (name === 'driver-profile') {
+        router.push(DRIVER_ROUTES.profile as never);
+        return;
       }
+      router.push(DRIVER_TAB_HREFS[name]);
     },
-    [activeRoute, navigation],
+    [activeRoute, router],
   );
 
   return (

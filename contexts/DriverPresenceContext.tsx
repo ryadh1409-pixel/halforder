@@ -1,7 +1,12 @@
 import { useDriverPresence } from '@/hooks/useDriverPresence';
 import { useAuthUid } from '@/hooks/useAuthUid';
-import { ensureDriverPresenceDoc } from '@/services/driverPresence';
+import {
+  ensureDriverPresenceDoc,
+  writeDriverOnlinePresence,
+} from '@/services/driverPresence';
+import { logDriverLayoutState } from '@/utils/driverLifecycleLog';
 import { useDriverMountLog } from '@/utils/driverMountLog';
+import { usePathname, useSegments } from 'expo-router';
 import React, {
   createContext,
   memo,
@@ -11,6 +16,7 @@ import React, {
   useRef,
   type ReactNode,
 } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 type DriverPresenceValue = ReturnType<typeof useDriverPresence>;
 
@@ -22,20 +28,69 @@ type DriverPresenceProviderProps = {
 };
 
 function DriverPresenceProviderInner({ children, uid: uidProp }: DriverPresenceProviderProps) {
+  const pathname = usePathname();
+  const segments = useSegments();
   const authUid = useAuthUid();
   const uid = (uidProp ?? authUid).trim();
   useDriverMountLog('DriverPresenceProvider', uid || null);
+
+  useEffect(() => {
+    logDriverLayoutState({
+      pathname,
+      segments: segments as string[],
+      routeGroup: '(driver)',
+      role: 'driver',
+      authReady: true,
+      roleResolved: true,
+      uid: uid || null,
+      providerReady: Boolean(uid),
+      reason: 'DriverPresenceProvider-mounted',
+    });
+  }, [pathname, segments, uid]);
 
   const ensuredRef = useRef<string | null>(null);
   const displayNameRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!uid || ensuredRef.current === uid) return;
-    ensuredRef.current = uid;
-    void ensureDriverPresenceDoc(uid, displayNameRef.current).catch((error) => {
-      console.error('[driver] ensureDriverPresenceDoc failed', error);
-      ensuredRef.current = null;
-    });
+    if (!uid) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        if (ensuredRef.current !== uid) {
+          ensuredRef.current = uid;
+          await ensureDriverPresenceDoc(uid, displayNameRef.current);
+        }
+        if (cancelled) return;
+        await writeDriverOnlinePresence(true);
+      } catch (error) {
+        console.error('[driver] auto online on session start failed', error);
+        ensuredRef.current = null;
+      }
+    })();
+
+    const onAppStateChange = (nextState: AppStateStatus) => {
+      if (cancelled) return;
+      if (nextState === 'active') {
+        void writeDriverOnlinePresence(true).catch((error) => {
+          console.error('[driver] set online on foreground failed', error);
+        });
+        return;
+      }
+      if (nextState === 'background' || nextState === 'inactive') {
+        void writeDriverOnlinePresence(false).catch((error) => {
+          console.error('[driver] set offline on background failed', error);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', onAppStateChange);
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
   }, [uid]);
 
   const presence = useDriverPresence(uid || null, Boolean(uid));

@@ -131,13 +131,25 @@ export async function ensureDriverPresenceDoc(
     return;
   }
 
+  const ts = serverTimestamp();
   await setDoc(
     ref,
     {
       name: displayName?.trim() || 'Driver',
-      updatedAt: serverTimestamp(),
-      lastActive: serverTimestamp(),
+      online: true,
+      isOnline: true,
+      isOnlineLive: true,
+      updatedAt: ts,
+      lastActive: ts,
+      lastSeenAt: ts,
     },
     { merge: true },
   );
+}
+
+/** Marks driver offline — safe to call before sign-out while auth is still active. */
+export async function markDriverOffline(): Promise<void> {
+  const uid = auth.currentUser?.uid?.trim();
+  if (!uid) return;
+  await writeDriverOnlinePresence(false);
 }

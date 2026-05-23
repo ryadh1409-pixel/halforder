@@ -1,3 +1,4 @@
+import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import AppHeader from '../../components/AppHeader';
 import { useDriverOnlineStatus } from '../../hooks/useDriverOnlineStatus';
 import { useAuth } from '../../services/AuthContext';
@@ -89,7 +90,7 @@ export default function DriverDispatchScreen() {
       }
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
       showSuccess('Order assigned to you');
-      router.push(`/(driver)/active/${encodeURIComponent(orderId)}` as never);
+      router.push(DRIVER_ROUTES.activeOrder(orderId) as never);
     } catch {
       showError('Could not accept order.');
     } finally {
@@ -151,7 +152,7 @@ export default function DriverDispatchScreen() {
               <Pressable
                 key={order.id}
                 style={styles.card}
-                onPress={() => router.push(`/(driver)/order/${encodeURIComponent(order.id)}` as never)}
+                onPress={() => router.push(DRIVER_ROUTES.order(order.id) as never)}
               >
                 <View style={styles.headerRow}>
                   <View style={styles.leftRow}>
@@ -203,7 +204,7 @@ export default function DriverDispatchScreen() {
               </Pressable>
             ))
           )}
-          <Pressable style={styles.link} onPress={() => router.push('/(driver)/active' as never)}>
+          <Pressable style={styles.link} onPress={() => router.push(DRIVER_ROUTES.active as never)}>
             <Text style={styles.linkText}>Go to active delivery →</Text>
           </Pressable>
         </ScrollView>

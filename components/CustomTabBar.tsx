@@ -1,4 +1,5 @@
 import { UE } from '@/constants/uberEatsTheme';
+import { DRIVER_ROUTES, TABS_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { selectCartTotals, useCartStore } from '@/store/cartStore';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,28 +30,30 @@ const VISIBLE_TAB_ORDER = [
   'profile',
 ] as const;
 
-function hrefForTabRoute(routeName: string): Href {
+function hrefForTabRoute(routeName: string, role: string): Href {
   switch (routeName) {
     case 'index':
-      return '/(tabs)' as Href;
+      return TABS_ROUTES.hub as Href;
     case 'explore':
-      return '/(tabs)/explore' as Href;
+      return TABS_ROUTES.explore as Href;
     case 'search':
-      return '/(tabs)/search' as Href;
+      return TABS_ROUTES.search as Href;
     case 'cart':
-      return '/(tabs)/cart' as Href;
+      return TABS_ROUTES.cart as Href;
     case 'profile':
-      return '/(tabs)/profile' as Href;
+      return role === 'driver'
+        ? (DRIVER_ROUTES.profile as Href)
+        : (TABS_ROUTES.profile as Href);
     case 'orders':
-      return '/(tabs)/orders' as Href;
+      return TABS_ROUTES.orders as Href;
     case 'home':
       return '/(tabs)/home' as Href;
     case 'host':
       return '/(tabs)/host' as Href;
     case 'driver':
-      return '/(driver)' as Href;
+      return DRIVER_ROUTES.hub as Href;
     case 'ai':
-      return '/(tabs)/ai' as Href;
+      return TABS_ROUTES.ai as Href;
     case 'admin':
       return '/(tabs)/admin' as Href;
     default:
@@ -193,12 +196,14 @@ function CustomTabBar(props: CustomTabBarProps) {
   const tabIndex = typeof state.index === 'number' ? state.index : 0;
   const activeRoute = state.routes[tabIndex]?.name;
 
-  const visibleRoutes = VISIBLE_TAB_ORDER.map((name) =>
-    state.routes.find((r) => r.name === name),
-  ).filter(Boolean) as BottomTabBarProps['state']['routes'];
-
   const showHost = role === 'restaurant' || role === 'host';
   const showDriver = role === 'driver' || role === 'admin';
+
+  const visibleRoutes = VISIBLE_TAB_ORDER.filter(
+    (name) => !(name === 'profile' && role === 'driver'),
+  )
+    .map((name) => state.routes.find((r) => r.name === name))
+    .filter(Boolean) as BottomTabBarProps['state']['routes'];
 
   return (
     <View style={[styles.outer, { bottom: Math.max(14, insets.bottom + 4) }]}>
@@ -216,7 +221,7 @@ function CustomTabBar(props: CustomTabBarProps) {
         {visibleRoutes.map((route) => {
           if (!route?.key) return null;
           const isFocused = activeRoute === route.name;
-          const href = hrefForTabRoute(route.name);
+          const href = hrefForTabRoute(route.name, role);
           const badge = route.name === 'cart' ? cartQty : undefined;
           return (
             <TabBarItem
@@ -232,14 +237,14 @@ function CustomTabBar(props: CustomTabBarProps) {
           <TabBarItem
             route={{ key: 'host-link', name: 'host' } as never}
             focused={activeRoute === 'host'}
-            href={hrefForTabRoute('host')}
+            href={hrefForTabRoute('host', role)}
           />
         ) : null}
         {showDriver ? (
           <TabBarItem
             route={{ key: 'driver-link', name: 'driver' } as never}
             focused={activeRoute === 'driver'}
-            href={hrefForTabRoute('driver')}
+            href={hrefForTabRoute('driver', role)}
           />
         ) : null}
       </View>

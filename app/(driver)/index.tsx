@@ -14,7 +14,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, usePathname } from 'expo-router';
+import { router } from 'expo-router';
+import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '../../services/AuthContext';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
@@ -137,8 +138,7 @@ function ordersListSignature(orders: DriverOrder[]): string {
 }
 
 export default function DriverHubScreen() {
-  const pathname = usePathname();
-  const { user, signOutUser, switchRoleMode } = useAuth();
+  const { user } = useAuth();
   const uid = user?.uid ?? '';
   const {
     isOnline,
@@ -234,7 +234,7 @@ export default function DriverHubScreen() {
         }
         setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
         showSuccess('Order accepted');
-        router.replace(`/(driver)/active/${encodeURIComponent(order.id)}` as never);
+        router.replace(DRIVER_ROUTES.activeOrder(order.id) as never);
       } catch (e) {
         console.error('[driver] accept order failed', e);
         showError('Failed to accept order');
@@ -247,45 +247,6 @@ export default function DriverHubScreen() {
 
   const pinnedActiveOrder = activeOrders[0] ?? null;
 
-  const handleSwitchRole = useCallback(
-    async (target: 'user' | 'restaurant' | 'driver') => {
-      try {
-        await switchRoleMode(target);
-        if (target === 'user') {
-          router.replace('/(tabs)' as never);
-          return;
-        }
-        if (target === 'restaurant') {
-          router.replace('/(host)' as never);
-          return;
-        }
-        if (!pathname.includes('(driver)')) {
-          router.replace('/(driver)' as never);
-        }
-      } catch (e) {
-        console.error('[driver] switch role failed', e);
-        showError('Could not switch mode right now');
-      }
-    },
-    [pathname, switchRoleMode],
-  );
-
-  const openDriverSettings = useCallback(() => {
-    Alert.alert('Driver settings', 'Choose an action', [
-      { text: 'Switch to User Mode', onPress: () => void handleSwitchRole('user') },
-      { text: 'Switch to Restaurant Mode', onPress: () => void handleSwitchRole('restaurant') },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => {
-          void signOutUser();
-          router.replace('/(auth)/login' as never);
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [handleSwitchRole, router, signOutUser]);
-
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
@@ -293,9 +254,6 @@ export default function DriverHubScreen() {
           <Text style={styles.headerTitle}>Driver Hub</Text>
           <Text style={styles.roleBadge}>DRIVER</Text>
         </View>
-        <Pressable style={styles.settingsBtn} onPress={openDriverSettings}>
-          <Text style={styles.settingsBtnText}>Profile</Text>
-        </Pressable>
       </View>
 
       <View style={[styles.onlineCard, isOnline ? styles.onlineCardActive : styles.onlineCardOffline]}>
@@ -350,7 +308,7 @@ export default function DriverHubScreen() {
         {pinnedActiveOrder ? (
           <Pressable
             style={styles.activeCard}
-            onPress={() => router.push(`/(driver)/active/${encodeURIComponent(pinnedActiveOrder.id)}` as never)}
+            onPress={() => router.push(DRIVER_ROUTES.activeOrder(pinnedActiveOrder.id) as never)}
           >
             <View style={styles.activeRow}>
               <Text style={styles.activeTitle}>Active Delivery</Text>
@@ -539,15 +497,6 @@ const styles = StyleSheet.create({
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusDotOnline: { backgroundColor: '#00E676' },
   statusDotOffline: { backgroundColor: '#6B7280' },
-  settingsBtn: {
-    borderWidth: 1,
-    borderColor: '#3A3A5A',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#151526',
-  },
-  settingsBtnText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
   scroll: { padding: 14, paddingBottom: 36 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statCard: {
