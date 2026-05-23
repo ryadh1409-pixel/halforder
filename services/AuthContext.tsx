@@ -40,7 +40,15 @@ import React, {
   useState,
 } from 'react';
 import { Platform } from 'react-native';
-import { auth, db, ensureAuthReady } from './firebase';
+import {
+  markAuthSessionBootstrapComplete,
+  markAuthSessionBootstrapFailed,
+  markAuthSessionBootstrapStarted,
+  resetAuthSessionBootstrap,
+  shouldRunAuthSessionBootstrap,
+} from '@/lib/authSessionBootstrap';
+import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
+import { auth, db, ensureAuthReadyOnce } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
   profilePhoneDigitsOnly,
@@ -294,14 +302,48 @@ async function ensureUserDocument(
   }
 }
 
+async function bootstrapSignedInSession(firebaseUser: User): Promise<void> {
+  if (firebaseUser.isAnonymous) return;
+
+  const uid = firebaseUser.uid;
+  if (!shouldRunAuthSessionBootstrap(uid)) return;
+
+  markAuthSessionBootstrapStarted(uid);
+  try {
+    await ensureUserDocument(
+      uid,
+      firebaseUser.displayName ?? null,
+      firebaseUser.email ?? null,
+      firebaseUser.phoneNumber ?? null,
+      firebaseUser.photoURL ?? null,
+    );
+    registerExpoPushTokenAndSyncToFirestore(uid).catch(() => {});
+    void claimReferralInboxRewards(uid);
+    void syncUserRoleToFirestore(firebaseUser);
+    const migratedRole = await migrateUserRoleIfNeeded(uid);
+    logAuthRoleDetected(migratedRole, uid);
+    markAuthSessionBootstrapComplete(uid);
+  } catch (error) {
+    markAuthSessionBootstrapFailed(uid);
+    throw error;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  useDevProviderMount('AuthProvider');
+
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  const settledAuthUidRef = useRef<string | null>(null);
+  const ensureAuthReadyStartedRef = useRef(false);
 
   useEffect(() => {
-    void ensureAuthReady().catch((e) => {
+    if (ensureAuthReadyStartedRef.current) return;
+    ensureAuthReadyStartedRef.current = true;
+    void ensureAuthReadyOnce().catch((e) => {
       console.error('[auth] ensureAuthReady bootstrap failed', e);
+      ensureAuthReadyStartedRef.current = false;
     });
   }, []);
   const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
@@ -348,82 +390,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
+        settledAuthUidRef.current = null;
         resetForcedTokenRefreshUid();
+        resetAuthSessionBootstrap();
         setUser(null);
         setLoading(false);
         setAuthReady(true);
         return;
       }
+
+      if (settledAuthUidRef.current === firebaseUser.uid) {
+        return;
+      }
+
       if (__DEV__) {
         console.log('[auth] user signed in', firebaseUser.uid);
       }
 
       try {
-        await reload(firebaseUser);
-      } catch (e) {
-        logError(e);
-        if (isFirebaseAuthUserInvalidated(e)) {
-          try {
-            await firebaseSignOut(auth);
-          } catch (so) {
-            logError(so);
+        try {
+          await reload(firebaseUser);
+        } catch (e) {
+          logError(e);
+          if (isFirebaseAuthUserInvalidated(e)) {
+            try {
+              await firebaseSignOut(auth);
+            } catch (so) {
+              logError(so);
+            }
+            settledAuthUidRef.current = null;
+            setUser(null);
+            setLoading(false);
+            setAuthReady(true);
+            return;
           }
-          setUser(null);
+          // Network / transient: keep local session; user can retry when online.
+          setUser(firebaseUser);
+          try {
+            await bootstrapSignedInSession(firebaseUser);
+          } catch {
+            // non-fatal for document/bootstrap
+          }
+          settledAuthUidRef.current = firebaseUser.uid;
           setLoading(false);
           setAuthReady(true);
           return;
         }
-        // Network / transient: keep local session; user can retry when online.
-        setUser(firebaseUser);
-        if (!firebaseUser.isAnonymous) {
-          try {
-            await ensureUserDocument(
-              firebaseUser.uid,
-              firebaseUser.displayName ?? null,
-              firebaseUser.email ?? null,
-              firebaseUser.phoneNumber ?? null,
-              firebaseUser.photoURL ?? null,
-            );
-          } catch {
-            // non-fatal
-          }
-          registerExpoPushTokenAndSyncToFirestore(firebaseUser.uid).catch(
-            () => {},
-          );
-          void claimReferralInboxRewards(firebaseUser.uid);
-          void syncUserRoleToFirestore(firebaseUser);
-          void migrateUserRoleIfNeeded(firebaseUser.uid).then((r) => {
-            logAuthRoleDetected(r, firebaseUser.uid);
-          });
+
+        const fresh = auth.currentUser ?? firebaseUser;
+        setUser(fresh);
+        try {
+          await bootstrapSignedInSession(fresh);
+        } catch {
+          // non-fatal for document/bootstrap
         }
+        settledAuthUidRef.current = fresh.uid;
+      } finally {
         setLoading(false);
         setAuthReady(true);
-        return;
       }
-
-      const fresh = auth.currentUser;
-      setUser(fresh);
-      if (fresh && !fresh.isAnonymous) {
-        try {
-          await ensureUserDocument(
-            fresh.uid,
-            fresh.displayName ?? null,
-            fresh.email ?? null,
-            fresh.phoneNumber ?? null,
-            fresh.photoURL ?? null,
-          );
-        } catch {
-          // non-fatal
-        }
-        registerExpoPushTokenAndSyncToFirestore(fresh.uid).catch(() => {});
-        void claimReferralInboxRewards(fresh.uid);
-        void syncUserRoleToFirestore(fresh);
-        void migrateUserRoleIfNeeded(fresh.uid).then((r) => {
-          logAuthRoleDetected(r, fresh.uid);
-        });
-      }
-      setLoading(false);
-      setAuthReady(true);
     });
     return () => unsub();
   }, []);

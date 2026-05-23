@@ -1,8 +1,11 @@
+import { resetAuthSessionBootstrap } from '@/lib/authSessionBootstrap';
 import { resetAuthRoleLogs } from '@/lib/authRole';
 import { resetDriverStackLatch } from '@/lib/driverStack';
 import type { UserRole } from '@/services/userService';
+import { resetDevProviderMountCounts } from '@/utils/devBootstrapDiagnostics';
 import { resetDriverListenerLogs } from '@/utils/driverListenerLog';
 import { resetDriverMountLogs } from '@/utils/driverMountLog';
+import { resetRouteDiagnostics } from '@/utils/routeDiagnostics';
 
 const ROLE_SHELLS = new Set([
   '(tabs)',
@@ -42,6 +45,9 @@ export function clearRoleRedirectGuards(): void {
   resetDriverMountLogs();
   resetDriverListenerLogs();
   resetAuthRoleLogs();
+  resetAuthSessionBootstrap();
+  resetRouteDiagnostics();
+  resetDevProviderMountCounts();
 }
 
 export function markRedirectCompleted(targetRoute: string, sessionKey?: string): void {

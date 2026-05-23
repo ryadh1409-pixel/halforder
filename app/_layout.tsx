@@ -30,12 +30,14 @@ import {
 } from '@/lib/roleRouteGuard';
 import { isDriverStackMounted } from '@/lib/driverStack';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
+import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { logAuthReady, logRouteRedirect } from '@/utils/routeDiagnostics';
 import { AuthProvider, useAuth } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
 
 forceEnglishLayout();
+logDevStartupConfig();
 
 /** Production: suppress noisy redbox logs. Development: keep logs visible for debugging. */
 if (!__DEV__) {
@@ -216,6 +218,8 @@ export const linking = {
  * `AuthBootstrapGate` holds a single splash until auth + role resolve (prevents shell flash).
  */
 export default function RootLayout() {
+  useDevProviderMount('RootLayout');
+
   if (Platform.OS !== 'web' && isExpoGo) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>

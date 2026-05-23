@@ -79,10 +79,12 @@ export const auth = getOrCreateAuth(app);
 export const db = getFirestore(app);
 
 let ensureAuthReadyForced = false;
+let ensureAuthReadyPromise: Promise<void> | null = null;
 
 /** Reset forced token refresh flags (sign-out / new session). */
 export function resetAuthTokenRefreshSession(): void {
   ensureAuthReadyForced = false;
+  ensureAuthReadyPromise = null;
 }
 
 onAuthStateChanged(auth, (user) => {
@@ -160,6 +162,20 @@ export function cloudFunctionHttpUrl(functionName: string): string {
  * is not cut off by the first `null` emission), ensures `auth.currentUser` exists
  * (anonymous sign-in only if still none), then refreshes the ID token for callables.
  */
+/**
+ * Idempotent wrapper — safe when AuthProvider mounts twice in dev (Fast Refresh / hydration).
+ * Cleared on sign-out via {@link resetAuthTokenRefreshSession}.
+ */
+export function ensureAuthReadyOnce(): Promise<void> {
+  if (!ensureAuthReadyPromise) {
+    ensureAuthReadyPromise = ensureAuthReady().catch((error) => {
+      ensureAuthReadyPromise = null;
+      throw error;
+    });
+  }
+  return ensureAuthReadyPromise;
+}
+
 export async function ensureAuthReady(): Promise<void> {
   await waitForAuthStateSettled(auth);
 

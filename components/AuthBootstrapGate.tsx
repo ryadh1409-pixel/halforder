@@ -1,5 +1,6 @@
 import AppLogo from '@/components/AppLogo';
 import { useAuth } from '@/services/AuthContext';
+import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import React, { type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
@@ -12,6 +13,7 @@ type AuthBootstrapGateProps = {
  * Prevents Slot from rendering the wrong shell and then replacing it (extra remounts).
  */
 export function AuthBootstrapGate({ children }: AuthBootstrapGateProps) {
+  useDevProviderMount('AuthBootstrapGate');
   const { loading, authReady, roleResolved } = useAuth();
   const bootstrapReady = authReady && roleResolved && !loading;
 
