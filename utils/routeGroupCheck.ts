@@ -1,4 +1,10 @@
-import { expectedGroupForRole, getRouteGroup, isInDriverGroup, isInTabsGroup } from '@/lib/routeGroups';
+import {
+  expectedGroupForRole,
+  getRouteGroup,
+  isInDriverGroup,
+  isInHostGroup,
+  isInTabsGroup,
+} from '@/lib/routeGroups';
 import { normalizeRoleForRouting } from '@/lib/authRole';
 import type { UserRole } from '@/services/userService';
 
@@ -46,6 +52,22 @@ export function logRouteGroupCheck(params: {
     console.warn('[ROUTE GROUP CHECK] user role entered (driver) group', {
       pathname: params.pathname,
       segments: params.segments,
+    });
+  }
+  if (normalized === 'restaurant' && isInDriverGroup(params.segments, params.pathname)) {
+    console.warn('[ROUTE GROUP CHECK] restaurant role entered (driver) group', {
+      pathname: params.pathname,
+      segments: params.segments,
+      expectedGroup,
+      actualGroup,
+    });
+  }
+  if (normalized === 'driver' && isInHostGroup(params.segments, params.pathname)) {
+    console.warn('[ROUTE GROUP CHECK] driver role entered (host) group', {
+      pathname: params.pathname,
+      segments: params.segments,
+      expectedGroup,
+      actualGroup,
     });
   }
 }

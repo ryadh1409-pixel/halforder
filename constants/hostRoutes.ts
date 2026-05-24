@@ -5,4 +5,5 @@ export const hostRoutes = {
   dashboard: HOST_ROUTES.dashboard,
   menu: HOST_ROUTES.menu,
   orders: HOST_ROUTES.orders,
+  order: HOST_ROUTES.order,
 } as const;

@@ -42,6 +42,7 @@ export const HOST_ROUTES = {
   dashboard: '/(host)/dashboard',
   menu: '/(host)/menu',
   orders: '/(host)/orders',
+  order: (orderId: string) => `/(host)/orders/${encodeURIComponent(orderId)}` as const,
 } as const;
 
 export type HostTabKey = 'dashboard' | 'orders' | 'menu';

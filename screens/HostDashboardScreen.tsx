@@ -6,6 +6,7 @@ import {
   mergeHostRestaurantProfile,
   saveRestaurantVenueMain,
 } from '@/services/hostRestaurant';
+import { HOST_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import {
   addFoodItem,
@@ -646,7 +647,7 @@ export default function HostDashboardScreen() {
                 restaurantTimeZone={restaurant?.timezone}
                 title="Live orders"
                 onOpenOrder={(orderId) =>
-                  router.push(`/restaurant/order/${encodeURIComponent(orderId)}` as never)
+                  router.push(HOST_ROUTES.order(orderId) as never)
                 }
               />
             ) : null}

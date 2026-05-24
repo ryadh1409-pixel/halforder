@@ -1,3 +1,4 @@
+import { RoleScopedOrderDetailGateway } from '@/components/layout/RoleScopedOrderDetailGateway';
 import { CustomerOrderDetailsScreen } from '@/components/orders/customer/CustomerOrderDetailsScreen';
 import { DriverOrderDetailsScreen } from '@/components/orders/driver/DriverOrderDetailsScreen';
 import { RestaurantOrderDetailsScreen } from '@/components/orders/restaurant/RestaurantOrderDetailsScreen';
@@ -118,7 +119,7 @@ function plateFromId(id: string | null | undefined): string {
   return tail.length >= 4 ? tail : 'CFTN950';
 }
 
-export default function OrderTrackingScreen() {
+function OrderTrackingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -849,3 +850,11 @@ const styles = StyleSheet.create({
   },
   switchPillText: { fontSize: 13, fontWeight: '700', color: '#000' },
 });
+
+export default function OrderDetailRoute() {
+  return (
+    <RoleScopedOrderDetailGateway>
+      <OrderTrackingScreen />
+    </RoleScopedOrderDetailGateway>
+  );
+}

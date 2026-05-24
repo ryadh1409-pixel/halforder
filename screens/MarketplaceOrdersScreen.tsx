@@ -8,6 +8,8 @@ import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
 import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { safeToMillis } from '@/utils/safeToMillis';
+import { orderDetailHref } from '@/lib/orderRoutes';
+import { normalizeRoleForRouting } from '@/lib/authRole';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
@@ -284,7 +286,8 @@ function mapDocToFeedRow(
 export default function MarketplaceOrdersScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { user } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
+  const routingRole = normalizeRoleForRouting(firestoreUserRole);
   const [rows, setRows] = useState<MarketplaceOrdersFeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -489,9 +492,9 @@ export default function MarketplaceOrdersScreen() {
 
   const handleOpen = useCallback(
     (orderId: string) => {
-      router.push(`/order/${orderId}`);
+      router.push(orderDetailHref(routingRole, orderId) as never);
     },
-    [router],
+    [router, routingRole],
   );
 
   const handleSignIn = () => {

@@ -76,7 +76,7 @@ export function isInsideCorrectRoleShell(
   }
 }
 
-/** Driver in tabs or customer in driver stack — accidental cross-group navigation. */
+/** Cross-shell navigation (e.g. restaurant in driver group) — triggers recovery redirect. */
 export function isWrongGroupForRole(
   role: UserRole | null | undefined,
   segments: string[],
@@ -84,12 +84,18 @@ export function isWrongGroupForRole(
 ): boolean {
   const normalized = normalizeRoleForRouting(role);
   if (normalized === 'driver') {
+    if (isInHostGroup(segments, pathname) && !isInDriverGroup(segments, pathname)) {
+      return true;
+    }
     return isInTabsGroup(segments, pathname) && !isInDriverGroup(segments, pathname);
   }
   if (normalized === 'user') {
     return isInDriverGroup(segments, pathname) && !isInTabsGroup(segments, pathname);
   }
   if (normalized === 'restaurant') {
+    if (isInDriverGroup(segments, pathname) && !isInHostGroup(segments, pathname)) {
+      return true;
+    }
     return isInTabsGroup(segments, pathname) && !isInHostGroup(segments, pathname);
   }
   return false;

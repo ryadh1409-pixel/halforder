@@ -1,52 +1,61 @@
-import { DRIVER_ROUTES } from '@/lib/navigationPaths';
-import { isInDriverGroup } from '@/lib/driverRouteUtils';
-import { logRedirectDecision } from '@/utils/driverLifecycleLog';
-import { router, useLocalSearchParams, usePathname, useSegments } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { DriverOrderDetailsScreen } from '@/components/orders/driver/DriverOrderDetailsScreen';
+import { subscribeOrderById, type RestaurantOrder } from '@/services/orderService';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-/** Legacy driver route — unified marketplace orders live at `/order/[id]`. */
-export default function DriverOrderLegacyRedirect() {
+/** Driver-scoped marketplace order detail — stays inside `(driver)`. */
+export default function DriverOrderDetailRoute() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const pathname = usePathname();
-  const segments = useSegments();
-  const redirectedRef = useRef(false);
-  const oid = typeof id === 'string' ? id.trim() : '';
+  const orderId = typeof id === 'string' ? id.trim() : '';
+  const [order, setOrder] = useState<RestaurantOrder | null | undefined>(undefined);
 
   useEffect(() => {
-    if (redirectedRef.current) return;
-    redirectedRef.current = true;
-
-    if (!oid) {
-      if (!isInDriverGroup(segments as string[], pathname)) {
-        logRedirectDecision({
-          guard: 'DriverOrderLegacyRedirect',
-          action: 'redirect',
-          from: pathname,
-          to: DRIVER_ROUTES.hub,
-          reason: 'missing-order-id',
-          segments: segments as string[],
-        });
-        router.replace(DRIVER_ROUTES.hub as never);
-      }
-      return;
+    if (!orderId) {
+      setOrder(null);
+      return undefined;
     }
-
-    const target = `/order/${encodeURIComponent(oid)}`;
-    logRedirectDecision({
-      guard: 'DriverOrderLegacyRedirect',
-      action: 'redirect',
-      from: pathname,
-      to: target,
-      reason: 'legacy-driver-order-to-marketplace',
-      segments: segments as string[],
+    return subscribeOrderById(orderId, (next) => {
+      setOrder(next);
     });
-    router.replace(target as never);
-  }, [oid, pathname, router, segments]);
+  }, [orderId]);
 
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' }}>
-      <ActivityIndicator size="large" color="#22C55E" />
-    </View>
-  );
+  if (!orderId) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.center}>
+          <Text style={styles.title}>Missing order</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (order === undefined) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#22C55E" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!order) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.center}>
+          <Text style={styles.title}>Order not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return <DriverOrderDetailsScreen order={order} />;
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#0F172A' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  title: { color: '#F8FAFC', fontWeight: '800', fontSize: 18 },
+});
