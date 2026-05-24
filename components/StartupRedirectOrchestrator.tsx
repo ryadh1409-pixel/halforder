@@ -1,7 +1,13 @@
 import { useBootstrap } from '@/contexts/BootstrapContext';
-import { getRouteForRole, logAuthRoleDetected, logAuthRoleRouted, normalizeRoleForRouting } from '@/lib/authRole';
+import { useStableRouteContext } from '@/hooks/useStableRouteContext';
+import { logAuthRoleDetected, logAuthRoleRouted } from '@/lib/authRole';
+import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
+import { isOnAuthRoute, isRegisteredAuthUser } from '@/lib/authSession';
+import { roleDefaultPath } from '@/lib/routing/routePaths';
+import { hasPersistentRoleRouteGroupViolation } from '@/lib/routing/routeMaps';
 import { evaluateRoleRedirect, sessionKeyForRole } from '@/lib/router/redirectPolicy';
 import { isRootEntryPathname } from '@/lib/router/hydration';
+import { runRootNavigationTask } from '@/lib/router/rootNavigation';
 import {
   clearStartupNavigationState,
   completedRoleRedirects,
@@ -13,27 +19,33 @@ import {
   logRedirect,
   markRedirectStart,
 } from '@/utils/startupDiagnostics';
-import { usePathname, useRouter, useSegments } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 
 /** Last-resort only — not used for normal hydration completion. */
 const EMERGENCY_STUCK_MS = __DEV__ ? 8000 : 12000;
 
 /**
- * Single owner of signed-in role landing redirects.
- * Runs only when bootstrap machine reports {@link shouldRedirect}.
+ * Single root navigation owner: signed-out guard, startup landing, and cross-shell recovery.
+ * Must not run from nested layouts — only here after root Slot + router are ready.
  */
 export function StartupRedirectOrchestrator() {
-  const pathname = usePathname();
-  const segments = useSegments();
   const router = useRouter();
   const { shouldRedirect, routerReady, redirectSettled } = useBootstrap();
-  const { firestoreUserRole: role, user } = useAuth();
+  const { firestoreUserRole: role, user, authReady, loading, roleResolved } = useAuth();
+  const [redirectInFlight, setRedirectInFlight] = useState(false);
 
   const redirectInFlightRef = useRef(false);
   const redirectCompletedRef = useRef(false);
+  const boundaryLatchRef = useRef<string | null>(null);
+  const signedOutLatchRef = useRef(false);
   const prevUidRef = useRef<string | null>(null);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routerReadyRef = useRef(routerReady);
+  routerReadyRef.current = routerReady;
+  const stableRoute = useStableRouteContext({
+    redirectInFlight,
+  });
 
   useEffect(() => {
     const uid = user?.uid ?? null;
@@ -44,7 +56,10 @@ export function StartupRedirectOrchestrator() {
     }
     prevUidRef.current = uid;
     redirectInFlightRef.current = false;
+    setRedirectInFlight(false);
     redirectCompletedRef.current = false;
+    boundaryLatchRef.current = null;
+    signedOutLatchRef.current = false;
 
     if (stuckTimerRef.current) {
       clearTimeout(stuckTimerRef.current);
@@ -52,29 +67,115 @@ export function StartupRedirectOrchestrator() {
     }
   }, [user?.uid]);
 
+  const replaceAtRoot = (target: string, reason: string, meta?: Record<string, unknown>) => {
+    if (!routerReadyRef.current) return;
+    runRootNavigationTask(() => {
+      if (!routerReadyRef.current) return;
+      setRedirectInFlight(true);
+      logRedirect(reason, { from: stableRoute.pathname, to: target, ...meta });
+      router.replace(target as never);
+    });
+  };
+
+  useEffect(() => {
+    if (!routerReady) return;
+
+    if (isRegisteredAuthUser(user)) {
+      signedOutLatchRef.current = false;
+      return;
+    }
+    if (!authReady || loading) return;
+
+    const segmentList = stableRoute.stableSegments;
+    if (!stableRoute.settled) return;
+    if (isOnAuthRoute(stableRoute.pathname, segmentList)) return;
+    if (signedOutLatchRef.current) return;
+
+    signedOutLatchRef.current = true;
+    replaceAtRoot('/(auth)/login', 'signed-out', {
+      reason: user?.isAnonymous ? 'anonymous-session' : 'signed-out',
+    });
+  }, [
+    authReady,
+    loading,
+    routerReady,
+    stableRoute.pathname,
+    stableRoute.settled,
+    stableRoute.stableSegments,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (!routerReady || !role || !user?.uid || !authReady || loading || !roleResolved) return;
+
+    if (redirectInFlightRef.current || !stableRoute.settled || stableRoute.redirectInFlight) return;
+    const segmentList = stableRoute.stableSegments;
+    const normalized = normalizeRoleForRouting(role);
+
+    if (hasPersistentRoleRouteGroupViolation(role, stableRoute.pathname, segmentList)) {
+      const target = roleDefaultPath(role);
+      const targetStr = typeof target === 'string' ? target : String(target);
+      const latchKey = `${stableRoute.pathname}→${targetStr}`;
+      if (boundaryLatchRef.current === latchKey) return;
+      boundaryLatchRef.current = latchKey;
+
+      if (__DEV__) {
+        console.warn('[ROUTE GROUP CHECK] boundary violation — root redirect', {
+          role: normalized,
+          pathname: stableRoute.pathname,
+          segments: segmentList,
+          target: targetStr,
+        });
+      }
+
+      logGuard('StartupRedirect:boundary', {
+        role: normalized,
+        pathname: stableRoute.pathname,
+        segments: segmentList,
+        target: targetStr,
+      });
+
+      replaceAtRoot(targetStr, 'wrong-route-group-recovery', {
+        role: normalized,
+        segments: segmentList,
+      });
+      return;
+    }
+
+    boundaryLatchRef.current = null;
+  }, [
+    authReady,
+    loading,
+    role,
+    roleResolved,
+    routerReady,
+    stableRoute.pathname,
+    stableRoute.redirectInFlight,
+    stableRoute.settled,
+    stableRoute.stableSegments,
+    user?.uid,
+  ]);
+
   useEffect(() => {
     if (!shouldRedirect || !role || !user?.uid || !routerReady) return;
 
     if (stuckTimerRef.current) return;
     stuckTimerRef.current = setTimeout(() => {
       if (redirectCompletedRef.current || redirectSettled) return;
-      if (!isRootEntryPathname(pathname)) return;
+      if (!isRootEntryPathname(stableRoute.pathname)) return;
 
       const normalized = normalizeRoleForRouting(role);
-      const targetRoute = getRouteForRole(normalized);
+      const targetRoute = roleDefaultPath(normalized);
       const sessionKey = sessionKeyForRole(user.uid, role);
 
       if (redirectInFlightRef.current || completedRoleRedirects.has(sessionKey)) return;
 
       redirectInFlightRef.current = true;
       redirectCompletedRef.current = true;
-      markRedirectCompleted(targetRoute, sessionKey);
-      logRedirect('emergency-stuck-root', {
-        from: pathname,
-        to: targetRoute,
+      markRedirectCompleted(targetRoute as string, sessionKey);
+      replaceAtRoot(targetRoute as string, 'emergency-stuck-root', {
         ms: EMERGENCY_STUCK_MS,
       });
-      router.replace(targetRoute as never);
     }, EMERGENCY_STUCK_MS);
 
     return () => {
@@ -83,27 +184,38 @@ export function StartupRedirectOrchestrator() {
         stuckTimerRef.current = null;
       }
     };
-  }, [shouldRedirect, role, user?.uid, routerReady, pathname, redirectSettled, router]);
+  }, [shouldRedirect, role, user?.uid, routerReady, stableRoute.pathname, redirectSettled, router]);
 
   useEffect(() => {
     if (!shouldRedirect || !role || !user?.uid || !routerReady) return;
+    if (!authReady || loading || !roleResolved) return;
 
-    const segmentList = segments as string[];
+    if (!stableRoute.settled || stableRoute.redirectInFlight) return;
+    const segmentList = stableRoute.stableSegments;
+    if (hasPersistentRoleRouteGroupViolation(role, stableRoute.pathname, segmentList)) {
+      return;
+    }
+
     const normalized = normalizeRoleForRouting(role);
-    const targetRoute = getRouteForRole(normalized);
+    const targetRoute = roleDefaultPath(normalized);
     const sessionKey = sessionKeyForRole(user.uid, role);
     const sessionAlreadyDone = completedRoleRedirects.has(sessionKey);
 
     const decision = evaluateRoleRedirect({
       uid: user.uid,
       role,
-      pathname,
+      pathname: stableRoute.pathname,
       segments: segmentList,
       sessionAlreadyDone,
     });
 
     if (decision.action === 'skip') {
-      logGuard('StartupRedirect', { action: 'skip', reason: decision.reason, pathname, segments: segmentList });
+      logGuard('StartupRedirect', {
+        action: 'skip',
+        reason: decision.reason,
+        pathname: stableRoute.pathname,
+        segments: segmentList,
+      });
       return;
     }
 
@@ -118,6 +230,7 @@ export function StartupRedirectOrchestrator() {
         });
       }
       redirectInFlightRef.current = false;
+      setRedirectInFlight(false);
       if (stuckTimerRef.current) {
         clearTimeout(stuckTimerRef.current);
         stuckTimerRef.current = null;
@@ -133,21 +246,32 @@ export function StartupRedirectOrchestrator() {
     redirectCompletedRef.current = true;
     markRedirectStart();
     markRedirectCompleted(decision.targetRoute, sessionKey);
-    logRedirect(decision.reason, {
-      from: pathname,
-      to: decision.targetRoute,
+    logAuthRoleDetected(normalized, user.uid);
+    logAuthRoleRouted(normalized, targetRoute, user.uid);
+    replaceAtRoot(decision.targetRoute, decision.reason, {
       role: normalized,
       segments: segmentList,
     });
-    logAuthRoleDetected(normalized, user.uid);
-    logAuthRoleRouted(normalized, targetRoute, user.uid);
-    router.replace(decision.targetRoute as never);
 
     if (stuckTimerRef.current) {
       clearTimeout(stuckTimerRef.current);
       stuckTimerRef.current = null;
     }
-  }, [shouldRedirect, pathname, role, router, routerReady, segments, user?.uid]);
+  }, [
+    authReady,
+    loading,
+    roleResolved,
+    shouldRedirect,
+    role,
+    router,
+    routerReady,
+    stableRoute.pathname,
+    stableRoute.redirectInFlight,
+    stableRoute.settled,
+    stableRoute.stableSegments,
+    user?.uid,
+    redirectInFlight,
+  ]);
 
   return null;
 }

@@ -1,28 +1,26 @@
 import { assertRoleRouteGroup } from '@/lib/routeAssertion';
 import { canRunRouteGroupDiagnostics } from '@/lib/router/hydration';
-import { normalizeRoleForRouting } from '@/lib/authRole';
+import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { useBootstrap } from '@/contexts/BootstrapContext';
+import { useStableRouteContext } from '@/hooks/useStableRouteContext';
 import { useAuth } from '@/services/AuthContext';
-import { usePathname, useSegments } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 
 /** Dev diagnostics: warn when role and Expo route group diverge (post-bootstrap only). */
 export function RouteGroupMonitor() {
-  const pathname = usePathname();
-  const segments = useSegments();
   const { authReady, roleResolved, firestoreUserRole } = useAuth();
   const { routerReady, interactive } = useBootstrap();
+  const stableRoute = useStableRouteContext({ redirectInFlight: false });
   const role = normalizeRoleForRouting(firestoreUserRole);
-  const segmentList = segments as string[];
-  const ranRef = useRef(false);
+  const segmentList = stableRoute.stableSegments;
 
   useEffect(() => {
-    if (!interactive || !routerReady) return;
+    if (!interactive || !routerReady || !stableRoute.settled) return;
 
     const ctx = {
       authReady,
       roleResolved,
-      pathname,
+      pathname: stableRoute.pathname,
       segments: segmentList,
     };
 
@@ -30,13 +28,21 @@ export function RouteGroupMonitor() {
 
     assertRoleRouteGroup({
       role,
-      pathname,
+      pathname: stableRoute.pathname,
       segments: segmentList,
       authReady,
       roleResolved,
     });
-    ranRef.current = true;
-  }, [authReady, interactive, pathname, role, roleResolved, routerReady, segmentList]);
+  }, [
+    authReady,
+    interactive,
+    role,
+    roleResolved,
+    routerReady,
+    segmentList,
+    stableRoute.pathname,
+    stableRoute.settled,
+  ]);
 
   return null;
 }

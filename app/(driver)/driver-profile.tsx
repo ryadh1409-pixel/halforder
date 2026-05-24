@@ -1,3 +1,4 @@
+import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { router } from 'expo-router';
@@ -10,8 +11,8 @@ export default function DriverProfileTab() {
   const { user, signOutUser } = useAuth();
 
   const handleSignOut = useCallback(async () => {
-    await signOutUser();
-    router.replace('/(auth)/login' as never);
+    await logoutAndResetSession(signOutUser);
+    router.replace(POST_LOGOUT_ROUTE as never);
   }, [signOutUser]);
 
   return (

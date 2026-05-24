@@ -1,7 +1,11 @@
 import { resetAuthSessionBootstrap } from '@/lib/authSessionBootstrap';
 import { resetAuthRoleLogs } from '@/lib/authRole';
 import { resetDriverStackLatch } from '@/lib/driverStack';
-import { isInDriverGroup, isInHostGroup, isInUserGroup } from '@/lib/routeGroups';
+import {
+  isInDriverGroup,
+  isInHostGroup,
+  isInUserGroup,
+} from '@/lib/routing/routeConstants';
 import {
   clearStartupNavigationState,
   hasRoleShellLandingCompleted,

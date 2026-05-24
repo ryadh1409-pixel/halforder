@@ -1,23 +1,24 @@
-import { normalizeRoleForRouting } from '@/lib/authRole';
+import { normalizeRoleForRouting, type RoutingRole } from '@/lib/routing/roleTypes';
 import type { UserRole } from '@/services/userService';
 import type { Href } from 'expo-router';
 
-export type TabsShellRole = ReturnType<typeof normalizeRoleForRouting>;
+export type TabsShellRole = RoutingRole;
 
 export function resolveTabsShellRole(
   role: UserRole | null | undefined,
   loading: boolean,
-): TabsShellRole {
-  if (loading) return 'user';
+): TabsShellRole | null {
+  if (loading) return null;
   return normalizeRoleForRouting(role);
 }
 
 /** Expo Router: `href: null` removes the tab from the tab bar and deep links. */
 export function tabHrefForRole(
-  role: TabsShellRole,
+  role: TabsShellRole | null,
   href: Href,
   opts: { allow?: TabsShellRole[]; deny?: TabsShellRole[] },
 ): Href | null {
+  if (!role) return null;
   if (opts.deny?.includes(role)) return null;
   if (opts.allow && !opts.allow.includes(role)) return null;
   return href;

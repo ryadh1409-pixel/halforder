@@ -1,16 +1,13 @@
 import { router } from 'expo-router';
 
-import {
-  getRouteForRole,
-  logAuthRoleRouted,
-  normalizeRoleForRouting,
-} from '@/lib/authRole';
+import { logAuthRoleRouted, normalizeRoleForRouting } from '@/lib/authRole';
+import { roleDefaultPath } from '@/lib/routing/routePaths';
 import type { UserRole } from '@/services/userService';
 
 /** Navigate to the correct home shell for a Firestore role. */
 export function navigateForRole(role: UserRole | null | undefined): void {
   const normalized = normalizeRoleForRouting(role);
-  const route = getRouteForRole(normalized);
+  const route = roleDefaultPath(normalized);
   logAuthRoleRouted(normalized, route);
   if (__DEV__) {
     console.log('[nav] navigateForRole →', route, { role: normalized });

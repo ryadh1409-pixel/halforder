@@ -1,4 +1,9 @@
+import { roleRouteResolver } from '@/lib/routing/routePaths';
+import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import type { UserRole } from '@/services/userService';
+
+export type { RoutingRole } from '@/lib/routing/roleTypes';
+export { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 
 /** Signup / upgrade intent from auth or profile flows. */
 export type SignupIntent = 'user' | 'restaurant' | 'driver';
@@ -7,7 +12,8 @@ export type AuthRoleRoute =
   | '/(tabs)'
   | '/(host)'
   | '/(driver)'
-  | '/admin';
+  | '/(auth)/login'
+  | '/(tabs)/admin';
 
 const AUTH_ROLE_LOG = '[auth-role]';
 
@@ -32,27 +38,9 @@ export function parseSignupIntent(raw: unknown): SignupIntent {
   return 'user';
 }
 
-/** Normalize legacy values (`customer`, `host`) for routing. */
-export function normalizeRoleForRouting(role: UserRole | null | undefined): UserRole {
-  if (!role) return 'user';
-  if (role === 'customer') return 'user';
-  if (role === 'host') return 'restaurant';
-  return role;
-}
-
+/** @see {@link roleRouteResolver} in `@/lib/routing/routePaths`. */
 export function getRouteForRole(role: UserRole | null | undefined): AuthRoleRoute {
-  const r = normalizeRoleForRouting(role);
-  switch (r) {
-    case 'driver':
-      return '/(driver)';
-    case 'admin':
-      return '/admin';
-    case 'restaurant':
-      return '/(host)';
-    case 'user':
-    default:
-      return '/(tabs)';
-  }
+  return roleRouteResolver(role) as AuthRoleRoute;
 }
 
 export function resetAuthRoleLogs(): void {
@@ -60,7 +48,6 @@ export function resetAuthRoleLogs(): void {
   lastRoutedRoleLogKey = '';
 }
 
-/** Dev-only — logs once per uid+role per session (avoids hydration duplicate spam). */
 export function logAuthRoleDetected(
   role: UserRole | null | undefined,
   uid?: string | null,

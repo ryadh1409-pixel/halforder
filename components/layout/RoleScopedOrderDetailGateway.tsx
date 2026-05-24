@@ -1,5 +1,5 @@
 import { orderDetailHref } from '@/lib/orderRoutes';
-import { isInDriverGroup, isInHostGroup } from '@/lib/routeGroups';
+import { isInDriverGroup, isInHostGroup } from '@/lib/routing/routeConstants';
 import { normalizeRoleForRouting } from '@/lib/authRole';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect, useLocalSearchParams, usePathname, useSegments } from 'expo-router';

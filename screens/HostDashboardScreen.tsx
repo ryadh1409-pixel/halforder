@@ -15,6 +15,13 @@ import {
   type FoodItem,
 } from '@/services/foodService';
 import { db } from '@/services/firebase';
+import {
+  isRestaurantIsOpenMatching,
+  logVenueStatusError,
+  parseRestaurantIsOpen,
+} from '@/lib/restaurantVenueStatus';
+import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
+import { runRootNavigationTask } from '@/lib/router/rootNavigation';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { startOnboarding } from '@/services/stripeConnect';
 import { MenuItemImagePicker } from '@/components/restaurant/MenuItemImagePicker';
@@ -81,7 +88,7 @@ function badgeTone(status: OrderStatus): { bg: string; text: string } {
 export default function HostDashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOutUser } = useAuth();
   const { authorized, loading: roleLoading } = requireRole(['restaurant', 'host']);
   const uid = user?.uid ?? '';
 
@@ -117,6 +124,11 @@ export default function HostDashboardScreen() {
   });
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const pendingIsOpenRef = useRef<boolean | null>(null);
+  const [toggleBusy, setToggleBusy] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const isVenueOpen = restaurant?.isOpen ?? true;
 
   useEffect(() => {
     if (!uid) {
@@ -135,13 +147,24 @@ export default function HostDashboardScreen() {
           setRestaurantLoading(false);
           return;
         }
-        const data = snap.data();
+        const data = snap.data() as Record<string, unknown>;
+        const rawIsOpen = data.isOpen;
+        const fromServer = parseRestaurantIsOpen(data);
+        const pending = pendingIsOpenRef.current;
+
+        if (pending !== null && isRestaurantIsOpenMatching(rawIsOpen, pending)) {
+          pendingIsOpenRef.current = null;
+        }
+
+        const resolvedIsOpen =
+          pendingIsOpenRef.current !== null ? pendingIsOpenRef.current : fromServer;
+
         const row: RestaurantState = {
           id: uid,
           name: typeof data.name === 'string' ? data.name : '',
           logo: typeof data.logo === 'string' ? data.logo : null,
           location: typeof data.location === 'string' ? data.location : '',
-          isOpen: data.isOpen !== false,
+          isOpen: resolvedIsOpen,
           timezone:
             typeof data.timezone === 'string' && data.timezone.trim()
               ? data.timezone.trim()
@@ -154,7 +177,12 @@ export default function HostDashboardScreen() {
         setLocationDraft(row.location);
         setRestaurantLoading(false);
       },
-      () => {
+      (error) => {
+        logVenueStatusError('snapshot-error', {
+          uid,
+          path: `restaurants/${uid}`,
+          error: error instanceof Error ? error.message : String(error),
+        });
         setRestaurantLoading(false);
       },
     );
@@ -281,12 +309,41 @@ export default function HostDashboardScreen() {
     }
   };
 
-  const onToggleOpen = async (next: boolean) => {
-    if (!uid) return;
+  const handleExit = useCallback(async () => {
+    if (loggingOut || toggleBusy) return;
+
+    setLoggingOut(true);
+    pendingIsOpenRef.current = null;
+
     try {
-      await updateRestaurantOpen(uid, next);
+      await logoutAndResetSession(signOutUser);
+      runRootNavigationTask(() => {
+        router.replace(POST_LOGOUT_ROUTE as never);
+      });
     } catch (e) {
       showError(getUserFriendlyError(e));
+    } finally {
+      setLoggingOut(false);
+    }
+  }, [loggingOut, signOutUser, toggleBusy, router]);
+
+  const onToggleOpen = async (next: boolean) => {
+    if (!uid || !restaurant || toggleBusy) return;
+
+    const previous = restaurant.isOpen;
+    pendingIsOpenRef.current = next;
+    setToggleBusy(true);
+    setRestaurant((prev) => (prev ? { ...prev, isOpen: next } : prev));
+
+    try {
+      await updateRestaurantOpen(uid, next);
+      showSuccess(next ? 'Restaurant is now open.' : 'Restaurant is now closed.');
+    } catch (e) {
+      pendingIsOpenRef.current = null;
+      setRestaurant((prev) => (prev ? { ...prev, isOpen: previous } : prev));
+      showError(getUserFriendlyError(e));
+    } finally {
+      setToggleBusy(false);
     }
   };
 
@@ -431,29 +488,30 @@ export default function HostDashboardScreen() {
           <View style={styles.headerMain}>
             <Text style={styles.screenTitle}>Restaurant Dashboard</Text>
             <View style={styles.onlineRow}>
-              <Text style={styles.onlineLabel}>
-                {restaurant?.isOpen !== false ? 'Online' : 'Offline'}
-              </Text>
+              <Text style={styles.onlineLabel}>{isVenueOpen ? 'Online' : 'Offline'}</Text>
               <Switch
-                value={restaurant?.isOpen ?? true}
+                value={isVenueOpen}
+                disabled={toggleBusy || restaurantLoading}
                 onValueChange={(v) => void onToggleOpen(v)}
                 trackColor={{
                   false: '#cbd5e1',
                   true: 'rgba(22,163,74,0.35)',
                 }}
-                thumbColor={restaurant?.isOpen !== false ? PRIMARY : '#f1f5f9'}
+                thumbColor={isVenueOpen ? PRIMARY : '#f1f5f9'}
               />
             </View>
           </View>
           <TouchableOpacity
-            onPress={() =>
-              router.canGoBack()
-                ? router.back()
-                : router.replace('/(tabs)' as never)
-            }
+            onPress={() => void handleExit()}
+            disabled={loggingOut || toggleBusy}
             hitSlop={12}
+            accessibilityLabel="Sign out"
           >
-            <Text style={styles.topLink}>Close</Text>
+            {loggingOut ? (
+              <ActivityIndicator size="small" color={PRIMARY} />
+            ) : (
+              <Text style={styles.topLink}>Exit</Text>
+            )}
           </TouchableOpacity>
         </View>
 

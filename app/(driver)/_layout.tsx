@@ -1,15 +1,21 @@
 import { DriverStackGate } from '@/components/driver/DriverStackGate';
-import { RoleShellLayoutGuard } from '@/components/layout/RoleShellLayoutGuard';
+import { useDriverShellAccess } from '@/hooks/useDriverShellAccess';
+import React from 'react';
 
 export const unstable_settings = {
   initialRouteName: 'index',
 };
 
-/** Driver route group — role guard runs before any driver providers mount. */
+/**
+ * Passive driver shell — no navigation side effects.
+ * Wrong-role recovery is handled by {@link StartupRedirectOrchestrator} at root.
+ */
 export default function DriverLayout() {
-  return (
-    <RoleShellLayoutGuard shell="driver">
-      <DriverStackGate />
-    </RoleShellLayoutGuard>
-  );
+  const { canMountDriver } = useDriverShellAccess();
+
+  if (!canMountDriver) {
+    return null;
+  }
+
+  return <DriverStackGate />;
 }

@@ -1,7 +1,6 @@
 /**
  * Pure startup redirect policy — no React, no side effects.
  */
-import { getRouteForRole, normalizeRoleForRouting } from '@/lib/authRole';
 import { isDriverStackMounted } from '@/lib/driverStack';
 import { isInDriverGroup } from '@/lib/driverRouteUtils';
 import {
@@ -12,7 +11,9 @@ import {
 import {
   isInsideCorrectRoleShell,
   isWrongGroupForRole,
-} from '@/lib/routeGroups';
+} from '@/lib/routing/routeMaps';
+import { roleDefaultPath } from '@/lib/routing/routePaths';
+import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { isRootEntryPathname, isRouterReadyForRecovery } from '@/lib/router/hydration';
 import type { UserRole } from '@/services/userService';
 
@@ -30,7 +31,14 @@ export function evaluateRoleRedirect(params: {
 }): RedirectDecision {
   const { uid, role, pathname, segments, sessionAlreadyDone } = params;
   const normalized = normalizeRoleForRouting(role);
-  const targetRoute = getRouteForRole(normalized);
+  const targetRoute = roleDefaultPath(normalized) as string;
+
+  if (isWrongGroupForRole(normalized, segments, pathname)) {
+    if (!isRouterReadyForRecovery(pathname, segments)) {
+      return { action: 'skip', reason: 'wrong-group-waiting-route-context' };
+    }
+    return { action: 'redirect', reason: 'wrong-route-group-recovery', targetRoute };
+  }
 
   if (sessionAlreadyDone) {
     return { action: 'skip', reason: 'session-already-redirected' };
@@ -42,13 +50,6 @@ export function evaluateRoleRedirect(params: {
 
   if (isInsideCorrectRoleShell(normalized, segments, pathname)) {
     return { action: 'complete', reason: 'already-in-correct-role-group', targetRoute };
-  }
-
-  if (isWrongGroupForRole(normalized, segments, pathname)) {
-    if (!isRouterReadyForRecovery(pathname, segments)) {
-      return { action: 'skip', reason: 'wrong-group-waiting-route-context' };
-    }
-    return { action: 'redirect', reason: 'wrong-route-group-recovery', targetRoute };
   }
 
   if (isAlreadyOnRoleRoute(pathname, segments, normalized)) {

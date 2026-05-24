@@ -1,24 +1,23 @@
 import CustomTabBar from '@/components/CustomTabBar';
-import { tabHrefForRole, resolveTabsShellRole } from '@/lib/tabsRoleVisibility';
+import { useCustomerTabsAccess } from '@/hooks/useCustomerTabsAccess';
+import { tabHrefForRole } from '@/lib/tabsRoleVisibility';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
-import { useAuth } from '@/services/AuthContext';
 import { Tabs } from 'expo-router';
 import React, { useMemo } from 'react';
 
 const HIDDEN_TAB = { href: null } as const;
 
 /**
- * Custom tab bar: `onPress` → `router.navigate(href)` only (see `components/CustomTabBar.tsx`).
- * Tab visibility is role-scoped via `href: null` (driver never uses this navigator).
+ * Passive customer tab shell — no navigation side effects.
+ * Wrong-role recovery is handled by {@link StartupRedirectOrchestrator} at root.
  */
 export default function TabLayout() {
-  const { firestoreUserRole, loading } = useAuth();
-  const role = useMemo(
-    () => resolveTabsShellRole(firestoreUserRole, loading),
-    [firestoreUserRole, loading],
-  );
+  const { canMountTabs, role } = useCustomerTabsAccess();
+  const customerTabs = useMemo(() => ({ allow: ['user', 'admin'] as const }), []);
 
-  const customerTabs = { allow: ['user', 'admin'] as const };
+  if (!canMountTabs) {
+    return null;
+  }
 
   return (
     <Tabs

@@ -1,6 +1,7 @@
 /**
  * Read-only listing of venues for discovery (Food Trucks tab, etc.).
  */
+import { parseRestaurantIsOpen } from '@/lib/restaurantVenueStatus';
 import { db } from './firebase';
 import {
   collection,
@@ -34,7 +35,7 @@ function mapDocToRow(d: { id: string; data: () => Record<string, unknown> }): Pu
       typeof data.location === 'string' && data.location.trim()
         ? data.location.trim()
         : '',
-    isOpen: data.isOpen !== false,
+    isOpen: parseRestaurantIsOpen(data),
   };
 }
 

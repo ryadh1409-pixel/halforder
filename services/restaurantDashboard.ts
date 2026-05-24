@@ -1,3 +1,5 @@
+import { parseRestaurantIsOpen } from '@/lib/restaurantVenueStatus';
+import { persistRestaurantIsOpen } from '@/services/restaurantVenueOpen';
 import { db } from './firebase';
 import {
   addDoc,
@@ -97,7 +99,7 @@ export function subscribeRestaurantByOwner(
           name: typeof data.name === 'string' ? data.name : 'My Restaurant',
           logo: typeof data.logo === 'string' ? data.logo : null,
           location: typeof data.location === 'string' ? data.location : '',
-          isOpen: data.isOpen !== false,
+          isOpen: parseRestaurantIsOpen(data),
           ownerId,
         });
       } catch (e) {
@@ -258,11 +260,7 @@ export async function updateRestaurantOpen(
   restaurantId: string,
   isOpen: boolean,
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'restaurants', restaurantId),
-    { isOpen, ownerId: restaurantId },
-    { merge: true },
-  );
+  await persistRestaurantIsOpen(restaurantId, isOpen);
 }
 
 export async function markOrderReady(orderId: string): Promise<void> {

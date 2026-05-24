@@ -5,21 +5,19 @@ import 'react-native-svg';
 
 import { BootstrapShell } from '@/components/BootstrapShell';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
+import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { Slot } from 'expo-router';
+import React from 'react';
 import { LogBox, Platform, StyleSheet, View } from 'react-native';
 
-import { clearRoleRedirectGuards } from '@/lib/roleRouteGuard';
-import { isOnAuthRoute, isRegisteredAuthUser } from '@/lib/authSession';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
-import { logRedirect } from '@/utils/startupDiagnostics';
-import { AuthProvider, useAuth } from '../services/AuthContext';
+import { AuthProvider } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
 
@@ -32,36 +30,6 @@ if (!__DEV__) {
 
 if (Platform.OS !== 'web' && !isExpoGo) {
   configureExpoPushNotificationHandler();
-}
-
-function SignedOutRouteGuard() {
-  const pathname = usePathname();
-  const segments = useSegments();
-  const router = useRouter();
-  const { user, authReady, loading } = useAuth();
-  const hasRedirectedToLoginRef = useRef(false);
-
-  useEffect(() => {
-    if (isRegisteredAuthUser(user)) {
-      hasRedirectedToLoginRef.current = false;
-      return;
-    }
-    if (!authReady || loading) return;
-
-    const segmentList = segments as string[];
-    if (isOnAuthRoute(pathname, segmentList)) return;
-    if (hasRedirectedToLoginRef.current) return;
-
-    hasRedirectedToLoginRef.current = true;
-    logRedirect('signed-out', {
-      from: pathname,
-      to: '/(auth)/login',
-      reason: user?.isAnonymous ? 'anonymous-session' : 'signed-out',
-    });
-    router.replace('/(auth)/login' as never);
-  }, [authReady, loading, pathname, router, segments, user]);
-
-  return null;
 }
 
 export const unstable_settings = {
@@ -119,8 +87,8 @@ export default function RootLayout() {
               <CartProvider>
                 <BootstrapShell>
                   <Slot />
-                  <SignedOutRouteGuard />
                   <StartupRedirectOrchestrator />
+                  <RoleBoundaryGuard />
                   <RouteGroupMonitor />
                 </BootstrapShell>
               </CartProvider>

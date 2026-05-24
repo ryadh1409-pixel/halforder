@@ -2,6 +2,7 @@ import AppLogo from '../components/AppLogo';
 import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
 import { isRegisteredAuthUser } from '@/lib/authSession';
+import { roleTermsReturnPath } from '@/lib/routing/roleReturnPaths';
 import { useAuth } from '../services/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
@@ -18,7 +19,7 @@ type GateState =
  */
 export default function Index() {
   const [gate, setGate] = useState<GateState>({ phase: 'loading' });
-  const { user, loading } = useAuth();
+  const { user, loading, firestoreUserRole } = useAuth();
   const { ready: termsReady, accepted: termsAccepted } = useUserTermsStatus(
     user?.uid,
   );
@@ -62,7 +63,8 @@ export default function Index() {
     }
     if (waitingForTerms) return;
     if (isRegisteredAuthUser(user) && termsReady && !termsAccepted) {
-      router.replace('/terms-acceptance?returnTo=/(tabs)' as never);
+      const returnTo = encodeURIComponent(roleTermsReturnPath(firestoreUserRole));
+      router.replace(`/terms-acceptance?returnTo=${returnTo}` as never);
       return;
     }
     if (isRegisteredAuthUser(user)) return;

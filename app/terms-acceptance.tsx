@@ -1,7 +1,5 @@
-import {
-  emitTermsAccepted,
-  normalizeReturnPathAfterTerms,
-} from '../constants/termsAcceptance';
+import { emitTermsAccepted } from '../constants/termsAcceptance';
+import { resolveReturnPathForRole } from '@/lib/routing/roleReturnPaths';
 import TermsScreen from '../screens/TermsScreen';
 import { acceptTermsOfService } from '../services/userTerms';
 import { useAuth } from '../services/AuthContext';
@@ -18,10 +16,12 @@ import { showError } from '../utils/toast';
 export default function TermsAcceptanceScreen() {
   const router = useRouter();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, firestoreUserRole } = useAuth();
 
-  const resolvedReturn =
-    typeof returnTo === 'string' && returnTo.trim() ? returnTo.trim() : '/(tabs)';
+  const resolvedReturn = resolveReturnPathForRole(
+    firestoreUserRole,
+    typeof returnTo === 'string' ? returnTo : undefined,
+  );
   const loginRedirectPath = `/terms-acceptance?returnTo=${encodeURIComponent(resolvedReturn)}`;
 
   if (authLoading) {
@@ -48,7 +48,7 @@ export default function TermsAcceptanceScreen() {
     try {
       await acceptTermsOfService(user.uid);
       emitTermsAccepted();
-      const next = normalizeReturnPathAfterTerms(resolvedReturn);
+      const next = resolveReturnPathForRole(firestoreUserRole, resolvedReturn);
       router.replace(next as Parameters<typeof router.replace>[0]);
     } catch {
       showError('Could not save your acceptance. Please try again.');

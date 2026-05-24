@@ -1,4 +1,6 @@
+import { roleRouteResolver } from '@/lib/routing/routePaths';
+
 /**
- * Canonical “Home” href — main tab navigator (same target as `goHome()` in `lib/navigation.ts`).
+ * @deprecated Use {@link roleRouteResolver} or {@link roleDefaultPath} for role-aware navigation.
  */
-export const APP_ROOT = '/(tabs)' as const;
+export const APP_ROOT = roleRouteResolver('user');

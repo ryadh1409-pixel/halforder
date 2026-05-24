@@ -22,6 +22,7 @@ import {
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { useBlockedUsers } from '../../hooks/useBlockedUsers';
 import { useTrustScore } from '../../hooks/useTrustScore';
+import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { navigateForRole } from '@/lib/navigation';
 import { applySignupRole } from '@/services/authRoleAssignment';
@@ -552,13 +553,12 @@ export default function ProfileScreen() {
 
   const handleSignOut = async () => {
     try {
-      await signOutUser();
+      await logoutAndResetSession(signOutUser);
+      router.replace(POST_LOGOUT_ROUTE as Parameters<typeof router.replace>[0]);
     } catch (err) {
       logError(err);
       showError(getUserFriendlyError(err));
-      return;
     }
-    router.replace('/(auth)/login');
   };
 
   const handleDeleteAccount = () => {
@@ -573,11 +573,11 @@ export default function ProfileScreen() {
   const handleAfterAccountDeleted = useCallback(async () => {
     setDeleteAccountModalVisible(false);
     try {
-      await signOutUser();
+      await logoutAndResetSession(signOutUser);
     } catch {
       // `deleteUser` already ends the session; sign-out may no-op.
     }
-    router.replace('/(auth)/login' as Parameters<typeof router.replace>[0]);
+    router.replace(POST_LOGOUT_ROUTE as Parameters<typeof router.replace>[0]);
   }, [router, signOutUser]);
 
   const handleSubmitProfileReport = async () => {

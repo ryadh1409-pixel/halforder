@@ -5,7 +5,7 @@ import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
 import { DriverRealtimeProvider } from '@/contexts/DriverRealtimeContext';
 import { DriverShellProvider } from '@/contexts/DriverShellContext';
 import { useAuthUid } from '@/hooks/useAuthUid';
-import { normalizeRoleForRouting } from '@/lib/authRole';
+import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { markDriverStackMounted } from '@/lib/driverStack';
 import { isInDriverGroup } from '@/lib/driverRouteUtils';
 import { useAuth } from '@/services/AuthContext';

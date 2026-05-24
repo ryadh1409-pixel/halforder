@@ -1,12 +1,11 @@
-import { normalizeRoleForRouting } from '@/lib/authRole';
 import { canRunRouteGroupDiagnostics } from '@/lib/router/hydration';
 import {
-  expectedGroupForRole,
   getRouteGroup,
-  isInDriverGroup,
-  isInHostGroup,
-  isInTabsGroup,
-} from '@/lib/routeGroups';
+  getRouteGroupFromPathname,
+} from '@/lib/routing/routeConstants';
+import { hasPersistentRoleRouteGroupViolation } from '@/lib/routing/routeMaps';
+import { expectedRouteGroupForRole } from '@/lib/routing/roleReturnPaths';
+import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import type { UserRole } from '@/services/userService';
 
 let lastMismatchKey = '';
@@ -43,8 +42,15 @@ export function assertRoleRouteGroup(params: AssertRoleRouteGroupParams): void {
   }
 
   const normalized = normalizeRoleForRouting(params.role);
-  const actualGroup = getRouteGroup(segmentList, params.pathname);
-  const expectedGroup = expectedGroupForRole(params.role);
+  const actualGroup =
+    getRouteGroupFromPathname(params.pathname) !== 'other'
+      ? getRouteGroupFromPathname(params.pathname)
+      : getRouteGroup(segmentList, params.pathname);
+  const expectedGroup = expectedRouteGroupForRole(params.role);
+
+  if (!hasPersistentRoleRouteGroupViolation(params.role, params.pathname, segmentList)) {
+    return;
+  }
 
   const mismatchKey = JSON.stringify({
     role: normalized,
@@ -55,31 +61,7 @@ export function assertRoleRouteGroup(params: AssertRoleRouteGroupParams): void {
   });
   if (lastMismatchKey === mismatchKey) return;
 
-  let mismatch: string | null = null;
-
-  if (normalized === 'driver' && isInTabsGroup(segmentList, params.pathname)) {
-    mismatch = 'driver role entered (tabs) group';
-  } else if (normalized === 'user' && isInDriverGroup(segmentList, params.pathname)) {
-    mismatch = 'user role entered (driver) group';
-  } else if (normalized === 'restaurant' && isInDriverGroup(segmentList, params.pathname)) {
-    mismatch = 'restaurant role entered (driver) group';
-  } else if (
-    normalized === 'restaurant' &&
-    isInTabsGroup(segmentList, params.pathname) &&
-    !isInHostGroup(segmentList, params.pathname)
-  ) {
-    mismatch = 'restaurant role entered (tabs) group';
-  } else if (normalized === 'driver' && isInHostGroup(segmentList, params.pathname)) {
-    mismatch = 'driver role entered (host) group';
-  } else if (
-    normalized === 'user' &&
-    isInHostGroup(segmentList, params.pathname) &&
-    !isInTabsGroup(segmentList, params.pathname)
-  ) {
-    mismatch = 'user role entered (host) group';
-  }
-
-  if (!mismatch) return;
+  const mismatch = `${normalized} role entered ${actualGroup} group (expected ${expectedGroup})`;
 
   lastMismatchKey = mismatchKey;
   console.warn(`[ROUTE GROUP CHECK] ${mismatch}`, {
