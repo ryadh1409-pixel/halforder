@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { Ionicons } from '@expo/vector-icons';
 import { SwipeActionButtons } from '@/components/swipe/SwipeActionButtons';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
@@ -419,7 +420,7 @@ export function SwipeDiscoveryScreen() {
         foodTitle={lastMatch?.foodTitle ?? ''}
         splitLabel={lastMatch ? `Split: $${lastMatch.splitPrice} each` : ''}
         onChat={() => {
-          if (lastMatch) router.push(`/order/${lastMatch.orderId}` as never);
+          if (lastMatch) router.push(USER_ROUTES.order(lastMatch.orderId) as never);
           setLastMatch(null);
           advanceDeck();
         }}
@@ -427,7 +428,7 @@ export function SwipeDiscoveryScreen() {
           if (lastMatch?.sharedOrderId) {
             router.push(`/shared-order/${lastMatch.sharedOrderId}` as never);
           } else if (lastMatch) {
-            router.push(`/order/${lastMatch.orderId}` as never);
+            router.push(USER_ROUTES.order(lastMatch.orderId) as never);
           }
           setLastMatch(null);
           advanceDeck();

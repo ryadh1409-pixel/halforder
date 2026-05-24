@@ -12,6 +12,7 @@ import {
   sendMessageToAI,
   type AiDecision,
 } from '../../services/aiBackendDecision';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '../../services/AuthContext';
 import {
   buildSmartMatchIntroText,
@@ -316,7 +317,7 @@ export default function ChatScreen() {
       router.push({ pathname: '/open-join' } as never);
       return;
     }
-    router.push(`/order/${first.id}` as never);
+    router.push(USER_ROUTES.order(first.id) as never);
   };
 
   const handleCreateOrderAction = () => {
@@ -543,7 +544,7 @@ export default function ChatScreen() {
         }
 
         if (result.navigateToOrderId) {
-          router.push(`/order/${result.navigateToOrderId}` as never);
+          router.push(USER_ROUTES.order(result.navigateToOrderId) as never);
         }
       } catch {
         setMessages((prev) => [

@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { isUserBanned } from '../../services/adminGuard';
 import { auth, db } from '../../services/firebase';
 import { cancelHalfOrder } from '../../services/halfOrderCancel';
@@ -245,14 +246,14 @@ export default function JoinOrderScreen() {
       const members = memberIdsFromOrderData(d);
       if (members.includes(u)) {
         showSuccess('You are already on this order.');
-        router.push(`/order/${orderId}` as never);
+        router.push(USER_ROUTES.order(orderId) as never);
         return;
       }
 
       if (item.usesHalf) {
         const res = await joinHalfOrderByOrderId(orderId);
         if (res.alreadyJoined) {
-          router.push(`/order/${orderId}` as never);
+          router.push(USER_ROUTES.order(orderId) as never);
           return;
         }
       } else {
@@ -271,7 +272,7 @@ export default function JoinOrderScreen() {
       showSuccess(
         `You have ${Math.round(ORDER_JOIN_WINDOW_MS / 60000)} minutes to coordinate after joining.`,
       );
-      router.push(`/order/${orderId}` as never);
+      router.push(USER_ROUTES.order(orderId) as never);
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {
@@ -344,7 +345,7 @@ export default function JoinOrderScreen() {
       <View style={styles.rowBtns}>
         <TouchableOpacity
           style={styles.openBtn}
-          onPress={() => router.push(`/order/${item.id}` as never)}
+          onPress={() => router.push(USER_ROUTES.order(item.id) as never)}
         >
           <Text style={styles.openBtnText}>Open</Text>
         </TouchableOpacity>

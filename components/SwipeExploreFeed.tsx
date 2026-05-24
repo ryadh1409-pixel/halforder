@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { isAdminFoodCardSlotId } from '@/constants/adminFoodCards';
 import { isAdminUser } from '@/constants/adminUid';
 import {
@@ -104,7 +105,7 @@ function buildDetailsProps(args: {
     hostName: card.user1?.name,
     showHostRow: Boolean(card.user1),
     onPressDetails: () => {
-      router.push(`/order/${card.orderId ?? card.id}` as never);
+      router.push(USER_ROUTES.order(card.orderId ?? card.id) as never);
     },
     onPressJoin: () => {
       void onLikeRef.current(card.id);
@@ -245,7 +246,7 @@ export default function SwipeExploreFeed() {
       if (result.justBecamePair) {
         showNotice(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
       }
-      router.push(`/order/${result.orderId}` as never);
+      router.push(USER_ROUTES.order(result.orderId) as never);
     } catch {
       showError(USER_ERROR_JOIN);
     } finally {

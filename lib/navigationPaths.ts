@@ -24,6 +24,16 @@ export const DRIVER_TAB_HREFS: Record<DriverTabKey, Href> = {
   'driver-profile': DRIVER_ROUTES.profile,
 };
 
+/**
+ * Customer / user shell hrefs.
+ * Route group is `(tabs)` today; use these helpers instead of ambiguous root paths.
+ */
+export const USER_ROUTES = {
+  hub: '/(tabs)',
+  orders: '/orders',
+  order: (orderId: string) => `/order/${encodeURIComponent(orderId)}` as const,
+} as const;
+
 /** Canonical customer tab shell hrefs. */
 export const TABS_ROUTES = {
   hub: '/(tabs)',

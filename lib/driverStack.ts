@@ -3,7 +3,7 @@
  *
  * We intentionally do NOT clear this in layout cleanup: Expo Router and React StrictMode
  * (dev) can unmount/remount the layout once during hydration. Clearing on cleanup made
- * RoleRouteGuard think the stack was gone and fire a second `router.replace('/(driver)')`.
+ * StartupRedirectOrchestrator think the stack was gone and fire a second `router.replace('/(driver)')`.
  *
  * Reset only on sign-out via `resetDriverStackLatch()` (called from clearRoleRedirectGuards).
  */

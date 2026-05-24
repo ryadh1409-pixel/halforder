@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import AppLogo from '../components/AppLogo';
 import { FoodCardPaymentDisclaimer } from '../components/FoodCardPaymentDisclaimer';
 import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
@@ -81,7 +82,7 @@ export default function NearbyOrdersScreen() {
       return;
     }
     if (order.participants.includes(uid)) {
-      router.push(`/order/${order.id}` as const);
+      router.push(USER_ROUTES.order(order.id) as const);
       return;
     }
     if (order.participants.length >= order.maxParticipants) {
@@ -124,7 +125,7 @@ export default function NearbyOrdersScreen() {
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, order.id);
-      router.push(`/order/${order.id}` as const);
+      router.push(USER_ROUTES.order(order.id) as const);
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {

@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import type { SmartMatchOrder } from '@/services/matchingEngine';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -58,7 +59,7 @@ function SmartMatchChipInner({ order, index = 0 }: Props) {
           );
           return;
         }
-        router.push(`/order/${order.id}` as never);
+        router.push(USER_ROUTES.order(order.id) as never);
       }}
     >
       <Animated.View

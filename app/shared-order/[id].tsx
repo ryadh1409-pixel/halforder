@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import { useMatchStore } from '@/store/matchStore';
 import type {
@@ -256,7 +257,7 @@ export default function SharedOrderRoomScreen() {
       // If the status write is blocked offline or by rules, still let members continue.
     } finally {
       setStartingCheckout(false);
-      router.push(`/order/${room.orderId}` as never);
+      router.push(USER_ROUTES.order(room.orderId) as never);
     }
   };
 
@@ -367,7 +368,7 @@ export default function SharedOrderRoomScreen() {
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>Chat preview</Text>
             <Pressable
-              onPress={() => router.push(`/order/${room.orderId}` as never)}
+              onPress={() => router.push(USER_ROUTES.order(room.orderId) as never)}
             >
               <Text style={styles.link}>Open chat</Text>
             </Pressable>

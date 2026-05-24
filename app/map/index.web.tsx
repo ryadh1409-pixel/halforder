@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useNearbyOrders } from '../../hooks/useNearbyOrders';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -57,7 +58,7 @@ export default function MapScreenWeb() {
                 key={order.id}
                 style={styles.card}
                 onPress={() =>
-                  router.push(`/order/${order.id}` as const)
+                  router.push(USER_ROUTES.order(order.id) as const)
                 }
               >
                 <Text style={styles.cardTitle}>{order.restaurantName}</Text>

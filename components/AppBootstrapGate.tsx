@@ -2,8 +2,7 @@ import AppLogo from '@/components/AppLogo';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
-import { logRootBootstrapState } from '@/utils/driverLifecycleLog';
-import { usePathname, useSegments } from 'expo-router';
+import { logBoot } from '@/utils/startupDiagnostics';
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
@@ -28,7 +27,6 @@ function resolvePhase(
   if (appReadyLatched) return 'appReady';
   if (!hasUser) {
     if (!authReady || loading) return 'bootstrapping';
-    /** Signed out — auth settled; show router (login, register, etc.). */
     return 'appReady';
   }
   if (!authReady || loading) return 'bootstrapping';
@@ -37,14 +35,12 @@ function resolvePhase(
 }
 
 /**
- * Single bootstrap gate for the Expo Router tree.
- * Latches `appReady` so transient `loading` flicker does not unmount Slot / driver providers.
+ * Gates on Firebase auth + role only — never on router segments.
+ * Slot must mount so Expo Router can navigate away from `/`.
  */
 export function AppBootstrapGate({ children }: AppBootstrapGateProps) {
   useDevProviderMount('AppBootstrapGate');
 
-  const pathname = usePathname();
-  const segments = useSegments();
   const { user, loading, authReady, roleResolved, firestoreUserRole } = useAuth();
   const [appReadyLatched, setAppReadyLatched] = useState(false);
 
@@ -62,28 +58,15 @@ export function AppBootstrapGate({ children }: AppBootstrapGateProps) {
   }, [user?.uid, authReady, roleResolved, loading]);
 
   useEffect(() => {
-    logRootBootstrapState({
-      pathname,
-      segments: segments as string[],
-      role: firestoreUserRole ?? null,
-      authReady,
-      roleResolved,
-      uid: user?.uid ?? null,
-      loading,
-      bootstrapPhase: phase,
-      reason: appReadyLatched ? 'latched' : 'waiting',
-    });
-  }, [
-    pathname,
-    segments,
-    firestoreUserRole,
-    authReady,
-    roleResolved,
-    user?.uid,
-    loading,
-    phase,
-    appReadyLatched,
-  ]);
+    if (phase === 'appReady') {
+      logBoot('phase-ready', {
+        uid: user?.uid ?? null,
+        role: firestoreUserRole ?? null,
+        authReady,
+        roleResolved,
+      });
+    }
+  }, [phase, authReady, roleResolved, firestoreUserRole, user?.uid]);
 
   if (phase !== 'appReady') {
     return (

@@ -30,6 +30,13 @@ export function isInTabsGroup(segments: string[], pathname: string): boolean {
   return false;
 }
 
+/** Customer shell — `(tabs)` today; `(customer)` for narrow flows. */
+export function isInUserGroup(segments: string[], pathname: string): boolean {
+  if (segments[0] === '(customer)' || segments.includes('(customer)')) return true;
+  if (pathname.includes('(customer)')) return true;
+  return isInTabsGroup(segments, pathname);
+}
+
 export function getRouteGroup(segments: string[], pathname: string): RouteGroup {
   const root = segments[0];
   if (root === '(driver)' || isInDriverGroup(segments, pathname)) return '(driver)';
@@ -72,7 +79,7 @@ export function isInsideCorrectRoleShell(
       return pathname.startsWith('/admin') || segments[0] === 'admin';
     case 'user':
     default:
-      return isInTabsGroup(segments, pathname);
+      return isInUserGroup(segments, pathname);
   }
 }
 

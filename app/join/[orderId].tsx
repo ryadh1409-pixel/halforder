@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import AppLogo from '../../components/AppLogo';
 import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
 import { getIosAppStoreUrl, getPlayStoreUrl } from '../../constants/storeLinks';
@@ -114,7 +115,7 @@ export default function JoinInviteScreen() {
         setNotFound(false);
         setLoading(false);
         if (auth.currentUser?.uid && orderId?.trim()) {
-          router.replace(`/order/${orderId.trim()}` as never);
+          router.replace(USER_ROUTES.order(orderId.trim()) as never);
         }
       })
       .catch(() => {
@@ -140,7 +141,7 @@ export default function JoinInviteScreen() {
     if (!orderId) return;
     const deepLink = `halforder://order/${orderId}`;
     if (Platform.OS === 'web') {
-      router.push(`/order/${orderId}` as never);
+      router.push(USER_ROUTES.order(orderId) as never);
       return;
     }
     Linking.openURL(deepLink).catch(() => {

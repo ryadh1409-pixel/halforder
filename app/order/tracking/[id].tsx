@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -12,7 +13,7 @@ export default function LegacyOrderTrackingRedirect() {
       router.replace('/(tabs)/orders' as never);
       return;
     }
-    router.replace(`/order/${encodeURIComponent(oid)}` as never);
+    router.replace(USER_ROUTES.order(oid) as never);
   }, [oid]);
 
   return (

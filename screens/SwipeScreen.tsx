@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -470,7 +471,7 @@ function SwipeScreenInner() {
         }).catch(() => {});
         setBurstKey((k) => k + 1);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push(`/order/${order.id}` as const);
+        router.push(USER_ROUTES.order(order.id) as const);
         setIndex((i) => i + 1);
       } catch (error) {
         logError(error);

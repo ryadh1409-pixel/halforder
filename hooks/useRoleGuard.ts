@@ -16,7 +16,7 @@ export type UseRoleGuardOptions = {
 
 /**
  * Optional role gate helper (no navigation). Prefer inlining `useAuth` + role arrays in screens;
- * root `/` role redirects are only in `app/_layout.tsx` (`RoleRouteGuard`).
+ * root `/` role redirects are only in `StartupRedirectOrchestrator` (`app/_layout.tsx`).
  */
 export function useRoleGuard(opts: UseRoleGuardOptions) {
   const { user, loading, firestoreUserRole } = useAuth();

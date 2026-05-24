@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -26,7 +27,7 @@ export default function ReviewOrderScreen() {
         amount: totalWithDelivery,
       });
       markOrderPaid(order.id);
-      router.replace(`/order/${order.id}` as never);
+      router.replace(USER_ROUTES.order(order.id) as never);
     } catch {
       setErrorText('Payment failed, try again');
     } finally {

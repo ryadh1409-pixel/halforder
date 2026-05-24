@@ -1,7 +1,7 @@
 import { getRouteForRole, normalizeRoleForRouting } from '@/lib/authRole';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
-import { logRedirectDecision } from '@/utils/driverLifecycleLog';
+import { logGuard } from '@/utils/startupDiagnostics';
 import { usePathname, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -13,18 +13,14 @@ function isRoleAllowedForShell(shell: RoleShell, role: ReturnType<typeof normali
   return role === 'restaurant';
 }
 
-function shellLabel(shell: RoleShell): string {
-  return shell === 'driver' ? '(driver)' : '(host)';
-}
-
 type Props = {
   shell: RoleShell;
   children: React.ReactNode;
 };
 
 /**
- * Blocks provider trees until auth + role are resolved and match the route shell.
- * Wrong-role users are replaced away before children mount.
+ * Blocks provider trees until auth + role match the shell.
+ * Does not wait on segment hydration (pathname group is enough).
  */
 export function RoleShellLayoutGuard({ shell, children }: Props) {
   const { user, loading, authReady, roleResolved, firestoreUserRole } = useAuth();
@@ -32,11 +28,19 @@ export function RoleShellLayoutGuard({ shell, children }: Props) {
   const pathname = usePathname();
   const segments = useSegments();
   const redirectLatch = useRef(false);
+  const uidRef = useRef<string | null>(null);
 
   const ready = authReady && roleResolved && !loading;
   const signedIn = isRegisteredAuthUser(user);
   const role = normalizeRoleForRouting(firestoreUserRole);
   const allowed = signedIn && isRoleAllowedForShell(shell, role);
+
+  useEffect(() => {
+    if (uidRef.current !== (user?.uid ?? null)) {
+      uidRef.current = user?.uid ?? null;
+      redirectLatch.current = false;
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!ready) return;
@@ -46,24 +50,11 @@ export function RoleShellLayoutGuard({ shell, children }: Props) {
     if (redirectLatch.current) return;
     redirectLatch.current = true;
 
-    if (__DEV__) {
-      console.warn('[Route shell guard] role/group mismatch — redirecting', {
-        shell: shellLabel(shell),
-        role,
-        pathname,
-        segments,
-        target,
-      });
-    }
-
-    logRedirectDecision({
-      guard: 'RoleShellLayoutGuard',
-      action: 'redirect',
-      from: pathname,
-      to: target,
-      reason: `wrong-role-for-${shell}-shell`,
+    logGuard(`RoleShellLayoutGuard:${shell}`, {
       role,
-      segments: segments as string[],
+      pathname,
+      segments,
+      target,
     });
 
     router.replace(target as never);

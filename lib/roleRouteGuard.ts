@@ -1,14 +1,29 @@
 import { resetAuthSessionBootstrap } from '@/lib/authSessionBootstrap';
 import { resetAuthRoleLogs } from '@/lib/authRole';
 import { resetDriverStackLatch } from '@/lib/driverStack';
-import { isInDriverGroup, isInHostGroup, isInTabsGroup } from '@/lib/routeGroups';
+import { isInDriverGroup, isInHostGroup, isInUserGroup } from '@/lib/routeGroups';
+import {
+  clearStartupNavigationState,
+  hasRoleShellLandingCompleted,
+} from '@/lib/startup/state';
 import type { UserRole } from '@/services/userService';
 import { resetDevProviderMountCounts } from '@/utils/devBootstrapDiagnostics';
 import { resetDriverListenerLogs } from '@/utils/driverListenerLog';
 import { resetDriverMountLogs } from '@/utils/driverMountLog';
 import { resetDriverLifecycleLogs, resetRedirectDecisionLogs } from '@/utils/driverLifecycleLog';
 import { resetRouteDiagnostics } from '@/utils/routeDiagnostics';
+import { resetRouteAssertionLogs } from '@/lib/routeAssertion';
 import { resetRouteGroupCheckLogs } from '@/utils/routeGroupCheck';
+import { resetStartupDiagnostics } from '@/utils/startupDiagnostics';
+
+export {
+  completedRedirects,
+  completedRoleRedirects,
+  hasRoleShellLandingCompleted,
+  hasRedirectCompleted,
+  markRedirectCompleted,
+  markRoleShellLandingComplete,
+} from '@/lib/startup/state';
 
 const ROLE_SHELLS = new Set([
   '(tabs)',
@@ -19,56 +34,7 @@ const ROLE_SHELLS = new Set([
   '(restaurant)',
 ]);
 
-/** Set after first successful landing into any role shell — never re-run entry redirect. */
-let roleShellLandingComplete = false;
-
-export function markRoleShellLandingComplete(): void {
-  roleShellLandingComplete = true;
-}
-
-export function hasRoleShellLandingCompleted(): boolean {
-  return roleShellLandingComplete;
-}
-
-export function resetRoleShellLanding(): void {
-  roleShellLandingComplete = false;
-}
-
-/** Completed `router.replace` targets — never redirect to the same route twice. */
-export const completedRedirects = new Set<string>();
-
-/** Completed role landing per uid+role — one redirect per role per session. */
-export const completedRoleRedirects = new Set<string>();
-
-export function clearRoleRedirectGuards(): void {
-  completedRedirects.clear();
-  completedRoleRedirects.clear();
-  resetRoleShellLanding();
-  resetDriverStackLatch();
-  resetDriverMountLogs();
-  resetDriverListenerLogs();
-  resetAuthRoleLogs();
-  resetAuthSessionBootstrap();
-  resetRouteDiagnostics();
-  resetRouteGroupCheckLogs();
-  resetDevProviderMountCounts();
-  resetDriverLifecycleLogs();
-  resetRedirectDecisionLogs();
-}
-
-export function markRedirectCompleted(targetRoute: string, sessionKey?: string): void {
-  completedRedirects.add(targetRoute);
-  if (sessionKey) {
-    completedRoleRedirects.add(sessionKey);
-  }
-  markRoleShellLandingComplete();
-}
-
-export function hasRedirectCompleted(targetRoute: string): boolean {
-  return completedRedirects.has(targetRoute);
-}
-
-/** Pure check — no side effects (call markRoleShellLandingComplete at redirect sites). */
+/** Pure check — no side effects. */
 export function isInsideRoleShell(segments: string[], pathname: string): boolean {
   const root = segments[0];
   if (root && ROLE_SHELLS.has(root)) {
@@ -86,14 +52,10 @@ export function isInsideRoleShell(segments: string[], pathname: string): boolean
 
 /** True only at bare app entry — not when Expo reports `/` while a shell is active. */
 export function isAtAppEntryPoint(pathname: string, segments: string[]): boolean {
-  if (roleShellLandingComplete) return false;
+  if (hasRoleShellLandingCompleted()) return false;
   if (isInsideRoleShell(segments, pathname)) return false;
 
   if (pathname !== '/' && pathname !== '/index') {
-    return false;
-  }
-
-  if (segments.length > 0) {
     return false;
   }
 
@@ -115,5 +77,21 @@ export function isAlreadyOnRoleRoute(pathname: string, segments: string[], role:
   if (normalized === 'admin') {
     return pathname.startsWith('/admin') || segments[0] === 'admin';
   }
-  return isInTabsGroup(segments, pathname);
+  return isInUserGroup(segments, pathname);
+}
+
+export function clearRoleRedirectGuards(): void {
+  clearStartupNavigationState();
+  resetDriverStackLatch();
+  resetDriverMountLogs();
+  resetDriverListenerLogs();
+  resetAuthRoleLogs();
+  resetAuthSessionBootstrap();
+  resetRouteDiagnostics();
+  resetRouteGroupCheckLogs();
+  resetRouteAssertionLogs();
+  resetStartupDiagnostics();
+  resetDevProviderMountCounts();
+  resetDriverLifecycleLogs();
+  resetRedirectDecisionLogs();
 }

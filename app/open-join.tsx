@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
 import { formatTorontoOrderTime } from '../lib/format-toronto-time';
 import { isUserBanned } from '../services/adminGuard';
@@ -382,7 +383,7 @@ export default function JoinScreen() {
         senderName: '',
         createdAt: serverTimestamp(),
       });
-      router.push(`/order/${orderId}` as never);
+      router.push(USER_ROUTES.order(orderId) as never);
     } catch (e) {
       logError(e);
       showError(getUserFriendlyError(e));

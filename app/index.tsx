@@ -13,8 +13,8 @@ type GateState =
   | { phase: 'ready'; onboardingDone: boolean };
 
 /**
- * App root (`/`): wait for auth + role loading, gate onboarding/terms, then `router.replace`
- * (no `<Redirect />` while `loading` is true — avoids navigation before the tree is stable).
+ * App root (`/`): onboarding/terms for guests; registered users rely on
+ * `StartupRedirectOrchestrator` for role landing (no infinite spinner here).
  */
 export default function Index() {
   const [gate, setGate] = useState<GateState>({ phase: 'loading' });
@@ -65,7 +65,6 @@ export default function Index() {
       router.replace('/terms-acceptance?returnTo=/(tabs)' as never);
       return;
     }
-    /** Registered users: role landing via `RoleRouteGuard` at `/`. Guests → tabs browse. */
     if (isRegisteredAuthUser(user)) return;
     router.replace('/(tabs)' as never);
   }, [
@@ -91,12 +90,18 @@ export default function Index() {
           justifyContent: 'center',
           alignItems: 'center',
           paddingTop: 60,
+          backgroundColor: '#0F172A',
         }}
       >
         <AppLogo size={112} marginTop={0} />
         <ActivityIndicator size="large" style={{ marginTop: 40 }} />
       </View>
     );
+  }
+
+  /** Registered: transparent shell while orchestrator navigates to role home. */
+  if (isRegisteredAuthUser(user)) {
+    return <View style={{ flex: 1, backgroundColor: '#0F172A' }} />;
   }
 
   return (

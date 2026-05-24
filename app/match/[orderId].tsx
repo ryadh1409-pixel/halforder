@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import ContactButtons from '../../components/ContactButtons';
 import MatchCheckoutMap, { type MapPoint } from '../../components/MatchCheckoutMap';
 import { FoodCardPaymentDisclaimer } from '../../components/FoodCardPaymentDisclaimer';
@@ -230,16 +231,16 @@ export default function MatchCheckoutScreen() {
         type: 'system',
       });
       await createAlert('order_matched', 'Meeting confirmed');
-      router.push(`/order/${orderId}` as never);
+      router.push(USER_ROUTES.order(orderId) as never);
     } catch (e) {
-      router.push(`/order/${orderId}` as never);
+      router.push(USER_ROUTES.order(orderId) as never);
     } finally {
       setConfirming(false);
     }
   };
 
   const openChat = () => {
-    router.push(`/order/${orderId}` as never);
+    router.push(USER_ROUTES.order(orderId) as never);
   };
 
   const mapPoints =

@@ -2,6 +2,7 @@
  * DoorDash-style customer live order tracking (light theme).
  * Route: /track-order/[orderId]
  */
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
@@ -106,7 +107,7 @@ export default function TrackOrderScreen() {
       <SafeAreaView style={styles.lightRoot} edges={['top']}>
         <Text style={styles.errorText}>We couldn’t load this delivery.</Text>
         <Pressable
-          onPress={() => router.replace(`/order/${encodeURIComponent(orderId)}` as never)}
+          onPress={() => router.replace(USER_ROUTES.order(orderId) as never)}
           style={styles.primaryBtn}
         >
           <Text style={styles.primaryBtnText}>Open order</Text>

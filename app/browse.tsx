@@ -4,6 +4,7 @@ import {
 } from '../constants/paymentDisclaimer';
 import { theme } from '../constants/theme';
 import { FoodCardGrid } from '../components/FoodCardGrid';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '../services/AuthContext';
 import { FoodCardPaymentDisclaimer } from '../components/FoodCardPaymentDisclaimer';
 import { safeAlertBody, USER_ERROR_JOIN } from '../lib/userFacingErrors';
@@ -83,14 +84,14 @@ function BrowseFoodCardRow({
     <View style={styles.card}>
       <TouchableOpacity
         activeOpacity={0.92}
-        onPress={() => router.push(`/order/${detailPath}` as never)}
+        onPress={() => router.push(USER_ROUTES.order(detailPath) as never)}
       >
         <Image source={{ uri: card.image }} style={styles.hero} />
       </TouchableOpacity>
       <View style={styles.cardBody}>
         <TouchableOpacity
           activeOpacity={0.88}
-          onPress={() => router.push(`/order/${detailPath}` as never)}
+          onPress={() => router.push(USER_ROUTES.order(detailPath) as never)}
         >
           <Text style={styles.cardTitle}>{card.title}</Text>
         </TouchableOpacity>
@@ -112,7 +113,7 @@ function BrowseFoodCardRow({
         <TouchableOpacity
           style={styles.detailsRow}
           activeOpacity={0.88}
-          onPress={() => router.push(`/order/${detailPath}` as never)}
+          onPress={() => router.push(USER_ROUTES.order(detailPath) as never)}
         >
           <Text style={styles.detailsRowText}>View details →</Text>
         </TouchableOpacity>
@@ -193,7 +194,7 @@ export default function BrowseScreen() {
       if (result.justBecamePair) {
         showNotice(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
       }
-      router.push(`/order/${result.orderId}` as never);
+      router.push(USER_ROUTES.order(result.orderId) as never);
     } catch (e) {
       showError(USER_ERROR_JOIN);
     } finally {

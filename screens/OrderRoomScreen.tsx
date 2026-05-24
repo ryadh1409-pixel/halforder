@@ -1,3 +1,4 @@
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { isUserBanned } from '../services/adminGuard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -1385,7 +1386,7 @@ export default function OrderRoomScreen() {
     const uid = auth.currentUser?.uid;
     if (!uid) {
       router.push(
-        `/(auth)/login?redirectTo=${encodeURIComponent(`/order/${orderId}`)}` as never,
+        `/(auth)/login?redirectTo=${encodeURIComponent(USER_ROUTES.order(orderId))}` as never,
       );
       return;
     }
@@ -1442,7 +1443,7 @@ export default function OrderRoomScreen() {
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, orderId);
-      router.push(`/order/${orderId}` as never);
+      router.push(USER_ROUTES.order(orderId) as never);
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {

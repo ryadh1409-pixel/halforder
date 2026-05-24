@@ -26,6 +26,7 @@ import {
   PAYMENT_MATCH_ALERT_TITLE,
 } from '../constants/paymentDisclaimer';
 import { theme } from '../constants/theme';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { buildOrderWhatsAppInviteLink } from '../lib/invite-link';
 import { safeAlertBody, USER_ERROR_JOIN } from '../lib/userFacingErrors';
 import {
@@ -585,7 +586,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
     const uid = auth.currentUser?.uid;
     if (!uid) {
       router.push(
-        `/(auth)/login?redirectTo=/order/${order.id}` as never,
+        `/(auth)/login?redirectTo=${encodeURIComponent(USER_ROUTES.order(order.id))}` as never,
       );
       return;
     }
@@ -608,7 +609,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
         if (result.justBecamePair) {
           showNotice(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
         }
-        router.replace(`/order/${result.orderId}` as never);
+        router.replace(USER_ROUTES.order(result.orderId) as never);
         return;
       }
       if (order.usesHalfUsers) {
@@ -619,14 +620,14 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
         if (half.justBecamePair) {
           showNotice(PAYMENT_MATCH_ALERT_TITLE, PAYMENT_MATCH_ALERT_MESSAGE);
         }
-        router.push(`/order/${order.id}` as never);
+        router.push(USER_ROUTES.order(order.id) as never);
         return;
       }
       await withOneRetry(() => joinFirestoreOrder(order.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         () => {},
       );
-      router.push(`/order/${order.id}` as never);
+      router.push(USER_ROUTES.order(order.id) as never);
     } catch (e) {
       showError(getUserFriendlyError(e));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
