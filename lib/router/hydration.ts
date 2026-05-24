@@ -10,7 +10,7 @@ export type RouterHydrationInput = {
   segments: string[];
 };
 
-export function normalizePathname(pathname: string): string {
+export function normalizePathname(pathname: string | null | undefined): string {
   const p = (pathname ?? '').trim();
   if (!p || p === '/') return '/';
   return p.startsWith('/') ? p : `/${p}`;
@@ -23,32 +23,34 @@ export function isRootEntryPathname(pathname: string): boolean {
 }
 
 /**
- * True when Expo has attached a concrete route group or left the bare index.
- * Empty segments at `/` is valid and must NOT block entry redirects.
+ * Event-driven: Expo Router context is active when pathname is a string.
+ * Empty segments at `/` is valid hydrated state.
+ */
+export function isRouterNavigationReady(pathname: string | null | undefined): boolean {
+  return typeof pathname === 'string';
+}
+
+/**
+ * True when route context is sufficient for recovery/diagnostics.
+ * At `/` with [] segments, navigation is still ready for entry redirect.
  */
 export function hasResolvedRouteContext(pathname: string, segments: string[]): boolean {
+  if (!isRouterNavigationReady(pathname)) return false;
   if (!isRootEntryPathname(pathname)) return true;
   if (segments.length > 0) return true;
   if (pathname.includes('(') && pathname.includes(')')) return true;
-  return false;
+  return true;
 }
 
 /** Safe to run post-navigation route-group diagnostics (dev only). */
 export function canRunRouteGroupDiagnostics(ctx: RouterHydrationInput): boolean {
   if (!ctx.authReady || !ctx.roleResolved) return false;
+  if (!isRouterNavigationReady(ctx.pathname)) return false;
   if (isRootEntryPathname(ctx.pathname) && ctx.segments.length === 0) return false;
   return true;
 }
 
-/**
- * Router is ready for wrong-group recovery (needs segment context).
- * Entry redirect from `/` uses {@link isRootEntryPathname} instead — never waits on segments.
- */
-export function isRouterReadyForRecovery(
-  pathname: string,
-  segments: string[],
-  hydrationTimedOut: boolean,
-): boolean {
-  if (hydrationTimedOut) return true;
+/** Router ready for wrong-group recovery. */
+export function isRouterReadyForRecovery(pathname: string, segments: string[]): boolean {
   return hasResolvedRouteContext(pathname, segments);
 }

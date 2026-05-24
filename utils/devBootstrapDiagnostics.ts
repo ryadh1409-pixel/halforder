@@ -51,7 +51,7 @@ export function useDevProviderMount(providerName: string): void {
         console.log(
           '[DEV DIAG]',
           providerName,
-          'quick first unmount — common in dev (hydration / fast refresh); production builds typically mount once.',
+          'quick first unmount — if this persists after bootstrap refactor, check BootstrapShell still mounts children (overlay-only splash).',
         );
       }
       if (instance > 2) {

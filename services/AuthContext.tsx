@@ -51,7 +51,6 @@ import { normalizeRoleForRouting } from '@/lib/authRole';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { markDriverOffline } from '@/services/driverPresence';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
-import { logRootBootstrapState } from '@/utils/driverLifecycleLog';
 import { auth, db } from './firebase';
 import {
   formatProfileWhatsAppDisplay,
@@ -749,26 +748,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const roleResolved = !isRegisteredAuthUser(user) || !roleLoading;
   const bootstrapLoading =
     loading || (isRegisteredAuthUser(user) && roleLoading);
-
-  useEffect(() => {
-    logRootBootstrapState({
-      pathname: 'AuthProvider',
-      segments: [],
-      role: firestoreRole ?? null,
-      authReady,
-      roleResolved,
-      uid: user?.uid ?? null,
-      loading: bootstrapLoading,
-      bootstrapPhase: authReady
-        ? roleResolved
-          ? bootstrapLoading
-            ? 'roleReady'
-            : 'appReady'
-          : 'roleReady'
-        : 'bootstrapping',
-      reason: 'auth-context-state',
-    });
-  }, [user?.uid, authReady, roleResolved, bootstrapLoading, firestoreRole]);
 
   const value = useMemo((): AuthContextValue => {
     const fur = isRegisteredAuthUser(user) ? (firestoreRole ?? null) : null;

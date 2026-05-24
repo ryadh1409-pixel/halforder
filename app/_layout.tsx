@@ -3,7 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import 'react-native-svg';
 
-import { AppBootstrapGate } from '@/components/AppBootstrapGate';
+import { BootstrapShell } from '@/components/BootstrapShell';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
@@ -26,30 +26,20 @@ import { configureExpoPushNotificationHandler } from '../services/pushNotificati
 forceEnglishLayout();
 logDevStartupConfig();
 
-/** Production: suppress noisy redbox logs. Development: keep logs visible for debugging. */
 if (!__DEV__) {
   LogBox.ignoreAllLogs(true);
 }
 
-/**
- * Push foreground handler uses native notification APIs — skip in Expo Go (unsupported /
- * different binary). Dev Client and standalone builds call this once at startup.
- */
 if (Platform.OS !== 'web' && !isExpoGo) {
   configureExpoPushNotificationHandler();
 }
 
-/** After sign-out, leave protected shells and land on login once auth has settled. */
 function SignedOutRouteGuard() {
   const pathname = usePathname();
   const segments = useSegments();
   const router = useRouter();
   const { user, authReady, loading } = useAuth();
   const hasRedirectedToLoginRef = useRef(false);
-  const pathnameRef = useRef(pathname);
-  const segmentsRef = useRef(segments);
-  pathnameRef.current = pathname;
-  segmentsRef.current = segments;
 
   useEffect(() => {
     if (isRegisteredAuthUser(user)) {
@@ -58,20 +48,18 @@ function SignedOutRouteGuard() {
     }
     if (!authReady || loading) return;
 
-    const currentPath = pathnameRef.current;
-    const segmentList = segmentsRef.current as string[];
-    if (isOnAuthRoute(currentPath, segmentList)) return;
-
+    const segmentList = segments as string[];
+    if (isOnAuthRoute(pathname, segmentList)) return;
     if (hasRedirectedToLoginRef.current) return;
-    hasRedirectedToLoginRef.current = true;
 
+    hasRedirectedToLoginRef.current = true;
     logRedirect('signed-out', {
-      from: currentPath,
+      from: pathname,
       to: '/(auth)/login',
       reason: user?.isAnonymous ? 'anonymous-session' : 'signed-out',
     });
     router.replace('/(auth)/login' as never);
-  }, [authReady, loading, router, user]);
+  }, [authReady, loading, pathname, router, segments, user]);
 
   return null;
 }
@@ -107,10 +95,6 @@ export const linking = {
   },
 };
 
-/**
- * Root: providers + `<Slot />`.
- * `StartupRedirectOrchestrator` owns signed-in role landing (including `/` with empty segments).
- */
 export default function RootLayout() {
   useDevProviderMount('RootLayout');
 
@@ -133,12 +117,12 @@ export default function RootLayout() {
           <View style={styles.ltrRoot}>
             <AuthProvider>
               <CartProvider>
-                <AppBootstrapGate>
+                <BootstrapShell>
+                  <Slot />
                   <SignedOutRouteGuard />
                   <StartupRedirectOrchestrator />
                   <RouteGroupMonitor />
-                  <Slot />
-                </AppBootstrapGate>
+                </BootstrapShell>
               </CartProvider>
             </AuthProvider>
           </View>

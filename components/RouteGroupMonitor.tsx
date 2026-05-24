@@ -1,8 +1,8 @@
 import { assertRoleRouteGroup } from '@/lib/routeAssertion';
 import { canRunRouteGroupDiagnostics } from '@/lib/router/hydration';
 import { normalizeRoleForRouting } from '@/lib/authRole';
+import { useBootstrap } from '@/contexts/BootstrapContext';
 import { useAuth } from '@/services/AuthContext';
-import { logRouterReady } from '@/utils/startupDiagnostics';
 import { usePathname, useSegments } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 
@@ -11,11 +11,14 @@ export function RouteGroupMonitor() {
   const pathname = usePathname();
   const segments = useSegments();
   const { authReady, roleResolved, firestoreUserRole } = useAuth();
+  const { routerReady, interactive } = useBootstrap();
   const role = normalizeRoleForRouting(firestoreUserRole);
   const segmentList = segments as string[];
-  const settledLoggedRef = useRef(false);
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    if (!interactive || !routerReady) return;
+
     const ctx = {
       authReady,
       roleResolved,
@@ -25,11 +28,6 @@ export function RouteGroupMonitor() {
 
     if (!canRunRouteGroupDiagnostics(ctx)) return;
 
-    if (!settledLoggedRef.current) {
-      settledLoggedRef.current = true;
-      logRouterReady({ pathname, segments: segmentList, role });
-    }
-
     assertRoleRouteGroup({
       role,
       pathname,
@@ -37,7 +35,8 @@ export function RouteGroupMonitor() {
       authReady,
       roleResolved,
     });
-  }, [authReady, pathname, role, roleResolved, segmentList]);
+    ranRef.current = true;
+  }, [authReady, interactive, pathname, role, roleResolved, routerReady, segmentList]);
 
   return null;
 }

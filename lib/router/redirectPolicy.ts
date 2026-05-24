@@ -13,7 +13,7 @@ import {
   isInsideCorrectRoleShell,
   isWrongGroupForRole,
 } from '@/lib/routeGroups';
-import { isRootEntryPathname } from '@/lib/router/hydration';
+import { isRootEntryPathname, isRouterReadyForRecovery } from '@/lib/router/hydration';
 import type { UserRole } from '@/services/userService';
 
 export type RedirectDecision =
@@ -27,12 +27,10 @@ export function evaluateRoleRedirect(params: {
   pathname: string;
   segments: string[];
   sessionAlreadyDone: boolean;
-  hydrationTimedOut: boolean;
 }): RedirectDecision {
-  const { uid, role, pathname, segments, sessionAlreadyDone, hydrationTimedOut } = params;
+  const { uid, role, pathname, segments, sessionAlreadyDone } = params;
   const normalized = normalizeRoleForRouting(role);
   const targetRoute = getRouteForRole(normalized);
-  const sessionKey = roleLandingKey(uid, role);
 
   if (sessionAlreadyDone) {
     return { action: 'skip', reason: 'session-already-redirected' };
@@ -47,7 +45,7 @@ export function evaluateRoleRedirect(params: {
   }
 
   if (isWrongGroupForRole(normalized, segments, pathname)) {
-    if (!hydrationTimedOut && isRootEntryPathname(pathname) && segments.length === 0) {
+    if (!isRouterReadyForRecovery(pathname, segments)) {
       return { action: 'skip', reason: 'wrong-group-waiting-route-context' };
     }
     return { action: 'redirect', reason: 'wrong-route-group-recovery', targetRoute };
@@ -61,7 +59,6 @@ export function evaluateRoleRedirect(params: {
     return { action: 'skip', reason: 'not-app-entry-point' };
   }
 
-  /** Entry landing from `/` — segments may stay empty until replace runs. */
   if (isRootEntryPathname(pathname) || isAtAppEntryPoint(pathname, segments)) {
     return { action: 'redirect', reason: 'entry-landing-by-role', targetRoute };
   }

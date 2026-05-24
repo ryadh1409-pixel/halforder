@@ -1,5 +1,5 @@
+import { useBootstrap } from '@/contexts/BootstrapContext';
 import { getRouteForRole, logAuthRoleDetected, logAuthRoleRouted, normalizeRoleForRouting } from '@/lib/authRole';
-import { isRegisteredAuthUser } from '@/lib/authSession';
 import { evaluateRoleRedirect, sessionKeyForRole } from '@/lib/router/redirectPolicy';
 import { isRootEntryPathname } from '@/lib/router/hydration';
 import {
@@ -7,64 +7,86 @@ import {
   completedRoleRedirects,
   markRedirectCompleted,
 } from '@/lib/startup/state';
-import {
-  logAuth,
-  logFailsafe,
-  logGuard,
-  logHydration,
-  logRedirect,
-  logRouterReady,
-} from '@/utils/startupDiagnostics';
 import { useAuth } from '@/services/AuthContext';
+import {
+  logGuard,
+  logRedirect,
+  markRedirectStart,
+} from '@/utils/startupDiagnostics';
 import { usePathname, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 
-const HYDRATION_FAILSAFE_MS = 2500;
+/** Last-resort only — not used for normal hydration completion. */
+const EMERGENCY_STUCK_MS = __DEV__ ? 8000 : 12000;
 
 /**
  * Single owner of signed-in role landing redirects.
- * Entry redirect from `/` never waits for segments (Expo may keep segments [] at index).
+ * Runs only when bootstrap machine reports {@link shouldRedirect}.
  */
 export function StartupRedirectOrchestrator() {
   const pathname = usePathname();
   const segments = useSegments();
   const router = useRouter();
-  const { authReady, roleResolved, firestoreUserRole: role, user, loading } = useAuth();
+  const { shouldRedirect, routerReady, redirectSettled } = useBootstrap();
+  const { firestoreUserRole: role, user } = useAuth();
 
   const redirectInFlightRef = useRef(false);
   const redirectCompletedRef = useRef(false);
-  const hydrationTimedOutRef = useRef(false);
-  const failsafeLoggedRef = useRef(false);
   const prevUidRef = useRef<string | null>(null);
-
-  const isReady =
-    authReady && roleResolved && !loading && isRegisteredAuthUser(user) && Boolean(role);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const uid = user?.uid ?? null;
-    if (prevUidRef.current !== uid) {
-      if (prevUidRef.current) {
-        clearStartupNavigationState();
-      }
-      prevUidRef.current = uid;
-      redirectInFlightRef.current = false;
-      redirectCompletedRef.current = false;
-      hydrationTimedOutRef.current = false;
-      failsafeLoggedRef.current = false;
+    if (prevUidRef.current === uid) return;
+
+    if (prevUidRef.current) {
+      clearStartupNavigationState();
+    }
+    prevUidRef.current = uid;
+    redirectInFlightRef.current = false;
+    redirectCompletedRef.current = false;
+
+    if (stuckTimerRef.current) {
+      clearTimeout(stuckTimerRef.current);
+      stuckTimerRef.current = null;
     }
   }, [user?.uid]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (hydrationTimedOutRef.current) return;
-      hydrationTimedOutRef.current = true;
-      logHydration('failsafe-timeout', { ms: HYDRATION_FAILSAFE_MS });
-    }, HYDRATION_FAILSAFE_MS);
-    return () => clearTimeout(timer);
-  }, [user?.uid]);
+    if (!shouldRedirect || !role || !user?.uid || !routerReady) return;
+
+    if (stuckTimerRef.current) return;
+    stuckTimerRef.current = setTimeout(() => {
+      if (redirectCompletedRef.current || redirectSettled) return;
+      if (!isRootEntryPathname(pathname)) return;
+
+      const normalized = normalizeRoleForRouting(role);
+      const targetRoute = getRouteForRole(normalized);
+      const sessionKey = sessionKeyForRole(user.uid, role);
+
+      if (redirectInFlightRef.current || completedRoleRedirects.has(sessionKey)) return;
+
+      redirectInFlightRef.current = true;
+      redirectCompletedRef.current = true;
+      markRedirectCompleted(targetRoute, sessionKey);
+      logRedirect('emergency-stuck-root', {
+        from: pathname,
+        to: targetRoute,
+        ms: EMERGENCY_STUCK_MS,
+      });
+      router.replace(targetRoute as never);
+    }, EMERGENCY_STUCK_MS);
+
+    return () => {
+      if (stuckTimerRef.current) {
+        clearTimeout(stuckTimerRef.current);
+        stuckTimerRef.current = null;
+      }
+    };
+  }, [shouldRedirect, role, user?.uid, routerReady, pathname, redirectSettled, router]);
 
   useEffect(() => {
-    if (!isReady || !role || !user?.uid) return;
+    if (!shouldRedirect || !role || !user?.uid || !routerReady) return;
 
     const segmentList = segments as string[];
     const normalized = normalizeRoleForRouting(role);
@@ -72,43 +94,16 @@ export function StartupRedirectOrchestrator() {
     const sessionKey = sessionKeyForRole(user.uid, role);
     const sessionAlreadyDone = completedRoleRedirects.has(sessionKey);
 
-    logAuth('ready', { uid: user.uid, role: normalized, pathname });
-
-    if (!isRootEntryPathname(pathname) || segmentList.length > 0) {
-      logRouterReady({ pathname, segments: segmentList });
-    }
-
     const decision = evaluateRoleRedirect({
       uid: user.uid,
       role,
       pathname,
       segments: segmentList,
       sessionAlreadyDone,
-      hydrationTimedOut: hydrationTimedOutRef.current,
     });
 
     if (decision.action === 'skip') {
       logGuard('StartupRedirect', { action: 'skip', reason: decision.reason, pathname, segments: segmentList });
-
-      /** Emergency: stuck on `/` with auth+role — never wait forever. */
-      if (
-        isRootEntryPathname(pathname) &&
-        (hydrationTimedOutRef.current || !redirectCompletedRef.current)
-      ) {
-        if (hydrationTimedOutRef.current && !redirectInFlightRef.current && !sessionAlreadyDone) {
-          if (!failsafeLoggedRef.current) {
-            failsafeLoggedRef.current = true;
-            logFailsafe('emergency-entry-redirect', { pathname, role: normalized, targetRoute });
-          }
-          redirectInFlightRef.current = true;
-          redirectCompletedRef.current = true;
-          markRedirectCompleted(targetRoute, sessionKey);
-          logRedirect('emergency', { from: pathname, to: targetRoute, role: normalized });
-          logAuthRoleDetected(normalized, user.uid);
-          logAuthRoleRouted(normalized, targetRoute, user.uid);
-          router.replace(targetRoute as never);
-        }
-      }
       return;
     }
 
@@ -123,6 +118,10 @@ export function StartupRedirectOrchestrator() {
         });
       }
       redirectInFlightRef.current = false;
+      if (stuckTimerRef.current) {
+        clearTimeout(stuckTimerRef.current);
+        stuckTimerRef.current = null;
+      }
       return;
     }
 
@@ -132,6 +131,7 @@ export function StartupRedirectOrchestrator() {
 
     redirectInFlightRef.current = true;
     redirectCompletedRef.current = true;
+    markRedirectStart();
     markRedirectCompleted(decision.targetRoute, sessionKey);
     logRedirect(decision.reason, {
       from: pathname,
@@ -142,7 +142,12 @@ export function StartupRedirectOrchestrator() {
     logAuthRoleDetected(normalized, user.uid);
     logAuthRoleRouted(normalized, targetRoute, user.uid);
     router.replace(decision.targetRoute as never);
-  }, [isReady, loading, pathname, role, router, segments, user?.uid]);
+
+    if (stuckTimerRef.current) {
+      clearTimeout(stuckTimerRef.current);
+      stuckTimerRef.current = null;
+    }
+  }, [shouldRedirect, pathname, role, router, routerReady, segments, user?.uid]);
 
   return null;
 }
