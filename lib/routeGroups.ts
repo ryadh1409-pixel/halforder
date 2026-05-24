@@ -14,6 +14,14 @@ export function isInDriverGroup(segments: string[], pathname: string): boolean {
   return false;
 }
 
+/** True when Expo Router segments place the user inside the restaurant host group. */
+export function isInHostGroup(segments: string[], pathname: string): boolean {
+  if (segments[0] === '(host)') return true;
+  if (segments.includes('(host)')) return true;
+  if (pathname.includes('(host)')) return true;
+  return false;
+}
+
 /** True when Expo Router segments place the user inside the customer tabs group. */
 export function isInTabsGroup(segments: string[], pathname: string): boolean {
   if (segments[0] === '(tabs)') return true;
@@ -59,7 +67,7 @@ export function isInsideCorrectRoleShell(
     case 'driver':
       return isInDriverGroup(segments, pathname);
     case 'restaurant':
-      return segments[0] === '(host)' || pathname.includes('(host)');
+      return isInHostGroup(segments, pathname);
     case 'admin':
       return pathname.startsWith('/admin') || segments[0] === 'admin';
     case 'user':
@@ -80,6 +88,9 @@ export function isWrongGroupForRole(
   }
   if (normalized === 'user') {
     return isInDriverGroup(segments, pathname) && !isInTabsGroup(segments, pathname);
+  }
+  if (normalized === 'restaurant') {
+    return isInTabsGroup(segments, pathname) && !isInHostGroup(segments, pathname);
   }
   return false;
 }

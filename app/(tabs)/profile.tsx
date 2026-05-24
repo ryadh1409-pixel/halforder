@@ -1208,7 +1208,7 @@ export default function ProfileScreen() {
               <Text style={dynamicStyles.label}>Host</Text>
               <TouchableOpacity
                 style={dynamicStyles.primaryButton}
-                onPress={() => router.push('/(tabs)/host' as never)}
+                onPress={() => router.push('/(host)/dashboard' as never)}
               >
                 <Text style={dynamicStyles.primaryButtonText}>Open Host Dashboard</Text>
               </TouchableOpacity>

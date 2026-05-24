@@ -129,3 +129,19 @@ export function showNotice(title: string, message: string): void {
     autoHide: true,
   });
 }
+
+/** Snackbar-style toast with tap-to-undo (5s). */
+export function showUndoToast(message: string, onUndo: () => void): void {
+  Toast.show({
+    type: 'info',
+    text1: message,
+    text2: 'Tap to undo',
+    position: 'bottom',
+    visibilityTime: 5000,
+    autoHide: true,
+    onPress: () => {
+      Toast.hide();
+      onUndo();
+    },
+  });
+}

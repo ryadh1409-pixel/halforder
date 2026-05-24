@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 
-/** Restaurant / host operations — primary UI remains `(tabs)/host`; this group is for future deep links. */
+/** Restaurant deep links — primary shell is `(host)`; legacy `(tabs)/host` redirects here. */
 export default function RestaurantLayout() {
   return (
     <Stack

@@ -32,14 +32,12 @@ export const CUSTOMER_TAB_NAMES = [
   'profile',
 ] as const;
 
-export const RESTAURANT_TAB_NAMES = ['host', 'orders', 'menu', 'profile'] as const;
-
 export const ADMIN_EXTRA_TAB_NAMES = ['admin'] as const;
 
 export function visibleTabNamesForRole(role: TabsShellRole): string[] {
   switch (role) {
     case 'restaurant':
-      return [...RESTAURANT_TAB_NAMES];
+      return [];
     case 'admin':
       return [...CUSTOMER_TAB_NAMES, ...ADMIN_EXTRA_TAB_NAMES];
     case 'driver':

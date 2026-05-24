@@ -25,5 +25,5 @@ export function isOwnerHost(
 /** Roles allowed to see the Driver tab in `(tabs)` (see `app/(tabs)/driver.tsx`). */
 export const DRIVER_TAB_ROLES: readonly UserRole[] = ['driver', 'admin'];
 
-/** Roles allowed to see the Host tab in `(tabs)` (see `app/(tabs)/host.tsx`). */
+/** Roles allowed to access the restaurant host shell (`app/(host)/*`). */
 export const HOST_TAB_ROLES: readonly UserRole[] = ['restaurant', 'host'];

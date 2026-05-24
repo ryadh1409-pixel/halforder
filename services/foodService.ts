@@ -26,6 +26,8 @@ export type FoodItem = {
   popular: boolean;
   recommended: boolean;
   promotion: string | null;
+  /** Parsed from Firestore `updatedAt` for image cache busting. */
+  updatedAtMs: number | null;
 };
 
 export async function addFoodItem(payload: {
@@ -36,15 +38,17 @@ export async function addFoodItem(payload: {
   available: boolean;
   description: string;
   category: string;
-}): Promise<void> {
-  await addDoc(collection(db, 'restaurants', payload.restaurantId, 'menuItems'), {
+}): Promise<string> {
+  const docRef = await addDoc(collection(db, 'restaurants', payload.restaurantId, 'menuItems'), {
     ...payload,
     tags: [],
     popular: false,
     recommended: false,
     promotion: null,
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
+  return docRef.id;
 }
 
 export function getFoodItems(
@@ -66,6 +70,17 @@ export function getFoodItems(
               Array.isArray(tagsRaw)
                 ? tagsRaw.filter((t): t is string => typeof t === 'string')
                 : [];
+            const updatedAt = data.updatedAt;
+            const updatedAtMs =
+              updatedAt &&
+              typeof updatedAt === 'object' &&
+              'toMillis' in updatedAt &&
+              typeof (updatedAt as { toMillis: () => number }).toMillis === 'function'
+                ? (updatedAt as { toMillis: () => number }).toMillis()
+                : typeof (updatedAt as { seconds?: number })?.seconds === 'number'
+                  ? (updatedAt as { seconds: number }).seconds * 1000
+                  : null;
+
             return {
               id: d.id,
               name: typeof data.name === 'string' ? data.name : 'Food item',
@@ -83,6 +98,7 @@ export function getFoodItems(
                 typeof data.promotion === 'string' && data.promotion.trim()
                   ? data.promotion.trim()
                   : null,
+              updatedAtMs,
             };
           }),
         );
@@ -114,7 +130,22 @@ export async function updateFoodItem(
     >
   >,
 ): Promise<void> {
-  await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', itemId), updates);
+  await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', itemId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Atomic menu image write (Storage URL + `updatedAt`). */
+export async function setFoodItemImage(
+  restaurantId: string,
+  itemId: string,
+  imageUrl: string | null,
+): Promise<void> {
+  await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', itemId), {
+    image: imageUrl,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function deleteFoodItem(restaurantId: string, itemId: string): Promise<void> {

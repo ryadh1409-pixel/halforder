@@ -1,27 +1,7 @@
-import { normalizeRoleForRouting } from '@/lib/authRole';
-import { isRegisteredAuthUser } from '@/lib/authSession';
-import HostDashboardScreen from '@/screens/HostDashboardScreen';
-import { useAuth } from '@/services/AuthContext';
+import { HOST_ROUTES } from '@/lib/navigationPaths';
 import { Redirect } from 'expo-router';
-import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
 
-/** Restaurant dashboard tab — only `restaurant` / legacy `host` roles. */
-export default function HostTabScreen() {
-  const { user, loading, firestoreUserRole } = useAuth();
-  const role = normalizeRoleForRouting(loading ? null : firestoreUserRole);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
-  if (!isRegisteredAuthUser(user) || role !== 'restaurant') {
-    return <Redirect href="/(tabs)" />;
-  }
-
-  return <HostDashboardScreen />;
+/** Legacy `(tabs)/host` — restaurant UI lives in `(host)`. */
+export default function LegacyHostTabRedirect() {
+  return <Redirect href={HOST_ROUTES.dashboard} />;
 }

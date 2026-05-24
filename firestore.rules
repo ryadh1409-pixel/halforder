@@ -1088,8 +1088,123 @@ service cloud.firestore {
     function marketplaceOrderPatchKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function orderRestaurantId(d) {
+      return d.get('restaurantId', d.get('venueId', ''));
+    }
     function isRestaurantVendorActor(d) {
-      return d.restaurantId is string && d.restaurantId == request.auth.uid;
+      return orderRestaurantId(d) == request.auth.uid;
+    }
+    /**
+     * Restaurant marketplace owner — strict `restaurantId` match (batch-safe).
+     * Documents without `restaurantId` cannot be mutated via dashboard rules.
+     */
+    function isRestaurantOwner() {
+      return isAuthenticated()
+        && resource.data.restaurantId is string
+        && resource.data.restaurantId.size() > 0
+        && resource.data.restaurantId == request.auth.uid
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+    }
+    /** Whitelist for restaurant dashboard writes (archive + kitchen status). */
+    function onlyAllowedRestaurantFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'archivedByRestaurant',
+        'archivedAt',
+        'hiddenForRestaurant',
+        'hiddenAt',
+        'restoredAt',
+        'updatedAt',
+        'status',
+        'deliveryStatus',
+        'acceptedAt',
+        'preparedAt',
+        'readyAt',
+        'estimatedDeliveryTime',
+        'estimatedPrepTime',
+        'estimatedDeliveryMinutes',
+        'notes',
+        'rejectionReason',
+        'driverId',
+      ]);
+    }
+    /** Payment, identity, totals, and Stripe fields must never change on restaurant patches. */
+    function restaurantProtectedFieldsUnchanged() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('customerName', '') == after.get('customerName', '')
+        && before.get('customerPhone', '') == after.get('customerPhone', '')
+        && before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && before.get('stripePaymentIntentId', '') == after.get('stripePaymentIntentId', '')
+        && before.get('paymentIntentId', '') == after.get('paymentIntentId', '')
+        && before.get('checkoutSessionId', '') == after.get('checkoutSessionId', '')
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('subtotal', 0) == after.get('subtotal', 0)
+        && before.get('tax', 0) == after.get('tax', 0)
+        && before.get('deliveryFee', 0) == after.get('deliveryFee', 0)
+        && before.get('fees', 0) == after.get('fees', 0)
+        && before.get('taxes', 0) == after.get('taxes', 0)
+        && before.get('items', []) == after.get('items', [])
+        && before.get('assignedDriverId', '') == after.get('assignedDriverId', '')
+        && before.get('driverName', '') == after.get('driverName', '')
+        && before.get('driverPhone', '') == after.get('driverPhone', '')
+        && before.get('driverVehicle', '') == after.get('driverVehicle', '');
+    }
+    function optionalOrderTimestampOk(field) {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny([field])
+        || request.resource.data[field] == request.time
+        || (
+          keys.hasAny([field])
+          && resource.data.get(field, null) != null
+          && request.resource.data.get(field, null) == null
+        );
+    }
+    function restaurantVisibilityFieldTypesOk() {
+      return request.resource.data.get('hiddenForRestaurant', false) is bool
+        && request.resource.data.get('archivedByRestaurant', false) is bool
+        && optionalOrderTimestampOk('archivedAt')
+        && optionalOrderTimestampOk('hiddenAt')
+        && optionalOrderTimestampOk('restoredAt')
+        && optionalOrderTimestampOk('acceptedAt')
+        && optionalOrderTimestampOk('preparedAt')
+        && optionalOrderTimestampOk('readyAt')
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          || request.resource.data.status is string
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveryStatus'])
+          || request.resource.data.deliveryStatus is string
+        );
+    }
+  /** Restaurant may clear `driverId` when marking ready; cannot assign a driver (drivers claim separately). */
+    function restaurantDriverIdPatchOk() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['driverId'])
+        || resource.data.get('driverId', '') == request.resource.data.get('driverId', '')
+        || (
+          restaurantMustNotAssignDriver(resource.data, request.resource.data)
+          && !(request.resource.data.get('driverId', '') is string
+            && request.resource.data.get('driverId', '').size() > 0)
+        );
+    }
+    /**
+     * Restaurant dashboard: archive / hide / restore / kitchen status.
+     * Isolated from customer & driver patches; safe for writeBatch (per-doc evaluation).
+     */
+    function restaurantDashboardPatchOk() {
+      return isRestaurantOwner()
+        && onlyAllowedRestaurantFieldsChanged()
+        && restaurantProtectedFieldsUnchanged()
+        && restaurantVisibilityFieldTypesOk()
+        && restaurantDriverIdPatchOk()
+        && request.resource.data.updatedAt == request.time;
     }
     function customerCancelStatusOk(before, after) {
       return after.status == 'cancelled'
@@ -1351,6 +1466,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && (
           isAdmin()
+          || restaurantDashboardPatchOk()
           || isSwipeAcceptUpdate()
           || isParticipantsJoinUpdate()
           || isParticipantsJoinWithExtrasUpdate()

@@ -1,5 +1,6 @@
 /**
  * Pick an image from the library and upload to Firebase Storage.
+ * Restaurant menu items: use `services/menuImageService.ts` (`restaurants/{id}/menu/...`).
  */
 import * as ImagePicker from 'expo-image-picker';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';

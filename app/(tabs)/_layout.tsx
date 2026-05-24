@@ -19,7 +19,6 @@ export default function TabLayout() {
   );
 
   const customerTabs = { allow: ['user', 'admin'] as const };
-  const restaurantTabs = { allow: ['restaurant'] as const };
 
   return (
     <Tabs
@@ -61,18 +60,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen name="ai" options={HIDDEN_TAB} />
-      <Tabs.Screen
-        name="orders"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.orders, restaurantTabs),
-        }}
-      />
+      <Tabs.Screen name="orders" options={HIDDEN_TAB} />
       <Tabs.Screen name="home" options={HIDDEN_TAB} />
       <Tabs.Screen
         name="profile"
         options={{
           href: tabHrefForRole(role, TABS_ROUTES.profile, {
-            allow: ['user', 'admin', 'restaurant'],
+            allow: ['user', 'admin'],
           }),
         }}
       />
@@ -84,19 +78,9 @@ export default function TabLayout() {
           }),
         }}
       />
-      <Tabs.Screen
-        name="host"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.host, restaurantTabs),
-        }}
-      />
+      <Tabs.Screen name="host" options={HIDDEN_TAB} />
       <Tabs.Screen name="driver" options={HIDDEN_TAB} />
-      <Tabs.Screen
-        name="menu"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.menu, restaurantTabs),
-        }}
-      />
+      <Tabs.Screen name="menu" options={HIDDEN_TAB} />
     </Tabs>
   );
 }

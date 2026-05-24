@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -209,8 +210,15 @@ export default function CartScreen() {
         ) : (
           cartItems.map((item) => (
             <View key={item.id} style={styles.card}>
-              <Text style={styles.name}>{item.qty}x {item.name}</Text>
-              <Text style={styles.price}>${(item.price * item.qty).toFixed(2)}</Text>
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={styles.lineThumb} />
+              ) : (
+                <View style={[styles.lineThumb, styles.lineThumbPh]} />
+              )}
+              <View style={styles.lineBody}>
+                <Text style={styles.name}>{item.qty}x {item.name}</Text>
+                <Text style={styles.price}>${(item.price * item.qty).toFixed(2)}</Text>
+              </View>
             </View>
           ))
         )}
@@ -286,9 +294,18 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
   },
-  name: { color: '#0F172A', fontWeight: '700' },
+  lineThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#e2e8f0',
+  },
+  lineThumbPh: { backgroundColor: '#f1f5f9' },
+  lineBody: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  name: { color: '#0F172A', fontWeight: '700', flex: 1, paddingRight: 8 },
   price: { color: '#16A34A', fontWeight: '800' },
   footer: {
     position: 'absolute',

@@ -28,13 +28,26 @@ export const DRIVER_TAB_HREFS: Record<DriverTabKey, Href> = {
 export const TABS_ROUTES = {
   hub: '/(tabs)',
   profile: '/(tabs)/profile',
-  orders: '/(tabs)/orders',
   cart: '/(tabs)/cart',
   swipe: '/(tabs)/swipe',
   explore: '/(tabs)/explore',
   search: '/(tabs)/search',
   driverEntry: '/(tabs)/driver',
-  host: '/(tabs)/host',
-  menu: '/(tabs)/menu',
   ai: '/(tabs)/ai',
 } as const;
+
+/** Restaurant / host operations — never under `(tabs)`. */
+export const HOST_ROUTES = {
+  hub: '/(host)',
+  dashboard: '/(host)/dashboard',
+  menu: '/(host)/menu',
+  orders: '/(host)/orders',
+} as const;
+
+export type HostTabKey = 'dashboard' | 'orders' | 'menu';
+
+export const HOST_TAB_HREFS: Record<HostTabKey, Href> = {
+  dashboard: HOST_ROUTES.dashboard,
+  orders: HOST_ROUTES.orders,
+  menu: HOST_ROUTES.menu,
+};

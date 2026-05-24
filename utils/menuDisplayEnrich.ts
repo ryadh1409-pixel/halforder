@@ -1,4 +1,5 @@
 import type { FoodItem } from '@/services/foodService';
+import { menuImageDisplayUri } from '@/utils/menuImageUrl';
 
 export type DisplayMenuItem = FoodItem & {
   /** Only when set on the menu item in Firestore (`promotion`). */
@@ -24,6 +25,7 @@ export function enrichMenuItem(item: FoodItem): DisplayMenuItem {
   const shortIngredients = item.description?.trim().slice(0, 72) ?? '';
   return {
     ...item,
+    image: menuImageDisplayUri(item.image, item.updatedAtMs) ?? item.image,
     offerLabel,
     shortIngredients,
   };

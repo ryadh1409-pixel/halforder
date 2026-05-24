@@ -1,32 +1,7 @@
-import { normalizeRoleForRouting } from '@/lib/authRole';
-import { isRegisteredAuthUser } from '@/lib/authSession';
-import SwipeWrapper from '@/components/SwipeWrapper';
-import MarketplaceOrdersScreen from '@/screens/MarketplaceOrdersScreen';
-import { useAuth } from '@/services/AuthContext';
+import { HOST_ROUTES } from '@/lib/navigationPaths';
 import { Redirect } from 'expo-router';
-import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
 
-/** Restaurant orders tab — `restaurant` role only (hidden from customer tab bar). */
-export default function OrdersTab() {
-  const { user, loading, firestoreUserRole } = useAuth();
-  const role = normalizeRoleForRouting(loading ? null : firestoreUserRole);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
-  if (!isRegisteredAuthUser(user) || role !== 'restaurant') {
-    return <Redirect href="/(tabs)" />;
-  }
-
-  return (
-    <SwipeWrapper currentIndex={0}>
-      <MarketplaceOrdersScreen />
-    </SwipeWrapper>
-  );
+/** Legacy `(tabs)/orders` — restaurant UI lives in `(host)`. */
+export default function LegacyOrdersTabRedirect() {
+  return <Redirect href={HOST_ROUTES.orders} />;
 }

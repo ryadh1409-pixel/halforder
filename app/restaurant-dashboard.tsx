@@ -11,23 +11,21 @@ import { AssignDriverModal } from '../components/AssignDriverModal';
 import { StatCard } from '../components/restaurant/StatCard';
 import { useDrivers } from '../hooks/useDrivers';
 import { useMenu } from '../hooks/useMenu';
-import { useRestaurantOrders } from '../hooks/useOrders';
+import { RestaurantOrdersPanel } from '../components/restaurant/RestaurantOrdersPanel';
+import { useRestaurantOrders } from '../hooks/useRestaurantOrders';
 import { useAuth } from '../services/AuthContext';
 import { assignDriverToOrder } from '../services/driverService';
 import { db } from '../services/firebase';
 import { addFoodItem, deleteFoodItem, updateFoodItem, type FoodItem } from '../services/foodService';
-import {
-    rejectOrder,
-    updateOrderStatus,
-    type OrderStatus,
-} from '../services/orderService';
 import { updateRestaurantOpen } from '../services/restaurantDashboard';
 import {
     fetchStripeConnectStatusExpo,
     startOnboarding,
     type StripeConnectStatus,
 } from '@/services/stripeConnect';
-import { pickAndUploadImage } from '../services/uploadImage';
+import { MenuItemImagePicker } from '../components/restaurant/MenuItemImagePicker';
+import { useMenuItemImageEditor } from '../hooks/useMenuItemImageEditor';
+import { menuImageDisplayUri } from '../utils/menuImageUrl';
 import { requireRole } from '../utils/requireRole';
 import { stripeConnectErrorMessage } from '../utils/stripeConnectErrors';
 import { showError, showSuccess } from '../utils/toast';
@@ -43,6 +41,7 @@ type RestaurantView = {
   /** From Stripe Connect + `account.updated` webhook / status sync. */
   stripeConnected: boolean;
   stripeChargesEnabled: boolean;
+  timezone: string | null;
 };
 
 /** Firestore `users/{uid}` — backend Stripe Connect writes here first. */
@@ -53,7 +52,11 @@ export default function RestaurantDashboardScreen() {
   const { user } = useAuth();
   const [restaurant, setRestaurant] = useState<RestaurantView | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState(true);
-  const { orders, loading: ordersLoading } = useRestaurantOrders(restaurant?.id);
+  const { allOrders: orders, loading: ordersLoading } = useRestaurantOrders({
+    restaurantId: restaurant?.id,
+    restaurantTimeZone: restaurant?.timezone,
+    filter: 'active',
+  });
   const { drivers, loading: driversLoading } = useDrivers();
   const { items: menu, loading: menuLoading } = useMenu(restaurant?.id);
   const [menuModalOpen, setMenuModalOpen] = useState(false);
@@ -62,11 +65,18 @@ export default function RestaurantDashboardScreen() {
   const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
-  const [itemImage, setItemImage] = useState<string | null>(null);
   const [itemAvailable, setItemAvailable] = useState(true);
   const [itemDescription, setItemDescription] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [savingItem, setSavingItem] = useState(false);
+
+  const menuItemImage = useMenuItemImageEditor({
+    restaurantId: restaurant?.id,
+    itemId: editingItem?.id,
+    initialImageUrl: editingItem?.image ?? null,
+    initialUpdatedAtMs: editingItem?.updatedAtMs ?? null,
+    active: menuModalOpen,
+  });
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeStatusLoading, setStripeStatusLoading] = useState(false);
   const [stripeConnectStatus, setStripeConnectStatus] = useState<StripeConnectStatus | null>(null);
@@ -93,7 +103,7 @@ export default function RestaurantDashboardScreen() {
     setStripeStatusLoading(true);
     try {
       const data = await fetchStripeConnectStatusExpo(restaurant.id);
-      console.log('[restaurant-dashboard] Stripe status parsed', data);
+      if (__DEV__) console.log('[restaurant-dashboard] Stripe status parsed', data);
       setStripeConnectStatus(data);
     } catch (e) {
       console.warn('[restaurant-dashboard] stripe-status failed (non-fatal)', e);
@@ -140,7 +150,7 @@ export default function RestaurantDashboardScreen() {
     const unsub = onSnapshot(
       doc(db, 'restaurants', user.uid),
       (snap) => {
-        console.log('[restaurant-dashboard] fetching restaurant for', user.uid);
+        if (__DEV__) console.log('[restaurant-dashboard] fetching restaurant for', user.uid);
         if (!snap.exists()) {
           setRestaurant(null);
           setRestaurantLoading(false);
@@ -158,6 +168,12 @@ export default function RestaurantDashboardScreen() {
             typeof data.stripeAccountId === 'string' ? data.stripeAccountId : null,
           stripeConnected: data.stripeConnected === true,
           stripeChargesEnabled: data.stripeChargesEnabled === true,
+          timezone:
+            typeof data.timezone === 'string' && data.timezone.trim()
+              ? data.timezone.trim()
+              : typeof data.timeZone === 'string' && data.timeZone.trim()
+                ? data.timeZone.trim()
+                : null,
         });
         setRestaurantLoading(false);
       },
@@ -195,60 +211,6 @@ export default function RestaurantDashboardScreen() {
     }
   }
 
-  async function handleOrderStatus(orderId: string, status: OrderStatus) {
-    try {
-      await updateOrderStatus(orderId, status);
-      showSuccess('Order updated');
-    } catch (error) {
-      console.log('[restaurant-dashboard] failed to update order status', error);
-      showError('Unable to update order.');
-    }
-  }
-
-  async function handleRejectOrder(orderId: string) {
-    try {
-      await rejectOrder(orderId);
-      showSuccess('Order rejected');
-    } catch (error) {
-      console.log('[restaurant-dashboard] failed to reject order', error);
-      showError('Could not reject order.');
-    }
-  }
-
-  const incomingOrders = useMemo(
-    () =>
-      orders.filter(
-        (o) =>
-          o.status !== 'awaiting_payment' &&
-          ['pending', 'restaurant_accepted', 'preparing', 'ready_for_pickup'].includes(o.status),
-      ),
-    [orders],
-  );
-
-  function statusBadgeStyle(status: OrderStatus): { bg: string; fg: string } {
-    switch (status) {
-      case 'awaiting_payment':
-        return { bg: '#E2E8F0', fg: '#334155' };
-      case 'pending':
-        return { bg: '#FEF3C7', fg: '#92400E' };
-      case 'restaurant_accepted':
-        return { bg: '#DBEAFE', fg: '#1E40AF' };
-      case 'preparing':
-        return { bg: '#E0E7FF', fg: '#3730A3' };
-      case 'ready_for_pickup':
-        return { bg: '#D1FAE5', fg: '#065F46' };
-      case 'picked_up':
-      case 'on_the_way':
-        return { bg: '#CCFBF1', fg: '#0F766E' };
-      case 'delivered':
-        return { bg: '#ECFDF5', fg: '#166534' };
-      case 'rejected':
-        return { bg: '#FEE2E2', fg: '#991B1B' };
-      default:
-        return { bg: '#F1F5F9', fg: '#475569' };
-    }
-  }
-
   function openAssignDriverModal(orderId: string) {
     setSelectedOrderId(orderId);
     setAssignDriverModalOpen(true);
@@ -281,7 +243,7 @@ export default function RestaurantDashboardScreen() {
     setEditingItem(null);
     setItemName('');
     setItemPrice('');
-    setItemImage(null);
+    menuItemImage.reset(null, null);
     setItemAvailable(true);
     setItemDescription('');
     setItemCategory('');
@@ -292,30 +254,16 @@ export default function RestaurantDashboardScreen() {
     setEditingItem(item);
     setItemName(item.name);
     setItemPrice(String(item.price));
-    setItemImage(item.image);
+    menuItemImage.reset(item.image, item.updatedAtMs);
     setItemAvailable(item.available);
     setItemDescription(item.description ?? '');
     setItemCategory(item.category ?? '');
     setMenuModalOpen(true);
   }
 
-  async function handlePickImage() {
-    if (!user?.uid) return;
-    const result = await pickAndUploadImage({
-      uid: user.uid,
-      folder: 'menu-items',
-    });
-    if (result.error) {
-      showError(result.error);
-      return;
-    }
-    if (result.url) {
-      setItemImage(result.url);
-    }
-  }
-
   async function saveMenuItem() {
     if (!restaurant?.id) return;
+    if (!menuItemImage.canSave) return;
     const trimmedName = itemName.trim();
     const parsedPrice = Number(itemPrice);
     if (!trimmedName) {
@@ -329,26 +277,29 @@ export default function RestaurantDashboardScreen() {
     setSavingItem(true);
     try {
       if (editingItem) {
+        const imageUrl = await menuItemImage.finalizeImageForItem(editingItem.id);
         await updateFoodItem(restaurant.id, editingItem.id, {
           name: trimmedName,
           price: parsedPrice,
-          image: itemImage,
+          image: imageUrl,
           available: itemAvailable,
           description: itemDescription.trim(),
           category: itemCategory.trim(),
         });
       } else {
-        await addFoodItem({
+        const newItemId = await addFoodItem({
           restaurantId: restaurant.id,
           name: trimmedName,
           price: parsedPrice,
-          image: itemImage,
+          image: menuItemImage.committedImageUrl,
           available: itemAvailable,
           description: itemDescription.trim(),
           category: itemCategory.trim(),
         });
+        await menuItemImage.finalizeImageForItem(newItemId);
       }
       setMenuModalOpen(false);
+      menuItemImage.reset(null, null);
       showSuccess('Menu item saved');
     } catch (error) {
       console.log('[restaurant-dashboard] failed to save menu item', error);
@@ -483,78 +434,14 @@ export default function RestaurantDashboardScreen() {
             <StatCard key={stat.label} label={stat.label} value={stat.value} />
           ))}
         </ScrollView>
-        <Text style={styles.sectionTitle}>Incoming orders (live)</Text>
-        {incomingOrders.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No active kitchen orders</Text>
-            <Text style={styles.emptySub}>New orders appear here instantly.</Text>
-          </View>
-        ) : (
-          incomingOrders.map((order) => {
-            const badge = statusBadgeStyle(order.status);
-            return (
-              <View key={order.id} style={styles.orderCard}>
-                <View style={styles.orderRow}>
-                  <Text style={styles.orderId}>#{order.id.slice(0, 8)}…</Text>
-                  <View style={[styles.statusPill, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.statusPillText, { color: badge.fg }]}>
-                      {order.status.replace('_', ' ')}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.orderMeta}>
-                  {order.items.map((x) => `${x.qty}× ${x.name}`).join(' · ') || 'No items'}
-                </Text>
-                <Text style={styles.orderMeta}>
-                  Total ${order.totalPrice.toFixed(2)} · Guest {order.userId.slice(0, 6)}…
-                </Text>
-                <Text style={styles.orderMeta}>Placed {order.createdAtLabel}</Text>
-                <View style={styles.orderActionRow}>
-                  {order.status === 'pending' ? (
-                    <>
-                      <Pressable
-                        style={styles.acceptButton}
-                        onPress={() => handleOrderStatus(order.id, 'restaurant_accepted')}
-                      >
-                        <Text style={styles.acceptButtonText}>Restaurant accepted</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.rejectButton}
-                        onPress={() => handleRejectOrder(order.id)}
-                      >
-                        <Text style={styles.rejectButtonText}>Reject</Text>
-                      </Pressable>
-                    </>
-                  ) : null}
-                  {order.status === 'restaurant_accepted' ? (
-                    <Pressable
-                      style={styles.secondaryOrderBtn}
-                      onPress={() => handleOrderStatus(order.id, 'preparing')}
-                    >
-                      <Text style={styles.secondaryOrderBtnText}>Preparing</Text>
-                    </Pressable>
-                  ) : null}
-                  {order.status === 'preparing' ? (
-                    <Pressable
-                      style={styles.readyButton}
-                      onPress={() => handleOrderStatus(order.id, 'ready_for_pickup')}
-                    >
-                      <Text style={styles.readyButtonText}>Mark ready for pickup</Text>
-                    </Pressable>
-                  ) : null}
-                  {order.status === 'ready_for_pickup' ? (
-                    <Pressable
-                      style={styles.secondaryOrderBtn}
-                      onPress={() => openAssignDriverModal(order.id)}
-                    >
-                      <Text style={styles.secondaryOrderBtnText}>Assign driver (optional)</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })
-        )}
+        {restaurant?.id ? (
+          <RestaurantOrdersPanel
+            restaurantId={restaurant.id}
+            restaurantTimeZone={restaurant.timezone}
+            title="Live orders"
+            onAssignDriver={openAssignDriverModal}
+          />
+        ) : null}
         <View style={styles.stripePaymentsSection}>
           <Text style={styles.stripePaymentsTitle}>💳 Payments</Text>
           {!stripeAccountIdEffective ? (
@@ -625,7 +512,18 @@ export default function RestaurantDashboardScreen() {
         ) : (
           menu.map((item) => (
             <View key={item.id} style={styles.menuCard}>
-              {item.image ? <Image source={{ uri: item.image }} style={styles.menuThumb} /> : <View style={styles.menuThumbPlaceholder} />}
+              {item.image ? (
+                <Image
+                  source={{
+                    uri:
+                      menuImageDisplayUri(item.image, item.updatedAtMs) ??
+                      item.image,
+                  }}
+                  style={styles.menuThumb}
+                />
+              ) : (
+                <View style={styles.menuThumbPlaceholder} />
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.menuName}>{item.name}</Text>
                 <Text style={styles.menuPrice}>${item.price.toFixed(2)}</Text>
@@ -697,23 +595,25 @@ export default function RestaurantDashboardScreen() {
                   <Text style={styles.label}>Available</Text>
                   <Switch value={itemAvailable} onValueChange={setItemAvailable} />
                 </View>
-                <Pressable style={styles.secondaryButton} onPress={handlePickImage}>
-                  <Text style={styles.secondaryButtonText}>
-                    {itemImage ? 'Change Image' : 'Upload Image'}
-                  </Text>
-                </Pressable>
-                {itemImage ? <Image source={{ uri: itemImage }} style={styles.logoPreview} /> : null}
+                <MenuItemImagePicker
+                  displayUri={menuItemImage.displayUri}
+                  isPicking={menuItemImage.isPicking}
+                  isUploading={menuItemImage.isUploading}
+                  uploadProgress={menuItemImage.uploadProgress}
+                  disabled={savingItem}
+                  onPick={() => void menuItemImage.pickImage()}
+                />
                 <Pressable
                   style={styles.primaryButton}
                   onPress={saveMenuItem}
-                  disabled={savingItem}
+                  disabled={savingItem || !menuItemImage.canSave}
                 >
                   {savingItem ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Item</Text>}
                 </Pressable>
                 <Pressable
                   style={styles.cancelButton}
                   onPress={() => setMenuModalOpen(false)}
-                  disabled={savingItem}
+                  disabled={savingItem || !menuItemImage.canSave}
                 >
                   <Text style={styles.cancelText}>Cancel</Text>
                 </Pressable>

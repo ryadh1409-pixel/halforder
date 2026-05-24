@@ -1,3 +1,4 @@
+import { formatOrderTime } from '@/utils/time';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { auth, db, ensureAuthReady } from './firebase';
 import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
@@ -21,6 +22,8 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
+
+const RESTAURANT_ORDERS_LIST_LIMIT = 120;
 
 /** Full delivery lifecycle (plus rejected / ready for handoff). */
 export type OrderStatus =
@@ -89,6 +92,12 @@ export type RestaurantOrder = {
   createdAtLabel: string;
   /** Firestore `createdAt` millis when available (for “today” stats). */
   createdAtMs: number | null;
+  /** Soft-archive: removed from default restaurant dashboard list. */
+  archivedByRestaurant: boolean;
+  hiddenForRestaurant: boolean;
+  archivedAtMs: number | null;
+  hiddenAtMs: number | null;
+  restoredAtMs: number | null;
   restaurant: RestaurantSnapshot;
   customer: CustomerSnapshot;
   driver: DriverSnapshot | null;
@@ -166,15 +175,14 @@ function parseLatLng(value: unknown): LatLng | null {
   return base;
 }
 
-function toCreatedAtLabel(value: unknown): string {
-  const ms = safeToMillis(value);
-  if (ms == null) return 'Now';
-  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function toCreatedAtLabel(value: unknown, timeZone?: string): string {
+  return formatOrderTime(value, { timeZone });
 }
 
 function mapDocToRestaurantOrder(
   d: { id: string; data: () => Record<string, unknown> },
   fallbackRestaurantId?: string,
+  options?: { timeZone?: string },
 ): RestaurantOrder {
   const data = d.data();
   warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
@@ -307,8 +315,13 @@ function mapDocToRestaurantOrder(
     restaurantLocation: restLoc,
     driverLocation: parseLatLng(data.driverLocation),
     notes: typeof data.notes === 'string' ? data.notes : null,
-    createdAtLabel: toCreatedAtLabel(data.createdAt),
+    createdAtLabel: toCreatedAtLabel(data.createdAt, options?.timeZone),
     createdAtMs: safeToMillis(data.createdAt),
+    archivedByRestaurant: data.archivedByRestaurant === true,
+    hiddenForRestaurant: data.hiddenForRestaurant === true,
+    archivedAtMs: safeToMillis(data.archivedAt),
+    hiddenAtMs: safeToMillis(data.hiddenAt),
+    restoredAtMs: safeToMillis(data.restoredAt),
     restaurant: {
       id:
         restaurantObj && typeof restaurantObj.id === 'string'
@@ -587,6 +600,11 @@ export async function createOrder(
     taxes: 0,
     etaMinutes: estimatedDeliveryTime,
     createdAt: serverTimestamp(),
+    hiddenForRestaurant: false,
+    archivedByRestaurant: false,
+    archivedAt: null,
+    hiddenAt: null,
+    restoredAt: null,
   };
 
   let ref;
@@ -645,27 +663,34 @@ export async function customerCancelMarketplaceOrder(orderId: string): Promise<v
   });
 }
 
+export type GetRestaurantOrdersOptions = {
+  timeZone?: string;
+};
+
 export function getOrders(
   restaurantId: string,
   onData: (orders: RestaurantOrder[]) => void,
+  options?: GetRestaurantOrdersOptions,
 ): Unsubscribe {
   const unsub = onSnapshot(
     query(
       collection(db, 'orders'),
       where('restaurantId', '==', restaurantId),
       orderBy('createdAt', 'desc'),
+      limit(RESTAURANT_ORDERS_LIST_LIMIT),
     ),
     (snap) => {
       try {
-        console.log('Current restaurant UID:', restaurantId);
-        console.log('Orders found:', snap.docs.length);
-        console.log(snap.docs.map((d) => d.data()));
         const rows = snap.docs.map((docSnap) =>
-          mapDocToRestaurantOrder(docSnap, restaurantId),
+          mapDocToRestaurantOrder(docSnap, restaurantId, {
+            timeZone: options?.timeZone,
+          }),
         );
         onData(rows);
       } catch (e) {
-        console.error('[getOrders:restaurantId]', e);
+        if (__DEV__) {
+          console.error('[getOrders:restaurantId]', e);
+        }
         onData([]);
       }
     },
@@ -761,13 +786,15 @@ export async function updateOrderStatus(
   if (normalizedStatus === 'arrived_customer') {
     patch.deliveryStatus = 'near_customer';
   }
-  console.log('[DRIVER FLOW] updateOrderStatus', {
-    orderId,
-    requestedStatus: status,
-    status: patch.status,
-    deliveryStatus: patch.deliveryStatus ?? null,
-    driverId: patch.driverId ?? '(unchanged)',
-  });
+  if (__DEV__) {
+    console.log('[DRIVER FLOW] updateOrderStatus', {
+      orderId,
+      requestedStatus: status,
+      status: patch.status,
+      deliveryStatus: patch.deliveryStatus ?? null,
+      driverId: patch.driverId ?? '(unchanged)',
+    });
+  }
   await updateDoc(doc(db, 'orders', orderId), patch);
 }
 

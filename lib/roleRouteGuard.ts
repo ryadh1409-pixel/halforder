@@ -1,7 +1,7 @@
 import { resetAuthSessionBootstrap } from '@/lib/authSessionBootstrap';
 import { resetAuthRoleLogs } from '@/lib/authRole';
 import { resetDriverStackLatch } from '@/lib/driverStack';
-import { isInDriverGroup, isInTabsGroup } from '@/lib/routeGroups';
+import { isInDriverGroup, isInHostGroup, isInTabsGroup } from '@/lib/routeGroups';
 import type { UserRole } from '@/services/userService';
 import { resetDevProviderMountCounts } from '@/utils/devBootstrapDiagnostics';
 import { resetDriverListenerLogs } from '@/utils/driverListenerLog';
@@ -110,7 +110,7 @@ export function isAlreadyOnRoleRoute(pathname: string, segments: string[], role:
     return isInDriverGroup(segments, pathname);
   }
   if (normalized === 'restaurant') {
-    return segments[0] === '(host)' || pathname.includes('(host)');
+    return isInHostGroup(segments, pathname);
   }
   if (normalized === 'admin') {
     return pathname.startsWith('/admin') || segments[0] === 'admin';

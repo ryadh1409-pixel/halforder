@@ -1,7 +1,7 @@
 import { systemConfirm } from '@/components/SystemDialogHost';
 import { useMenu } from '@/hooks/useMenu';
-import { useRestaurantOrders } from '@/hooks/useOrders';
-import OrderCard from '@/components/orders/OrderCard';
+import { RestaurantOrdersPanel } from '@/components/restaurant/RestaurantOrdersPanel';
+import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import {
   mergeHostRestaurantProfile,
   saveRestaurantVenueMain,
@@ -14,10 +14,15 @@ import {
   type FoodItem,
 } from '@/services/foodService';
 import { db } from '@/services/firebase';
-import { rejectOrder, updateOrderStatus } from '@/services/orderService';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { startOnboarding } from '@/services/stripeConnect';
-import { pickAndUploadImage } from '@/services/uploadImage';
+import { MenuItemImagePicker } from '@/components/restaurant/MenuItemImagePicker';
+import { useMenuItemImageEditor } from '@/hooks/useMenuItemImageEditor';
+import {
+  pickMenuImageFromLibrary,
+  uploadRestaurantLogo,
+} from '@/services/menuImageService';
+import { menuImageDisplayUri } from '@/utils/menuImageUrl';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { requireRole } from '@/utils/requireRole';
 import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
@@ -42,24 +47,12 @@ type RestaurantState = {
   logo: string | null;
   location: string;
   isOpen: boolean;
+  timezone: string | null;
 };
 
 const PRIMARY = '#16a34a';
 const PAGE = '#f8fafc';
 const CARD = '#ffffff';
-
-function relativeTime(createdAtMs: number | null): string {
-  if (!createdAtMs) return 'just now';
-  const diff = Date.now() - createdAtMs;
-  const sec = Math.max(1, Math.floor(diff / 1000));
-  if (sec < 60) return `${sec}s ago`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
-}
 
 function badgeTone(status: OrderStatus): { bg: string; text: string } {
   switch (status) {
@@ -102,14 +95,25 @@ export default function HostDashboardScreen() {
   const [stripeLoading, setStripeLoading] = useState(false);
 
   const { items: menu, loading: menuLoading } = useMenu(uid || null);
-  const { orders, loading: ordersLoading } = useRestaurantOrders(uid || null);
+  const { allOrders: orders, loading: ordersLoading } = useRestaurantOrders({
+    restaurantId: uid || undefined,
+    restaurantTimeZone: restaurant?.timezone,
+    filter: 'active',
+  });
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
-  const [itemImage, setItemImage] = useState<string | null>(null);
   const [savingItem, setSavingItem] = useState(false);
+
+  const menuItemImage = useMenuItemImageEditor({
+    restaurantId: uid || undefined,
+    itemId: editingItem?.id,
+    initialImageUrl: editingItem?.image ?? null,
+    initialUpdatedAtMs: editingItem?.updatedAtMs ?? null,
+    active: itemModalOpen,
+  });
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
 
@@ -137,6 +141,12 @@ export default function HostDashboardScreen() {
           logo: typeof data.logo === 'string' ? data.logo : null,
           location: typeof data.location === 'string' ? data.location : '',
           isOpen: data.isOpen !== false,
+          timezone:
+            typeof data.timezone === 'string' && data.timezone.trim()
+              ? data.timezone.trim()
+              : typeof data.timeZone === 'string' && data.timeZone.trim()
+                ? data.timeZone.trim()
+                : null,
         };
         setRestaurant(row);
         setNameDraft(row.name);
@@ -220,13 +230,12 @@ export default function HostDashboardScreen() {
     if (!uid) return;
     setUploadingLogo(true);
     try {
-      const { url, error: upErr } = await pickAndUploadImage({
-        uid,
-        folder: 'restaurantLogos',
-        quality: 0.88,
+      const picked = await pickMenuImageFromLibrary(0.88);
+      if ('cancelled' in picked) return;
+      const url = await uploadRestaurantLogo({
+        restaurantId: uid,
+        localUri: picked.localUri,
       });
-      if (upErr) showError(upErr);
-      if (!url) return;
       await mergeHostRestaurantProfile(uid, { logo: url });
       showSuccess('Logo updated.');
     } catch (e) {
@@ -284,7 +293,7 @@ export default function HostDashboardScreen() {
     setEditingItem(null);
     setItemName('');
     setItemPrice('');
-    setItemImage(null);
+    menuItemImage.reset(null, null);
     setItemModalOpen(true);
   };
 
@@ -292,23 +301,13 @@ export default function HostDashboardScreen() {
     setEditingItem(row);
     setItemName(row.name);
     setItemPrice(String(row.price));
-    setItemImage(row.image);
+    menuItemImage.reset(row.image, row.updatedAtMs);
     setItemModalOpen(true);
-  };
-
-  const pickItemImage = async () => {
-    if (!uid) return;
-    const { url, error: upErr } = await pickAndUploadImage({
-      uid,
-      folder: 'restaurantMenu',
-      quality: 0.85,
-    });
-    if (upErr) showError(upErr);
-    if (url) setItemImage(url);
   };
 
   const saveMenuItem = async () => {
     if (!uid) return;
+    if (!menuItemImage.canSave) return;
     const name = itemName.trim();
     const price = Number(String(itemPrice).replace(/[^0-9.]/g, ''));
     if (!name) {
@@ -322,26 +321,29 @@ export default function HostDashboardScreen() {
     setSavingItem(true);
     try {
       if (editingItem) {
+        const imageUrl = await menuItemImage.finalizeImageForItem(editingItem.id);
         await updateFoodItem(uid, editingItem.id, {
           name,
           price,
-          image: itemImage,
+          image: imageUrl,
         });
         showSuccess('Item updated.');
       } else {
-        await addFoodItem({
+        const newItemId = await addFoodItem({
           name,
           price,
-          image: itemImage,
+          image: menuItemImage.committedImageUrl,
           restaurantId: uid,
           available: true,
           description: '',
           category: '',
         });
+        await menuItemImage.finalizeImageForItem(newItemId);
         showSuccess('Item added.');
       }
       setItemModalOpen(false);
       setEditingItem(null);
+      menuItemImage.reset(null, null);
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {
@@ -367,29 +369,6 @@ export default function HostDashboardScreen() {
     })();
   };
 
-  const ordersPreview = useMemo(
-    () =>
-      [...orders]
-        .sort((a, b) => {
-          const priority = (status: OrderStatus): number => {
-            if (status === 'ready_for_pickup' || status === 'ready') return 0;
-            if (
-              status === 'preparing' ||
-              status === 'accepted' ||
-              status === 'restaurant_accepted'
-            )
-              return 1;
-            if (status === 'pending') return 2;
-            return 3;
-          };
-          const p = priority(a.status) - priority(b.status);
-          if (p !== 0) return p;
-          return (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
-        })
-        .slice(0, 24),
-    [orders],
-  );
-
   useEffect(() => {
     if (knownOrderIdsRef.current.size === 0) {
       knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
@@ -412,14 +391,6 @@ export default function HostDashboardScreen() {
     const activeItems = menu.length;
     return { ordersToday, revenueToday, activeItems };
   }, [menu, orders]);
-
-  const pendingCount = orders.filter((o) => o.status === 'pending').length;
-  const preparingCount = orders.filter(
-    (o) => o.status === 'accepted' || o.status === 'restaurant_accepted' || o.status === 'preparing',
-  ).length;
-  const readyCount = orders.filter(
-    (o) => o.status === 'ready' || o.status === 'ready_for_pickup',
-  ).length;
 
   if (authLoading || roleLoading) {
     return (
@@ -618,7 +589,14 @@ export default function HostDashboardScreen() {
               menu.map((row) => (
                 <View key={row.id} style={styles.menuDishCard}>
                   {row.image ? (
-                    <Image source={{ uri: row.image }} style={styles.menuDishImage} />
+                    <Image
+                      source={{
+                        uri:
+                          menuImageDisplayUri(row.image, row.updatedAtMs) ??
+                          row.image,
+                      }}
+                      style={styles.menuDishImage}
+                    />
                   ) : (
                     <View style={[styles.menuDishImage, styles.menuDishImagePh]}>
                       <Ionicons name="fast-food-outline" size={36} color="#94a3b8" />
@@ -656,50 +634,22 @@ export default function HostDashboardScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Orders</Text>
             <View style={styles.ordersSummaryRow}>
               <View style={styles.ordersSummaryTile}>
-                <Text style={styles.ordersSummaryValue}>{pendingCount}</Text>
-                <Text style={styles.ordersSummaryLabel}>Pending</Text>
-              </View>
-              <View style={styles.ordersSummaryTile}>
-                <Text style={styles.ordersSummaryValue}>{preparingCount}</Text>
-                <Text style={styles.ordersSummaryLabel}>Preparing</Text>
-              </View>
-              <View style={styles.ordersSummaryTile}>
-                <Text style={styles.ordersSummaryValue}>{readyCount}</Text>
-                <Text style={styles.ordersSummaryLabel}>Ready</Text>
-              </View>
-              <View style={styles.ordersSummaryTile}>
                 <Text style={styles.ordersSummaryValue}>${stats.revenueToday.toFixed(0)}</Text>
-                <Text style={styles.ordersSummaryLabel}>Revenue Today</Text>
+                <Text style={styles.ordersSummaryLabel}>Revenue today</Text>
               </View>
             </View>
-            {ordersLoading ? (
-              <>
-                <ActivityIndicator color={PRIMARY} style={{ marginTop: 8 }} />
-                <View style={styles.orderSkeleton} />
-                <View style={styles.orderSkeleton} />
-              </>
-            ) : ordersPreview.length === 0 ? (
-              <Text style={styles.empty}>No orders yet for your venue.</Text>
-            ) : (
-              ordersPreview.map((o) => (
-                <OrderCard
-                  key={o.id}
-                  order={o}
-                  onPress={() =>
-                    router.push(`/restaurant/order/${encodeURIComponent(o.id)}` as never)
-                  }
-                  onStatus={(status) => {
-                    void updateOrderStatus(o.id, status);
-                  }}
-                  onReject={() => {
-                    void rejectOrder(o.id);
-                  }}
-                />
-              ))
-            )}
+            {uid ? (
+              <RestaurantOrdersPanel
+                restaurantId={uid}
+                restaurantTimeZone={restaurant?.timezone}
+                title="Live orders"
+                onOpenOrder={(orderId) =>
+                  router.push(`/restaurant/order/${encodeURIComponent(orderId)}` as never)
+                }
+              />
+            ) : null}
           </View>
 
           <Text style={styles.footerHint}>
@@ -745,14 +695,14 @@ export default function HostDashboardScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.modalBody}
             >
-              <TouchableOpacity style={styles.secondaryBtn} onPress={pickItemImage}>
-                <Text style={styles.secondaryBtnText}>
-                  {itemImage ? 'Change photo' : 'Add photo'}
-                </Text>
-              </TouchableOpacity>
-              {itemImage ? (
-                <Image source={{ uri: itemImage }} style={styles.preview} />
-              ) : null}
+              <MenuItemImagePicker
+                displayUri={menuItemImage.displayUri}
+                isPicking={menuItemImage.isPicking}
+                isUploading={menuItemImage.isUploading}
+                uploadProgress={menuItemImage.uploadProgress}
+                disabled={savingItem}
+                onPick={() => void menuItemImage.pickImage()}
+              />
               <Text style={styles.inputLabel}>Name</Text>
               <AppTextInput
                 style={styles.input}
@@ -773,7 +723,7 @@ export default function HostDashboardScreen() {
               <TouchableOpacity
                 style={styles.primaryBtn}
                 onPress={saveMenuItem}
-                disabled={savingItem}
+                disabled={savingItem || !menuItemImage.canSave}
               >
                 {savingItem ? (
                   <ActivityIndicator color="#fff" />
