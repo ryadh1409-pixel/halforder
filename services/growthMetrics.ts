@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { logFirestoreUncaught } from './firestoreQueryDiagnostics';
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -22,7 +23,8 @@ export async function incrementGrowthOrders(): Promise<void> {
       { merge: true },
     );
   } catch (e) {
-    console.warn('growthMetrics orders update failed:', e);
+    logFirestoreUncaught(`growthMetrics/${todayKey()}`, 'getDoc/setDoc(merge)', e);
+    throw e;
   }
 }
 
@@ -43,6 +45,7 @@ export async function incrementGrowthMatches(): Promise<void> {
       { merge: true },
     );
   } catch (e) {
-    console.warn('growthMetrics matches update failed:', e);
+    logFirestoreUncaught(`growthMetrics/${todayKey()}`, 'getDoc/setDoc(merge)', e);
+    throw e;
   }
 }

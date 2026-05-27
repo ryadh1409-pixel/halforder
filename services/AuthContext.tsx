@@ -69,7 +69,11 @@ import {
 import { logError } from '../utils/errorLogger';
 import { createAlert } from './alerts';
 import { auth, db } from './firebase';
-import { beginFirestoreQuery, logFirestoreQueryFailed } from './firestoreQueryDiagnostics';
+import {
+  beginFirestoreQuery,
+  logFirestoreOpError,
+  logFirestoreQueryFailed,
+} from './firestoreQueryDiagnostics';
 import { subscribeExpoPushTokenRefresh } from './notifications';
 import {
   persistUserPushTokens,
@@ -134,8 +138,21 @@ async function ensureUserDocument(
   });
   let snap;
   try {
+    console.log('[PRE FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'getDoc(ensureUserDocument)',
+    });
     snap = await getDoc(userRef);
+    console.log('[POST FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'getDoc(ensureUserDocument)',
+    });
   } catch (err) {
+    console.error('[FAILED FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'getDoc(ensureUserDocument)',
+      error: err,
+    });
     logFirestoreQueryFailed(promiseId, 'ensureUserDocument.users', err);
     throw err;
   }
@@ -216,7 +233,25 @@ async function ensureUserDocument(
     if (data?.messagesSent === undefined) updates.messagesSent = 0;
     if (!Array.isArray(data?.badges)) updates.badges = [];
     if (Object.keys(updates).length > 0) {
-      await setDoc(userRef, updates, { merge: true });
+      try {
+        console.log('[PRE FIRESTORE]', {
+          path: `users/${uid}`,
+          operation: 'setDoc(merge ensureUserDocument)',
+        });
+        await setDoc(userRef, updates, { merge: true });
+        console.log('[POST FIRESTORE]', {
+          path: `users/${uid}`,
+          operation: 'setDoc(merge ensureUserDocument)',
+        });
+      } catch (err) {
+        console.error('[FAILED FIRESTORE]', {
+          path: `users/${uid}`,
+          operation: 'setDoc(merge ensureUserDocument)',
+          error: err,
+        });
+        logFirestoreOpError(`users/${uid}`, 'setDoc(merge)', err);
+        throw err;
+      }
     }
     return;
   }
@@ -234,47 +269,65 @@ async function ensureUserDocument(
       ? formatProfileWhatsAppDisplay(profilePhoneDigitsOnly(phoneNumber))
       : '';
   const initialPhoto = photoURL?.trim() || null;
-  await setDoc(userRef, {
-    uid,
-    name: displayName ?? '',
-    displayName: displayName ?? '',
-    email: email ?? null,
-    phone: phoneLine,
-    whatsapp: phoneLine,
-    phoneNumber: phoneNumber ?? null,
-    photoURL: initialPhoto,
-    avatar: initialPhoto,
-    photo: initialPhoto ?? '',
-    createdAt: serverTimestamp(),
-    activeOrderId: null,
-    credits: referredBy ? REFERRAL_CREDIT : 0,
-    referredBy: referredBy ?? null,
-    role: USER_ROLE.USER,
-    restaurantId: null,
-    notificationsEnabled: true,
-    ordersCount: 0,
-    averageRating: 0,
-    totalRatings: 0,
-    totalOrdersCompleted: 0,
-    cancellationRate: 0,
-    reportCount: 0,
-    trustScore: 0,
-    stripeAccountId: null,
-    stripeOnboardingComplete: false,
-    taxGiftEligible: false,
-    appOpenCount: 0,
-    ordersCreated: 0,
-    ordersJoined: 0,
-    activeOrderCount: 0,
-    cancelledOrders: 0,
-    cancellationCount24h: 0,
-    cancellationWindowStartMs: 0,
-    restricted: false,
-    suspicious: false,
-    suspiciousSignals: [],
-    messagesSent: 0,
-    badges: [],
-  });
+  try {
+    console.log('[PRE FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'setDoc(create ensureUserDocument)',
+    });
+    await setDoc(userRef, {
+      uid,
+      name: displayName ?? '',
+      displayName: displayName ?? '',
+      email: email ?? null,
+      phone: phoneLine,
+      whatsapp: phoneLine,
+      phoneNumber: phoneNumber ?? null,
+      photoURL: initialPhoto,
+      avatar: initialPhoto,
+      photo: initialPhoto ?? '',
+      createdAt: serverTimestamp(),
+      activeOrderId: null,
+      credits: referredBy ? REFERRAL_CREDIT : 0,
+      referredBy: referredBy ?? null,
+      role: USER_ROLE.USER,
+      restaurantId: null,
+      notificationsEnabled: true,
+      ordersCount: 0,
+      averageRating: 0,
+      totalRatings: 0,
+      totalOrdersCompleted: 0,
+      cancellationRate: 0,
+      reportCount: 0,
+      trustScore: 0,
+      stripeAccountId: null,
+      stripeOnboardingComplete: false,
+      taxGiftEligible: false,
+      appOpenCount: 0,
+      ordersCreated: 0,
+      ordersJoined: 0,
+      activeOrderCount: 0,
+      cancelledOrders: 0,
+      cancellationCount24h: 0,
+      cancellationWindowStartMs: 0,
+      restricted: false,
+      suspicious: false,
+      suspiciousSignals: [],
+      messagesSent: 0,
+      badges: [],
+    });
+    console.log('[POST FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'setDoc(create ensureUserDocument)',
+    });
+  } catch (err) {
+    console.error('[FAILED FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'setDoc(create ensureUserDocument)',
+      error: err,
+    });
+    logFirestoreOpError(`users/${uid}`, 'setDoc(create)', err);
+    throw err;
+  }
   await createAlert('new_user', 'New user joined');
 
   if (referredBy) {
@@ -286,30 +339,103 @@ async function ensureUserDocument(
       } catch {
         // ignore
       }
-      await addDoc(collection(db, 'referrals'), {
-        referrerId: referredBy,
-        newUserId: uid,
-        orderId: referralOrderId ?? null,
-        createdAt: serverTimestamp(),
-      });
+      try {
+        console.log('[PRE FIRESTORE]', {
+          path: 'referrals',
+          operation: 'addDoc',
+        });
+        await addDoc(collection(db, 'referrals'), {
+          referrerId: referredBy,
+          newUserId: uid,
+          orderId: referralOrderId ?? null,
+          createdAt: serverTimestamp(),
+        });
+        console.log('[POST FIRESTORE]', {
+          path: 'referrals',
+          operation: 'addDoc',
+        });
+      } catch (err) {
+        console.error('[FAILED FIRESTORE]', {
+          path: 'referrals',
+          operation: 'addDoc',
+          error: err,
+        });
+        logFirestoreOpError('referrals', 'addDoc', err);
+        throw err;
+      }
       await AsyncStorage.removeItem(REFERRAL_STORAGE_KEY);
       await AsyncStorage.removeItem(REFERRAL_ORDER_ID_KEY);
       const inviterRef = doc(db, 'users', referredBy);
-      await updateDoc(inviterRef, { credits: increment(REFERRAL_CREDIT) });
+      try {
+        console.log('[PRE FIRESTORE]', {
+          path: `users/${referredBy}`,
+          operation: 'updateDoc(increment credits)',
+        });
+        await updateDoc(inviterRef, { credits: increment(REFERRAL_CREDIT) });
+        console.log('[POST FIRESTORE]', {
+          path: `users/${referredBy}`,
+          operation: 'updateDoc(increment credits)',
+        });
+      } catch (err) {
+        console.error('[FAILED FIRESTORE]', {
+          path: `users/${referredBy}`,
+          operation: 'updateDoc(increment credits)',
+          error: err,
+        });
+        logFirestoreOpError(`users/${referredBy}`, 'updateDoc(increment credits)', err);
+        throw err;
+      }
       const today = new Date().toISOString().slice(0, 10);
       const metricsRef = doc(db, 'growthMetrics', today);
-      const metricsSnap = await getDoc(metricsRef);
+      let metricsSnap;
+      try {
+        console.log('[PRE FIRESTORE]', {
+          path: `growthMetrics/${today}`,
+          operation: 'getDoc',
+        });
+        metricsSnap = await getDoc(metricsRef);
+        console.log('[POST FIRESTORE]', {
+          path: `growthMetrics/${today}`,
+          operation: 'getDoc',
+        });
+      } catch (err) {
+        console.error('[FAILED FIRESTORE]', {
+          path: `growthMetrics/${today}`,
+          operation: 'getDoc',
+          error: err,
+        });
+        logFirestoreOpError(`growthMetrics/${today}`, 'getDoc', err);
+        throw err;
+      }
       const current = metricsSnap.exists() ? metricsSnap.data() : {};
-      await setDoc(
-        metricsRef,
-        {
-          date: today,
-          referralUsers: (Number(current?.referralUsers) || 0) + 1,
-          orders: Number(current?.orders) || 0,
-          matches: Number(current?.matches) || 0,
-        },
-        { merge: true },
-      );
+      try {
+        console.log('[PRE FIRESTORE]', {
+          path: `growthMetrics/${today}`,
+          operation: 'setDoc(merge)',
+        });
+        await setDoc(
+          metricsRef,
+          {
+            date: today,
+            referralUsers: (Number(current?.referralUsers) || 0) + 1,
+            orders: Number(current?.orders) || 0,
+            matches: Number(current?.matches) || 0,
+          },
+          { merge: true },
+        );
+        console.log('[POST FIRESTORE]', {
+          path: `growthMetrics/${today}`,
+          operation: 'setDoc(merge)',
+        });
+      } catch (err) {
+        console.error('[FAILED FIRESTORE]', {
+          path: `growthMetrics/${today}`,
+          operation: 'setDoc(merge)',
+          error: err,
+        });
+        logFirestoreOpError(`growthMetrics/${today}`, 'setDoc(merge)', err);
+        throw err;
+      }
     } catch (e) {
       console.error('[auth] referral credit/metrics update failed', e);
     }
@@ -364,7 +490,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ensureRestaurantProfile = async () => {
       try {
         const restaurantRef = doc(db, 'restaurants', uid);
-        const snap = await getDoc(restaurantRef);
+        let snap;
+        try {
+          console.log('[PRE FIRESTORE]', {
+            path: `restaurants/${uid}`,
+            operation: 'getDoc(ensureRestaurantProfile)',
+          });
+          snap = await getDoc(restaurantRef);
+          console.log('[POST FIRESTORE]', {
+            path: `restaurants/${uid}`,
+            operation: 'getDoc(ensureRestaurantProfile)',
+          });
+        } catch (err) {
+          console.error('[FAILED FIRESTORE]', {
+            path: `restaurants/${uid}`,
+            operation: 'getDoc(ensureRestaurantProfile)',
+            error: err,
+          });
+          logFirestoreOpError(`restaurants/${uid}`, 'getDoc', err);
+          throw err;
+        }
         if (snap.exists()) return;
         await createRestaurant({
           userId: uid,
@@ -532,12 +677,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...(photoURL ? { photoURL } : {}),
       });
     } catch (e) {
+      logFirestoreOpError(`users/${uid}`, 'setDoc(signup merge)', e);
       logError(e);
     }
 
     const signupRole = roleForSignupIntent(payload.signupIntent ?? 'user');
 
     try {
+      console.log('[PRE FIRESTORE]', {
+        path: `users/${uid}`,
+        operation: 'setDoc(signup merge)',
+      });
       await setDoc(
         doc(db, 'users', uid),
         {
@@ -565,7 +715,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         { merge: true },
       );
+      console.log('[POST FIRESTORE]', {
+        path: `users/${uid}`,
+        operation: 'setDoc(signup merge)',
+      });
     } catch (e) {
+      console.error('[FAILED FIRESTORE]', {
+        path: `users/${uid}`,
+        operation: 'setDoc(signup merge)',
+        error: e,
+      });
       logError(e);
     }
 
@@ -616,9 +775,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           cred.user.photoURL ?? null,
         );
         try {
+          console.log('[PRE FIRESTORE]', {
+            path: `users/${cred.user.uid}`,
+            operation: 'getDocFromServer',
+          });
           await getDocFromServer(doc(db, 'users', cred.user.uid));
-        } catch {
-          /* offline or missing doc */
+          console.log('[POST FIRESTORE]', {
+            path: `users/${cred.user.uid}`,
+            operation: 'getDocFromServer',
+          });
+        } catch (error) {
+          console.error('[FAILED FIRESTORE]', {
+            path: `users/${cred.user.uid}`,
+            operation: 'getDocFromServer',
+            error,
+          });
         }
         void syncUserRoleToFirestore(cred.user);
         const migrated = await migrateUserRoleIfNeeded(cred.user.uid);

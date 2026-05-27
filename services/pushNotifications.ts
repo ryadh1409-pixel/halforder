@@ -6,6 +6,7 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
 import { db } from './firebase';
+import { logFirestoreOpError, logFirestoreUncaught } from './firestoreQueryDiagnostics';
 import {
   configureForegroundNotificationHandler,
   ensureAndroidNotificationChannelAsync,
@@ -68,33 +69,42 @@ export async function persistUserPushTokens(
 ): Promise<void> {
   if (Platform.OS === 'web' || !uid?.trim() || !token?.trim() || isExpoGo) return;
 
-  const userRef = doc(db, 'users', uid);
-  const tokenRef = doc(db, 'users', uid, 'pushToken', PUSH_TOKEN_DOC_ID);
+  try {
+    const userRef = doc(db, 'users', uid);
+    const tokenRef = doc(db, 'users', uid, 'pushToken', PUSH_TOKEN_DOC_ID);
 
-  await setDoc(
-    userRef,
-    {
-      expoPushToken: token,
-      expoPushTokenUpdatedAt: serverTimestamp(),
-      fcmToken: token,
-      fcmTokenUpdatedAt: serverTimestamp(),
-      pushToken: token,
-      pushTokenUpdatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+    await setDoc(
+      userRef,
+      {
+        expoPushToken: token,
+        expoPushTokenUpdatedAt: serverTimestamp(),
+        fcmToken: token,
+        fcmTokenUpdatedAt: serverTimestamp(),
+        pushToken: token,
+        pushTokenUpdatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
 
-  await setDoc(
-    tokenRef,
-    {
-      token,
-      platform: Platform.OS,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+    await setDoc(
+      tokenRef,
+      {
+        token,
+        platform: Platform.OS,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
 
-  lastExpoPushSynced = { uid, token };
+    lastExpoPushSynced = { uid, token };
+  } catch (e) {
+    logFirestoreOpError(
+      `users/${uid}|users/${uid}/pushToken/${PUSH_TOKEN_DOC_ID}`,
+      'setDoc(merge)',
+      e,
+    );
+    throw e;
+  }
 }
 
 /**
@@ -154,6 +164,11 @@ export async function registerExpoPushTokenAndSyncToFirestore(
   try {
     await persistUserPushTokens(uid, token);
   } catch (e) {
+    logFirestoreUncaught(
+      `users/${uid}|users/${uid}/pushToken/${PUSH_TOKEN_DOC_ID}`,
+      'setDoc(merge)',
+      e,
+    );
     console.error('[push] Failed to save Expo token to Firestore:', e);
   }
 }

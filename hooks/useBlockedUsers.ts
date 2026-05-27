@@ -1,6 +1,5 @@
 /**
- * Instagram-style blocked accounts: live `users/{uid}.blockedUsers` + profile rows (name, avatar).
- * Subscribes only to the signed-in user's document — same security model as Profile.
+ * Blocked accounts list: live `users/{uid}/blockedUsers/*` + profile rows.
  */
 import { useBlock } from './useBlock';
 import { getPublicUserFields } from '../services/users';
@@ -14,12 +13,9 @@ export type BlockedUserRow = {
 
 export type UseBlockedUsersResult = {
   uid: string | null;
-  /** Ordered list matching `blockedUserIds` from Firestore. */
   blockedUsers: BlockedUserRow[];
   blockedUserIds: string[];
-  /** True while resolving names/avatars for current ids. */
   loadingProfiles: boolean;
-  /** Remove id from `blockedUsers` via `arrayRemove` + subcollection cleanup (see `blockService`). */
   unblockUser: (targetUserId: string) => Promise<void>;
 };
 

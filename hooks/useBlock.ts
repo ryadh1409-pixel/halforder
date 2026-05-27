@@ -1,5 +1,5 @@
 /**
- * Block / unblock: live `users/{uid}.blockedUsers` + bidirectional hide via `useHiddenUserIds`.
+ * Block / unblock via `users/{uid}/blockedUsers/{blockedUserId}` subcollection.
  */
 import { auth, db } from '../services/firebase';
 import {
@@ -9,25 +9,23 @@ import {
   type BlockFilterCurrentUser,
 } from '../services/blockService';
 import {
-  beginFirestoreQuery,
-  logFirestoreQueryFailed,
-} from '../services/firestoreQueryDiagnostics';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+  logBlockQueryFailed,
+  logBlockQueryStart,
+  logBlockQuerySuccess,
+} from '../services/blockQueryLog';
+import { doc, getDoc } from 'firebase/firestore';
+import { useCallback, useMemo } from 'react';
 
 import { useHiddenUserIds } from './useHiddenUserIds';
 
 export type UseBlockResult = {
   uid: string | null;
-  /** Ids you blocked (from `users/{uid}.blockedUsers` array) — updates in real time. */
+  /** Ids you blocked (from `users/{uid}/blockedUsers/*`). */
   blockedByMeIds: string[];
-  /** Bidirectional: you blocked them OR they blocked you — for filtering & “cannot chat”. */
+  /** Users you blocked (same as subcollection snapshot; no profile-array reads). */
   hiddenUserIds: Set<string>;
-  /** For `filterBlockedUsers` / `isUserBlocked` sync overload. */
   filterContext: BlockFilterCurrentUser;
-  /** True if either side blocked (same as peer in hidden set). */
   isHiddenFromMe: (targetUserId: string) => boolean;
-  /** True if **you** blocked this user (unblock available). */
   iBlockedThem: (targetUserId: string) => boolean;
   blockUser: (targetUserId: string) => Promise<void>;
   unblockUser: (targetUserId: string) => Promise<void>;
@@ -38,36 +36,7 @@ export function useBlock(): UseBlockResult {
   const uid =
     currentUser?.uid && !currentUser.isAnonymous ? currentUser.uid : null;
   const hiddenUserIds = useHiddenUserIds();
-  const [blockedByMeIds, setBlockedByMeIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!uid) {
-      setBlockedByMeIds([]);
-      return;
-    }
-    const ref = doc(db, 'users', uid);
-    const promiseId = beginFirestoreQuery({
-      file: 'hooks/useBlock.ts',
-      listener: 'useBlock.usersBlockedByMe',
-      collection: `users/${uid}`,
-      filters: { op: 'onSnapshot', fields: ['blockedUsers'] },
-    });
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        const raw = snap.data()?.blockedUsers;
-        const list = Array.isArray(raw)
-          ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0)
-          : [];
-        setBlockedByMeIds(list);
-      },
-      (err) => {
-        logFirestoreQueryFailed(promiseId, 'useBlock.usersBlockedByMe', err);
-        setBlockedByMeIds([]);
-      },
-    );
-    return () => unsub();
-  }, [uid]);
+  const blockedByMeIds = useMemo(() => [...hiddenUserIds], [hiddenUserIds]);
 
   const filterContext: BlockFilterCurrentUser = useMemo(
     () => ({ uid, hiddenUserIds }),
@@ -110,4 +79,25 @@ export function useBlock(): UseBlockResult {
     blockUser,
     unblockUser,
   };
+}
+
+/** Document-id lookup: `users/{viewer}/blockedUsers/{peerId}`. */
+export async function isPeerBlockedInSubcollection(
+  viewerUid: string,
+  peerId: string,
+): Promise<boolean> {
+  if (!viewerUid || !peerId || viewerUid === peerId) return false;
+  const path = `users/${viewerUid}/blockedUsers/${peerId}`;
+  const operation = 'getDoc';
+  logBlockQueryStart(path, operation);
+  try {
+    const snap = await getDoc(
+      doc(db, 'users', viewerUid, 'blockedUsers', peerId),
+    );
+    logBlockQuerySuccess(path, operation);
+    return snap.exists();
+  } catch (error) {
+    logBlockQueryFailed(path, operation, error);
+    throw error;
+  }
 }

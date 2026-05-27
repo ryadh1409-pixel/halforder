@@ -2,6 +2,7 @@ import type { User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 import { db } from '../services/firebase';
+import { logFirestoreUncaught } from '../services/firestoreQueryDiagnostics';
 
 /** Emails that always receive `role: admin` on sync (lowercased when checked). */
 export const ADMIN_EMAILS = [
@@ -32,5 +33,23 @@ export async function syncUserRoleToFirestore(user: User): Promise<void> {
     payload.role = 'admin';
   }
   if (Object.keys(payload).length === 0) return;
-  await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+  try {
+    console.log('[PRE FIRESTORE]', {
+      path: `users/${user.uid}`,
+      operation: 'setDoc(merge role/email)',
+    });
+    await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
+    console.log('[POST FIRESTORE]', {
+      path: `users/${user.uid}`,
+      operation: 'setDoc(merge role/email)',
+    });
+  } catch (error) {
+    console.error('[FAILED FIRESTORE]', {
+      path: `users/${user.uid}`,
+      operation: 'setDoc(merge role/email)',
+      error,
+    });
+    logFirestoreUncaught(`users/${user.uid}`, 'setDoc(merge role/email)', error);
+    throw error;
+  }
 }

@@ -10,6 +10,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { db } from './firebase';
+import { logFirestoreUncaught } from './firestoreQueryDiagnostics';
 
 const LEGACY_CUSTOMER_ROLES = new Set(['customer', '', undefined, null]);
 
@@ -19,7 +20,26 @@ const LEGACY_CUSTOMER_ROLES = new Set(['customer', '', undefined, null]);
  */
 export async function migrateUserRoleIfNeeded(uid: string): Promise<UserRole> {
   const userRef = doc(db, 'users', uid);
-  const snap = await getDoc(userRef);
+  let snap;
+  try {
+    console.log('[PRE FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'getDoc(role migration)',
+    });
+    snap = await getDoc(userRef);
+    console.log('[POST FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'getDoc(role migration)',
+    });
+  } catch (error) {
+    console.error('[FAILED FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'getDoc(role migration)',
+      error,
+    });
+    logFirestoreUncaught(`users/${uid}`, 'getDoc(role migration)', error);
+    throw error;
+  }
   if (!snap.exists()) return 'user';
 
   const data = snap.data() as Record<string, unknown>;
@@ -39,7 +59,25 @@ export async function migrateUserRoleIfNeeded(uid: string): Promise<UserRole> {
   }
 
   if (Object.keys(updates).length > 0) {
-    await setDoc(userRef, updates, { merge: true });
+    try {
+      console.log('[PRE FIRESTORE]', {
+        path: `users/${uid}`,
+        operation: 'setDoc(merge role migration)',
+      });
+      await setDoc(userRef, updates, { merge: true });
+      console.log('[POST FIRESTORE]', {
+        path: `users/${uid}`,
+        operation: 'setDoc(merge role migration)',
+      });
+    } catch (error) {
+      console.error('[FAILED FIRESTORE]', {
+        path: `users/${uid}`,
+        operation: 'setDoc(merge role migration)',
+        error,
+      });
+      logFirestoreUncaught(`users/${uid}`, 'setDoc(merge role migration)', error);
+      throw error;
+    }
     return updates.role as UserRole;
   }
 
@@ -59,18 +97,54 @@ export async function assignUserRole(
     payload.restaurantId = options?.restaurantId ?? uid;
   } else if (role === 'driver') {
     payload.restaurantId = null;
-    await setDoc(
-      doc(db, 'drivers', uid),
-      {
-        name: options?.displayName?.trim() || 'Driver',
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+    try {
+      console.log('[PRE FIRESTORE]', {
+        path: `drivers/${uid}`,
+        operation: 'setDoc(merge)',
+      });
+      await setDoc(
+        doc(db, 'drivers', uid),
+        {
+          name: options?.displayName?.trim() || 'Driver',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      console.log('[POST FIRESTORE]', {
+        path: `drivers/${uid}`,
+        operation: 'setDoc(merge)',
+      });
+    } catch (error) {
+      console.error('[FAILED FIRESTORE]', {
+        path: `drivers/${uid}`,
+        operation: 'setDoc(merge)',
+        error,
+      });
+      logFirestoreUncaught(`drivers/${uid}`, 'setDoc(merge)', error);
+      throw error;
+    }
   } else {
     payload.restaurantId = null;
   }
-  await setDoc(doc(db, 'users', uid), payload, { merge: true });
+  try {
+    console.log('[PRE FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'setDoc(merge assign role)',
+    });
+    await setDoc(doc(db, 'users', uid), payload, { merge: true });
+    console.log('[POST FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'setDoc(merge assign role)',
+    });
+  } catch (error) {
+    console.error('[FAILED FIRESTORE]', {
+      path: `users/${uid}`,
+      operation: 'setDoc(merge assign role)',
+      error,
+    });
+    logFirestoreUncaught(`users/${uid}`, 'setDoc(merge assign role)', error);
+    throw error;
+  }
   void refreshAuthRoleClaims();
 }
 
@@ -88,7 +162,26 @@ export async function applySignupRole(
 
   if (role === 'restaurant') {
     const restaurantRef = doc(db, 'restaurants', uid);
-    const snap = await getDoc(restaurantRef);
+    let snap;
+    try {
+      console.log('[PRE FIRESTORE]', {
+        path: `restaurants/${uid}`,
+        operation: 'getDoc(role apply)',
+      });
+      snap = await getDoc(restaurantRef);
+      console.log('[POST FIRESTORE]', {
+        path: `restaurants/${uid}`,
+        operation: 'getDoc(role apply)',
+      });
+    } catch (error) {
+      console.error('[FAILED FIRESTORE]', {
+        path: `restaurants/${uid}`,
+        operation: 'getDoc(role apply)',
+        error,
+      });
+      logFirestoreUncaught(`restaurants/${uid}`, 'getDoc(role apply)', error);
+      throw error;
+    }
     if (!snap.exists()) {
       await createRestaurant({
         userId: uid,

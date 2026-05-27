@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from './firebase';
+import { logFirestoreUncaught } from './firestoreQueryDiagnostics';
 import { normalizeOrderUserIds } from './orders';
 
 const REFERRAL_INBOX = 'referralInbox';
@@ -79,7 +80,12 @@ export async function applyHalfOrderPairReferralRewards(
     );
     await batch.commit();
   } catch (e) {
-    console.warn('[referralRewards] applyHalfOrderPairReferralRewards', e);
+    logFirestoreUncaught(
+      `orders/${oid}|referrals/${oid}|users/${jid}|users/{inviterId}/referralInbox/${oid}`,
+      'getDoc/getDoc/writeBatch.commit',
+      e,
+    );
+    throw e;
   }
 }
 
@@ -100,7 +106,8 @@ export async function claimReferralInboxRewards(uid: string): Promise<void> {
       await batch.commit();
     }
   } catch (e) {
-    console.warn('[referralRewards] claimReferralInboxRewards', e);
+    logFirestoreUncaught(`users/${u}/referralInbox`, 'getDocs/writeBatch.commit', e);
+    throw e;
   }
 }
 
@@ -121,7 +128,8 @@ export async function userHasSoloWaitingHalfOrder(uid: string): Promise<boolean>
       const cardId = typeof data.cardId === 'string' && data.cardId.length > 0;
       if (cardId && users.length === 1) return true;
     }
-  } catch {
+  } catch (e) {
+    logFirestoreUncaught('orders', 'getDocs(status==waiting, users contains uid)', e);
     return false;
   }
   return false;

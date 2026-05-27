@@ -81,6 +81,40 @@ export function logFirestoreQueryFailed(
   });
 }
 
+export function logFirestoreOpError(
+  path: string,
+  operation: string,
+  error: unknown,
+): void {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : undefined;
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: string }).message)
+      : undefined;
+  console.error('[FIRESTORE OP FAILED]', {
+    path,
+    operation,
+    code,
+    message,
+    error,
+  });
+}
+
+export function logFirestoreUncaught(
+  path: string,
+  operation: string,
+  error: unknown,
+): void {
+  console.error('[FIRESTORE UNCAUGHT]', {
+    path,
+    operation,
+    error,
+  });
+}
+
 export function isFirestorePermissionDenied(error: unknown): boolean {
   return (
     typeof error === 'object' &&

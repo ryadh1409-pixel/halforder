@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { logFirestoreUncaught } from './firestoreQueryDiagnostics';
 
 export type AlertType =
   | 'new_order'
@@ -32,6 +33,7 @@ export async function createAlert(
     if (extra?.restaurantName) data.restaurantName = extra.restaurantName;
     await addDoc(collection(db, 'alerts'), data);
   } catch (e) {
-    console.warn('Failed to create alert:', e);
+    logFirestoreUncaught('alerts', 'addDoc', e);
+    throw e;
   }
 }

@@ -1,18 +1,18 @@
 import { auth, db } from '../services/firebase';
 import {
-  beginFirestoreQuery,
-  logFirestoreQueryFailed,
-} from '../services/firestoreQueryDiagnostics';
-import { doc, onSnapshot } from 'firebase/firestore';
+  logBlockQueryFailed,
+  logBlockQueryStart,
+  logBlockQuerySuccess,
+} from '../services/blockQueryLog';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 /**
- * User IDs the current user should not see in discovery.
- * Uses `users/{uid}.blockedUsers` only (users you blocked).
+ * Bidirectional hide set without reading `users/{uid}.blockedUsers` or other users'
+ * profile documents.
  *
- * Reverse blocks (users who blocked you) are not loaded — listing
- * `users` where `blockedUsers array-contains` the current uid is not
- * allowed for privacy/security reasons.
+ * - Users you blocked: `users/{uid}/blockedUsers/*`
+ * - Users who blocked you: legacy `blocks` where `blockedUserId == uid` (mirrored on block)
  *
  * @param enabled When false, skips Firestore listeners (e.g. explore tab not focused).
  */
@@ -20,49 +20,74 @@ export function useHiddenUserIds(enabled: boolean = true): Set<string> {
   const currentUser = auth.currentUser;
   const uid =
     currentUser?.uid && !currentUser.isAnonymous ? currentUser.uid : null;
-  const [blockedIds, setBlockedIds] = useState<string[]>([]);
+  const [blockedByMe, setBlockedByMe] = useState<string[]>([]);
+  const [blockedMe, setBlockedMe] = useState<string[]>([]);
 
   useEffect(() => {
     if (!enabled || !uid) {
-      setBlockedIds([]);
+      setBlockedByMe([]);
+      setBlockedMe([]);
       return;
     }
-    const myRef = doc(db, 'users', uid);
-    const promiseIdMy = beginFirestoreQuery({
-      file: 'hooks/useHiddenUserIds.ts',
-      listener: 'useHiddenUserIds.usersDoc',
-      collection: `users/${uid}`,
-      filters: { op: 'onSnapshot', fields: ['blockedUsers'] },
-    });
-    const unsub = onSnapshot(
-      myRef,
+
+    const subPath = `users/${uid}/blockedUsers`;
+    const subOp = 'onSnapshot';
+    logBlockQueryStart(subPath, subOp);
+
+    const unsubSub = onSnapshot(
+      collection(db, 'users', uid, 'blockedUsers'),
       (snap) => {
-        if (!snap.exists()) {
-          setBlockedIds([]);
-          return;
-        }
-        const list = snap.data()?.blockedUsers;
-        setBlockedIds(Array.isArray(list) ? list.filter(Boolean) : []);
+        logBlockQuerySuccess(subPath, subOp);
+        setBlockedByMe(
+          snap.docs
+            .map((d) => {
+              const fromField = d.data()?.blockedUserId;
+              if (typeof fromField === 'string' && fromField) return fromField;
+              return d.id;
+            })
+            .filter(Boolean),
+        );
       },
-      (err) => {
-        logFirestoreQueryFailed(promiseIdMy, 'useHiddenUserIds.usersDoc', err);
-        setBlockedIds([]);
+      (error) => {
+        logBlockQueryFailed(subPath, subOp, error);
+        setBlockedByMe([]);
       },
     );
-    return () => unsub();
+
+    const blocksPath = 'blocks(blockedUserId==uid)';
+    const blocksOp = 'onSnapshot';
+    logBlockQueryStart(blocksPath, blocksOp);
+
+    const unsubBlocks = onSnapshot(
+      query(collection(db, 'blocks'), where('blockedUserId', '==', uid)),
+      (snap) => {
+        logBlockQuerySuccess(blocksPath, blocksOp);
+        setBlockedMe(
+          snap.docs
+            .map((d) => String(d.data()?.blockerId ?? ''))
+            .filter(Boolean),
+        );
+      },
+      (error) => {
+        logBlockQueryFailed(blocksPath, blocksOp, error);
+        setBlockedMe([]);
+      },
+    );
+
+    return () => {
+      unsubSub();
+      unsubBlocks();
+    };
   }, [uid, enabled]);
 
-  /** Who blocked me — disabled; cannot scan `users` collection (privacy). */
-  const blockerIds: string[] = [];
-
   return useMemo(
-    () => new Set([...blockedIds, ...blockerIds]),
-    [blockedIds],
+    () => new Set([...blockedByMe, ...blockedMe]),
+    [blockedByMe, blockedMe],
   );
 }
 
 /**
- * Real-time: true if this peer is hidden (you blocked them).
+ * Real-time: true if this peer is hidden (you blocked them or they blocked you).
  */
 export function useIsPeerHidden(peerId: string | null | undefined): boolean {
   const hidden = useHiddenUserIds();

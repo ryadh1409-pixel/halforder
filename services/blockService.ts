@@ -1,9 +1,9 @@
 /**
  * Block / unblock service (production).
  *
- * - **Block:** `users/{currentUserId}.blockedUsers` via `arrayUnion` + mirror subdoc
- *   `users/{currentUserId}/blockedUsers/{targetUserId}`.
- * - **Unblock:** `arrayRemove` on that array + subdoc delete + legacy `blocks` cleanup.
+ * - **Block:** `users/{currentUserId}/blockedUsers/{targetUserId}` with
+ *   `{ blockedUserId, createdAt }`.
+ * - **Unblock:** deletes that subcollection document (+ legacy `blocks` cleanup).
  *
  * `blockUser(currentUserId, targetUserId)` — current user blocks target.
  */
@@ -32,9 +32,9 @@ export async function unblockUser(
 
 /**
  * **Sync (instant UI):** pass `{ uid, hiddenUserIds }` from `useHiddenUserIds()`.
- * True if `targetUserId` is in the hidden set (blocked either direction).
+ * True if `targetUserId` is in the hidden set (users you blocked).
  *
- * **Async (server):** pass two strings — full Firestore check (arrays, subcollections, legacy `blocks`).
+ * **Async (server):** pass two strings — subcollection + legacy `blocks` check.
  */
 export function isUserBlocked(
   currentUser: BlockFilterCurrentUser,

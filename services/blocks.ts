@@ -1,5 +1,15 @@
 import { db } from './firebase';
 import {
+  logBlockQueryFailed,
+  logBlockQueryStart,
+  logBlockQuerySuccess,
+} from './blockQueryLog';
+import {
+  blockUser as persistBlockUser,
+  isUserBlocked,
+  unblockBlockedUser,
+} from './block';
+import {
   addDoc,
   collection,
   deleteDoc,
@@ -8,46 +18,48 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore';
-import {
-  blockUser as persistBlock,
-  isUserBlocked,
-  unblockBlockedUser,
-} from './block';
 
 /**
- * @deprecated Prefer `block` service writing only subcollection + array.
- * Keeps `blocks` collection writes for older clients; new blocks use `blockUser` below.
+ * Legacy `blocks` collection mirror (optional). Primary block state lives in
+ * `users/{blocker}/blockedUsers/{blocked}`.
  */
-export async function blockUserLegacy(
+async function mirrorLegacyBlockDoc(
+  blockerId: string,
+  blockedUserId: string,
+): Promise<void> {
+  const existing = query(
+    collection(db, 'blocks'),
+    where('blockerId', '==', blockerId),
+    where('blockedUserId', '==', blockedUserId),
+  );
+  const mirrorPath = 'blocks(mirror)';
+  logBlockQueryStart(mirrorPath, 'getDocs');
+  const existingSnap = await getDocs(existing);
+  if (!existingSnap.empty) {
+    logBlockQuerySuccess(mirrorPath, 'getDocs(skip)');
+    return;
+  }
+  logBlockQuerySuccess(mirrorPath, 'getDocs');
+
+  logBlockQueryStart(mirrorPath, 'addDoc');
+  await addDoc(collection(db, 'blocks'), {
+    blockerId,
+    blockedUserId,
+    createdAt: serverTimestamp(),
+  });
+  logBlockQuerySuccess(mirrorPath, 'addDoc');
+}
+
+/** Primary API: `users/{blocker}/blockedUsers/{blocked}` subcollection. */
+export async function blockUser(
   blockerId: string,
   blockedUserId: string,
 ): Promise<void> {
   if (!blockerId || !blockedUserId) throw new Error('Invalid user IDs.');
   if (blockerId === blockedUserId) throw new Error('You cannot block yourself.');
 
-  await persistBlock(blockedUserId, blockerId);
-
-  const existing = query(
-    collection(db, 'blocks'),
-    where('blockerId', '==', blockerId),
-    where('blockedUserId', '==', blockedUserId),
-  );
-  const existingSnap = await getDocs(existing);
-  if (!existingSnap.empty) return;
-
-  await addDoc(collection(db, 'blocks'), {
-    blockerId,
-    blockedUserId,
-    createdAt: serverTimestamp(),
-  });
-}
-
-/** Primary API: subcollection `users/{blocker}/blockedUsers/{blocked}` + parent array. */
-export async function blockUser(
-  blockerId: string,
-  blockedUserId: string,
-): Promise<void> {
-  await blockUserLegacy(blockerId, blockedUserId);
+  await persistBlockUser(blockedUserId, blockerId);
+  await mirrorLegacyBlockDoc(blockerId, blockedUserId);
 }
 
 export async function hasBlockBetween(
@@ -63,12 +75,25 @@ export async function getBlockedUsersByBlocker(
 ): Promise<string[]> {
   if (!blockerId) return [];
 
-  const [subSnap, legacySnap] = await Promise.all([
-    getDocs(collection(db, 'users', blockerId, 'blockedUsers')),
-    getDocs(
-      query(collection(db, 'blocks'), where('blockerId', '==', blockerId)),
-    ),
-  ]);
+  const subPath = `users/${blockerId}/blockedUsers`;
+  const blocksPath = 'blocks(blockerId==uid)';
+  logBlockQueryStart(subPath, 'getDocs');
+  logBlockQueryStart(blocksPath, 'getDocs');
+  let subSnap;
+  let legacySnap;
+  try {
+    [subSnap, legacySnap] = await Promise.all([
+      getDocs(collection(db, 'users', blockerId, 'blockedUsers')),
+      getDocs(
+        query(collection(db, 'blocks'), where('blockerId', '==', blockerId)),
+      ),
+    ]);
+    logBlockQuerySuccess(subPath, 'getDocs');
+    logBlockQuerySuccess(blocksPath, 'getDocs');
+  } catch (error) {
+    logBlockQueryFailed(subPath, 'getDocs', error);
+    throw error;
+  }
 
   const ids = new Set<string>();
   subSnap.docs.forEach((d) => {
@@ -92,11 +117,23 @@ export async function unblockUser(
 ): Promise<void> {
   if (!blockerId || !blockedUserId) return;
   await unblockBlockedUser(blockedUserId, blockerId);
+  const legacyPath = 'blocks(unblock cleanup)';
+  logBlockQueryStart(legacyPath, 'getDocs');
   const q = query(
     collection(db, 'blocks'),
     where('blockerId', '==', blockerId),
     where('blockedUserId', '==', blockedUserId),
   );
-  const snap = await getDocs(q);
-  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  try {
+    const snap = await getDocs(q);
+    logBlockQuerySuccess(legacyPath, 'getDocs');
+    if (snap.docs.length > 0) {
+      logBlockQueryStart(legacyPath, 'deleteDoc');
+      await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+      logBlockQuerySuccess(legacyPath, 'deleteDoc');
+    }
+  } catch (error) {
+    logBlockQueryFailed(legacyPath, 'getDocs', error);
+    throw error;
+  }
 }

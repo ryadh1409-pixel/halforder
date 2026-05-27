@@ -277,7 +277,9 @@ export async function getSmartMatches(user: GrowthMatchUser): Promise<SmartMatch
           `users/${user.uid}/blockedUsers`,
           FIRESTORE_COLLECTIONS.blocks,
         ],
-        constraints: { parallel: 'getDoc(me) + getDocs(blockedUsers) + 2x getDocs(blocks)' },
+        constraints: {
+          parallel: 'getDocs(users/{uid}/blockedUsers) + 2x getDocs(blocks)',
+        },
         role: roleForLog,
       });
     }
