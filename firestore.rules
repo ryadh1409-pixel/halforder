@@ -1441,8 +1441,7 @@ service cloud.firestore {
       // Fallback when custom claim is present (refreshUserRoleClaims).
       allow list: if isSignedIn() && authTokenRoleIsDriver();
       allow list: if isSignedIn()
-        && !isCurrentUserRestricted()
-        && resource.data.status == "open";
+        && !isCurrentUserRestricted();
       // Driver getDoc on a single unassigned pool order (accept / preview).
       allow read: if driverPoolOrderSingleRead();
       // Marketplace checkout: auth uid must match payload userId + field guards.

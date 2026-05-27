@@ -1,9 +1,9 @@
 /**
- * Blocked accounts list: live `users/{uid}/blockedUsers/*` + profile rows.
+ * Blocked accounts list from `users/{uid}/blockedUsers/*` only.
+ * Does not read other users' `users/{blockedId}` docs (rules: self or admin only).
  */
 import { useBlock } from './useBlock';
-import { getPublicUserFields } from '../services/users';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 export type BlockedUserRow = {
   userId: string;
@@ -21,60 +21,14 @@ export type UseBlockedUsersResult = {
 
 export function useBlockedUsers(): UseBlockedUsersResult {
   const { uid, blockedByMeIds, unblockUser: unblockFromService } = useBlock();
-  const [profileMap, setProfileMap] = useState<
-    Record<string, BlockedUserRow | undefined>
-  >({});
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
-
-  useEffect(() => {
-    if (blockedByMeIds.length === 0) {
-      setProfileMap({});
-      setLoadingProfiles(false);
-      return;
-    }
-    let cancelled = false;
-    setLoadingProfiles(true);
-    void (async () => {
-      const next: Record<string, BlockedUserRow> = {};
-      await Promise.all(
-        blockedByMeIds.map(async (id) => {
-          try {
-            const p = await getPublicUserFields(id);
-            next[id] = {
-              userId: id,
-              displayName: p?.name?.trim() || 'User',
-              avatarUrl: p?.avatar ?? null,
-            };
-          } catch {
-            next[id] = {
-              userId: id,
-              displayName: 'User',
-              avatarUrl: null,
-            };
-          }
-        }),
-      );
-      if (!cancelled) {
-        setProfileMap(next);
-        setLoadingProfiles(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [blockedByMeIds.join('|')]);
 
   const blockedUsers = useMemo((): BlockedUserRow[] => {
-    return blockedByMeIds.map((id) => {
-      const row = profileMap[id];
-      if (row) return row;
-      return {
-        userId: id,
-        displayName: '…',
-        avatarUrl: null,
-      };
-    });
-  }, [blockedByMeIds, profileMap]);
+    return blockedByMeIds.map((id) => ({
+      userId: id,
+      displayName: 'Blocked user',
+      avatarUrl: null,
+    }));
+  }, [blockedByMeIds]);
 
   const unblockUser = useCallback(
     async (targetUserId: string) => {
@@ -87,7 +41,7 @@ export function useBlockedUsers(): UseBlockedUsersResult {
     uid,
     blockedUsers,
     blockedUserIds: blockedByMeIds,
-    loadingProfiles,
+    loadingProfiles: false,
     unblockUser,
   };
 }

@@ -2,6 +2,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 import { blobFromPickerUri } from '../lib/imageBlob';
 import { auth, ensureAuthReady, storage } from './firebase';
+import { profileFirestoreOp } from './profileFirestoreLog';
 
 /** Matches Storage rules: `profiles/{auth.uid}.jpg` */
 export function profileImageStoragePath(uid: string): string {
@@ -26,9 +27,24 @@ export async function uploadUserProfileImage(
   const contentType =
     blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
 
-  const storageRef = ref(storage, profileImageStoragePath(uid));
-  await uploadBytes(storageRef, blob, { contentType });
-  return getDownloadURL(storageRef);
+  const storagePath = profileImageStoragePath(uid);
+  const storageRef = ref(storage, storagePath);
+  await profileFirestoreOp(
+    {
+      file: 'services/profilePhoto.ts',
+      operation: 'uploadBytes',
+      path: storagePath,
+    },
+    () => uploadBytes(storageRef, blob, { contentType }),
+  );
+  return profileFirestoreOp(
+    {
+      file: 'services/profilePhoto.ts',
+      operation: 'getDownloadURL',
+      path: storagePath,
+    },
+    () => getDownloadURL(storageRef),
+  );
 }
 
 /** Current user convenience — same path as signup. */

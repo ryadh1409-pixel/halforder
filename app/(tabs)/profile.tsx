@@ -34,6 +34,12 @@ import {
 } from '../../services/imagePicker';
 import { uploadProfilePhoto } from '../../services/profilePhoto';
 import {
+  logProfileFsFail,
+  logProfileFsStart,
+  logProfileFsSuccess,
+  profileFirestoreOp,
+} from '../../services/profileFirestoreLog';
+import {
   reportContentIdUser,
   submitReport,
   type ReportReason,
@@ -323,6 +329,7 @@ export default function ProfileScreen() {
       return undefined;
     }
     const userRef = doc(db, 'users', uid);
+    const userPath = `users/${uid}`;
     let cancelled = false;
 
     const applyUserDoc = (data: DocumentData | undefined) => {
@@ -344,7 +351,14 @@ export default function ProfileScreen() {
     setProfileLoading(true);
     void (async () => {
       try {
-        const serverSnap = await getDocFromServer(userRef);
+        const serverSnap = await profileFirestoreOp(
+          {
+            file: 'app/(tabs)/profile.tsx',
+            operation: 'getDocFromServer',
+            path: userPath,
+          },
+          () => getDocFromServer(userRef),
+        );
         if (cancelled) return;
         applyUserDoc(
           serverSnap.exists() ? (serverSnap.data() as DocumentData) : undefined,
@@ -352,7 +366,14 @@ export default function ProfileScreen() {
       } catch {
         if (cancelled) return;
         try {
-          const cacheSnap = await getDoc(userRef);
+          const cacheSnap = await profileFirestoreOp(
+            {
+              file: 'app/(tabs)/profile.tsx',
+              operation: 'getDoc',
+              path: userPath,
+            },
+            () => getDoc(userRef),
+          );
           if (cancelled) return;
           applyUserDoc(
             cacheSnap.exists() ? (cacheSnap.data() as DocumentData) : undefined,
@@ -363,15 +384,23 @@ export default function ProfileScreen() {
       }
     })();
 
+    const snapshotCtx = {
+      file: 'app/(tabs)/profile.tsx',
+      operation: 'onSnapshot',
+      path: userPath,
+    };
+    logProfileFsStart(snapshotCtx);
     const unsubscribe = onSnapshot(
       userRef,
       (snap) => {
+        logProfileFsSuccess(snapshotCtx);
         if (cancelled) return;
         applyUserDoc(
           snap.exists() ? (snap.data() as DocumentData) : undefined,
         );
       },
-      () => {
+      (error) => {
+        logProfileFsFail(snapshotCtx, error);
         if (cancelled) return;
         applyUserDoc(undefined);
       },
@@ -445,19 +474,28 @@ export default function ProfileScreen() {
     setNameErrorMessage('');
     try {
       const userRef = doc(db, 'users', uid);
+      const userPath = `users/${uid}`;
       await updateProfile(currentUser, { displayName: mod.text });
       await currentUser.reload();
-        await setDoc(
-        userRef,
+      await profileFirestoreOp(
         {
-          displayName: mod.text,
-          name: mod.text,
-          avatar: currentUser.photoURL ?? null,
-          phone: phoneForFirestore,
-          whatsapp: phoneForFirestore,
-          dateOfBirth: deleteField(),
+          file: 'app/(tabs)/profile.tsx',
+          operation: 'setDoc(merge)',
+          path: userPath,
         },
-        { merge: true },
+        () =>
+          setDoc(
+            userRef,
+            {
+              displayName: mod.text,
+              name: mod.text,
+              avatar: currentUser.photoURL ?? null,
+              phone: phoneForFirestore,
+              whatsapp: phoneForFirestore,
+              dateOfBirth: deleteField(),
+            },
+            { merge: true },
+          ),
       );
       setDisplayNameInput(mod.text);
       setInitialDisplayName(mod.text);
@@ -517,10 +555,18 @@ export default function ProfileScreen() {
       await updateProfile(currentUser, { photoURL: downloadURL });
 
       const userRef = doc(db, 'users', uid);
-      await setDoc(
-        userRef,
-        { photoURL: downloadURL, avatar: downloadURL, photo: downloadURL },
-        { merge: true },
+      await profileFirestoreOp(
+        {
+          file: 'app/(tabs)/profile.tsx',
+          operation: 'setDoc(merge)',
+          path: `users/${uid}`,
+        },
+        () =>
+          setDoc(
+            userRef,
+            { photoURL: downloadURL, avatar: downloadURL, photo: downloadURL },
+            { merge: true },
+          ),
       );
 
       try {
@@ -544,7 +590,14 @@ export default function ProfileScreen() {
     setNotificationsEnabled(value);
     try {
       const userRef = doc(db, 'users', uid);
-      await setDoc(userRef, { notificationsEnabled: value }, { merge: true });
+      await profileFirestoreOp(
+        {
+          file: 'app/(tabs)/profile.tsx',
+          operation: 'setDoc(merge)',
+          path: `users/${uid}`,
+        },
+        () => setDoc(userRef, { notificationsEnabled: value }, { merge: true }),
+      );
     } catch (e) {
       logError(e);
       setNotificationsEnabled(!value);

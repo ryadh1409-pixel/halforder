@@ -1,4 +1,5 @@
 import { db } from './firebase';
+import { profileFirestoreOp } from './profileFirestoreLog';
 import {
   addDoc,
   collection,
@@ -166,7 +167,15 @@ export async function getTrustScoreProfile(
   let cancellationRate = 0;
   let reportCount = 0;
 
-  const userSnap = await getDoc(doc(db, 'users', userId));
+  const userPath = `users/${userId}`;
+  const userSnap = await profileFirestoreOp(
+    {
+      file: 'services/ratings.ts',
+      operation: 'getDoc',
+      path: userPath,
+    },
+    () => getDoc(doc(db, 'users', userId)),
+  );
   if (userSnap.exists()) {
     const d = userSnap.data();
     const avg = d?.ratingAverage ?? d?.averageRating;
@@ -190,38 +199,59 @@ export async function getTrustScoreProfile(
   }
 
   if (totalRatings === 0) {
-    const q = query(collection(db, 'ratings'), where('toUserId', '==', userId));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      let sum = 0;
-      snap.docs.forEach((d) => {
-        const r = d.data().rating;
-        if (typeof r === 'number') sum += r;
-      });
-      totalRatings = snap.size;
-      averageRating = totalRatings > 0 ? sum / totalRatings : 0;
+    const ratingsPath = `ratings(toUserId==${userId})`;
+    try {
+      const snap = await profileFirestoreOp(
+        {
+          file: 'services/ratings.ts',
+          operation: 'getDocs',
+          path: ratingsPath,
+        },
+        () =>
+          getDocs(
+            query(collection(db, 'ratings'), where('toUserId', '==', userId)),
+          ),
+      );
+      if (!snap.empty) {
+        let sum = 0;
+        snap.docs.forEach((d) => {
+          const r = d.data().rating;
+          if (typeof r === 'number') sum += r;
+        });
+        totalRatings = snap.size;
+        averageRating = totalRatings > 0 ? sum / totalRatings : 0;
+      }
+    } catch {
+      // Ratings fallback is optional; user doc fields are authoritative when present.
     }
   }
 
-  if (reportCount === 0) {
-    const reportsQ = query(
-      collection(db, 'reports'),
-      where('reportedUserId', '==', userId),
-    );
-    const reportsSnap = await getDocs(reportsQ);
-    reportCount = reportsSnap.size;
-  }
+  // `reports` is admin-read-only — never list from the client (Profile tab permission error).
 
   if (cancellationRate === 0) {
-    const cancelledQ = query(
-      collection(db, 'orders'),
-      where('createdBy', '==', userId),
-      where('status', '==', 'cancelled'),
-    );
-    const cancelledSnap = await getDocs(cancelledQ);
-    const cancelledOrders = cancelledSnap.size;
-    const totalAttempts = totalOrdersCompleted + cancelledOrders;
-    cancellationRate = totalAttempts > 0 ? cancelledOrders / totalAttempts : 0;
+    const ordersPath = `orders(createdBy==${userId},status==cancelled)`;
+    try {
+      const cancelledSnap = await profileFirestoreOp(
+        {
+          file: 'services/ratings.ts',
+          operation: 'getDocs',
+          path: ordersPath,
+        },
+        () =>
+          getDocs(
+            query(
+              collection(db, 'orders'),
+              where('createdBy', '==', userId),
+              where('status', '==', 'cancelled'),
+            ),
+          ),
+      );
+      const cancelledOrders = cancelledSnap.size;
+      const totalAttempts = totalOrdersCompleted + cancelledOrders;
+      cancellationRate = totalAttempts > 0 ? cancelledOrders / totalAttempts : 0;
+    } catch {
+      // Keep cancellationRate from user doc or 0 when list rules deny the query.
+    }
   }
 
   return calculateTrustScoreProfile({
