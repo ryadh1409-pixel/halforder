@@ -1,4 +1,8 @@
 import { USER_ROLE } from '@/constants/roles';
+import {
+  beginFirestoreQuery,
+  logFirestoreQueryFailed,
+} from './firestoreQueryDiagnostics';
 import { db } from './firebase';
 import {
   collection,
@@ -56,6 +60,13 @@ export function subscribeUserRole(
   onRole: (role: UserRole) => void,
   onError?: () => void,
 ): Unsubscribe {
+  const promiseId = beginFirestoreQuery({
+    file: 'services/userService.ts',
+    listener: 'subscribeUserRole.users',
+    collection: `users/${uid}`,
+    filters: { op: 'onSnapshot', query: 'doc(users/{uid})' },
+  });
+
   return onSnapshot(
     doc(db, 'users', uid),
     (snap) => {
@@ -65,7 +76,8 @@ export function subscribeUserRole(
       }
       onRole(normalizeRole(snap.data()?.role));
     },
-    () => {
+    (err) => {
+      logFirestoreQueryFailed(promiseId, 'subscribeUserRole.users', err);
       onError?.();
     },
   );

@@ -8,6 +8,10 @@ import {
   unblockUser as unblockUserApi,
   type BlockFilterCurrentUser,
 } from '../services/blockService';
+import {
+  beginFirestoreQuery,
+  logFirestoreQueryFailed,
+} from '../services/firestoreQueryDiagnostics';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -42,6 +46,12 @@ export function useBlock(): UseBlockResult {
       return;
     }
     const ref = doc(db, 'users', uid);
+    const promiseId = beginFirestoreQuery({
+      file: 'hooks/useBlock.ts',
+      listener: 'useBlock.usersBlockedByMe',
+      collection: `users/${uid}`,
+      filters: { op: 'onSnapshot', fields: ['blockedUsers'] },
+    });
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -51,7 +61,10 @@ export function useBlock(): UseBlockResult {
           : [];
         setBlockedByMeIds(list);
       },
-      () => setBlockedByMeIds([]),
+      (err) => {
+        logFirestoreQueryFailed(promiseId, 'useBlock.usersBlockedByMe', err);
+        setBlockedByMeIds([]);
+      },
     );
     return () => unsub();
   }, [uid]);

@@ -1,4 +1,8 @@
 import { db } from '../services/firebase';
+import {
+  beginFirestoreQuery,
+  logFirestoreQueryFailed,
+} from '../services/firestoreQueryDiagnostics';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
@@ -20,6 +24,12 @@ export function useUserTermsStatus(uid: string | undefined | null): {
     }
     setReady(false);
     const ref = doc(db, 'users', uid);
+    const promiseId = beginFirestoreQuery({
+      file: 'hooks/useUserTermsStatus.ts',
+      listener: 'useUserTermsStatus.users',
+      collection: `users/${uid}`,
+      filters: { op: 'onSnapshot', fields: ['hasAcceptedTerms'] },
+    });
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -29,7 +39,8 @@ export function useUserTermsStatus(uid: string | undefined | null): {
         setAccepted(v);
         setReady(true);
       },
-      () => {
+      (err) => {
+        logFirestoreQueryFailed(promiseId, 'useUserTermsStatus.users', err);
         setAccepted(false);
         setReady(true);
       },

@@ -1,4 +1,8 @@
 import { db } from '@/services/firebase';
+import {
+  beginFirestoreQuery,
+  logFirestoreQueryFailed,
+} from '@/services/firestoreQueryDiagnostics';
 import { getUserLocationSafe } from '@/services/location';
 import { mapFirestoreRestaurant, type HomeRestaurant } from '@/types/homeRestaurant';
 import { collection, onSnapshot, query } from 'firebase/firestore';
@@ -33,9 +37,17 @@ export function useHomeRestaurants(): State {
   }, []);
 
   useEffect(() => {
+    let unsub: (() => void) | undefined;
+    const promiseId = beginFirestoreQuery({
+      file: 'hooks/useHomeRestaurants.ts',
+      listener: 'useHomeRestaurants.restaurants',
+      collection: 'restaurants',
+      filters: { op: 'onSnapshot', query: 'collection(restaurants)' },
+    });
+
     setLoading(true);
     const q = query(collection(db, 'restaurants'));
-    const unsub = onSnapshot(
+    unsub = onSnapshot(
       q,
       (snap) => {
         const rows = snap.docs.map((d) =>
@@ -51,13 +63,19 @@ export function useHomeRestaurants(): State {
         setLoading(false);
       },
       (err) => {
+        logFirestoreQueryFailed(
+          promiseId,
+          'useHomeRestaurants.restaurants',
+          err,
+        );
         if (__DEV__) console.warn('[useHomeRestaurants]', err);
         setError('Could not load restaurants');
         setRestaurants([]);
         setLoading(false);
       },
     );
-    return () => unsub();
+
+    return () => unsub?.();
   }, [userCoords]);
 
   return { restaurants, loading, error };

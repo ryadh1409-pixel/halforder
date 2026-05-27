@@ -91,20 +91,8 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
     }
   }
 
-  // 4) Remove this user from other users' blockedUsers arrays
-  const blockedInOtherUsers = await getDocs(
-    query(collection(db, 'users'), where('blockedUsers', 'array-contains', uid)),
-  );
-  for (const userDoc of blockedInOtherUsers.docs) {
-    if (userDoc.id === uid) continue;
-    try {
-      await updateDoc(userDoc.ref, {
-        blockedUsers: arrayRemove(uid),
-      });
-    } catch {
-      // ignore
-    }
-  }
+  // 4) Reverse-block cleanup intentionally skipped.
+  // We do not scan `users` by `blockedUsers array-contains` for privacy/security.
 
   // 5) User profile document
   await deleteDoc(doc(db, 'users', uid));

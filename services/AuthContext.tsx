@@ -1,13 +1,36 @@
+import { USER_ROLE } from '@/constants/roles';
+import {
+  logAuthRoleDetected, normalizeRoleForRouting, roleForSignupIntent,
+  type SignupIntent
+} from '@/lib/authRole';
+import { isRegisteredAuthUser } from '@/lib/authSession';
+import {
+  markAuthSessionBootstrapComplete,
+  markAuthSessionBootstrapFailed,
+  markAuthSessionBootstrapStarted,
+  resetAuthSessionBootstrap,
+  shouldRunAuthSessionBootstrap,
+} from '@/lib/authSessionBootstrap';
+import {
+  applySignupRole,
+  assignUserRole,
+  migrateUserRoleIfNeeded,
+} from '@/services/authRoleAssignment';
+import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
+import { resetForcedTokenRefreshUid } from '@/services/authTokenRefresh';
+import { markDriverOffline } from '@/services/driverPresence';
+import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ConfirmationResult,
   createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
   onAuthStateChanged,
   RecaptchaVerifier,
   reload,
   sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
-  signOut as firebaseSignOut,
   updateProfile,
   type User,
 } from 'firebase/auth';
@@ -17,19 +40,11 @@ import {
   doc,
   getDoc,
   getDocFromServer,
-  setDoc,
-  serverTimestamp,
-  updateDoc,
   increment,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
 } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createAlert } from './alerts';
-import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../lib/invite-link';
-import {
-  getUserFriendlyError,
-  isFirebaseAuthUserInvalidated,
-} from '../utils/errorHandler';
-import { logError } from '../utils/errorLogger';
 import React, {
   createContext,
   useCallback,
@@ -40,45 +55,29 @@ import React, {
   useState,
 } from 'react';
 import { Platform } from 'react-native';
-import {
-  markAuthSessionBootstrapComplete,
-  markAuthSessionBootstrapFailed,
-  markAuthSessionBootstrapStarted,
-  resetAuthSessionBootstrap,
-  shouldRunAuthSessionBootstrap,
-} from '@/lib/authSessionBootstrap';
-import { normalizeRoleForRouting } from '@/lib/authRole';
-import { isRegisteredAuthUser } from '@/lib/authSession';
-import { markDriverOffline } from '@/services/driverPresence';
-import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
-import { auth, db } from './firebase';
+import { useUserRole } from '../hooks/useUserRole';
+import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../lib/invite-link';
 import {
   formatProfileWhatsAppDisplay,
   profilePhoneDigitsOnly,
 } from '../lib/profileWhatsAppPhone';
-import {
-  logAuthRoleDetected,
-  roleForSignupIntent,
-  type SignupIntent,
-} from '@/lib/authRole';
-import {
-  applySignupRole,
-  assignUserRole,
-  migrateUserRoleIfNeeded,
-} from '@/services/authRoleAssignment';
-import { resetForcedTokenRefreshUid } from '@/services/authTokenRefresh';
-import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { syncUserRoleToFirestore } from '../utils/admin';
-import { uploadImageAsync } from './uploadImage';
-import { claimReferralInboxRewards } from './referralRewards';
+import {
+  getUserFriendlyError,
+  isFirebaseAuthUserInvalidated,
+} from '../utils/errorHandler';
+import { logError } from '../utils/errorLogger';
+import { createAlert } from './alerts';
+import { auth, db } from './firebase';
+import { beginFirestoreQuery, logFirestoreQueryFailed } from './firestoreQueryDiagnostics';
 import { subscribeExpoPushTokenRefresh } from './notifications';
 import {
   persistUserPushTokens,
   registerExpoPushTokenAndSyncToFirestore,
 } from './pushNotifications';
-import { useUserRole } from '../hooks/useUserRole';
+import { claimReferralInboxRewards } from './referralRewards';
 import { createRestaurant } from './restaurantService';
-import { USER_ROLE } from '@/constants/roles';
+import { uploadImageAsync } from './uploadImage';
 import type { UserRole } from './userService';
 
 const REFERRAL_CREDIT = 2;
@@ -127,7 +126,19 @@ async function ensureUserDocument(
   photoURL: string | null = null,
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
-  const snap = await getDoc(userRef);
+  const promiseId = beginFirestoreQuery({
+    file: 'services/AuthContext.tsx',
+    listener: 'ensureUserDocument.users',
+    collection: `users/${uid}`,
+    filters: { op: 'getDoc' },
+  });
+  let snap;
+  try {
+    snap = await getDoc(userRef);
+  } catch (err) {
+    logFirestoreQueryFailed(promiseId, 'ensureUserDocument.users', err);
+    throw err;
+  }
   if (snap.exists()) {
     const data = snap.data();
     const updates: Record<string, unknown> = {};
@@ -328,7 +339,7 @@ async function bootstrapSignedInSession(firebaseUser: User): Promise<void> {
     markAuthSessionBootstrapComplete(uid);
   } catch (error) {
     markAuthSessionBootstrapFailed(uid);
-    throw error;
+    if (__DEV__) console.warn('[auth] bootstrap non-fatal', error);
   }
 }
 

@@ -2,6 +2,10 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 import { auth, db } from '../services/firebase';
+import {
+  beginFirestoreQuery,
+  logFirestoreQueryFailed,
+} from '../services/firestoreQueryDiagnostics';
 import { mapRawUserDocument, type PublicUserFields } from '../services/users';
 
 /**
@@ -24,6 +28,12 @@ export function useCurrentUser() {
     setLoading(true);
     setError(null);
     const ref = doc(db, 'users', uid);
+    const promiseId = beginFirestoreQuery({
+      file: 'hooks/useCurrentUser.ts',
+      listener: 'useCurrentUser.users',
+      collection: `users/${uid}`,
+      filters: { op: 'onSnapshot' },
+    });
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -46,7 +56,8 @@ export function useCurrentUser() {
           setError('parse');
         }
       },
-      () => {
+      (err) => {
+        logFirestoreQueryFailed(promiseId, 'useCurrentUser.users', err);
         setProfile(null);
         setLoading(false);
         setError(null);

@@ -19,6 +19,10 @@ import { acceptFoodSwipe } from '@/services/foodSwipeMatch';
 import { ensureOrderChatInitialized } from '@/services/chat';
 import { auth, db } from '@/services/firebase';
 import {
+  beginFirestoreQuery,
+  logFirestoreQueryFailed,
+} from '@/services/firestoreQueryDiagnostics';
+import {
   getCityFromCoordinates,
   getUserLocationSafe,
 } from '@/services/location';
@@ -256,6 +260,12 @@ export function SwipeDiscoveryScreen() {
         ? await getCityFromCoordinates(loc.latitude, loc.longitude)
         : 'Toronto';
       const currentUid = auth.currentUser?.uid ?? '';
+      const promiseId = beginFirestoreQuery({
+        file: 'components/swipe/SwipeDiscoveryScreen.tsx',
+        listener: 'SwipeDiscoveryScreen.ordersOpen',
+        collection: 'orders',
+        filters: { status: '==', value: 'open', op: 'onSnapshot' },
+      });
       const q = query(collection(db, 'orders'), where('status', '==', 'open'));
       unsub = onSnapshot(
         q,
@@ -272,7 +282,12 @@ export function SwipeDiscoveryScreen() {
           setCards(live.length > 0 ? live : mockToSwipeCards());
           setLoadingDeck(false);
         },
-        () => {
+        (err) => {
+          logFirestoreQueryFailed(
+            promiseId,
+            'SwipeDiscoveryScreen.ordersOpen',
+            err,
+          );
           setCards(mockToSwipeCards());
           setLoadingDeck(false);
         },

@@ -14,6 +14,7 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot } from 'expo-router';
 import React from 'react';
 import { LogBox, Platform, StyleSheet, View } from 'react-native';
+LogBox.ignoreLogs(['FirebaseError: Missing or insufficient permissions']);
 
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
 import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';

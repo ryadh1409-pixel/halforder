@@ -805,11 +805,14 @@ service cloud.firestore {
         && (after == 'restaurant' || after == 'driver');
     }
     match /users/{userId} {
-      allow read, list: if isAdmin();
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow get: if isAdmin()
+        || (request.auth != null
+            && request.auth.uid == userId);
+      allow list: if isAdmin();
       allow create: if isAdmin()
         || (request.auth != null && request.auth.uid == userId && request.resource.data.get('stripeOnboardingComplete', false) == false);
       allow update: if isAdmin()
+        || (request.auth != null && request.auth.uid == userId && userStripeOnboardingCompleteNotForged())
         || (
           request.auth != null
           && request.auth.uid == userId
@@ -1422,7 +1425,8 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read, list: if isAdmin();
+      allow read: if isAdmin();
+      allow list: if isAdmin();
       // Published baseline: owner / restaurant / driver may read their orders.
       allow read: if ordersReadByParticipant();
       // List queries do not use allow read when allow list is present (Firestore rules v2).
@@ -1436,6 +1440,9 @@ service cloud.firestore {
       allow list: if driverOrdersByAssignedDriverIdListReadable();
       // Fallback when custom claim is present (refreshUserRoleClaims).
       allow list: if isSignedIn() && authTokenRoleIsDriver();
+      allow list: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.status == "open";
       // Driver getDoc on a single unassigned pool order (accept / preview).
       allow read: if driverPoolOrderSingleRead();
       // Marketplace checkout: auth uid must match payload userId + field guards.
@@ -1461,7 +1468,6 @@ service cloud.firestore {
         && (isAdmin() || !isCurrentUserRestricted())
         && (
           canAccessMarketplaceDeliveryOrder(resource.data)
-          || joinDiscoveryReadable(resource.data)
         );
       allow update: if isSignedIn()
         && (
