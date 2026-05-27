@@ -18,6 +18,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.halforder.app",
       "buildNumber": "3",
+      "entitlements": {
+        "com.apple.developer.in-app-payments": [
+          "merchant.com.halforder.app"
+        ]
+      },
       "associatedDomains": [
         "applinks:halforder.app",
         "applinks:www.halforder.app",

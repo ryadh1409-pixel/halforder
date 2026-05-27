@@ -69,3 +69,7 @@ This runs the production iOS build and, when it finishes, submits it to TestFlig
 
 - Create a new App Store Connect app with `com.halforder.app`, or  
 - Set `ios.bundleIdentifier` back to `com.anonymous.ourfoodclean` in app.json so it matches the existing app.
+
+## Apple Pay merchant ID
+
+Must be **`merchant.com.halforder.app`** (not `merchant.com.halforfer`). See `scripts/fix-apple-pay-merchant.md` for portal + EAS credential steps.

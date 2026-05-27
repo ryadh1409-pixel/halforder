@@ -8,6 +8,7 @@ import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
+import { APPLE_PAY_MERCHANT_ID } from '@/constants/applePay';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
@@ -79,7 +80,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStripeProvider
         publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
-        merchantIdentifier="merchant.com.halforder.app"
+        merchantIdentifier={APPLE_PAY_MERCHANT_ID}
         urlScheme="halforder"
       >
         <ThemeProvider value={DarkTheme}>
