@@ -228,7 +228,10 @@ export function ProfileOrdersSection({
                       : tone === 'orange'
                         ? { bg: 'rgba(251,146,60,0.2)', fg: '#FDBA74' }
                         : { bg: 'rgba(255,255,255,0.1)', fg: pal.textSecondary };
-              const cancelEnabled = canCancelProfileOrder(effectiveStatus);
+              const cancelEnabled = canCancelProfileOrder(
+                effectiveStatus,
+                effectiveDeliveryStatus,
+              );
               const isCancelling = Boolean(cancellingIds[order.id]);
               return (
                 <TouchableOpacity

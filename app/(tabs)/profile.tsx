@@ -661,13 +661,6 @@ export default function ProfileScreen() {
         cancelledBy: currentUid,
         updatedAt: serverTimestamp(),
       };
-      console.log('[ORDER BEFORE CANCEL]', {
-        id: order.id,
-        status: order.status,
-        deliveryStatus: order.deliveryStatus,
-        paymentStatus: order.paymentStatus,
-      });
-      console.log('[ORDER CANCEL PAYLOAD]', payload);
       setProfileOrdersCancellingIds((prev) => ({ ...prev, [order.id]: true }));
       try {
         await updateDoc(orderRef, payload);

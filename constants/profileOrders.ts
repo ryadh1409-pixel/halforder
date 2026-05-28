@@ -5,28 +5,29 @@ export function profileOrderStatusLabel(
   deliveryStatus?: string | null,
 ): string {
   const ds = (deliveryStatus ?? '').trim();
-  if (ds === 'waiting_driver') return 'Finding driver';
+  if (ds === 'waiting_driver') return 'Finding Driver';
   if (status === 'payment_processing') return 'Processing payment';
   if (status === 'delivered' || ds === 'delivered') return 'Delivered';
   if (status === 'cancelled') return 'Cancelled';
-  if (status === 'pending_driver') return 'Finding driver';
+  if (status === 'pending_driver') return 'Finding Driver';
   if (status === 'driver_assigned' || ds === 'driver_assigned') return 'Driver assigned';
-  if (status === 'picked_up') return 'Driver on the way';
+  if (status === 'picked_up') return 'On the Way';
   if (
     status === 'arriving_restaurant' ||
     status === 'picked_up_pending' ||
     status === 'on_the_way' ||
+    status === 'delivering' ||
     status === 'arrived_customer' ||
     ds === 'on_the_way' ||
+    ds === 'delivering' ||
     ds === 'heading_to_customer' ||
     ds === 'driver_assigned'
   ) {
-    return 'On the way';
+    return 'On the Way';
   }
-  if (
-    status === 'accepted' || status === 'restaurant_accepted'
-  ) return 'Restaurant accepted';
-  if (status === 'preparing') return 'Preparing your food';
+  if (status === 'accepted' || status === 'restaurant_accepted' || status === 'preparing') {
+    return 'Preparing';
+  }
   if (status === 'ready' || status === 'ready_for_pickup') return 'Ready for pickup';
   if (status === 'awaiting_payment') return 'Awaiting payment';
   return 'Pending';
@@ -101,12 +102,15 @@ export function profileOrderStatusActive(
     ds === 'driver_assigned' ||
     status === 'picked_up' ||
     status === 'on_the_way' ||
+    status === 'delivering' ||
     ds === 'on_the_way' ||
+    ds === 'delivering' ||
     status === 'arrived_customer' ||
     status === 'preparing'
   );
 }
 
-export function canCancelProfileOrder(status: string): boolean {
-  return status !== 'delivered' && status !== 'cancelled' && status !== 'rejected';
+export function canCancelProfileOrder(status: string, deliveryStatus?: string | null): boolean {
+  const ds = (deliveryStatus ?? '').trim();
+  return status !== 'delivered' && ds !== 'delivered' && status !== 'cancelled' && status !== 'rejected';
 }
