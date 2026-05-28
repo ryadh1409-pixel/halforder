@@ -1,4 +1,3 @@
-import { auth, db } from './firebase';
 import {
   doc,
   getDoc,
@@ -6,6 +5,7 @@ import {
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
+import { auth, db } from './firebase';
 
 type PaymentWriteOperation =
   | 'set_processing'
@@ -18,6 +18,32 @@ type PaymentWriteInput = {
   operation: PaymentWriteOperation;
   payload: Record<string, unknown>;
 };
+
+type PaymentPayload = Record<string, unknown>;
+type PaymentUpdateAllowedKey =
+  | 'status'
+  | 'paymentStatus'
+  | 'paymentIntentId'
+  | 'checkoutSessionId'
+  | 'stripePaymentIntentId'
+  | 'updatedAt'
+  | 'paidAt'
+  | 'paymentFailedAt'
+  | 'estimatedDeliveryTime'
+  | 'deliveryStatus';
+
+const PAYMENT_UPDATE_ALLOWED_KEYS: PaymentUpdateAllowedKey[] = [
+  'status',
+  'paymentStatus',
+  'paymentIntentId',
+  'checkoutSessionId',
+  'stripePaymentIntentId',
+  'updatedAt',
+  'paidAt',
+  'paymentFailedAt',
+  'estimatedDeliveryTime',
+  'deliveryStatus',
+];
 
 function logPaymentWriteStart(
   op: PaymentWriteOperation,
@@ -88,6 +114,83 @@ function isRetryableFirestoreError(error: unknown): boolean {
   );
 }
 
+function readRequiredPaymentIntentId(payload: PaymentPayload): string {
+  const paymentIntentId = payload.paymentIntentId;
+  if (typeof paymentIntentId !== 'string' || paymentIntentId.trim().length === 0) {
+    throw new Error('Missing required paymentIntentId for payment operation');
+  }
+  return paymentIntentId.trim();
+}
+
+function readStripePaymentIntentId(payload: PaymentPayload, fallback: string): string {
+  const stripePaymentIntentId = payload.stripePaymentIntentId;
+  if (
+    typeof stripePaymentIntentId === 'string' &&
+    stripePaymentIntentId.trim().length > 0
+  ) {
+    return stripePaymentIntentId.trim();
+  }
+  return fallback;
+}
+
+function buildPaymentPayload(
+  operation: PaymentWriteOperation,
+  payload: PaymentPayload,
+): PaymentPayload {
+  switch (operation) {
+    case 'set_processing': {
+      const paymentIntentId = readRequiredPaymentIntentId(payload);
+      const stripePaymentIntentId = readStripePaymentIntentId(payload, paymentIntentId);
+      return {
+        status: 'payment_processing',
+        paymentStatus: 'processing',
+        paymentIntentId,
+        stripePaymentIntentId,
+        updatedAt: serverTimestamp(),
+      };
+    }
+    case 'set_paid': {
+      const paymentIntentId = readRequiredPaymentIntentId(payload);
+      const stripePaymentIntentId = readStripePaymentIntentId(payload, paymentIntentId);
+      return {
+        status: 'pending_driver',
+        paymentStatus: 'paid',
+        deliveryStatus: 'waiting_driver',
+        paymentIntentId,
+        stripePaymentIntentId,
+        paidAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+    }
+    case 'set_failed':
+      return {
+        status: 'awaiting_payment',
+        paymentStatus: 'failed',
+        paymentFailedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+    case 'set_unpaid':
+      return {
+        paymentStatus: 'unpaid',
+        updatedAt: serverTimestamp(),
+      };
+    default: {
+      const exhaustiveCheck: never = operation;
+      throw new Error(`Unsupported payment operation: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
+function cleanPaymentUpdate(payload: PaymentPayload): PaymentPayload {
+  const cleaned: PaymentPayload = {};
+  for (const key of PAYMENT_UPDATE_ALLOWED_KEYS) {
+    if (payload[key] !== undefined) {
+      cleaned[key] = payload[key];
+    }
+  }
+  return cleaned;
+}
+
 export async function assertPaymentOrderOwnership(orderId: string): Promise<void> {
   const uid = auth.currentUser?.uid ?? null;
   if (!uid) throw new Error('Please sign in to complete payment');
@@ -116,18 +219,22 @@ export async function updatePaymentOrderWithRetry(
   await assertPaymentOrderOwnership(orderId);
 
   const path = `orders/${orderId}`;
-  const payload = { ...input.payload, updatedAt: serverTimestamp() };
+  const payload = buildPaymentPayload(input.operation, input.payload);
+  const safePayload = cleanPaymentUpdate(payload);
+  console.log('PAYMENT WRITE KEYS', Object.keys(payload));
+  console.log('PAYMENT WRITE PAYLOAD', payload);
+  console.log('PAYMENT SAFE KEYS', Object.keys(safePayload));
 
   let attempt = 0;
   while (attempt < 3) {
     attempt += 1;
-    logPaymentWriteStart(input.operation, path, uid, payload);
+    logPaymentWriteStart(input.operation, path, uid, safePayload);
     try {
-      await updateDoc(doc(db, 'orders', orderId), payload);
+      await updateDoc(doc(db, 'orders', orderId), safePayload);
       logPaymentWriteSuccess(input.operation, path, uid);
       return;
     } catch (error) {
-      logPaymentWriteFail(input.operation, path, uid, payload, error);
+      logPaymentWriteFail(input.operation, path, uid, safePayload, error);
       if (!isRetryableFirestoreError(error) || attempt >= 3) {
         throw error;
       }

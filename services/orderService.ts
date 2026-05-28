@@ -434,7 +434,8 @@ export async function createOrder(
   payload: MarketplaceOrderCreatePayload,
 ): Promise<string> {
   await ensureAuthReady();
-  if (!auth.currentUser?.uid) {
+  const customerUid = auth.currentUser?.uid?.trim() ?? '';
+  if (!customerUid) {
     throw new Error('Please sign in first.');
   }
 
@@ -476,7 +477,7 @@ export async function createOrder(
     longitude: restaurantLocation.lng,
   };
   let customerSnapshot: CustomerSnapshot = {
-    id: payload.userId,
+    id: customerUid,
     name: '',
     avatar: null,
     address: payload.deliveryLocation.address,
@@ -484,7 +485,7 @@ export async function createOrder(
   try {
     const [restaurantSnap, customerSnap] = await Promise.all([
       getDoc(doc(db, 'restaurants', payload.restaurantId)),
-      getDoc(doc(db, 'users', payload.userId)),
+      getDoc(doc(db, 'users', customerUid)),
     ]);
     if (restaurantSnap.exists()) {
       const r = restaurantSnap.data() as Record<string, unknown>;
@@ -529,7 +530,7 @@ export async function createOrder(
     if (customerSnap.exists()) {
       const u = customerSnap.data() as Record<string, unknown>;
       customerSnapshot = {
-        id: payload.userId,
+        id: customerUid,
         name: typeof u.name === 'string' ? u.name : '',
         avatar:
           typeof u.avatar === 'string'
@@ -544,13 +545,17 @@ export async function createOrder(
     // Keep snapshot fallbacks and still create order.
   }
 
-  if (auth.currentUser?.uid !== payload.userId) {
-    throw new Error('createOrder: signed-in user does not match payload.userId');
+  if (payload.userId.trim() !== customerUid) {
+    console.warn('[createOrder] payload.userId mismatch; using auth uid', {
+      payloadUserId: payload.userId,
+      customerUid,
+      restaurantId: payload.restaurantId,
+    });
   }
 
   const orderPayload = {
-    userId: payload.userId,
-    customerId: payload.userId,
+    userId: customerUid,
+    customerId: customerUid,
     restaurantId: payload.restaurantId,
     venueId: payload.restaurantId,
     items: payload.items,
@@ -564,7 +569,7 @@ export async function createOrder(
     deliveryType,
     estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',
-    deliveryStatus: 'waiting_driver',
+    deliveryStatus: null,
     paymentStatus: 'unpaid',
     stripePaymentIntentId: null,
     paymentIntentId: null,
@@ -606,6 +611,10 @@ export async function createOrder(
     hiddenAt: null,
     restoredAt: null,
   };
+  console.log('ORDER INITIAL DELIVERY STATUS', orderPayload.deliveryStatus);
+  console.log('ORDER CREATE CUSTOMER UID', customerUid);
+  console.log('ORDER CREATE RESTAURANT UID', payload.restaurantId);
+  console.log('ORDER CREATE PAYLOAD', orderPayload);
 
   let ref;
   try {
