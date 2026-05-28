@@ -120,6 +120,9 @@ export function ProfileOrdersSection({
   }, [activePulse]);
 
   const [confirmingOrder, setConfirmingOrder] = React.useState<ProfileOrderRow | null>(null);
+  const [locallyCancelledOrderIds, setLocallyCancelledOrderIds] = React.useState<
+    Record<string, boolean>
+  >({});
 
   const askCancel = (order: ProfileOrderRow) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -134,6 +137,7 @@ export function ProfileOrdersSection({
     const target = confirmingOrder;
     setConfirmingOrder(null);
     await onCancelOrder(target);
+    setLocallyCancelledOrderIds((prev) => ({ ...prev, [target.id]: true }));
   };
 
   const grouped = orders.reduce<Record<'Today' | 'Yesterday' | 'Earlier', ProfileOrderRow[]>>(
@@ -200,9 +204,20 @@ export function ProfileOrdersSection({
                 <View key={group} style={styles.groupWrap}>
                   <Text style={[styles.groupTitle, { color: pal.textSecondary }]}>{group}</Text>
                   {grouped[group].map((order) => {
-              const tone = profileOrderBadgeTone(order.status, order.deliveryStatus);
-              const badgeIcon = profileOrderStatusIcon(order.status, order.deliveryStatus);
-              const active = profileOrderStatusActive(order.status, order.deliveryStatus);
+              const forcedCancelled = Boolean(locallyCancelledOrderIds[order.id]);
+              const effectiveStatus = forcedCancelled ? 'cancelled' : order.status;
+              const effectiveDeliveryStatus = forcedCancelled
+                ? 'cancelled'
+                : order.deliveryStatus;
+              const tone = profileOrderBadgeTone(effectiveStatus, effectiveDeliveryStatus);
+              const badgeIcon = profileOrderStatusIcon(
+                effectiveStatus,
+                effectiveDeliveryStatus,
+              );
+              const active = profileOrderStatusActive(
+                effectiveStatus,
+                effectiveDeliveryStatus,
+              );
               const badgeStyle =
                 tone === 'green'
                   ? { bg: '#16A34A', fg: '#FFFFFF' }
@@ -213,7 +228,7 @@ export function ProfileOrdersSection({
                       : tone === 'orange'
                         ? { bg: 'rgba(251,146,60,0.2)', fg: '#FDBA74' }
                         : { bg: 'rgba(255,255,255,0.1)', fg: pal.textSecondary };
-              const cancelEnabled = canCancelProfileOrder(order.status);
+              const cancelEnabled = canCancelProfileOrder(effectiveStatus);
               const isCancelling = Boolean(cancellingIds[order.id]);
               return (
                 <TouchableOpacity
@@ -236,7 +251,7 @@ export function ProfileOrdersSection({
                         style={[
                           styles.restaurant,
                           { color: pal.text },
-                          order.status === 'cancelled'
+                          effectiveStatus === 'cancelled'
                             ? { textDecorationLine: 'line-through', opacity: 0.75 }
                             : null,
                         ]}
@@ -273,7 +288,10 @@ export function ProfileOrdersSection({
                           style={{ marginRight: 4 }}
                         />
                         <Text style={[styles.badgeText, { color: badgeStyle.fg }]}>
-                          {profileOrderStatusLabel(order.status, order.deliveryStatus)}
+                          {profileOrderStatusLabel(
+                            effectiveStatus,
+                            effectiveDeliveryStatus,
+                          )}
                         </Text>
                       </Animated.View>
                     </View>
@@ -284,9 +302,9 @@ export function ProfileOrdersSection({
                       {formatDate(order.createdAtMs)} · {formatTime(order.createdAtMs)}
                     </Text>
                     <Text style={[styles.meta, { color: pal.textSecondary }]}>
-                      {profileOrderStatusLabel(order.status, order.deliveryStatus)}
+                      {profileOrderStatusLabel(effectiveStatus, effectiveDeliveryStatus)}
                     </Text>
-                    {order.status === 'cancelled' ? (
+                    {effectiveStatus === 'cancelled' ? (
                       <Animated.View
                         style={[
                           styles.cancelledState,

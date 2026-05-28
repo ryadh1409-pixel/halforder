@@ -1213,20 +1213,32 @@ service cloud.firestore {
         && restaurantDriverIdPatchOk()
         && request.resource.data.updatedAt == request.time;
     }
-    function customerCancelStatusOk(before, after) {
-      return after.status == 'cancelled'
-        && before.status != 'delivered'
+    function customerMarketplaceCancelAllowed(before, after) {
+      return isSignedIn()
+        && primaryUidFromOrder(before) == request.auth.uid
         && before.status != 'cancelled'
-        && before.status != 'rejected';
-    }
-    function marketplaceCustomerPatchOk() {
-      let before = resource.data;
-      return primaryUidFromOrder(before) == request.auth.uid
-        && marketplaceOrderPatchKeys().hasOnly(['status','updatedAt','cancelledAt','cancelledBy','notes','deliveryStatus'])
-        && (
-          request.resource.data.status == before.status
-          || customerCancelStatusOk(before, request.resource.data)
-        );
+        && before.status != 'delivered'
+        && before.status != 'rejected'
+        && after.status == 'cancelled'
+        && after.deliveryStatus == 'cancelled'
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'deliveryStatus',
+            'cancelledAt',
+            'cancelledBy',
+            'updatedAt'
+          ])
+        && before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('userId', '') == after.get('userId', '')
+        && before.get('items', []) == after.get('items', [])
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('driverId', null) == after.get('driverId', null)
+        && before.get('assignedDriverId', null) == after.get('assignedDriverId', null)
+        && after.get('cancelledBy', '') == request.auth.uid;
     }
     /** Checkout / client payment sheet updates (prefer tightening once all payment writes are server-side). */
     function marketplaceCustomerCheckoutPatchOk() {
@@ -1291,8 +1303,7 @@ service cloud.firestore {
       return driverClaimPatchOk() || driverActivePatchOk();
     }
     function marketplaceOrderActorPatchOk() {
-      return marketplaceCustomerPatchOk()
-        || marketplaceRestaurantPatchOk()
+      return marketplaceRestaurantPatchOk()
         || marketplaceDriverPatchOk();
     }
 
@@ -1487,6 +1498,10 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && (
           isAdmin()
+          || (
+            !isCurrentUserRestricted()
+            && customerMarketplaceCancelAllowed(resource.data, request.resource.data)
+          )
           || restaurantDashboardPatchOk()
           || isSwipeAcceptUpdate()
           || isParticipantsJoinUpdate()

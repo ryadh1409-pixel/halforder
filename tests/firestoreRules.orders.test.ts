@@ -322,6 +322,141 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows customer cancellation patch on own pending delivery order', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_ok'), {
+          userId: 'cust_cancel',
+          customerId: 'cust_cancel',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'pending_driver',
+          deliveryStatus: 'waiting_driver',
+          paymentStatus: 'paid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_cancel').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_ok'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cust_cancel',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies customer cancellation patch when caller is not order owner', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_other_owner'), {
+          userId: 'cust_owner',
+          customerId: 'cust_owner',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'pending_driver',
+          deliveryStatus: 'waiting_driver',
+          paymentStatus: 'paid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_other').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_other_owner'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cust_other',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies customer cancellation patch when status transition is not pending_driver', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_wrong_status'), {
+          userId: 'cust_cancel',
+          customerId: 'cust_cancel',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'preparing',
+          deliveryStatus: 'preparing',
+          paymentStatus: 'paid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_cancel').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_wrong_status'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cust_cancel',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies customer cancellation patch when order is already delivered', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_delivered'), {
+          userId: 'cust_cancel',
+          customerId: 'cust_cancel',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'delivered',
+          deliveryStatus: 'delivered',
+          paymentStatus: 'paid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_cancel').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_delivered'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cust_cancel',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies customer cancellation patch when cancelledBy does not match caller', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_by_mismatch'), {
+          userId: 'cust_cancel',
+          customerId: 'cust_cancel',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'pending_driver',
+          deliveryStatus: 'waiting_driver',
+          paymentStatus: 'paid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_cancel').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_by_mismatch'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'someone_else',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('allows valid order create by owner', async () => {
       const db = te().authenticatedContext('u1').firestore();
       await assertSucceeds(

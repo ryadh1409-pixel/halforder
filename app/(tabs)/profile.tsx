@@ -656,6 +656,7 @@ export default function ProfileScreen() {
       const orderRef = doc(db, 'orders', order.id);
       const payload = {
         status: 'cancelled',
+        deliveryStatus: 'cancelled',
         cancelledAt: serverTimestamp(),
         cancelledBy: currentUid,
         updatedAt: serverTimestamp(),
