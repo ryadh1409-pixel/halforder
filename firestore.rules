@@ -1033,8 +1033,12 @@ service cloud.firestore {
         ? d.get('userId', '')
         : d.get('customerId', '') is string && d.get('customerId', '').size() > 0
           ? d.get('customerId', '')
+          : d.get('createdBy', '') is string && d.get('createdBy', '').size() > 0
+            ? d.get('createdBy', '')
           : d.get('creatorId', '') is string && d.get('creatorId', '').size() > 0
             ? d.get('creatorId', '')
+            : d.get('hostId', '') is string && d.get('hostId', '').size() > 0
+              ? d.get('hostId', '')
             : d.users is list && d.users.size() > 0 && d.users[0] is string
               ? d.users[0]
               : '';
@@ -1227,11 +1231,23 @@ service cloud.firestore {
     /** Checkout / client payment sheet updates (prefer tightening once all payment writes are server-side). */
     function marketplaceCustomerCheckoutPatchOk() {
       let before = resource.data;
+      let after = request.resource.data;
       return primaryUidFromOrder(before) == request.auth.uid
         && marketplaceOrderPatchKeys().hasOnly([
           'status','paymentStatus','paymentIntentId','checkoutSessionId','stripePaymentIntentId',
           'updatedAt','paidAt','paymentFailedAt','estimatedDeliveryTime','deliveryStatus'
-        ]);
+        ])
+        && (
+          (
+            after.status == 'payment_processing'
+            && after.paymentStatus == 'processing'
+          )
+          || (
+            after.status == 'pending_driver'
+            && after.paymentStatus == 'paid'
+            && after.deliveryStatus == 'waiting_driver'
+          )
+        );
     }
     function restaurantMustNotAssignDriver(before, after) {
       return !(
@@ -1493,6 +1509,10 @@ service cloud.firestore {
               || marketplaceOrderActorPatchOk()
             )
           )
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceCustomerCheckoutPatchOk()
+          )
         );
       allow delete: if isAdmin()
         || (
@@ -1579,8 +1599,27 @@ service cloud.firestore {
     match /carts/{cartId} {
       allow read, write: if request.auth != null;
     }
+    function paymentDocOwnerUid(d) {
+      return d.get('userId', d.get('uid', d.get('customerId', '')));
+    }
+    function paymentDocOwnerMatchesAuth(d) {
+      return isSignedIn()
+        && paymentDocOwnerUid(d) is string
+        && paymentDocOwnerUid(d).size() > 0
+        && paymentDocOwnerUid(d) == request.auth.uid;
+    }
     match /payments/{paymentId} {
-      allow read, write: if request.auth != null;
+      allow create: if isSignedIn()
+        && paymentDocOwnerMatchesAuth(request.resource.data);
+      allow read: if isAdmin()
+        || paymentDocOwnerMatchesAuth(resource.data);
+      allow update: if isAdmin()
+        || (
+          paymentDocOwnerMatchesAuth(resource.data)
+          && paymentDocOwnerUid(request.resource.data) == paymentDocOwnerUid(resource.data)
+        );
+      allow delete: if isAdmin()
+        || paymentDocOwnerMatchesAuth(resource.data);
     }
     match /restaurants/{restaurantId} {
       allow read: if true;
@@ -1671,3 +1710,4 @@ service cloud.firestore {
     }
   }
 }
+// force redeploy Thu May 28 03:06:57 EDT 2026

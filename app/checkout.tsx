@@ -1,13 +1,14 @@
 import AppHeader from '@/components/AppHeader';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
-import { auth, db, ensureAuthReady } from '@/services/firebase';
+import { auth, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
 import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripe';
+import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
 import { showError, showSuccess } from '@/utils/toast';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { serverTimestamp } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -86,10 +87,13 @@ export default function CheckoutScreen() {
 
       if (result.status === 'canceled') {
         try {
-          await updateDoc(doc(db, 'orders', id), {
-            status: 'awaiting_payment',
-            paymentStatus: 'unpaid',
-            updatedAt: serverTimestamp(),
+          await updatePaymentOrderWithRetry({
+            orderId: id,
+            operation: 'set_unpaid',
+            payload: {
+              status: 'awaiting_payment',
+              paymentStatus: 'unpaid',
+            },
           });
         } catch {
           // best-effort cleanup
@@ -115,14 +119,17 @@ export default function CheckoutScreen() {
         }),
       );
 
-      await updateDoc(doc(db, 'orders', id), {
-        paymentStatus: 'paid',
-        paymentIntentId: result.paymentIntentId,
-        stripePaymentIntentId: result.paymentIntentId,
-        amount: Math.round(order.totalPrice * 100),
-        status: 'pending_driver',
-        deliveryStatus: 'waiting_driver',
-        updatedAt: serverTimestamp(),
+      await updatePaymentOrderWithRetry({
+        orderId: id,
+        operation: 'set_paid',
+        payload: {
+          paymentStatus: 'paid',
+          paymentIntentId: result.paymentIntentId,
+          stripePaymentIntentId: result.paymentIntentId,
+          status: 'pending_driver',
+          deliveryStatus: 'waiting_driver',
+          paidAt: serverTimestamp(),
+        },
       });
 
       setPhase('done');

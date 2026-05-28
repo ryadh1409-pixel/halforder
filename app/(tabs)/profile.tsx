@@ -20,7 +20,9 @@ import {
   profileWhatsAppOnChangeText,
 } from '../../lib/profileWhatsAppPhone';
 import { BlockedUsersList } from '../../components/BlockedUsersList';
+import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
 import { useBlockedUsers } from '../../hooks/useBlockedUsers';
+import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
 import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
@@ -61,7 +63,9 @@ import {
   getDoc,
   getDocFromServer,
   onSnapshot,
+  serverTimestamp,
   setDoc,
+  updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -70,6 +74,7 @@ import {
   Alert,
   Linking,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -274,6 +279,9 @@ export default function ProfileScreen() {
   const [reportReason, setReportReason] = useState<ReportReason>('spam');
   const [submittingReport, setSubmittingReport] = useState(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [profileOrdersCancellingIds, setProfileOrdersCancellingIds] = useState<
+    Record<string, boolean>
+  >({});
   const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(null);
   const displayNameInputRef = useRef<TextInput>(null);
   const nameFeedbackClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -281,6 +289,14 @@ export default function ProfileScreen() {
   const registered = isRegisteredAuthUser(user);
   const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
+  const {
+    rows: profileOrders,
+    loading: profileOrdersLoading,
+    refreshing: profileOrdersRefreshing,
+    errorMessage: profileOrdersError,
+    refresh: refreshProfileOrders,
+    indexBuilding: profileOrdersIndexBuilding,
+  } = useProfileOrders(uid);
   const {
     blockedUsers,
     blockedUserIds,
@@ -623,6 +639,52 @@ export default function ProfileScreen() {
     setDeleteAccountModalVisible(false);
   }, []);
 
+  const handleOpenOrderDetails = useCallback(
+    (orderId: string) => {
+      router.push(`/order/${encodeURIComponent(orderId)}` as never);
+    },
+    [router],
+  );
+
+  const handleCancelProfileOrder = useCallback(
+    async (order: ProfileOrderRow) => {
+      const currentUid = auth.currentUser?.uid;
+      if (!currentUid) {
+        showError('Please sign in again.');
+        return;
+      }
+      const orderRef = doc(db, 'orders', order.id);
+      const payload = {
+        status: 'cancelled',
+        cancelledAt: serverTimestamp(),
+        cancelledBy: currentUid,
+        updatedAt: serverTimestamp(),
+      };
+      console.log('[ORDER BEFORE CANCEL]', {
+        id: order.id,
+        status: order.status,
+        deliveryStatus: order.deliveryStatus,
+        paymentStatus: order.paymentStatus,
+      });
+      console.log('[ORDER CANCEL PAYLOAD]', payload);
+      setProfileOrdersCancellingIds((prev) => ({ ...prev, [order.id]: true }));
+      try {
+        await updateDoc(orderRef, payload);
+        showSuccess('Order cancelled successfully');
+      } catch (e) {
+        logError(e);
+        showError(getUserFriendlyError(e));
+      } finally {
+        setProfileOrdersCancellingIds((prev) => {
+          const next = { ...prev };
+          delete next[order.id];
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
   const handleAfterAccountDeleted = useCallback(async () => {
     setDeleteAccountModalVisible(false);
     try {
@@ -828,6 +890,13 @@ export default function ProfileScreen() {
           { paddingBottom: scrollBottomPadding },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={profileOrdersRefreshing}
+            onRefresh={() => void refreshProfileOrders()}
+            tintColor={pal.primary}
+          />
+        }
       >
         <View style={styles.profileBody}>
           <View style={dynamicStyles.profileHeader}>
@@ -1035,11 +1104,28 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Text style={dynamicStyles.sectionHeading}>Preferences</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.label}>Language</Text>
-            <Text style={dynamicStyles.readOnlyValue}>English</Text>
-          </View>
+          <ProfileOrdersSection
+            pal={{
+              card: pal.surface,
+              border: pal.border,
+              text: pal.text,
+              textSecondary: pal.textSecondary,
+              textTertiary: pal.textTertiary,
+              primary: pal.primary,
+              onPrimary: pal.onPrimary,
+              danger: pal.danger,
+              success: pal.success,
+            }}
+            orders={profileOrders}
+            loading={profileOrdersLoading}
+            refreshing={profileOrdersRefreshing}
+            errorMessage={profileOrdersError}
+            indexBuilding={profileOrdersIndexBuilding}
+            cancellingIds={profileOrdersCancellingIds}
+            onOpenOrder={handleOpenOrderDetails}
+            onCancelOrder={handleCancelProfileOrder}
+            onRetry={() => void refreshProfileOrders()}
+          />
 
           <Text style={dynamicStyles.sectionHeading}>Support & legal</Text>
           <View style={dynamicStyles.card}>

@@ -245,6 +245,83 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       await assertFails(getDoc(doc(db, 'orders', 'mkt5')));
     });
 
+    it('allows owner checkout patch on unpaid order (processing -> intent ids)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt6'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          paymentStatus: 'unpaid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt6'), {
+          status: 'payment_processing',
+          paymentStatus: 'processing',
+          paymentIntentId: 'pi_123',
+          stripePaymentIntentId: 'pi_123',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('denies non-owner checkout patch on unpaid order', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt7'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          paymentStatus: 'unpaid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust2').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'mkt7'), {
+          status: 'payment_processing',
+          paymentStatus: 'processing',
+          paymentIntentId: 'pi_123',
+          stripePaymentIntentId: 'pi_123',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('allows checkout patch when order owner is stored in createdBy', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_createdBy'), {
+          createdBy: 'cust_created',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          paymentStatus: 'unpaid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_created').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt_createdBy'), {
+          status: 'payment_processing',
+          paymentStatus: 'processing',
+          paymentIntentId: 'pi_456',
+          stripePaymentIntentId: 'pi_456',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('allows valid order create by owner', async () => {
       const db = te().authenticatedContext('u1').firestore();
       await assertSucceeds(

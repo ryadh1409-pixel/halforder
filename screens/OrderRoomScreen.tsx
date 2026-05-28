@@ -52,6 +52,15 @@ import {
   buildOrderInviteWhatsAppMessage,
   openWhatsAppWithText,
 } from '../lib/orderWhatsAppInvite';
+import {
+  copyInviteLink,
+  shareInviteSheet,
+  shareInviteViaDiscord,
+  shareInviteViaIMessage,
+  shareInviteViaTelegram,
+  shareInviteViaWhatsApp,
+  type InviteShareInput,
+} from '../lib/sharing/shareToWhatsApp';
 import { isMessageSafe, reportBlockedMessage } from '../services/chatSecurity';
 import { checkTaxGift } from '../services/taxGift';
 import { auth, db } from '../services/firebase';
@@ -176,6 +185,7 @@ export default function OrderRoomScreen() {
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const hasExpiredRef = useRef(false);
   const inviteFadeAnim = useRef(new Animated.Value(0)).current;
+  const inviteSentAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     hasExpiredRef.current = false;
   }, [orderId]);
@@ -896,59 +906,55 @@ export default function OrderRoomScreen() {
   );
   const orderShareMessage = `🍔 Join my order on HalfOrder\n\nCoordinate pickup and your share with the group.\n\nTap to join:\n${orderShareLink}`;
 
+  const buildInviteShareInput = (): InviteShareInput => {
+    const participantsCount = Math.max(1, order?.participants?.length ?? 1);
+    const totalOrderUsd = order?.totalPrice ?? null;
+    const yourShareUsd =
+      order?.sharePrice ??
+      (typeof totalOrderUsd === 'number' ? totalOrderUsd / participantsCount : null);
+    return {
+      orderId,
+      restaurantName: order?.restaurantName ?? 'Restaurant',
+      totalOrderUsd,
+      yourShareUsd,
+      deliveryMode: 'Shared delivery',
+      refUserId: auth.currentUser?.uid ?? null,
+    };
+  };
+
+  const showInviteSentFeedback = () => {
+    Animated.sequence([
+      Animated.timing(inviteSentAnim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1400),
+      Animated.timing(inviteSentAnim, {
+        toValue: 0,
+        duration: 260,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    showSuccess('Invite sent 🚀');
+  };
+
   const handleInvite = async () => {
-    const link = `https://halforder.app/order/${orderId}`;
-    const message = `Join my HalfOrder and split this meal 🍕 ${link}`;
-    try {
-      if (Platform.OS === 'web') {
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(message);
-          showSuccess('Invite message copied to clipboard. Share it anywhere!');
-        } else {
-          showNotice('Share', message);
-        }
-        return;
-      }
-      await Share.share({
-        message,
-        title: 'Join my HalfOrder order',
-      });
-    } catch (error) {
-      if ((error as { message?: string })?.message !== 'User did not share') {
-        showError('Could not open share sheet.');
-      }
+    const ok = await shareInviteSheet(buildInviteShareInput());
+    if (ok) {
+      showInviteSentFeedback();
+      return;
     }
+    showError('Could not open share sheet.');
   };
 
   const handleInviteViaWhatsApp = async () => {
-    const orderLink = `https://halforder.app/join/${orderId}`;
-    const restaurantName = order?.restaurantName ?? 'This order';
-    const mealType = order?.mealType ?? 'Not specified';
-    const sharePrice =
-      order?.sharePrice != null ? order.sharePrice.toFixed(2) : '—';
-    const message = `Hey! I'm using HalfOrder to share meals and save money.\n\nJoin my order here:\n${orderLink}\n\nRestaurant: ${restaurantName}\nMeal: ${mealType}\nShare price: $${sharePrice}\n\nDownload HalfOrder and join!`;
-    const encodedMessage = encodeURIComponent(message);
-    const waUrl = `https://wa.me/?text=${encodedMessage}`;
-
-    if (Platform.OS === 'web') {
-      (window as unknown as { open: (u: string) => void }).open(
-        waUrl,
-        '_blank',
-      );
+    const ok = await shareInviteViaWhatsApp(buildInviteShareInput());
+    if (ok) {
+      showInviteSentFeedback();
       return;
     }
-    try {
-      await Linking.openURL(waUrl);
-    } catch {
-      Share.share({
-        message,
-        title: 'Join my HalfOrder order',
-      }).catch(() =>
-        showError(
-          'Could not open WhatsApp. You can copy the message from the order screen.',
-        ),
-      );
-    }
+    showError('Could not open WhatsApp. You can copy the invite link instead.');
   };
 
   const handleShareOrderWhatsApp = () => {
@@ -971,35 +977,58 @@ export default function OrderRoomScreen() {
   };
 
   const handleShareOrderSMS = () => {
-    if (Platform.OS === 'web') {
-      const encoded = encodeURIComponent(orderShareMessage);
-      (window as unknown as { open: (u: string) => void }).open(
-        `sms:?body=${encoded}`,
-        '_self',
-      );
-    } else {
-      Linking.openURL(
-        `sms:?body=${encodeURIComponent(orderShareMessage)}`,
-      ).catch(() =>
-        Share.share({ message: orderShareMessage, title: 'Join my HalfOrder' }),
-      );
-    }
+    void shareInviteViaIMessage(buildInviteShareInput()).then((ok) => {
+      if (ok) showInviteSentFeedback();
+      else showError('Could not open Messages.');
+    });
   };
 
   const handleCopyOrderLink = () => {
-    if (
-      Platform.OS === 'web' &&
-      typeof navigator !== 'undefined' &&
-      navigator.clipboard?.writeText
-    ) {
-      navigator.clipboard
-        .writeText(orderShareLink)
-        .then(() => showSuccess('Link copied to clipboard.'));
-    } else {
-      Share.share({ message: orderShareLink, title: 'Copy link' })
-        .then(() => {})
-        .catch(() => showNotice('Link', orderShareLink));
-    }
+    void copyInviteLink(buildInviteShareInput()).then((ok) => {
+      if (ok) {
+        showSuccess('Invite link copied.');
+      } else if (
+        Platform.OS === 'web' &&
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard?.writeText
+      ) {
+        navigator.clipboard
+          .writeText(orderShareLink)
+          .then(() => showSuccess('Link copied to clipboard.'));
+      } else {
+        Share.share({ message: orderShareLink, title: 'Copy link' })
+          .then(() => {})
+          .catch(() => showNotice('Link', orderShareLink));
+      }
+    });
+  };
+
+  const handleShareOrderTelegram = () => {
+    void shareInviteViaTelegram(buildInviteShareInput()).then((ok) => {
+      if (ok) showInviteSentFeedback();
+      else showError('Could not open Telegram.');
+    });
+  };
+
+  const handleShareOrderDiscord = () => {
+    void shareInviteViaDiscord(buildInviteShareInput()).then((ok) => {
+      if (ok) showInviteSentFeedback();
+      else showError('Could not open Discord.');
+    });
+  };
+
+  const handleOpenInviteChannels = () => {
+    void systemActionSheet({
+      title: 'Share Invite',
+      message: 'Pick where to share your invite',
+      options: [
+        { label: 'WhatsApp', onPress: handleInviteViaWhatsApp },
+        { label: 'iMessage', onPress: handleShareOrderSMS },
+        { label: 'Telegram', onPress: handleShareOrderTelegram },
+        { label: 'Discord', onPress: handleShareOrderDiscord },
+        { label: 'Copy Invite Link', onPress: handleCopyOrderLink },
+      ],
+    });
   };
 
   const doCompleteOrder = async () => {
@@ -1976,27 +2005,42 @@ export default function OrderRoomScreen() {
               </View>
 
               {isWaiting && !showPostJoinWhatsAppInvite ? (
-                <TouchableOpacity
-                  onPress={handleInviteViaWhatsApp}
-                  style={{
-                    marginBottom: 24,
-                    paddingVertical: 14,
-                    borderRadius: 10,
-                    backgroundColor: c.whatsapp,
-                    alignItems: 'center',
-                    width: '100%',
-                  }}
-                >
-                  <Text
+                <View style={{ width: '100%', gap: 10, marginBottom: 24 }}>
+                  <TouchableOpacity
+                    onPress={handleInviteViaWhatsApp}
                     style={{
-                      color: c.textOnPrimary,
-                      fontWeight: '600',
-                      fontSize: 16,
+                      paddingVertical: 14,
+                      borderRadius: 10,
+                      backgroundColor: c.whatsapp,
+                      alignItems: 'center',
                     }}
                   >
-                    Invite via WhatsApp
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={{
+                        color: c.textOnPrimary,
+                        fontWeight: '600',
+                        fontSize: 16,
+                      }}
+                    >
+                      Share via WhatsApp
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleOpenInviteChannels}
+                    style={{
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      alignItems: 'center',
+                      backgroundColor: c.card,
+                    }}
+                  >
+                    <Text style={{ color: c.text, fontWeight: '600' }}>
+                      More share options
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               ) : null}
             </>
           )}
@@ -2049,15 +2093,45 @@ export default function OrderRoomScreen() {
       ) : null}
 
       {isWaiting ? (
-        <TouchableOpacity
-          style={styles.waitingBanner}
-          onPress={handleInvite}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.waitingBannerText}>
-            Invite someone to split the order 🍔
-          </Text>
-        </TouchableOpacity>
+        <View style={{ paddingHorizontal: 10, paddingBottom: 8 }}>
+          <TouchableOpacity
+            style={styles.waitingBanner}
+            onPress={handleInvite}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.waitingBannerText}>
+              Share Invite
+            </Text>
+          </TouchableOpacity>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                marginTop: 8,
+                alignSelf: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: c.successBackground,
+              },
+              {
+                opacity: inviteSentAnim,
+                transform: [
+                  {
+                    translateY: inviteSentAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [8, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text style={{ color: c.successText, fontWeight: '700' }}>
+              Invite sent 🚀
+            </Text>
+          </Animated.View>
+        </View>
       ) : null}
       {isBlocked ? (
         <View style={{ padding: 12, backgroundColor: c.dangerBackground }}>

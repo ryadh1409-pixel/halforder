@@ -34,6 +34,40 @@ if (Platform.OS !== 'web' && !isExpoGo) {
   configureExpoPushNotificationHandler();
 }
 
+// Guard against uncaught Promise rejections causing white screens.
+if (typeof globalThis !== 'undefined') {
+  const g = globalThis as typeof globalThis & {
+    __HALFORDER_REJECTION_GUARD__?: boolean;
+    addEventListener?: (
+      type: string,
+      listener: (event: { reason?: unknown }) => void,
+    ) => void;
+    ErrorUtils?: {
+      getGlobalHandler?: () => (error: unknown, isFatal?: boolean) => void;
+      setGlobalHandler?: (
+        handler: (error: unknown, isFatal?: boolean) => void,
+      ) => void;
+    };
+  };
+  if (!g.__HALFORDER_REJECTION_GUARD__) {
+    g.__HALFORDER_REJECTION_GUARD__ = true;
+    if (typeof g.addEventListener === 'function') {
+      g.addEventListener('unhandledrejection', (event) => {
+        console.error('[UNHANDLED PROMISE]', event?.reason);
+      });
+    }
+    const existing = g.ErrorUtils?.getGlobalHandler?.();
+    if (typeof g.ErrorUtils?.setGlobalHandler === 'function') {
+      g.ErrorUtils.setGlobalHandler((error, isFatal) => {
+        console.error('[GLOBAL ERROR]', { error, isFatal });
+        if (typeof existing === 'function') {
+          existing(error, isFatal);
+        }
+      });
+    }
+  }
+}
+
 export const unstable_settings = {
   initialRouteName: 'index',
 };

@@ -1,5 +1,5 @@
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { serverTimestamp } from 'firebase/firestore';
+import { updatePaymentOrderWithRetry } from './paymentFlowFirestore';
 import { openPaymentSheet } from '@/services/stripe';
 
 export async function payOrderWithStripe(params: {
@@ -23,15 +23,18 @@ export async function payOrderWithStripe(params: {
     }
     throw new Error(result.message || 'Payment failed.');
   }
-  await updateDoc(doc(db, 'orders', orderId), {
-    paymentStatus: 'paid',
-    paymentIntentId: result.paymentIntentId,
-    stripePaymentIntentId: result.paymentIntentId,
-    amount,
-    status: 'pending_driver',
-    deliveryStatus: 'waiting_driver',
-    driverId: null,
-    assignedDriverId: null,
-    updatedAt: serverTimestamp(),
+  await updatePaymentOrderWithRetry({
+    orderId,
+    operation: 'set_paid',
+    payload: {
+      paymentStatus: 'paid',
+      paymentIntentId: result.paymentIntentId,
+      stripePaymentIntentId: result.paymentIntentId,
+      status: 'pending_driver',
+      deliveryStatus: 'waiting_driver',
+      driverId: null,
+      assignedDriverId: null,
+      paidAt: serverTimestamp(),
+    },
   });
 }
