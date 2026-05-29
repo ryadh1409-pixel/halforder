@@ -8,7 +8,7 @@ if (!admin.apps.length) {
 }
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-import type { DocumentSnapshot, Firestore, Transaction } from "firebase-admin/firestore";
+import type { DocumentSnapshot, Transaction } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { paymentIntentIdFromSession, trimMetadata } from "./stripeWebhookLogic.js";
 
@@ -61,20 +61,27 @@ function logStripeDebug(stage: string, payload: Record<string, unknown>): void {
   console.log(`[stripeWebhook][DEBUG] ${stage}`, JSON.stringify(payload));
 }
 
+/**
+ * Idempotent Stripe event handling — Firestore requires every read before any write in a transaction.
+ */
 async function withEventIdempotency(
   event: Stripe.Event,
-  handler: (tx: Transaction, db: Firestore) => void | Promise<void>,
+  orderId: string,
+  apply: (tx: Transaction, orderSnap: DocumentSnapshot) => void,
 ): Promise<"duplicate" | "applied"> {
   const db = admin.firestore();
   const evRef = db.collection(PROCESSED_EVENTS).doc(event.id);
+  const orderRef = db.doc(`orders/${orderId}`);
   let duplicate = false;
 
   await db.runTransaction(async (tx) => {
-    const existing = await tx.get(evRef);
+    const [existing, orderSnap] = await Promise.all([tx.get(evRef), tx.get(orderRef)]);
+
     if (existing.exists) {
       duplicate = true;
       return;
     }
+
     tx.set(evRef, {
       stripeEventId: event.id,
       type: event.type,
@@ -82,7 +89,8 @@ async function withEventIdempotency(
       apiVersion: event.api_version ?? null,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await Promise.resolve(handler(tx, db));
+
+    apply(tx, orderSnap);
   });
 
   return duplicate ? "duplicate" : "applied";
@@ -195,9 +203,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
-      const outcome = await withEventIdempotency(event, async (tx, db) => {
-        const orderRef = db.doc(`orders/${orderId}`);
-        const orderSnap = await tx.get(orderRef);
+      const outcome = await withEventIdempotency(event, orderId, (tx, orderSnap) => {
         mergeOrderPaidSync(tx, orderSnap, {
           orderId,
           paymentIntentId: pi.id,
@@ -239,9 +245,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
-      const outcome = await withEventIdempotency(event, async (tx, db) => {
-        const orderRef = db.doc(`orders/${orderId}`);
-        const orderSnap = await tx.get(orderRef);
+      const outcome = await withEventIdempotency(event, orderId, (tx, orderSnap) => {
         mergeOrderPaidSync(tx, orderSnap, {
           orderId,
           paymentIntentId: stripePaymentIntentId,
@@ -278,9 +282,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
-      const outcome = await withEventIdempotency(event, async (tx, db) => {
-        const orderRef = db.doc(`orders/${orderId}`);
-        const orderSnap = await tx.get(orderRef);
+      const outcome = await withEventIdempotency(event, orderId, (tx, orderSnap) => {
         mergeOrderPaymentFailed(tx, orderSnap, {
           paymentIntentId: pi.id,
           sourceEventType: event.type,

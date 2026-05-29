@@ -245,6 +245,32 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       await assertFails(getDoc(doc(db, 'orders', 'mkt5')));
     });
 
+    it('allows owner web checkout init patch (checkoutSessionId only)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_web_init'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          paymentStatus: 'unpaid',
+          checkoutSessionId: null,
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt_web_init'), {
+          status: 'payment_processing',
+          paymentStatus: 'processing',
+          checkoutSessionId: 'cs_test_web_123',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('allows owner checkout patch on unpaid order (processing -> intent ids)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'orders', 'mkt6'), {

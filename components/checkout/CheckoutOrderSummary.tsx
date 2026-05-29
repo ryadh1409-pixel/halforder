@@ -1,4 +1,4 @@
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import * as Haptics from 'expo-haptics';
 import React, { memo, useState } from 'react';
 import { Image, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -35,7 +35,7 @@ function CheckoutOrderSummaryInner({ restaurantName, imageUri, itemCount, childr
   return (
     <View style={styles.card}>
       <Pressable
-        accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+        {...checkoutPressableProps}
         onPress={toggle}
         style={styles.head}
       >

@@ -1,4 +1,4 @@
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
 import type { IoniconsProps } from '@expo/vector-icons/build/createIconSet';
 import * as Haptics from 'expo-haptics';
@@ -16,7 +16,7 @@ type Props = {
 function AddressRowInner({ icon, title, subtitle, subtitlePlaceholder, onPress }: Props) {
   return (
     <Pressable
-      accessibilityRole="button"
+      {...checkoutPressableProps}
       onPress={() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();

@@ -1,5 +1,5 @@
 import type { CheckoutDeliveryTiming } from '@/types/checkoutFlow';
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { memo, useEffect } from 'react';
@@ -55,7 +55,7 @@ function DeliveryOptionCardInner({
   return (
     <View style={styles.flex}>
       <Animated.View style={[styles.cardOuter, selected && styles.cardOuterOn, cardAnim]}>
-        <Pressable accessibilityRole="button" onPress={open} style={styles.pressFill}>
+        <Pressable {...checkoutPressableProps} onPress={open} style={styles.pressFill}>
           {variant === 'priority' ? (
             <View style={styles.flashRow}>
               <Ionicons name="flash" size={13} color={CK.text} />

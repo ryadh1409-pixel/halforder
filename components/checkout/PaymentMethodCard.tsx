@@ -1,5 +1,5 @@
 import type { CheckoutPaymentMethodPreview } from '@/types/checkoutFlow';
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { memo } from 'react';
@@ -30,7 +30,7 @@ function BrandMark({ brand }: { brand: CheckoutPaymentMethodPreview['brand'] }) 
 function PaymentMethodCardInner({ method, onPress }: Props) {
   return (
     <Pressable
-      accessibilityRole="button"
+      {...checkoutPressableProps}
       onPress={() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();

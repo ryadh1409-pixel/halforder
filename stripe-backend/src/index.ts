@@ -254,7 +254,19 @@ export const createPaymentIntent = functions
           }),
         );
 
-        return {checkoutSessionId: session.id};
+        const checkoutUrl =
+          typeof session.url === "string" ? session.url.trim() : "";
+        if (!checkoutUrl) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "Stripe Checkout session URL missing",
+          );
+        }
+
+        return {
+          checkoutSessionId: session.id,
+          checkoutUrl,
+        };
       }
 
       const paymentIntent = await stripe.paymentIntents.create({

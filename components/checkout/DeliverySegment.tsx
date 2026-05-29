@@ -1,5 +1,5 @@
 import type { CheckoutFulfillmentMode } from '@/types/checkoutFlow';
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import * as Haptics from 'expo-haptics';
 import React, { memo, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -44,10 +44,10 @@ function DeliverySegmentInner({ mode, onChange }: Props) {
         <View style={[styles.track, { padding: TRACK_PAD }]}>
           <Animated.View style={[styles.knobLayer, knob]} />
           <View style={[styles.flexRow]}>
-            <Pressable accessibilityRole="button" style={[styles.cell, { width: seg }]} onPress={() => select('delivery')}>
+            <Pressable {...checkoutPressableProps} style={[styles.cell, { width: seg }]} onPress={() => select('delivery')}>
               <Text style={[styles.label, mode === 'delivery' && styles.labelOn]}>Delivery</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" style={[styles.cell, { width: seg }]} onPress={() => select('pickup')}>
+            <Pressable {...checkoutPressableProps} style={[styles.cell, { width: seg }]} onPress={() => select('pickup')}>
               <Text style={[styles.label, mode === 'pickup' && styles.labelOn]}>Pickup</Text>
             </Pressable>
           </View>

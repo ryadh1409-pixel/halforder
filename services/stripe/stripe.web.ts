@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import React from 'react';
 import { auth, functions } from '@/services/firebase';
-import { openWebCheckout } from '@/services/stripe.web';
+import { openWebCheckout } from '@/services/stripeWebCheckout';
 import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
@@ -24,6 +24,7 @@ type InitSheetResult = {
   clientSecret: string;
   paymentIntentId: string;
   checkoutSessionId?: string;
+  checkoutUrl?: string;
 };
 
 type OpenPaymentSheetResult =
@@ -61,8 +62,13 @@ export async function openPaymentSheet(
     platform: 'web',
   });
   const data = result.data as Record<string, unknown> | undefined;
+  const checkoutUrl = typeof data?.checkoutUrl === 'string' ? data.checkoutUrl.trim() : '';
   const checkoutSessionId =
     typeof data?.checkoutSessionId === 'string' ? data.checkoutSessionId.trim() : '';
+
+  if (!checkoutUrl) {
+    throw new Error('checkoutUrl missing from createPaymentIntent response');
+  }
 
   if (!checkoutSessionId) {
     throw new Error('checkoutSessionId missing from createPaymentIntent response');
@@ -93,13 +99,14 @@ export async function openPaymentSheet(
     }
   }
 
-  await openWebCheckout(checkoutSessionId);
+  openWebCheckout(checkoutUrl);
 
   return {
     status: 'redirected',
     clientSecret: '',
     paymentIntentId: '',
     checkoutSessionId,
+    checkoutUrl,
   };
 }
 
@@ -116,6 +123,8 @@ export function AppStripeProvider({ children }: WebProviderProps) {
 
 export function useStripe() {
   return {
+    initPaymentSheet: async () => ({ error: null }),
+    presentPaymentSheet: async () => ({ error: null }),
     isPlatformPaySupported: async () => false,
   };
 }

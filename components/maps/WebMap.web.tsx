@@ -1,3 +1,4 @@
+import { checkoutPressableProps } from '@/constants/checkoutUi';
 import React from 'react';
 import {
   Linking,
@@ -69,7 +70,7 @@ export default function WebMap({
             </Text>
           </View>
         ) : null}
-        <Pressable style={styles.btn} onPress={() => openUrl(mapsUrl)}>
+        <Pressable {...checkoutPressableProps} style={styles.btn} onPress={() => openUrl(mapsUrl)}>
           <Text style={styles.btnText}>Open in Google Maps</Text>
         </Pressable>
       </View>

@@ -1,4 +1,4 @@
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -49,7 +49,7 @@ function CheckoutHeaderInner({ scrollY, title = 'Checkout', onBack }: Props) {
       </Animated.View>
       <View style={styles.row}>
         <Pressable
-          accessibilityRole="button"
+          {...checkoutPressableProps}
           accessibilityLabel="Go back"
           hitSlop={12}
           onPress={() => {

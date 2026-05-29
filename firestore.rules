@@ -1031,6 +1031,8 @@ service cloud.firestore {
     function primaryUidFromOrder(d) {
       return d.get('userId', '') is string && d.get('userId', '').size() > 0
         ? d.get('userId', '')
+        : d.get('customerUid', '') is string && d.get('customerUid', '').size() > 0
+          ? d.get('customerUid', '')
         : d.get('customerId', '') is string && d.get('customerId', '').size() > 0
           ? d.get('customerId', '')
           : d.get('createdBy', '') is string && d.get('createdBy', '').size() > 0
@@ -1240,26 +1242,90 @@ service cloud.firestore {
         && before.get('assignedDriverId', null) == after.get('assignedDriverId', null)
         && after.get('cancelledBy', '') == request.auth.uid;
     }
-    /** Checkout / client payment sheet updates (prefer tightening once all payment writes are server-side). */
-    function marketplaceCustomerCheckoutPatchOk() {
+    /** Customer uid for marketplace payment patches (customerUid alias + legacy owner fields). */
+    function orderCustomerUid(d) {
+      return primaryUidFromOrder(d);
+    }
+    function marketplaceCustomerPaymentInitBeforeStatusOk(s) {
+      return s == 'awaiting_payment'
+        || s == 'pending'
+        || s == 'pending_payment';
+    }
+    function marketplaceCustomerPaymentInitBeforePaymentOk(ps) {
+      return ps == 'unpaid' || ps == '';
+    }
+    function customerCheckoutImmutableFieldsOk(before, after) {
+      return before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('customerUid', '') == after.get('customerUid', '')
+        && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('venueId', '') == after.get('venueId', '')
+        && before.get('items', []) == after.get('items', [])
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('deliveryType', '') == after.get('deliveryType', '');
+    }
+    /** Web Checkout: awaiting_payment|pending → payment_processing + checkoutSessionId only. */
+    function marketplaceCustomerPaymentInitPatchOk() {
       let before = resource.data;
       let after = request.resource.data;
-      return primaryUidFromOrder(before) == request.auth.uid
+      return orderCustomerUid(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','paymentStatus','checkoutSessionId','updatedAt'
+        ])
+        && marketplaceCustomerPaymentInitBeforeStatusOk(before.status)
+        && marketplaceCustomerPaymentInitBeforePaymentOk(before.get('paymentStatus', 'unpaid'))
+        && after.status == 'payment_processing'
+        && after.paymentStatus == 'processing'
+        && after.checkoutSessionId is string
+        && after.checkoutSessionId.size() > 0
+        && customerCheckoutImmutableFieldsOk(before, after);
+    }
+    /** Native PaymentSheet: payment_processing + Stripe intent ids. */
+    function marketplaceCustomerPaymentInitWithIntentPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return orderCustomerUid(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','paymentStatus','paymentIntentId','stripePaymentIntentId','updatedAt'
+        ])
+        && marketplaceCustomerPaymentInitBeforeStatusOk(before.status)
+        && marketplaceCustomerPaymentInitBeforePaymentOk(before.get('paymentStatus', 'unpaid'))
+        && after.status == 'payment_processing'
+        && after.paymentStatus == 'processing'
+        && after.paymentIntentId is string
+        && after.paymentIntentId.size() > 0
+        && after.stripePaymentIntentId == after.paymentIntentId
+        && customerCheckoutImmutableFieldsOk(before, after);
+    }
+    /** Client / webhook paid transition after successful charge. */
+    function marketplaceCustomerCheckoutPaidPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return orderCustomerUid(before) == request.auth.uid
         && marketplaceOrderPatchKeys().hasOnly([
           'status','paymentStatus','paymentIntentId','checkoutSessionId','stripePaymentIntentId',
           'updatedAt','paidAt','paymentFailedAt','estimatedDeliveryTime','deliveryStatus'
         ])
         && (
           (
-            after.status == 'payment_processing'
-            && after.paymentStatus == 'processing'
-          )
-          || (
             after.status == 'pending_driver'
             && after.paymentStatus == 'paid'
             && after.deliveryStatus == 'waiting_driver'
           )
+          || (
+            before.status == 'awaiting_payment'
+            && before.paymentStatus == 'unpaid'
+            && after.status == 'pending_driver'
+            && after.paymentStatus == 'paid'
+            && after.deliveryStatus == 'waiting_driver'
+          )
         );
+    }
+    function marketplaceCustomerCheckoutPatchOk() {
+      return marketplaceCustomerPaymentInitPatchOk()
+        || marketplaceCustomerPaymentInitWithIntentPatchOk()
+        || marketplaceCustomerCheckoutPaidPatchOk();
     }
     function restaurantMustNotAssignDriver(before, after) {
       return !(
@@ -1456,6 +1522,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       // Published baseline: owner / restaurant / driver may read their orders.
       allow read: if ordersReadByParticipant();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       // List queries do not use allow read when allow list is present (Firestore rules v2).
       allow list: if ordersReadByParticipant();
       // Driver marketplace pool list on orders (legacy); mirrors pending_driver pool filters.
@@ -1726,3 +1793,4 @@ service cloud.firestore {
   }
 }
 // force redeploy Thu May 28 03:06:57 EDT 2026
+// redeploy Fri May 29 05:41:35 EDT 2026

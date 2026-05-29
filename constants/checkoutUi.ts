@@ -1,4 +1,12 @@
+import { Platform, type PressableProps } from 'react-native';
 import { RP } from '@/constants/restaurantPremiumTheme';
+
+/**
+ * On web, `accessibilityRole="button"` maps Pressable to `<button>`.
+ * Nested pressables (e.g. footer CTA over scroll rows) break clicks — use `none` instead.
+ */
+export const checkoutPressableProps: Pick<PressableProps, 'accessibilityRole'> =
+  Platform.OS === 'web' ? { accessibilityRole: 'none' } : { accessibilityRole: 'button' };
 
 /** Checkout-specific tokens layered on RP (Uber Eats–style light chrome). */
 export const CK = {

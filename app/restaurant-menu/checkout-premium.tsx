@@ -18,7 +18,7 @@ import {
   SavingsRibbon,
   StickyCheckoutButton,
 } from '@/components/checkout';
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import type { CheckoutDeliveryTiming, CheckoutFulfillmentMode, CheckoutPriceLine } from '@/types/checkoutFlow';
 import { CHECKOUT_MOCK_DEFAULT_PAYMENT } from '@/types/checkoutFlow';
 import { useMenu } from '@/hooks/useMenu';
@@ -45,6 +45,7 @@ import {
   Alert,
   AppState,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -216,6 +217,13 @@ export default function CheckoutPremiumScreen() {
   const phoneDisplay = '+1 (416) 555-0199';
 
   async function submitOrder() {
+    console.log('[CHECKOUT NEXT CLICKED]', {
+      placing,
+      checkingStripe,
+      stripeReady,
+      cartCount: cartItems.length,
+      blocked,
+    });
     if (!user?.uid) {
       showError('Please sign in first.');
       return;
@@ -245,18 +253,21 @@ export default function CheckoutPremiumScreen() {
       return;
     }
 
-    Alert.alert(
-      'Confirm checkout',
-      `Charge ${walletSummary} securely via Stripe (${totalFmt}) and continue to confirmation?`,
-      [
-        { text: 'Review', style: 'cancel' },
-        {
-          text: 'Continue',
-          style: 'default',
-          onPress: () => void placeOrder(),
-        },
-      ],
-    );
+    const confirmMessage = `Charge ${walletSummary} securely via Stripe (${totalFmt}) and continue to confirmation?`;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
+        await placeOrder();
+      }
+      return;
+    }
+    Alert.alert('Confirm checkout', confirmMessage, [
+      { text: 'Review', style: 'cancel' },
+      {
+        text: 'Continue',
+        style: 'default',
+        onPress: () => void placeOrder(),
+      },
+    ]);
   }
 
   async function placeOrder() {
@@ -470,7 +481,7 @@ export default function CheckoutPremiumScreen() {
           onPress={() => Alert.alert('Payment methods', 'Hook to Stripe PaymentSheet + saved instruments.')}
         />
         <Pressable
-          accessibilityRole="button"
+          {...checkoutPressableProps}
           style={styles.altPay}
           onPress={() => Alert.alert('Apple Pay', 'Enable via Stripe + ApplePayButton on native binaries.')}
         >
@@ -478,6 +489,7 @@ export default function CheckoutPremiumScreen() {
           <Text style={styles.altPayChev}>›</Text>
         </Pressable>
         <Pressable
+          {...checkoutPressableProps}
           onPress={() => Alert.alert('Add card', 'Use Stripe Elements / PaymentSheet.')}
           style={styles.payLink}
         >
@@ -494,7 +506,11 @@ export default function CheckoutPremiumScreen() {
                 : 'Payments are temporarily unavailable for this restaurant'}
             </Text>
             {isOwnerOfThisRestaurant ? (
-              <Pressable style={styles.setupButton} onPress={() => void handleConnectSetup()}>
+              <Pressable
+                {...checkoutPressableProps}
+                style={styles.setupButton}
+                onPress={() => void handleConnectSetup()}
+              >
                 <Text style={styles.setupButtonText}>Complete Setup</Text>
               </Pressable>
             ) : null}
@@ -502,6 +518,7 @@ export default function CheckoutPremiumScreen() {
         ) : null}
 
         <Pressable
+          {...checkoutPressableProps}
           onPress={() =>
             router.push(`/restaurant-menu/cart?restaurantId=${encodeURIComponent(restaurantId)}` as never)
           }
@@ -538,11 +555,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 40,
     paddingBottom: 0,
     backgroundColor: CK.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: CK.headerHairline,
     paddingTop: 4,
+    ...Platform.select({
+      web: { boxShadow: '0 -4px 24px rgba(15, 23, 42, 0.08)' },
+      default: {},
+    }),
   },
   pickupNote: {
     marginHorizontal: 16,

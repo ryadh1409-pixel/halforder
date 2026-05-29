@@ -1,6 +1,6 @@
+import { openPaymentSheet } from '@/services/stripe';
 import { serverTimestamp } from 'firebase/firestore';
 import { updatePaymentOrderWithRetry } from './paymentFlowFirestore';
-import { openPaymentSheet } from '@/services/stripe';
 
 export async function payOrderWithStripe(params: {
   orderId: string;
@@ -20,6 +20,9 @@ export async function payOrderWithStripe(params: {
   if (result.status !== 'success') {
     if (result.status === 'canceled') {
       throw new Error('Payment canceled.');
+    }
+    if (result.status === 'redirected') {
+      throw new Error('Redirected to Stripe Checkout.');
     }
     throw new Error(result.message || 'Payment failed.');
   }

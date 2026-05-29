@@ -1,4 +1,4 @@
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import React, { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -59,7 +59,7 @@ function DeliveryMapCardInner({
           webSubtitle={mapSubtitle}
         />
         <Pressable
-          accessibilityRole="button"
+          {...checkoutPressableProps}
           accessibilityLabel="Edit delivery pin"
           onPress={onEditPin}
           style={({ pressed }) => [styles.fabEdit, pressed && styles.fabEditPressed]}
