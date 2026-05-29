@@ -55,7 +55,11 @@ export async function initializePaymentSheet(
   await auth.currentUser?.getIdToken(true);
 
   const fn = httpsCallable(functions, 'createPaymentIntent');
-  const result = await fn({ amount, orderId: params.orderId ?? null });
+  const result = await fn({
+    amount,
+    orderId: params.orderId ?? null,
+    platform: 'native',
+  });
   const data = result.data as Record<string, unknown> | undefined;
   const clientSecret =
     typeof data?.clientSecret === 'string'

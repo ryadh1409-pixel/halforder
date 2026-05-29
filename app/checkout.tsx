@@ -39,13 +39,6 @@ export default function CheckoutScreen() {
     setMessage('');
     setStripeBlockedRestaurantId(null);
     try {
-      if (Platform.OS === 'web') {
-        setPhase('error');
-        setMessage(
-          'Card checkout runs on the HalfOrder iOS or Android app. Open the same order there to pay securely.',
-        );
-        return;
-      }
       await ensureAuthReady();
       if (!auth.currentUser) {
         setPhase('error');
@@ -85,6 +78,12 @@ export default function CheckoutScreen() {
         orderId: id,
       });
 
+      if (result.status === 'redirected') {
+        setPhase('paying');
+        setMessage('Redirecting to secure Stripe Checkout…');
+        return;
+      }
+
       if (result.status === 'canceled') {
         try {
           await updatePaymentOrderWithRetry({
@@ -119,22 +118,28 @@ export default function CheckoutScreen() {
         }),
       );
 
-      await updatePaymentOrderWithRetry({
-        orderId: id,
-        operation: 'set_paid',
-        payload: {
-          paymentStatus: 'paid',
-          paymentIntentId: result.paymentIntentId,
-          stripePaymentIntentId: result.paymentIntentId,
-          status: 'pending_driver',
-          deliveryStatus: 'waiting_driver',
-          paidAt: serverTimestamp(),
-        },
-      });
+      if (Platform.OS !== 'web') {
+        await updatePaymentOrderWithRetry({
+          orderId: id,
+          operation: 'set_paid',
+          payload: {
+            paymentStatus: 'paid',
+            paymentIntentId: result.paymentIntentId,
+            stripePaymentIntentId: result.paymentIntentId,
+            status: 'pending_driver',
+            deliveryStatus: 'waiting_driver',
+            paidAt: serverTimestamp(),
+          },
+        });
+      }
 
       setPhase('done');
       setMessage('');
-      showSuccess('Payment successful.');
+      showSuccess(
+        Platform.OS === 'web'
+          ? 'Payment submitted. Confirming your order…'
+          : 'Payment successful.',
+      );
     } catch (e) {
       console.warn('[checkout]', e);
       if (e instanceof Error && e.message === 'Please sign in to complete payment') {

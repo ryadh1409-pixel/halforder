@@ -16,9 +16,10 @@ export const initializePaymentSheet = impl.initializePaymentSheet as (
 export const openPaymentSheet = impl.openPaymentSheet as (
   params: { amount: number; merchantDisplayName?: string; orderId?: string },
 ) => Promise<
-  | { status: 'success'; clientSecret: string; paymentIntentId: string }
-  | { status: 'canceled'; clientSecret: string; paymentIntentId: string }
-  | { status: 'failed'; message: string; clientSecret: string; paymentIntentId: string }
+  | { status: 'success'; clientSecret: string; paymentIntentId: string; checkoutSessionId?: string }
+  | { status: 'redirected'; clientSecret: string; paymentIntentId: string; checkoutSessionId?: string }
+  | { status: 'canceled'; clientSecret: string; paymentIntentId: string; checkoutSessionId?: string }
+  | { status: 'failed'; message: string; clientSecret: string; paymentIntentId: string; checkoutSessionId?: string }
 >;
 
 export const AppStripeProvider = impl.AppStripeProvider as React.ComponentType<{

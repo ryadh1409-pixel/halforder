@@ -1,4 +1,18 @@
+import { httpsCallable } from 'firebase/functions';
 import React from 'react';
+import { auth, functions } from '@/services/firebase';
+import { openWebCheckout } from '@/services/stripe.web';
+import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
+
+const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
+
+function assertNonAnonymousPaymentUser(): void {
+  const currentUser = auth.currentUser;
+  if (!currentUser || currentUser.isAnonymous) {
+    if (currentUser?.isAnonymous) void auth.signOut();
+    throw new Error(SIGN_IN_REQUIRED_ERROR);
+  }
+}
 
 type InitSheetParams = {
   amount: number;
@@ -9,30 +23,83 @@ type InitSheetParams = {
 type InitSheetResult = {
   clientSecret: string;
   paymentIntentId: string;
+  checkoutSessionId?: string;
 };
 
 type OpenPaymentSheetResult =
   | ({ status: 'success' } & InitSheetResult)
+  | ({ status: 'redirected' } & InitSheetResult)
   | ({ status: 'canceled' } & InitSheetResult)
   | ({ status: 'failed'; message: string } & InitSheetResult);
 
-const WEB_UNSUPPORTED_MESSAGE =
-  'Card payment sheet is currently available on iOS/Android only.';
-
 export async function initializePaymentSheet(
-  _params: InitSheetParams,
+  params: InitSheetParams,
 ): Promise<InitSheetResult> {
-  throw new Error(WEB_UNSUPPORTED_MESSAGE);
+  return openPaymentSheet(params);
 }
 
 export async function openPaymentSheet(
-  _params: InitSheetParams,
+  params: InitSheetParams,
 ): Promise<OpenPaymentSheetResult> {
+  const amount = Number(params.amount);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error('Amount must be a positive integer (in cents).');
+  }
+
+  const orderId = params.orderId?.trim() ?? '';
+  if (!orderId) {
+    throw new Error('orderId is required for web checkout');
+  }
+
+  assertNonAnonymousPaymentUser();
+  await auth.currentUser?.getIdToken(true);
+
+  const fn = httpsCallable(functions, 'createPaymentIntent');
+  const result = await fn({
+    amount,
+    orderId,
+    platform: 'web',
+  });
+  const data = result.data as Record<string, unknown> | undefined;
+  const checkoutSessionId =
+    typeof data?.checkoutSessionId === 'string' ? data.checkoutSessionId.trim() : '';
+
+  if (!checkoutSessionId) {
+    throw new Error('checkoutSessionId missing from createPaymentIntent response');
+  }
+
+  try {
+    await updatePaymentOrderWithRetry({
+      orderId,
+      operation: 'set_processing',
+      payload: {
+        status: 'payment_processing',
+        paymentStatus: 'processing',
+        checkoutSessionId,
+      },
+    });
+  } catch (e) {
+    if (__DEV__) {
+      console.warn(
+        JSON.stringify({
+          msg: 'payment_flow_processing_patch_failed',
+          orderId,
+          path: `orders/${orderId}`,
+          operation: 'set_processing',
+          uid: auth.currentUser?.uid ?? null,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
+  }
+
+  await openWebCheckout(checkoutSessionId);
+
   return {
-    status: 'failed',
-    message: WEB_UNSUPPORTED_MESSAGE,
+    status: 'redirected',
     clientSecret: '',
     paymentIntentId: '',
+    checkoutSessionId,
   };
 }
 
@@ -52,4 +119,3 @@ export function useStripe() {
     isPlatformPaySupported: async () => false,
   };
 }
-

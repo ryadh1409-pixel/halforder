@@ -139,14 +139,39 @@ function buildPaymentPayload(
 ): PaymentPayload {
   switch (operation) {
     case 'set_processing': {
-      const paymentIntentId = readRequiredPaymentIntentId(payload);
-      const stripePaymentIntentId = readStripePaymentIntentId(payload, paymentIntentId);
-      return {
+      const checkoutSessionId =
+        typeof payload.checkoutSessionId === 'string' && payload.checkoutSessionId.trim().length > 0
+          ? payload.checkoutSessionId.trim()
+          : '';
+      const paymentIntentIdRaw = payload.paymentIntentId;
+      const hasPaymentIntentId =
+        typeof paymentIntentIdRaw === 'string' && paymentIntentIdRaw.trim().length > 0;
+
+      if (!hasPaymentIntentId && !checkoutSessionId) {
+        throw new Error(
+          'set_processing requires paymentIntentId or checkoutSessionId',
+        );
+      }
+
+      const base = {
         status: 'payment_processing',
         paymentStatus: 'processing',
-        paymentIntentId,
-        stripePaymentIntentId,
         updatedAt: serverTimestamp(),
+      };
+
+      if (hasPaymentIntentId) {
+        const paymentIntentId = readRequiredPaymentIntentId(payload);
+        const stripePaymentIntentId = readStripePaymentIntentId(payload, paymentIntentId);
+        return {
+          ...base,
+          paymentIntentId,
+          stripePaymentIntentId,
+        };
+      }
+
+      return {
+        ...base,
+        checkoutSessionId,
       };
     }
     case 'set_paid': {

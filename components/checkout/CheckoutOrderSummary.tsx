@@ -34,7 +34,11 @@ function CheckoutOrderSummaryInner({ restaurantName, imageUri, itemCount, childr
 
   return (
     <View style={styles.card}>
-      <Pressable accessibilityRole="button" onPress={toggle} style={styles.head}>
+      <Pressable
+        accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+        onPress={toggle}
+        style={styles.head}
+      >
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.thumb} accessibilityIgnoresInvertColors />
         ) : (

@@ -104,6 +104,9 @@ export const createPaymentIntent = functions
       );
     }
 
+    const platformRaw = payload.platform;
+    const platform = platformRaw === "web" ? "web" : "native";
+
     const secretLoaded = Boolean(process.env.STRIPE_SECRET_KEY);
     console.log("[createPaymentIntent] stripe secret loaded:", secretLoaded);
     if (!secretLoaded) {
@@ -174,10 +177,86 @@ export const createPaymentIntent = functions
           ? orderData.assignedDriverId.trim()
           : "";
 
+    const resolveAppBaseUrl = (): string => {
+      const fromEnv =
+        (typeof process.env.EXPO_PUBLIC_APP_URL === "string"
+          ? process.env.EXPO_PUBLIC_APP_URL.trim()
+          : "") ||
+        (typeof process.env.APP_URL === "string" ? process.env.APP_URL.trim() : "");
+      if (fromEnv) return fromEnv.replace(/\/$/, "");
+      return "http://localhost:8081";
+    };
+
     try {
       const stripe = new Stripe(stripeSecret.value(), {
         apiVersion: "2023-10-16" as unknown as Stripe.LatestApiVersion,
       });
+
+      if (platform === "web") {
+        const totalPriceRaw = orderData.totalPrice ?? orderData.total;
+        const orderTotalCents =
+          typeof totalPriceRaw === "number" && Number.isFinite(totalPriceRaw)
+            ? Math.max(1, Math.round(totalPriceRaw * 100))
+            : amount;
+        const restaurantName =
+          typeof restaurantData.name === "string" && restaurantData.name.trim()
+            ? restaurantData.name.trim()
+            : typeof restaurantData.restaurantName === "string" &&
+                restaurantData.restaurantName.trim()
+              ? restaurantData.restaurantName.trim()
+              : "OurFood Order";
+        const appUrl = resolveAppBaseUrl();
+        const session = await stripe.checkout.sessions.create({
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: restaurantName,
+                },
+                unit_amount: orderTotalCents,
+              },
+              quantity: 1,
+            },
+          ],
+          success_url: `${appUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&orderId=${encodeURIComponent(orderId)}`,
+          cancel_url: `${appUrl}/checkout-cancelled?orderId=${encodeURIComponent(orderId)}`,
+          metadata: {
+            orderId,
+            userId: uid,
+            restaurantId,
+            driverId: driverIdRaw,
+            uid,
+          },
+          payment_intent_data: {
+            transfer_data: {
+              destination: restaurantStripeAccountId,
+            },
+            metadata: {
+              orderId,
+              userId: uid,
+              restaurantId,
+              driverId: driverIdRaw,
+              uid,
+            },
+          },
+        });
+
+        console.log(
+          JSON.stringify({
+            msg: "createCheckoutSession_success",
+            checkoutSessionId: session.id,
+            orderId,
+            userId: uid,
+            restaurantId,
+          }),
+        );
+
+        return {checkoutSessionId: session.id};
+      }
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount,
         currency: "usd",
