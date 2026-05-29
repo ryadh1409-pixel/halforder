@@ -2,7 +2,9 @@
  * DoorDash-style customer live order tracking (light theme).
  * Route: /track-order/[orderId]
  */
+import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
 import { USER_ROUTES } from '@/lib/navigationPaths';
+import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
@@ -35,7 +37,7 @@ function TrackingMap({ order }: { order: RestaurantOrder }) {
   return <CustomerTrackingMap order={order} />;
 }
 
-export default function TrackOrderScreen() {
+function TrackOrderScreen() {
   const insets = useSafeAreaInsets();
   const { orderId: rawId } = useLocalSearchParams<{ orderId?: string | string[] }>();
   const orderId = useMemo(() => {
@@ -44,15 +46,47 @@ export default function TrackOrderScreen() {
   }, [rawId]);
 
   const [order, setOrder] = useState<RestaurantOrder | null | undefined>(undefined);
+  const [listenError, setListenError] = useState(false);
+
+  useEffect(() => {
+    logPaymentNavigation('track_order_mount', { orderId });
+    return () => {
+      logPaymentNavigation('track_order_unmount', { orderId });
+    };
+  }, [orderId]);
 
   useEffect(() => {
     if (!orderId) {
       setOrder(null);
+      setListenError(false);
       return undefined;
     }
-    return subscribeOrderById(orderId, setOrder, {
-      onListenError: () => setOrder(null),
-    });
+    setListenError(false);
+    setOrder(undefined);
+    return subscribeOrderById(
+      orderId,
+      (next) => {
+        setListenError(false);
+        setOrder(next);
+        if (next) {
+          logPaymentNavigation('track_order_snapshot', {
+            orderId,
+            paymentStatus: next.paymentStatus,
+            status: next.status,
+          });
+        }
+      },
+      {
+        onListenError: (err) => {
+          setListenError(true);
+          setOrder(null);
+          logPaymentNavigation('track_order_listen_error', {
+            orderId,
+            error: err.message,
+          });
+        },
+      },
+    );
   }, [orderId]);
 
   const phase = useMemo(() => {
@@ -102,16 +136,28 @@ export default function TrackOrderScreen() {
     );
   }
 
-  if (!order || !looksLikeMarketplaceRestaurantOrder(order)) {
+  if (listenError || !order || !looksLikeMarketplaceRestaurantOrder(order)) {
     return (
       <SafeAreaView style={styles.lightRoot} edges={['top']}>
-        <Text style={styles.errorText}>We couldn’t load this delivery.</Text>
-        <Pressable
-          onPress={() => router.replace(USER_ROUTES.order(orderId) as never)}
-          style={styles.primaryBtn}
-        >
-          <Text style={styles.primaryBtnText}>Open order</Text>
-        </Pressable>
+        <View style={styles.loadingBox}>
+          <Text style={styles.errorText}>
+            {listenError
+              ? 'We couldn’t sync this order yet. Check your connection and try again.'
+              : 'We couldn’t load this delivery yet.'}
+          </Text>
+          <Pressable
+            onPress={() => {
+              logPaymentNavigation('track_order_fallback_order_details', { orderId });
+              router.replace(USER_ROUTES.order(orderId) as never);
+            }}
+            style={styles.primaryBtn}
+          >
+            <Text style={styles.primaryBtnText}>Open order details</Text>
+          </Pressable>
+          <Pressable onPress={onClose} style={styles.textBtn}>
+            <Text style={styles.textBtnLabel}>Go back</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
@@ -447,3 +493,11 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
 });
+
+export default function TrackOrderRoute() {
+  return (
+    <PaymentNavigationBoundary screenName="track-order/[orderId]">
+      <TrackOrderScreen />
+    </PaymentNavigationBoundary>
+  );
+}

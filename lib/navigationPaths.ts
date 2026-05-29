@@ -32,6 +32,7 @@ export const USER_ROUTES = {
   hub: '/(tabs)',
   orders: '/orders',
   order: (orderId: string) => `/order/${encodeURIComponent(orderId)}` as const,
+  trackOrder: (orderId: string) => `/track-order/${encodeURIComponent(orderId)}` as const,
 } as const;
 
 /** Canonical customer tab shell hrefs. */

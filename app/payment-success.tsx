@@ -1,35 +1,58 @@
 import AppHeader from '@/components/AppHeader';
-import { USER_ROUTES } from '@/lib/navigationPaths';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAwaitOrderPaidNavigation } from '@/hooks/useAwaitOrderPaidNavigation';
+import { logPaymentNavigation } from '@/lib/paymentNavigation';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function PaymentSuccessScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ orderId?: string; session_id?: string }>();
   const orderId = typeof params.orderId === 'string' ? params.orderId.trim() : '';
+
+  useEffect(() => {
+    logPaymentNavigation('payment_success_mount', {
+      orderId,
+      sessionId: typeof params.session_id === 'string' ? params.session_id : null,
+    });
+  }, [orderId, params.session_id]);
+
+  const { timedOut, listening, navigateToLiveOrder } = useAwaitOrderPaidNavigation({
+    orderId,
+    enabled: Boolean(orderId),
+  });
+
+  const hint = useMemo(() => {
+    if (timedOut) {
+      return 'Confirmation is taking longer than expected. Open your order to see live updates.';
+    }
+    if (listening) {
+      return 'Your Stripe payment was submitted. Confirming your order now…';
+    }
+    return 'Thank you! We are confirming your order.';
+  }, [timedOut, listening]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <AppHeader title="Payment received" />
       <View style={styles.center}>
-        <Text style={styles.title}>Thank you!</Text>
-        <Text style={styles.sub}>
-          Your Stripe payment was submitted. We are confirming your order now — this usually
-          takes a few seconds.
-        </Text>
+        {!timedOut ? <ActivityIndicator size="large" color="#16A34A" /> : null}
+        <Text style={styles.title}>{timedOut ? 'Almost there' : 'Thank you!'}</Text>
+        <Text style={styles.sub}>{hint}</Text>
         {orderId ? (
           <Pressable
             style={styles.button}
-            onPress={() => router.replace(USER_ROUTES.order(orderId) as never)}
+            onPress={() => {
+              logPaymentNavigation('payment_success_manual_open', { orderId });
+              navigateToLiveOrder(orderId, 'payment_success_manual');
+            }}
           >
-            <Text style={styles.buttonText}>Track order</Text>
+            <Text style={styles.buttonText}>
+              {timedOut ? 'View order' : 'Open order'}
+            </Text>
           </Pressable>
         ) : (
-          <Pressable style={styles.button} onPress={() => router.replace('/(tabs)' as never)}>
-            <Text style={styles.buttonText}>Back to home</Text>
-          </Pressable>
+          <Text style={styles.sub}>Missing order id in return URL.</Text>
         )}
       </View>
     </SafeAreaView>
@@ -39,7 +62,7 @@ export default function PaymentSuccessScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F8FAFC' },
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '800', color: '#0F172A', textAlign: 'center' },
+  title: { fontSize: 22, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginTop: 16 },
   sub: {
     marginTop: 12,
     color: '#64748B',

@@ -1,4 +1,8 @@
 import AppHeader from '@/components/AppHeader';
+import {
+  useAwaitOrderPaidNavigation,
+} from '@/hooks/useAwaitOrderPaidNavigation';
+import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { useAuth } from '@/services/AuthContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
@@ -7,24 +11,31 @@ import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripe';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Phase = 'loading' | 'paying' | 'error' | 'done';
+type Phase = 'loading' | 'paying' | 'confirming' | 'error' | 'done';
 
 /** Root checkout — outside `(tabs)` so no tab chrome appears during payment. */
 export default function CheckoutScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+  const orderIdTrimmed = typeof orderId === 'string' ? orderId.trim() : '';
   const { user, role, loading: authLoading } = useAuth();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
   const [stripeBlockedRestaurantId, setStripeBlockedRestaurantId] = useState<string | null>(null);
   const started = useRef(false);
 
+  const awaitingPaid = phase === 'confirming';
+  const { timedOut, listening, navigateToLiveOrder } = useAwaitOrderPaidNavigation({
+    orderId: orderIdTrimmed,
+    enabled: awaitingPaid,
+  });
+
   const runCheckout = useCallback(async () => {
-    const id = typeof orderId === 'string' ? orderId.trim() : '';
+    const id = orderIdTrimmed;
     if (!id || !user?.uid) {
       setPhase('error');
       setMessage('Missing order or sign-in.');
@@ -102,7 +113,8 @@ export default function CheckoutScreen() {
         }),
       );
 
-      setPhase('done');
+      logPaymentNavigation('checkout_payment_success', { orderId: id });
+      setPhase('confirming');
       setMessage('Payment submitted. Confirming your order…');
       showSuccess('Payment submitted. Confirming your order…');
     } catch (e) {
@@ -118,13 +130,29 @@ export default function CheckoutScreen() {
       setMessage('Could not start payment. You can try again.');
       showError('Payment could not start.');
     }
-  }, [orderId, user, role, authLoading, router]);
+  }, [orderIdTrimmed, user, role, authLoading, router]);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     void runCheckout();
   }, [runCheckout]);
+
+  const confirmingHint = useMemo(() => {
+    if (timedOut) {
+      return 'This is taking longer than usual. You can open your order now — we will keep updating it live.';
+    }
+    if (listening) {
+      return 'Waiting for payment confirmation…';
+    }
+    return 'Confirming your order…';
+  }, [timedOut, listening]);
+
+  const goToLiveOrder = useCallback(() => {
+    if (!orderIdTrimmed) return;
+    logPaymentNavigation('checkout_manual_view_order', { orderId: orderIdTrimmed });
+    navigateToLiveOrder(orderIdTrimmed, 'checkout_manual_timeout');
+  }, [orderIdTrimmed, navigateToLiveOrder]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -135,9 +163,21 @@ export default function CheckoutScreen() {
             <ActivityIndicator size="large" color="#16A34A" />
             <Text style={styles.hint}>
               {phase === 'paying'
-                ? 'Complete payment in the payment sheet…'
+                ? message || 'Complete payment in the payment sheet…'
                 : 'Preparing secure payment…'}
             </Text>
+          </>
+        )}
+        {phase === 'confirming' && (
+          <>
+            <ActivityIndicator size="large" color="#16A34A" />
+            <Text style={styles.title}>Confirming payment</Text>
+            <Text style={styles.sub}>{confirmingHint}</Text>
+            {timedOut && orderIdTrimmed ? (
+              <Pressable style={styles.button} onPress={goToLiveOrder}>
+                <Text style={styles.buttonText}>View order</Text>
+              </Pressable>
+            ) : null}
           </>
         )}
         {phase === 'error' && (
@@ -181,7 +221,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
   hint: { marginTop: 16, color: '#64748B', fontWeight: '600', textAlign: 'center' },
   title: { fontSize: 20, fontWeight: '800', color: '#0F172A', textAlign: 'center' },
-  sub: { marginTop: 10, color: '#64748B', fontWeight: '600', textAlign: 'center' },
+  sub: {
+    marginTop: 10,
+    color: '#64748B',
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 340,
+  },
   button: {
     marginTop: 24,
     backgroundColor: '#16A34A',

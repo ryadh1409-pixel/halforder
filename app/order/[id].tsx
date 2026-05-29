@@ -1,4 +1,6 @@
 import { RoleScopedOrderDetailGateway } from '@/components/layout/RoleScopedOrderDetailGateway';
+import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
+import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { CustomerOrderDetailsScreen } from '@/components/orders/customer/CustomerOrderDetailsScreen';
 import { DriverOrderDetailsScreen } from '@/components/orders/driver/DriverOrderDetailsScreen';
 import { RestaurantOrderDetailsScreen } from '@/components/orders/restaurant/RestaurantOrderDetailsScreen';
@@ -299,7 +301,7 @@ function OrderTrackingScreen() {
   if (viewerRole === 'restaurant') {
     return <RestaurantOrderDetailsScreen order={order} />;
   }
-  if (viewerRole !== 'customer' && viewerRole !== 'admin') {
+  if (viewerRole === 'customer' || viewerRole === 'admin') {
     return <CustomerOrderDetailsScreen order={order} />;
   }
 
@@ -853,8 +855,10 @@ const styles = StyleSheet.create({
 
 export default function OrderDetailRoute() {
   return (
-    <RoleScopedOrderDetailGateway>
-      <OrderTrackingScreen />
-    </RoleScopedOrderDetailGateway>
+    <PaymentNavigationBoundary screenName="order/[id]">
+      <RoleScopedOrderDetailGateway>
+        <OrderTrackingScreen />
+      </RoleScopedOrderDetailGateway>
+    </PaymentNavigationBoundary>
   );
 }

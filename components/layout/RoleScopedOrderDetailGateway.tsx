@@ -1,10 +1,11 @@
+import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { orderDetailHref } from '@/lib/orderRoutes';
 import { isInDriverGroup, isInHostGroup } from '@/lib/routing/routeConstants';
 import { normalizeRoleForRouting } from '@/lib/authRole';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect, useLocalSearchParams, usePathname, useSegments } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   children: React.ReactNode;
@@ -61,5 +62,17 @@ export function RoleScopedOrderDetailGateway({ children }: Props) {
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748B',
+  },
 });
