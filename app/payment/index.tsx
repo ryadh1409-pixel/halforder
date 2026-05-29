@@ -1,9 +1,7 @@
-import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
 import { openPaymentSheet } from '@/services/stripe';
 import { useAuth } from '@/services/auth/useAuth';
 import { alertFriendly } from '@/utils/friendlyAlert';
 import { showError, showSuccess } from '@/utils/toast';
-import { serverTimestamp } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -57,22 +55,7 @@ export default function PaymentScreen() {
         return;
       }
 
-      if (trimmedOrderId) {
-        await updatePaymentOrderWithRetry({
-          orderId: trimmedOrderId,
-          operation: 'set_paid',
-          payload: {
-            paymentStatus: 'paid',
-            paymentIntentId: result.paymentIntentId,
-            stripePaymentIntentId: result.paymentIntentId,
-            status: 'pending_driver',
-            deliveryStatus: 'waiting_driver',
-            paidAt: serverTimestamp(),
-          },
-        });
-      }
-
-      showSuccess('Payment successful.');
+      showSuccess('Payment submitted. Confirming your order…');
     } catch (error) {
       if (
         error instanceof Error &&

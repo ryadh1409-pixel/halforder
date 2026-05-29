@@ -1,6 +1,4 @@
 import { openPaymentSheet } from '@/services/stripe';
-import { serverTimestamp } from 'firebase/firestore';
-import { updatePaymentOrderWithRetry } from './paymentFlowFirestore';
 
 export async function payOrderWithStripe(params: {
   orderId: string;
@@ -26,18 +24,5 @@ export async function payOrderWithStripe(params: {
     }
     throw new Error(result.message || 'Payment failed.');
   }
-  await updatePaymentOrderWithRetry({
-    orderId,
-    operation: 'set_paid',
-    payload: {
-      paymentStatus: 'paid',
-      paymentIntentId: result.paymentIntentId,
-      stripePaymentIntentId: result.paymentIntentId,
-      status: 'pending_driver',
-      deliveryStatus: 'waiting_driver',
-      driverId: null,
-      assignedDriverId: null,
-      paidAt: serverTimestamp(),
-    },
-  });
+  // Paid state is written by Stripe webhook; UI should listen to the order doc in realtime.
 }

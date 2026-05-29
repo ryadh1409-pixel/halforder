@@ -1,17 +1,14 @@
 import AppHeader from '@/components/AppHeader';
-import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
 import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripe';
-import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
 import { showError, showSuccess } from '@/utils/toast';
-import { serverTimestamp } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Phase = 'loading' | 'paying' | 'error' | 'done';
@@ -20,7 +17,6 @@ type Phase = 'loading' | 'paying' | 'error' | 'done';
 export default function CheckoutScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-  const orderParam = typeof orderId === 'string' ? orderId.trim() : '';
   const { user, role, loading: authLoading } = useAuth();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
@@ -85,18 +81,6 @@ export default function CheckoutScreen() {
       }
 
       if (result.status === 'canceled') {
-        try {
-          await updatePaymentOrderWithRetry({
-            orderId: id,
-            operation: 'set_unpaid',
-            payload: {
-              status: 'awaiting_payment',
-              paymentStatus: 'unpaid',
-            },
-          });
-        } catch {
-          // best-effort cleanup
-        }
         setPhase('done');
         setMessage('Payment was canceled. You can try again anytime.');
         return;
@@ -118,28 +102,9 @@ export default function CheckoutScreen() {
         }),
       );
 
-      if (Platform.OS !== 'web') {
-        await updatePaymentOrderWithRetry({
-          orderId: id,
-          operation: 'set_paid',
-          payload: {
-            paymentStatus: 'paid',
-            paymentIntentId: result.paymentIntentId,
-            stripePaymentIntentId: result.paymentIntentId,
-            status: 'pending_driver',
-            deliveryStatus: 'waiting_driver',
-            paidAt: serverTimestamp(),
-          },
-        });
-      }
-
       setPhase('done');
-      setMessage('');
-      showSuccess(
-        Platform.OS === 'web'
-          ? 'Payment submitted. Confirming your order…'
-          : 'Payment successful.',
-      );
+      setMessage('Payment submitted. Confirming your order…');
+      showSuccess('Payment submitted. Confirming your order…');
     } catch (e) {
       console.warn('[checkout]', e);
       if (e instanceof Error && e.message === 'Please sign in to complete payment') {
@@ -197,18 +162,6 @@ export default function CheckoutScreen() {
             </Pressable>
           </>
         )}
-        {phase === 'done' && !message ? (
-          <>
-            <Text style={styles.title}>You&apos;re all set</Text>
-            <Text style={styles.sub}>Payment confirmed. We will keep this order updated live.</Text>
-            <Pressable
-              style={styles.button}
-              onPress={() => router.replace(USER_ROUTES.order(orderParam) as never)}
-            >
-              <Text style={styles.buttonText}>Track order</Text>
-            </Pressable>
-          </>
-        ) : null}
         {phase === 'done' && message ? (
           <>
             <Text style={styles.title}>Payment update</Text>

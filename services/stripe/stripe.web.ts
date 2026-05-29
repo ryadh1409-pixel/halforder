@@ -2,7 +2,6 @@ import { httpsCallable } from 'firebase/functions';
 import React from 'react';
 import { auth, functions } from '@/services/firebase';
 import { openWebCheckout } from '@/services/stripeWebCheckout';
-import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
 
@@ -72,31 +71,6 @@ export async function openPaymentSheet(
 
   if (!checkoutSessionId) {
     throw new Error('checkoutSessionId missing from createPaymentIntent response');
-  }
-
-  try {
-    await updatePaymentOrderWithRetry({
-      orderId,
-      operation: 'set_processing',
-      payload: {
-        status: 'payment_processing',
-        paymentStatus: 'processing',
-        checkoutSessionId,
-      },
-    });
-  } catch (e) {
-    if (__DEV__) {
-      console.warn(
-        JSON.stringify({
-          msg: 'payment_flow_processing_patch_failed',
-          orderId,
-          path: `orders/${orderId}`,
-          operation: 'set_processing',
-          uid: auth.currentUser?.uid ?? null,
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    }
   }
 
   openWebCheckout(checkoutUrl);

@@ -10,7 +10,6 @@ import { isNativePaymentsAndMapsSupported } from '@/constants/runtimeEnvironment
 import { httpsCallable } from 'firebase/functions';
 import React from 'react';
 import { auth, functions } from '@/services/firebase';
-import { updatePaymentOrderWithRetry } from '@/services/paymentFlowFirestore';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
 
@@ -81,39 +80,14 @@ export async function initializePaymentSheet(
 
   const paymentIntentId = parsePaymentIntentId(clientSecret);
 
-  if (params.orderId) {
-    try {
-      await updatePaymentOrderWithRetry({
+  if (params.orderId && __DEV__) {
+    console.log(
+      JSON.stringify({
+        msg: 'payment_flow_sheet_initialized',
         orderId: params.orderId,
-        operation: 'set_processing',
-        payload: {
-          status: 'payment_processing',
-          paymentStatus: 'processing',
-          paymentIntentId,
-          stripePaymentIntentId: paymentIntentId,
-        },
-      });
-      console.log(
-        JSON.stringify({
-          msg: 'payment_flow_sheet_initialized',
-          orderId: params.orderId,
-          paymentIntentId,
-        }),
-      );
-    } catch (e) {
-      if (__DEV__) {
-        console.warn(
-          JSON.stringify({
-            msg: 'payment_flow_processing_patch_failed',
-            orderId: params.orderId,
-            path: `orders/${params.orderId}`,
-            operation: 'set_processing',
-            uid: auth.currentUser?.uid ?? null,
-            error: e instanceof Error ? e.message : String(e),
-          }),
-        );
-      }
-    }
+        paymentIntentId,
+      }),
+    );
   }
 
   return { clientSecret, paymentIntentId };
