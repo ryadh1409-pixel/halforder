@@ -1,5 +1,9 @@
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
-import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import {
+  isRestaurantActiveLiveOrder,
+  RESTAURANT_KITCHEN_ACTIVE_STATUSES,
+} from '@/lib/restaurantLiveOrders';
+import type { RestaurantOrder } from '@/services/orderService';
 
 export type RestaurantOrderListFilter =
   | 'active'
@@ -19,22 +23,12 @@ export const RESTAURANT_ORDER_FILTERS: ReadonlyArray<{
   { id: 'archived', label: 'Archived' },
 ] as const;
 
-const KITCHEN_ACTIVE: ReadonlySet<OrderStatus> = new Set([
-  'pending',
-  'accepted',
-  'restaurant_accepted',
-  'preparing',
-  'ready',
-  'ready_for_pickup',
-  'pending_driver',
-  'driver_accepted',
-  'driver_assigned',
-  'arriving_restaurant',
-  'picked_up_pending',
-  'picked_up',
-  'on_the_way',
-  'arrived_customer',
-]);
+export {
+  isRestaurantActiveLiveOrder,
+  isRestaurantPaidOrder,
+  isRestaurantPrePaymentCheckout,
+  RESTAURANT_KITCHEN_ACTIVE_STATUSES,
+} from '@/lib/restaurantLiveOrders';
 
 export function isRestaurantOrderArchived(o: RestaurantOrder): boolean {
   return o.archivedByRestaurant === true || o.hiddenForRestaurant === true;
@@ -55,7 +49,7 @@ export function matchesRestaurantOrderFilter(
 
   switch (filter) {
     case 'active':
-      return KITCHEN_ACTIVE.has(order.status);
+      return isRestaurantActiveLiveOrder(order);
     case 'ready':
       return order.status === 'ready' || order.status === 'ready_for_pickup';
     case 'driver_assigned':
@@ -89,3 +83,6 @@ export function restaurantOrderFilterEmptyTitle(
       return 'No active orders';
   }
 }
+
+/** @deprecated Use RESTAURANT_KITCHEN_ACTIVE_STATUSES */
+export const KITCHEN_ACTIVE = RESTAURANT_KITCHEN_ACTIVE_STATUSES;

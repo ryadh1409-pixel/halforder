@@ -37,6 +37,7 @@ export function profileOrderStatusLabel(
     return 'Preparing';
   }
   if (status === 'ready' || status === 'ready_for_pickup') return 'Ready for pickup';
+  if (status === 'payment_confirmed') return 'Payment confirmed';
   if (status === 'awaiting_payment') return paid ? 'Payment confirmed' : 'Awaiting payment';
   return 'Pending';
 }

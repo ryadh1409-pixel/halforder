@@ -19,7 +19,7 @@ export function isOrderPaidForNavigation(
   const paymentStatus =
     typeof data.paymentStatus === 'string' ? data.paymentStatus.trim() : '';
   const status = typeof data.status === 'string' ? data.status.trim() : '';
-  return paymentStatus === 'paid' || status === 'pending_driver' || status === 'accepted';
+  return paymentStatus === 'paid' || status === 'pending_driver' || status === 'accepted' || status === 'payment_confirmed';
 }
 
 type Options = {

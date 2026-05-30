@@ -94,7 +94,12 @@ export function RestaurantOrdersPanel({
   }, []);
 
   const summary = useMemo(() => {
-    const pending = freshOrders.filter((o) => o.status === 'pending').length;
+    const pending = freshOrders.filter(
+      (o) =>
+        o.status === 'pending' ||
+        o.status === 'payment_confirmed' ||
+        o.status === 'pending_driver',
+    ).length;
     const preparing = freshOrders.filter(
       (o) => o.status === 'preparing' || o.status === 'restaurant_accepted',
     ).length;

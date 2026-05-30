@@ -1,7 +1,7 @@
 /**
  * Mirror of `lib/orderPaidState.ts` for Stripe webhook (stripe-backend codebase).
  */
-export const POST_PAYMENT_ORDER_STATUS = "pending" as const;
+export const POST_PAYMENT_ORDER_STATUS = "payment_confirmed" as const;
 
 export const PRE_PAYMENT_ORDER_STATUSES = new Set([
   "awaiting_payment",

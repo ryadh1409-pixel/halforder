@@ -33,6 +33,7 @@ function kitchenBadgeLabel(status: OrderStatus): string {
   switch (status) {
     case 'awaiting_payment':
     case 'payment_processing':
+    case 'payment_confirmed':
     case 'pending':
     case 'pending_driver':
       return 'Pending';
@@ -67,6 +68,7 @@ function kitchenBadgeTone(status: OrderStatus): { bg: string; fg: string } {
     case 'accepted':
       return { bg: '#DBEAFE', fg: '#1D4ED8' };
     case 'pending':
+    case 'payment_confirmed':
     case 'awaiting_payment':
     case 'pending_driver':
       return { bg: '#FEF3C7', fg: '#92400E' };

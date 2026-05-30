@@ -3,8 +3,8 @@
  * Webhook + repair Cloud Function must stay in sync with this module.
  */
 
-/** Order `status` after successful payment (app uses `pending` = order placed / confirmed). */
-export const POST_PAYMENT_ORDER_STATUS = 'pending' as const;
+/** Order `status` after successful payment — restaurant kitchen queue. */
+export const POST_PAYMENT_ORDER_STATUS = 'payment_confirmed' as const;
 
 export const PRE_PAYMENT_ORDER_STATUSES = new Set([
   'awaiting_payment',

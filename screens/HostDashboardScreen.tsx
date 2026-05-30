@@ -66,6 +66,7 @@ function badgeTone(status: OrderStatus): { bg: string; text: string } {
   switch (status) {
     case 'awaiting_payment':
       return { bg: '#E2E8F0', text: '#334155' };
+    case 'payment_confirmed':
     case 'pending':
       return { bg: '#FEF3C7', text: '#92400E' };
     case 'restaurant_accepted':

@@ -2,7 +2,7 @@
  * Mirror of `lib/orderPaidState.ts` for Cloud Functions (main codebase).
  * Keep in sync when changing paid-state rules.
  */
-export const POST_PAYMENT_ORDER_STATUS = "pending" as const;
+export const POST_PAYMENT_ORDER_STATUS = "payment_confirmed" as const;
 
 export const PRE_PAYMENT_ORDER_STATUSES = new Set([
   "awaiting_payment",

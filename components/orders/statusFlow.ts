@@ -21,6 +21,7 @@ export function normalizeMerchantStatus(status: OrderStatus): MerchantOrderStatu
   if (status === 'accepted' || status === 'restaurant_accepted') return 'accepted';
   if (status === 'ready' || status === 'ready_for_pickup') return 'ready';
   if (status === 'awaiting_payment') return 'pending';
+  if (status === 'payment_confirmed') return 'pending';
   if (status === 'cancelled' || status === 'rejected') return 'delivered';
   if (
     status === 'pending' ||

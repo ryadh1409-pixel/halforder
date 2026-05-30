@@ -1,6 +1,9 @@
 import type { OrderStatus } from '@/services/orderService';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
 import { safeToMillis } from '@/utils/safeToMillis';
+import {
+  isRestaurantPrePaymentCheckout,
+} from '@/lib/restaurantLiveOrders';
 
 /** Restaurant dashboard visibility window — exactly 24 hours. */
 export const RESTAURANT_ORDER_FRESH_MS = 24 * 60 * 60 * 1000;
@@ -39,6 +42,7 @@ export function filterFreshRestaurantOrders<T extends OrderFreshnessInput>(
 
 export type RestaurantDashboardMetricsInput = OrderFreshnessInput & {
   status?: OrderStatus | string;
+  paymentStatus?: string;
   totalPrice?: number;
 };
 
@@ -58,10 +62,13 @@ export function computeRestaurantDashboardMetrics(
   let revenue = 0;
 
   for (const order of fresh) {
+    if (isRestaurantPrePaymentCheckout(order)) {
+      continue;
+    }
     const status = typeof order.status === 'string' ? order.status : '';
     if (status === 'delivered') {
       completed += 1;
-    } else if (status !== 'rejected') {
+    } else if (status !== 'rejected' && status !== 'cancelled') {
       active += 1;
     }
     revenue += typeof order.totalPrice === 'number' ? order.totalPrice : 0;

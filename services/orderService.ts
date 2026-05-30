@@ -30,6 +30,7 @@ const RESTAURANT_ORDERS_LIST_LIMIT = 120;
 export type OrderStatus =
   | 'awaiting_payment'
   | 'payment_processing'
+  | 'payment_confirmed'
   | 'payment_failed'
   | 'pending'
   | 'pending_driver'
@@ -119,9 +120,11 @@ function makeGroupId() {
 function parseStatus(value: unknown): OrderStatus {
   const s = typeof value === 'string' ? value : '';
   if (s === 'pending_payment') return 'awaiting_payment';
+  if (s === 'confirmed') return 'payment_confirmed';
   if (
     s === 'awaiting_payment' ||
     s === 'payment_processing' ||
+    s === 'payment_confirmed' ||
     s === 'payment_failed' ||
     s === 'pending' ||
     s === 'pending_driver' ||
@@ -159,6 +162,7 @@ function parsePaymentStatus(value: unknown, orderStatus: OrderStatus): PaymentSt
   }
   if (orderStatus === 'payment_processing') return 'processing';
   if (orderStatus === 'awaiting_payment') return 'unpaid';
+  if (orderStatus === 'payment_confirmed') return 'paid';
   return 'paid';
 }
 
@@ -652,6 +656,7 @@ export async function rejectOrder(orderId: string): Promise<void> {
 const CUSTOMER_CANCELLABLE_STATUSES: OrderStatus[] = [
   'awaiting_payment',
   'payment_processing',
+  'payment_confirmed',
   'pending',
   'pending_driver',
   'accepted',

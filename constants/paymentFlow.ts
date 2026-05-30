@@ -9,14 +9,14 @@
  * 1. `awaiting_payment` + `unpaid` — cart converted to order; customer pays.
  * 2. `payment_processing` + `processing` — PaymentIntent created; sheet presented (native).
  * 3. Webhook `payment_intent.succeeded` or `checkout.session.completed` →
- *    `paymentStatus: paid`, `status: pending`, `deliveryStatus: pending`, `paidAt` (server).
+ *    `paymentStatus: paid`, `status: payment_confirmed`, `deliveryStatus: pending`, `paidAt` (server).
  * 4. Restaurant: `pending` / `accepted` / `preparing` / `ready_for_pickup` (existing flows).
  * 5. Driver: `driver_assigned` → `picked_up` → `delivered`.
  * 6. Failures: webhook `payment_intent.payment_failed` → `payment_failed` + `failed` + `paymentFailedAt`.
  *
  * Aliases for dashboards / analytics:
  * - `pending_payment` === `awaiting_payment`
- * - `paid` is reflected by `paymentStatus: paid` and `status: pending` (order placed).
+ * - `paid` is reflected by `paymentStatus: paid` and `status: payment_confirmed` (order confirmed).
  */
 export const PAYMENT_FLOW_VERSION = 1 as const;
 

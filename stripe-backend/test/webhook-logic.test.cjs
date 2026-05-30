@@ -30,7 +30,7 @@ test("needsPaidStatusRepair detects split paid/status", () => {
     true,
   );
   assert.equal(
-    needsPaidStatusRepair({ paymentStatus: "paid", status: "pending" }),
+    needsPaidStatusRepair({ paymentStatus: "paid", status: "payment_confirmed" }),
     false,
   );
   assert.equal(
@@ -45,7 +45,7 @@ test("buildOrderPaidStatePatch advances status on payment success", () => {
     { paymentIntentId: "pi_abc", stripeWebhookLastEventType: "payment_intent.succeeded" },
   );
   assert.equal(patch.paymentStatus, "paid");
-  assert.equal(patch.status, "pending");
+  assert.equal(patch.status, "payment_confirmed");
   assert.equal(patch.deliveryStatus, "pending");
   assert.equal(patch.paymentIntentId, "pi_abc");
 });
@@ -59,7 +59,7 @@ test("buildOrderPaidStatePatch repairOnly preserves drivers", () => {
     },
     { repairOnly: true },
   );
-  assert.equal(patch.status, "pending");
+  assert.equal(patch.status, "payment_confirmed");
   assert.equal("driverId" in patch, false);
 });
 
@@ -67,6 +67,6 @@ test("resolvePostPaymentOrderStatus keeps active fulfillment", () => {
   assert.equal(resolvePostPaymentOrderStatus({ status: "preparing" }), "preparing");
   assert.equal(
     resolvePostPaymentOrderStatus({ status: "awaiting_payment" }),
-    "pending",
+    "payment_confirmed",
   );
 });
