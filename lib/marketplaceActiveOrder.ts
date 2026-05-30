@@ -11,6 +11,7 @@ import { marketplaceLog } from '@/lib/marketplaceLogger';
 export type MarketplaceOrderFields = {
   createdAt?: unknown;
   paidAt?: unknown;
+  updatedAt?: unknown;
   readyAt?: unknown;
   acceptedAt?: unknown;
   preparedAt?: unknown;

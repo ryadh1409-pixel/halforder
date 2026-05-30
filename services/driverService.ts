@@ -752,69 +752,107 @@ export async function claimMarketplaceDriverOrder(
   vehicle?: string | null,
 ): Promise<{ ok: boolean; reason?: string }> {
   const orderRef = doc(db, 'orders', orderId);
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(orderRef);
-    if (!snap.exists()) return { ok: false, reason: 'missing' };
-    const data = snap.data();
-    if (typeof data.driverId === 'string' && data.driverId.length > 0) {
-      return { ok: false, reason: 'already_assigned' };
-    }
+  const ruleSafePayload = {
+    driverId: driver.id,
+    assignedDriverId: driver.id,
+    driverName: driver.name,
+    driverPhone: driver.phone ?? null,
+    ...(vehicle ? { driverVehicle: vehicle } : {}),
+    deliveryStatus: 'driver_assigned',
+  };
 
-    const existingPin =
-      typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
-        ? data.deliveryPin
-        : null;
-    const deliveryPin = existingPin ?? String(1000 + Math.floor(Math.random() * 9000));
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists()) {
+        marketplaceLog.acceptFailed(orderId, { reason: 'missing' });
+        return { ok: false, reason: 'missing' };
+      }
+      const data = snap.data();
+      if (typeof data.driverId === 'string' && data.driverId.length > 0) {
+        marketplaceLog.acceptFailed(orderId, {
+          reason: 'already_assigned',
+          assignedDriverId: data.driverId,
+          conflictingAssignment: data.driverId !== driver.id,
+        });
+        return { ok: false, reason: 'already_assigned' };
+      }
+      if (
+        typeof data.assignedDriverId === 'string' &&
+        data.assignedDriverId.length > 0
+      ) {
+        marketplaceLog.acceptFailed(orderId, {
+          reason: 'already_assigned',
+          assignedDriverId: data.assignedDriverId,
+          conflictingAssignment: data.assignedDriverId !== driver.id,
+        });
+        return { ok: false, reason: 'already_assigned' };
+      }
 
-    const normalizedDelivery = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
-    const paid = isPaidMarketplaceDeliveryOrder(data);
+      const existingPin =
+        typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
+          ? data.deliveryPin
+          : null;
+      const deliveryPin = existingPin ?? String(1000 + Math.floor(Math.random() * 9000));
 
-    const driverBlob = {
-      id: driver.id,
-      name: driver.name,
-      phone: driver.phone ?? null,
-      vehicle: vehicle ?? null,
-      avatar: null as string | null,
-    };
+      const normalizedDelivery = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+      const paid = isPaidMarketplaceDeliveryOrder(data);
 
-    marketplaceLog.acceptStart(orderId, {
-      paid,
-      deliveryStatus: data.deliveryStatus,
-      normalizedDelivery,
-    });
+      const driverBlob = {
+        id: driver.id,
+        name: driver.name,
+        phone: driver.phone ?? null,
+        vehicle: vehicle ?? null,
+        avatar: null as string | null,
+      };
 
-    if (paid && isDriverMarketplaceClaimable(normalizedDelivery)) {
-      tx.update(orderRef, {
-        driverId: driver.id,
-        assignedDriverId: driver.id,
-        driverName: driver.name,
-        driverPhone: driver.phone ?? null,
-        ...(vehicle ? { driverVehicle: vehicle } : {}),
-        driver: driverBlob,
-        deliveryStatus: 'driver_assigned',
-        acceptedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        estimatedDeliveryTime:
-          typeof data.estimatedDeliveryTime === 'number' && data.estimatedDeliveryTime < 180
-            ? data.estimatedDeliveryTime
-            : 18,
-        estimatedDeliveryMinutes:
-          typeof data.estimatedDeliveryMinutes === 'number' && data.estimatedDeliveryMinutes < 180
-            ? data.estimatedDeliveryMinutes
-            : 18,
-        deliveryPin,
+      marketplaceLog.acceptStart(orderId, {
+        paid,
+        deliveryStatus: data.deliveryStatus,
+        normalizedDelivery,
+        ruleSafePayload,
       });
-      marketplaceLog.acceptSuccess(orderId, { normalizedDelivery });
-      return { ok: true };
-    }
 
-    marketplaceLog.acceptFailed(orderId, {
-      paid,
-      normalizedDelivery,
-      reason: 'invalid_state',
+      if (paid && isDriverMarketplaceClaimable(normalizedDelivery)) {
+        tx.update(orderRef, {
+          ...ruleSafePayload,
+          driver: driverBlob,
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          estimatedDeliveryTime:
+            typeof data.estimatedDeliveryTime === 'number' && data.estimatedDeliveryTime < 180
+              ? data.estimatedDeliveryTime
+              : 18,
+          estimatedDeliveryMinutes:
+            typeof data.estimatedDeliveryMinutes === 'number' &&
+            data.estimatedDeliveryMinutes < 180
+              ? data.estimatedDeliveryMinutes
+              : 18,
+          deliveryPin,
+        });
+        marketplaceLog.acceptSuccess(orderId, { normalizedDelivery, ruleSafePayload });
+        return { ok: true };
+      }
+
+      marketplaceLog.acceptFailed(orderId, {
+        paid,
+        normalizedDelivery,
+        reason: 'invalid_state',
+        ruleSafePayload,
+      });
+      return { ok: false, reason: 'invalid_state' };
     });
-    return { ok: false, reason: 'invalid_state' };
-  });
+  } catch (error) {
+    marketplaceLog.acceptError(orderId, error, {
+      ruleSafePayload,
+      permissionDenied:
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === 'permission-denied',
+    });
+    return { ok: false, reason: 'permission_denied' };
+  }
 }
 
 /**

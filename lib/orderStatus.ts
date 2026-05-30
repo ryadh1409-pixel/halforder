@@ -38,6 +38,7 @@ const REMOVED_SET = new Set<string>(DRIVER_MARKETPLACE_REMOVED_STATUSES);
 /** Maps legacy Firestore values → canonical deliveryStatus. */
 /** Raw Firestore courier statuses eligible for driver pool (checked before normalize). */
 export const DRIVER_MARKETPLACE_RAW_VISIBLE = [
+  'pending',
   'accepted',
   'preparing',
   'ready_for_pickup',
