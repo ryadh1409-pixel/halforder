@@ -5,6 +5,7 @@
 import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
+import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
@@ -69,6 +70,10 @@ function TrackOrderScreen() {
         setListenError(false);
         setOrder(next);
         if (next) {
+          logPaidStatusRepairIfNeeded(orderId, {
+            paymentStatus: next.paymentStatus,
+            status: next.status,
+          });
           logPaymentNavigation('track_order_snapshot', {
             orderId,
             paymentStatus: next.paymentStatus,

@@ -163,7 +163,10 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     lastStatusRef.current = order.status;
   }, [order.status]);
 
-  const stepDone = useMemo(() => fulfillmentStatusIndex(order.status), [order.status]);
+  const stepDone = useMemo(
+    () => fulfillmentStatusIndex(order.status, order.paymentStatus),
+    [order.status, order.paymentStatus],
+  );
 
   const customerPhase = useMemo(
     () =>

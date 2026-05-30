@@ -14,8 +14,18 @@ export const FULFILLMENT_TIMELINE: { status: OrderStatus; label: string }[] = [
   { status: 'delivered', label: 'Delivered' },
 ];
 
-export function fulfillmentStatusIndex(status: OrderStatus | undefined): number {
+export function fulfillmentStatusIndex(
+  status: OrderStatus | undefined,
+  paymentStatus?: string,
+): number {
   if (!status || status === 'rejected' || status === 'payment_failed') return -1;
+  const paid = paymentStatus === 'paid';
+  if (
+    paid &&
+    (status === 'awaiting_payment' || status === 'payment_processing')
+  ) {
+    return Math.max(0, FULFILLMENT_TIMELINE.findIndex((s) => s.status === 'pending'));
+  }
   if (status === 'payment_processing') {
     return Math.max(0, FULFILLMENT_TIMELINE.findIndex((s) => s.status === 'awaiting_payment'));
   }

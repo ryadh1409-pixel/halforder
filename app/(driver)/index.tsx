@@ -26,18 +26,11 @@ import {
   type DriverOrder,
 } from '../../services/driverService';
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
+import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { showError, showSuccess } from '../../utils/toast';
 
-function formatOrderTime(value: number | null): string {
-  if (!value) return 'Now';
-  const date = new Date(value);
-  const now = new Date();
-  const isToday =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return isToday ? `Today ${timeLabel}` : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+function formatOrderPlacedAt(createdAtMs: number | null | undefined): string {
+  return createdAtMs ? new Date(createdAtMs).toLocaleTimeString() : 'Now';
 }
 
 function formatItems(items: Array<{ qty?: number; quantity?: number; name?: string; title?: string }>): string {
@@ -167,7 +160,9 @@ export default function DriverHubScreen() {
 
   const applyAvailableOrders = useCallback((orders: DriverOrder[]) => {
     const unique = Array.from(
-      new Map(orders.filter((o) => !o.driverId).map((o) => [o.id, o])).values(),
+      new Map(
+        orders.filter((o) => !o.driverId).map((o) => [o.id, o]),
+      ).values(),
     );
     const sig = ordersListSignature(unique);
     if (sig === availableSigRef.current) return;
@@ -222,6 +217,7 @@ export default function DriverHubScreen() {
       if (!uid || acceptingIdRef.current) return;
       setAcceptingId(order.id);
       try {
+        marketplaceLog.acceptStart(order.id, { driverId: uid });
         const res = await acceptQueuedDeliveryOrder(order.id, {
           id: uid,
           name: user?.displayName ?? 'Driver',
@@ -229,12 +225,18 @@ export default function DriverHubScreen() {
           isOnline: true,
         });
         if (!res.ok) {
+          marketplaceLog.acceptFailed(order.id, { reason: res.reason });
+          if (res.reason === 'expired') {
+            setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
+            showError('This order has expired');
+            return;
+          }
           showError(res.reason === 'already_assigned' ? 'Already assigned' : 'Could not accept order');
           return;
         }
+        marketplaceLog.acceptSuccess(order.id, { driverId: uid });
         setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
-        showSuccess('Order accepted');
-        router.replace(DRIVER_ROUTES.activeOrder(order.id) as never);
+        showSuccess('Order accepted — active delivery is on your Hub');
       } catch (e) {
         console.error('[driver] accept order failed', e);
         showError('Failed to accept order');
@@ -321,25 +323,26 @@ export default function DriverHubScreen() {
               Pickup: {pinnedActiveOrder.restaurantAddress ?? 'Restaurant address unavailable'}
             </Text>
           </Pressable>
-        ) : null}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Available Orders</Text>
-          <Text style={styles.sectionCount}>{availableOrders.length}</Text>
-        </View>
-
-        {!isOnline ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateTitle}>You are offline</Text>
-            <Text style={styles.stateSub}>Turn on the switch above to start receiving delivery offers.</Text>
-          </View>
-        ) : availableOrders.length === 0 ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateTitle}>No delivery requests nearby yet.</Text>
-            <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
-          </View>
         ) : (
-          availableOrders.map((order) => {
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Available Orders</Text>
+              <Text style={styles.sectionCount}>{availableOrders.length}</Text>
+            </View>
+
+            {!isOnline ? (
+              <View style={styles.stateCard}>
+                <Text style={styles.stateTitle}>You are offline</Text>
+                <Text style={styles.stateSub}>Turn on the switch above to start receiving delivery offers.</Text>
+              </View>
+            ) : availableOrders.length === 0 ? (
+              <View style={styles.stateCard}>
+                <Text style={styles.stateTitle}>No delivery requests nearby yet.</Text>
+                <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
+              </View>
+            ) : (
+              availableOrders.map((order) => {
+            const isExpired = false;
             const restaurantAddress = order.restaurantAddress ?? 'Address unavailable';
             const customerAddress =
               order.deliveryAddress ?? (order as DriverOrder & { address?: string | null }).address ?? 'Address unavailable';
@@ -358,7 +361,9 @@ export default function DriverHubScreen() {
                     )}
                     <View style={styles.brandMeta}>
                       <Text style={styles.restaurantName}>{order.restaurantName || 'Restaurant'}</Text>
-                      <Text style={styles.timestamp}>{formatOrderTime(order.createdAtMs)}</Text>
+                      <Text style={styles.timestamp}>
+                        {formatOrderPlacedAt(order.createdAtMs)}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.earningPill}>
@@ -396,7 +401,11 @@ export default function DriverHubScreen() {
                   <Text style={styles.detailTitle}>Order Details</Text>
                   <Text style={styles.detailValue}>{formatItems(order.items) || 'No items listed'}</Text>
                   <Text style={styles.metaLine}>
-                    {totalItemsCount(order)} items • {order.estimatedDeliveryTime} min •{' '}
+                    {totalItemsCount(order)} items •{' '}
+                    {order.estimatedDeliveryTime > 0 && order.estimatedDeliveryTime < 180
+                      ? `${order.estimatedDeliveryTime} min ETA`
+                      : '35 min ETA'}{' '}
+                    •{' '}
                     {order.distanceKm != null ? `${order.distanceKm} km` : 'Distance unavailable'}
                   </Text>
                   <Text style={styles.metaLine}>Total order value: ${order.total.toFixed(2)}</Text>
@@ -424,19 +433,26 @@ export default function DriverHubScreen() {
                 </View>
 
                 <Pressable
-                  style={[styles.acceptBtn, acceptingId === order.id && styles.acceptBtnDisabled]}
+                  style={[
+                    styles.acceptBtn,
+                    (acceptingId === order.id || isExpired) && styles.acceptBtnDisabled,
+                  ]}
                   onPress={() => handleAccept(order)}
-                  disabled={acceptingId !== null}
+                  disabled={acceptingId !== null || isExpired}
                 >
                   {acceptingId === order.id ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.acceptBtnText}>Accept Order</Text>
+                    <Text style={styles.acceptBtnText}>
+                      {isExpired ? 'Expired' : 'Accept Order'}
+                    </Text>
                   )}
                 </Pressable>
               </View>
             );
           })
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -550,6 +566,7 @@ const styles = StyleSheet.create({
   brandMeta: { marginLeft: 10, flex: 1 },
   restaurantName: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
   timestamp: { color: '#9CA3AF', marginTop: 2, fontWeight: '600', fontSize: 12 },
+  timestampExpired: { color: '#FCA5A5' },
   earningPill: {
     backgroundColor: '#00C853',
     borderRadius: 10,

@@ -5,17 +5,20 @@
 
 export const HALF_ORDER_MATCH_WAIT_MS = 2 * 60 * 1000;
 
+/** Kitchen / order lifecycle (not courier state — see DELIVERY_STATUS). */
 export const ORDER_STATUS = {
   AWAITING_PAYMENT: 'awaiting_payment',
   PAYMENT_PROCESSING: 'payment_processing',
   PAYMENT_CONFIRMED: 'payment_confirmed',
+  ACCEPTED: 'accepted',
+  PREPARING: 'preparing',
+  READY_FOR_PICKUP: 'ready_for_pickup',
+  COMPLETED: 'completed',
   FINDING_DRIVER: 'finding_driver',
   PENDING_DRIVER: 'pending_driver',
   MATCHED: 'matched',
   ORDER_PLACED: 'order_placed',
   RESTAURANT_ACCEPTED: 'restaurant_accepted',
-  PREPARING: 'preparing',
-  READY_FOR_PICKUP: 'ready_for_pickup',
   PICKED_UP: 'picked_up',
   ON_THE_WAY: 'on_the_way',
   ARRIVED_NEARBY: 'arrived_nearby',
@@ -25,7 +28,7 @@ export const ORDER_STATUS = {
   // backward compatibility
   WAITING: 'awaiting_payment',
   ACTIVE: 'matched',
-  COMPLETED: 'delivered',
+  COMPLETED_LEGACY: 'delivered',
 } as const;
 
 if (__DEV__) {
@@ -66,6 +69,18 @@ export const ACTIVE_ORDER_STATUSES = [
 export const COMPLETED_ORDER_STATUSES = [ORDER_STATUS.DELIVERED, 'completed'] as const;
 
 export const CANCELLED_ORDER_STATUSES = [ORDER_STATUS.CANCELLED, 'expired', 'rejected'] as const;
+
+/** Courier lifecycle — kept in sync with `services/deliveryStatus.ts`. */
+export const DELIVERY_STATUS = {
+  PENDING: 'pending',
+  WAITING_DRIVER: 'waiting_driver',
+  DRIVER_ASSIGNED: 'driver_assigned',
+  HEADING_TO_RESTAURANT: 'heading_to_restaurant',
+  PICKED_UP: 'picked_up',
+  ON_THE_WAY: 'on_the_way',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled',
+} as const;
 
 export type OrderListSection = 'active' | 'completed' | 'cancelled';
 

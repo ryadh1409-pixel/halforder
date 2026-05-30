@@ -15,11 +15,10 @@ export const DRIVER_ROUTES = {
   order: (orderId: string) => `/(driver)/order/${encodeURIComponent(orderId)}` as const,
 } as const;
 
-export type DriverTabKey = 'index' | 'dispatch' | 'earnings' | 'driver-profile';
+export type DriverTabKey = 'index' | 'earnings' | 'driver-profile';
 
 export const DRIVER_TAB_HREFS: Record<DriverTabKey, Href> = {
   index: DRIVER_ROUTES.hub,
-  dispatch: DRIVER_ROUTES.dispatch,
   earnings: DRIVER_ROUTES.earnings,
   'driver-profile': DRIVER_ROUTES.profile,
 };
@@ -52,14 +51,11 @@ export const HOST_ROUTES = {
   hub: '/(host)',
   dashboard: '/(host)/dashboard',
   menu: '/(host)/menu',
-  orders: '/(host)/orders',
-  order: (orderId: string) => `/(host)/orders/${encodeURIComponent(orderId)}` as const,
 } as const;
 
-export type HostTabKey = 'dashboard' | 'orders' | 'menu';
+export type HostTabKey = 'dashboard' | 'menu';
 
 export const HOST_TAB_HREFS: Record<HostTabKey, Href> = {
   dashboard: HOST_ROUTES.dashboard,
-  orders: HOST_ROUTES.orders,
   menu: HOST_ROUTES.menu,
 };

@@ -3,7 +3,15 @@ export type ProfileOrderBadgeTone = 'orange' | 'blue' | 'green' | 'red' | 'neutr
 export function profileOrderStatusLabel(
   status: string,
   deliveryStatus?: string | null,
+  paymentStatus?: string | null,
 ): string {
+  const ps = (paymentStatus ?? '').trim().toLowerCase();
+  const paid = ps === 'paid';
+
+  if (paid && (status === 'awaiting_payment' || status === 'payment_processing')) {
+    return 'Payment confirmed';
+  }
+
   const ds = (deliveryStatus ?? '').trim();
   if (ds === 'waiting_driver') return 'Finding Driver';
   if (status === 'payment_processing') return 'Processing payment';
@@ -29,7 +37,7 @@ export function profileOrderStatusLabel(
     return 'Preparing';
   }
   if (status === 'ready' || status === 'ready_for_pickup') return 'Ready for pickup';
-  if (status === 'awaiting_payment') return 'Awaiting payment';
+  if (status === 'awaiting_payment') return paid ? 'Payment confirmed' : 'Awaiting payment';
   return 'Pending';
 }
 

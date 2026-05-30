@@ -39,7 +39,7 @@ function hrefForTabRoute(routeName: string): Href {
     case 'profile':
       return TABS_ROUTES.profile as Href;
     case 'orders':
-      return '/(host)/orders' as Href;
+      return '/(host)/dashboard' as Href;
     case 'host':
       return '/(host)/dashboard' as Href;
     case 'menu':

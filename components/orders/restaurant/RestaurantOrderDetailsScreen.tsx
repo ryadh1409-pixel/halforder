@@ -1,5 +1,6 @@
 import AppHeader from '@/components/AppHeader';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { orderRoomHref } from '@/services/orderChat';
 import type { OrderStatus } from '@/services/orderService';
 import {
@@ -53,7 +54,8 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
 
   const canAccept =
     paid &&
-    (order.status === 'pending' ||
+    (order.status === 'awaiting_payment' ||
+      order.status === 'pending' ||
       order.status === 'pending_driver' ||
       order.status === 'accepted');
 
@@ -86,6 +88,20 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
 
   async function patchStatus(next: OrderStatus) {
     await updateOrderStatus(order.id, next);
+  }
+
+  if (!isOrderFresh(order)) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <AppHeader title="Kitchen order" />
+        <View style={styles.emptyWrap}>
+          <Text style={styles.title}>Order no longer available</Text>
+          <Text style={styles.muted}>
+            Restaurant dashboards only show orders from the last 24 hours.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -203,6 +219,13 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0c0a09' },
   scroll: { padding: 16, paddingBottom: 40 },
+  emptyWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 8,
+  },
   header: {
     padding: 16,
     borderRadius: 18,

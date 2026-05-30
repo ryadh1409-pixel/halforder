@@ -1,4 +1,6 @@
+import { getOrderTimestamp } from '@/lib/userOrderFreshness';
 import { db } from '@/services/firebase';
+import { safeToMillis } from '@/utils/safeToMillis';
 import {
   collection,
   getDocs,
@@ -30,32 +32,10 @@ export type ProfileOrderRow = {
   driverPhone: string | null;
   itemsCount: number;
   createdAtMs: number;
+  createdAt?: unknown;
+  updatedAtMs?: number | null;
   imageUrl: string | null;
 };
-
-function toMillis(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (
-    value &&
-    typeof value === 'object' &&
-    'seconds' in (value as Record<string, unknown>)
-  ) {
-    const secs = Number((value as { seconds?: unknown }).seconds);
-    if (Number.isFinite(secs)) return secs * 1000;
-  }
-  if (
-    value &&
-    typeof value === 'object' &&
-    typeof (value as { toMillis?: unknown }).toMillis === 'function'
-  ) {
-    try {
-      return (value as { toMillis: () => number }).toMillis();
-    } catch {
-      return 0;
-    }
-  }
-  return 0;
-}
 
 function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
   const items = Array.isArray(d?.items) ? d.items : [];
@@ -106,7 +86,13 @@ function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
       const qty = Number((item as { qty?: unknown })?.qty ?? 1);
       return acc + (Number.isFinite(qty) && qty > 0 ? qty : 1);
     }, 0),
-    createdAtMs: toMillis(d?.createdAt),
+    createdAtMs:
+      safeToMillis(d?.createdAtMs) ??
+      safeToMillis(d?.createdAt) ??
+      0,
+    createdAt: d?.createdAt,
+    updatedAtMs:
+      safeToMillis(d?.updatedAtMs) ?? safeToMillis(d?.updatedAt) ?? null,
     imageUrl: imageFromItem || imageFromRestaurant,
   };
 }
@@ -180,7 +166,7 @@ export function useProfileOrders(uid: string | null) {
       const dedup = new Map<string, ProfileOrderRow>();
       input.forEach((r) => dedup.set(r.id, r));
       return [...dedup.values()]
-        .sort((a, b) => b.createdAtMs - a.createdAtMs)
+        .sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a))
         .slice(0, ORDERS_LIMIT);
     },
     [],

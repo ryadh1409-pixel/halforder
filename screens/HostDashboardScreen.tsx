@@ -1,12 +1,12 @@
 import { systemConfirm } from '@/components/SystemDialogHost';
 import { useMenu } from '@/hooks/useMenu';
 import { RestaurantOrdersPanel } from '@/components/restaurant/RestaurantOrdersPanel';
+import { computeRestaurantDashboardMetrics } from '@/lib/restaurantOrderFreshness';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import {
   mergeHostRestaurantProfile,
   saveRestaurantVenueMain,
 } from '@/services/hostRestaurant';
-import { HOST_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import {
   addFoodItem,
@@ -440,14 +440,13 @@ export default function HostDashboardScreen() {
   }, [orders]);
 
   const stats = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const t0 = start.getTime();
-    const todayOrders = orders.filter((o) => (o.createdAtMs ?? 0) >= t0);
-    const ordersToday = todayOrders.length;
-    const revenueToday = todayOrders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+    const orderMetrics = computeRestaurantDashboardMetrics(orders);
     const activeItems = menu.length;
-    return { ordersToday, revenueToday, activeItems };
+    return {
+      ordersToday: orderMetrics.total,
+      revenueToday: orderMetrics.revenue,
+      activeItems,
+    };
   }, [menu, orders]);
 
   if (authLoading || roleLoading) {
@@ -533,7 +532,7 @@ export default function HostDashboardScreen() {
             <View style={styles.statTile}>
               <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
               <Text style={styles.statValue}>{stats.ordersToday}</Text>
-              <Text style={styles.statLabel}>Orders today</Text>
+              <Text style={styles.statLabel}>Orders (24h)</Text>
             </View>
             <View style={styles.statTile}>
               <Ionicons name="cash-outline" size={20} color={PRIMARY} />
@@ -696,7 +695,7 @@ export default function HostDashboardScreen() {
             <View style={styles.ordersSummaryRow}>
               <View style={styles.ordersSummaryTile}>
                 <Text style={styles.ordersSummaryValue}>${stats.revenueToday.toFixed(0)}</Text>
-                <Text style={styles.ordersSummaryLabel}>Revenue today</Text>
+                <Text style={styles.ordersSummaryLabel}>Revenue (24h)</Text>
               </View>
             </View>
             {uid ? (
@@ -704,9 +703,6 @@ export default function HostDashboardScreen() {
                 restaurantId={uid}
                 restaurantTimeZone={restaurant?.timezone}
                 title="Live orders"
-                onOpenOrder={(orderId) =>
-                  router.push(HOST_ROUTES.order(orderId) as never)
-                }
               />
             ) : null}
           </View>

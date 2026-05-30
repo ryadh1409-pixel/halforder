@@ -13,6 +13,12 @@ type PaymentWriteInput = {
   payload: Record<string, unknown>;
 };
 
+import {
+  buildOrderPaidStatePatch,
+  needsPaidStatusRepair,
+  POST_PAYMENT_ORDER_STATUS,
+} from '@/lib/orderPaidState';
+
 /**
  * Order payment fields (`status`, `paymentStatus`, `paymentIntentId`, `paidAt`, etc.)
  * are updated only by the Stripe webhook (Admin SDK). Client writes cause duplicate
@@ -68,4 +74,29 @@ export async function updatePaymentOrderWithRetry(
   throw new Error(
     'Client payment Firestore writes are disabled. Payment state is synced via Stripe webhook.',
   );
+}
+
+/**
+ * Documents the canonical paid transition (webhook / Cloud Function only).
+ * Client must never call this — use for logging and server-side handlers.
+ */
+export function describeOrderPaidStatePatch(
+  existing: Record<string, unknown>,
+  extras?: Parameters<typeof buildOrderPaidStatePatch>[1],
+): Record<string, unknown> {
+  return buildOrderPaidStatePatch(existing, extras);
+}
+
+/** Dev-only: log when Firestore has split paid/status (webhook repair will fix). */
+export function logPaidStatusRepairIfNeeded(
+  orderId: string,
+  order: Record<string, unknown>,
+): void {
+  if (!needsPaidStatusRepair(order)) return;
+  console.warn('[PAYMENT REPAIR NEEDED] paid but status still pre-payment', {
+    orderId,
+    paymentStatus: order.paymentStatus,
+    status: order.status,
+    expectedStatus: POST_PAYMENT_ORDER_STATUS,
+  });
 }

@@ -13,6 +13,7 @@ import {
 } from "firebase-admin/firestore";
 import {logger} from "firebase-functions";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
+import {isOrderExpired} from "./orderExpiry.js";
 
 const db = getFirestore();
 
@@ -93,6 +94,8 @@ function isClassicSwipeJoinEligible(data: DocumentData): boolean {
 
 function shouldPublish(data: DocumentData): boolean {
   if (isMarketplaceDeliveryOrderDoc(data)) return false;
+  if (data.expired === true || data.marketplaceArchived === true) return false;
+  if (isOrderExpired(data.createdAt)) return false;
   if (!joinGrowthDiscoveryStatusOk(data.status)) return false;
   return isHalfOrderJoinEligible(data) || isClassicSwipeJoinEligible(data);
 }

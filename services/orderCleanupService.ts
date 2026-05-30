@@ -1,5 +1,9 @@
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
+import {
+  isOrderFresh,
+  isRestaurantActiveDelivery,
+} from '@/lib/restaurantOrderFreshness';
 import type { RestaurantOrder } from '@/services/orderService';
 import { shouldAutoArchiveOrder } from '@/services/orderArchiveService';
 import { db } from '@/services/firebase';
@@ -100,10 +104,59 @@ async function flushCleanupBatch(
   return ids;
 }
 
+function shouldExpireRestaurantOrderFromUi(
+  order: RestaurantOrder,
+  now: number,
+): 'archive' | 'hide' | null {
+  if (isOrderFresh(order, now)) return null;
+  if (isRestaurantActiveDelivery(order)) return null;
+  if (order.archivedByRestaurant && order.hiddenForRestaurant) return null;
+
+  if (order.status === 'delivered') return 'archive';
+  if (order.status === 'rejected' || order.status === 'cancelled') return 'hide';
+  return 'hide';
+}
+
 /**
  * Runs retention cleanup once per cooldown window (debounced, batched).
  * Safe to call from snapshot handlers — no-op when throttled.
  */
+function collectCleanupCandidates(
+  restaurantId: string,
+  orders: RestaurantOrder[],
+  state: RestaurantCleanupState,
+  now: number,
+): Array<{ orderId: string; action: 'archive' | 'hide' }> {
+  const candidates: Array<{ orderId: string; action: 'archive' | 'hide' }> = [];
+  const seen = new Set<string>();
+
+  for (const order of orders) {
+    if (candidates.length >= MAX_BATCH_WRITES) break;
+    if (order.restaurantId !== restaurantId) continue;
+
+    const failed = state.failedIds.get(order.id);
+    if (isFailedBackoffActive(failed, now)) continue;
+    if (state.processedIds.has(order.id)) continue;
+    if (seen.has(order.id)) continue;
+
+    const action =
+      shouldAutoArchiveOrder(order, now) ?? shouldExpireRestaurantOrderFromUi(order, now);
+    if (!action) continue;
+
+    seen.add(order.id);
+    candidates.push({ orderId: order.id, action });
+  }
+
+  return candidates;
+}
+
+export async function cleanupExpiredRestaurantOrders(
+  restaurantId: string,
+  orders: RestaurantOrder[],
+): Promise<string[]> {
+  return runRestaurantOrderCleanup(restaurantId, orders);
+}
+
 export function scheduleRestaurantOrderCleanup(
   restaurantId: string,
   orders: RestaurantOrder[],
@@ -146,21 +199,7 @@ export async function runRestaurantOrderCleanup(
     return [];
   }
 
-  const candidates: Array<{ orderId: string; action: 'archive' | 'hide' }> = [];
-
-  for (const order of orders) {
-    if (candidates.length >= MAX_BATCH_WRITES) break;
-    if (order.restaurantId !== rid) continue;
-
-    const failed = state.failedIds.get(order.id);
-    if (isFailedBackoffActive(failed, now)) continue;
-    if (state.processedIds.has(order.id)) continue;
-
-    const action = shouldAutoArchiveOrder(order, now);
-    if (!action) continue;
-
-    candidates.push({ orderId: order.id, action });
-  }
+  const candidates = collectCleanupCandidates(rid, orders, state, now);
 
   if (candidates.length === 0) {
     state.lastRunAt = now;

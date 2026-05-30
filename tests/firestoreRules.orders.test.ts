@@ -901,8 +901,10 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
         });
         await setDoc(doc(ctx.firestore(), 'driver_marketplace_pool', 'pool1'), {
           orderId: 'pool1',
-          status: 'pending_driver',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'ready_for_pickup',
           deliveryType: 'delivery',
+          paymentStatus: 'paid',
           driverId: null,
           assignedDriverId: null,
           createdAt: Timestamp.now(),
@@ -923,7 +925,9 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           userId: 'cust1',
           restaurantId: 'rest_abc',
           venueId: 'rest_abc',
-          status: 'pending_driver',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'ready_for_pickup',
+          paymentStatus: 'paid',
           deliveryType: 'delivery',
           driverId: null,
           assignedDriverId: null,
@@ -935,9 +939,8 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
         getDocs(
           query(
             collection(db, 'orders'),
-            where('status', '==', 'pending_driver'),
             where('deliveryType', '==', 'delivery'),
-            where('driverId', '==', null),
+            where('deliveryStatus', '==', 'ready_for_pickup'),
             where('assignedDriverId', '==', null),
             orderBy('createdAt', 'desc'),
           ),
@@ -950,7 +953,9 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
         await setDoc(doc(ctx.firestore(), 'orders', 'pool2'), {
           userId: 'cust1',
           restaurantId: 'rest_abc',
-          status: 'pending_driver',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'ready_for_pickup',
+          paymentStatus: 'paid',
           deliveryType: 'delivery',
           driverId: null,
           assignedDriverId: null,
@@ -962,9 +967,8 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
         getDocs(
           query(
             collection(db, 'orders'),
-            where('status', '==', 'pending_driver'),
             where('deliveryType', '==', 'delivery'),
-            where('driverId', '==', null),
+            where('deliveryStatus', '==', 'ready_for_pickup'),
             where('assignedDriverId', '==', null),
             orderBy('createdAt', 'desc'),
           ),

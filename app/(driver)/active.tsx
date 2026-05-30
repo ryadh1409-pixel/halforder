@@ -47,7 +47,7 @@ export default function DriverActiveScreen() {
               <Text style={styles.emptyIcon}>🚚</Text>
               <Text style={styles.emptyTitle}>No active deliveries</Text>
               <Text style={styles.emptySub}>Accept an order from the queue first.</Text>
-              <Pressable style={styles.secondary} onPress={() => router.push(DRIVER_ROUTES.dispatch as never)}>
+              <Pressable style={styles.secondary} onPress={() => router.push(DRIVER_ROUTES.hub as never)}>
                 <Text style={styles.secondaryText}>Browse available</Text>
               </Pressable>
             </View>

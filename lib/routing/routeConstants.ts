@@ -70,7 +70,7 @@ export function getRouteGroupFromPathname(pathname: string): RouteGroup {
 
   // Canonical host tabs resolve without group tokens in pathname.
   const root = firstPathSegment(pathname);
-  if (root === 'dashboard' || root === 'orders' || root === 'menu') return '(host)';
+  if (root === 'dashboard' || root === 'menu') return '(host)';
 
   return 'other';
 }

@@ -1,6 +1,7 @@
 import OrderActions from '@/components/orders/OrderActions';
 import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
 import { normalizeMerchantStatus } from '@/components/orders/statusFlow';
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { formatOrderTime } from '@/utils/time';
 import { formatRestaurantOrderPlacedLabel } from '@/utils/orderTime';
@@ -40,6 +41,8 @@ export default function OrderCard({
     if (!anchor) return null;
     return formatOrderTime(anchor, { timeZone });
   }, [order.createdAtMs, order.deliveredAtMs, timeZone]);
+
+  if (!isOrderFresh(order)) return null;
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>

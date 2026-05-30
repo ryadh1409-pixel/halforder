@@ -6,6 +6,11 @@ const {
   trimMetadata,
   paymentIntentIdFromSession,
 } = require("../lib/stripeWebhookLogic.js");
+const {
+  buildOrderPaidStatePatch,
+  needsPaidStatusRepair,
+  resolvePostPaymentOrderStatus,
+} = require("../lib/orderPaidState.js");
 
 test("trimMetadata trims and rejects empty", () => {
   assert.equal(trimMetadata("  abc  "), "abc");
@@ -17,4 +22,51 @@ test("paymentIntentIdFromSession resolves expanded object or string", () => {
   assert.equal(paymentIntentIdFromSession({ payment_intent: "pi_123" }), "pi_123");
   assert.equal(paymentIntentIdFromSession({ payment_intent: { id: "pi_obj" } }), "pi_obj");
   assert.equal(paymentIntentIdFromSession({}), null);
+});
+
+test("needsPaidStatusRepair detects split paid/status", () => {
+  assert.equal(
+    needsPaidStatusRepair({ paymentStatus: "paid", status: "awaiting_payment" }),
+    true,
+  );
+  assert.equal(
+    needsPaidStatusRepair({ paymentStatus: "paid", status: "pending" }),
+    false,
+  );
+  assert.equal(
+    needsPaidStatusRepair({ paymentStatus: "unpaid", status: "awaiting_payment" }),
+    false,
+  );
+});
+
+test("buildOrderPaidStatePatch advances status on payment success", () => {
+  const patch = buildOrderPaidStatePatch(
+    { status: "awaiting_payment", paymentStatus: "unpaid" },
+    { paymentIntentId: "pi_abc", stripeWebhookLastEventType: "payment_intent.succeeded" },
+  );
+  assert.equal(patch.paymentStatus, "paid");
+  assert.equal(patch.status, "pending");
+  assert.equal(patch.deliveryStatus, "pending");
+  assert.equal(patch.paymentIntentId, "pi_abc");
+});
+
+test("buildOrderPaidStatePatch repairOnly preserves drivers", () => {
+  const patch = buildOrderPaidStatePatch(
+    {
+      status: "awaiting_payment",
+      paymentStatus: "paid",
+      driverId: "drv1",
+    },
+    { repairOnly: true },
+  );
+  assert.equal(patch.status, "pending");
+  assert.equal("driverId" in patch, false);
+});
+
+test("resolvePostPaymentOrderStatus keeps active fulfillment", () => {
+  assert.equal(resolvePostPaymentOrderStatus({ status: "preparing" }), "preparing");
+  assert.equal(
+    resolvePostPaymentOrderStatus({ status: "awaiting_payment" }),
+    "pending",
+  );
 });

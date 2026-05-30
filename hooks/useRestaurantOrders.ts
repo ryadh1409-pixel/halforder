@@ -11,6 +11,10 @@ import {
   restoreOrderForRestaurant,
 } from '@/services/orderArchiveService';
 import {
+  filterFreshRestaurantOrders,
+  isOrderFresh,
+} from '@/lib/restaurantOrderFreshness';
+import {
   resetRestaurantOrderCleanupState,
   scheduleRestaurantOrderCleanup,
 } from '@/services/orderCleanupService';
@@ -65,11 +69,11 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       restaurantId,
       (rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        setOrders(list);
+        setOrders(filterFreshRestaurantOrders(list));
         setLoading(false);
         setError(null);
 
-        if (!enableAutoCleanup || filter === 'archived') return;
+        if (!enableAutoCleanup) return;
 
         const scheduleKey = `${restaurantId}:${list.length}:${list[0]?.id ?? ''}`;
         if (lastCleanupScheduleKeyRef.current === scheduleKey) return;
@@ -104,6 +108,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
 
   const visibleOrders = useMemo(() => {
     return orders
+      .filter((order) => isOrderFresh(order))
       .filter((order) => {
         const pending = optimistic[order.id];
         if (pending === 'restore') {

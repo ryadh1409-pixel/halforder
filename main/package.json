@@ -8,7 +8,10 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "deploy:pool": "firebase deploy --only functions:main:syncDriverMarketplacePool --project halforfer",
+    "cleanup:pool": "node lib/scripts/cleanupStalePoolDocs.js",
+    "logs": "firebase functions:log",
+    "logs:pool": "firebase functions:log --only syncDriverMarketplacePool --project halforfer"
   },
   "engines": {
     "node": "24"

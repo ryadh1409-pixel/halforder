@@ -7,10 +7,17 @@ import {
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { db } from './firebase';
-import { normalizeDeliveryStatus, type DeliveryStatus } from './deliveryStatus';
+import {
+  isDriverMarketplaceClaimable,
+  normalizeMarketplaceDeliveryStatus,
+  type MarketplaceDeliveryStatus,
+} from '@/lib/orderStatus';
+import { marketplaceLog } from '@/lib/marketplaceLogger';
+import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import {
   collection,
   doc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -40,7 +47,7 @@ export type DispatchOrder = {
   total: number;
   createdAtMs: number | null;
   status: string;
-  deliveryStatus: DeliveryStatus;
+  deliveryStatus: MarketplaceDeliveryStatus;
   driverId: string | null;
   acceptedAtMs: number | null;
 };
@@ -145,7 +152,7 @@ function mapDispatchOrder(d: { id: string; data: () => Record<string, unknown> }
           : 0,
     createdAtMs: safeToMillis(data.createdAt),
     status: typeof data.status === 'string' ? data.status : 'ready_for_pickup',
-    deliveryStatus: normalizeDeliveryStatus(data.deliveryStatus),
+    deliveryStatus: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
     acceptedAtMs: safeToMillis(data.acceptedAt),
   };
@@ -198,9 +205,18 @@ export function subscribeAvailableOrders(
     );
 
     unsubOrders = onSnapshot(
-      query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc')),
+      query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
       (snap) => {
-        ordersCache = snap.docs.map((orderDoc) => mapDispatchOrder(orderDoc));
+        ordersCache = snap.docs
+          .map((orderDoc) => mapDispatchOrder(orderDoc))
+          .filter((order) => {
+            const raw = snap.docs.find((d) => d.id === order.id)?.data() ?? {};
+            return !isDriverPoolRowStale(raw.createdAt, order.createdAtMs);
+          });
+        marketplaceLog.listenerUpdate(ordersCache.length, {
+          listener: 'driverDispatch.pool',
+          rawCount: snap.size,
+        });
         emit();
       },
       safeListenerError('driverDispatch driver_marketplace_pool', () => {
@@ -230,7 +246,11 @@ export async function acceptDelivery(orderId: string, driver: DispatchDriver): P
       throw new Error('finalized_order');
     }
     if (data.driverId) throw new Error('already_assigned');
-    if (data.status !== 'ready_for_pickup' || data.deliveryStatus !== 'waiting_driver') {
+    if (!isDriverMarketplaceClaimable(data.deliveryStatus)) {
+      marketplaceLog.acceptFailed(orderId, {
+        deliveryStatus: data.deliveryStatus,
+        normalized: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
+      });
       throw new Error('not_dispatchable');
     }
 
@@ -250,7 +270,7 @@ export async function acceptDelivery(orderId: string, driver: DispatchDriver): P
       driverPhone: driver.phone ?? null,
       acceptedAt: serverTimestamp(),
       deliveryStatus: 'driver_assigned',
-      status: 'driver_assigned',
+      updatedAt: serverTimestamp(),
       estimatedDeliveryMinutes:
         typeof data.estimatedDeliveryMinutes === 'number' ? data.estimatedDeliveryMinutes : 20,
     });

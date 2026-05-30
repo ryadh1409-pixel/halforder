@@ -1,3 +1,4 @@
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { RoleScopedOrderDetailGateway } from '@/components/layout/RoleScopedOrderDetailGateway';
 import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
@@ -299,6 +300,19 @@ function OrderTrackingScreen() {
     return <DriverOrderDetailsScreen order={order} />;
   }
   if (viewerRole === 'restaurant') {
+    if (!isOrderFresh(order)) {
+      return (
+        <View style={[styles.loadingRoot, { paddingTop: insets.top }]}>
+          <Text style={styles.missingTitle}>Order no longer available</Text>
+          <Text style={styles.missingSub}>
+            Restaurant dashboards only show orders from the last 24 hours.
+          </Text>
+          <Pressable style={styles.retryBtn} onPress={() => router.back()}>
+            <Text style={styles.retryBtnText}>Go back</Text>
+          </Pressable>
+        </View>
+      );
+    }
     return <RestaurantOrderDetailsScreen order={order} />;
   }
   if (viewerRole === 'customer' || viewerRole === 'admin') {

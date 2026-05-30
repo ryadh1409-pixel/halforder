@@ -11,8 +11,7 @@ const DRIVER_TAB_SCREEN_OPTIONS = {
 } as const;
 
 /** Explicit hrefs — never bare `/profile` (collides with `(tabs)`). */
-const TAB_INDEX = { title: 'Dashboard', href: '/(driver)' as const };
-const TAB_DISPATCH = { title: 'Orders', href: '/(driver)/dispatch' as const };
+const TAB_INDEX = { title: 'Hub', href: '/(driver)' as const };
 const TAB_EARNINGS = { title: 'Earnings', href: '/(driver)/earnings' as const };
 const TAB_DRIVER_PROFILE = {
   href: '/(driver)/driver-profile' as const,
@@ -38,7 +37,7 @@ function DriverTabsNavigator() {
       screenOptions={DRIVER_TAB_SCREEN_OPTIONS}
     >
       <Tabs.Screen name="index" options={TAB_INDEX} />
-      <Tabs.Screen name="dispatch" options={TAB_DISPATCH} />
+      <Tabs.Screen name="dispatch" options={TAB_HIDDEN} />
       <Tabs.Screen name="earnings" options={TAB_EARNINGS} />
       <Tabs.Screen name="driver-profile" options={TAB_DRIVER_PROFILE} />
       <Tabs.Screen name="dashboard" options={TAB_HIDDEN} />

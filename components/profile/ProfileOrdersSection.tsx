@@ -6,10 +6,17 @@ import {
   profileOrderStatusLabel,
 } from '@/constants/profileOrders';
 import type { ProfileOrderRow } from '@/hooks/useProfileOrders';
+import {
+  buildFreshProfileOrders,
+  formatOrderExpiresIn,
+  formatProfileOrderAge,
+  getOrderTimestamp,
+} from '@/lib/userOrderFreshness';
+import { formatOrderDate, formatOrderTime } from '@/utils/orderTime';
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -51,26 +58,8 @@ function formatMoney(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-function formatDate(ms: number): string {
-  if (!ms) return '-';
-  const d = new Date(ms);
-  return d.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function formatTime(ms: number): string {
-  if (!ms) return '-';
-  const d = new Date(ms);
-  return d.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function groupLabel(ms: number): 'Today' | 'Yesterday' | 'Earlier' {
+function groupLabel(order: ProfileOrderRow): 'Today' | 'Yesterday' | 'Earlier' {
+  const ms = getOrderTimestamp(order);
   if (!ms) return 'Earlier';
   const d = new Date(ms);
   const now = new Date();
@@ -95,6 +84,13 @@ export function ProfileOrdersSection({
   onRetry,
 }: Props) {
   const activePulse = useRef(new Animated.Value(0)).current;
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -140,20 +136,29 @@ export function ProfileOrdersSection({
     setLocallyCancelledOrderIds((prev) => ({ ...prev, [target.id]: true }));
   };
 
-  const grouped = orders.reduce<Record<'Today' | 'Yesterday' | 'Earlier', ProfileOrderRow[]>>(
-    (acc, o) => {
-      const key = groupLabel(o.createdAtMs);
-      acc[key].push(o);
-      return acc;
-    },
-    { Today: [], Yesterday: [], Earlier: [] },
+  const freshOrders = useMemo(
+    () => buildFreshProfileOrders(orders, { nowMs }),
+    [orders, nowMs],
+  );
+
+  const grouped = useMemo(
+    () =>
+      freshOrders.reduce<Record<'Today' | 'Yesterday' | 'Earlier', ProfileOrderRow[]>>(
+        (acc, o) => {
+          const key = groupLabel(o);
+          acc[key].push(o);
+          return acc;
+        },
+        { Today: [], Yesterday: [], Earlier: [] },
+      ),
+    [freshOrders],
   );
 
   return (
     <View>
       <Text style={[styles.sectionHeading, { color: pal.text }]}>Your Orders</Text>
       <Text style={[styles.sectionSub, { color: pal.textSecondary }]}>
-        Track and manage your recent orders
+        Orders from the last 24 hours
       </Text>
 
       <View style={[styles.container, { backgroundColor: pal.card, borderColor: pal.border }]}>
@@ -188,12 +193,14 @@ export function ProfileOrdersSection({
               <Text style={{ color: pal.onPrimary, fontWeight: '700' }}>Retry</Text>
             </TouchableOpacity>
           </View>
-        ) : orders.length === 0 ? (
+        ) : freshOrders.length === 0 ? (
           <View style={styles.centerState}>
             <MaterialIcons name="receipt-long" size={30} color={pal.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: pal.text }]}>No orders yet</Text>
+            <Text style={[styles.emptyTitle, { color: pal.text }]}>
+              No recent orders in the last 24 hours
+            </Text>
             <Text style={[styles.emptySub, { color: pal.textSecondary }]}>
-              Your future HalfOrders will appear here.
+              New orders will appear here as soon as you place them.
             </Text>
           </View>
         ) : (
@@ -233,6 +240,8 @@ export function ProfileOrdersSection({
                 effectiveDeliveryStatus,
               );
               const isCancelling = Boolean(cancellingIds[order.id]);
+              const orderTs = getOrderTimestamp(order);
+              const expiresLabel = formatOrderExpiresIn(orderTs, nowMs);
               return (
                 <TouchableOpacity
                   key={order.id}
@@ -294,19 +303,37 @@ export function ProfileOrdersSection({
                           {profileOrderStatusLabel(
                             effectiveStatus,
                             effectiveDeliveryStatus,
+                            order.paymentStatus,
                           )}
                         </Text>
                       </Animated.View>
                     </View>
                     <Text style={[styles.meta, { color: pal.textSecondary }]}>
-                      {formatMoney(order.totalPrice)} · {order.itemsCount} item{order.itemsCount === 1 ? '' : 's'}
+                      {formatMoney(order.totalPrice)}
+                      {' · '}
+                      {profileOrderStatusLabel(
+                        effectiveStatus,
+                        effectiveDeliveryStatus,
+                        order.paymentStatus,
+                      )}
                     </Text>
-                    <Text style={[styles.meta, { color: pal.textTertiary }]}>
-                      {formatDate(order.createdAtMs)} · {formatTime(order.createdAtMs)}
-                    </Text>
-                    <Text style={[styles.meta, { color: pal.textSecondary }]}>
-                      {profileOrderStatusLabel(effectiveStatus, effectiveDeliveryStatus)}
-                    </Text>
+                    <View style={styles.ageRow}>
+                      <Text style={[styles.meta, styles.ageText, { color: pal.textTertiary }]}>
+                        {formatProfileOrderAge(orderTs, nowMs)}
+                        {' · '}
+                        {formatOrderDate(orderTs)}
+                        {' · '}
+                        {formatOrderTime(orderTs)}
+                      </Text>
+                      {expiresLabel ? (
+                        <View style={[styles.expiryBadge, { borderColor: pal.border }]}>
+                          <MaterialIcons name="schedule" size={11} color={pal.primary} />
+                          <Text style={[styles.expiryText, { color: pal.primary }]}>
+                            {expiresLabel}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     {effectiveStatus === 'cancelled' ? (
                       <Animated.View
                         style={[
@@ -415,6 +442,24 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 11, fontWeight: '700' },
   meta: { marginTop: 3, fontSize: 12 },
+  ageRow: {
+    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  ageText: { flex: 1, marginTop: 0 },
+  expiryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  expiryText: { fontSize: 10, fontWeight: '700' },
   cancelBtn: {
     marginTop: 8,
     borderRadius: 10,

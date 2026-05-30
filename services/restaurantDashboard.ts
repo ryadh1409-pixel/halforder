@@ -1,4 +1,5 @@
 import { parseRestaurantIsOpen } from '@/lib/restaurantVenueStatus';
+import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { persistRestaurantIsOpen } from '@/services/restaurantVenueOpen';
 import { db } from './firebase';
 import {
@@ -191,7 +192,7 @@ export function subscribeRestaurantOrders(
           createdAtLabel: toCreatedAtLabel(data.createdAt),
         };
       });
-      onData(rows);
+      onData(filterFreshRestaurantOrders(rows));
     },
     () => onData([]),
   );
@@ -265,7 +266,10 @@ export async function updateRestaurantOpen(
 
 export async function markOrderReady(orderId: string): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId), {
-    status: 'pending_driver',
+    status: 'ready_for_pickup',
+    deliveryStatus: 'waiting_driver',
+    readyAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
     estimatedDeliveryTime: 20,
   });
 }

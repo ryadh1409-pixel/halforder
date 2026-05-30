@@ -1,3 +1,4 @@
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 
 export type RestaurantOrderListFilter =
@@ -43,6 +44,8 @@ export function matchesRestaurantOrderFilter(
   order: RestaurantOrder,
   filter: RestaurantOrderListFilter,
 ): boolean {
+  if (!isOrderFresh(order)) return false;
+
   const archived = isRestaurantOrderArchived(order);
 
   if (filter === 'archived') {

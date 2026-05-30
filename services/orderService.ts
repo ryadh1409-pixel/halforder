@@ -1,3 +1,4 @@
+import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { formatOrderTime } from '@/utils/time';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { auth, db, ensureAuthReady } from './firebase';
@@ -569,7 +570,7 @@ export async function createOrder(
     deliveryType,
     estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',
-    deliveryStatus: null,
+    deliveryStatus: 'pending',
     paymentStatus: 'unpaid',
     stripePaymentIntentId: null,
     paymentIntentId: null,
@@ -695,7 +696,7 @@ export function getOrders(
             timeZone: options?.timeZone,
           }),
         );
-        onData(rows);
+        onData(filterFreshRestaurantOrders(rows));
       } catch (e) {
         if (__DEV__) {
           console.error('[getOrders:restaurantId]', e);
@@ -765,24 +766,36 @@ export async function updateOrderStatus(
   };
   if (normalizedStatus === 'accepted' || normalizedStatus === 'restaurant_accepted') {
     patch.acceptedAt = serverTimestamp();
+    patch.deliveryStatus = 'accepted';
+  }
+  if (normalizedStatus === 'preparing') {
+    patch.deliveryStatus = 'preparing';
   }
   if (normalizedStatus === 'ready_for_pickup') {
     patch.preparedAt = serverTimestamp();
-    patch.deliveryStatus = 'waiting_driver';
+    patch.deliveryStatus = 'ready_for_pickup';
     patch.driverId = null;
     patch.assignedDriverId = null;
     patch.driverName = null;
     patch.driverPhone = null;
     patch.readyAt = serverTimestamp();
+    if (__DEV__) {
+      console.log('[MARKETPLACE READY]', {
+        orderId,
+        deliveryStatus: 'ready_for_pickup',
+        archived: false,
+        expired: false,
+        insertedIntoPool: true,
+      });
+    }
   }
-  if (normalizedStatus === 'picked_up_pending' || normalizedStatus === 'driver_assigned') {
+  if (
+    normalizedStatus === 'picked_up_pending'
+    || normalizedStatus === 'driver_assigned'
+    || normalizedStatus === 'arriving_restaurant'
+    || normalizedStatus === 'driver_accepted'
+  ) {
     patch.deliveryStatus = 'driver_assigned';
-  }
-  if (normalizedStatus === 'arriving_restaurant') {
-    patch.deliveryStatus = 'arrived_restaurant';
-  }
-  if (normalizedStatus === 'driver_accepted') {
-    patch.deliveryStatus = 'heading_to_restaurant';
   }
   if (normalizedStatus === 'picked_up') {
     patch.pickedUpAt = serverTimestamp();
@@ -791,6 +804,7 @@ export async function updateOrderStatus(
   if (normalizedStatus === 'delivered') {
     patch.deliveredAt = serverTimestamp();
     patch.deliveryStatus = 'delivered';
+    patch.status = 'completed';
   }
   if (normalizedStatus === 'arrived_customer') {
     patch.deliveryStatus = 'near_customer';

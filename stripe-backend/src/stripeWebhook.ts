@@ -11,6 +11,12 @@ import { defineSecret } from "firebase-functions/params";
 import type { DocumentSnapshot, Transaction } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { paymentIntentIdFromSession, trimMetadata } from "./stripeWebhookLogic.js";
+import {
+  buildOrderPaidStatePatch,
+  needsPaidStatusRepair,
+  orderPaymentStatusString,
+  orderStatusString,
+} from "./orderPaidState.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -114,34 +120,61 @@ function mergeOrderPaidSync(
     return;
   }
   const data = orderSnap.data() ?? {};
-  if (data.paymentStatus === "paid") {
+  const before = {
+    paymentStatus: orderPaymentStatusString(data.paymentStatus),
+    status: orderStatusString(data.status),
+  };
+
+  const alreadyPaid = before.paymentStatus === "paid";
+  const needsRepair = needsPaidStatusRepair(data);
+
+  if (alreadyPaid && !needsRepair) {
     logStripeDebug("order_already_paid_skip_order_patch", {
       orderId,
       stripeEventId,
       sourceEventType,
+      before,
     });
     return;
   }
 
-  const patch: Record<string, unknown> = {
-    paymentStatus: "paid",
-    status: "pending_driver",
-    deliveryStatus: "waiting_driver",
-    driverId: null,
-    assignedDriverId: null,
-    paidAt: admin.firestore.FieldValue.serverTimestamp(),
+  logStripeDebug("order_paid_update_before", {
+    orderId,
+    stripeEventId,
+    sourceEventType,
+    before,
+    repairOnly: alreadyPaid && needsRepair,
+  });
+
+  const basePatch = buildOrderPaidStatePatch(data, {
+    paymentIntentId,
+    checkoutSessionId,
     stripeWebhookLastEventType: sourceEventType,
     stripeWebhookLastEventId: stripeEventId,
+    repairOnly: alreadyPaid && needsRepair,
+  });
+
+  const patch: Record<string, unknown> = {
+    ...basePatch,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
-  if (paymentIntentId) {
-    patch.paymentIntentId = paymentIntentId;
-    patch.stripePaymentIntentId = paymentIntentId;
+  if (!alreadyPaid) {
+    patch.paidAt = admin.firestore.FieldValue.serverTimestamp();
   }
-  if (checkoutSessionId) {
-    patch.checkoutSessionId = checkoutSessionId;
-  }
+
   tx.set(orderSnap.ref, patch, { merge: true });
+
+  logStripeDebug("order_paid_update_after", {
+    orderId,
+    stripeEventId,
+    sourceEventType,
+    before,
+    after: {
+      paymentStatus: patch.paymentStatus,
+      status: patch.status,
+      deliveryStatus: patch.deliveryStatus,
+    },
+  });
 }
 
 function mergeOrderPaymentFailed(
@@ -407,6 +440,20 @@ export const stripeWebhook = onRequest(
         res.status(500).json({ error: "Webhook handler failed" });
         return;
       }
+
+      logStripe({
+        level: "info",
+        msg: "webhook_received",
+        type: event.type,
+        stripeEventId: event.id,
+      });
+
+      logStripe({
+        level: "info",
+        msg: "webhook_success",
+        type: event.type,
+        stripeEventId: event.id,
+      });
 
       res.status(200).json({ received: true });
     } catch (fatalErr) {

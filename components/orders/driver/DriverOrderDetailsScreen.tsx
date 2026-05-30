@@ -70,8 +70,11 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
   const canClaim =
     !order.driverId &&
     driverProfile &&
-    ((order.paymentStatus === 'paid' && order.status === 'pending_driver') ||
-      (order.status === 'ready_for_pickup' && order.deliveryStatus === 'waiting_driver'));
+    order.paymentStatus === 'paid' &&
+    (order.deliveryStatus === 'accepted' ||
+      order.deliveryStatus === 'preparing' ||
+      order.deliveryStatus === 'ready_for_pickup' ||
+      order.deliveryStatus === 'waiting_driver');
 
   useEffect(() => {
     if (!assignedToMe || !user?.uid || Platform.OS === 'web') return undefined;

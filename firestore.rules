@@ -106,18 +106,32 @@ service cloud.firestore {
      * Unassigned marketplace delivery pool — must mirror subscribeDriverQueue filters exactly.
      * Uses Auth custom claim role=driver only (no get/exists) so collection listeners work.
      */
+  /** Canonical + legacy courier statuses visible on driver marketplace. */
+    function marketplacePoolDeliveryStatusOk(ds) {
+      return ds == 'accepted'
+        || ds == 'preparing'
+        || ds == 'ready_for_pickup'
+        || ds == 'waiting_driver'
+        || ds == 'ready'
+        || ds == 'accepted_for_delivery'
+        || ds == 'pending_driver';
+    }
     function driverMarketplacePoolReadable() {
       return authTokenRoleIsDriver()
-        && resource.data.status == 'pending_driver'
         && resource.data.deliveryType == 'delivery'
+        && resource.data.get('paymentStatus', '') == 'paid'
+        && resource.data.get('expired', false) != true
+        && resource.data.get('marketplaceArchived', false) != true
+        && marketplacePoolDeliveryStatusOk(resource.data.get('deliveryStatus', ''))
         && resource.data.driverId == null
         && resource.data.assignedDriverId == null;
     }
     /** Single-doc read on unassigned pool orders (accept flow / getDoc). */
     function driverPoolOrderSingleRead() {
       return hasDriverAccountDoc()
-        && resource.data.status == 'pending_driver'
         && resource.data.deliveryType == 'delivery'
+        && resource.data.get('paymentStatus', '') == 'paid'
+        && marketplacePoolDeliveryStatusOk(resource.data.get('deliveryStatus', ''))
         && resource.data.driverId == null
         && resource.data.assignedDriverId == null;
     }
@@ -1053,8 +1067,23 @@ service cloud.firestore {
         );
     }
     function noDriverAssignedYet(d) {
-      return d.driverId == null
-        && d.get('assignedDriverId', null) == null;
+      return !(d.get('driverId', '') is string && d.get('driverId', '').size() > 0)
+        && !(d.get('assignedDriverId', '') is string && d.get('assignedDriverId', '').size() > 0);
+    }
+    /** Courier statuses a driver may claim from (unassigned marketplace delivery). */
+    function driverMarketplaceClaimBeforeStatusOk(ds) {
+      return marketplacePoolDeliveryStatusOk(ds);
+    }
+    /** Courier statuses while actively delivering (post-claim patches). */
+    function driverMarketplaceActiveDeliveryStatusOk(ds) {
+      return ds == 'driver_assigned'
+        || ds == 'picked_up'
+        || ds == 'on_the_way'
+        || ds == 'delivered'
+        || ds == 'heading_to_restaurant'
+        || ds == 'arrived_restaurant'
+        || ds == 'near_customer'
+        || ds == 'driver_accepted';
     }
     function isDriver() {
       return authTokenRoleIsDriver()
@@ -1069,10 +1098,14 @@ service cloud.firestore {
       return isDriver()
         && noDriverAssignedYet(d)
         && d.deliveryType == 'delivery'
-        && (
-          d.status == 'pending_driver'
-          || d.status == 'awaiting_driver'
-        );
+        && d.get('paymentStatus', '') == 'paid'
+        && d.get('expired', false) != true
+        && d.get('marketplaceArchived', false) != true
+        && marketplacePoolDeliveryStatusOk(d.get('deliveryStatus', ''));
+    }
+    function driverPoolOrderClaimable(d) {
+      return driverPoolOrderReadable(d)
+        && marketplacePoolDeliveryStatusOk(d.get('deliveryStatus', ''));
     }
     /** Active delivery order already assigned to current driver. */
     function driverAssignedDeliveryReadable(d) {
@@ -1307,20 +1340,11 @@ service cloud.firestore {
           'status','paymentStatus','paymentIntentId','checkoutSessionId','stripePaymentIntentId',
           'updatedAt','paidAt','paymentFailedAt','estimatedDeliveryTime','deliveryStatus'
         ])
-        && (
-          (
-            after.status == 'pending_driver'
-            && after.paymentStatus == 'paid'
-            && after.deliveryStatus == 'waiting_driver'
-          )
-          || (
-            before.status == 'awaiting_payment'
-            && before.paymentStatus == 'unpaid'
-            && after.status == 'pending_driver'
-            && after.paymentStatus == 'paid'
-            && after.deliveryStatus == 'waiting_driver'
-          )
-        );
+        && marketplaceCustomerPaymentInitBeforeStatusOk(before.status)
+        && marketplaceCustomerPaymentInitBeforePaymentOk(before.get('paymentStatus', 'unpaid'))
+        && after.paymentStatus == 'paid'
+        && after.deliveryStatus == 'pending'
+        && after.status == before.status;
     }
     function marketplaceCustomerCheckoutPatchOk() {
       return marketplaceCustomerPaymentInitPatchOk()
@@ -1346,23 +1370,33 @@ service cloud.firestore {
     }
     function driverClaimPatchOk() {
       let before = resource.data;
-      return requestUserIsDriver()
-        && driverPoolOrderReadable(before)
-        && (!(before.driverId is string && before.driverId.size() > 0))
-        && request.resource.data.driverId == request.auth.uid
+      let after = request.resource.data;
+      return isDriver()
+        && before.deliveryType == 'delivery'
+        && before.get('paymentStatus', '') == 'paid'
+        && noDriverAssignedYet(before)
+        && driverMarketplaceClaimBeforeStatusOk(before.get('deliveryStatus', ''))
+        && after.driverId == request.auth.uid
+        && after.assignedDriverId == request.auth.uid
+        && after.deliveryStatus == 'driver_assigned'
+        && after.status == before.status
         && marketplaceOrderPatchKeys().hasOnly([
           'driverId','assignedDriverId','driverName','driverPhone','driverVehicle','driver',
-          'status','deliveryStatus','acceptedAt','estimatedDeliveryTime','updatedAt','deliveryPin'
+          'deliveryStatus','acceptedAt','estimatedDeliveryTime','estimatedDeliveryMinutes',
+          'updatedAt','deliveryPin'
         ]);
     }
     function driverActivePatchOk() {
       let before = resource.data;
-      return requestUserIsDriver()
-        && before.driverId is string
-        && before.driverId == request.auth.uid
+      let after = request.resource.data;
+      return isDriver()
+        && before.deliveryType == 'delivery'
+        && driverAssignedToMarketplaceOrder(before)
+        && driverMarketplaceActiveDeliveryStatusOk(after.get('deliveryStatus', ''))
         && marketplaceOrderPatchKeys().hasOnly([
           'driverLocation','status','deliveryStatus','pickedUpAt','deliveredAt',
-          'estimatedDeliveryTime','updatedAt','driver','driverName','driverPhone','driverVehicle','acceptedAt'
+          'estimatedDeliveryTime','estimatedDeliveryMinutes','updatedAt','driver',
+          'driverName','driverPhone','driverVehicle','acceptedAt'
         ]);
     }
     function marketplaceDriverPatchOk() {
@@ -1525,7 +1559,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       // List queries do not use allow read when allow list is present (Firestore rules v2).
       allow list: if ordersReadByParticipant();
-      // Driver marketplace pool list on orders (legacy); mirrors pending_driver pool filters.
+      // Driver marketplace pool list on orders (legacy); mirrors waiting_driver pool filters.
       allow read: if driverMarketplacePoolReadable();
       allow list: if driverMarketplacePoolReadable();
       // Driver list queries (query-safe via drivers/{auth.uid} membership; no custom claim).
@@ -1583,6 +1617,16 @@ service cloud.firestore {
           || isHalfOrderCancelUpdate()
           || isHalfOrderMarkActiveUpdate()
           || isHalfOrderCompleteUpdate()
+          || (
+            !isCurrentUserRestricted()
+            && isMarketplaceDeliveryOrderDoc(resource.data)
+            && driverClaimPatchOk()
+          )
+          || (
+            !isCurrentUserRestricted()
+            && isMarketplaceDeliveryOrderDoc(resource.data)
+            && driverActivePatchOk()
+          )
           || (
             !isCurrentUserRestricted()
             && canAccessMarketplaceDeliveryOrder(resource.data)

@@ -9,6 +9,7 @@ import {
   normalizeMerchantStatus,
   type MerchantOrderStatus,
 } from '@/components/orders/statusFlow';
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { db } from '@/services/firebase';
 import {
   rejectOrder,
@@ -139,6 +140,20 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>Order not found</Text>
           <Text style={styles.emptySub}>This order may have been removed.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isOrderFresh(order)) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <AppHeader title="Order Details" />
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>Order no longer available</Text>
+          <Text style={styles.emptySub}>
+            Restaurant dashboards only show orders from the last 24 hours.
+          </Text>
         </View>
       </SafeAreaView>
     );

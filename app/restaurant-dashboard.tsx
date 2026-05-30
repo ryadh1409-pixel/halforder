@@ -12,6 +12,7 @@ import { StatCard } from '../components/restaurant/StatCard';
 import { useDrivers } from '../hooks/useDrivers';
 import { useMenu } from '../hooks/useMenu';
 import { RestaurantOrdersPanel } from '../components/restaurant/RestaurantOrdersPanel';
+import { computeRestaurantDashboardMetrics } from '../lib/restaurantOrderFreshness';
 import { useRestaurantOrders } from '../hooks/useRestaurantOrders';
 import { useAuth } from '../services/AuthContext';
 import { assignDriverToOrder } from '../services/driverService';
@@ -185,20 +186,19 @@ export default function RestaurantDashboardScreen() {
     return () => unsub();
   }, [user?.uid]);
 
-  const completedOrders = orders.filter((o) => o.status === 'delivered').length;
-  const activeOrders = orders.filter(
-    (o) => o.status !== 'delivered' && o.status !== 'rejected',
-  ).length;
-  const revenue = orders.reduce((sum, o) => sum + o.totalPrice, 0);
+  const orderMetrics = useMemo(
+    () => computeRestaurantDashboardMetrics(orders),
+    [orders],
+  );
 
   const stats = useMemo(
     () => [
-      { label: 'Orders today', value: `${orders.length}` },
-      { label: 'Active orders', value: `${activeOrders}` },
-      { label: 'Completed', value: `${completedOrders}` },
-      { label: 'Revenue', value: `$${revenue.toFixed(2)}` },
+      { label: 'Orders (24h)', value: `${orderMetrics.total}` },
+      { label: 'Active orders', value: `${orderMetrics.active}` },
+      { label: 'Completed', value: `${orderMetrics.completed}` },
+      { label: 'Revenue', value: `$${orderMetrics.revenue.toFixed(2)}` },
     ],
-    [orders.length, activeOrders, completedOrders, revenue],
+    [orderMetrics],
   );
 
   async function handleToggleOpen(value: boolean) {
@@ -421,7 +421,7 @@ export default function RestaurantDashboardScreen() {
           <Text style={styles.restaurantName}>{restaurant.name || user?.displayName?.trim() || 'Restaurant Dashboard'}</Text>
           {restaurant.logo ? <Image source={{ uri: restaurant.logo }} style={styles.logoThumb} /> : null}
           <Text style={styles.locationText}>{restaurant.location || 'No location set'}</Text>
-          <Text style={styles.earnings}>Today: ${revenue.toFixed(2)}</Text>
+          <Text style={styles.earnings}>24h: ${orderMetrics.revenue.toFixed(2)}</Text>
         </View>
         <View style={styles.openToggleWrap}>
           <Text style={styles.openLabel}>{restaurant.isOpen ? 'Open' : 'Closed'}</Text>

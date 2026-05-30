@@ -30,6 +30,15 @@ import {
   logDriverQueryStart,
 } from './firestoreDriverQueryLog';
 import { auth, db, syncAuthForFirestoreReads } from './firebase';
+import { isMarketplaceOrderExpired } from '@/lib/marketplaceActiveOrder';
+import { getHumanOrderAge } from '@/lib/orderExpiry';
+import {
+  isDriverMarketplaceClaimable,
+  isPaidMarketplaceDeliveryOrder,
+  normalizeMarketplaceDeliveryStatus,
+} from '@/lib/orderStatus';
+import { marketplaceLog } from '@/lib/marketplaceLogger';
+import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import type { OrderStatus } from './orderService';
 
 async function prepareDriverFirestoreAccess(driverId: string): Promise<string | null> {
@@ -69,6 +78,9 @@ export type DriverOrder = {
   id: string;
   groupId: string | null;
   restaurantId: string | null;
+  deliveryStatus: string;
+  expired: boolean;
+  placedLabel: string;
   restaurantName: string;
   restaurantImage: string | null;
   restaurantAddress: string | null;
@@ -252,8 +264,35 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     driverLocation,
     acceptedAtMs: safeToMillis(data.acceptedAt),
     createdAtMs: safeToMillis(data.createdAt),
-    estimatedDeliveryTime:
-      typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 0,
+    deliveryStatus: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
+    expired: isMarketplaceOrderExpired({
+      createdAt: data.createdAt,
+      paidAt: data.paidAt,
+      updatedAt: data.updatedAt,
+      readyAt: data.readyAt,
+      acceptedAt: data.acceptedAt,
+      expired: data.expired,
+      marketplaceArchived: data.marketplaceArchived,
+    }),
+    placedLabel: getHumanOrderAge(data.createdAt, {
+      fallbackFields: {
+        createdAt: data.createdAt,
+        paidAt: data.paidAt,
+        updatedAt: data.updatedAt,
+        readyAt: data.readyAt,
+        acceptedAt: data.acceptedAt,
+      },
+    }),
+    estimatedDeliveryTime: (() => {
+      const mins =
+        typeof data.estimatedDeliveryMinutes === 'number'
+          ? data.estimatedDeliveryMinutes
+          : typeof data.estimatedDeliveryTime === 'number'
+            ? data.estimatedDeliveryTime
+            : 0;
+      if (mins > 0 && mins < 180) return mins;
+      return 35;
+    })(),
     distanceKm: distanceKm(driverLocation ?? restaurantLocation, dropoffLocation),
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
   };
@@ -445,7 +484,7 @@ export function subscribeAvailableOrders(
     await prepareDriverFirestoreAccess(authUid);
     if (cancelled) return;
 
-    const poolFilters = { orderBy: 'createdAt desc', limit: 20 };
+    const poolFilters = { orderBy: 'createdAt desc', limit: 20, clientExpiryFilter: true };
     await logDriverQueryStart({
       listener: 'subscribeAvailableOrders',
       collection: 'driver_marketplace_pool',
@@ -460,7 +499,16 @@ export function subscribeAvailableOrders(
         (snap) => {
           if (cancelled) return;
           try {
-            const rows = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
+            const rows = snap.docs
+              .map((docSnap) => mapDriverOrder(docSnap))
+              .filter((order) => {
+                const raw = snap.docs.find((d) => d.id === order.id)?.data() ?? {};
+                return !isDriverPoolRowStale(raw.createdAt, order.createdAtMs);
+              });
+            marketplaceLog.listenerUpdate(rows.length, {
+              listener: 'subscribeAvailableOrders',
+              rawCount: snap.size,
+            });
             onData(rows);
           } catch (err) {
             logDriverQueryError('subscribeAvailableOrders', err);
@@ -651,22 +699,42 @@ export async function acceptGroupDelivery(groupId: string, driver: DriverProfile
 
 export async function driverMarkPickedUp(orderId: string): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId), {
-    status: 'picked_up',
+    deliveryStatus: 'picked_up',
+    pickedUpAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
     estimatedDeliveryTime: 14,
   });
 }
 
 export async function driverMarkOnTheWay(orderId: string): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId), {
-    status: 'on_the_way',
+    deliveryStatus: 'on_the_way',
+    updatedAt: serverTimestamp(),
     estimatedDeliveryTime: 10,
   });
 }
 
 export async function driverMarkArrivedCustomer(orderId: string): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId), {
-    status: 'arrived_customer',
+    deliveryStatus: 'near_customer',
+    updatedAt: serverTimestamp(),
     estimatedDeliveryTime: 4,
+  });
+}
+
+export async function driverMarkDelivered(orderId: string): Promise<void> {
+  await updateDoc(doc(db, 'orders', orderId), {
+    deliveryStatus: 'delivered',
+    status: 'completed',
+    deliveredAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function driverMarkHeadingToRestaurant(orderId: string): Promise<void> {
+  await updateDoc(doc(db, 'orders', orderId), {
+    deliveryStatus: 'heading_to_restaurant',
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -698,9 +766,8 @@ export async function claimMarketplaceDriverOrder(
         : null;
     const deliveryPin = existingPin ?? String(1000 + Math.floor(Math.random() * 9000));
 
-    const status = typeof data.status === 'string' ? data.status : '';
-    const deliveryStatus = typeof data.deliveryStatus === 'string' ? data.deliveryStatus : '';
-    const paid = data.paymentStatus === 'paid';
+    const normalizedDelivery = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+    const paid = isPaidMarketplaceDeliveryOrder(data);
 
     const driverBlob = {
       id: driver.id,
@@ -710,29 +777,13 @@ export async function claimMarketplaceDriverOrder(
       avatar: null as string | null,
     };
 
-    if (paid && status === 'pending_driver') {
-      tx.update(orderRef, {
-        driverId: driver.id,
-        assignedDriverId: driver.id,
-        driverName: driver.name,
-        driverPhone: driver.phone ?? null,
-        ...(vehicle ? { driverVehicle: vehicle } : {}),
-        driver: driverBlob,
-        status: 'driver_accepted',
-        deliveryStatus: 'heading_to_restaurant',
-        acceptedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        estimatedDeliveryTime:
-          typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 24,
-        deliveryPin,
-      });
-      return { ok: true };
-    }
+    marketplaceLog.acceptStart(orderId, {
+      paid,
+      deliveryStatus: data.deliveryStatus,
+      normalizedDelivery,
+    });
 
-    if (
-      (status === 'ready_for_pickup' || status === 'ready') &&
-      deliveryStatus === 'waiting_driver'
-    ) {
+    if (paid && isDriverMarketplaceClaimable(normalizedDelivery)) {
       tx.update(orderRef, {
         driverId: driver.id,
         assignedDriverId: driver.id,
@@ -740,17 +791,28 @@ export async function claimMarketplaceDriverOrder(
         driverPhone: driver.phone ?? null,
         ...(vehicle ? { driverVehicle: vehicle } : {}),
         driver: driverBlob,
-        status: 'driver_assigned',
         deliveryStatus: 'driver_assigned',
         acceptedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         estimatedDeliveryTime:
-          typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 18,
+          typeof data.estimatedDeliveryTime === 'number' && data.estimatedDeliveryTime < 180
+            ? data.estimatedDeliveryTime
+            : 18,
+        estimatedDeliveryMinutes:
+          typeof data.estimatedDeliveryMinutes === 'number' && data.estimatedDeliveryMinutes < 180
+            ? data.estimatedDeliveryMinutes
+            : 18,
         deliveryPin,
       });
+      marketplaceLog.acceptSuccess(orderId, { normalizedDelivery });
       return { ok: true };
     }
 
+    marketplaceLog.acceptFailed(orderId, {
+      paid,
+      normalizedDelivery,
+      reason: 'invalid_state',
+    });
     return { ok: false, reason: 'invalid_state' };
   });
 }
@@ -783,24 +845,7 @@ export async function acceptDriverOrder(
   orderId: string,
   driver: DriverProfile,
 ): Promise<{ ok: boolean; reason?: string }> {
-  console.log('[DRIVER FLOW] acceptDriverOrder', { orderId, driverId: driver.id });
-  const orderRef = doc(db, 'orders', orderId);
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(orderRef);
-    if (!snap.exists()) return { ok: false, reason: 'missing' };
-    const data = snap.data();
-    if (data.driverId) return { ok: false, reason: 'already_assigned' };
-    if (data.status !== 'pending_driver') return { ok: false, reason: 'invalid_status' };
-    tx.update(orderRef, {
-      driverId: driver.id,
-      driverName: driver.name,
-      driverPhone: driver.phone ?? null,
-      status: 'driver_accepted',
-      acceptedAt: serverTimestamp(),
-      estimatedDeliveryTime: 24,
-    });
-    return { ok: true };
-  });
+  return claimMarketplaceDriverOrder(orderId, driver);
 }
 
 export async function updateOrderStatus(

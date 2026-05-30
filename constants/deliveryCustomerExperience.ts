@@ -108,7 +108,17 @@ function phaseFromDeliveryAndStatus(
   ) {
     return 'driver_assigned';
   }
-  if (ds === 'waiting_driver' || status === 'pending_driver') return 'finding_driver';
+  if (
+    ds === 'waiting_driver'
+    || ds === 'ready_for_pickup'
+    || status === 'pending_driver'
+    || status === 'ready_for_pickup'
+  ) {
+    return 'finding_driver';
+  }
+  if (ds === 'accepted' || ds === 'preparing' || status === 'accepted' || status === 'preparing') {
+    return 'payment_confirmed';
+  }
   return null;
 }
 

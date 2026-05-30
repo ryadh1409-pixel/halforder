@@ -16,12 +16,15 @@ import {
   logDriverQueryStart,
 } from '@/services/firestoreDriverQueryLog';
 import { auth, db } from '@/services/firebase';
+import { marketplaceLog } from '@/lib/marketplaceLogger';
+import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import { warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import {
   arrayUnion,
   collection,
   doc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -419,7 +422,7 @@ export function subscribeDriverQueue(
     const authUid = auth.currentUser?.uid?.trim() ?? '';
     if (!authUid || authUid !== driverId.trim()) return;
 
-    const poolFilters = { orderBy: 'createdAt desc' };
+    const poolFilters = { orderBy: 'createdAt desc', clientExpiryFilter: true };
     await logDriverQueryStart({
       listener: 'subscribeDriverQueue',
       collection: 'driver_marketplace_pool',
@@ -428,15 +431,17 @@ export function subscribeDriverQueue(
 
     try {
       unsubOrders = onSnapshot(
-        query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc')),
+        query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(30)),
         (snap) => {
           if (cancelled) return;
           try {
             cache = snap.docs
               .map((row) => safeMapQueueOrder(row))
               .filter((row): row is DeliveryQueueOrder => row != null)
-              .filter((row) => row.deliveryStatus === DELIVERY_STATUS.AVAILABLE)
-              .filter((row) => row.status !== 'cancelled');
+              .filter((row) => {
+                const raw = snap.docs.find((d) => d.id === row.id)?.data() ?? {};
+                return !isDriverPoolRowStale(raw.createdAt, row.createdAtMs);
+              });
           } catch (err) {
             warnMalformedDeliveryDoc('(batch)', 'subscribeDriverQueue pool map', err);
             cache = [];

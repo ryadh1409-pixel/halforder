@@ -14,7 +14,7 @@ export function orderDetailHref(role: UserRole | null | undefined, orderId: stri
     case 'driver':
       return DRIVER_ROUTES.order(id) as Href;
     case 'restaurant':
-      return HOST_ROUTES.order(id) as Href;
+      return HOST_ROUTES.dashboard as Href;
     case 'admin':
       return adminRoutes.order(id) as Href;
     case 'user':

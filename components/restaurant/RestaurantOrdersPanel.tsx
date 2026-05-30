@@ -9,51 +9,65 @@ import {
   View,
 } from 'react-native';
 
-import OrderCard from '@/components/orders/OrderCard';
-import { systemActionSheet, systemConfirm } from '@/components/SystemDialogHost';
+import { RestaurantLiveOrderCard } from '@/components/restaurant/RestaurantLiveOrderCard';
 import {
   RESTAURANT_ORDER_FILTERS,
   restaurantOrderFilterEmptyTitle,
   type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import type { OrderStatus } from '@/services/orderService';
 import { rejectOrder, updateOrderStatus } from '@/services/orderService';
-import { showError, showSuccess, showUndoToast } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 
 type Props = {
   restaurantId: string;
   restaurantTimeZone?: string | null;
-  onOpenOrder?: (orderId: string) => void;
   onAssignDriver?: (orderId: string) => void;
   title?: string;
 };
 
+const EMPTY_TITLE = 'No active orders';
+const EMPTY_SUBTITLE =
+  'Orders placed within the last 24 hours will appear here instantly.';
+
 export function RestaurantOrdersPanel({
   restaurantId,
   restaurantTimeZone,
-  onOpenOrder,
   onAssignDriver,
-  title = 'Orders',
+  title = 'Live orders',
 }: Props) {
   const [filter, setFilter] = useState<RestaurantOrderListFilter>('active');
   const [actionOrderId, setActionOrderId] = useState<string | null>(null);
 
-  const {
-    orders,
-    loading,
-    timeZone,
-    archiveOrder,
-    hideOrder,
-    restoreOrder,
-  } = useRestaurantOrders({
+  const { orders, allOrders, loading, timeZone } = useRestaurantOrders({
     restaurantId,
     restaurantTimeZone,
     filter,
-    enableAutoCleanup: filter !== 'archived',
+    enableAutoCleanup: false,
   });
 
-  const emptyTitle = restaurantOrderFilterEmptyTitle(filter);
+  const freshOrders = useMemo(
+    () => orders.filter((order) => isOrderFresh(order)),
+    [orders],
+  );
+
+  const emptyTitle = useMemo(() => {
+    if (!loading && allOrders.length === 0) return EMPTY_TITLE;
+    if (!loading && freshOrders.length === 0) {
+      return restaurantOrderFilterEmptyTitle(filter);
+    }
+    return restaurantOrderFilterEmptyTitle(filter);
+  }, [allOrders.length, filter, freshOrders.length, loading]);
+
+  const emptySubtitle = useMemo(() => {
+    if (!loading && allOrders.length === 0) return EMPTY_SUBTITLE;
+    if (filter === 'archived') {
+      return 'Archived and hidden orders from the last 24 hours appear here.';
+    }
+    return EMPTY_SUBTITLE;
+  }, [allOrders.length, filter, loading]);
 
   const handleStatus = useCallback(async (orderId: string, status: OrderStatus) => {
     setActionOrderId(orderId);
@@ -79,88 +93,23 @@ export function RestaurantOrdersPanel({
     }
   }, []);
 
-  const confirmRemoveFromDashboard = useCallback(
-    async (orderId: string, mode: 'archive' | 'hide') => {
-      const ok = await systemConfirm({
-        title: 'Remove from dashboard?',
-        message:
-          'This order stays in your records but will no longer appear in the live list.',
-        confirmLabel: mode === 'archive' ? 'Archive' : 'Hide',
-        destructive: true,
-      });
-      if (!ok) return;
-
-      const previousFilter = filter;
-      try {
-        if (mode === 'archive') {
-          await archiveOrder(orderId);
-        } else {
-          await hideOrder(orderId);
-        }
-        showUndoToast('Order removed from dashboard', () => {
-          void restoreOrder(orderId).then(() => {
-            showSuccess('Order restored');
-            setFilter(previousFilter);
-          });
-        });
-      } catch {
-        showError('Could not update order.');
-      }
-    },
-    [archiveOrder, filter, hideOrder, restoreOrder],
-  );
-
-  const openOrderActions = useCallback(
-    (orderId: string, isArchived: boolean) => {
-      if (isArchived) {
-        void systemActionSheet({
-          title: 'Archived order',
-          actions: [
-            {
-              label: 'Restore to dashboard',
-              onPress: () => {
-                void restoreOrder(orderId).then(() => showSuccess('Order restored'));
-              },
-            },
-          ],
-        });
-        return;
-      }
-
-      void systemActionSheet({
-        title: 'Order actions',
-        actions: [
-          {
-            label: 'Archive',
-            onPress: () => void confirmRemoveFromDashboard(orderId, 'archive'),
-          },
-          {
-            label: 'Hide from dashboard',
-            onPress: () => void confirmRemoveFromDashboard(orderId, 'hide'),
-          },
-        ],
-      });
-    },
-    [confirmRemoveFromDashboard, restoreOrder],
-  );
-
   const summary = useMemo(() => {
-    const pending = orders.filter((o) => o.status === 'pending').length;
-    const preparing = orders.filter(
+    const pending = freshOrders.filter((o) => o.status === 'pending').length;
+    const preparing = freshOrders.filter(
       (o) => o.status === 'preparing' || o.status === 'restaurant_accepted',
     ).length;
-    const ready = orders.filter(
+    const ready = freshOrders.filter(
       (o) => o.status === 'ready' || o.status === 'ready_for_pickup',
     ).length;
     return { pending, preparing, ready };
-  }, [orders]);
+  }, [freshOrders]);
 
   return (
     <View style={styles.wrap}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{title}</Text>
         {!loading ? (
-          <Text style={styles.count}>{orders.length} shown</Text>
+          <Text style={styles.count}>{freshOrders.length} shown</Text>
         ) : null}
       </View>
 
@@ -207,24 +156,19 @@ export function RestaurantOrdersPanel({
           <ActivityIndicator size="small" color="#16a34a" />
           <Text style={styles.loadingText}>Loading orders…</Text>
         </View>
-      ) : orders.length === 0 ? (
+      ) : freshOrders.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Ionicons name="receipt-outline" size={32} color="#94a3b8" />
+          <Ionicons name="receipt-outline" size={36} color="#94a3b8" />
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-          <Text style={styles.emptySub}>
-            {filter === 'archived'
-              ? 'Archived and hidden orders appear here.'
-              : 'New orders show up instantly when customers place them.'}
-          </Text>
+          <Text style={styles.emptySub}>{emptySubtitle}</Text>
         </View>
       ) : (
         <View style={styles.list}>
-          {orders.map((order) => (
+          {freshOrders.map((order) => (
             <View key={order.id} style={styles.cardWrap}>
-              <OrderCard
+              <RestaurantLiveOrderCard
                 order={order}
                 timeZone={timeZone}
-                onPress={() => onOpenOrder?.(order.id)}
                 onStatus={(status) => void handleStatus(order.id, status)}
                 onReject={() => void handleReject(order.id)}
                 loading={actionOrderId === order.id}
@@ -238,19 +182,6 @@ export function RestaurantOrdersPanel({
                   <Text style={styles.assignBtnText}>Assign driver</Text>
                 </Pressable>
               ) : null}
-              <Pressable
-                style={styles.moreBtn}
-                hitSlop={10}
-                accessibilityLabel="Order actions"
-                onPress={() =>
-                  openOrderActions(
-                    order.id,
-                    filter === 'archived',
-                  )
-                }
-              >
-                <Ionicons name="ellipsis-horizontal" size={20} color="#64748b" />
-              </Pressable>
             </View>
           ))}
         </View>
@@ -310,26 +241,27 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 28,
-    paddingHorizontal: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
     borderRadius: 16,
     backgroundColor: '#f8fafc',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#334155', marginTop: 4 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#334155', marginTop: 6 },
   emptySub: {
     fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
+    maxWidth: 320,
   },
   list: { gap: 4 },
   cardWrap: { position: 'relative' },
   assignBtn: {
     marginTop: -4,
     marginBottom: 12,
-    marginHorizontal: 16,
+    marginHorizontal: 4,
     height: 40,
     borderRadius: 10,
     borderWidth: 1,
@@ -339,17 +271,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   assignBtnText: { color: '#334155', fontWeight: '800', fontSize: 14 },
-  moreBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
-  },
 });
