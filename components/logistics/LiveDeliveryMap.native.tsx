@@ -1,7 +1,9 @@
-import { isExpoGo } from '@/constants/runtimeEnvironment';
+import { regionFromCoordinates, collectMapCoordinates } from '@/lib/location/coordinates';
+import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
+import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import type { LiveDeliveryMapProps } from './liveDeliveryMapTypes';
 import React, { memo, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
 function LiveDeliveryMapInner({
@@ -22,42 +24,29 @@ function LiveDeliveryMapInner({
     return pts;
   }, [polylineCoords, restaurant, dropoff, driver]);
 
+  const markerPoints = useMemo(
+    () =>
+      collectMapCoordinates(
+        restaurant ? { latitude: restaurant.latitude, longitude: restaurant.longitude } : null,
+        dropoff ? { latitude: dropoff.latitude, longitude: dropoff.longitude } : null,
+        driver ? { latitude: driver.latitude, longitude: driver.longitude } : null,
+      ),
+    [restaurant, dropoff, driver],
+  );
+
   useEffect(() => {
-    if (!mapRef.current || fitCoords.length < 2) return;
-    try {
-      mapRef.current.fitToCoordinates(fitCoords, {
-        edgePadding: { top: 80, right: 40, bottom: 120, left: 40 },
-        animated: true,
-      });
-    } catch {
-      /* map not ready */
-    }
-  }, [fitCoords]);
+    if (!mapRef.current || markerPoints.length < 1) return;
+    fitMapToCoordinates(mapRef.current, markerPoints);
+  }, [markerPoints]);
 
-  const initial = useMemo(() => {
-    const d = driver ?? dropoff ?? restaurant;
-    if (!d) {
-      return {
-        latitude: 37.7749,
-        longitude: -122.4194,
-        latitudeDelta: 0.12,
-        longitudeDelta: 0.12,
-      };
-    }
-    return {
-      latitude: d.latitude,
-      longitude: d.longitude,
-      latitudeDelta: 0.06,
-      longitudeDelta: 0.06,
-    };
-  }, [driver, dropoff, restaurant]);
+  const initial = useMemo(() => regionFromCoordinates(markerPoints), [markerPoints]);
+  const mapProvider = getNativeMapProvider();
 
-  if (isExpoGo) {
+  if (!initial) {
     return (
       <View style={[styles.fallback, dark && styles.fallbackDark]}>
-        <Text style={styles.fallbackText}>
-          Live maps are disabled in Expo Go. Use a development build (EAS) to track deliveries on the map.
-        </Text>
+        <ActivityIndicator color="#22C55E" />
+        <Text style={styles.fallbackText}>Waiting for GPS coordinates…</Text>
       </View>
     );
   }
@@ -66,6 +55,7 @@ function LiveDeliveryMapInner({
     <MapView
       ref={mapRef}
       style={styles.map}
+      provider={mapProvider}
       initialRegion={initial}
       userInterfaceStyle={dark ? 'dark' : 'light'}
       showsUserLocation={false}

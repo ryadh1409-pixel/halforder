@@ -101,7 +101,6 @@ function shouldSkipDuplicate(
   return norm(nextText) === norm(lastBotResponseText);
 }
 
-const DEFAULT_FALLBACK_LOC = { lat: 43.6532, lng: -79.3832 };
 
 type MockRestaurant = { name: string; distanceKm: number };
 
@@ -384,8 +383,11 @@ export async function processOrderBuilderTurn(input: {
       loc = { lat: userLocation.lat, lng: userLocation.lng };
       label = text.trim() || userLocation.label || 'Near you';
     } else {
-      loc = DEFAULT_FALLBACK_LOC;
-      label = text.trim() || 'Your area';
+      push({
+        text: 'Share your location or type your neighborhood so I can find nearby restaurants.',
+        action: 'none',
+      });
+      return { session, messages };
     }
 
     session.draft.location = loc;
@@ -406,7 +408,15 @@ export async function processOrderBuilderTurn(input: {
 
   if (st === 'awaiting_restaurant') {
     const cat = session.draft.mealCategory ?? 'other';
-    const loc = session.draft.location ?? DEFAULT_FALLBACK_LOC;
+    const loc = session.draft.location;
+    if (!loc) {
+      session.orderState = 'awaiting_location';
+      push({
+        text: 'I need your location first. Enable GPS or type your neighborhood.',
+        action: 'none',
+      });
+      return { session, messages };
+    }
     const options = mockNearbyRestaurants(cat, loc.lat, loc.lng);
     const picked = parseRestaurantChoice(text, options);
     if (!picked) {

@@ -53,9 +53,6 @@ const PIZZA_TYPES = [
   { id: 'veggie', label: 'Veggie' },
 ] as const;
 
-const FALLBACK_LOC: LatLng = { lat: 43.6532, lng: -79.3832 };
-
-const GROUP_WAIT_MS = 60_000;
 
 export type ChatFlowLocation = {
   lat: number;
@@ -227,7 +224,13 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
         );
         setRestaurants(rows);
         if (coords) setSavedLoc(coords);
-        else setSavedLoc(FALLBACK_LOC);
+
+        if (!coords) {
+          addMessage('Could not resolve that location. Try enabling GPS or a more specific address.');
+          setStep('need_location');
+          setLoadingRests(false);
+          return;
+        }
 
         const matched =
           rows.length > 0 ? matchPlaceRestaurantByName(rows, aiRest) : null;
@@ -255,9 +258,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
           setShowSplit(true);
         }
 
-        const locForMatch = coords
-          ? { lat: coords.lat, lng: coords.lng }
-          : FALLBACK_LOC;
+        const locForMatch = { lat: coords.lat, lng: coords.lng };
         pendingGroupLocRef.current = locForMatch;
 
         setStep('recommended');
@@ -466,11 +467,25 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
     return () => clearTimeout(t);
   }, [activeGroupId, step, groupLive]);
 
-  const handleManualLocation = () => {
-    const label = manualArea.trim() || 'Your area';
+  const handleManualLocation = async () => {
+    const label = manualArea.trim();
+    if (!label) {
+      addMessage('Enter your neighborhood or address first.');
+      return;
+    }
     didStartFromProfileLoc.current = true;
-    setSelectedLocation(manualArea.trim() || label);
-    startAfterLocation(FALLBACK_LOC, label, manualArea.trim() || label);
+    setSelectedLocation(label);
+    setLoadingRests(true);
+    try {
+      const { coords } = await getNearbyRestaurantsWithCoords(label, 'pizza');
+      if (!coords) {
+        addMessage('Could not find that location. Try a more specific address.');
+        return;
+      }
+      startAfterLocation(coords, label, label);
+    } finally {
+      setLoadingRests(false);
+    }
   };
 
   const handlePickPizzaType = async (id: string, label: string) => {

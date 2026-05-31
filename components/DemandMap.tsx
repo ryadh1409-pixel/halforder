@@ -70,12 +70,7 @@ export default function DemandMap({ onJoinOrder, style }: DemandMapProps) {
         latitudeDelta: 0.02,
         longitudeDelta: 0.02,
       }
-    : {
-        latitude: 43.6532,
-        longitude: -79.3832,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      };
+    : null;
 
   const distanceKm =
     selectedOrder && userLocation
@@ -112,6 +107,17 @@ export default function DemandMap({ onJoinOrder, style }: DemandMapProps) {
     return (
       <View style={[styles.centered, style]}>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!region) {
+    return (
+      <View style={[styles.centered, style]}>
+        <Text style={styles.errorText}>Enable location to view nearby orders on the map.</Text>
         <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
           <Text style={styles.retryBtnText}>Retry</Text>
         </TouchableOpacity>

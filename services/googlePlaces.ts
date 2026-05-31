@@ -1,6 +1,6 @@
 /**
  * Google Maps Geocoding + Places Nearby Search + Place Photos.
- * Requires EXPO_PUBLIC_GOOGLE_API_KEY and enabled APIs + billing on the key.
+ * Requires EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (or EXPO_PUBLIC_GOOGLE_API_KEY) in `.env`.
  */
 
 import {
@@ -9,7 +9,11 @@ import {
   type NearbyRestaurant,
 } from './api';
 
-const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_API_KEY ?? '';
+const GOOGLE_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
+  process.env.EXPO_PUBLIC_GOOGLE_API_KEY?.trim() ||
+  process.env.GOOGLE_MAPS_API_KEY?.trim() ||
+  '';
 
 export type PlaceRestaurant = {
   id: string;
@@ -105,7 +109,7 @@ async function nearbyFromCoords(
 
 /**
  * Geocode + nearby search; returns restaurants and coordinates for checkout.
- * Without API key or empty text → mock data + default coords (Toronto centroid).
+ * Without API key or empty text → empty result (no mock coordinates).
  */
 export async function getNearbyRestaurantsWithCoords(
   locationText: string,
@@ -117,12 +121,7 @@ export async function getNearbyRestaurantsWithCoords(
   const key = GOOGLE_API_KEY.trim();
   const text = locationText.trim();
   if (!key || !text) {
-    const loc: LatLng = { lat: 43.6532, lng: -79.3832 };
-    const mock = await getMockNearbyRestaurants(loc, keyword);
-    return {
-      restaurants: mock.map(toPlaceRestaurant),
-      coords: loc,
-    };
+    return { restaurants: [], coords: null };
   }
 
   const coords = await getCoordinates(text);

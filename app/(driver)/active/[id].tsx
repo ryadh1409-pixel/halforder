@@ -3,21 +3,18 @@ import { DELIVERY_STATUS, DELIVERY_STATUS_LABEL, type DeliveryLifecycleStatus } 
 import { DeliveryActionBar } from '@/components/delivery/DeliveryActionBar';
 import { DeliveryTimeline } from '@/components/delivery/DeliveryTimeline';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
+import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
 import {
-  type DeliveryLocation,
   updateDeliveryStatus,
-  updateDriverLiveLocation,
 } from '@/services/delivery';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams } from 'expo-router';
-import * as Location from 'expo-location';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,51 +38,30 @@ export default function DriverActiveDeliveryDetailsScreen() {
   const { user } = useAuth();
   const { order, loading } = useActiveDelivery(id);
   const [busy, setBusy] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<DeliveryLocation | null>(null);
-  const [permissionReady, setPermissionReady] = useState(false);
-  const watchRef = useRef<Location.LocationSubscription | null>(null);
   const mapRef = useRef<unknown>(null);
 
-  useEffect(() => {
-    if (!user?.uid || !id || Platform.OS === 'web') return;
-    let mounted = true;
-    void Location.requestForegroundPermissionsAsync().then(({ status }) => {
-      if (!mounted || status !== 'granted') return;
-      setPermissionReady(true);
-      Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-          distanceInterval: 10,
-        },
-        (pos) => {
-          const next: DeliveryLocation = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            heading: pos.coords.heading ?? null,
-            speed: pos.coords.speed ?? null,
-          };
-          setCurrentLocation(next);
-          void updateDriverLiveLocation(id, user.uid, next);
-        },
-      )
-        .then((subscription) => {
-          watchRef.current = subscription;
-        })
-        .catch(() => {});
-    });
-    return () => {
-      mounted = false;
-      if (watchRef.current) {
-        watchRef.current.remove();
-        watchRef.current = null;
-      }
-    };
-  }, [id, user?.uid]);
+  const { current: currentLocation, permissionGranted } = useDriverLocationTracking(
+    id,
+    user?.uid,
+    Boolean(id && user?.uid),
+  );
+
+  const driverLocationForMap = useMemo(
+    () =>
+      currentLocation
+        ? {
+            lat: currentLocation.latitude,
+            lng: currentLocation.longitude,
+            heading: currentLocation.heading ?? null,
+            speed: currentLocation.speed ?? null,
+          }
+        : null,
+    [currentLocation],
+  );
 
   const points = useMemo(() => {
     if (!order) return [];
-    const driver = currentLocation ?? order.driverLocation;
+    const driver = driverLocationForMap ?? order.driverLocation;
     const restaurant = order.restaurantLocation;
     const customer = order.customerLocation;
     const list: { latitude: number; longitude: number }[] = [];
@@ -93,7 +69,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
     if (restaurant) list.push({ latitude: restaurant.lat, longitude: restaurant.lng });
     if (customer) list.push({ latitude: customer.lat, longitude: customer.lng });
     return list;
-  }, [currentLocation, order]);
+  }, [driverLocationForMap, order]);
 
   async function onAdvance(nextStatus: DeliveryLifecycleStatus) {
     if (!id || !user?.uid || busy) return;
@@ -147,14 +123,14 @@ export default function DriverActiveDeliveryDetailsScreen() {
             <DriverActiveRouteMap
               mapRef={mapRef}
               order={order}
-              currentLocation={currentLocation}
+              currentLocation={driverLocationForMap}
               points={points}
             />
           ) : (
             <View style={styles.mapFallback}>
               <Text style={styles.meta}>
-                {permissionReady
-                  ? 'Waiting for live coordinates...'
+                {permissionGranted
+                  ? 'Waiting for live coordinates…'
                   : 'Enable location permission for realtime route'}
               </Text>
             </View>

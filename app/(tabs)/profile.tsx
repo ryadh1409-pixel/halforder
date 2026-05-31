@@ -21,6 +21,7 @@ import {
 } from '../../lib/profileWhatsAppPhone';
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
+import { ProfileLocationPicker } from '../../components/profile/ProfileLocationPicker';
 import { useBlockedUsers } from '../../hooks/useBlockedUsers';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
 import { useTrustScore } from '../../hooks/useTrustScore';
@@ -1076,6 +1077,9 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
+
+          <Text style={dynamicStyles.sectionHeading}>Delivery location</Text>
+          <ProfileLocationPicker userId={uid} palette={pal} />
 
           <Text style={dynamicStyles.sectionHeading}>Notifications</Text>
           <View style={dynamicStyles.card}>

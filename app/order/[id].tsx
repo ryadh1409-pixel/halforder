@@ -253,12 +253,7 @@ function OrderTrackingScreen() {
         longitudeDelta: 0.04,
       };
     }
-    return {
-      latitude: 43.761,
-      longitude: -79.411,
-      latitudeDelta: 0.08,
-      longitudeDelta: 0.08,
-    };
+    return null;
   }, [driverCoord, destCoord]);
 
   if (!orderId) {

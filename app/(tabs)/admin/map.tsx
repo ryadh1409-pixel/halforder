@@ -33,12 +33,6 @@ type ActivityPoint = {
   time: number;
 };
 
-const DEFAULT_REGION = {
-  latitude: 43.6532,
-  longitude: -79.3832,
-  latitudeDelta: 0.1,
-  longitudeDelta: 0.1,
-};
 
 export default function AdminActivityMapScreen() {
   const router = useRouter();
@@ -156,7 +150,18 @@ export default function AdminActivityMapScreen() {
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }
-      : DEFAULT_REGION;
+      : null;
+
+  if (!initialRegion && !loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <AdminHeader title="Activity map" subtitle="Last 24 hours" />
+        <View style={styles.webPlaceholder}>
+          <Text style={styles.webPlaceholderText}>No user activity with GPS in the last 24 hours.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (Platform.OS === 'web') {
     return (
@@ -172,6 +177,10 @@ export default function AdminActivityMapScreen() {
         </View>
       </SafeAreaView>
     );
+  }
+
+  if (!initialRegion) {
+    return null;
   }
 
   return (

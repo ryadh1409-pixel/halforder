@@ -2,9 +2,16 @@
  * Customer live tracking map — native only (`react-native-maps` never imported on web).
  */
 import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
+import {
+  collectMapCoordinates,
+  regionFromCoordinates,
+  toMapCoordinate,
+} from '@/lib/location/coordinates';
+import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
+import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import type { RestaurantOrder } from '@/services/orderService';
 import React, { Component, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import MapView, {
   AnimatedRegion,
   Marker,
@@ -13,14 +20,6 @@ import MapView, {
 } from 'react-native-maps';
 
 type LatLng = { latitude: number; longitude: number };
-
-function toLatLng(
-  loc: { lat: number; lng: number } | null | undefined,
-): LatLng | null {
-  if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return null;
-  if (!Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return null;
-  return { latitude: loc.lat, longitude: loc.lng };
-}
 
 class MapErrorBoundary extends Component<
   { children: React.ReactNode; fallback: React.ReactNode },
@@ -52,18 +51,25 @@ function TrackingMapInner({
   const seededRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
 
-  const defaultCenter = restaurant ?? dropoff ?? driver ?? { latitude: 37.7749, longitude: -122.4194 };
+  const markerPoints = useMemo(
+    () => collectMapCoordinates(restaurant, dropoff, driver),
+    [restaurant, dropoff, driver],
+  );
+  const initialRegion = useMemo(() => regionFromCoordinates(markerPoints), [markerPoints]);
+  const seedPoint = markerPoints[0] ?? null;
 
   useEffect(() => {
+    if (!seedPoint) return;
     if (!driverAnimRef.current) {
       driverAnimRef.current = new AnimatedRegion({
-        ...defaultCenter,
+        latitude: seedPoint.latitude,
+        longitude: seedPoint.longitude,
         latitudeDelta: 0,
         longitudeDelta: 0,
       });
       seededRef.current = false;
     }
-  }, [defaultCenter.latitude, defaultCenter.longitude]);
+  }, [seedPoint?.latitude, seedPoint?.longitude]);
 
   useEffect(() => {
     if (!driver || !driverAnimRef.current) return;
@@ -94,32 +100,36 @@ function TrackingMapInner({
   }, [restaurant, driver, dropoff]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || polyline.length < 2) return;
+    if (!mapReady || markerPoints.length < 1) return;
     const t = setTimeout(() => {
-      try {
-        mapRef.current?.fitToCoordinates?.(polyline, {
-          edgePadding: { top: 100, right: 36, bottom: 40, left: 36 },
-          animated: true,
-        });
-      } catch {
-        /* ignore */
-      }
+      fitMapToCoordinates(mapRef.current, markerPoints, {
+        top: 100,
+        right: 36,
+        bottom: 40,
+        left: 36,
+      });
     }, 450);
     return () => clearTimeout(t);
-  }, [mapReady, polyline]);
+  }, [mapReady, markerPoints]);
+
+  if (!initialRegion) {
+    return (
+      <View style={styles.loadingWrap}>
+        <ActivityIndicator color="#FF3008" />
+        <Text style={styles.loadingText}>Waiting for location data…</Text>
+      </View>
+    );
+  }
 
   const anim = driverAnimRef.current;
+  const mapProvider = getNativeMapProvider();
 
   return (
     <MapView
       ref={mapRef}
       style={styles.mapView}
-      initialRegion={{
-        latitude: defaultCenter.latitude,
-        longitude: defaultCenter.longitude,
-        latitudeDelta: 0.06,
-        longitudeDelta: 0.06,
-      }}
+      provider={mapProvider}
+      initialRegion={initialRegion}
       userInterfaceStyle="light"
       showsCompass={false}
       toolbarEnabled={false}
@@ -160,9 +170,12 @@ function TrackingMapInner({
 }
 
 export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
-  const restaurant = toLatLng(order.restaurantLocation);
-  const dropoff = toLatLng(order.deliveryLocation);
-  const driver = order.driverLocation ? toLatLng(order.driverLocation) : null;
+  const restaurant = toMapCoordinate(order.restaurantLocation);
+  const dropoff =
+    toMapCoordinate(order.customerLocation) ??
+    toMapCoordinate(order.deliveryLocation) ??
+    toMapCoordinate(order.userLocation);
+  const driver = order.driverLocation ? toMapCoordinate(order.driverLocation) : null;
   const pickupLabel =
     order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';
   const dropoffLabel =
@@ -179,6 +192,14 @@ export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
 
 const styles = StyleSheet.create({
   mapView: { flex: 1, width: '100%', minHeight: 200 },
+  loadingWrap: {
+    flex: 1,
+    minHeight: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: { color: '#64748B', fontSize: 14 },
   markerBubble: {
     backgroundColor: '#fff',
     borderRadius: 20,

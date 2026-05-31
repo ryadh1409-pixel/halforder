@@ -28,6 +28,11 @@ import { useAuth } from '@/services/AuthContext';
 import { useCart } from '@/services/CartContext';
 import { useCheckoutStore } from '@/store/checkoutStore';
 import { createOrder } from '@/services/orderService';
+import {
+  fetchRestaurantLocation,
+  resolveDeliveryLocationForCheckout,
+} from '@/services/location';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
 import { isOwnerHost } from '@/services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '@/services/stripeOnboarding';
@@ -54,8 +59,6 @@ import {
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const DROP = { lat: 43.6532, lng: -79.3832 };
-
 export default function CheckoutPremiumScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ restaurantId: string }>();
@@ -68,6 +71,12 @@ export default function CheckoutPremiumScreen() {
   const { items: cart, clearCartForRestaurant } = useCart();
   const { profile } = useRestaurantProfile(restaurantId || null);
   const { items: menuItems, loading: menuLoading } = useMenu(restaurantId || null);
+  const {
+    reading: customerGps,
+    address: customerAddress,
+    loading: locationLoading,
+    refresh: refreshCustomerLocation,
+  } = useCustomerLocation({ autoFetch: true });
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler({
@@ -111,8 +120,12 @@ export default function CheckoutPremiumScreen() {
   );
 
   const distanceKm = useMemo(
-    () => distanceKmBetween(DROP, profile?.coords ?? null),
-    [profile?.coords],
+    () =>
+      distanceKmBetween(
+        customerGps ? { lat: customerGps.latitude, lng: customerGps.longitude } : null,
+        profile?.coords ?? null,
+      ),
+    [customerGps, profile?.coords],
   );
 
   const deliveryFeeEstimate = useMemo(
@@ -212,8 +225,11 @@ export default function CheckoutPremiumScreen() {
     }
   }
 
-  const addressPrimary = profile?.address ?? '123 Queen Street West, Toronto, ON';
-  const addressSecondary = fulfillmentMode === 'pickup' ? 'Pickup parking — side entrance' : 'Leave at concierge · Knock twice';
+  const addressPrimary =
+    fulfillmentMode === 'pickup'
+      ? (profile?.address ?? 'Restaurant pickup')
+      : (customerAddress ?? 'Fetching your location…');
+  const addressSecondary = fulfillmentMode === 'pickup' ? 'Pickup parking — side entrance' : 'Leave at door · Add delivery notes at checkout';
   const phoneDisplay = '+1 (416) 555-0199';
 
   async function submitOrder() {
@@ -273,17 +289,41 @@ export default function CheckoutPremiumScreen() {
   async function placeOrder() {
     setPlacing(true);
     try {
+      let deliveryLocation: { lat: number; lng: number; address: string };
+      let customerLocation;
+
+      if (fulfillmentMode === 'pickup') {
+        const restaurantLoc = await fetchRestaurantLocation(restaurantId);
+        deliveryLocation = {
+          lat: restaurantLoc.latitude,
+          lng: restaurantLoc.longitude,
+          address: restaurantLoc.address ?? profile?.address ?? 'Restaurant pickup',
+        };
+        if (customerGps) {
+          customerLocation = {
+            latitude: customerGps.latitude,
+            longitude: customerGps.longitude,
+            timestamp: Date.now(),
+          };
+        }
+      } else {
+        const delivery = await resolveDeliveryLocationForCheckout({ required: true });
+        deliveryLocation = {
+          lat: delivery.lat,
+          lng: delivery.lng,
+          address: delivery.address,
+        };
+        customerLocation = delivery.customerLocation;
+      }
+
       const orderId = await createOrder({
         userId: user!.uid,
         restaurantId,
         items: cartItems,
         totalPrice: total,
         deliveryType: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
-        deliveryLocation: {
-          lat: DROP.lat,
-          lng: DROP.lng,
-          address: addressPrimary,
-        },
+        deliveryLocation,
+        customerLocation,
       });
       clearCartForRestaurant(restaurantId);
       router.replace({
@@ -386,7 +426,8 @@ export default function CheckoutPremiumScreen() {
     cartItems.length === 0 ||
     checkingStripe ||
     authLoading ||
-    stripeReady === false;
+    stripeReady === false ||
+    (fulfillmentMode === 'delivery' && (locationLoading || !customerGps));
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -401,14 +442,24 @@ export default function CheckoutPremiumScreen() {
       >
         <DeliverySegment mode={fulfillmentMode} onChange={setFulfillmentMode} />
 
-        {fulfillmentMode === 'delivery' ? (
+        {fulfillmentMode === 'delivery' && customerGps ? (
           <DeliveryMapCard
-            center={{ latitude: DROP.lat, longitude: DROP.lng }}
-            markers={[{ id: 'drop', latitude: DROP.lat, longitude: DROP.lng }]}
+            center={{ latitude: customerGps.latitude, longitude: customerGps.longitude }}
+            markers={[
+              {
+                id: 'drop',
+                latitude: customerGps.latitude,
+                longitude: customerGps.longitude,
+              },
+            ]}
             addressPrimary={addressPrimary}
             addressSecondary={addressSecondary}
-            onEditPin={() => Alert.alert('Edit pin', 'Map-based address edits sync with Firebase in a future cut.')}
+            onEditPin={() => void refreshCustomerLocation()}
           />
+        ) : fulfillmentMode === 'delivery' && locationLoading ? (
+          <View style={styles.locationLoading}>
+            <Text style={styles.locationLoadingText}>Getting your delivery location…</Text>
+          </View>
         ) : null}
 
         <View style={{ height: 6 }} />
@@ -642,6 +693,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   setupButtonText: { color: '#FFFFFF', fontWeight: '800' },
+  locationLoading: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 16,
+    borderRadius: CK.mapRadius,
+    backgroundColor: CK.surface,
+    borderWidth: 1,
+    borderColor: CK.border,
+  },
+  locationLoadingText: { color: CK.textMuted, fontWeight: '600', textAlign: 'center' },
   classicLink: {
     marginTop: 16,
     textAlign: 'center',

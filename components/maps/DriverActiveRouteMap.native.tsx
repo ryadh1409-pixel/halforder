@@ -1,4 +1,5 @@
 import type { ActiveDelivery, DeliveryLocation } from '@/services/delivery';
+import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
@@ -37,6 +38,7 @@ export function DriverActiveRouteMap({
     <MapView
       ref={mapRef as React.Ref<MapView>}
       style={styles.map}
+      provider={getNativeMapProvider()}
       initialRegion={{
         latitude: points[0].latitude,
         longitude: points[0].longitude,

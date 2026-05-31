@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
+import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import type { MapRendererProps } from './types';
 
 export default function NativeMap({
@@ -41,7 +42,7 @@ export default function NativeMap({
       ref={mapRef}
       style={style}
       mapType={mapType}
-      provider={useGoogleProviderOnAndroid && Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+      provider={getNativeMapProvider()}
       initialRegion={initialRegion}
       showsUserLocation={showsUserLocation}
       showsMyLocationButton={showsMyLocationButton}

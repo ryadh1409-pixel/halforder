@@ -20,6 +20,7 @@ import { useAuth } from '../../services/AuthContext';
 import { useCart } from '../../services/CartContext';
 import { auth, ensureAuthReady } from '../../services/firebase';
 import { createOrder } from '../../services/orderService';
+import { resolveDeliveryLocationForCheckout } from '../../services/location';
 import { isOwnerHost } from '../../services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '../../services/stripeOnboarding';
@@ -150,16 +151,18 @@ export default function CartScreen() {
     }
     setPlacing(true);
     try {
+      const delivery = await resolveDeliveryLocationForCheckout({ required: true });
       const orderId = await createOrder({
         userId: user.uid,
         restaurantId,
         items: cartItems,
         totalPrice,
         deliveryLocation: {
-          lat: 43.6532,
-          lng: -79.3832,
-          address: 'Toronto, ON',
+          lat: delivery.lat,
+          lng: delivery.lng,
+          address: delivery.address,
         },
+        customerLocation: delivery.customerLocation,
       });
       router.replace({
         pathname: '/checkout',

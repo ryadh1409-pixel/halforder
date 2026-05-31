@@ -16,6 +16,7 @@ import {
   logDriverQueryStart,
 } from '@/services/firestoreDriverQueryLog';
 import { auth, db } from '@/services/firebase';
+import { syncDriverLiveLocation } from '@/services/location/driverTracking';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
@@ -783,34 +784,13 @@ export async function updateDriverLiveLocation(
   driverId: string,
   location: DeliveryLocation,
 ): Promise<void> {
-  const payload = {
-    lat: location.lat,
-    lng: location.lng,
-    heading: typeof location.heading === 'number' ? location.heading : null,
-    speed: typeof location.speed === 'number' ? location.speed : null,
-    updatedAt: serverTimestamp(),
-  };
-  const batch = writeBatch(db);
-  batch.update(doc(db, 'orders', orderId), { driverLocation: payload });
-  batch.set(
-    doc(db, 'live_locations', orderId),
-    {
-      orderId,
-      driverId,
-      ...payload,
-    },
-    { merge: true },
-  );
-  batch.set(
-    doc(db, 'drivers', driverId),
-    {
-      liveLocation: payload,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
   try {
-    await batch.commit();
+    await syncDriverLiveLocation(orderId, driverId, {
+      latitude: location.lat,
+      longitude: location.lng,
+      heading: location.heading ?? null,
+      speed: location.speed ?? null,
+    });
   } catch (e) {
     if (isPermissionDeniedError(e) && __DEV__) {
       // eslint-disable-next-line no-console

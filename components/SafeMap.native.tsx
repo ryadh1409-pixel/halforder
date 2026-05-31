@@ -1,4 +1,5 @@
 import React from 'react';
+import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 
 const MapView = require('react-native-maps').default;
 const Marker = require('react-native-maps').Marker;
@@ -19,5 +20,10 @@ export default function SafeMap(props: {
   [key: string]: unknown;
 }) {
   const { children, ...rest } = props;
-  return <MapView {...rest}>{children}</MapView>;
+  const provider = getNativeMapProvider();
+  return (
+    <MapView {...rest} provider={provider}>
+      {children}
+    </MapView>
+  );
 }

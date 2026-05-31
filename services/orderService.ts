@@ -1,4 +1,7 @@
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
+import { parseLegacyLatLng } from '@/lib/location/coordinates';
+import { fetchRestaurantLocation, restaurantLocationToLegacy } from '@/services/location/restaurantLocation';
+import type { CustomerLocationRecord } from '@/types/location';
 import { formatOrderTime } from '@/utils/time';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { auth, db, ensureAuthReady } from './firebase';
@@ -87,6 +90,7 @@ export type RestaurantOrder = {
   groupId: string | null;
   estimatedDeliveryTime: number;
   deliveryLocation: { lat: number; lng: number; address: string } | null;
+  customerLocation: LatLng | null;
   userLocation: LatLng | null;
   restaurantLocation: LatLng | null;
   driverLocation: LatLng | null;
@@ -167,17 +171,7 @@ function parsePaymentStatus(value: unknown, orderStatus: OrderStatus): PaymentSt
 }
 
 function parseLatLng(value: unknown): LatLng | null {
-  if (!value || typeof value !== 'object') return null;
-  const o = value as Record<string, unknown>;
-  const lat = typeof o.lat === 'number' ? o.lat : Number(o.lat);
-  const lng = typeof o.lng === 'number' ? o.lng : Number(o.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const headingRaw = o.heading;
-  const heading =
-    typeof headingRaw === 'number' && Number.isFinite(headingRaw) ? headingRaw : null;
-  const base: LatLng = { lat, lng };
-  if (heading != null) base.heading = heading;
-  return base;
+  return parseLegacyLatLng(value);
 }
 
 function toCreatedAtLabel(value: unknown, timeZone?: string): string {
@@ -227,17 +221,23 @@ function mapDocToRestaurantOrder(
       : typeof data.venueId === 'string'
         ? data.venueId
       : fallbackRestaurantId ?? '';
-  const delivery = data.deliveryLocation;
-  const userLoc = parseLatLng(data.userLocation) ?? parseLatLng(delivery);
-  const restLoc =
-    parseLatLng(data.restaurantLocation) ??
-    (userLoc ? { lat: userLoc.lat + 0.01, lng: userLoc.lng + 0.01 } : null);
-
-  const status = parseStatus(data.status);
   const restaurantObj =
     data.restaurant && typeof data.restaurant === 'object'
       ? (data.restaurant as Record<string, unknown>)
       : null;
+  const delivery = data.deliveryLocation;
+  const customerLoc =
+    parseLatLng(data.customerLocation) ?? parseLatLng(data.userLocation) ?? parseLatLng(delivery);
+  const userLoc = customerLoc;
+  const restLoc =
+    parseLatLng(data.restaurantLocation) ??
+    (restaurantObj &&
+    typeof restaurantObj.latitude === 'number' &&
+    typeof restaurantObj.longitude === 'number'
+      ? { lat: restaurantObj.latitude, lng: restaurantObj.longitude }
+      : null);
+
+  const status = parseStatus(data.status);
   const customerObj =
     data.customer && typeof data.customer === 'object'
       ? (data.customer as Record<string, unknown>)
@@ -316,6 +316,7 @@ function mapDocToRestaurantOrder(
             address: (delivery as { address: string }).address,
           }
         : null,
+    customerLocation: customerLoc,
     userLocation: userLoc,
     restaurantLocation: restLoc,
     driverLocation: parseLatLng(data.driverLocation),
@@ -432,6 +433,7 @@ export type MarketplaceOrderCreatePayload = {
   deliveryType?: 'delivery' | 'pickup';
   driverId?: string | null;
   deliveryLocation: { lat: number; lng: number; address: string };
+  customerLocation?: CustomerLocationRecord;
   restaurantLocation?: LatLng | null;
 };
 
@@ -470,9 +472,20 @@ export async function createOrder(
 
   const { lat, lng } = payload.deliveryLocation;
   const userLocation: LatLng = { lat, lng };
-  const restaurantLocation =
-    payload.restaurantLocation ??
-    ({ lat: lat + 0.015, lng: lng + 0.015 } as LatLng);
+  const customerLocationRecord: CustomerLocationRecord =
+    payload.customerLocation ?? {
+      latitude: lat,
+      longitude: lng,
+      timestamp: serverTimestamp(),
+    };
+
+  let restaurantLocation: LatLng;
+  if (payload.restaurantLocation) {
+    restaurantLocation = payload.restaurantLocation;
+  } else {
+    const restaurantRecord = await fetchRestaurantLocation(payload.restaurantId);
+    restaurantLocation = restaurantLocationToLegacy(restaurantRecord);
+  }
   let restaurantSnapshot: RestaurantSnapshot = {
     id: payload.restaurantId,
     name: '',
@@ -589,6 +602,7 @@ export async function createOrder(
     driverLocation: null,
     deliveryLocation: payload.deliveryLocation,
     deliveryAddress: payload.deliveryLocation.address,
+    customerLocation: customerLocationRecord,
     restaurant: restaurantSnapshot,
     customer: customerSnapshot,
     driver: {
