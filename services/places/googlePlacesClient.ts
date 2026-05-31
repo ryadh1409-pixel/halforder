@@ -37,6 +37,16 @@ type PlaceDetailsResponse = {
   error_message?: string;
 };
 
+type GeocodeResponse = {
+  status: string;
+  results?: {
+    place_id?: string;
+    formatted_address?: string;
+    geometry?: { location?: { lat: number; lng: number } };
+  }[];
+  error_message?: string;
+};
+
 function requireApiKey(): string {
   const key = resolveGoogleMapsApiKey();
   if (!key) {
@@ -48,28 +58,31 @@ function requireApiKey(): string {
   return key;
 }
 
-function mapAutocompleteStatus(status: string, errorMessage?: string): never {
+function mapGeocodeStatus(status: string, errorMessage?: string): never {
   if (status === 'ZERO_RESULTS') {
-    throw new PlacesApiError('No addresses found. Try a different search.', status);
+    throw new PlacesApiError(
+      'No address found for your location. Try searching manually.',
+      status,
+    );
   }
   if (status === 'OVER_QUERY_LIMIT') {
-    throw new PlacesApiError('Places search is temporarily unavailable. Try again later.', status);
+    throw new PlacesApiError('Geocoding is temporarily unavailable. Try again later.', status);
   }
   if (status === 'REQUEST_DENIED') {
     throw new PlacesApiError(
       errorMessage ??
-        'Places API access denied. Enable Places API and check your API key restrictions.',
+        'Geocoding API access denied. Enable Geocoding API and check your API key restrictions.',
       status,
     );
   }
   throw new PlacesApiError(
-    errorMessage ?? 'Could not search addresses. Please try again.',
+    errorMessage ?? 'Could not resolve your address. Please try again.',
     status,
   );
 }
 
 /**
- * Google Places Autocomplete (legacy REST). Returns address suggestions for profile picker.
+ * Google Places Autocomplete — live API results only, Canada-priority, biased to device GPS.
  */
 export async function fetchPlaceAutocompleteSuggestions(
   input: string,
@@ -83,6 +96,7 @@ export async function fetchPlaceAutocompleteSuggestions(
     input: query,
     key,
     types: 'address',
+    components: 'country:ca',
   });
   if (options?.origin) {
     params.set(
@@ -107,7 +121,7 @@ export async function fetchPlaceAutocompleteSuggestions(
       secondaryText: p.structured_formatting?.secondary_text ?? '',
     }));
   }
-  mapAutocompleteStatus(data.status, data.error_message);
+  mapGeocodeStatus(data.status, data.error_message);
 }
 
 /** Resolve a place id into formatted address + coordinates (Place Details). */
@@ -133,7 +147,7 @@ export async function fetchPlaceDetails(
 
   const data = (await res.json()) as PlaceDetailsResponse;
   if (data.status !== 'OK' || !data.result?.geometry?.location) {
-    mapAutocompleteStatus(data.status, data.error_message);
+    mapGeocodeStatus(data.status, data.error_message);
   }
 
   const result = data.result!;
@@ -152,7 +166,58 @@ export async function fetchPlaceDetails(
   };
 }
 
-/** Geocode free-text address when user picks a custom label without Places id. */
+/**
+ * Reverse geocode GPS via Google Geocoding API.
+ * https://maps.googleapis.com/maps/api/geocode/json?latlng=LAT,LNG&key=API_KEY
+ */
+export async function reverseGeocodeCoordinates(
+  latitude: number,
+  longitude: number,
+): Promise<PlaceDetailsResult> {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new PlacesApiError('Invalid GPS coordinates.', 'INVALID_INPUT');
+  }
+
+  const key = requireApiKey();
+  const latlng = `${latitude},${longitude}`;
+  const params = new URLSearchParams({ latlng, key });
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+
+  console.log('[GEOCODE REQUEST]', { latlng, url: url.replace(key, '***') });
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new PlacesApiError(`Reverse geocoding failed (${res.status}).`, 'HTTP_ERROR');
+  }
+
+  const data = (await res.json()) as GeocodeResponse;
+  console.log('[GEOCODE RESPONSE]', {
+    status: data.status,
+    resultCount: data.results?.length ?? 0,
+    error_message: data.error_message,
+  });
+
+  if (data.status !== 'OK' || !data.results?.length) {
+    mapGeocodeStatus(data.status, data.error_message);
+  }
+
+  const first = data.results![0];
+  const formatted = first.formatted_address?.trim() ?? '';
+  if (!formatted) {
+    throw new PlacesApiError('Google returned no formatted address for your location.', 'INVALID_RESULT');
+  }
+
+  console.log('[GEOCODE PARSED ADDRESS]', formatted);
+
+  return {
+    placeId: first.place_id ?? '',
+    address: formatted,
+    latitude,
+    longitude,
+  };
+}
+
+/** Geocode free-text address — Canada region priority. */
 export async function geocodeAddressToCoordinates(
   address: string,
 ): Promise<PlaceDetailsResult> {
@@ -162,25 +227,30 @@ export async function geocodeAddressToCoordinates(
   }
 
   const key = requireApiKey();
-  const params = new URLSearchParams({ address: query, key });
+  const params = new URLSearchParams({
+    address: query,
+    key,
+    region: 'ca',
+    components: 'country:CA',
+  });
   const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+
+  console.log('[GEOCODE REQUEST]', { address: query, url: url.replace(key, '***') });
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new PlacesApiError(`Geocoding failed (${res.status}).`, 'HTTP_ERROR');
   }
 
-  const data = (await res.json()) as {
-    status: string;
-    results?: {
-      place_id?: string;
-      formatted_address?: string;
-      geometry?: { location?: { lat: number; lng: number } };
-    }[];
-    error_message?: string;
-  };
+  const data = (await res.json()) as GeocodeResponse;
+  console.log('[GEOCODE RESPONSE]', {
+    status: data.status,
+    resultCount: data.results?.length ?? 0,
+    error_message: data.error_message,
+  });
 
   if (data.status !== 'OK' || !data.results?.length) {
-    mapAutocompleteStatus(data.status, data.error_message);
+    mapGeocodeStatus(data.status, data.error_message);
   }
 
   const first = data.results![0];
@@ -190,6 +260,8 @@ export async function geocodeAddressToCoordinates(
   if (typeof lat !== 'number' || typeof lng !== 'number') {
     throw new PlacesApiError('Could not geocode that address.', 'INVALID_RESULT');
   }
+
+  console.log('[GEOCODE PARSED ADDRESS]', formatted);
 
   return {
     placeId: first.place_id ?? '',

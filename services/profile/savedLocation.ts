@@ -19,17 +19,21 @@ export async function saveUserSavedLocation(
   if (!uid) throw new Error('User id is required.');
 
   const payload = userSavedLocationToFirestore(location);
-  await setDoc(
-    doc(db, 'users', uid),
-    {
-      location: payload,
-      ...(options?.label ? { locationLabel: options.label } : {}),
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-      lastLocationUpdatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  const firestorePayload = {
+    location: payload,
+    ...(options?.label ? { locationLabel: options.label } : {}),
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+    lastLocationUpdatedAt: serverTimestamp(),
+  };
+
+  console.log('[PROFILE LOCATION SAVE]', {
+    uid,
+    label: options?.label ?? null,
+    location: payload,
+  });
+
+  await setDoc(doc(db, 'users', uid), firestorePayload, { merge: true });
   return payload;
 }
 

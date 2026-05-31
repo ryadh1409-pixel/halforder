@@ -47,18 +47,20 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
     searching,
     resolvingGps,
     error,
-    query,
+    addressInput,
+    inputVersion,
     suggestions,
     selectedLabel,
     setSelectedLabel,
-    onQueryChange,
+    onAddressInputChange,
     selectSuggestion,
-    useCurrentDeviceLocation,
+    applyCurrentDeviceLocation,
     saveManualQuery,
   } = useProfileLocation(userId);
 
   const styles = useMemo(() => createStyles(palette), [palette]);
-  const busy = saving || resolvingGps;
+  const saveBusy = saving;
+  const gpsBusy = resolvingGps;
 
   if (!userId) {
     return (
@@ -67,6 +69,9 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
       </View>
     );
   }
+
+  const displayAddress = addressInput.trim();
+  const showResolvedPreview = displayAddress.length > 0;
 
   return (
     <View style={styles.card}>
@@ -88,7 +93,7 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
               key={item.id}
               style={[styles.chip, active && styles.chipActive]}
               onPress={() => setSelectedLabel(item.id)}
-              disabled={busy}
+              disabled={saveBusy || gpsBusy}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
             >
@@ -106,14 +111,31 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
       </ScrollView>
 
       <AppTextInput
+        key={`profile-address-${inputVersion}`}
         style={styles.input}
-        value={query}
-        onChangeText={onQueryChange}
+        value={addressInput}
+        onChangeText={onAddressInputChange}
         placeholder="Search street address, city…"
         placeholderTextColor={palette.textTertiary}
-        editable={!busy}
+        editable
         autoCorrect={false}
       />
+
+      {gpsBusy ? (
+        <View style={styles.inlineStatus}>
+          <ActivityIndicator size="small" color={palette.primary} />
+          <Text style={styles.inlineStatusText}>Getting your location…</Text>
+        </View>
+      ) : null}
+
+      {showResolvedPreview && !gpsBusy ? (
+        <View style={styles.resolvedPreview}>
+          <MaterialIcons name="place" size={18} color={palette.success} />
+          <Text style={styles.resolvedPreviewText} numberOfLines={3}>
+            {displayAddress}
+          </Text>
+        </View>
+      ) : null}
 
       {searching ? (
         <View style={styles.inlineStatus}>
@@ -129,7 +151,7 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
               key={row.placeId}
               style={styles.suggestionRow}
               onPress={() => void selectSuggestion(row.placeId)}
-              disabled={busy}
+              disabled={saveBusy || gpsBusy}
             >
               <MaterialIcons name="place" size={18} color={palette.primary} />
               <View style={styles.suggestionTextCol}>
@@ -149,11 +171,11 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
 
       <View style={styles.actionsRow}>
         <TouchableOpacity
-          style={[styles.secondaryButton, busy && styles.buttonDisabled]}
-          onPress={() => void useCurrentDeviceLocation()}
-          disabled={busy}
+          style={[styles.secondaryButton, gpsBusy && styles.buttonDisabled]}
+          onPress={() => void applyCurrentDeviceLocation()}
+          disabled={gpsBusy}
         >
-          {resolvingGps ? (
+          {gpsBusy ? (
             <ActivityIndicator size="small" color={palette.primary} />
           ) : (
             <>
@@ -164,11 +186,11 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.primaryButton, busy && styles.buttonDisabled]}
+          style={[styles.primaryButton, saveBusy && styles.buttonDisabled]}
           onPress={() => void saveManualQuery()}
-          disabled={busy || query.trim().length < 3}
+          disabled={saveBusy || gpsBusy || displayAddress.length < 3}
         >
-          {saving ? (
+          {saveBusy ? (
             <ActivityIndicator size="small" color={palette.onPrimary} />
           ) : (
             <Text style={styles.primaryButtonText}>Save address</Text>
@@ -196,6 +218,8 @@ export function ProfileLocationPicker({ userId, palette }: Props) {
             </Text>
           </View>
         </View>
+      ) : showResolvedPreview ? (
+        <Text style={styles.hint}>Address ready — tap Save address to store on your profile.</Text>
       ) : (
         <Text style={styles.hint}>No delivery address saved yet.</Text>
       )}
@@ -270,6 +294,23 @@ function createStyles(p: Palette) {
       color: p.text,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: p.border,
+    },
+    resolvedPreview: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 10,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: p.surfaceMuted,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.border,
+    },
+    resolvedPreviewText: {
+      flex: 1,
+      fontSize: 15,
+      color: p.text,
+      lineHeight: 20,
     },
     inlineStatus: {
       flexDirection: 'row',

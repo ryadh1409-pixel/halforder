@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import * as Location from 'expo-location';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 import {
   fetchPlaceAutocompleteSuggestions,
   fetchPlaceDetails,
   geocodeAddressToCoordinates,
   PlacesApiError,
+  reverseGeocodeCoordinates,
 } from '@/services/places/googlePlacesClient';
 import {
-  getCurrentGpsReadingSafe,
+  getCurrentGpsReading,
   requestForegroundLocationPermission,
-  reverseGeocodeAddress,
 } from '@/services/location';
 import {
   readSavedLocationFromUserDoc,
@@ -17,7 +20,6 @@ import {
   saveUserSavedLocation,
 } from '@/services/profile/savedLocation';
 import type { SavedAddressLabel, UserSavedLocation } from '@/types/userLocation';
-import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 
 export type ProfileLocationState = {
@@ -28,12 +30,25 @@ export type ProfileLocationState = {
   searching: boolean;
   resolvingGps: boolean;
   error: string | null;
-  query: string;
+  /** Human-readable address shown in the input (autofill target). */
+  addressInput: string;
   suggestions: Awaited<ReturnType<typeof fetchPlaceAutocompleteSuggestions>>;
   selectedLabel: SavedAddressLabel;
 };
 
 const DEFAULT_LABEL: SavedAddressLabel = 'home';
+
+type DeviceCoords = { latitude: number; longitude: number };
+
+function locationErrorMessage(error: unknown): string {
+  if (error instanceof PlacesApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return 'Could not resolve your address.';
+}
+
+function showLocationAlert(message: string): void {
+  Alert.alert('Location', message, [{ text: 'OK' }]);
+}
 
 export function useProfileLocation(userId: string | null) {
   const [saved, setSaved] = useState<UserSavedLocation | null>(null);
@@ -43,7 +58,7 @@ export function useProfileLocation(userId: string | null) {
   const [searching, setSearching] = useState(false);
   const [resolvingGps, setResolvingGps] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const [addressInput, setAddressInput] = useState('');
   const [suggestions, setSuggestions] = useState<
     ProfileLocationState['suggestions']
   >([]);
@@ -51,14 +66,18 @@ export function useProfileLocation(userId: string | null) {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchSeqRef = useRef(0);
-  const hydratedQueryRef = useRef(false);
+  const deviceCoordsRef = useRef<DeviceCoords | null>(null);
+  const skipFirestoreAddressHydrationRef = useRef(false);
+  const [inputVersion, setInputVersion] = useState(0);
 
   useEffect(() => {
     if (!userId) {
       setSaved(null);
       setLabel(null);
       setLoading(false);
-      hydratedQueryRef.current = false;
+      setAddressInput('');
+      skipFirestoreAddressHydrationRef.current = false;
+      deviceCoordsRef.current = null;
       return undefined;
     }
 
@@ -71,9 +90,9 @@ export function useProfileLocation(userId: string | null) {
         const loc = readSavedLocationFromUserDoc(data);
         setSaved(loc);
         setLabel(readSavedLocationLabelFromUserDoc(data));
-        if (loc && !hydratedQueryRef.current) {
-          hydratedQueryRef.current = true;
-          setQuery(loc.address);
+
+        if (loc && !skipFirestoreAddressHydrationRef.current) {
+          setAddressInput(loc.address);
         }
         setLoading(false);
       },
@@ -90,39 +109,94 @@ export function useProfileLocation(userId: string | null) {
     };
   }, []);
 
-  const runSearch = useCallback(
-    async (text: string, origin?: { latitude: number; longitude: number }) => {
-      const trimmed = text.trim();
-      if (trimmed.length < 2) {
-        setSuggestions([]);
-        setSearching(false);
-        return;
+  const applyResolvedAddress = useCallback((address: string) => {
+    const trimmed = address.trim();
+    if (!trimmed) return;
+    skipFirestoreAddressHydrationRef.current = true;
+    setInputVersion((v) => v + 1);
+    setAddressInput(trimmed);
+    setError(null);
+  }, []);
+
+  /** GPS → Google reverse geocode → autofill input → optional Firestore save. */
+  const resolveRealDeviceLocation = useCallback(
+    async (options?: { persist?: boolean }) => {
+      const permission = await requestForegroundLocationPermission();
+      if (permission !== 'granted') {
+        throw new PlacesApiError(
+          'Location permission is required. Enable location access in Settings.',
+          'PERMISSION_DENIED',
+        );
       }
-      const seq = ++searchSeqRef.current;
-      setSearching(true);
-      setError(null);
-      try {
-        const rows = await fetchPlaceAutocompleteSuggestions(trimmed, { origin });
-        if (seq === searchSeqRef.current) {
-          setSuggestions(rows);
-        }
-      } catch (e) {
-        if (seq === searchSeqRef.current) {
-          setSuggestions([]);
-          setError(e instanceof PlacesApiError ? e.message : 'Address search failed.');
-        }
-      } finally {
-        if (seq === searchSeqRef.current) {
-          setSearching(false);
-        }
+
+      const reading = await getCurrentGpsReading({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const coords = {
+        latitude: reading.latitude,
+        longitude: reading.longitude,
+      };
+      console.log('[GPS REAL]', coords);
+      deviceCoordsRef.current = coords;
+
+      const geocoded = await reverseGeocodeCoordinates(coords.latitude, coords.longitude);
+
+      applyResolvedAddress(geocoded.address);
+
+      const locationPayload: UserSavedLocation = {
+        address: geocoded.address,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        ...(geocoded.placeId ? { placeId: geocoded.placeId } : {}),
+      };
+
+      if (options?.persist && userId) {
+        const persisted = await saveUserSavedLocation(userId, locationPayload, {
+          label: selectedLabel,
+        });
+        setSaved(persisted);
+        setLabel(selectedLabel);
       }
+
+      return { coords, geocoded, locationPayload };
     },
-    [],
+    [applyResolvedAddress, selectedLabel, userId],
   );
 
-  const onQueryChange = useCallback(
+  const runSearch = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
+    const seq = ++searchSeqRef.current;
+    setSearching(true);
+    setError(null);
+    try {
+      const origin = deviceCoordsRef.current ?? saved ?? undefined;
+      const rows = await fetchPlaceAutocompleteSuggestions(trimmed, { origin });
+      if (seq === searchSeqRef.current) {
+        setSuggestions(rows);
+      }
+    } catch (e) {
+      if (seq === searchSeqRef.current) {
+        setSuggestions([]);
+        const msg = locationErrorMessage(e);
+        setError(msg);
+      }
+    } finally {
+      if (seq === searchSeqRef.current) {
+        setSearching(false);
+      }
+    }
+  }, [saved]);
+
+  const onAddressInputChange = useCallback(
     (text: string) => {
-      setQuery(text);
+      skipFirestoreAddressHydrationRef.current = true;
+      setAddressInput(text);
       setError(null);
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
       if (text.trim().length < 2) {
@@ -131,10 +205,10 @@ export function useProfileLocation(userId: string | null) {
         return;
       }
       debounceRef.current = setTimeout(() => {
-        void runSearch(text, saved ?? undefined);
+        void runSearch(text);
       }, 350);
     },
-    [runSearch, saved],
+    [runSearch],
   );
 
   const selectSuggestion = useCallback(
@@ -145,7 +219,11 @@ export function useProfileLocation(userId: string | null) {
       setSuggestions([]);
       try {
         const details = await fetchPlaceDetails(placeId);
-        setQuery(details.address);
+        applyResolvedAddress(details.address);
+        deviceCoordsRef.current = {
+          latitude: details.latitude,
+          longitude: details.longitude,
+        };
         const persisted = await saveUserSavedLocation(
           userId,
           {
@@ -159,61 +237,39 @@ export function useProfileLocation(userId: string | null) {
         setSaved(persisted);
         setLabel(selectedLabel);
       } catch (e) {
-        setError(
-          e instanceof PlacesApiError
-            ? e.message
-            : e instanceof Error
-              ? e.message
-              : 'Could not save location.',
-        );
+        const msg = locationErrorMessage(e);
+        setError(msg);
+        showLocationAlert(msg);
       } finally {
         setSaving(false);
       }
     },
-    [selectedLabel, userId],
+    [applyResolvedAddress, selectedLabel, userId],
   );
 
-  const useCurrentDeviceLocation = useCallback(async () => {
+  const applyCurrentDeviceLocation = useCallback(async () => {
     if (!userId) return;
     setResolvingGps(true);
     setError(null);
     setSuggestions([]);
     try {
-      const permission = await requestForegroundLocationPermission();
-      if (permission !== 'granted') {
-        setError('Location permission is required to use your current position.');
-        return;
-      }
-      const reading = await getCurrentGpsReadingSafe();
-      if (!reading) {
-        setError('Could not determine your current location.');
-        return;
-      }
-      const address = await reverseGeocodeAddress(reading.latitude, reading.longitude);
-      setQuery(address);
-      const persisted = await saveUserSavedLocation(
-        userId,
-        {
-          address,
-          latitude: reading.latitude,
-          longitude: reading.longitude,
-        },
-        { label: selectedLabel },
-      );
-      setSaved(persisted);
-      setLabel(selectedLabel);
+      await resolveRealDeviceLocation({ persist: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not use current location.');
+      const msg = locationErrorMessage(e);
+      setError(msg);
+      showLocationAlert(msg);
     } finally {
       setResolvingGps(false);
     }
-  }, [selectedLabel, userId]);
+  }, [resolveRealDeviceLocation, userId]);
 
   const saveManualQuery = useCallback(async () => {
     if (!userId) return;
-    const trimmed = query.trim();
+    const trimmed = addressInput.trim();
     if (trimmed.length < 3) {
-      setError('Enter an address with at least 3 characters.');
+      const msg = 'Enter an address with at least 3 characters.';
+      setError(msg);
+      showLocationAlert(msg);
       return;
     }
     setSaving(true);
@@ -221,6 +277,11 @@ export function useProfileLocation(userId: string | null) {
     setSuggestions([]);
     try {
       const details = await geocodeAddressToCoordinates(trimmed);
+      applyResolvedAddress(details.address);
+      deviceCoordsRef.current = {
+        latitude: details.latitude,
+        longitude: details.longitude,
+      };
       const persisted = await saveUserSavedLocation(
         userId,
         {
@@ -231,21 +292,16 @@ export function useProfileLocation(userId: string | null) {
         },
         { label: selectedLabel },
       );
-      setQuery(details.address);
       setSaved(persisted);
       setLabel(selectedLabel);
     } catch (e) {
-      setError(
-        e instanceof PlacesApiError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : 'Could not save location.',
-      );
+      const msg = locationErrorMessage(e);
+      setError(msg);
+      showLocationAlert(msg);
     } finally {
       setSaving(false);
     }
-  }, [query, selectedLabel, userId]);
+  }, [addressInput, applyResolvedAddress, selectedLabel, userId]);
 
   return {
     saved,
@@ -255,13 +311,14 @@ export function useProfileLocation(userId: string | null) {
     searching,
     resolvingGps,
     error,
-    query,
+    addressInput,
+    inputVersion,
     suggestions,
     selectedLabel,
     setSelectedLabel,
-    onQueryChange,
+    onAddressInputChange,
     selectSuggestion,
-    useCurrentDeviceLocation,
+    applyCurrentDeviceLocation,
     saveManualQuery,
     clearError: () => setError(null),
   };
