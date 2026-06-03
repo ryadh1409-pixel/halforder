@@ -50,6 +50,7 @@ import {
   query,
   serverTimestamp,
   where,
+  type DocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -144,6 +145,9 @@ export type RestaurantOrder = {
   deliveryPin: string | null;
   /** Encoded polyline for map route (optional; from Directions API). */
   routePolyline: string | null;
+  deliveryType: 'delivery' | 'pickup';
+  /** Root Firestore `deliveryAddress` when `deliveryLocation` is partial. */
+  deliveryAddress: string | null;
 };
 
 function makeGroupId() {
@@ -207,7 +211,76 @@ function toCreatedAtLabel(value: unknown, timeZone?: string): string {
   return formatOrderTime(value, { timeZone });
 }
 
-function mapDocToRestaurantOrder(
+function resolveMappedDeliveryLocation(
+  data: Record<string, unknown>,
+  customerLoc: LatLng | null,
+): { lat: number; lng: number; address: string } | null {
+  const delivery = data.deliveryLocation;
+  const deliveryAddress =
+    typeof data.deliveryAddress === 'string' ? data.deliveryAddress.trim() : '';
+
+  if (delivery && typeof delivery === 'object') {
+    const lat = (delivery as { lat?: unknown }).lat;
+    const lng = (delivery as { lng?: unknown }).lng;
+    const nestedAddress =
+      typeof (delivery as { address?: unknown }).address === 'string'
+        ? String((delivery as { address: string }).address).trim()
+        : '';
+    const address = nestedAddress || deliveryAddress;
+    if (typeof lat === 'number' && typeof lng === 'number' && address) {
+      return { lat, lng, address };
+    }
+    if (address && customerLoc) {
+      return { lat: customerLoc.lat, lng: customerLoc.lng, address };
+    }
+    if (address) {
+      return { lat: 0, lng: 0, address };
+    }
+  }
+
+  if (deliveryAddress) {
+    if (customerLoc) {
+      return { lat: customerLoc.lat, lng: customerLoc.lng, address: deliveryAddress };
+    }
+    return { lat: 0, lng: 0, address: deliveryAddress };
+  }
+
+  return null;
+}
+
+/** True when the document is a paid marketplace delivery order (not half-order / pickup-only). */
+export function isMarketplaceDeliveryOrderData(
+  raw: Record<string, unknown>,
+  mapped?: Pick<
+    RestaurantOrder,
+    'deliveryType' | 'restaurantId' | 'items' | 'deliveryAddress' | 'deliveryLocation'
+  > | null,
+): boolean {
+  const deliveryType = raw.deliveryType ?? mapped?.deliveryType;
+  if (deliveryType === 'pickup') return false;
+  if (deliveryType === 'delivery') {
+    const rid =
+      typeof raw.restaurantId === 'string'
+        ? raw.restaurantId.trim()
+        : mapped?.restaurantId?.trim() ?? '';
+    return rid.length > 0;
+  }
+  const restaurantId =
+    typeof raw.restaurantId === 'string'
+      ? raw.restaurantId.trim()
+      : mapped?.restaurantId?.trim() ?? '';
+  if (!restaurantId) return false;
+  const hasItems =
+    (Array.isArray(raw.items) && raw.items.length > 0) ||
+    (mapped?.items?.length ?? 0) > 0;
+  const hasAddress =
+    (typeof raw.deliveryAddress === 'string' && raw.deliveryAddress.trim().length > 0) ||
+    Boolean(mapped?.deliveryAddress?.trim()) ||
+    Boolean(mapped?.deliveryLocation?.address?.trim());
+  return hasItems && hasAddress;
+}
+
+function mapDocToRestaurantOrderFromData(
   d: { id: string; data: () => Record<string, unknown> },
   fallbackRestaurantId?: string,
   options?: { timeZone?: string },
@@ -254,9 +327,16 @@ function mapDocToRestaurantOrder(
     data.restaurant && typeof data.restaurant === 'object'
       ? (data.restaurant as Record<string, unknown>)
       : null;
-  const delivery = data.deliveryLocation;
+  const deliveryType: 'delivery' | 'pickup' =
+    data.deliveryType === 'pickup' ? 'pickup' : 'delivery';
+  const deliveryAddress =
+    typeof data.deliveryAddress === 'string' && data.deliveryAddress.trim()
+      ? data.deliveryAddress.trim()
+      : null;
   const customerLoc =
-    parseLatLng(data.customerLocation) ?? parseLatLng(data.userLocation) ?? parseLatLng(delivery);
+    parseLatLng(data.customerLocation) ??
+    parseLatLng(data.userLocation) ??
+    parseLatLng(data.deliveryLocation);
   const userLoc = customerLoc;
   const restLoc =
     parseLatLng(data.restaurantLocation) ??
@@ -333,18 +413,9 @@ function mapDocToRestaurantOrder(
     driverName: typeof data.driverName === 'string' ? data.driverName : null,
     driverPhone: typeof data.driverPhone === 'string' ? data.driverPhone : null,
     driverVehicle: typeof data.driverVehicle === 'string' ? data.driverVehicle : null,
-    deliveryLocation:
-      delivery &&
-      typeof delivery === 'object' &&
-      typeof (delivery as { lat?: unknown }).lat === 'number' &&
-      typeof (delivery as { lng?: unknown }).lng === 'number' &&
-      typeof (delivery as { address?: unknown }).address === 'string'
-        ? {
-            lat: (delivery as { lat: number }).lat,
-            lng: (delivery as { lng: number }).lng,
-            address: (delivery as { address: string }).address,
-          }
-        : null,
+    deliveryLocation: resolveMappedDeliveryLocation(data, customerLoc),
+    deliveryType,
+    deliveryAddress,
     customerLocation: customerLoc,
     userLocation: userLoc,
     restaurantLocation: restLoc,
@@ -405,9 +476,11 @@ function mapDocToRestaurantOrder(
       address:
         customerObj && typeof customerObj.address === 'string'
           ? customerObj.address
-          : typeof (delivery as { address?: unknown })?.address === 'string'
-            ? ((delivery as { address: string }).address ?? null)
-            : null,
+          : deliveryAddress ??
+            (typeof (data.deliveryLocation as { address?: unknown } | undefined)?.address ===
+            'string'
+              ? String((data.deliveryLocation as { address: string }).address)
+              : null),
     },
     driver:
       driverObj || data.driverId
@@ -455,6 +528,23 @@ function mapDocToRestaurantOrder(
         : null,
     routePolyline: typeof data.routePolyline === 'string' ? data.routePolyline : null,
   };
+}
+
+/** Map a Firestore order document (or `{ id, data }` shim) to {@link RestaurantOrder}. */
+export function mapDocToRestaurantOrder(
+  snap: DocumentSnapshot | { id: string; data: () => Record<string, unknown> },
+  fallbackRestaurantId?: string,
+  options?: { timeZone?: string },
+): RestaurantOrder {
+  const docLike =
+    snap && typeof snap === 'object' && 'exists' in snap
+      ? {
+          id: (snap as DocumentSnapshot).id,
+          data: () =>
+            ((snap as DocumentSnapshot).data() ?? {}) as Record<string, unknown>,
+        }
+      : (snap as { id: string; data: () => Record<string, unknown> });
+  return mapDocToRestaurantOrderFromData(docLike, fallbackRestaurantId, options);
 }
 
 export type MarketplaceOrderCreatePayload = {
@@ -726,10 +816,7 @@ export async function getRestaurantOrderById(orderId: string): Promise<Restauran
   if (!trimmed) return null;
   const snap = await getDoc(doc(db, 'orders', trimmed));
   if (!snap.exists()) return null;
-  return mapDocToRestaurantOrder({
-    id: snap.id,
-    data: () => snap.data() as Record<string, unknown>,
-  });
+  return mapDocToRestaurantOrder(snap);
 }
 
 export async function rejectOrder(orderId: string): Promise<void> {
@@ -830,7 +917,7 @@ export function subscribeActiveRestaurantOrders(
             mapDocToRestaurantOrder(
               {
                 id: docSnap.id,
-                data: () => merged as Record<string, unknown>,
+                data: () => merged,
               },
               restaurantId,
               { timeZone: options?.timeZone },
@@ -1079,11 +1166,15 @@ export async function updateOrderDriverLocation(
 }
 
 export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean {
-  return (
-    typeof o.restaurantId === 'string' &&
-    o.restaurantId.trim().length > 0 &&
-    o.deliveryLocation != null &&
-    typeof o.deliveryLocation.address === 'string'
+  return isMarketplaceDeliveryOrderData(
+    {
+      deliveryType: o.deliveryType,
+      restaurantId: o.restaurantId,
+      items: o.items,
+      deliveryAddress: o.deliveryAddress,
+      deliveryLocation: o.deliveryLocation,
+    },
+    o,
   );
 }
 
@@ -1123,12 +1214,7 @@ export function subscribeOrderById(
             sourceScreen: 'subscribeOrderById',
           });
         }
-        onData(
-          mapDocToRestaurantOrder({
-            id: snap.id,
-            data: () => merged,
-          }),
-        );
+        onData(mapDocToRestaurantOrder({ id: snap.id, data: () => merged }));
       } catch (e) {
         console.warn('[subscribeOrderById] mapDoc failed', orderId, e);
         options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));

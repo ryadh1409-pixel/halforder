@@ -30,7 +30,11 @@ export const DRIVER_TAB_HREFS: Record<DriverTabKey, Href> = {
 export const USER_ROUTES = {
   hub: '/(tabs)',
   orders: '/orders',
-  order: (orderId: string) => `/order/${encodeURIComponent(orderId)}` as const,
+  /** Canonical marketplace order detail — matches `app/order/[id].tsx`. */
+  order: (orderId: string): Href => ({
+    pathname: '/order/[id]',
+    params: { id: orderId.trim() },
+  }),
   trackOrder: (orderId: string) => `/track-order/${encodeURIComponent(orderId)}` as const,
 } as const;
 

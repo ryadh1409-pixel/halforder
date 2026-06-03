@@ -9,7 +9,7 @@ export function postPaymentLiveOrderHref(orderId: string): Href {
 /** Order details fallback when live tracking cannot hydrate. */
 export function postPaymentOrderDetailsHref(orderId: string): Href {
   const id = orderId.trim();
-  return `/order/${encodeURIComponent(id)}` as Href;
+  return { pathname: '/order/[id]', params: { id } };
 }
 
 export function logPaymentNavigation(

@@ -1,3 +1,4 @@
+import { PostPaymentLoadingShell } from '@/components/payment/PaymentNavigationBoundary';
 import { DriverStackGate } from '@/components/driver/DriverStackGate';
 import { useDriverShellAccess } from '@/hooks/useDriverShellAccess';
 import React from 'react';
@@ -14,7 +15,7 @@ export default function DriverLayout() {
   const { canMountDriver } = useDriverShellAccess();
 
   if (!canMountDriver) {
-    return null;
+    return <PostPaymentLoadingShell title="Loading driver workspace…" />;
   }
 
   return <DriverStackGate />;

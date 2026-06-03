@@ -90,7 +90,19 @@ export const linking = {
       'restaurant-dashboard': 'restaurant-dashboard',
       'restaurant-onboarding': 'restaurant-onboarding',
       checkout: 'checkout',
-      order: 'order',
+      order: {
+        path: 'order',
+        screens: {
+          '[id]': ':id',
+          index: '',
+          tracking: {
+            path: 'tracking',
+            screens: {
+              '[id]': ':id',
+            },
+          },
+        },
+      },
       'track-order/[orderId]': 'track-order/:orderId',
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',

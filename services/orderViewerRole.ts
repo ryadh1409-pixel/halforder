@@ -21,8 +21,9 @@ export function resolveMarketplaceOrderViewerRole(
   if (!uid) return 'customer';
   if (firestoreRole === 'admin') return 'admin';
   if (order.restaurantId === uid) return 'restaurant';
-  if (firestoreRole === 'driver') return 'driver';
   const primary = primaryCustomerUid(order);
   if (primary && primary === uid) return 'customer';
+  if (order.driverId === uid) return 'driver';
+  if (firestoreRole === 'driver') return 'driver';
   return 'customer';
 }

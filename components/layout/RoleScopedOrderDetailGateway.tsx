@@ -1,11 +1,11 @@
-import { logPaymentNavigation } from '@/lib/paymentNavigation';
+import { PostPaymentLoadingShell } from '@/components/payment/PaymentNavigationBoundary';
 import { orderDetailHref } from '@/lib/orderRoutes';
+import { normalizeOrderRouteId } from '@/lib/orderRouteParams';
 import { isInDriverGroup, isInHostGroup } from '@/lib/routing/routeConstants';
 import { normalizeRoleForRouting } from '@/lib/authRole';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect, useLocalSearchParams, usePathname, useSegments } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   children: React.ReactNode;
@@ -17,22 +17,38 @@ type Props = {
  */
 export function RoleScopedOrderDetailGateway({ children }: Props) {
   const { authReady, roleResolved, loading, firestoreUserRole, user } = useAuth();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
   const pathname = usePathname();
   const segments = useSegments();
-  const orderId = typeof id === 'string' ? id.trim() : '';
+  const orderId = normalizeOrderRouteId(params.id);
   const role = normalizeRoleForRouting(firestoreUserRole);
   const segmentList = segments as string[];
 
-  if (!authReady || loading || !roleResolved) {
+  console.log('[RoleScopedOrderDetailGateway]', {
+    rawId: params.id,
+    orderId: orderId || null,
+    role,
+    roleResolved,
+    authReady,
+    loading,
+    pathname,
+    segments: segmentList,
+  });
+
+  if (!authReady || loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1A6FE8" />
-      </View>
+      <PostPaymentLoadingShell
+        title="Loading order…"
+        subtitle={orderId ? `Order ${orderId}` : undefined}
+      />
     );
   }
 
   if (!user?.uid || !orderId) {
+    return <>{children}</>;
+  }
+
+  if (!roleResolved) {
     return <>{children}</>;
   }
 
@@ -60,19 +76,3 @@ export function RoleScopedOrderDetailGateway({ children }: Props) {
 
   return <>{children}</>;
 }
-
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 24,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-});

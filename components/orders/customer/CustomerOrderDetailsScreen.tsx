@@ -1,15 +1,17 @@
 import AppHeader from '@/components/AppHeader';
+import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
 import { DeliveryProgressBar } from '@/components/order/DeliveryProgressBar';
-import { DeliveryTimeline } from '@/components/order/DeliveryTimeline';
 import { OrderPaymentTimeline } from '@/components/order/OrderPaymentTimeline';
 import { ETAChip } from '@/components/order/ETAChip';
 import {
   chipForFulfillment,
   driverStatusLabel,
-  fulfillmentStatusIndex,
-  FULFILLMENT_TIMELINE,
   paymentBadge,
 } from '@/components/orders/shared/marketplaceTrackingParts';
+import {
+  CUSTOMER_MARKETPLACE_TIMELINE,
+  customerMarketplaceTimelineIndex,
+} from '@/lib/customerMarketplaceTimeline';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
@@ -165,10 +167,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     lastStatusRef.current = order.status;
   }, [order.status]);
 
-  const stepDone = useMemo(
-    () => fulfillmentStatusIndex(order.status, order.paymentStatus),
-    [order.status, order.paymentStatus],
-  );
+  const timelineIndex = useMemo(() => customerMarketplaceTimelineIndex(order), [order]);
+  const timelineProgress = useMemo(() => {
+    if (timelineIndex < 0) return 0;
+    return (timelineIndex + 1) / CUSTOMER_MARKETPLACE_TIMELINE.length;
+  }, [timelineIndex]);
 
   const customerPhase = useMemo(
     () =>
@@ -308,7 +311,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             </View>
           ) : null}
           <View style={styles.progressWrap}>
-            <DeliveryProgressBar progress={(stepDone + 1) / FULFILLMENT_TIMELINE.length} />
+            <DeliveryProgressBar progress={timelineProgress} />
           </View>
         </View>
 
@@ -427,7 +430,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           </View>
         </View>
 
-        <DeliveryTimeline steps={FULFILLMENT_TIMELINE} status={order.status} variant="dark" />
+        <CustomerMarketplaceTimeline order={order} variant="dark" />
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Items</Text>

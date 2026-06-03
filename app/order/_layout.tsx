@@ -1,14 +1,20 @@
 import { Stack } from 'expo-router';
+import React, { useEffect } from 'react';
 
+/** All screens under `app/order/` — do not hand-pick routes (omitting `[id]` caused blank screens). */
 export default function OrderLayout() {
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('[ORDER LAYOUT] mounted');
+    }
+  }, []);
+
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="create" />
-      <Stack.Screen name="join" />
-      <Stack.Screen name="[id]" />
-      <Stack.Screen name="room/[id]" />
-      <Stack.Screen name="success" />
-      <Stack.Screen name="checkout" />
-    </Stack>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: '#06080C' },
+      }}
+    />
   );
 }

@@ -30,6 +30,7 @@ import { isRegisteredAuthUser } from '@/lib/authSession';
 import { showRestaurantAcceptedCancelAlert } from '@/lib/customerOrderCancelAlert';
 import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
 import { navigateForRole } from '@/lib/navigation';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
 import { auth, db, ensureAuthReady } from '../../services/firebase';
@@ -644,7 +645,9 @@ export default function ProfileScreen() {
 
   const handleOpenOrderDetails = useCallback(
     (orderId: string) => {
-      router.push(`/order/${encodeURIComponent(orderId)}` as never);
+      const href = USER_ROUTES.order(orderId);
+      console.log('[Profile] open order', { orderId, href });
+      router.push(href);
     },
     [router],
   );
