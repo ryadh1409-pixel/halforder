@@ -375,6 +375,42 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows restaurant owner to accept paid marketplace order', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'restaurants', 'rest_abc'), {
+          ownerId: 'rest_owner',
+          name: 'Test Kitchen',
+        });
+        await setDoc(doc(ctx.firestore(), 'users', 'rest_owner'), {
+          restaurantId: 'rest_abc',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_accept'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
+          paymentStatus: 'paid',
+          totalPrice: 24,
+          items: [{ id: 'i1', name: 'Burger', price: 24, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const dbRest = te().authenticatedContext('rest_owner').firestore();
+      await assertSucceeds(
+        updateDoc(doc(dbRest, 'orders', 'mkt_accept'), {
+          status: 'accepted',
+          deliveryStatus: 'accepted',
+          acceptedAt: serverTimestamp(),
+          estimatedDeliveryTime: 28,
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('denies customer cancellation patch when caller is not order owner', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_other_owner'), {

@@ -75,7 +75,7 @@ service cloud.firestore {
       return request.auth != null
         && (
           resource.data.userId == request.auth.uid
-          || resource.data.restaurantId == request.auth.uid
+          || isRestaurantVendorActor(resource.data)
           || resource.data.driverId == request.auth.uid
           || resource.data.get('assignedDriverId', '') == request.auth.uid
         );
@@ -1146,7 +1146,7 @@ service cloud.firestore {
           primaryUidFromOrder(d) is string
           && primaryUidFromOrder(d) == request.auth.uid
         )
-        || (d.restaurantId is string && d.restaurantId == request.auth.uid)
+        || isRestaurantVendorActor(d)
         || driverAssignedDeliveryReadable(d)
         || isOrderMember(d)
         || driverPoolOrderReadable(d);
@@ -1163,19 +1163,32 @@ service cloud.firestore {
     function orderRestaurantId(d) {
       return d.get('restaurantId', d.get('venueId', ''));
     }
+    /**
+     * Restaurant vendor may own orders when `restaurantId` is their uid, matches
+     * `users/{uid}.restaurantId`, or `restaurants/{restaurantId}.ownerId`.
+     */
     function isRestaurantVendorActor(d) {
-      return orderRestaurantId(d) == request.auth.uid;
+      let rid = orderRestaurantId(d);
+      return rid is string
+        && rid.size() > 0
+        && (
+          rid == request.auth.uid
+          || get(/databases/$(database)/documents/users/$(request.auth.uid))
+              .data.get('restaurantId', '') == rid
+          || (
+            exists(/databases/$(database)/documents/restaurants/$(rid))
+            && get(/databases/$(database)/documents/restaurants/$(rid))
+                .data.get('ownerId', '') == request.auth.uid
+          )
+        );
     }
     /**
-     * Restaurant marketplace owner — strict `restaurantId` match (batch-safe).
-     * Documents without `restaurantId` cannot be mutated via dashboard rules.
+     * Restaurant marketplace owner — may accept kitchen orders for their venue.
      */
     function isRestaurantOwner() {
       return isAuthenticated()
-        && resource.data.restaurantId is string
-        && resource.data.restaurantId.size() > 0
-        && resource.data.restaurantId == request.auth.uid
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+        && isRestaurantVendorActor(resource.data)
+        && orderRestaurantId(request.resource.data) == orderRestaurantId(resource.data);
     }
     /** Whitelist for restaurant dashboard writes (archive + kitchen status). */
     function onlyAllowedRestaurantFieldsChanged() {
@@ -1273,7 +1286,10 @@ service cloud.firestore {
         && restaurantProtectedFieldsUnchanged()
         && restaurantVisibilityFieldTypesOk()
         && restaurantDriverIdPatchOk()
-        && request.resource.data.updatedAt == request.time;
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        );
     }
     function customerMarketplaceCancelAllowed(before, after) {
       return isSignedIn()
