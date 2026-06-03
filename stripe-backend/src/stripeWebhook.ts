@@ -127,9 +127,33 @@ function mergeOrderPaidSync(
 
   const alreadyPaid = before.paymentStatus === "paid";
   const needsRepair = needsPaidStatusRepair(data);
+  const currentStage = orderStatusString(data.status);
+  const courierStage = orderStatusString(data.deliveryStatus).toLowerCase();
+  const fulfillmentAdvanced =
+    currentStage === "accepted" ||
+    currentStage === "restaurant_accepted" ||
+    currentStage === "preparing" ||
+    currentStage === "ready" ||
+    currentStage === "ready_for_pickup" ||
+    courierStage === "accepted" ||
+    courierStage === "preparing" ||
+    courierStage === "ready_for_pickup" ||
+    courierStage === "driver_assigned" ||
+    courierStage === "picked_up" ||
+    courierStage === "delivered";
 
   if (alreadyPaid && !needsRepair) {
     logStripeDebug("order_already_paid_skip_order_patch", {
+      orderId,
+      stripeEventId,
+      sourceEventType,
+      before,
+    });
+    return;
+  }
+
+  if (fulfillmentAdvanced) {
+    logStripeDebug("order_paid_skip_fulfillment_advanced", {
       orderId,
       stripeEventId,
       sourceEventType,
@@ -161,6 +185,15 @@ function mergeOrderPaidSync(
   if (!alreadyPaid) {
     patch.paidAt = admin.firestore.FieldValue.serverTimestamp();
   }
+
+  console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync", {
+    orderId,
+    status: patch.status ?? null,
+    deliveryStatus: patch.deliveryStatus ?? null,
+    paymentStatus: patch.paymentStatus ?? null,
+    op: "set",
+    merge: true,
+  });
 
   tx.set(orderSnap.ref, patch, { merge: true });
 
@@ -207,6 +240,16 @@ function mergeOrderPaymentFailed(
     patch.paymentIntentId = paymentIntentId;
     patch.stripePaymentIntentId = paymentIntentId;
   }
+
+  console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaymentFailed", {
+    orderId: orderSnap.id,
+    status: patch.status ?? null,
+    deliveryStatus: patch.deliveryStatus ?? null,
+    paymentStatus: patch.paymentStatus ?? null,
+    op: "set",
+    merge: true,
+  });
+
   tx.set(orderSnap.ref, patch, { merge: true });
 }
 

@@ -1,6 +1,6 @@
 import OrderActions from '@/components/orders/OrderActions';
 import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
-import { normalizeMerchantStatus } from '@/components/orders/statusFlow';
+import { merchantStatusFromOrder } from '@/components/orders/statusFlow';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { formatOrderTime } from '@/utils/time';
@@ -27,7 +27,7 @@ export default function OrderCard({
   loading,
 }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
-  const merchantStatus = normalizeMerchantStatus(order.status);
+  const merchantStatus = merchantStatusFromOrder(order);
   const itemPreview = useMemo(
     () => order.items.map((i) => `${i.qty}× ${i.name}`).join(' · '),
     [order.items],

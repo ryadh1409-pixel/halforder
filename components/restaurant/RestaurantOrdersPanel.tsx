@@ -16,9 +16,15 @@ import {
   type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
+import { isRestaurantPendingAcceptOrder } from '@/lib/restaurantLiveOrders';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import type { OrderStatus } from '@/services/orderService';
-import { rejectOrder, updateOrderStatus } from '@/services/orderService';
+import {
+  acceptRestaurantOrder,
+  rejectOrder,
+  updateOrderStatus,
+} from '@/services/orderService';
+import { deriveOrderStage } from '@/services/orderStage';
 import { showError, showSuccess } from '@/utils/toast';
 
 type Props = {
@@ -40,6 +46,7 @@ export function RestaurantOrdersPanel({
 }: Props) {
   const [filter, setFilter] = useState<RestaurantOrderListFilter>('active');
   const [actionOrderId, setActionOrderId] = useState<string | null>(null);
+  const acceptInFlightRef = React.useRef<Set<string>>(new Set());
 
   const { orders, allOrders, loading, timeZone } = useRestaurantOrders({
     restaurantId,
@@ -70,16 +77,29 @@ export function RestaurantOrdersPanel({
   }, [allOrders.length, filter, loading]);
 
   const handleStatus = useCallback(async (orderId: string, status: OrderStatus) => {
+    if (actionOrderId || acceptInFlightRef.current.has(orderId)) return;
+
     setActionOrderId(orderId);
+    if (status === 'accepted') {
+      acceptInFlightRef.current.add(orderId);
+    }
+
     try {
-      await updateOrderStatus(orderId, status);
+      if (status === 'accepted') {
+        await acceptRestaurantOrder(orderId);
+      } else {
+        await updateOrderStatus(orderId, status);
+      }
       showSuccess('Order updated');
     } catch {
       showError('Unable to update order.');
     } finally {
+      if (status === 'accepted') {
+        acceptInFlightRef.current.delete(orderId);
+      }
       setActionOrderId(null);
     }
-  }, []);
+  }, [actionOrderId]);
 
   const handleReject = useCallback(async (orderId: string) => {
     setActionOrderId(orderId);
@@ -94,17 +114,12 @@ export function RestaurantOrdersPanel({
   }, []);
 
   const summary = useMemo(() => {
-    const pending = freshOrders.filter(
-      (o) =>
-        o.status === 'pending' ||
-        o.status === 'payment_confirmed' ||
-        o.status === 'pending_driver',
-    ).length;
+    const pending = freshOrders.filter((o) => isRestaurantPendingAcceptOrder(o)).length;
     const preparing = freshOrders.filter(
-      (o) => o.status === 'preparing' || o.status === 'restaurant_accepted',
+      (o) => deriveOrderStage(o) === 'preparing',
     ).length;
     const ready = freshOrders.filter(
-      (o) => o.status === 'ready' || o.status === 'ready_for_pickup',
+      (o) => deriveOrderStage(o) === 'driver_assignment',
     ).length;
     return { pending, preparing, ready };
   }, [freshOrders]);
@@ -178,8 +193,7 @@ export function RestaurantOrdersPanel({
                 onReject={() => void handleReject(order.id)}
                 loading={actionOrderId === order.id}
               />
-              {onAssignDriver &&
-              (order.status === 'ready_for_pickup' || order.status === 'ready') ? (
+              {onAssignDriver && deriveOrderStage(order) === 'driver_assignment' ? (
                 <Pressable
                   style={styles.assignBtn}
                   onPress={() => onAssignDriver(order.id)}

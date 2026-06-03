@@ -1,9 +1,15 @@
 import OrderActions from '@/components/orders/OrderActions';
-import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
-import { normalizeMerchantStatus } from '@/components/orders/statusFlow';
+import { PaymentBadge } from '@/components/orders/StatusBadge';
+import { merchantStatusFromOrder } from '@/components/orders/statusFlow';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
-import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import {
+  deriveOrderStage,
+  logOrderStage,
+  restaurantCourierBadgeLabel,
+  restaurantKitchenBadgeTone,
+  restaurantStageBadgeLabel,
+} from '@/services/orderStage';
 import {
   formatOrderDate,
   formatOrderTime,
@@ -29,65 +35,12 @@ function customerDisplayName(order: RestaurantOrder): string {
   return uid ? `Guest ${uid.slice(0, 8)}` : 'Guest';
 }
 
-function kitchenBadgeLabel(status: OrderStatus): string {
-  switch (status) {
-    case 'awaiting_payment':
-    case 'payment_processing':
-    case 'payment_confirmed':
-    case 'pending':
-    case 'pending_driver':
-      return 'Pending';
-    case 'accepted':
-    case 'restaurant_accepted':
-    case 'preparing':
-      return 'Preparing';
-    case 'ready':
-    case 'ready_for_pickup':
-      return 'Ready';
-    case 'picked_up':
-    case 'on_the_way':
-    case 'arrived_customer':
-      return 'Out for delivery';
-    case 'delivered':
-      return 'Delivered';
-    case 'rejected':
-    case 'cancelled':
-      return 'Closed';
-    default:
-      return status.replace(/_/g, ' ');
-  }
-}
-
-function kitchenBadgeTone(status: OrderStatus): { bg: string; fg: string } {
-  switch (status) {
-    case 'ready':
-    case 'ready_for_pickup':
-      return { bg: '#DCFCE7', fg: '#166534' };
-    case 'preparing':
-    case 'restaurant_accepted':
-    case 'accepted':
-      return { bg: '#DBEAFE', fg: '#1D4ED8' };
-    case 'pending':
-    case 'payment_confirmed':
-    case 'awaiting_payment':
-    case 'pending_driver':
-      return { bg: '#FEF3C7', fg: '#92400E' };
-    default:
-      return { bg: '#F1F5F9', fg: '#475569' };
-  }
-}
-
-function driverStatusLabel(order: RestaurantOrder): string {
+function driverStatusLabel(order: RestaurantOrder, stage: ReturnType<typeof deriveOrderStage>): string {
   if (order.driverId && (order.driverName || order.driver?.name)) {
     const name = order.driverName?.trim() || order.driver?.name?.trim() || 'Assigned';
     return `Driver: ${name}`;
   }
-  if (
-    order.status === 'ready_for_pickup'
-    || order.status === 'ready'
-    || order.deliveryStatus === 'ready_for_pickup'
-    || order.deliveryStatus === 'waiting_driver'
-  ) {
+  if (stage === 'driver_assignment') {
     return 'Awaiting driver';
   }
   return 'No driver assigned';
@@ -120,7 +73,8 @@ export function RestaurantLiveOrderCard({
   onReject,
   loading,
 }: Props) {
-  const merchantStatus = normalizeMerchantStatus(order.status);
+  const stage = logOrderStage(order);
+  const merchantStatus = merchantStatusFromOrder(order);
   const timeOpts = { timeZone };
 
   const itemLines = useMemo(
@@ -156,9 +110,9 @@ export function RestaurantLiveOrderCard({
 
   if (!isOrderFresh(order)) return null;
 
-  const deliveryLabel = marketplaceDeliveryStatusLabel(order.deliveryStatus);
-  const kitchenLabel = kitchenBadgeLabel(order.status);
-  const kitchenTone = kitchenBadgeTone(order.status);
+  const deliveryLabel = restaurantCourierBadgeLabel(stage, order);
+  const kitchenLabel = restaurantStageBadgeLabel(stage, order);
+  const kitchenTone = restaurantKitchenBadgeTone(stage, order);
 
   return (
     <View style={styles.card}>
@@ -166,7 +120,7 @@ export function RestaurantLiveOrderCard({
         <View style={styles.headerCopy}>
           <Text style={styles.customerName}>{customerDisplayName(order)}</Text>
           <Text style={styles.phone}>
-            {safePhone(order.customerPhone, order.customer?.phone)}
+            {safePhone(order.customerPhone, null)}
           </Text>
         </View>
         <View style={[styles.kitchenBadge, { backgroundColor: kitchenTone.bg }]}>
@@ -189,7 +143,6 @@ export function RestaurantLiveOrderCard({
         <View style={styles.deliveryBadge}>
           <Text style={styles.deliveryBadgeText}>{deliveryLabel}</Text>
         </View>
-        <StatusBadge status={order.status} />
       </View>
 
       <View style={styles.section}>
@@ -219,7 +172,7 @@ export function RestaurantLiveOrderCard({
         <View style={[styles.metaCell, styles.metaCellWide]}>
           <Text style={styles.metaLabel}>Driver</Text>
           <Text style={styles.metaValue} numberOfLines={2}>
-            {driverStatusLabel(order)}
+            {driverStatusLabel(order, stage)}
           </Text>
         </View>
       </View>

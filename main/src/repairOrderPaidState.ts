@@ -26,9 +26,47 @@ export async function repairOrderPaidStateIfNeeded(
     status: orderStatusString(data.status),
   };
 
+  const courier = orderStatusString(data.deliveryStatus).toLowerCase();
+  const kitchen = orderStatusString(data.status).toLowerCase();
+  const fulfillmentAdvanced =
+    kitchen === "accepted" ||
+    kitchen === "restaurant_accepted" ||
+    kitchen === "preparing" ||
+    kitchen === "ready" ||
+    kitchen === "ready_for_pickup" ||
+    courier === "accepted" ||
+    courier === "preparing" ||
+    courier === "ready_for_pickup" ||
+    courier === "driver_assigned" ||
+    courier === "picked_up" ||
+    courier === "delivered";
+
+  if (fulfillmentAdvanced) {
+    logger.info("[order-paid-repair] skipped_fulfillment_advanced", {orderId, before});
+    return false;
+  }
+
   logger.info("[order-paid-repair] triggered", {orderId, before});
 
-  const patch = buildOrderPaidStatePatch(data, {repairOnly: true});
+  const freshSnap = await db.doc(`orders/${orderId}`).get();
+  if (!freshSnap.exists) return false;
+  const fresh = freshSnap.data() ?? {};
+
+  const patch = buildOrderPaidStatePatch(fresh, {repairOnly: true});
+  if (Object.keys(patch).length === 0) {
+    logger.info("[order-paid-repair] skipped_empty_patch", {orderId});
+    return false;
+  }
+
+  console.log("[ORDER WRITE TRACE]", "repairOrderPaidState.ts", "repairOrderPaidStateIfNeeded", {
+    orderId,
+    status: patch.status ?? null,
+    deliveryStatus: patch.deliveryStatus ?? null,
+    paymentStatus: patch.paymentStatus ?? null,
+    op: "update",
+    merge: null,
+  });
+
   await db.doc(`orders/${orderId}`).update({
     ...patch,
     updatedAt: FieldValue.serverTimestamp(),

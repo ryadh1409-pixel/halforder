@@ -6,17 +6,19 @@ import PaymentSummary from '@/components/orders/PaymentSummary';
 import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
 import {
   canTransition,
-  normalizeMerchantStatus,
+  merchantStatusFromOrder,
   type MerchantOrderStatus,
 } from '@/components/orders/statusFlow';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { db } from '@/services/firebase';
 import {
+  acceptRestaurantOrder,
   rejectOrder,
   subscribeOrderById,
   updateOrderStatus,
   type RestaurantOrder,
 } from '@/services/orderService';
+import { logOrderStage } from '@/services/orderStage';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -46,9 +48,13 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [customerName, setCustomerName] = useState<string | null>(null);
   const merchantStatus = useMemo(
-    () => (order ? normalizeMerchantStatus(order.status) : null),
+    () => (order ? merchantStatusFromOrder(order) : null),
     [order],
   );
+
+  useEffect(() => {
+    if (order) logOrderStage(order);
+  }, [order]);
 
   useEffect(() => {
     if (!id) {
@@ -95,12 +101,17 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
 
   async function setStatus(next: 'accepted' | 'preparing' | 'ready') {
     if (!order?.id || !merchantStatus || saving) return;
-    const nextStatus = normalizeMerchantStatus(next) as MerchantOrderStatus;
-    if (!canTransition(merchantStatus, nextStatus)) return;
+    const nextMerchant: MerchantOrderStatus =
+      next === 'accepted' ? 'accepted' : next === 'preparing' ? 'preparing' : 'ready';
+    if (!canTransition(merchantStatus, nextMerchant)) return;
     setSaving(true);
     try {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      await updateOrderStatus(order.id, next);
+      if (next === 'accepted') {
+        await acceptRestaurantOrder(order.id);
+      } else {
+        await updateOrderStatus(order.id, next);
+      }
       showSuccess('Order updated');
     } catch {
       showError('Could not update order');

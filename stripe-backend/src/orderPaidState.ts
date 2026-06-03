@@ -1,6 +1,7 @@
 /**
  * Mirror of `lib/orderPaidState.ts` for Stripe webhook (stripe-backend codebase).
  */
+import {sanitizeOrderPatchAgainstRegression} from "./orderStageMonotonic.js";
 export const POST_PAYMENT_ORDER_STATUS = "payment_confirmed" as const;
 
 export const PRE_PAYMENT_ORDER_STATUSES = new Set([
@@ -28,7 +29,21 @@ export function orderPaymentStatusString(value: unknown): string {
 export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
   const paymentStatus = orderPaymentStatusString(order.paymentStatus);
   const status = orderStatusString(order.status);
-  return paymentStatus === "paid" && PRE_PAYMENT_ORDER_STATUSES.has(status);
+  if (paymentStatus !== "paid" || !PRE_PAYMENT_ORDER_STATUSES.has(status)) {
+    return false;
+  }
+  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
+  if (
+    courier === "accepted" ||
+    courier === "preparing" ||
+    courier === "ready_for_pickup" ||
+    courier === "driver_assigned" ||
+    courier === "picked_up" ||
+    courier === "delivered"
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function resolvePostPaymentOrderStatus(
@@ -60,13 +75,26 @@ export function buildOrderPaidStatePatch(
     status: resolvePostPaymentOrderStatus(existing, currentStatus),
   };
 
+  const courier = orderStatusString(existing.deliveryStatus).toLowerCase();
+  const courierFulfillmentAdvanced =
+    courier === "accepted" ||
+    courier === "preparing" ||
+    courier === "ready_for_pickup" ||
+    courier === "driver_assigned" ||
+    courier === "picked_up" ||
+    courier === "delivered";
+
   if (!input.repairOnly) {
-    patch.deliveryStatus = "pending";
-    patch.driverId = null;
-    patch.assignedDriverId = null;
+    if (!courierFulfillmentAdvanced) {
+      patch.deliveryStatus = "pending";
+    }
+    if (!courierFulfillmentAdvanced) {
+      patch.driverId = null;
+      patch.assignedDriverId = null;
+    }
   } else {
     const ds = orderStatusString(existing.deliveryStatus);
-    if (!ds || ds === "pending") {
+    if ((!ds || ds === "pending") && !courierFulfillmentAdvanced) {
       patch.deliveryStatus = "pending";
     }
   }
@@ -85,5 +113,5 @@ export function buildOrderPaidStatePatch(
     patch.stripeWebhookLastEventId = input.stripeWebhookLastEventId;
   }
 
-  return patch;
+  return sanitizeOrderPatchAgainstRegression(existing, patch);
 }

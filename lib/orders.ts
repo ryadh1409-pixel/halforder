@@ -7,6 +7,7 @@ import {
   updateDoc,
   type Timestamp,
 } from 'firebase/firestore';
+import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
 import { db } from '../services/firebase';
 import { autoInvite } from '../services/autoInvite';
 
@@ -159,8 +160,9 @@ export async function updateOrderStatus(
   if (!snap.exists()) {
     throw new Error('Order not found');
   }
-  await updateDoc(orderRef, {
-    status,
-    updatedAt: serverTimestamp(),
-  });
+  await protectedUpdateOrder(
+    orderId,
+    { status, updatedAt: serverTimestamp() },
+    { fileName: 'lib/orders.ts', functionName: 'updateOrderStatus' },
+  );
 }

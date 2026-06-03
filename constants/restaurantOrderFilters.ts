@@ -4,6 +4,7 @@ import {
   RESTAURANT_KITCHEN_ACTIVE_STATUSES,
 } from '@/lib/restaurantLiveOrders';
 import type { RestaurantOrder } from '@/services/orderService';
+import { deriveOrderStage } from '@/services/orderStage';
 
 export type RestaurantOrderListFilter =
   | 'active'
@@ -51,17 +52,11 @@ export function matchesRestaurantOrderFilter(
     case 'active':
       return isRestaurantActiveLiveOrder(order);
     case 'ready':
-      return order.status === 'ready' || order.status === 'ready_for_pickup';
+      return deriveOrderStage(order) === 'driver_assignment';
     case 'driver_assigned':
-      return (
-        typeof order.driverId === 'string' &&
-        order.driverId.length > 0 &&
-        order.status !== 'delivered' &&
-        order.status !== 'cancelled' &&
-        order.status !== 'rejected'
-      );
+      return deriveOrderStage(order) === 'driver_assigned';
     case 'delivered':
-      return order.status === 'delivered';
+      return deriveOrderStage(order) === 'delivered';
     default:
       return true;
   }

@@ -1,3 +1,8 @@
+import {
+  deriveOrderStage,
+  type DerivedOrderStage,
+} from '@/services/orderStage';
+import type { OrderStageInput } from '@/services/orderStage';
 import type { OrderStatus } from '@/services/orderService';
 
 export type MerchantOrderStatus =
@@ -17,21 +22,37 @@ const ORDER_STEPS: MerchantOrderStatus[] = [
   'delivered',
 ];
 
-export function normalizeMerchantStatus(status: OrderStatus): MerchantOrderStatus {
-  if (status === 'accepted' || status === 'restaurant_accepted') return 'accepted';
-  if (status === 'ready' || status === 'ready_for_pickup') return 'ready';
-  if (status === 'awaiting_payment') return 'pending';
-  if (status === 'payment_confirmed') return 'pending';
-  if (status === 'cancelled' || status === 'rejected') return 'delivered';
-  if (
-    status === 'pending' ||
-    status === 'preparing' ||
-    status === 'picked_up' ||
-    status === 'delivered'
-  ) {
-    return status;
+/** Kitchen action rail derived from canonical order stage (not raw Firestore status). */
+export function merchantStatusFromOrder(
+  order: OrderStageInput,
+): MerchantOrderStatus {
+  const stage = deriveOrderStage(order);
+  const status = typeof order.status === 'string' ? order.status : '';
+
+  switch (stage) {
+    case 'awaiting_payment':
+    case 'awaiting_restaurant':
+      return 'pending';
+    case 'preparing':
+      if (status === 'preparing') return 'preparing';
+      return 'accepted';
+    case 'driver_assignment':
+      return 'ready';
+    case 'driver_assigned':
+      return 'ready';
+    case 'picked_up':
+      return 'picked_up';
+    case 'delivered':
+    case 'cancelled':
+      return 'delivered';
+    default:
+      return 'pending';
   }
-  return 'pending';
+}
+
+/** @deprecated Use {@link merchantStatusFromOrder} — kept for gradual migration. */
+export function normalizeMerchantStatus(status: OrderStatus): MerchantOrderStatus {
+  return merchantStatusFromOrder({ status, paymentStatus: 'paid' });
 }
 
 export function getOrderStepIndex(status: MerchantOrderStatus): number {

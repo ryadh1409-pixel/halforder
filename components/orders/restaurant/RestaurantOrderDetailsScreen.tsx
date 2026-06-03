@@ -4,10 +4,12 @@ import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { orderRoomHref } from '@/services/orderChat';
 import type { OrderStatus } from '@/services/orderService';
 import {
+  acceptRestaurantOrder,
   rejectOrder,
   updateOrderStatus,
   type RestaurantOrder,
 } from '@/services/orderService';
+import { deriveOrderStage, restaurantStageBadgeLabel } from '@/services/orderStage';
 import { formatAddress, formatOrderStatus, formatRestaurantName } from '@/utils/orderFormatters';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
@@ -50,28 +52,20 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
     return Math.max(0, Math.floor((now - order.acceptedAtMs) / 1000));
   }, [now, order.acceptedAtMs, order.status]);
 
-  const paid = order.paymentStatus === 'paid';
+  const stage = deriveOrderStage(order);
 
-  const canAccept =
-    paid &&
-    (order.status === 'awaiting_payment' ||
-      order.status === 'pending' ||
-      order.status === 'pending_driver' ||
-      order.status === 'accepted');
+  const canAccept = stage === 'awaiting_restaurant';
 
   const canReject =
-    order.status === 'pending' ||
-    order.status === 'pending_driver' ||
-    order.status === 'accepted' ||
-    order.status === 'awaiting_payment';
+    stage === 'awaiting_restaurant' || stage === 'preparing';
 
-  const canMarkPreparing = paid && order.status === 'restaurant_accepted';
+  const canMarkPreparing =
+    stage === 'preparing' &&
+    order.status !== 'preparing' &&
+    order.status !== 'ready' &&
+    order.status !== 'ready_for_pickup';
 
-  const canMarkReady =
-    paid &&
-    (order.status === 'preparing' ||
-      order.status === 'restaurant_accepted' ||
-      order.status === 'accepted');
+  const canMarkReady = stage === 'preparing' && order.status === 'preparing';
 
   async function run(label: string, fn: () => Promise<void>) {
     if (busy) return;
@@ -111,7 +105,7 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
         <View style={styles.header}>
           <Text style={styles.kicker}>Incoming</Text>
           <Text style={styles.title}>#{order.id.slice(0, 8)}</Text>
-          <Text style={styles.status}>{formatOrderStatus(order.status)}</Text>
+          <Text style={styles.status}>{restaurantStageBadgeLabel(stage)}</Text>
           {order.acceptedAtMs && prepSeconds > 0 ? (
             <Text style={styles.timer}>Prep timer · {formatElapsed(prepSeconds)}</Text>
           ) : (
@@ -167,7 +161,7 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
             <Pressable
               style={styles.acceptBtn}
               disabled={busy}
-              onPress={() => void run('Order accepted', () => patchStatus('restaurant_accepted'))}
+              onPress={() => void run('Order accepted', () => acceptRestaurantOrder(order.id))}
             >
               {busy ? <ActivityIndicator color="#0f172a" /> : <Text style={styles.acceptText}>Accept order</Text>}
             </Pressable>

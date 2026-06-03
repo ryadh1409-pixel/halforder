@@ -1,3 +1,5 @@
+import { sanitizeOrderPatchAgainstRegression } from '@/services/orderStage';
+
 /**
  * Canonical post-Stripe-payment order fields.
  * Webhook + repair Cloud Function must stay in sync with this module.
@@ -32,7 +34,21 @@ export function orderPaymentStatusString(value: unknown): string {
 export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
   const paymentStatus = orderPaymentStatusString(order.paymentStatus);
   const status = orderStatusString(order.status);
-  return paymentStatus === 'paid' && PRE_PAYMENT_ORDER_STATUSES.has(status);
+  if (paymentStatus !== 'paid' || !PRE_PAYMENT_ORDER_STATUSES.has(status)) {
+    return false;
+  }
+  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
+  if (
+    courier === 'accepted' ||
+    courier === 'preparing' ||
+    courier === 'ready_for_pickup' ||
+    courier === 'driver_assigned' ||
+    courier === 'picked_up' ||
+    courier === 'delivered'
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /** Resolve target `status` after payment without rewinding active fulfillment. */
@@ -70,14 +86,27 @@ export function buildOrderPaidStatePatch(
     updatedAt: 'SERVER_TIMESTAMP',
   };
 
+  const courier = orderStatusString(existing.deliveryStatus).toLowerCase();
+  const courierFulfillmentAdvanced =
+    courier === 'accepted' ||
+    courier === 'preparing' ||
+    courier === 'ready_for_pickup' ||
+    courier === 'driver_assigned' ||
+    courier === 'picked_up' ||
+    courier === 'delivered';
+
   if (!input.repairOnly) {
-    patch.deliveryStatus = 'pending';
-    patch.driverId = null;
-    patch.assignedDriverId = null;
+    if (!courierFulfillmentAdvanced) {
+      patch.deliveryStatus = 'pending';
+    }
+    if (!courierFulfillmentAdvanced) {
+      patch.driverId = null;
+      patch.assignedDriverId = null;
+    }
     patch.paidAt = 'SERVER_TIMESTAMP';
   } else {
     const ds = orderStatusString(existing.deliveryStatus);
-    if (!ds || ds === 'pending') {
+    if ((!ds || ds === 'pending') && !courierFulfillmentAdvanced) {
       patch.deliveryStatus = 'pending';
     }
   }
@@ -96,7 +125,7 @@ export function buildOrderPaidStatePatch(
     patch.stripeWebhookLastEventId = input.stripeWebhookLastEventId;
   }
 
-  return patch;
+  return sanitizeOrderPatchAgainstRegression(existing, patch);
 }
 
 /** Customer-facing label when payment succeeded but legacy status lags. */

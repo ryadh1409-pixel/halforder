@@ -1,6 +1,11 @@
 import { parseRestaurantIsOpen } from '@/lib/restaurantVenueStatus';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { persistRestaurantIsOpen } from '@/services/restaurantVenueOpen';
+import { applyProtectedOrderPatch } from '@/services/orderService';
+import {
+  protectedUpdateOrder,
+  rawUpdateOrder,
+} from '@/services/orderFirestoreWrite';
 import { db } from './firebase';
 import {
   addDoc,
@@ -265,9 +270,9 @@ export async function updateRestaurantOpen(
 }
 
 export async function markOrderReady(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
+  await applyProtectedOrderPatch(orderId, {
     status: 'ready_for_pickup',
-    deliveryStatus: 'waiting_driver',
+    deliveryStatus: 'ready_for_pickup',
     readyAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     estimatedDeliveryTime: 20,
@@ -278,15 +283,23 @@ export async function assignDriverToOrder(
   orderId: string,
   driver: { id: string; name: string; phone: string | null },
 ): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    driverId: driver.id,
-    driverName: driver.name,
-    driverPhone: driver.phone ?? null,
-  });
+  await rawUpdateOrder(
+    orderId,
+    {
+      driverId: driver.id,
+      driverName: driver.name,
+      driverPhone: driver.phone ?? null,
+    },
+    { fileName: 'restaurantDashboard.ts', functionName: 'assignDriverToOrder' },
+  );
 }
 
 export async function markOrderPickedUp(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), { status: 'picked_up' });
+  await protectedUpdateOrder(
+    orderId,
+    { status: 'picked_up' },
+    { fileName: 'restaurantDashboard.ts', functionName: 'markOrderPickedUp' },
+  );
 }
 
 export async function addMenuItem(payload: {

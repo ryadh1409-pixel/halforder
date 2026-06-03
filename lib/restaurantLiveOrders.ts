@@ -14,7 +14,28 @@ export type RestaurantOrderVisibilityInput = {
 };
 
 export function isRestaurantPaidOrder(order: RestaurantOrderVisibilityInput): boolean {
-  return order.paymentStatus === 'paid';
+  const ps =
+    typeof order.paymentStatus === 'string'
+      ? order.paymentStatus.trim().toLowerCase()
+      : '';
+  return ps === 'paid';
+}
+
+/**
+ * Marketplace kitchen feed: only paid orders (or in-flight kitchen statuses).
+ * Hides unpaid `awaiting_payment` snapshots that cause accept/badge flicker.
+ */
+export function isRestaurantMarketplaceKitchenOrder(
+  order: RestaurantOrderVisibilityInput,
+): boolean {
+  if (isRestaurantPaidOrder(order)) return true;
+
+  const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
+  if (status === 'awaiting_payment' || status === 'payment_processing') {
+    return false;
+  }
+
+  return RESTAURANT_KITCHEN_ACTIVE_STATUSES.has(status as OrderStatus);
 }
 
 /** Statuses the restaurant kitchen should never see before payment settles. */
@@ -61,8 +82,19 @@ export function isRestaurantActiveLiveOrder(order: RestaurantOrderVisibilityInpu
   if (status === 'delivered' || status === 'cancelled' || status === 'rejected') {
     return false;
   }
-  if (isRestaurantPaidOrder(order)) return true;
-  return RESTAURANT_KITCHEN_ACTIVE_STATUSES.has(status as OrderStatus);
+  return isRestaurantPaidOrder(order);
+}
+
+/** Pending tab: paid, awaiting restaurant accept (not yet preparing). */
+export function isRestaurantPendingAcceptOrder(order: RestaurantOrderVisibilityInput): boolean {
+  if (!isRestaurantPaidOrder(order)) return false;
+  const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
+  return (
+    status === 'awaiting_payment' ||
+    status === 'pending' ||
+    status === 'payment_confirmed' ||
+    status === 'pending_driver'
+  );
 }
 
 export function isRestaurantPendingKitchenOrder(order: RestaurantOrderVisibilityInput): boolean {

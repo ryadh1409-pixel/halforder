@@ -28,17 +28,23 @@ async function expireMarketplaceOrder(orderId: string, reason: string): Promise<
   if (hasDriverAssigned(data)) return;
   if (!isPoolExpiredByAge(data)) return;
 
-  await orderRef.set(
-    {
-      expired: true,
-      marketplaceArchived: true,
-      marketplaceExpiredAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      deliveryStatus: "cancelled",
-      status: "cancelled",
-    },
-    {merge: true},
-  );
+  const patch = {
+    expired: true,
+    marketplaceArchived: true,
+    marketplaceExpiredAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    deliveryStatus: "cancelled",
+    status: "cancelled",
+  };
+  console.log("[ORDER WRITE TRACE]", "cleanupExpiredOrders.ts", "expireMarketplaceOrder", {
+    orderId,
+    status: patch.status,
+    deliveryStatus: patch.deliveryStatus,
+    paymentStatus: null,
+    op: "set",
+    merge: true,
+  });
+  await orderRef.set(patch, {merge: true});
   logger.info("[marketplace-cleanup] order_expired", {orderId, reason});
 }
 

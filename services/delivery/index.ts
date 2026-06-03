@@ -17,6 +17,7 @@ import {
 } from '@/services/firestoreDriverQueryLog';
 import { auth, db } from '@/services/firebase';
 import { syncDriverLiveLocation } from '@/services/location/driverTracking';
+import { tracedTransactionUpdateOrder } from '@/services/orderFirestoreWrite';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
@@ -548,24 +549,29 @@ export async function acceptOrderWithLock(orderId: string, driver: DriverIdentit
       const status = normalizeDeliveryLifecycleStatus(data.deliveryStatus);
       if (status !== DELIVERY_STATUS.AVAILABLE) throw new Error('not_available');
 
-      tx.update(ref, {
-        assignedDriverId: driver.id,
-        assignedAt: serverTimestamp(),
-        acceptedAt: serverTimestamp(),
-        driverId: driver.id,
-        driverName: driver.name,
-        driverPhone: driver.phone ?? null,
-        deliveryStatus: DELIVERY_STATUS.ACCEPTED,
-        legacyDeliveryStatus: toLegacyDeliveryStatus(DELIVERY_STATUS.ACCEPTED),
-        status: toLegacyOrderStatus(DELIVERY_STATUS.ACCEPTED),
-        timeline: arrayUnion({
-          type: 'accepted',
-          actor: 'driver',
-          actorId: driver.id,
-          at: serverTimestamp(),
-          note: 'Order accepted by driver',
-        }),
-      });
+      tracedTransactionUpdateOrder(
+        tx,
+        ref,
+        {
+          assignedDriverId: driver.id,
+          assignedAt: serverTimestamp(),
+          acceptedAt: serverTimestamp(),
+          driverId: driver.id,
+          driverName: driver.name,
+          driverPhone: driver.phone ?? null,
+          deliveryStatus: DELIVERY_STATUS.ACCEPTED,
+          legacyDeliveryStatus: toLegacyDeliveryStatus(DELIVERY_STATUS.ACCEPTED),
+          status: toLegacyOrderStatus(DELIVERY_STATUS.ACCEPTED),
+          timeline: arrayUnion({
+            type: 'accepted',
+            actor: 'driver',
+            actorId: driver.id,
+            at: serverTimestamp(),
+            note: 'Order accepted by driver',
+          }),
+        },
+        { fileName: 'delivery/index.ts', functionName: 'acceptOrderWithLock' },
+      );
 
       tx.set(
         doc(db, 'drivers', driver.id),
@@ -754,7 +760,10 @@ export async function updateDeliveryStatus(
       };
       if (nextStatus === DELIVERY_STATUS.PICKED_UP) patch.pickedUpAt = serverTimestamp();
       if (nextStatus === DELIVERY_STATUS.DELIVERED) patch.deliveredAt = serverTimestamp();
-      tx.update(ref, patch);
+      tracedTransactionUpdateOrder(tx, ref, patch, {
+        fileName: 'delivery/index.ts',
+        functionName: 'updateDeliveryStatus',
+      });
       tx.set(
         doc(db, 'drivers', driverId),
         {

@@ -664,7 +664,11 @@ export default function ProfileScreen() {
       };
       setProfileOrdersCancellingIds((prev) => ({ ...prev, [order.id]: true }));
       try {
-        await updateDoc(orderRef, payload);
+        const { protectedUpdateOrder } = await import('@/services/orderFirestoreWrite');
+        await protectedUpdateOrder(order.id, payload, {
+          fileName: 'app/(tabs)/profile.tsx',
+          functionName: 'handleCancelProfileOrder',
+        });
         showSuccess('Order cancelled successfully');
       } catch (e) {
         logError(e);

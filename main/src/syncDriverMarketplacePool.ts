@@ -108,10 +108,29 @@ async function handleOrderWrite(
     return;
   }
 
-  const repaired = await repairOrderPaidStateIfNeeded(orderId, data);
-  if (repaired) {
-    logger.info("[marketplace-sync] paid_status_repair_applied", {orderId});
-    return;
+  const courier = typeof data.deliveryStatus === "string"
+    ? data.deliveryStatus.trim().toLowerCase()
+    : "";
+  const kitchen = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";
+  const fulfillmentAdvanced =
+    kitchen === "accepted" ||
+    kitchen === "restaurant_accepted" ||
+    kitchen === "preparing" ||
+    kitchen === "ready" ||
+    kitchen === "ready_for_pickup" ||
+    courier === "accepted" ||
+    courier === "preparing" ||
+    courier === "ready_for_pickup" ||
+    courier === "driver_assigned" ||
+    courier === "picked_up" ||
+    courier === "delivered";
+
+  if (!fulfillmentAdvanced) {
+    const repaired = await repairOrderPaidStateIfNeeded(orderId, data);
+    if (repaired) {
+      logger.info("[marketplace-sync] paid_status_repair_applied", {orderId});
+      return;
+    }
   }
 
   const debug = evaluateMarketplacePublishDebug(orderId, data);

@@ -13,6 +13,7 @@ import {
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
+import { tracedTransactionUpdateOrder } from '@/services/orderFirestoreWrite';
 import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import {
   collection,
@@ -263,17 +264,22 @@ export async function acceptDelivery(orderId: string, driver: DispatchDriver): P
       acceptedAt: data.acceptedAt ?? null,
     });
 
-    tx.update(orderRef, {
-      driverId: driver.id,
-      assignedDriverId: driver.id,
-      driverName: driver.name,
-      driverPhone: driver.phone ?? null,
-      acceptedAt: serverTimestamp(),
-      deliveryStatus: 'driver_assigned',
-      updatedAt: serverTimestamp(),
-      estimatedDeliveryMinutes:
-        typeof data.estimatedDeliveryMinutes === 'number' ? data.estimatedDeliveryMinutes : 20,
-    });
+    tracedTransactionUpdateOrder(
+      tx,
+      orderRef,
+      {
+        driverId: driver.id,
+        assignedDriverId: driver.id,
+        driverName: driver.name,
+        driverPhone: driver.phone ?? null,
+        acceptedAt: serverTimestamp(),
+        deliveryStatus: 'driver_assigned',
+        updatedAt: serverTimestamp(),
+        estimatedDeliveryMinutes:
+          typeof data.estimatedDeliveryMinutes === 'number' ? data.estimatedDeliveryMinutes : 20,
+      },
+      { fileName: 'driverDispatch.ts', functionName: 'acceptDelivery' },
+    );
   });
 }
 
@@ -285,14 +291,19 @@ export async function rejectDelivery(orderId: string, driverId: string): Promise
     const data = snap.data();
     if (data.driverId && data.driverId !== driverId) return;
     if (data.deliveryStatus === 'delivered' || data.deliveryStatus === 'cancelled') return;
-    tx.update(orderRef, {
-      driverId: null,
-      assignedDriverId: null,
-      driverName: null,
-      driverPhone: null,
-      acceptedAt: null,
-      deliveryStatus: 'waiting_driver',
-      status: 'ready_for_pickup',
-    });
+    tracedTransactionUpdateOrder(
+      tx,
+      orderRef,
+      {
+        driverId: null,
+        assignedDriverId: null,
+        driverName: null,
+        driverPhone: null,
+        acceptedAt: null,
+        deliveryStatus: 'waiting_driver',
+        status: 'ready_for_pickup',
+      },
+      { fileName: 'driverDispatch.ts', functionName: 'rejectDelivery' },
+    );
   });
 }

@@ -1,5 +1,6 @@
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
+import { traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import {
   isOrderFresh,
   isRestaurantActiveDelivery,
@@ -95,7 +96,15 @@ async function flushCleanupBatch(
 
   const batch = writeBatch(db);
   for (const entry of entries) {
-    batch.update(doc(db, 'orders', entry.orderId), buildVisibilityPatch(entry.action));
+    const patch = buildVisibilityPatch(entry.action);
+    traceOrderWriteFromPatch(
+      'orderCleanupService.ts',
+      'flushCleanupBatch',
+      entry.orderId,
+      patch,
+      { op: 'batch-update' },
+    );
+    batch.update(doc(db, 'orders', entry.orderId), patch);
   }
   await batch.commit();
 

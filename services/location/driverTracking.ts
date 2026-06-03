@@ -1,6 +1,7 @@
 import { doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { getDistance } from 'geolib';
 
+import { traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import type { DriverLocationRecord, DriverLiveCoordinate } from '@/types/location';
 import { db } from '@/services/firebase';
 
@@ -119,6 +120,13 @@ export async function syncDriverLiveLocation(
 
   const payload = buildDriverLocationFirestorePayload(coord);
   const batch = writeBatch(db);
+  traceOrderWriteFromPatch(
+    'driverTracking.ts',
+    'syncDriverLiveLocation',
+    oid,
+    { driverLocation: payload },
+    { op: 'batch-update' },
+  );
   batch.update(doc(db, 'orders', oid), { driverLocation: payload });
   batch.set(
     doc(db, 'live_locations', oid),

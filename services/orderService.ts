@@ -3,6 +3,13 @@ import {
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
+import { deriveOrderStage, isOrderStageAtLeast, logOrderStage } from '@/services/orderStage';
+import {
+  protectedUpdateOrder,
+  rawUpdateOrder,
+  tracedAddOrder,
+} from '@/services/orderFirestoreWrite';
+import { isRestaurantMarketplaceKitchenOrder } from '@/lib/restaurantLiveOrders';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { fetchRestaurantLocation, restaurantLocationToLegacy } from '@/services/location/restaurantLocation';
 import type { DeliveryDistanceTier } from '@/types/deliveryEligibility';
@@ -17,7 +24,6 @@ import type {
   RestaurantSnapshot,
 } from '@/types/order';
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -27,7 +33,6 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -678,9 +683,12 @@ export async function createOrder(
   console.log('ORDER CREATE RESTAURANT UID', payload.restaurantId);
   console.log('ORDER CREATE PAYLOAD', orderPayload);
 
-  let ref;
+  let orderId: string;
   try {
-    ref = await addDoc(collection(db, 'orders'), orderPayload);
+    orderId = await tracedAddOrder(orderPayload, {
+      fileName: 'orderService.ts',
+      functionName: 'createOrder',
+    });
   } catch (err) {
     console.error('[createOrder] Firestore write failed', {
       code: (err as { code?: string })?.code,
@@ -688,7 +696,7 @@ export async function createOrder(
     });
     throw err;
   }
-  return ref.id;
+  return orderId;
 }
 
 export async function getRestaurantOrderById(orderId: string): Promise<RestaurantOrder | null> {
@@ -703,8 +711,9 @@ export async function getRestaurantOrderById(orderId: string): Promise<Restauran
 }
 
 export async function rejectOrder(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
+  await applyProtectedOrderPatch(orderId, {
     status: 'rejected',
+    deliveryStatus: 'cancelled',
     estimatedDeliveryTime: 0,
     updatedAt: serverTimestamp(),
   });
@@ -726,7 +735,7 @@ export function customerCanCancelMarketplaceOrder(status: OrderStatus): boolean 
 }
 
 export async function customerCancelMarketplaceOrder(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
+  await applyProtectedOrderPatch(orderId, {
     status: 'cancelled',
     deliveryStatus: 'cancelled',
     updatedAt: serverTimestamp(),
@@ -753,11 +762,25 @@ export function getOrders(
     ),
     (snap) => {
       try {
-        const rows = snap.docs.map((docSnap) =>
-          mapDocToRestaurantOrder(docSnap, restaurantId, {
-            timeZone: options?.timeZone,
-          }),
-        );
+        if (__DEV__) {
+          for (const docSnap of snap.docs) {
+            if (!docSnap.metadata.hasPendingWrites) continue;
+            const pending = docSnap.data() as Record<string, unknown>;
+            console.warn('[ORDER STAGE] listener pending local write (not server truth yet)', {
+              orderId: docSnap.id,
+              status: pending.status ?? null,
+              deliveryStatus: pending.deliveryStatus ?? null,
+              paymentStatus: pending.paymentStatus ?? null,
+            });
+          }
+        }
+        const rows = snap.docs
+          .map((docSnap) =>
+            mapDocToRestaurantOrder(docSnap, restaurantId, {
+              timeZone: options?.timeZone,
+            }),
+          )
+          .filter(isRestaurantMarketplaceKitchenOrder);
         onData(filterFreshRestaurantOrders(rows));
       } catch (e) {
         if (__DEV__) {
@@ -816,6 +839,84 @@ function etaForStatus(status: OrderStatus): number {
   }
 }
 
+const DRIVER_FLOW_STATUSES = new Set<OrderStatus>([
+  'picked_up_pending',
+  'driver_assigned',
+  'arriving_restaurant',
+  'driver_accepted',
+  'picked_up',
+  'on_the_way',
+  'arrived_customer',
+  'delivered',
+]);
+
+const RESTAURANT_FLOW_STATUSES = new Set<OrderStatus>([
+  'accepted',
+  'restaurant_accepted',
+  'preparing',
+  'ready',
+  'ready_for_pickup',
+  'rejected',
+  'cancelled',
+]);
+
+const RESTAURANT_ACCEPTABLE_KITCHEN_STATUSES = new Set<OrderStatus>([
+  'awaiting_payment',
+  'pending',
+  'payment_confirmed',
+  'pending_driver',
+]);
+
+export async function acceptRestaurantOrder(orderId: string): Promise<void> {
+  const trimmed = orderId.trim();
+  if (!trimmed) throw new Error('Order id is required');
+
+  const ref = doc(db, 'orders', trimmed);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Order not found');
+
+  const current = snap.data() as Record<string, unknown>;
+  const currentStatus =
+    typeof current.status === 'string' ? (current.status as OrderStatus) : 'pending';
+
+  if (!RESTAURANT_ACCEPTABLE_KITCHEN_STATUSES.has(currentStatus)) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('[RESTAURANT FLOW] skipping — order already processed', {
+        orderId: trimmed,
+        status: currentStatus,
+        deliveryStatus: current.deliveryStatus ?? null,
+      });
+    }
+    return;
+  }
+
+  if (isOrderStageAtLeast({ id: trimmed, ...current }, 'preparing')) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('[RESTAURANT FLOW] skipping — already at preparing or later', {
+        orderId: trimmed,
+        status: currentStatus,
+      });
+    }
+    return;
+  }
+
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log('[RESTAURANT FLOW] acceptRestaurantOrder', { orderId: trimmed });
+  }
+  await updateOrderStatus(trimmed, 'accepted');
+}
+
+/** Firestore order patch that refuses backward lifecycle transitions. */
+export async function applyProtectedOrderPatch(
+  orderId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await protectedUpdateOrder(orderId, patch, {
+    fileName: 'orderService.ts',
+    functionName: 'applyProtectedOrderPatch',
+  });
+}
+
 export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
@@ -872,15 +973,32 @@ export async function updateOrderStatus(
     patch.deliveryStatus = 'near_customer';
   }
   if (__DEV__) {
-    console.log('[DRIVER FLOW] updateOrderStatus', {
+    const payload = {
       orderId,
       requestedStatus: status,
       status: patch.status,
       deliveryStatus: patch.deliveryStatus ?? null,
       driverId: patch.driverId ?? '(unchanged)',
-    });
+    };
+    if (RESTAURANT_FLOW_STATUSES.has(normalizedStatus)) {
+      console.log('[RESTAURANT FLOW] updateOrderStatus', payload);
+    } else if (DRIVER_FLOW_STATUSES.has(normalizedStatus)) {
+      console.log('[DRIVER FLOW] updateOrderStatus', payload);
+    } else {
+      console.log('[ORDER FLOW] updateOrderStatus', payload);
+    }
   }
-  await updateDoc(doc(db, 'orders', orderId), patch);
+  const currentSnap = await getDoc(doc(db, 'orders', orderId));
+  const currentData = currentSnap.exists()
+    ? ({ id: orderId, ...(currentSnap.data() as Record<string, unknown>) } as Record<
+        string,
+        unknown
+      >)
+    : { id: orderId };
+
+  logOrderStage({ ...currentData, ...patch });
+
+  await applyProtectedOrderPatch(orderId, patch);
 }
 
 /** Live driver pin on the order (for customer map). */
@@ -888,15 +1006,22 @@ export async function updateOrderDriverLocation(
   orderId: string,
   location: LatLng,
 ): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    driverLocation: {
-      lat: location.lat,
-      lng: location.lng,
-      ...(typeof location.heading === 'number' && Number.isFinite(location.heading)
-        ? { heading: location.heading }
-        : {}),
+  await rawUpdateOrder(
+    orderId,
+    {
+      driverLocation: {
+        lat: location.lat,
+        lng: location.lng,
+        ...(typeof location.heading === 'number' && Number.isFinite(location.heading)
+          ? { heading: location.heading }
+          : {}),
+      },
     },
-  });
+    {
+      fileName: 'orderService.ts',
+      functionName: 'updateOrderDriverLocation',
+    },
+  );
 }
 
 export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean {

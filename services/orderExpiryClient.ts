@@ -63,12 +63,17 @@ export function startExpiredOrdersCleanup(): () => void {
         if (st === 'cancelled' || st === 'completed') continue;
         const deadline = matchWaitDeadlineMs(data);
         if (deadline == null || now < deadline) continue;
-        await updateDoc(doc(db, 'orders', d.id), {
-          status: 'cancelled',
-          cancelledBy: uid,
-          cancelReason: 'wait_timeout',
-          cancelledAt: serverTimestamp(),
-        });
+        const { protectedUpdateOrder } = await import('@/services/orderFirestoreWrite');
+        await protectedUpdateOrder(
+          d.id,
+          {
+            status: 'cancelled',
+            cancelledBy: uid,
+            cancelReason: 'wait_timeout',
+            cancelledAt: serverTimestamp(),
+          },
+          { fileName: 'orderExpiryClient.ts', functionName: 'tick' },
+        );
       }
     } catch (e) {
       console.warn('[orderExpiryClient]', e);

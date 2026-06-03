@@ -1,7 +1,7 @@
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { serverTimestamp } from 'firebase/firestore';
 
 import type { RestaurantOrder } from '@/services/orderService';
-import { db } from '@/services/firebase';
+import { rawUpdateOrder } from '@/services/orderFirestoreWrite';
 
 const DELIVERED_ARCHIVE_MS = 7 * 24 * 60 * 60 * 1000;
 const REJECTED_HIDE_MS = 2 * 24 * 60 * 60 * 1000;
@@ -44,10 +44,11 @@ async function patchOrderVisibility(
   orderId: string,
   patch: RestaurantOrderVisibilityPatch,
 ): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    ...patch,
-    updatedAt: serverTimestamp(),
-  });
+  await rawUpdateOrder(
+    orderId,
+    { ...patch, updatedAt: serverTimestamp() },
+    { fileName: 'orderArchiveService.ts', functionName: 'patchOrderVisibility' },
+  );
 }
 
 export async function archiveOrderForRestaurant(orderId: string): Promise<void> {
