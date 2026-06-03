@@ -1,6 +1,6 @@
-import HostDashboardScreen from '@/screens/HostDashboardScreen';
+import HostMenuScreen from '@/screens/HostMenuScreen';
 
 /** Menu tab — menu items only (no live orders). */
 export default function HostMenuRoute() {
-  return <HostDashboardScreen variant="menu" />;
+  return <HostMenuScreen />;
 }

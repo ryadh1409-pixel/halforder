@@ -3,9 +3,10 @@ import { PaymentBadge } from '@/components/orders/StatusBadge';
 import { merchantStatusFromOrder } from '@/components/orders/statusFlow';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import { applyStageLockToOrder } from '@/lib/orderStageLock';
+import { traceOrderStageRender } from '@/lib/orderStageTrace';
 import {
   deriveOrderStage,
-  logOrderStage,
   restaurantCourierBadgeLabel,
   restaurantKitchenBadgeTone,
   restaurantStageBadgeLabel,
@@ -23,6 +24,7 @@ import { StyleSheet, Text, View } from 'react-native';
 type Props = {
   order: RestaurantOrder;
   timeZone?: string;
+  sourceScreen?: string;
   onStatus: (status: OrderStatus) => void;
   onReject: () => void;
   loading?: boolean;
@@ -69,12 +71,14 @@ function safeEta(minutes: number | null | undefined): string {
 export function RestaurantLiveOrderCard({
   order,
   timeZone,
+  sourceScreen = 'RestaurantLiveOrderCard',
   onStatus,
   onReject,
   loading,
 }: Props) {
-  const stage = logOrderStage(order);
-  const merchantStatus = merchantStatusFromOrder(order);
+  const displayOrder = useMemo(() => applyStageLockToOrder(order), [order]);
+  const stage = traceOrderStageRender(displayOrder, { sourceScreen });
+  const merchantStatus = merchantStatusFromOrder(displayOrder);
   const timeOpts = { timeZone };
 
   const itemLines = useMemo(

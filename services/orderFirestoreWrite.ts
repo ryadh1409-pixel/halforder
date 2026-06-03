@@ -41,7 +41,33 @@ function sourceLabel(source: OrderWriteSource): string {
   return `${source.fileName}#${source.functionName}`;
 }
 
-/** Strip lifecycle fields that would move backward; log blocked downgrades. */
+function patchTouchesLifecycle(patch: Record<string, unknown>): boolean {
+  return (
+    patch.status !== undefined ||
+    patch.deliveryStatus !== undefined ||
+    patch.paymentStatus !== undefined
+  );
+}
+
+function ensureUpdatedBy(
+  patch: Record<string, unknown>,
+  source: OrderWriteSource,
+): Record<string, unknown> {
+  if (!patchTouchesLifecycle(patch)) return patch;
+  if (patch.updatedBy !== undefined && patch.updatedBy !== null) return patch;
+
+  console.warn('[MISSING updatedBy]', {
+    orderId: '(patch)',
+    source: sourceLabel(source),
+    patch,
+  });
+  return {
+    ...patch,
+    updatedBy: sourceLabel(source),
+  };
+}
+
+/** Hard monotonic guard — rejects entire write when patch would regress lifecycle. */
 export function prepareProtectedOrderPatch(
   orderId: string,
   current: OrderStageInput,
@@ -50,29 +76,43 @@ export function prepareProtectedOrderPatch(
 ): Record<string, unknown> {
   const trimmed = orderId.trim();
   const currentInput = { id: trimmed, ...current };
-  const withUpdatedAt = {
-    ...patch,
-    updatedAt: patch.updatedAt ?? serverTimestamp(),
-    updatedBy: patch.updatedBy ?? `${source.fileName}#${source.functionName}`,
-  };
+  const withMeta = ensureUpdatedBy(
+    {
+      ...patch,
+      updatedAt: patch.updatedAt ?? serverTimestamp(),
+      updatedBy:
+        patch.updatedBy ?? `${source.fileName}#${source.functionName}`,
+    },
+    source,
+  );
 
-  if (wouldDowngradeLifecycle(currentInput, withUpdatedAt)) {
-    const incomingStatus =
-      typeof withUpdatedAt.status === 'string' ? withUpdatedAt.status : '(patch)';
-    if (__DEV__) {
-      console.warn('[ORDER DOWNGRADE BLOCKED]', trimmed, current.status ?? null, incomingStatus, {
-        source: sourceLabel(source),
-        deliveryStatus: withUpdatedAt.deliveryStatus ?? null,
-      });
-    }
-    const stripped = { ...withUpdatedAt };
-    delete stripped.status;
-    delete stripped.deliveryStatus;
-    delete stripped.paymentStatus;
-    return sanitizeOrderPatchAgainstRegression(currentInput, stripped);
+  if (wouldDowngradeLifecycle(currentInput, withMeta)) {
+    console.warn('[ORDER DOWNGRADE BLOCKED]', {
+      orderId: trimmed,
+      currentStatus: current.status ?? null,
+      incomingStatus: withMeta.status ?? null,
+      currentDeliveryStatus: current.deliveryStatus ?? null,
+      incomingDeliveryStatus: withMeta.deliveryStatus ?? null,
+      source: sourceLabel(source),
+    });
+    return {};
   }
 
-  return sanitizeOrderPatchAgainstRegression(currentInput, withUpdatedAt);
+  const safe = sanitizeOrderPatchAgainstRegression(currentInput, withMeta);
+  if (
+    wouldDowngradeLifecycle(currentInput, safe) ||
+    (safe.status !== undefined &&
+      wouldDowngradeLifecycle(currentInput, { status: safe.status }))
+  ) {
+    console.warn('[ORDER DOWNGRADE BLOCKED]', {
+      orderId: trimmed,
+      reason: 'post_sanitize',
+      source: sourceLabel(source),
+    });
+    return {};
+  }
+
+  return safe;
 }
 
 function tracePreparedPatch(

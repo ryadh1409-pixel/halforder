@@ -2,7 +2,9 @@ import {
   assertDeliveryEligibleForOrder,
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
+import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import { reconcileOrderSnapshotStage } from '@/lib/orderListenerCommit';
+import { traceOrderStageRender } from '@/lib/orderStageTrace';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { deriveOrderStage, isOrderStageAtLeast, logOrderStage } from '@/services/orderStage';
 import {
@@ -717,6 +719,7 @@ export async function rejectOrder(orderId: string): Promise<void> {
     deliveryStatus: 'cancelled',
     estimatedDeliveryTime: 0,
     updatedAt: serverTimestamp(),
+    updatedBy: 'restaurantReject',
   });
 }
 
@@ -778,12 +781,19 @@ export function getOrders(
               { id: docSnap.id, ...raw },
               pending,
             );
-            const merged = {
+            const merged = applyStageLockToOrder({
               ...raw,
+              id: docSnap.id,
               status: reconciled.status ?? raw.status,
               deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
               paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
-            };
+            });
+            if (__DEV__ && !pending) {
+              traceOrderStageRender(merged, {
+                hasPendingWrites: false,
+                sourceScreen: 'getOrders',
+              });
+            }
             return mapDocToRestaurantOrder(
               {
                 id: docSnap.id,
@@ -947,6 +957,7 @@ export async function updateOrderStatus(
   }
   if (normalizedStatus === 'preparing') {
     patch.deliveryStatus = 'preparing';
+    patch.updatedBy = patch.updatedBy ?? 'restaurantPreparing';
   }
   if (normalizedStatus === 'ready_for_pickup') {
     patch.preparedAt = serverTimestamp();
@@ -1070,12 +1081,19 @@ export function subscribeOrderById(
         if (__DEV__ && pending) {
           logOrderStage({ id: snap.id, ...raw }, { hasPendingWrites: true });
         }
-        const merged = {
+        const merged = applyStageLockToOrder({
           ...raw,
+          id: snap.id,
           status: reconciled.status ?? raw.status,
           deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
           paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
-        };
+        });
+        if (__DEV__ && !pending) {
+          traceOrderStageRender(merged, {
+            hasPendingWrites: false,
+            sourceScreen: 'subscribeOrderById',
+          });
+        }
         onData(
           mapDocToRestaurantOrder({
             id: snap.id,

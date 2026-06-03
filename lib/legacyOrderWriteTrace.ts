@@ -1,6 +1,6 @@
 /**
- * Temporary trace for direct Firestore order writes that bypass protectedUpdateOrder.
- * Search Metro logs for `[LEGACY ORDER WRITE]`.
+ * Detects direct Firestore order writes that bypass protectedUpdateOrder.
+ * Search logs for `[LEGACY ORDER WRITER DETECTED]`.
  */
 export function traceLegacyOrderWrite(
   source: string,
@@ -14,10 +14,16 @@ export function traceLegacyOrderWrite(
 
   if (!hasLifecycle) return;
 
-  console.log('[LEGACY ORDER WRITE]', {
+  const stack = new Error().stack ?? '';
+  const file = source.split('#')[0] ?? source;
+  const fn = source.split('#')[1] ?? '(unknown)';
+
+  console.warn('[LEGACY ORDER WRITER DETECTED]', {
+    file,
+    function: fn,
     source,
     orderId,
     patch,
-    stack: new Error().stack,
+    stack,
   });
 }

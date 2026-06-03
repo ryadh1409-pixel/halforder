@@ -15,8 +15,12 @@ import {
   restaurantOrderFilterEmptyTitle,
   type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
-import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
+import {
+  computeRestaurantDashboardMetrics,
+  isOrderFresh,
+} from '@/lib/restaurantOrderFreshness';
 import { isRestaurantPendingAcceptOrder } from '@/lib/restaurantLiveOrders';
+import { clearOrderStageLock, lockOrderStage } from '@/lib/orderStageLock';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import type { OrderStatus } from '@/services/orderService';
 import {
@@ -27,11 +31,18 @@ import {
 import { deriveOrderStage } from '@/services/orderStage';
 import { showError, showSuccess } from '@/utils/toast';
 
+export type RestaurantDashboardMetrics = {
+  ordersToday: number;
+  revenue: number;
+};
+
 type Props = {
   restaurantId: string;
   restaurantTimeZone?: string | null;
   onAssignDriver?: (orderId: string) => void;
   title?: string;
+  /** Sole marketplace orders subscription for host dashboard — feeds top-level stats. */
+  onDashboardMetrics?: (metrics: RestaurantDashboardMetrics) => void;
 };
 
 const EMPTY_TITLE = 'No active orders';
@@ -43,6 +54,7 @@ export function RestaurantOrdersPanel({
   restaurantTimeZone,
   onAssignDriver,
   title = 'Live orders',
+  onDashboardMetrics,
 }: Props) {
   const [filter, setFilter] = useState<RestaurantOrderListFilter>('active');
   const [actionOrderId, setActionOrderId] = useState<string | null>(null);
@@ -59,6 +71,12 @@ export function RestaurantOrdersPanel({
     () => orders.filter((order) => isOrderFresh(order)),
     [orders],
   );
+
+  React.useEffect(() => {
+    if (!onDashboardMetrics) return;
+    const m = computeRestaurantDashboardMetrics(allOrders);
+    onDashboardMetrics({ ordersToday: m.total, revenue: m.revenue });
+  }, [allOrders, onDashboardMetrics]);
 
   const emptyTitle = useMemo(() => {
     if (!loading && allOrders.length === 0) return EMPTY_TITLE;
@@ -87,6 +105,7 @@ export function RestaurantOrdersPanel({
     try {
       if (status === 'accepted') {
         await acceptRestaurantOrder(orderId);
+        lockOrderStage(orderId, 'preparing');
       } else {
         await updateOrderStatus(orderId, status);
       }
@@ -105,6 +124,7 @@ export function RestaurantOrdersPanel({
     setActionOrderId(orderId);
     try {
       await rejectOrder(orderId);
+      clearOrderStageLock(orderId);
       showSuccess('Order rejected');
     } catch {
       showError('Could not reject order.');
@@ -189,6 +209,7 @@ export function RestaurantOrdersPanel({
               <RestaurantLiveOrderCard
                 order={order}
                 timeZone={timeZone}
+                sourceScreen="RestaurantOrdersPanel"
                 onStatus={(status) => void handleStatus(order.id, status)}
                 onReject={() => void handleReject(order.id)}
                 loading={actionOrderId === order.id}

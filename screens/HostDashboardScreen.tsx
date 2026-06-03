@@ -1,19 +1,12 @@
-import { systemConfirm } from '@/components/SystemDialogHost';
-import { useMenu } from '@/hooks/useMenu';
-import { RestaurantOrdersPanel } from '@/components/restaurant/RestaurantOrdersPanel';
-import { computeRestaurantDashboardMetrics } from '@/lib/restaurantOrderFreshness';
-import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
+import {
+  RestaurantOrdersPanel,
+  type RestaurantDashboardMetrics,
+} from '@/components/restaurant/RestaurantOrdersPanel';
 import {
   mergeHostRestaurantProfile,
   saveRestaurantVenueMain,
 } from '@/services/hostRestaurant';
 import { useAuth } from '@/services/AuthContext';
-import {
-  addFoodItem,
-  deleteFoodItem,
-  updateFoodItem,
-  type FoodItem,
-} from '@/services/foodService';
 import { db } from '@/services/firebase';
 import {
   isRestaurantIsOpenMatching,
@@ -24,13 +17,10 @@ import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSessi
 import { runRootNavigationTask } from '@/lib/router/rootNavigation';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { startOnboarding } from '@/services/stripeConnect';
-import { MenuItemImagePicker } from '@/components/restaurant/MenuItemImagePicker';
-import { useMenuItemImageEditor } from '@/hooks/useMenuItemImageEditor';
 import {
   pickMenuImageFromLibrary,
   uploadRestaurantLogo,
 } from '@/services/menuImageService';
-import { menuImageDisplayUri } from '@/utils/menuImageUrl';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { requireRole } from '@/utils/requireRole';
 import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
@@ -41,14 +31,9 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { AppTextInput } from '../components/AppTextInput';
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
-import type { OrderStatus } from '@/services/orderService';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
 type RestaurantState = {
   id: string;
   name: string;
@@ -62,44 +47,9 @@ const PRIMARY = '#16a34a';
 const PAGE = '#f8fafc';
 const CARD = '#ffffff';
 
-function badgeTone(status: OrderStatus): { bg: string; text: string } {
-  switch (status) {
-    case 'awaiting_payment':
-      return { bg: '#E2E8F0', text: '#334155' };
-    case 'payment_confirmed':
-    case 'pending':
-      return { bg: '#FEF3C7', text: '#92400E' };
-    case 'restaurant_accepted':
-    case 'preparing':
-      return { bg: '#DBEAFE', text: '#1E40AF' };
-    case 'ready_for_pickup':
-      return { bg: '#D1FAE5', text: '#065F46' };
-    case 'picked_up':
-    case 'on_the_way':
-      return { bg: '#CCFBF1', text: '#0F766E' };
-    case 'delivered':
-      return { bg: '#ECFDF5', text: '#166534' };
-    case 'rejected':
-      return { bg: '#FEE2E2', text: '#991B1B' };
-    default:
-      return { bg: '#F1F5F9', text: '#475569' };
-  }
-}
-
-export type HostDashboardVariant = 'dashboard' | 'menu';
-
-type HostDashboardScreenProps = {
-  /** `menu` = items only; `dashboard` = live orders + venue (no menu list). */
-  variant?: HostDashboardVariant;
-};
-
-export default function HostDashboardScreen({
-  variant = 'dashboard',
-}: HostDashboardScreenProps) {
-  const isMenuTab = variant === 'menu';
-  const isDashboardTab = variant === 'dashboard';
+/** Restaurant dashboard — sole host screen for live marketplace orders. */
+export default function HostDashboardScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user, loading: authLoading, signOutUser } = useAuth();
   const { authorized, loading: roleLoading } = requireRole(['restaurant', 'host']);
   const uid = user?.uid ?? '';
@@ -114,28 +64,11 @@ export default function HostDashboardScreen({
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
 
-  const { items: menu, loading: menuLoading } = useMenu(uid || null);
-  const { allOrders: orders, loading: ordersLoading } = useRestaurantOrders({
-    restaurantId: isDashboardTab && uid ? uid : null,
-    restaurantTimeZone: restaurant?.timezone,
-    filter: 'active',
-  });
-
-  const [itemModalOpen, setItemModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
-  const [itemName, setItemName] = useState('');
-  const [itemPrice, setItemPrice] = useState('');
-  const [savingItem, setSavingItem] = useState(false);
-
-  const menuItemImage = useMenuItemImageEditor({
-    restaurantId: uid || undefined,
-    itemId: editingItem?.id,
-    initialImageUrl: editingItem?.image ?? null,
-    initialUpdatedAtMs: editingItem?.updatedAtMs ?? null,
-    active: itemModalOpen,
+  const [dashboardMetrics, setDashboardMetrics] = useState<RestaurantDashboardMetrics>({
+    ordersToday: 0,
+    revenue: 0,
   });
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
-  const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const pendingIsOpenRef = useRef<boolean | null>(null);
   const [toggleBusy, setToggleBusy] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -359,107 +292,13 @@ export default function HostDashboardScreen({
     }
   };
 
-  const openNewItem = () => {
-    setEditingItem(null);
-    setItemName('');
-    setItemPrice('');
-    menuItemImage.reset(null, null);
-    setItemModalOpen(true);
-  };
-
-  const openEditItem = (row: FoodItem) => {
-    setEditingItem(row);
-    setItemName(row.name);
-    setItemPrice(String(row.price));
-    menuItemImage.reset(row.image, row.updatedAtMs);
-    setItemModalOpen(true);
-  };
-
-  const saveMenuItem = async () => {
-    if (!uid) return;
-    if (!menuItemImage.canSave) return;
-    const name = itemName.trim();
-    const price = Number(String(itemPrice).replace(/[^0-9.]/g, ''));
-    if (!name) {
-      showError('Enter item name.');
-      return;
-    }
-    if (!Number.isFinite(price) || price <= 0) {
-      showError('Enter a valid price.');
-      return;
-    }
-    setSavingItem(true);
-    try {
-      if (editingItem) {
-        const imageUrl = await menuItemImage.finalizeImageForItem(editingItem.id);
-        await updateFoodItem(uid, editingItem.id, {
-          name,
-          price,
-          image: imageUrl,
-        });
-        showSuccess('Item updated.');
-      } else {
-        const newItemId = await addFoodItem({
-          name,
-          price,
-          image: menuItemImage.committedImageUrl,
-          restaurantId: uid,
-          available: true,
-          description: '',
-          category: '',
-        });
-        await menuItemImage.finalizeImageForItem(newItemId);
-        showSuccess('Item added.');
-      }
-      setItemModalOpen(false);
-      setEditingItem(null);
-      menuItemImage.reset(null, null);
-    } catch (e) {
-      showError(getUserFriendlyError(e));
-    } finally {
-      setSavingItem(false);
-    }
-  };
-
-  const confirmDeleteItem = (row: FoodItem) => {
-    void (async () => {
-      const ok = await systemConfirm({
-        title: 'Remove item',
-        message: `Delete “${row.name}”?`,
-        confirmLabel: 'Delete',
-        destructive: true,
-      });
-      if (!ok || !uid) return;
-      try {
-        await deleteFoodItem(uid, row.id);
-        showSuccess('Item removed.');
-      } catch (e) {
-        showError(getUserFriendlyError(e));
-      }
-    })();
-  };
-
-  useEffect(() => {
-    if (knownOrderIdsRef.current.size === 0) {
-      knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
-      return;
-    }
-    const incoming = orders.some((o) => !knownOrderIdsRef.current.has(o.id));
-    if (incoming) {
-      // Placeholder hook for new-order sound.
-      knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
-    }
-  }, [orders]);
-
-  const stats = useMemo(() => {
-    const orderMetrics = computeRestaurantDashboardMetrics(orders);
-    const activeItems = menu.length;
-    return {
-      ordersToday: orderMetrics.total,
-      revenueToday: orderMetrics.revenue,
-      activeItems,
-    };
-  }, [menu, orders]);
+  const stats = useMemo(
+    () => ({
+      ordersToday: dashboardMetrics.ordersToday,
+      revenueToday: dashboardMetrics.revenue,
+    }),
+    [dashboardMetrics],
+  );
 
   if (authLoading || roleLoading) {
     return (
@@ -497,9 +336,7 @@ export default function HostDashboardScreen({
       >
         <View style={styles.topBar}>
           <View style={styles.headerMain}>
-            <Text style={styles.screenTitle}>
-              {isMenuTab ? 'Menu' : 'Restaurant Dashboard'}
-            </Text>
+            <Text style={styles.screenTitle}>Restaurant Dashboard</Text>
             <View style={styles.onlineRow}>
               <Text style={styles.onlineLabel}>{isVenueOpen ? 'Online' : 'Offline'}</Text>
               <Switch
@@ -542,35 +379,19 @@ export default function HostDashboardScreen({
             />
           }
         >
-          {isDashboardTab ? (
-            <View style={styles.statsRow}>
-              <View style={styles.statTile}>
-                <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
-                <Text style={styles.statValue}>{stats.ordersToday}</Text>
-                <Text style={styles.statLabel}>Orders (24h)</Text>
-              </View>
-              <View style={styles.statTile}>
-                <Ionicons name="cash-outline" size={20} color={PRIMARY} />
-                <Text style={styles.statValue}>${stats.revenueToday.toFixed(0)}</Text>
-                <Text style={styles.statLabel}>Revenue</Text>
-              </View>
-              <View style={styles.statTile}>
-                <Ionicons name="restaurant-outline" size={20} color={PRIMARY} />
-                <Text style={styles.statValue}>{stats.activeItems}</Text>
-                <Text style={styles.statLabel}>Active items</Text>
-              </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statTile}>
+              <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
+              <Text style={styles.statValue}>{stats.ordersToday}</Text>
+              <Text style={styles.statLabel}>Orders (24h)</Text>
             </View>
-          ) : (
-            <View style={styles.statsRow}>
-              <View style={[styles.statTile, styles.statTileWide]}>
-                <Ionicons name="restaurant-outline" size={20} color={PRIMARY} />
-                <Text style={styles.statValue}>{stats.activeItems}</Text>
-                <Text style={styles.statLabel}>Active menu items</Text>
-              </View>
+            <View style={styles.statTile}>
+              <Ionicons name="cash-outline" size={20} color={PRIMARY} />
+              <Text style={styles.statValue}>${stats.revenueToday.toFixed(0)}</Text>
+              <Text style={styles.statLabel}>Revenue</Text>
             </View>
-          )}
+          </View>
 
-          {isDashboardTab ? (
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>Venue info</Text>
             {restaurantLoading ? (
@@ -658,68 +479,7 @@ export default function HostDashboardScreen({
               </>
             )}
           </View>
-          ) : null}
 
-          {isMenuTab ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Menu</Text>
-            <Text style={styles.menuHint}>
-              Card layout with photo, name, and price. Tap + to add an item.
-            </Text>
-            {menuLoading ? (
-              <ActivityIndicator color={PRIMARY} style={{ marginTop: 12 }} />
-            ) : menu.length === 0 ? (
-              <Text style={styles.empty}>No menu items yet. Tap + to add your first dish.</Text>
-            ) : (
-              menu.map((row) => (
-                <View key={row.id} style={styles.menuDishCard}>
-                  {row.image ? (
-                    <Image
-                      source={{
-                        uri:
-                          menuImageDisplayUri(row.image, row.updatedAtMs) ??
-                          row.image,
-                      }}
-                      style={styles.menuDishImage}
-                    />
-                  ) : (
-                    <View style={[styles.menuDishImage, styles.menuDishImagePh]}>
-                      <Ionicons name="fast-food-outline" size={36} color="#94a3b8" />
-                    </View>
-                  )}
-                  <View style={styles.menuDishBody}>
-                    <View style={styles.menuDishText}>
-                      <Text style={styles.menuDishName} numberOfLines={2}>
-                        {row.name}
-                      </Text>
-                      <Text style={styles.menuDishPrice}>${row.price.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.menuDishActions}>
-                      <TouchableOpacity
-                        onPress={() => openEditItem(row)}
-                        style={styles.menuActionBtn}
-                        hitSlop={8}
-                      >
-                        <Ionicons name="create-outline" size={22} color="#fff" />
-                        <Text style={styles.menuActionBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => confirmDeleteItem(row)}
-                        style={[styles.menuActionBtn, styles.menuActionBtnDanger]}
-                        hitSlop={8}
-                      >
-                        <Ionicons name="trash-outline" size={22} color="#fff" />
-                        <Text style={styles.menuActionBtnText}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-          ) : null}
-
-          {isDashboardTab ? (
           <View style={styles.card}>
             <View style={styles.ordersSummaryRow}>
               <View style={styles.ordersSummaryTile}>
@@ -732,98 +492,11 @@ export default function HostDashboardScreen({
                 restaurantId={uid}
                 restaurantTimeZone={restaurant?.timezone}
                 title="Live orders"
+                onDashboardMetrics={setDashboardMetrics}
               />
             ) : null}
           </View>
-          ) : null}
-
-          {isMenuTab ? (
-          <Text style={styles.footerHint}>
-            Public menu:{' '}
-            <Text
-              style={styles.footerLink}
-              onPress={() =>
-                router.push(
-                  `/restaurant-menu/${encodeURIComponent(uid)}` as never,
-                )
-              }
-            >
-              Preview menu link
-            </Text>
-          </Text>
-          ) : null}
-
         </ScrollView>
-
-        {isMenuTab ? (
-        <TouchableOpacity
-          style={[styles.fab, { bottom: 18 + insets.bottom }]}
-          onPress={openNewItem}
-          activeOpacity={0.88}
-          accessibilityLabel="Add menu item"
-        >
-          <Ionicons name="add" size={30} color="#fff" />
-        </TouchableOpacity>
-        ) : null}
-
-        <Modal
-          visible={itemModalOpen}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setItemModalOpen(false)}
-        >
-          <SafeAreaView style={styles.modalSafe} edges={['top', 'bottom']}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingItem ? 'Edit item' : 'New item'}
-              </Text>
-              <TouchableOpacity onPress={() => setItemModalOpen(false)}>
-                <Text style={styles.modalClose}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.modalBody}
-            >
-              <MenuItemImagePicker
-                displayUri={menuItemImage.displayUri}
-                isPicking={menuItemImage.isPicking}
-                isUploading={menuItemImage.isUploading}
-                uploadProgress={menuItemImage.uploadProgress}
-                disabled={savingItem}
-                onPick={() => void menuItemImage.pickImage()}
-              />
-              <Text style={styles.inputLabel}>Name</Text>
-              <AppTextInput
-                style={styles.input}
-                value={itemName}
-                onChangeText={setItemName}
-                placeholder="Item name"
-                placeholderTextColor="#94a3b8"
-              />
-              <Text style={styles.inputLabel}>Price (USD)</Text>
-              <AppTextInput
-                style={styles.input}
-                value={itemPrice}
-                onChangeText={setItemPrice}
-                placeholder="0.00"
-                placeholderTextColor="#94a3b8"
-                keyboardType="decimal-pad"
-              />
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={saveMenuItem}
-                disabled={savingItem || !menuItemImage.canSave}
-              >
-                {savingItem ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Save item</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

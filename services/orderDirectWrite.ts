@@ -14,6 +14,8 @@ import {
 } from 'firebase/firestore';
 
 import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
+
+export { traceLegacyOrderWrite as detectLegacyOrderWriter };
 import { db } from '@/services/firebase';
 
 export function orderDocRef(orderId: string): DocumentReference {
