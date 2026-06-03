@@ -1,5 +1,6 @@
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
+import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
 import { traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import {
   isOrderFresh,
@@ -97,6 +98,7 @@ async function flushCleanupBatch(
   const batch = writeBatch(db);
   for (const entry of entries) {
     const patch = buildVisibilityPatch(entry.action);
+    traceLegacyOrderWrite('orderCleanupService.ts#flushCleanupBatch', entry.orderId, patch);
     traceOrderWriteFromPatch(
       'orderCleanupService.ts',
       'flushCleanupBatch',

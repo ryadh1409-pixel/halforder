@@ -1,5 +1,5 @@
 import HostDashboardScreen from '@/screens/HostDashboardScreen';
 
 export default function HostDashboardRoute() {
-  return <HostDashboardScreen />;
+  return <HostDashboardScreen variant="dashboard" />;
 }

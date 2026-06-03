@@ -2,21 +2,33 @@ import {FieldValue, getFirestore, type DocumentData} from "firebase-admin/firest
 import {logger} from "firebase-functions";
 import {
   buildOrderPaidStatePatch,
+  isOrderFulfilledForPaidPatch,
   needsPaidStatusRepair,
   orderPaymentStatusString,
   orderStatusString,
 } from "./orderPaidState.js";
+import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
+import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 
 const db = getFirestore();
 
 /**
  * Repairs split state: paymentStatus paid + status still awaiting_payment.
- * Idempotent — no-op when already consistent.
+ * Idempotent — no-op when already consistent. Never downgrades fulfillment.
  */
 export async function repairOrderPaidStateIfNeeded(
   orderId: string,
   data: DocumentData,
 ): Promise<boolean> {
+  if (hasFulfillmentProgressMarkers(data) || isOrderFulfilledForPaidPatch(data)) {
+    console.log(
+      "[REPAIR] skipping — order already fulfilled:",
+      orderStatusString(data.status),
+      {orderId},
+    );
+    return false;
+  }
+
   if (!needsPaidStatusRepair(data)) {
     return false;
   }
@@ -26,60 +38,58 @@ export async function repairOrderPaidStateIfNeeded(
     status: orderStatusString(data.status),
   };
 
-  const courier = orderStatusString(data.deliveryStatus).toLowerCase();
-  const kitchen = orderStatusString(data.status).toLowerCase();
-  const fulfillmentAdvanced =
-    kitchen === "accepted" ||
-    kitchen === "restaurant_accepted" ||
-    kitchen === "preparing" ||
-    kitchen === "ready" ||
-    kitchen === "ready_for_pickup" ||
-    courier === "accepted" ||
-    courier === "preparing" ||
-    courier === "ready_for_pickup" ||
-    courier === "driver_assigned" ||
-    courier === "picked_up" ||
-    courier === "delivered";
-
-  if (fulfillmentAdvanced) {
-    logger.info("[order-paid-repair] skipped_fulfillment_advanced", {orderId, before});
-    return false;
-  }
-
   logger.info("[order-paid-repair] triggered", {orderId, before});
 
-  const freshSnap = await db.doc(`orders/${orderId}`).get();
-  if (!freshSnap.exists) return false;
-  const fresh = freshSnap.data() ?? {};
+  const orderRef = db.doc(`orders/${orderId}`);
+  let applied = false;
 
-  const patch = buildOrderPaidStatePatch(fresh, {repairOnly: true});
-  if (Object.keys(patch).length === 0) {
-    logger.info("[order-paid-repair] skipped_empty_patch", {orderId});
-    return false;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(orderRef);
+    if (!snap.exists) return;
+
+    const fresh = snap.data() ?? {};
+    if (hasFulfillmentProgressMarkers(fresh) || isOrderFulfilledForPaidPatch(fresh)) {
+      console.log("[REPAIR] txn skip — fulfilled", {orderId});
+      return;
+    }
+    if (!needsPaidStatusRepair(fresh)) {
+      return;
+    }
+
+    const basePatch = buildOrderPaidStatePatch(fresh, {repairOnly: true});
+    const safePatch = prepareServerOrderPatch(
+      orderId,
+      fresh,
+      {
+        ...basePatch,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      "repairOrderPaidState",
+    );
+
+    const lifecycleKeys = ["status", "deliveryStatus", "paymentStatus"];
+    const hasLifecycleWrite = lifecycleKeys.some((k) => safePatch[k] !== undefined);
+    if (!hasLifecycleWrite && safePatch.paymentStatus === undefined) {
+      logger.info("[order-paid-repair] skipped_empty_patch", {orderId});
+      return;
+    }
+
+    console.log("[ORDER WRITE TRACE]", "repairOrderPaidState.ts", "repairOrderPaidStateIfNeeded", {
+      orderId,
+      status: safePatch.status ?? null,
+      deliveryStatus: safePatch.deliveryStatus ?? null,
+      paymentStatus: safePatch.paymentStatus ?? null,
+      updatedBy: safePatch.updatedBy ?? "repairOrderPaidState",
+      op: "update",
+    });
+
+    tx.update(orderRef, safePatch);
+    applied = true;
+  });
+
+  if (applied) {
+    logger.info("[order-paid-repair] applied", {orderId, before});
   }
 
-  console.log("[ORDER WRITE TRACE]", "repairOrderPaidState.ts", "repairOrderPaidStateIfNeeded", {
-    orderId,
-    status: patch.status ?? null,
-    deliveryStatus: patch.deliveryStatus ?? null,
-    paymentStatus: patch.paymentStatus ?? null,
-    op: "update",
-    merge: null,
-  });
-
-  await db.doc(`orders/${orderId}`).update({
-    ...patch,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-
-  logger.info("[order-paid-repair] applied", {
-    orderId,
-    before,
-    after: {
-      paymentStatus: patch.paymentStatus,
-      status: patch.status,
-    },
-  });
-
-  return true;
+  return applied;
 }

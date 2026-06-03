@@ -2,6 +2,7 @@ import {
   assertDeliveryEligibleForOrder,
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
+import { reconcileOrderSnapshotStage } from '@/lib/orderListenerCommit';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { deriveOrderStage, isOrderStageAtLeast, logOrderStage } from '@/services/orderStage';
 import {
@@ -762,24 +763,36 @@ export function getOrders(
     ),
     (snap) => {
       try {
-        if (__DEV__) {
-          for (const docSnap of snap.docs) {
-            if (!docSnap.metadata.hasPendingWrites) continue;
-            const pending = docSnap.data() as Record<string, unknown>;
-            console.warn('[ORDER STAGE] listener pending local write (not server truth yet)', {
-              orderId: docSnap.id,
-              status: pending.status ?? null,
-              deliveryStatus: pending.deliveryStatus ?? null,
-              paymentStatus: pending.paymentStatus ?? null,
-            });
-          }
-        }
         const rows = snap.docs
-          .map((docSnap) =>
-            mapDocToRestaurantOrder(docSnap, restaurantId, {
-              timeZone: options?.timeZone,
-            }),
-          )
+          .map((docSnap) => {
+            const raw = docSnap.data() as Record<string, unknown>;
+            const pending = docSnap.metadata.hasPendingWrites;
+            if (__DEV__ && pending) {
+              logOrderStage(
+                { id: docSnap.id, ...raw },
+                { hasPendingWrites: true },
+              );
+            }
+            const reconciled = reconcileOrderSnapshotStage(
+              docSnap.id,
+              { id: docSnap.id, ...raw },
+              pending,
+            );
+            const merged = {
+              ...raw,
+              status: reconciled.status ?? raw.status,
+              deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
+              paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
+            };
+            return mapDocToRestaurantOrder(
+              {
+                id: docSnap.id,
+                data: () => merged as Record<string, unknown>,
+              },
+              restaurantId,
+              { timeZone: options?.timeZone },
+            );
+          })
           .filter(isRestaurantMarketplaceKitchenOrder);
         onData(filterFreshRestaurantOrders(rows));
       } catch (e) {
@@ -930,6 +943,7 @@ export async function updateOrderStatus(
   if (normalizedStatus === 'accepted' || normalizedStatus === 'restaurant_accepted') {
     patch.acceptedAt = serverTimestamp();
     patch.deliveryStatus = 'accepted';
+    patch.updatedBy = 'restaurantAccept';
   }
   if (normalizedStatus === 'preparing') {
     patch.deliveryStatus = 'preparing';
@@ -1046,7 +1060,28 @@ export function subscribeOrderById(
         return;
       }
       try {
-        onData(mapDocToRestaurantOrder(snap));
+        const raw = snap.data() as Record<string, unknown>;
+        const pending = snap.metadata.hasPendingWrites;
+        const reconciled = reconcileOrderSnapshotStage(
+          snap.id,
+          { id: snap.id, ...raw },
+          pending,
+        );
+        if (__DEV__ && pending) {
+          logOrderStage({ id: snap.id, ...raw }, { hasPendingWrites: true });
+        }
+        const merged = {
+          ...raw,
+          status: reconciled.status ?? raw.status,
+          deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
+          paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
+        };
+        onData(
+          mapDocToRestaurantOrder({
+            id: snap.id,
+            data: () => merged,
+          }),
+        );
       } catch (e) {
         console.warn('[subscribeOrderById] mapDoc failed', orderId, e);
         options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));

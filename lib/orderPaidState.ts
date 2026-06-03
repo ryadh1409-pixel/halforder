@@ -1,3 +1,4 @@
+import { hasFulfillmentProgressMarkers } from '@/lib/orderFulfillmentSignals';
 import { sanitizeOrderPatchAgainstRegression } from '@/services/orderStage';
 
 /**
@@ -14,6 +15,36 @@ export const PRE_PAYMENT_ORDER_STATUSES = new Set([
   'payment_processing',
   'payment_failed',
 ]);
+
+/** Kitchen/courier stages where paid webhooks must not touch fulfillment fields. */
+export const FULFILLED_KITCHEN_STATUSES = new Set([
+  'accepted',
+  'restaurant_accepted',
+  'preparing',
+  'ready',
+  'ready_for_pickup',
+  'picked_up',
+  'on_the_way',
+  'arrived_customer',
+  'delivered',
+  'completed',
+]);
+
+export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolean {
+  const status = orderStatusString(order.status).toLowerCase();
+  if (FULFILLED_KITCHEN_STATUSES.has(status)) {
+    return true;
+  }
+  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
+  return (
+    courier === 'accepted' ||
+    courier === 'preparing' ||
+    courier === 'ready_for_pickup' ||
+    courier === 'driver_assigned' ||
+    courier === 'picked_up' ||
+    courier === 'delivered'
+  );
+}
 
 export type OrderPaidStateInput = {
   status?: unknown;
@@ -72,6 +103,40 @@ export type BuildOrderPaidStatePatchInput = {
   repairOnly?: boolean;
 };
 
+function appendPaidStateMetadata(
+  patch: Record<string, unknown>,
+  input: BuildOrderPaidStatePatchInput,
+): void {
+  if (input.paymentIntentId) {
+    patch.paymentIntentId = input.paymentIntentId;
+    patch.stripePaymentIntentId = input.paymentIntentId;
+  }
+  if (input.checkoutSessionId) {
+    patch.checkoutSessionId = input.checkoutSessionId;
+  }
+  if (input.stripeWebhookLastEventType) {
+    patch.stripeWebhookLastEventType = input.stripeWebhookLastEventType;
+  }
+  if (input.stripeWebhookLastEventId) {
+    patch.stripeWebhookLastEventId = input.stripeWebhookLastEventId;
+  }
+}
+
+/** Payment + Stripe metadata only — never mutates status/deliveryStatus/drivers. */
+export function buildPaymentOnlyPaidStatePatch(
+  input: BuildOrderPaidStatePatchInput = {},
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    paymentStatus: 'paid',
+    updatedAt: 'SERVER_TIMESTAMP',
+  };
+  if (!input.repairOnly) {
+    patch.paidAt = 'SERVER_TIMESTAMP';
+  }
+  appendPaidStateMetadata(patch, input);
+  return patch;
+}
+
 /**
  * Atomic field set for webhook or repair. Caller adds Firestore server timestamps.
  */
@@ -79,6 +144,10 @@ export function buildOrderPaidStatePatch(
   existing: OrderPaidStateInput & Record<string, unknown>,
   input: BuildOrderPaidStatePatchInput = {},
 ): Record<string, unknown> {
+  if (hasFulfillmentProgressMarkers(existing) || isOrderFulfilledForPaidPatch(existing)) {
+    return buildPaymentOnlyPaidStatePatch(input);
+  }
+
   const currentStatus = orderStatusString(existing.status);
   const patch: Record<string, unknown> = {
     paymentStatus: 'paid',
@@ -111,19 +180,7 @@ export function buildOrderPaidStatePatch(
     }
   }
 
-  if (input.paymentIntentId) {
-    patch.paymentIntentId = input.paymentIntentId;
-    patch.stripePaymentIntentId = input.paymentIntentId;
-  }
-  if (input.checkoutSessionId) {
-    patch.checkoutSessionId = input.checkoutSessionId;
-  }
-  if (input.stripeWebhookLastEventType) {
-    patch.stripeWebhookLastEventType = input.stripeWebhookLastEventType;
-  }
-  if (input.stripeWebhookLastEventId) {
-    patch.stripeWebhookLastEventId = input.stripeWebhookLastEventId;
-  }
+  appendPaidStateMetadata(patch, input);
 
   return sanitizeOrderPatchAgainstRegression(existing, patch);
 }

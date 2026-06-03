@@ -113,6 +113,45 @@ describe('deriveOrderStage', () => {
     expect(patch.deliveryStatus).toBeUndefined();
   });
 
+  it('blocks status downgrade from accepted to awaiting_payment', () => {
+    const { wouldDowngradeLifecycle } = require('@/lib/orderLifecyclePriority');
+    expect(
+      wouldDowngradeLifecycle(
+        { status: 'accepted', deliveryStatus: 'accepted', paymentStatus: 'paid' },
+        { status: 'awaiting_payment', deliveryStatus: 'pending' },
+      ),
+    ).toBe(true);
+  });
+
+  it('paid patch skips lifecycle when acceptedAt is set', () => {
+    const { buildOrderPaidStatePatch } = require('@/lib/orderPaidState');
+    const patch = buildOrderPaidStatePatch({
+      status: 'payment_confirmed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'pending',
+      acceptedAt: { seconds: 1 },
+    });
+    expect(patch.status).toBeUndefined();
+    expect(patch.deliveryStatus).toBeUndefined();
+    expect(patch.paymentStatus).toBe('paid');
+  });
+
+  it('fulfilled kitchen status returns payment-only patch', () => {
+    const { buildOrderPaidStatePatch } = require('@/lib/orderPaidState');
+    const patch = buildOrderPaidStatePatch(
+      {
+        paymentStatus: 'unpaid',
+        status: 'accepted',
+        deliveryStatus: 'accepted',
+      },
+      { paymentIntentId: 'pi_test' },
+    );
+    expect(patch.paymentStatus).toBe('paid');
+    expect(patch.status).toBeUndefined();
+    expect(patch.deliveryStatus).toBeUndefined();
+    expect(patch.paymentIntentId).toBe('pi_test');
+  });
+
   it('paid awaiting_payment maps to awaiting_restaurant not awaiting_payment', () => {
     expect(
       deriveOrderStage({

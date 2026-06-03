@@ -1,12 +1,8 @@
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore';
+import { getDoc, serverTimestamp } from 'firebase/firestore';
 
 import { ORDER_STATUS } from '@/constants/orderStatus';
-import { auth, db } from './firebase';
+import { auth } from './firebase';
+import { directUpdateOrder, orderDocRef } from './orderDirectWrite';
 import { normalizeOrderUserIds } from './orders';
 
 export async function markHalfOrderChatActive(orderId: string): Promise<void> {
@@ -14,7 +10,7 @@ export async function markHalfOrderChatActive(orderId: string): Promise<void> {
   if (!oid) return;
   const uid = auth.currentUser?.uid;
   if (!uid) return;
-  const ref = doc(db, 'orders', oid);
+  const ref = orderDocRef(oid);
   let snap;
   try {
     snap = await getDoc(ref);
@@ -28,7 +24,11 @@ export async function markHalfOrderChatActive(orderId: string): Promise<void> {
   const users = normalizeOrderUserIds(d.users);
   if (!users.includes(uid) || users.length < 2) return;
   try {
-    await updateDoc(ref, { status: ORDER_STATUS.ACTIVE });
+    await directUpdateOrder(
+      oid,
+      { status: ORDER_STATUS.ACTIVE },
+      'halfOrderLifecycle.ts#markHalfOrderChatActive',
+    );
   } catch {
     /* rules or offline */
   }
@@ -39,7 +39,7 @@ export async function completeHalfOrder(orderId: string): Promise<void> {
   if (!oid) throw new Error('Invalid order.');
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('You must be signed in.');
-  const ref = doc(db, 'orders', oid);
+  const ref = orderDocRef(oid);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Order not found.');
   const d = snap.data() as Record<string, unknown>;
@@ -51,8 +51,12 @@ export async function completeHalfOrder(orderId: string): Promise<void> {
   if (st !== ORDER_STATUS.MATCHED && st !== ORDER_STATUS.ACTIVE) {
     throw new Error('This order cannot be marked complete.');
   }
-  await updateDoc(ref, {
-    status: ORDER_STATUS.COMPLETED,
-    completedAt: serverTimestamp(),
-  });
+  await directUpdateOrder(
+    oid,
+    {
+      status: ORDER_STATUS.COMPLETED,
+      completedAt: serverTimestamp(),
+    },
+    'halfOrderLifecycle.ts#completeHalfOrder',
+  );
 }

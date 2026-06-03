@@ -11,12 +11,15 @@ import { defineSecret } from "firebase-functions/params";
 import type { DocumentSnapshot, Transaction } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { paymentIntentIdFromSession, trimMetadata } from "./stripeWebhookLogic.js";
+import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {
   buildOrderPaidStatePatch,
-  needsPaidStatusRepair,
+  buildPaymentOnlyPaidStatePatch,
+  isOrderFulfilledForPaidPatch,
   orderPaymentStatusString,
   orderStatusString,
 } from "./orderPaidState.js";
+import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -126,39 +129,83 @@ function mergeOrderPaidSync(
   };
 
   const alreadyPaid = before.paymentStatus === "paid";
-  const needsRepair = needsPaidStatusRepair(data);
-  const currentStage = orderStatusString(data.status);
-  const courierStage = orderStatusString(data.deliveryStatus).toLowerCase();
-  const fulfillmentAdvanced =
-    currentStage === "accepted" ||
-    currentStage === "restaurant_accepted" ||
-    currentStage === "preparing" ||
-    currentStage === "ready" ||
-    currentStage === "ready_for_pickup" ||
-    courierStage === "accepted" ||
-    courierStage === "preparing" ||
-    courierStage === "ready_for_pickup" ||
-    courierStage === "driver_assigned" ||
-    courierStage === "picked_up" ||
-    courierStage === "delivered";
 
-  if (alreadyPaid && !needsRepair) {
-    logStripeDebug("order_already_paid_skip_order_patch", {
+  const fulfillmentLocked =
+    hasFulfillmentProgressMarkers(data) || isOrderFulfilledForPaidPatch(data);
+
+  if (fulfillmentLocked) {
+    console.log(
+      "[STRIPE WEBHOOK] skipping fulfillment patch — order already fulfilled:",
+      orderStatusString(data.status),
+      {orderId, deliveryStatus: data.deliveryStatus ?? null},
+    );
+
+    const paymentOnly: Record<string, unknown> = {
+      ...buildPaymentOnlyPaidStatePatch({
+        paymentIntentId,
+        checkoutSessionId,
+        stripeWebhookLastEventType: sourceEventType,
+        stripeWebhookLastEventId: stripeEventId,
+      }),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (!alreadyPaid) {
+      paymentOnly.paidAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    const safe = prepareServerOrderPatch(
       orderId,
-      stripeEventId,
-      sourceEventType,
-      before,
+      data,
+      paymentOnly,
+      "stripeWebhook:fulfilled",
+    );
+    if (Object.keys(safe).length === 0) return;
+
+    console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync:fulfilled", {
+      orderId,
+      status: safe.status ?? null,
+      deliveryStatus: safe.deliveryStatus ?? null,
+      paymentStatus: safe.paymentStatus ?? null,
+      updatedBy: safe.updatedBy ?? null,
+      op: "set",
+      merge: true,
     });
+
+    tx.set(orderSnap.ref, safe, {merge: true});
     return;
   }
 
-  if (fulfillmentAdvanced) {
-    logStripeDebug("order_paid_skip_fulfillment_advanced", {
+  /** Once paid, webhook must never re-assert payment_confirmed/pending (repair runs in main CF). */
+  if (alreadyPaid) {
+    const paymentOnly: Record<string, unknown> = {
+      ...buildPaymentOnlyPaidStatePatch({
+        paymentIntentId,
+        checkoutSessionId,
+        stripeWebhookLastEventType: sourceEventType,
+        stripeWebhookLastEventId: stripeEventId,
+      }),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const safe = prepareServerOrderPatch(orderId, data, paymentOnly, "stripeWebhook:alreadyPaid");
+    if (Object.keys(safe).length === 0) {
+      logStripeDebug("order_already_paid_skip_order_patch", {
+        orderId,
+        stripeEventId,
+        sourceEventType,
+        before,
+      });
+      return;
+    }
+    console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync:alreadyPaid", {
       orderId,
-      stripeEventId,
-      sourceEventType,
-      before,
+      status: safe.status ?? null,
+      deliveryStatus: safe.deliveryStatus ?? null,
+      paymentStatus: safe.paymentStatus ?? null,
+      updatedBy: safe.updatedBy ?? null,
+      op: "set",
+      merge: true,
     });
+    tx.set(orderSnap.ref, safe, {merge: true});
     return;
   }
 
@@ -167,7 +214,7 @@ function mergeOrderPaidSync(
     stripeEventId,
     sourceEventType,
     before,
-    repairOnly: alreadyPaid && needsRepair,
+    repairOnly: false,
   });
 
   const basePatch = buildOrderPaidStatePatch(data, {
@@ -175,7 +222,7 @@ function mergeOrderPaidSync(
     checkoutSessionId,
     stripeWebhookLastEventType: sourceEventType,
     stripeWebhookLastEventId: stripeEventId,
-    repairOnly: alreadyPaid && needsRepair,
+    repairOnly: false,
   });
 
   const patch: Record<string, unknown> = {
@@ -186,16 +233,23 @@ function mergeOrderPaidSync(
     patch.paidAt = admin.firestore.FieldValue.serverTimestamp();
   }
 
+  const safe = prepareServerOrderPatch(orderId, data, patch, "stripeWebhook:mergeOrderPaidSync");
+  if (Object.keys(safe).length === 0) {
+    logStripeDebug("order_paid_update_blocked_downgrade", {orderId, stripeEventId, before});
+    return;
+  }
+
   console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync", {
     orderId,
-    status: patch.status ?? null,
-    deliveryStatus: patch.deliveryStatus ?? null,
-    paymentStatus: patch.paymentStatus ?? null,
+    status: safe.status ?? null,
+    deliveryStatus: safe.deliveryStatus ?? null,
+    paymentStatus: safe.paymentStatus ?? null,
+    updatedBy: safe.updatedBy ?? null,
     op: "set",
     merge: true,
   });
 
-  tx.set(orderSnap.ref, patch, { merge: true });
+  tx.set(orderSnap.ref, safe, {merge: true});
 
   logStripeDebug("order_paid_update_after", {
     orderId,
@@ -203,9 +257,10 @@ function mergeOrderPaidSync(
     sourceEventType,
     before,
     after: {
-      paymentStatus: patch.paymentStatus,
-      status: patch.status,
-      deliveryStatus: patch.deliveryStatus,
+      paymentStatus: safe.paymentStatus,
+      status: safe.status,
+      deliveryStatus: safe.deliveryStatus,
+      updatedBy: safe.updatedBy,
     },
   });
 }

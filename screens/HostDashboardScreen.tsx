@@ -86,7 +86,18 @@ function badgeTone(status: OrderStatus): { bg: string; text: string } {
   }
 }
 
-export default function HostDashboardScreen() {
+export type HostDashboardVariant = 'dashboard' | 'menu';
+
+type HostDashboardScreenProps = {
+  /** `menu` = items only; `dashboard` = live orders + venue (no menu list). */
+  variant?: HostDashboardVariant;
+};
+
+export default function HostDashboardScreen({
+  variant = 'dashboard',
+}: HostDashboardScreenProps) {
+  const isMenuTab = variant === 'menu';
+  const isDashboardTab = variant === 'dashboard';
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, loading: authLoading, signOutUser } = useAuth();
@@ -105,7 +116,7 @@ export default function HostDashboardScreen() {
 
   const { items: menu, loading: menuLoading } = useMenu(uid || null);
   const { allOrders: orders, loading: ordersLoading } = useRestaurantOrders({
-    restaurantId: uid || undefined,
+    restaurantId: isDashboardTab && uid ? uid : null,
     restaurantTimeZone: restaurant?.timezone,
     filter: 'active',
   });
@@ -486,7 +497,9 @@ export default function HostDashboardScreen() {
       >
         <View style={styles.topBar}>
           <View style={styles.headerMain}>
-            <Text style={styles.screenTitle}>Restaurant Dashboard</Text>
+            <Text style={styles.screenTitle}>
+              {isMenuTab ? 'Menu' : 'Restaurant Dashboard'}
+            </Text>
             <View style={styles.onlineRow}>
               <Text style={styles.onlineLabel}>{isVenueOpen ? 'Online' : 'Offline'}</Text>
               <Switch
@@ -529,24 +542,35 @@ export default function HostDashboardScreen() {
             />
           }
         >
-          <View style={styles.statsRow}>
-            <View style={styles.statTile}>
-              <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
-              <Text style={styles.statValue}>{stats.ordersToday}</Text>
-              <Text style={styles.statLabel}>Orders (24h)</Text>
+          {isDashboardTab ? (
+            <View style={styles.statsRow}>
+              <View style={styles.statTile}>
+                <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
+                <Text style={styles.statValue}>{stats.ordersToday}</Text>
+                <Text style={styles.statLabel}>Orders (24h)</Text>
+              </View>
+              <View style={styles.statTile}>
+                <Ionicons name="cash-outline" size={20} color={PRIMARY} />
+                <Text style={styles.statValue}>${stats.revenueToday.toFixed(0)}</Text>
+                <Text style={styles.statLabel}>Revenue</Text>
+              </View>
+              <View style={styles.statTile}>
+                <Ionicons name="restaurant-outline" size={20} color={PRIMARY} />
+                <Text style={styles.statValue}>{stats.activeItems}</Text>
+                <Text style={styles.statLabel}>Active items</Text>
+              </View>
             </View>
-            <View style={styles.statTile}>
-              <Ionicons name="cash-outline" size={20} color={PRIMARY} />
-              <Text style={styles.statValue}>${stats.revenueToday.toFixed(0)}</Text>
-              <Text style={styles.statLabel}>Revenue</Text>
+          ) : (
+            <View style={styles.statsRow}>
+              <View style={[styles.statTile, styles.statTileWide]}>
+                <Ionicons name="restaurant-outline" size={20} color={PRIMARY} />
+                <Text style={styles.statValue}>{stats.activeItems}</Text>
+                <Text style={styles.statLabel}>Active menu items</Text>
+              </View>
             </View>
-            <View style={styles.statTile}>
-              <Ionicons name="restaurant-outline" size={20} color={PRIMARY} />
-              <Text style={styles.statValue}>{stats.activeItems}</Text>
-              <Text style={styles.statLabel}>Active items</Text>
-            </View>
-          </View>
+          )}
 
+          {isDashboardTab ? (
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>Venue info</Text>
             {restaurantLoading ? (
@@ -634,7 +658,9 @@ export default function HostDashboardScreen() {
               </>
             )}
           </View>
+          ) : null}
 
+          {isMenuTab ? (
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>Menu</Text>
             <Text style={styles.menuHint}>
@@ -691,7 +717,9 @@ export default function HostDashboardScreen() {
               ))
             )}
           </View>
+          ) : null}
 
+          {isDashboardTab ? (
           <View style={styles.card}>
             <View style={styles.ordersSummaryRow}>
               <View style={styles.ordersSummaryTile}>
@@ -707,7 +735,9 @@ export default function HostDashboardScreen() {
               />
             ) : null}
           </View>
+          ) : null}
 
+          {isMenuTab ? (
           <Text style={styles.footerHint}>
             Public menu:{' '}
             <Text
@@ -721,8 +751,11 @@ export default function HostDashboardScreen() {
               Preview menu link
             </Text>
           </Text>
+          ) : null}
+
         </ScrollView>
 
+        {isMenuTab ? (
         <TouchableOpacity
           style={[styles.fab, { bottom: 18 + insets.bottom }]}
           onPress={openNewItem}
@@ -731,6 +764,7 @@ export default function HostDashboardScreen() {
         >
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
+        ) : null}
 
         <Modal
           visible={itemModalOpen}
@@ -835,6 +869,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 16,
+  },
+  statTileWide: {
+    flex: 1,
+    minWidth: '100%',
   },
   statTile: {
     flex: 1,

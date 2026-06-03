@@ -12,6 +12,7 @@ import {
   marketplacePoolRemoveReason,
   shouldRemoveFromDriverPool,
 } from "./marketplacePoolLifecycle.js";
+import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 
 const db = getFirestore();
 
@@ -28,19 +29,27 @@ async function expireMarketplaceOrder(orderId: string, reason: string): Promise<
   if (hasDriverAssigned(data)) return;
   if (!isPoolExpiredByAge(data)) return;
 
-  const patch = {
-    expired: true,
-    marketplaceArchived: true,
-    marketplaceExpiredAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    deliveryStatus: "cancelled",
-    status: "cancelled",
-  };
+  const patch = prepareServerOrderPatch(
+    orderId,
+    data,
+    {
+      expired: true,
+      marketplaceArchived: true,
+      marketplaceExpiredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      deliveryStatus: "cancelled",
+      status: "cancelled",
+    },
+    "cleanupExpiredOrders",
+  );
+  if (Object.keys(patch).length === 0) return;
+
   console.log("[ORDER WRITE TRACE]", "cleanupExpiredOrders.ts", "expireMarketplaceOrder", {
     orderId,
-    status: patch.status,
-    deliveryStatus: patch.deliveryStatus,
+    status: patch.status ?? null,
+    deliveryStatus: patch.deliveryStatus ?? null,
     paymentStatus: null,
+    updatedBy: patch.updatedBy ?? null,
     op: "set",
     merge: true,
   });

@@ -1,6 +1,7 @@
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { getDoc, serverTimestamp } from 'firebase/firestore';
 
-import { auth, db } from './firebase';
+import { auth } from './firebase';
+import { directUpdateOrder, orderDocRef } from './orderDirectWrite';
 
 /**
  * HalfOrder: set `status` to `cancelled` and record who cancelled (for push targeting).
@@ -12,7 +13,7 @@ export async function cancelHalfOrder(orderId: string): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('You must be signed in.');
 
-  const ref = doc(db, 'orders', oid);
+  const ref = orderDocRef(oid);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Order not found.');
 
@@ -31,10 +32,14 @@ export async function cancelHalfOrder(orderId: string): Promise<void> {
   }
   if (d.status === 'cancelled') return;
 
-  await updateDoc(ref, {
-    status: 'cancelled',
-    cancelledBy: uid,
-    cancelReason: 'user',
-    cancelledAt: serverTimestamp(),
-  });
+  await directUpdateOrder(
+    oid,
+    {
+      status: 'cancelled',
+      cancelledBy: uid,
+      cancelReason: 'user',
+      cancelledAt: serverTimestamp(),
+    },
+    'halfOrderCancel.ts#cancelHalfOrder',
+  );
 }

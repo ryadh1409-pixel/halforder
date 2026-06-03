@@ -1,6 +1,6 @@
 import HostDashboardScreen from '@/screens/HostDashboardScreen';
 
-/** Menu management — same venue dashboard (menu section). */
+/** Menu tab — menu items only (no live orders). */
 export default function HostMenuRoute() {
-  return <HostDashboardScreen />;
+  return <HostDashboardScreen variant="menu" />;
 }

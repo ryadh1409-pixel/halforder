@@ -1,5 +1,9 @@
+import { ORDER_STAGE_PRIORITY as LIFECYCLE_STATUS_PRIORITY } from '@/lib/orderLifecyclePriority';
 import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
 import { safeToMillis } from '@/utils/safeToMillis';
+
+/** Monotonic status ranks for raw `status` field writes (see prepareProtectedOrderPatch). */
+export const ORDER_STAGE_PRIORITY = LIFECYCLE_STATUS_PRIORITY;
 
 export type DerivedOrderStage =
   | 'awaiting_payment'
@@ -297,14 +301,20 @@ export function deriveOrderStage(order: OrderStageInput | null | undefined): Der
   return 'awaiting_payment';
 }
 
-export function logOrderStage(order: OrderStageInput | null | undefined): DerivedOrderStage {
+export function logOrderStage(
+  order: OrderStageInput | null | undefined,
+  meta?: { hasPendingWrites?: boolean },
+): DerivedOrderStage {
   const derivedStage = deriveOrderStage(order);
   if (__DEV__) {
+    const row = order as Record<string, unknown> | null | undefined;
     console.log('[ORDER STAGE]', {
       orderId: order?.id ?? null,
-      paymentStatus: order?.paymentStatus ?? null,
       status: order?.status ?? null,
       deliveryStatus: order?.deliveryStatus ?? null,
+      paymentStatus: order?.paymentStatus ?? null,
+      updatedBy: typeof row?.updatedBy === 'string' ? row.updatedBy : null,
+      hasPendingWrites: meta?.hasPendingWrites ?? false,
       derivedStage,
     });
   }

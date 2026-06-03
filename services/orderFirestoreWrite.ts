@@ -1,12 +1,14 @@
 /**
  * Single client gateway for Firestore `orders/{orderId}` writes.
- * All marketplace lifecycle patches should go through `protectedUpdateOrder`.
+ * All marketplace lifecycle mutations MUST use protectedUpdateOrder or
+ * protectedTransactionUpdateOrder.
  */
 import {
   addDoc,
   collection,
   doc,
   getDoc,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -16,8 +18,14 @@ import {
   type WithFieldValue,
 } from 'firebase/firestore';
 
-import { traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
-import { deriveOrderStage, sanitizeOrderPatchAgainstRegression } from '@/services/orderStage';
+import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
+import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
+import { traceOrderLifecycleWrite, traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
+import {
+  deriveOrderStage,
+  sanitizeOrderPatchAgainstRegression,
+  type OrderStageInput,
+} from '@/services/orderStage';
 import { db } from '@/services/firebase';
 
 export type OrderWriteSource = {
@@ -29,7 +37,66 @@ function orderRef(orderId: string): DocumentReference {
   return doc(db, 'orders', orderId.trim());
 }
 
-/** Read → sanitize → traced update (marketplace lifecycle). */
+function sourceLabel(source: OrderWriteSource): string {
+  return `${source.fileName}#${source.functionName}`;
+}
+
+/** Strip lifecycle fields that would move backward; log blocked downgrades. */
+export function prepareProtectedOrderPatch(
+  orderId: string,
+  current: OrderStageInput,
+  patch: Record<string, unknown>,
+  source: OrderWriteSource,
+): Record<string, unknown> {
+  const trimmed = orderId.trim();
+  const currentInput = { id: trimmed, ...current };
+  const withUpdatedAt = {
+    ...patch,
+    updatedAt: patch.updatedAt ?? serverTimestamp(),
+    updatedBy: patch.updatedBy ?? `${source.fileName}#${source.functionName}`,
+  };
+
+  if (wouldDowngradeLifecycle(currentInput, withUpdatedAt)) {
+    const incomingStatus =
+      typeof withUpdatedAt.status === 'string' ? withUpdatedAt.status : '(patch)';
+    if (__DEV__) {
+      console.warn('[ORDER DOWNGRADE BLOCKED]', trimmed, current.status ?? null, incomingStatus, {
+        source: sourceLabel(source),
+        deliveryStatus: withUpdatedAt.deliveryStatus ?? null,
+      });
+    }
+    const stripped = { ...withUpdatedAt };
+    delete stripped.status;
+    delete stripped.deliveryStatus;
+    delete stripped.paymentStatus;
+    return sanitizeOrderPatchAgainstRegression(currentInput, stripped);
+  }
+
+  return sanitizeOrderPatchAgainstRegression(currentInput, withUpdatedAt);
+}
+
+function tracePreparedPatch(
+  orderId: string,
+  current: OrderStageInput,
+  requested: Record<string, unknown>,
+  safePatch: Record<string, unknown>,
+  source: OrderWriteSource,
+): void {
+  const trimmed = orderId.trim();
+  const currentInput = { id: trimmed, ...current };
+  traceOrderLifecycleWrite({
+    source: sourceLabel(source),
+    orderId: trimmed,
+    beforeStatus: current.status ?? null,
+    incomingPatch: requested,
+    afterStatus: safePatch.status ?? current.status ?? null,
+    beforeStage: deriveOrderStage(currentInput),
+    afterStage: deriveOrderStage({ ...currentInput, ...safePatch }),
+    hasPendingWrites: false,
+  });
+}
+
+/** Read → monotonic guard → sanitize → traced update. */
 export async function protectedUpdateOrder(
   orderId: string,
   patch: Record<string, unknown>,
@@ -44,40 +111,50 @@ export async function protectedUpdateOrder(
 
   const current = snap.data() as Record<string, unknown>;
   const currentInput = { id: trimmed, ...current };
-  const safePatch = sanitizeOrderPatchAgainstRegression(currentInput, {
-    ...patch,
-    updatedAt: patch.updatedAt ?? serverTimestamp(),
-  });
+  const safePatch = prepareProtectedOrderPatch(trimmed, currentInput, patch, source);
 
-  traceOrderWriteFromPatch(source.fileName, source.functionName, trimmed, safePatch, {
-    op: 'update',
-  });
+  tracePreparedPatch(trimmed, currentInput, patch, safePatch, source);
 
   if (Object.keys(safePatch).length === 0) {
-    if (__DEV__) {
-      console.warn('[ORDER WRITE TRACE] skipped empty protected patch', {
-        orderId: trimmed,
-        source,
-        requested: patch,
-      });
-    }
     return;
-  }
-
-  if (__DEV__) {
-    console.log('[ORDER STAGE] protected patch', {
-      orderId: trimmed,
-      beforeStage: deriveOrderStage(currentInput),
-      afterStage: deriveOrderStage({ ...currentInput, ...safePatch }),
-      fields: Object.keys(safePatch),
-      source,
-    });
   }
 
   await updateDoc(ref, safePatch as UpdateData<Record<string, unknown>>);
 }
 
-/** Traced partial update without lifecycle sanitization (visibility, driver pin, etc.). */
+/** Transactional lifecycle write with the same monotonic protection. */
+export async function protectedTransactionUpdateOrder(
+  orderId: string,
+  buildPatch: (current: Record<string, unknown>) => Record<string, unknown> | null,
+  source: OrderWriteSource,
+): Promise<boolean> {
+  const trimmed = orderId.trim();
+  if (!trimmed) throw new Error('Order id is required');
+
+  let wrote = false;
+  await runTransaction(db, async (tx) => {
+    const ref = orderRef(trimmed);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Order not found');
+
+    const current = snap.data() as Record<string, unknown>;
+    const currentInput = { id: trimmed, ...current };
+    const requested = buildPatch(current);
+    if (!requested) return;
+
+    const safePatch = prepareProtectedOrderPatch(trimmed, currentInput, requested, source);
+    tracePreparedPatch(trimmed, currentInput, requested, safePatch, source);
+
+    if (Object.keys(safePatch).length === 0) return;
+
+    tx.update(ref, safePatch as WithFieldValue<Record<string, unknown>>);
+    wrote = true;
+  });
+
+  return wrote;
+}
+
+/** Non-lifecycle fields only (archive flags, driverLocation, typing, etc.). */
 export async function rawUpdateOrder(
   orderId: string,
   patch: Record<string, unknown>,
@@ -86,6 +163,7 @@ export async function rawUpdateOrder(
   const trimmed = orderId.trim();
   if (!trimmed) throw new Error('Order id is required');
 
+  traceLegacyOrderWrite(sourceLabel(source), trimmed, patch);
   traceOrderWriteFromPatch(source.fileName, source.functionName, trimmed, patch, {
     op: 'update',
   });
@@ -101,6 +179,7 @@ export async function tracedSetOrder(
   const trimmed = orderId.trim();
   if (!trimmed) throw new Error('Order id is required');
 
+  traceLegacyOrderWrite(sourceLabel(source), trimmed, patch);
   traceOrderWriteFromPatch(source.fileName, source.functionName, trimmed, patch, {
     op: 'set',
     merge: options?.merge ?? false,
@@ -124,16 +203,20 @@ export async function tracedAddOrder(
   return ref.id;
 }
 
+/** @deprecated Use protectedTransactionUpdateOrder — still sanitizes patch. */
 export function tracedTransactionUpdateOrder(
   tx: Transaction,
   ref: DocumentReference,
   patch: Record<string, unknown>,
   source: OrderWriteSource,
+  current?: Record<string, unknown>,
 ): void {
-  traceOrderWriteFromPatch(source.fileName, source.functionName, ref.id, patch, {
-    op: 'transaction-update',
-  });
-  tx.update(ref, patch as WithFieldValue<Record<string, unknown>>);
+  const orderId = ref.id;
+  const currentInput = { id: orderId, ...(current ?? {}) };
+  const safePatch = prepareProtectedOrderPatch(orderId, currentInput, patch, source);
+  tracePreparedPatch(orderId, currentInput, patch, safePatch, source);
+  if (Object.keys(safePatch).length === 0) return;
+  tx.update(ref, safePatch as WithFieldValue<Record<string, unknown>>);
 }
 
 export function tracedTransactionSetOrder(
@@ -143,6 +226,7 @@ export function tracedTransactionSetOrder(
   source: OrderWriteSource,
   options?: { merge?: boolean },
 ): void {
+  traceLegacyOrderWrite(sourceLabel(source), ref.id, patch);
   traceOrderWriteFromPatch(source.fileName, source.functionName, ref.id, patch, {
     op: 'transaction-set',
     merge: options?.merge ?? false,

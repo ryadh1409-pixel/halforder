@@ -2,10 +2,7 @@ import { parseRestaurantIsOpen } from '@/lib/restaurantVenueStatus';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { persistRestaurantIsOpen } from '@/services/restaurantVenueOpen';
 import { applyProtectedOrderPatch } from '@/services/orderService';
-import {
-  protectedUpdateOrder,
-  rawUpdateOrder,
-} from '@/services/orderFirestoreWrite';
+import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
 import { db } from './firebase';
 import {
   addDoc,
@@ -283,7 +280,7 @@ export async function assignDriverToOrder(
   orderId: string,
   driver: { id: string; name: string; phone: string | null },
 ): Promise<void> {
-  await rawUpdateOrder(
+  await protectedUpdateOrder(
     orderId,
     {
       driverId: driver.id,

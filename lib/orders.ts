@@ -4,7 +4,6 @@ import {
   doc,
   getDoc,
   serverTimestamp,
-  updateDoc,
   type Timestamp,
 } from 'firebase/firestore';
 import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
@@ -145,10 +144,15 @@ export async function joinOrder(
       p.shareAmount = shareAmounts[idx++] ?? 0;
     }
   });
-  await updateDoc(orderRef, {
-    participants,
-    updatedAt: serverTimestamp(),
-  });
+  const { directUpdateOrder } = await import('@/services/orderDirectWrite');
+  await directUpdateOrder(
+    orderId,
+    {
+      participants,
+      updatedAt: serverTimestamp(),
+    },
+    'lib/orders.ts#joinOrderParticipants',
+  );
 }
 
 export async function updateOrderStatus(

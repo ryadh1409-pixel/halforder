@@ -1,7 +1,5 @@
-/**
- * TEMP: trace every Firestore write to `orders/{orderId}`.
- * Search logs for `[ORDER WRITE TRACE]` and filter by orderId.
- */
+import type { OrderStageInput } from '@/services/orderStage';
+import { deriveOrderStage } from '@/services/orderStage';
 
 export type OrderWriteTracePayload = {
   orderId: string;
@@ -10,6 +8,18 @@ export type OrderWriteTracePayload = {
   paymentStatus?: unknown;
   op?: 'update' | 'set' | 'add' | 'transaction-update' | 'transaction-set' | 'batch-update';
   merge?: boolean;
+  hasPendingWrites?: boolean;
+};
+
+export type OrderLifecycleWriteTrace = {
+  source: string;
+  orderId: string;
+  beforeStatus: unknown;
+  incomingPatch: Record<string, unknown>;
+  afterStatus: unknown;
+  beforeStage?: string;
+  afterStage?: string;
+  hasPendingWrites?: boolean;
 };
 
 function lifecycleFieldsFromPatch(
@@ -22,7 +32,23 @@ function lifecycleFieldsFromPatch(
   };
 }
 
-/** Log when patch touches lifecycle fields or when explicitly tracing any order write. */
+/** Mandatory format for every marketplace order mutation. */
+export function traceOrderLifecycleWrite(input: OrderLifecycleWriteTrace): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+
+  console.log('[ORDER WRITE TRACE]', {
+    source: input.source,
+    orderId: input.orderId,
+    beforeStatus: input.beforeStatus ?? null,
+    incomingPatch: input.incomingPatch,
+    afterStatus: input.afterStatus ?? null,
+    beforeStage: input.beforeStage ?? null,
+    afterStage: input.afterStage ?? null,
+    hasPendingWrites: input.hasPendingWrites ?? false,
+    timestamp: Date.now(),
+  });
+}
+
 export function traceOrderWrite(
   fileName: string,
   functionName: string,
@@ -37,13 +63,19 @@ export function traceOrderWrite(
 
   if (!hasLifecycle && !payload.op) return;
 
-  console.log('[ORDER WRITE TRACE]', fileName, functionName, {
+  traceOrderLifecycleWrite({
+    source: `${fileName}#${functionName}`,
     orderId: payload.orderId,
-    status: payload.status ?? null,
-    deliveryStatus: payload.deliveryStatus ?? null,
-    paymentStatus: payload.paymentStatus ?? null,
-    op: payload.op ?? 'update',
-    merge: payload.merge ?? null,
+    beforeStatus: null,
+    incomingPatch: {
+      status: payload.status ?? undefined,
+      deliveryStatus: payload.deliveryStatus ?? undefined,
+      paymentStatus: payload.paymentStatus ?? undefined,
+      op: payload.op ?? 'update',
+      merge: payload.merge ?? undefined,
+    },
+    afterStatus: null,
+    hasPendingWrites: payload.hasPendingWrites ?? false,
   });
 }
 
@@ -53,10 +85,19 @@ export function traceOrderWriteFromPatch(
   orderId: string,
   patch: Record<string, unknown>,
   extra?: Omit<OrderWriteTracePayload, 'orderId' | 'status' | 'deliveryStatus' | 'paymentStatus'>,
+  current?: OrderStageInput | null,
 ): void {
-  traceOrderWrite(fileName, functionName, {
+  const currentInput = current ? { id: orderId, ...current } : { id: orderId };
+  const merged = { ...currentInput, ...lifecycleFieldsFromPatch(patch) };
+
+  traceOrderLifecycleWrite({
+    source: `${fileName}#${functionName}`,
     orderId,
-    ...lifecycleFieldsFromPatch(patch),
-    ...extra,
+    beforeStatus: current?.status ?? null,
+    incomingPatch: patch,
+    afterStatus: patch.status ?? current?.status ?? null,
+    beforeStage: deriveOrderStage(currentInput),
+    afterStage: deriveOrderStage(merged),
+    hasPendingWrites: extra?.hasPendingWrites ?? false,
   });
 }

@@ -126,10 +126,19 @@ async function handleOrderWrite(
     courier === "delivered";
 
   if (!fulfillmentAdvanced) {
+    const paid = String(data.paymentStatus ?? "").trim().toLowerCase() === "paid";
+    const kitchenStatus = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";
+    if (paid && kitchenStatus !== "awaiting_payment" && kitchenStatus !== "pending_payment") {
+      logger.info("[marketplace-sync] skip repair — paid with post-payment status", {
+        orderId,
+        kitchenStatus,
+      });
+    } else {
     const repaired = await repairOrderPaidStateIfNeeded(orderId, data);
     if (repaired) {
       logger.info("[marketplace-sync] paid_status_repair_applied", {orderId});
       return;
+    }
     }
   }
 

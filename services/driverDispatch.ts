@@ -279,6 +279,7 @@ export async function acceptDelivery(orderId: string, driver: DispatchDriver): P
           typeof data.estimatedDeliveryMinutes === 'number' ? data.estimatedDeliveryMinutes : 20,
       },
       { fileName: 'driverDispatch.ts', functionName: 'acceptDelivery' },
+      data,
     );
   });
 }
@@ -304,6 +305,7 @@ export async function rejectDelivery(orderId: string, driverId: string): Promise
         status: 'ready_for_pickup',
       },
       { fileName: 'driverDispatch.ts', functionName: 'rejectDelivery' },
+      data,
     );
   });
 }

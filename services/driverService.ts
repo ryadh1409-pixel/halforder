@@ -9,7 +9,6 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -22,6 +21,10 @@ import {
   updateDriverOnlineStatus,
 } from '@/services/driverPresence';
 import { acceptOrderWithLock } from '@/services/delivery';
+import {
+  prepareProtectedOrderPatch,
+  protectedUpdateOrder,
+} from '@/services/orderFirestoreWrite';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
 import { runListenerBootstrap, safeListenerError } from '@/utils/safeFirestoreListener';
 import {
@@ -649,13 +652,17 @@ export async function assignDriverToOrder(
   driver: DriverProfile,
   _currentStatus: OrderStatus | string,
 ): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    driverId: driver.id,
-    driverName: driver.name,
-    driverPhone: driver.phone ?? null,
-    status: 'driver_accepted',
-    acceptedAt: serverTimestamp(),
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      driverId: driver.id,
+      driverName: driver.name,
+      driverPhone: driver.phone ?? null,
+      status: 'driver_accepted',
+      acceptedAt: serverTimestamp(),
+    },
+    { fileName: 'driverService.ts', functionName: 'assignDriverToOrder' },
+  );
 }
 
 /** Driver claims a ready order (still at restaurant until pickup). */
@@ -664,15 +671,19 @@ export async function acceptDeliveryOrder(
   driver: DriverProfile,
   vehicle?: string | null,
 ): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    driverId: driver.id,
-    driverName: driver.name,
-    driverPhone: driver.phone ?? null,
-    ...(vehicle ? { driverVehicle: vehicle } : {}),
-    status: 'driver_accepted',
-    acceptedAt: serverTimestamp(),
-    estimatedDeliveryTime: 18,
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      driverId: driver.id,
+      driverName: driver.name,
+      driverPhone: driver.phone ?? null,
+      ...(vehicle ? { driverVehicle: vehicle } : {}),
+      status: 'driver_accepted',
+      acceptedAt: serverTimestamp(),
+      estimatedDeliveryTime: 18,
+    },
+    { fileName: 'driverService.ts', functionName: 'acceptDeliveryOrder' },
+  );
 }
 
 export async function acceptGroupDelivery(groupId: string, driver: DriverProfile): Promise<void> {
@@ -685,57 +696,76 @@ export async function acceptGroupDelivery(groupId: string, driver: DriverProfile
   );
   await Promise.all(
     snap.docs.map((orderDoc) =>
-      updateDoc(doc(db, 'orders', orderDoc.id), {
-        driverId: driver.id,
-        driverName: driver.name,
-        driverPhone: driver.phone ?? null,
-        status: 'driver_accepted',
-        acceptedAt: serverTimestamp(),
-        estimatedDeliveryTime: 18,
-      }),
+      protectedUpdateOrder(
+        orderDoc.id,
+        {
+          driverId: driver.id,
+          driverName: driver.name,
+          driverPhone: driver.phone ?? null,
+          status: 'driver_accepted',
+          acceptedAt: serverTimestamp(),
+          estimatedDeliveryTime: 18,
+        },
+        { fileName: 'driverService.ts', functionName: 'acceptGroupDelivery' },
+      ),
     ),
   );
 }
 
 export async function driverMarkPickedUp(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    deliveryStatus: 'picked_up',
-    pickedUpAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    estimatedDeliveryTime: 14,
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      deliveryStatus: 'picked_up',
+      pickedUpAt: serverTimestamp(),
+      estimatedDeliveryTime: 14,
+    },
+    { fileName: 'driverService.ts', functionName: 'driverMarkPickedUp' },
+  );
 }
 
 export async function driverMarkOnTheWay(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    deliveryStatus: 'on_the_way',
-    updatedAt: serverTimestamp(),
-    estimatedDeliveryTime: 10,
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      deliveryStatus: 'on_the_way',
+      estimatedDeliveryTime: 10,
+    },
+    { fileName: 'driverService.ts', functionName: 'driverMarkOnTheWay' },
+  );
 }
 
 export async function driverMarkArrivedCustomer(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    deliveryStatus: 'near_customer',
-    updatedAt: serverTimestamp(),
-    estimatedDeliveryTime: 4,
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      deliveryStatus: 'near_customer',
+      estimatedDeliveryTime: 4,
+    },
+    { fileName: 'driverService.ts', functionName: 'driverMarkArrivedCustomer' },
+  );
 }
 
 export async function driverMarkDelivered(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    deliveryStatus: 'delivered',
-    status: 'completed',
-    deliveredAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      deliveryStatus: 'delivered',
+      status: 'completed',
+      deliveredAt: serverTimestamp(),
+    },
+    { fileName: 'driverService.ts', functionName: 'driverMarkDelivered' },
+  );
 }
 
 export async function driverMarkHeadingToRestaurant(orderId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    deliveryStatus: 'heading_to_restaurant',
-    updatedAt: serverTimestamp(),
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      deliveryStatus: 'heading_to_restaurant',
+    },
+    { fileName: 'driverService.ts', functionName: 'driverMarkHeadingToRestaurant' },
+  );
 }
 
 export async function markPickedUp(orderId: string): Promise<void> {
@@ -814,11 +844,10 @@ export async function claimMarketplaceDriverOrder(
       });
 
       if (paid && isDriverMarketplaceClaimable(normalizedDelivery)) {
-        tx.update(orderRef, {
+        const requested = {
           ...ruleSafePayload,
           driver: driverBlob,
           acceptedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
           estimatedDeliveryTime:
             typeof data.estimatedDeliveryTime === 'number' && data.estimatedDeliveryTime < 180
               ? data.estimatedDeliveryTime
@@ -829,7 +858,16 @@ export async function claimMarketplaceDriverOrder(
               ? data.estimatedDeliveryMinutes
               : 18,
           deliveryPin,
-        });
+        };
+        const safePatch = prepareProtectedOrderPatch(
+          orderId,
+          { id: orderId, ...(data as Record<string, unknown>) },
+          requested,
+          { fileName: 'driverService.ts', functionName: 'claimMarketplaceDriverOrder' },
+        );
+        if (Object.keys(safePatch).length > 0) {
+          tx.update(orderRef, safePatch);
+        }
         marketplaceLog.acceptSuccess(orderId, { normalizedDelivery, ruleSafePayload });
         return { ok: true };
       }
@@ -896,16 +934,22 @@ export async function updateOrderStatus(
   };
   if (status === 'picked_up') updates.pickedUpAt = serverTimestamp();
   if (status === 'delivered') updates.deliveredAt = serverTimestamp();
-  await updateDoc(doc(db, 'orders', orderId), updates);
+  await protectedUpdateOrder(orderId, updates, {
+    fileName: 'driverService.ts',
+    functionName: 'updateOrderStatus',
+  });
 }
 
 export async function acceptOrder(orderId: string, driverId: string): Promise<void> {
-  await updateDoc(doc(db, 'orders', orderId), {
-    status: 'driver_accepted',
-    driverId,
-    driverAcceptedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  await protectedUpdateOrder(
+    orderId,
+    {
+      status: 'driver_accepted',
+      driverId,
+      driverAcceptedAt: serverTimestamp(),
+    },
+    { fileName: 'driverService.ts', functionName: 'acceptOrder' },
+  );
 }
 
 export function getDriverAvailableOrders(

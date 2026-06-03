@@ -571,6 +571,7 @@ export async function acceptOrderWithLock(orderId: string, driver: DriverIdentit
           }),
         },
         { fileName: 'delivery/index.ts', functionName: 'acceptOrderWithLock' },
+        data,
       );
 
       tx.set(
@@ -763,7 +764,7 @@ export async function updateDeliveryStatus(
       tracedTransactionUpdateOrder(tx, ref, patch, {
         fileName: 'delivery/index.ts',
         functionName: 'updateDeliveryStatus',
-      });
+      }, data);
       tx.set(
         doc(db, 'drivers', driverId),
         {
