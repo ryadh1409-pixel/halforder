@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import { isGoogleMapsApiKeyConfigured } from '@/lib/maps/googleMapsApiKey';
 import {
   fetchPlaceAutocompleteSuggestions,
@@ -13,6 +14,10 @@ import {
   LocationUnavailableError,
   MAX_ACCEPTABLE_GPS_CACHE_AGE_MS,
 } from '@/services/location/gps';
+import {
+  runDedupedGpsRequest,
+  shouldAllowUserGpsTap,
+} from '@/services/location/gpsRequestGate';
 import {
   GPS_IMPROVING_MESSAGE,
   resolveProductionGpsSavedLocation,
@@ -225,7 +230,7 @@ export function useLocationSearch() {
     setShowNoResults(false);
     setError(null);
 
-    console.log('[PLACES SEARCH QUERY]', trimmed);
+    logLocationDebug('[PLACES SEARCH QUERY]', { query: trimmed });
 
     try {
       const origin = getPlacesSearchOrigin();
@@ -281,7 +286,7 @@ export function useLocationSearch() {
         const location = await fetchPlaceDetailsAsSavedLocation(placeId);
         await setLiveGpsBias(location.latitude, location.longitude, null);
         applySelectedLocation(location, { fillSearchInput: false });
-        console.log('[PLACES RESULT SELECTED]', {
+        logLocationDebug('[PLACES RESULT SELECTED]', {
           placeId,
           address: location.address,
           latitude: location.latitude,
@@ -298,7 +303,14 @@ export function useLocationSearch() {
     [applySelectedLocation, clearStaleCaches, setLiveGpsBias],
   );
 
+  const selectedLocationRef = useRef(selectedLocation);
+  selectedLocationRef.current = selectedLocation;
+
   const applyCurrentDeviceLocation = useCallback(async (): Promise<SavedLocation | null> => {
+    if (!shouldAllowUserGpsTap()) {
+      return selectedLocationRef.current;
+    }
+
     setSuggestions([]);
     setShowNoResults(false);
     setResolvingGps(true);
@@ -306,18 +318,20 @@ export function useLocationSearch() {
     setError(null);
 
     try {
-      await clearStaleCaches('use_current_location');
-      const { reading, location } = await resolveProductionGpsSavedLocation({
-        forceFresh: true,
+      return await runDedupedGpsRequest('user_gps_button', async () => {
+        await clearStaleCaches('use_current_location');
+        const { reading, location } = await resolveProductionGpsSavedLocation({
+          forceFresh: true,
+        });
+        await setLiveGpsBias(reading.latitude, reading.longitude, reading.accuracy ?? null);
+        const withAccuracy: SavedLocation = {
+          ...location,
+          formattedAddress: location.formattedAddress ?? location.address,
+          gpsAccuracy: reading.accuracy ?? null,
+        };
+        applySelectedLocation(withAccuracy, { fillSearchInput: true });
+        return withAccuracy;
       });
-      await setLiveGpsBias(reading.latitude, reading.longitude, reading.accuracy ?? null);
-      const withAccuracy: SavedLocation = {
-        ...location,
-        formattedAddress: location.formattedAddress ?? location.address,
-        gpsAccuracy: reading.accuracy ?? null,
-      };
-      applySelectedLocation(withAccuracy, { fillSearchInput: true });
-      return withAccuracy;
     } catch (e) {
       setError(locationErrorMessage(e));
       return null;

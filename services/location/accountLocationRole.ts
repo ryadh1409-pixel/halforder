@@ -1,3 +1,4 @@
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import type { AccountLocationCollection } from '@/types/savedLocation';
 
 export type AccountLocationRole = 'user' | 'driver' | 'restaurant';
@@ -62,9 +63,5 @@ export function logRoleGps(
   payload?: Record<string, unknown>,
 ): void {
   const tag = getAccountLocationRoleConfig(role).logTag;
-  if (payload) {
-    console.log(tag, event, payload);
-  } else {
-    console.log(tag, event);
-  }
+  logLocationDebug(tag, payload ? { event, ...payload } : { event });
 }

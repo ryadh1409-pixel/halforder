@@ -1,3 +1,4 @@
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import {
   reverseGeocodeCoordinatesSafe,
   type SafeGeocodeResult,
@@ -46,10 +47,10 @@ export async function resolveAddressFromGps(
   latitude: number,
   longitude: number,
 ): Promise<ResolvedAddressFromGps> {
-  console.log('[REVERSE GEOCODE]', { latitude, longitude });
+  logLocationDebug('[REVERSE GEOCODE]', { latitude, longitude });
   const geocode = await reverseGeocodeCoordinatesSafe(latitude, longitude);
   const resolved = fromSafeGeocode(geocode);
-  console.log('[REVERSE GEOCODE]', {
+  logLocationDebug('[REVERSE GEOCODE]', {
     geocoded: resolved.geocoded,
     address: resolved.address?.slice(0, 80),
     city: resolved.city,

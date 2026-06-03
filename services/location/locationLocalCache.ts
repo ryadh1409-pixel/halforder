@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import { MAX_ACCEPTABLE_GPS_CACHE_AGE_MS } from '@/services/location/gps';
 
 const DELIVERY_LOCATION_CACHE_KEY = '@ourfood/delivery_location_cache';
@@ -32,7 +33,7 @@ export async function clearDeliveryLocationCache(
 ): Promise<void> {
   await AsyncStorage.multiRemove([DELIVERY_LOCATION_CACHE_KEY, LIVE_GPS_BIAS_KEY]);
   if (options?.log) {
-    console.log('[CACHE CLEARED]', {
+    logLocationDebug('[CACHE CLEARED]', {
       reason: options.reason ?? 'manual',
       keys: [DELIVERY_LOCATION_CACHE_KEY, LIVE_GPS_BIAS_KEY],
     });
@@ -62,7 +63,7 @@ export async function readLiveGpsBiasCache(): Promise<CachedLiveGpsBias | null> 
       Number.isFinite(parsed.longitude)
     ) {
       if (isCachedGpsBiasStale(parsed)) {
-        console.log('[GPS AGE]', {
+        logLocationDebug('[GPS AGE]', {
           action: 'discard_async_storage_bias',
           ageMs: Date.now() - parsed.capturedAt,
         });

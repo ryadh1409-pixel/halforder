@@ -32,6 +32,8 @@ export async function persistCustomerLocation(
 export type ResolveDeliveryLocationOptions = {
   required?: boolean;
   persistToProfile?: boolean;
+  /** Omit to load from Firestore; pass `null` to skip saved profile fallback. */
+  savedProfile?: SavedLocation | null;
   manual?: SavedLocation | null;
 };
 
@@ -46,6 +48,7 @@ export async function resolveDeliveryLocationForCheckout(
     required: options.required !== false,
     persistToProfile: options.persistToProfile !== false,
     userId: uid,
+    savedProfile: options.savedProfile,
     manual: options.manual ?? null,
   });
 }

@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 
 import { savedAddressLabelToDeliveryType } from '@/lib/location/deliveryAddressType';
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import {
   parseSavedLocation,
   savedLocationToFirestore,
@@ -207,7 +208,7 @@ export async function saveAccountSavedLocation(
     city: base.city,
     gpsAccuracy: base.gpsAccuracy,
   });
-  console.log('[PROFILE LOCATION UPDATED]', {
+  logLocationDebug('[PROFILE LOCATION UPDATED]', {
     role,
     accountId: id,
     address: base.address,

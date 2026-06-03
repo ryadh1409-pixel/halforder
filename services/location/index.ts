@@ -29,6 +29,24 @@ export {
 } from './appLaunchLocationReconcile';
 
 export {
+  BACKGROUND_GPS_REFRESH_AFTER_MS,
+  markAppBackgrounded,
+  runBackgroundLocationRefresh,
+} from './backgroundLocationRefresh';
+
+export {
+  buildAccountLocationReconcileTargets,
+  runSilentAccountLocationReconcile,
+  type AccountLocationReconcileParams,
+} from './accountLocationReconcile';
+
+export {
+  runDedupedGpsRequest,
+  shouldAllowUserGpsTap,
+  USER_GPS_TAP_DEBOUNCE_MS,
+} from './gpsRequestGate';
+
+export {
   claimProfileLocationBootstrap,
   profileLocationBootstrapKey,
   releaseProfileLocationBootstrap,

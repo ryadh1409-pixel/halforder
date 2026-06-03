@@ -1,14 +1,16 @@
 import * as Location from 'expo-location';
 
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
+import { savedLocationShouldBeReplacedByGps } from '@/lib/location/savedLocationReconcile';
 import type { AccountLocationRole } from '@/services/location/accountLocationRole';
 import { logRoleGps } from '@/services/location/accountLocationRole';
-import type { SavedLocation } from '@/types/savedLocation';
 import type { DeliveryAddressBundle } from '@/types/location';
+import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
 
+import { buildCustomerLocationRecord } from './customerLocationRecord';
 import {
   getFreshHighAccuracyGpsReading,
   getForegroundPermissionStatus,
-  isGpsPositionStale,
   LIVE_GPS_PRECISE_ERROR,
   LocationPermissionError,
   LocationUnavailableError,
@@ -17,14 +19,8 @@ import {
   type GpsPermissionStatus,
   type GpsReading,
 } from './gps';
-import {
-  claimGpsRefreshSession,
-  getSessionGpsReading,
-  setSessionGpsReading,
-} from './gpsSession';
-import { savedLocationShouldBeReplacedByGps } from '@/lib/location/savedLocationReconcile';
-
-import { buildCustomerLocationRecord } from './customerLocationRecord';
+import { runDedupedGpsRequest } from './gpsRequestGate';
+import { claimGpsRefreshSession, getSessionGpsReading, setSessionGpsReading } from './gpsSession';
 import {
   resolveAddressFromGps,
   savedLocationFromGpsResolve,
@@ -33,7 +29,6 @@ import {
   fetchSavedLocationFromServer,
   saveAccountSavedLocation,
 } from './savedLocationFirestore';
-import type { AccountLocationCollection } from '@/types/savedLocation';
 
 export const MAX_HORIZONTAL_ACCURACY_M = 100;
 export const GPS_IMPROVING_MESSAGE = 'Improving GPS accuracy...';
@@ -64,8 +59,27 @@ export function isAcceptableHorizontalAccuracy(
   return accuracyMeters <= MAX_HORIZONTAL_ACCURACY_M;
 }
 
+function isUsableSavedLocation(
+  location: SavedLocation | null | undefined,
+): location is SavedLocation {
+  if (!location?.address?.trim()) return false;
+  return isValidGpsCoordinates(location.latitude, location.longitude);
+}
+
+function bundleFromSavedLocation(location: SavedLocation): DeliveryAddressBundle {
+  return {
+    lat: location.latitude,
+    lng: location.longitude,
+    address: location.address.trim(),
+    customerLocation: buildCustomerLocationRecord(
+      location.latitude,
+      location.longitude,
+    ),
+  };
+}
+
 function logGpsAccuracy(reading: GpsReading, attempt: number): void {
-  console.log('[GPS ACCURACY]', {
+  logLocationDebug('[GPS ACCURACY]', {
     attempt,
     accuracyMeters: reading.accuracy,
     acceptable: isAcceptableHorizontalAccuracy(reading.accuracy),
@@ -74,7 +88,7 @@ function logGpsAccuracy(reading: GpsReading, attempt: number): void {
 }
 
 function logGpsStaleCheck(reading: GpsReading): void {
-  console.log('[GPS STALE CHECK]', {
+  logLocationDebug('[GPS STALE CHECK]', {
     positionAgeMs: reading.positionAgeMs,
     maxAgeMs: MAX_ACCEPTABLE_GPS_CACHE_AGE_MS,
     stale:
@@ -115,18 +129,16 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Production GPS read: permission checks, accuracy validation, stale rejection.
- * Never uses getLastKnownPositionAsync or AsyncStorage coordinates.
- */
-export async function getProductionGpsReading(options?: {
-  /** When true, always fetch a new fix (checkout, Use my location). */
+async function readProductionGpsReadingUncached(options?: {
   forceFresh?: boolean;
 }): Promise<GpsReading> {
   if (!options?.forceFresh) {
     const cached = getSessionGpsReading();
     if (cached && isValidGpsCoordinates(cached.latitude, cached.longitude)) {
-      console.log('[LIVE GPS OVERRIDES CACHE]', { source: 'session_recent', ageMs: Date.now() - (cached.capturedAtMs ?? 0) });
+      logLocationDebug('[LIVE GPS OVERRIDES CACHE]', {
+        source: 'session_recent',
+        ageMs: Date.now() - (cached.capturedAtMs ?? 0),
+      });
       return cached;
     }
   }
@@ -176,7 +188,7 @@ export async function getProductionGpsReading(options?: {
   }
 
   if (lastReading && isValidGpsCoordinates(lastReading.latitude, lastReading.longitude)) {
-    console.log('[GPS ACCURACY]', {
+    logLocationDebug('[GPS ACCURACY]', {
       acceptedDespiteLowAccuracy: true,
       accuracyMeters: lastReading.accuracy,
     });
@@ -187,35 +199,70 @@ export async function getProductionGpsReading(options?: {
   throw new LocationUnavailableError();
 }
 
+/**
+ * Production GPS read: permission checks, accuracy validation, stale rejection.
+ * Never uses getLastKnownPositionAsync or AsyncStorage coordinates.
+ */
+export async function getProductionGpsReading(options?: {
+  forceFresh?: boolean;
+}): Promise<GpsReading> {
+  const key = options?.forceFresh ? 'production_gps:fresh' : 'production_gps:session';
+  return runDedupedGpsRequest(key, () => readProductionGpsReadingUncached(options));
+}
+
 export async function resolveProductionGpsSavedLocation(options?: {
   forceFresh?: boolean;
 }): Promise<{ reading: GpsReading; location: SavedLocation }> {
-  const reading = await getProductionGpsReading(options);
-  const resolved = await resolveAddressFromGps(reading.latitude, reading.longitude);
-  const location = savedLocationFromGpsResolve(
-    reading.latitude,
-    reading.longitude,
-    resolved,
-  );
-  if (!location) {
-    throw new LocationUnavailableError(
-      resolved.geocodeError ??
-        'Could not resolve your address. Search manually or try again outdoors.',
+  const key = options?.forceFresh
+    ? 'production_gps_saved:fresh'
+    : 'production_gps_saved:session';
+
+  return runDedupedGpsRequest(key, async () => {
+    const reading = await getProductionGpsReading(options);
+    const resolved = await resolveAddressFromGps(reading.latitude, reading.longitude);
+    const location = savedLocationFromGpsResolve(
+      reading.latitude,
+      reading.longitude,
+      resolved,
     );
-  }
-  return { reading, location };
+    if (!location) {
+      throw new LocationUnavailableError(
+        resolved.geocodeError ??
+          'Could not resolve your address. Search manually or try again outdoors.',
+      );
+    }
+    return { reading, location };
+  });
 }
 
 export type DeliveryLocationResolveOptions = {
   required?: boolean;
   persistToProfile?: boolean;
   userId?: string;
-  /** Manual Places/geocode selection — used when live GPS is unavailable. */
+  /** Saved Firestore profile — used only after live GPS + geocode fail. */
+  savedProfile?: SavedLocation | null;
+  /** Manual Places/geocode selection — last resort before error. */
   manual?: SavedLocation | null;
 };
 
+async function resolveSavedProfileForUser(
+  uid: string,
+  explicit: SavedLocation | null | undefined,
+): Promise<SavedLocation | null> {
+  if (explicit !== undefined) {
+    return isUsableSavedLocation(explicit) ? explicit : null;
+  }
+  if (!uid) return null;
+  try {
+    const server = await fetchSavedLocationFromServer('users', uid);
+    return isUsableSavedLocation(server.location) ? server.location : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Fallback order: fresh GPS → session GPS (<2min) → manual search → saved profile.
+ * Fallback: live GPS + reverse geocode → session GPS + geocode → saved profile → manual.
  */
 export async function resolveDeliveryLocationForOrder(
   options: DeliveryLocationResolveOptions = {},
@@ -224,54 +271,45 @@ export async function resolveDeliveryLocationForOrder(
   const uid = userId.trim();
 
   try {
-    const { reading, location } = await resolveProductionGpsSavedLocation({
-      forceFresh: true,
-    });
-    console.log('[LIVE GPS OVERRIDES CACHE]', { source: 'fresh_gps' });
+    const { reading, location } = await runDedupedGpsRequest(
+      'delivery:live_gps',
+      () => resolveProductionGpsSavedLocation({ forceFresh: true }),
+    );
+    logLocationDebug('[DELIVERY LOCATION]', { source: 'live_gps' });
 
     if (persistToProfile && uid) {
       try {
         await saveAccountSavedLocation('users', uid, location);
-        console.log('[PROFILE LOCATION UPDATED]', { uid, city: location.city });
       } catch {
         /* order can still proceed */
       }
     }
 
-    return {
-      lat: reading.latitude,
-      lng: reading.longitude,
-      address: location.address,
-      customerLocation: buildCustomerLocationRecord(reading.latitude, reading.longitude),
-    };
+    return bundleFromSavedLocation(location);
   } catch (freshError) {
     const recent = getSessionGpsReading();
     if (recent && isValidGpsCoordinates(recent.latitude, recent.longitude)) {
       const resolved = await resolveAddressFromGps(recent.latitude, recent.longitude);
-      const saved = savedLocationFromGpsResolve(
+      const geocoded = savedLocationFromGpsResolve(
         recent.latitude,
         recent.longitude,
         resolved,
       );
-      if (saved?.address.trim()) {
-        console.log('[LIVE GPS OVERRIDES CACHE]', { source: 'session_recent_fallback' });
-        return {
-          lat: recent.latitude,
-          lng: recent.longitude,
-          address: saved.address,
-          customerLocation: buildCustomerLocationRecord(recent.latitude, recent.longitude),
-        };
+      if (geocoded?.address.trim()) {
+        logLocationDebug('[DELIVERY LOCATION]', { source: 'session_gps_geocode' });
+        return bundleFromSavedLocation(geocoded);
       }
     }
 
-    if (options.manual?.address.trim()) {
-      const m = options.manual;
-      return {
-        lat: m.latitude,
-        lng: m.longitude,
-        address: m.address,
-        customerLocation: buildCustomerLocationRecord(m.latitude, m.longitude),
-      };
+    const savedProfile = await resolveSavedProfileForUser(uid, options.savedProfile);
+    if (savedProfile) {
+      logLocationDebug('[DELIVERY LOCATION]', { source: 'saved_profile' });
+      return bundleFromSavedLocation(savedProfile);
+    }
+
+    if (isUsableSavedLocation(options.manual)) {
+      logLocationDebug('[DELIVERY LOCATION]', { source: 'manual_search' });
+      return bundleFromSavedLocation(options.manual);
     }
 
     if (required) {
@@ -300,19 +338,8 @@ export async function reconcileProfileLocationIfUserMoved(
     if (!server.location || !savedLocationShouldBeReplacedByGps(server.location, location)) {
       return false;
     }
-    console.log('[LIVE GPS OVERRIDES CACHE]', {
-      reason: 'city_moved',
-      oldCity: server.location.city,
-      newCity: location.city,
-    });
     await persist(location);
     logRoleGps(role, 'city_moved_reconcile', {
-      accountId,
-      address: location.address,
-      city: location.city,
-    });
-    console.log('[PROFILE LOCATION UPDATED]', {
-      role,
       accountId,
       address: location.address,
       city: location.city,

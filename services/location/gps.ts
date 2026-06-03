@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import {
   PRODUCTION_GPS_SIMULATOR_MESSAGE,
   shouldBlockSimulatorGps,
@@ -116,7 +117,7 @@ async function requestCurrentPosition(
   accuracy: Location.Accuracy,
   label: string,
 ): Promise<Location.LocationObject> {
-  console.log('[GPS REQUEST]', { accuracy, label, maximumAge: 0, timeout: 15_000 });
+  logLocationDebug('[GPS REQUEST]', { accuracy, label, maximumAge: 0, timeout: 15_000 });
 
   const position = await Location.getCurrentPositionAsync({
     ...FRESH_POSITION_BASE,
@@ -124,14 +125,14 @@ async function requestCurrentPosition(
   });
 
   const ageMs = positionAgeMs(position);
-  console.log('[GPS RESULT]', {
+  logLocationDebug('[GPS RESULT]', {
     label,
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
     accuracy: position.coords.accuracy,
     timestamp: position.timestamp,
   });
-  console.log('[GPS STALE CHECK]', {
+  logLocationDebug('[GPS STALE CHECK]', {
     ageMs,
     stale: isGpsPositionStale(position),
     maxAgeMs: MAX_ACCEPTABLE_GPS_CACHE_AGE_MS,
@@ -171,7 +172,7 @@ export async function getFreshHighAccuracyGpsReading(): Promise<GpsReading> {
       'BestForNavigation',
     );
   } catch (primaryError) {
-    console.log('[GPS REQUEST]', {
+    logLocationDebug('[GPS REQUEST]', {
       fallback: Location.Accuracy.High,
       primaryFailed: true,
       error: primaryError instanceof Error ? primaryError.message : String(primaryError),
@@ -180,7 +181,7 @@ export async function getFreshHighAccuracyGpsReading(): Promise<GpsReading> {
   }
 
   if (isGpsPositionStale(position)) {
-    console.log('[GPS STALE CHECK]', { action: 'discard_stale_fix', retry: true });
+    logLocationDebug('[GPS STALE CHECK]', { action: 'discard_stale_fix', retry: true });
     try {
       position = await requestCurrentPosition(
         Location.Accuracy.BestForNavigation,
