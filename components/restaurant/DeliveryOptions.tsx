@@ -21,6 +21,8 @@ type Props = {
   mode: DeliveryMode;
   onChange: (m: DeliveryMode) => void;
   onGroupOrder?: () => void;
+  /** When true, delivery segment is disabled (outside delivery zone). */
+  deliveryDisabled?: boolean;
 };
 
 const PAD = 16;
@@ -30,7 +32,12 @@ function thumbX(mode: DeliveryMode, segW: number) {
 }
 
 /** Delivery / Pickup pill + separate Group order CTA (Uber Eats action row). */
-export function DeliveryOptions({ mode, onChange, onGroupOrder }: Props) {
+export function DeliveryOptions({
+  mode,
+  onChange,
+  onGroupOrder,
+  deliveryDisabled = false,
+}: Props) {
   const { width: winW } = useWindowDimensions();
   const trackInner = winW - PAD * 2 - 8;
   const segW = trackInner / 2;
@@ -59,13 +66,17 @@ export function DeliveryOptions({ mode, onChange, onGroupOrder }: Props) {
         <Animated.View style={[styles.thumb, { width: segW - 8 }, pillStyle]} />
         <View style={styles.row}>
           <Pressable
-            style={[styles.cell, { width: segW }]}
-            onPress={() => select('delivery')}
+            style={[styles.cell, { width: segW }, deliveryDisabled && styles.cellDisabled]}
+            disabled={deliveryDisabled}
+            onPress={() => {
+              if (!deliveryDisabled) select('delivery');
+            }}
           >
             <Text
               style={[
                 styles.label,
                 activeMode === 'delivery' && styles.labelOn,
+                deliveryDisabled && styles.labelDisabled,
               ]}
             >
               Delivery
@@ -129,8 +140,10 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', height: '100%', zIndex: 1 },
   cell: { alignItems: 'center', justifyContent: 'center' },
+  cellDisabled: { opacity: 0.4 },
   label: { fontSize: 15, fontWeight: '700', color: UE.textSecondary },
   labelOn: { color: UE.text, fontWeight: '900' },
+  labelDisabled: { color: UE.textMuted },
   groupBtn: {
     flexDirection: 'row',
     alignItems: 'center',

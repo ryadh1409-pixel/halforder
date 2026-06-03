@@ -219,6 +219,17 @@ service cloud.firestore {
           || request.resource.data.deliveryType == 'pickup'
         )
         && (
+          request.resource.data.deliveryType != 'delivery'
+          || (
+            request.resource.data.deliveryEligible == true
+            && request.resource.data.deliveryDistanceKm is number
+            && request.resource.data.deliveryDistanceKm >= 0
+            && request.resource.data.deliveryDistanceKm <= request.resource.data.maxDeliveryDistanceKmAtCheckout
+            && request.resource.data.maxDeliveryDistanceKmAtCheckout is number
+            && request.resource.data.maxDeliveryDistanceKmAtCheckout > 0
+          )
+        )
+        && (
           !request.resource.data.keys().hasAny(['createdAt'])
           || request.resource.data.createdAt == request.time
         )

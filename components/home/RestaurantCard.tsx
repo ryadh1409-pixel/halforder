@@ -35,6 +35,8 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
     restaurant.rating != null &&
     restaurant.rating > 0;
   const distanceLabel = restaurant.distanceKmLabel;
+  const deliveryUnavailable =
+    restaurant.isOpen && restaurant.deliverable === false;
 
   return (
     <AnimatedPressable
@@ -49,7 +51,7 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
-      style={[styles.card, { width }, anim]}
+      style={[styles.card, { width }, deliveryUnavailable && styles.cardDim, anim]}
     >
       <View style={styles.imageWrap}>
         {img ? (
@@ -105,6 +107,12 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
           <View style={styles.closed}>
             <Text style={styles.closedTxt}>Closed</Text>
           </View>
+        ) : deliveryUnavailable ? (
+          <View style={styles.closed}>
+            <Text style={styles.closedTxt}>
+              {restaurant.deliveryStatusLabel}
+            </Text>
+          </View>
         ) : null}
       </View>
 
@@ -149,6 +157,7 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
+  cardDim: { opacity: 0.72 },
   imageWrap: {
     borderRadius: UE.radiusCard,
     overflow: 'hidden',

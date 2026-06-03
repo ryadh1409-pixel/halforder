@@ -45,6 +45,32 @@ export function readSavedLocationFromUserDoc(
   return parseUserSavedLocation(data.location);
 }
 
+/** Persist GPS only — clears stale formatted address from Firestore. */
+export async function persistGpsCoordinatesOnly(
+  userId: string,
+  latitude: number,
+  longitude: number,
+): Promise<void> {
+  const uid = userId.trim();
+  if (!uid) return;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+  await setDoc(
+    doc(db, 'users', uid),
+    {
+      latitude,
+      longitude,
+      location: { latitude, longitude },
+      lastLocationUpdatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  if (__DEV__) {
+    console.log('[PROFILE LOCATION GPS ONLY]', { uid, latitude, longitude });
+  }
+}
+
 export function readSavedLocationLabelFromUserDoc(
   data: Record<string, unknown> | undefined,
 ): SavedAddressLabel | null {

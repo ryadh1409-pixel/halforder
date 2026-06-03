@@ -1,20 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import { doc, onSnapshot } from 'firebase/firestore';
 
+import { haversineDistanceKm } from '@/lib/haversine';
 import {
   fetchPlaceAutocompleteSuggestions,
   fetchPlaceDetails,
   geocodeAddressToCoordinates,
   PlacesApiError,
-  reverseGeocodeCoordinates,
 } from '@/services/places/googlePlacesClient';
 import {
   getCurrentGpsReading,
   requestForegroundLocationPermission,
+  watchGpsPosition,
 } from '@/services/location';
 import {
+  CURRENT_LOCATION_LABEL,
+  resolveAddressFromGps,
+} from '@/services/location/resolveAddressFromGps';
+import {
+  persistGpsCoordinatesOnly,
   readSavedLocationFromUserDoc,
   readSavedLocationLabelFromUserDoc,
   saveUserSavedLocation,
@@ -37,6 +44,9 @@ export type ProfileLocationState = {
 };
 
 const DEFAULT_LABEL: SavedAddressLabel = 'home';
+
+/** Minimum movement before re-geocoding while profile is open (km). */
+const PROFILE_LOCATION_WATCH_KM = 0.75;
 
 type DeviceCoords = { latitude: number; longitude: number };
 
@@ -67,8 +77,8 @@ export function useProfileLocation(userId: string | null) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchSeqRef = useRef(0);
   const deviceCoordsRef = useRef<DeviceCoords | null>(null);
-  const skipFirestoreAddressHydrationRef = useRef(false);
   const [inputVersion, setInputVersion] = useState(0);
+  const gpsWatchRef = useRef<Location.LocationSubscription | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -76,7 +86,6 @@ export function useProfileLocation(userId: string | null) {
       setLabel(null);
       setLoading(false);
       setAddressInput('');
-      skipFirestoreAddressHydrationRef.current = false;
       deviceCoordsRef.current = null;
       return undefined;
     }
@@ -90,9 +99,11 @@ export function useProfileLocation(userId: string | null) {
         const loc = readSavedLocationFromUserDoc(data);
         setSaved(loc);
         setLabel(readSavedLocationLabelFromUserDoc(data));
-
-        if (loc && !skipFirestoreAddressHydrationRef.current) {
-          setAddressInput(loc.address);
+        if (loc) {
+          deviceCoordsRef.current = {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+          };
         }
         setLoading(false);
       },
@@ -106,19 +117,63 @@ export function useProfileLocation(userId: string | null) {
   useEffect(() => {
     return () => {
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
+      gpsWatchRef.current?.remove();
+      gpsWatchRef.current = null;
     };
   }, []);
 
   const applyResolvedAddress = useCallback((address: string) => {
     const trimmed = address.trim();
     if (!trimmed) return;
-    skipFirestoreAddressHydrationRef.current = true;
     setInputVersion((v) => v + 1);
     setAddressInput(trimmed);
     setError(null);
   }, []);
 
-  /** GPS → Google reverse geocode → autofill input → optional Firestore save. */
+  const syncGpsToProfile = useCallback(
+    async (
+      coords: DeviceCoords,
+      options?: { persist?: boolean; label?: SavedAddressLabel },
+    ) => {
+      console.log('[GPS REAL]', coords);
+      deviceCoordsRef.current = coords;
+
+      const resolved = await resolveAddressFromGps(coords.latitude, coords.longitude);
+      applyResolvedAddress(resolved.address);
+
+      if (!options?.persist || !userId) {
+        return { coords, resolved, locationPayload: null };
+      }
+
+      if (resolved.geocoded) {
+        const locationPayload: UserSavedLocation = {
+          address: resolved.address,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          ...(resolved.placeId ? { placeId: resolved.placeId } : {}),
+        };
+        const persisted = await saveUserSavedLocation(userId, locationPayload, {
+          label: options.label ?? selectedLabel,
+        });
+        setSaved(persisted);
+        setLabel(options.label ?? selectedLabel);
+        return { coords, resolved, locationPayload };
+      }
+
+      await persistGpsCoordinatesOnly(userId, coords.latitude, coords.longitude);
+      setSaved(null);
+      if (resolved.geocodeStatus === 'REQUEST_DENIED' || resolved.geocodeStatus === 'MISSING_KEY') {
+        setError(
+          resolved.geocodeError ??
+            'Google Geocoding is unavailable. Enable Geocoding API and verify your API key.',
+        );
+      }
+      return { coords, resolved, locationPayload: null };
+    },
+    [applyResolvedAddress, selectedLabel, userId],
+  );
+
+  /** GPS → Google reverse geocode (or Current Location fallback) → optional Firestore save. */
   const resolveRealDeviceLocation = useCallback(
     async (options?: { persist?: boolean }) => {
       const permission = await requestForegroundLocationPermission();
@@ -130,39 +185,71 @@ export function useProfileLocation(userId: string | null) {
       }
 
       const reading = await getCurrentGpsReading({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.BestForNavigation,
+        fresh: true,
       });
 
-      const coords = {
-        latitude: reading.latitude,
-        longitude: reading.longitude,
-      };
-      console.log('[GPS REAL]', coords);
-      deviceCoordsRef.current = coords;
-
-      const geocoded = await reverseGeocodeCoordinates(coords.latitude, coords.longitude);
-
-      applyResolvedAddress(geocoded.address);
-
-      const locationPayload: UserSavedLocation = {
-        address: geocoded.address,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        ...(geocoded.placeId ? { placeId: geocoded.placeId } : {}),
-      };
-
-      if (options?.persist && userId) {
-        const persisted = await saveUserSavedLocation(userId, locationPayload, {
-          label: selectedLabel,
-        });
-        setSaved(persisted);
-        setLabel(selectedLabel);
-      }
-
-      return { coords, geocoded, locationPayload };
+      return syncGpsToProfile(
+        { latitude: reading.latitude, longitude: reading.longitude },
+        { persist: options?.persist, label: selectedLabel },
+      );
     },
-    [applyResolvedAddress, selectedLabel, userId],
+    [selectedLabel, syncGpsToProfile],
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      void resolveRealDeviceLocation({ persist: true });
+    }, [userId, resolveRealDeviceLocation]),
+  );
+
+  useEffect(() => {
+    if (!userId) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const permission = await requestForegroundLocationPermission();
+      if (permission !== 'granted' || cancelled) return;
+
+      gpsWatchRef.current?.remove();
+      gpsWatchRef.current = await watchGpsPosition(
+        (reading) => {
+          void (async () => {
+            const prev = deviceCoordsRef.current;
+            if (prev) {
+              const movedKm = haversineDistanceKm(
+                prev.latitude,
+                prev.longitude,
+                reading.latitude,
+                reading.longitude,
+              );
+              if (movedKm < PROFILE_LOCATION_WATCH_KM) return;
+            }
+            try {
+              await syncGpsToProfile(
+                { latitude: reading.latitude, longitude: reading.longitude },
+                { persist: true, label: selectedLabel },
+              );
+            } catch {
+              applyResolvedAddress(CURRENT_LOCATION_LABEL);
+            }
+          })();
+        },
+        {
+          accuracy: Location.Accuracy.Balanced,
+          distanceIntervalM: Math.round(PROFILE_LOCATION_WATCH_KM * 1000),
+        },
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      gpsWatchRef.current?.remove();
+      gpsWatchRef.current = null;
+    };
+  }, [applyResolvedAddress, selectedLabel, syncGpsToProfile, userId]);
 
   const runSearch = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -195,7 +282,6 @@ export function useProfileLocation(userId: string | null) {
 
   const onAddressInputChange = useCallback(
     (text: string) => {
-      skipFirestoreAddressHydrationRef.current = true;
       setAddressInput(text);
       setError(null);
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
@@ -268,6 +354,12 @@ export function useProfileLocation(userId: string | null) {
     const trimmed = addressInput.trim();
     if (trimmed.length < 3) {
       const msg = 'Enter an address with at least 3 characters.';
+      setError(msg);
+      showLocationAlert(msg);
+      return;
+    }
+    if (trimmed === CURRENT_LOCATION_LABEL) {
+      const msg = 'Use “Use current location” or search for a street address.';
       setError(msg);
       showLocationAlert(msg);
       return;

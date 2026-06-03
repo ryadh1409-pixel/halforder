@@ -1,10 +1,10 @@
 import {
-  calculateDeliveryFee,
-  calculateETA,
+  evaluateDeliveryEligibility,
+  parseRestaurantDeliverySettings,
+} from '@/lib/delivery/deliveryEligibility';
+import {
   distanceKmBetween,
   extractRestaurantCoords,
-  formatDistanceKm,
-  pickFirestoreDeliveryFee,
   pickRatingAverage,
   pickReviewCount,
   resolvePromoTags,
@@ -25,6 +25,10 @@ export type HomeRestaurant = {
   isOpen: boolean;
   /** Pre-formatted e.g. `2.4 km`; null when user location unavailable */
   distanceKmLabel: string | null;
+  /** False when customer is outside this restaurant's delivery zone. */
+  deliverable: boolean;
+  /** e.g. "Delivery unavailable" for card badges. */
+  deliveryStatusLabel: string;
 };
 
 export function mapFirestoreRestaurant(
@@ -50,16 +54,13 @@ export function mapFirestoreRestaurant(
 
   const restaurantCoords = extractRestaurantCoords(data);
   const distanceKm = distanceKmBetween(userCoords ?? null, restaurantCoords);
-  const distanceKmLabel = formatDistanceKm(distanceKm);
-
-  const firestoreFee = pickFirestoreDeliveryFee(data);
-  const deliveryFee = calculateDeliveryFee({
+  const settings = parseRestaurantDeliverySettings(data);
+  const eligibility = evaluateDeliveryEligibility({
+    customer: userCoords ?? null,
+    restaurant: restaurantCoords,
+    settings,
     mode: 'delivery',
-    distanceKm,
-    firestoreFee,
   });
-
-  const etaLabel = calculateETA({ mode: 'delivery', distanceKm });
 
   const isPopularNearby =
     data.popular === true &&
@@ -70,7 +71,7 @@ export function mapFirestoreRestaurant(
     data,
     menuPromotions: [],
     reviewCount,
-    deliveryFeeAmount: deliveryFee.amount,
+    deliveryFeeAmount: eligibility.deliveryFee.amount,
     isPopularNearby,
   });
 
@@ -81,11 +82,13 @@ export function mapFirestoreRestaurant(
     coverImage,
     rating,
     reviewCount,
-    etaLabel,
-    deliveryFeeLabel: deliveryFee.label,
+    etaLabel: eligibility.etaLabel,
+    deliveryFeeLabel: eligibility.deliveryFee.label,
     promoLabel: promoTags[0] ?? null,
     cuisine: typeof data.cuisine === 'string' ? data.cuisine : null,
     isOpen: data.isOpen !== false,
-    distanceKmLabel,
+    distanceKmLabel: eligibility.distanceLabel,
+    deliverable: eligibility.deliverable,
+    deliveryStatusLabel: eligibility.statusLabel,
   };
 }

@@ -7,8 +7,11 @@ import {
   getCurrentGpsReading,
   LocationPermissionError,
   LocationUnavailableError,
-  reverseGeocodeAddress,
 } from './gps';
+import {
+  CURRENT_LOCATION_LABEL,
+  resolveAddressFromGps,
+} from './resolveAddressFromGps';
 
 export function buildCustomerLocationRecord(
   latitude: number,
@@ -60,7 +63,7 @@ export async function resolveDeliveryLocationForCheckout(
 
   let reading;
   try {
-    reading = await getCurrentGpsReading();
+    reading = await getCurrentGpsReading({ fresh: true });
   } catch (error) {
     if (required) {
       if (error instanceof LocationPermissionError) {
@@ -71,12 +74,25 @@ export async function resolveDeliveryLocationForCheckout(
     throw error;
   }
 
-  const address = await reverseGeocodeAddress(reading.latitude, reading.longitude);
+  const resolved = await resolveAddressFromGps(reading.latitude, reading.longitude);
+  const address = resolved.address || CURRENT_LOCATION_LABEL;
   const customerLocation = buildCustomerLocationRecord(reading.latitude, reading.longitude);
 
   if (persistToProfile && uid) {
     try {
       await persistCustomerLocation(uid, reading.latitude, reading.longitude);
+      if (resolved.geocoded) {
+        const { saveUserSavedLocation } = await import('@/services/profile/savedLocation');
+        await saveUserSavedLocation(uid, {
+          address: resolved.address,
+          latitude: reading.latitude,
+          longitude: reading.longitude,
+          ...(resolved.placeId ? { placeId: resolved.placeId } : {}),
+        });
+      } else {
+        const { persistGpsCoordinatesOnly } = await import('@/services/profile/savedLocation');
+        await persistGpsCoordinatesOnly(uid, reading.latitude, reading.longitude);
+      }
     } catch {
       /* non-fatal — order still carries coords */
     }

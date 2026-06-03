@@ -3,6 +3,11 @@ import * as Location from 'expo-location';
 import type { DriverLiveCoordinate, GeoCoordinate } from '@/types/location';
 import { driverCoordFromGps } from '@/lib/location/coordinates';
 
+import {
+  CURRENT_LOCATION_LABEL,
+  resolveAddressFromGps,
+} from './resolveAddressFromGps';
+
 export type GpsPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
 export type GpsReading = GeoCoordinate & {
@@ -44,25 +49,54 @@ export async function requestForegroundLocationPermission(): Promise<GpsPermissi
   return 'undetermined';
 }
 
+/** Options for a fresh device fix (no stale cached coordinates). */
+export const FRESH_GPS_OPTIONS = {
+  accuracy: Location.Accuracy.BestForNavigation,
+} as const;
+
 export async function getCurrentGpsReading(options?: {
   accuracy?: Location.Accuracy;
+  /** When true (default), prefer a new satellite/network fix over cached position. */
+  fresh?: boolean;
 }): Promise<GpsReading> {
   const permission = await requestForegroundLocationPermission();
   if (permission !== 'granted') {
     throw new LocationPermissionError();
   }
 
+  const useFresh = options?.fresh !== false;
+  if (useFresh) {
+    try {
+      await Location.enableNetworkProviderAsync();
+    } catch {
+      /* iOS — not applicable */
+    }
+  }
+
   const location = await Location.getCurrentPositionAsync({
-    accuracy: options?.accuracy ?? Location.Accuracy.High,
+    accuracy:
+      options?.accuracy ??
+      (useFresh ? FRESH_GPS_OPTIONS.accuracy : Location.Accuracy.High),
   });
 
-  return {
+  const reading: GpsReading = {
     latitude: location.coords.latitude,
     longitude: location.coords.longitude,
     accuracy: location.coords.accuracy ?? null,
     heading: location.coords.heading ?? null,
     speed: location.coords.speed ?? null,
   };
+
+  if (__DEV__) {
+    console.log('[GPS READING]', {
+      latitude: reading.latitude,
+      longitude: reading.longitude,
+      accuracy: reading.accuracy,
+      fresh: useFresh,
+    });
+  }
+
+  return reading;
 }
 
 /** Privacy-safe: returns null instead of throwing when denied/unavailable. */
@@ -76,21 +110,16 @@ export async function getCurrentGpsReadingSafe(options?: {
   }
 }
 
+/**
+ * Resolve display address via Google Geocoding API with safe fallback.
+ * Never returns a stale Firestore or device-cache city string.
+ */
 export async function reverseGeocodeAddress(
   latitude: number,
   longitude: number,
 ): Promise<string> {
-  try {
-    const res = await Location.reverseGeocodeAsync({ latitude, longitude });
-    const row = res?.[0];
-    if (!row) return 'Current location';
-    const parts = [row.streetNumber, row.street, row.city, row.region, row.postalCode]
-      .filter((p) => typeof p === 'string' && p.trim().length > 0)
-      .map((p) => String(p).trim());
-    return parts.length > 0 ? parts.join(', ') : 'Current location';
-  } catch {
-    return 'Current location';
-  }
+  const resolved = await resolveAddressFromGps(latitude, longitude);
+  return resolved.address || CURRENT_LOCATION_LABEL;
 }
 
 /** Reverse geocode to city only (never expose exact address in UI). */

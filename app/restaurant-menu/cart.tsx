@@ -15,7 +15,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppHeader from '../../components/AppHeader';
+import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
+import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { useMenu } from '../../hooks/useMenu';
+import { useRestaurantProfile } from '@/hooks/useRestaurantProfile';
+import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
 import { useAuth } from '../../services/AuthContext';
 import { useCart } from '../../services/CartContext';
 import { auth, ensureAuthReady } from '../../services/firebase';
@@ -36,6 +41,12 @@ export default function CartScreen() {
     !authLoading && isOwnerHost(user, role, restaurantId);
   const { items: cart } = useCart();
   const { items, loading } = useMenu(restaurantId || null);
+  const { profile } = useRestaurantProfile(restaurantId || null);
+  const {
+    reading: customerGps,
+    loading: locationLoading,
+    refresh: refreshCustomerLocation,
+  } = useCustomerLocation({ autoFetch: true });
   const [placing, setPlacing] = useState(false);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   const [checkingStripe, setCheckingStripe] = useState(false);
@@ -76,9 +87,25 @@ export default function CartScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void refreshCustomerLocation();
       void refreshStripeReadiness();
-    }, [refreshStripeReadiness]),
+    }, [refreshCustomerLocation, refreshStripeReadiness]),
   );
+
+  const customerCoords = useMemo(
+    () =>
+      customerGps
+        ? { lat: customerGps.latitude, lng: customerGps.longitude }
+        : null,
+    [customerGps],
+  );
+
+  const eligibility = useDeliveryEligibility({
+    customer: customerCoords,
+    restaurant: profile?.coords ?? null,
+    restaurantRaw: profile?.raw,
+    mode: 'delivery',
+  });
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -127,6 +154,10 @@ export default function CartScreen() {
     }
     if (!restaurantId || cartItems.length === 0 || items.length === 0) {
       showError('Cart is empty.');
+      return;
+    }
+    if (eligibility.blocked) {
+      showError(eligibility.message ?? OUTSIDE_DELIVERY_AREA_MESSAGE);
       return;
     }
     try {
@@ -191,6 +222,12 @@ export default function CartScreen() {
       <AppHeader title="Cart" />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Your Cart</Text>
+        {cartItems.length > 0 ? (
+          <DeliveryEligibilityBanner
+            eligibility={eligibility}
+            loading={locationLoading}
+          />
+        ) : null}
         {stripeReady === false && cartItems.length > 0 && !authLoading ? (
           <View style={styles.setupCard}>
             <Text style={styles.stripeWarn}>
@@ -235,7 +272,10 @@ export default function CartScreen() {
               cartItems.length === 0 ||
               checkingStripe ||
               authLoading ||
-              stripeReady === false) &&
+              stripeReady === false ||
+              eligibility.blocked ||
+              locationLoading ||
+              !customerGps) &&
               styles.disabled,
           ]}
           onPress={placeOrder}
@@ -244,7 +284,10 @@ export default function CartScreen() {
             cartItems.length === 0 ||
             checkingStripe ||
             authLoading ||
-            stripeReady === false
+            stripeReady === false ||
+            eligibility.blocked ||
+            locationLoading ||
+            !customerGps
           }
         >
           {placing || checkingStripe ? (

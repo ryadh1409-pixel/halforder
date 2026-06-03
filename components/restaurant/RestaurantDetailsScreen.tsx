@@ -1,6 +1,7 @@
 import { MenuHorizontalCarousel } from '@/components/menu/MenuHorizontalCarousel';
 import { MenuItemRowCard } from '@/components/menu/MenuItemRowCard';
 import { FloatingCartBar } from '@/components/cart/FloatingCartBar';
+import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
 import { CategoryTabs } from '@/components/restaurant/CategoryTabs';
 import {
   DeliveryOptions,
@@ -19,8 +20,11 @@ import { QuickInfoCards } from '@/components/restaurant/QuickInfoCards';
 import { RestaurantHero } from '@/components/restaurant/RestaurantHero';
 import { RestaurantInfo } from '@/components/restaurant/RestaurantInfo';
 import { RP } from '@/constants/restaurantPremiumTheme';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
+import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { useMenu } from '@/hooks/useMenu';
 import { useRestaurantMenuSections } from '@/hooks/useRestaurantMenuSections';
+import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
 import {
   useRestaurantProfile,
   type RestaurantProfile,
@@ -36,18 +40,15 @@ import {
 } from '@/utils/menuDisplayEnrich';
 import {
   calculateDeliveryFee,
-  calculateETA,
   calculateServiceFee,
-  distanceKmBetween,
-  formatDistanceKm,
   pickActivePromotion,
   resolveRatingDisplay,
   resolveStoreStatusLabel,
   resolveStoreStatusSubtext,
 } from '@/lib/restaurantStoreMetrics';
-import { getUserLocationSafe } from '@/services/location';
 import { showError } from '@/utils/toast';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -111,22 +112,25 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     null,
   );
 
-  const [userCoords, setUserCoords] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  const {
+    reading: customerGps,
+    loading: locationLoading,
+    refresh: refreshCustomerLocation,
+  } = useCustomerLocation({ autoFetch: true });
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const loc = await getUserLocationSafe();
-      if (cancelled) return;
-      if (loc) setUserCoords({ lat: loc.latitude, lng: loc.longitude });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCustomerLocation();
+    }, [refreshCustomerLocation]),
+  );
+
+  const userCoords = useMemo(
+    () =>
+      customerGps
+        ? { lat: customerGps.latitude, lng: customerGps.longitude }
+        : null,
+    [customerGps],
+  );
 
   const resolvedProfile =
     profile ??
@@ -144,10 +148,14 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       raw: {},
     } satisfies RestaurantProfile);
 
-  const distanceKm = useMemo(
-    () => distanceKmBetween(userCoords, resolvedProfile.coords),
-    [resolvedProfile.coords, userCoords],
-  );
+  const eligibility = useDeliveryEligibility({
+    customer: userCoords,
+    restaurant: resolvedProfile.coords,
+    restaurantRaw: resolvedProfile.raw,
+    mode: deliveryMode === 'pickup' ? 'pickup' : 'delivery',
+  });
+
+  const distanceKm = eligibility.distanceKm;
 
   const ratingDisplay = useMemo(
     () => resolveRatingDisplay(resolvedProfile.rating, resolvedProfile.reviewCount),
@@ -156,25 +164,22 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
 
   const deliveryFeeEstimate = useMemo(
     () =>
-      calculateDeliveryFee({
-        mode: deliveryMode,
-        distanceKm,
-        firestoreFee: resolvedProfile.deliveryFee,
-      }),
-    [deliveryMode, distanceKm, resolvedProfile.deliveryFee],
+      deliveryMode === 'pickup'
+        ? calculateDeliveryFee({
+            mode: 'pickup',
+            distanceKm,
+            firestoreFee: resolvedProfile.deliveryFee,
+          })
+        : eligibility.deliveryFee,
+    [deliveryMode, distanceKm, resolvedProfile.deliveryFee, eligibility.deliveryFee],
   );
 
   const deliveryFeeLabel = deliveryFeeEstimate.label;
+  const etaLabel = eligibility.etaLabel;
+  const distanceLabel = eligibility.distanceLabel;
 
-  const etaLabel = useMemo(
-    () => calculateETA({ mode: deliveryMode, distanceKm }),
-    [deliveryMode, distanceKm],
-  );
-
-  const distanceLabel = useMemo(
-    () => formatDistanceKm(distanceKm),
-    [distanceKm],
-  );
+  const deliveryBlocked =
+    deliveryMode === 'delivery' && eligibility.blocked;
 
   const displayItems = useMemo(
     () => items.filter((i) => i.available).map(enrichMenuItem),
@@ -289,10 +294,22 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       showError('Cart is empty.');
       return;
     }
+    if (deliveryMode === 'delivery' && eligibility.blocked) {
+      showError(eligibility.message ?? OUTSIDE_DELIVERY_AREA_MESSAGE);
+      return;
+    }
     router.push(
       `/restaurant-menu/checkout-premium?restaurantId=${encodeURIComponent(restaurantId)}` as never,
     );
-  }, [cartForRestaurant.length, restaurantId, router, user?.uid]);
+  }, [
+    cartForRestaurant.length,
+    deliveryMode,
+    eligibility.blocked,
+    eligibility.message,
+    restaurantId,
+    router,
+    user?.uid,
+  ]);
 
   const shareRestaurant = useCallback(async () => {
     try {
@@ -410,6 +427,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
               <DeliveryOptions
                 mode={deliveryMode}
                 onChange={setDeliveryMode}
+                deliveryDisabled={eligibility.blocked}
                 onGroupOrder={() =>
                   Alert.alert(
                     'Group order',
@@ -417,6 +435,12 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                   )
                 }
               />
+              {deliveryMode === 'delivery' ? (
+                <DeliveryEligibilityBanner
+                  eligibility={eligibility}
+                  loading={locationLoading}
+                />
+              ) : null}
               <QuickInfoCards
                 mode={deliveryMode}
                 deliveryFeeLabel={deliveryFeeLabel}
@@ -520,6 +544,12 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         itemCount={cartQty}
         total={subtotal}
         onCheckout={goCheckout}
+        disabled={deliveryBlocked}
+        label={
+          deliveryBlocked
+            ? (eligibility.message ?? 'Delivery unavailable')
+            : undefined
+        }
       />
 
       <ItemDetailsSheet

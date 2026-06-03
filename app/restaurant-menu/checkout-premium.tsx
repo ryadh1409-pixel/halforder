@@ -18,6 +18,7 @@ import {
   SavingsRibbon,
   StickyCheckoutButton,
 } from '@/components/checkout';
+import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
 import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import type { CheckoutDeliveryTiming, CheckoutFulfillmentMode, CheckoutPriceLine } from '@/types/checkoutFlow';
 import { CHECKOUT_MOCK_DEFAULT_PAYMENT } from '@/types/checkoutFlow';
@@ -33,14 +34,12 @@ import {
   resolveDeliveryLocationForCheckout,
 } from '@/services/location';
 import { useCustomerLocation } from '@/hooks/useCustomerLocation';
+import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
+import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
 import { isOwnerHost } from '@/services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { getHostStripeOnboardingUrl } from '@/services/stripeOnboarding';
-import {
-  calculateDeliveryFee,
-  calculateServiceFee,
-  distanceKmBetween,
-} from '@/lib/restaurantStoreMetrics';
+import { calculateServiceFee } from '@/lib/restaurantStoreMetrics';
 import { alertFriendly } from '@/utils/friendlyAlert';
 import { showError, showFriendlyError } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
@@ -119,27 +118,23 @@ export default function CheckoutPremiumScreen() {
     [cartItems],
   );
 
-  const distanceKm = useMemo(
+  const customerCoords = useMemo(
     () =>
-      distanceKmBetween(
-        customerGps ? { lat: customerGps.latitude, lng: customerGps.longitude } : null,
-        profile?.coords ?? null,
-      ),
-    [customerGps, profile?.coords],
+      customerGps
+        ? { lat: customerGps.latitude, lng: customerGps.longitude }
+        : null,
+    [customerGps],
   );
 
-  const deliveryFeeEstimate = useMemo(
-    () =>
-      calculateDeliveryFee({
-        mode: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
-        distanceKm,
-        firestoreFee: profile?.deliveryFee ?? null,
-      }),
-    [distanceKm, fulfillmentMode, profile?.deliveryFee],
-  );
+  const eligibility = useDeliveryEligibility({
+    customer: customerCoords,
+    restaurant: profile?.coords ?? null,
+    restaurantRaw: profile?.raw,
+    mode: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
+  });
 
   const deliveryFee =
-    fulfillmentMode === 'pickup' ? 0 : (deliveryFeeEstimate.amount ?? 0);
+    fulfillmentMode === 'pickup' ? 0 : (eligibility.deliveryFee.amount ?? 0);
 
   const priorityFee =
     fulfillmentMode === 'pickup' ? 0 : timing === 'priority' ? 2.49 : 0;
@@ -202,8 +197,9 @@ export default function CheckoutPremiumScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void refreshCustomerLocation();
       void refreshStripeReadiness();
-    }, [refreshStripeReadiness]),
+    }, [refreshCustomerLocation, refreshStripeReadiness]),
   );
 
   useEffect(() => {
@@ -246,6 +242,10 @@ export default function CheckoutPremiumScreen() {
     }
     if (!restaurantId || cartItems.length === 0 || menuItems.length === 0) {
       showError('Cart is empty.');
+      return;
+    }
+    if (fulfillmentMode === 'delivery' && eligibility.blocked) {
+      showError(eligibility.message ?? OUTSIDE_DELIVERY_AREA_MESSAGE);
       return;
     }
     try {
@@ -427,7 +427,8 @@ export default function CheckoutPremiumScreen() {
     checkingStripe ||
     authLoading ||
     stripeReady === false ||
-    (fulfillmentMode === 'delivery' && (locationLoading || !customerGps));
+    (fulfillmentMode === 'delivery' &&
+      (locationLoading || !customerGps || eligibility.blocked));
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -441,6 +442,13 @@ export default function CheckoutPremiumScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <DeliverySegment mode={fulfillmentMode} onChange={setFulfillmentMode} />
+
+        {fulfillmentMode === 'delivery' ? (
+          <DeliveryEligibilityBanner
+            eligibility={eligibility}
+            loading={locationLoading}
+          />
+        ) : null}
 
         {fulfillmentMode === 'delivery' && customerGps ? (
           <DeliveryMapCard

@@ -1,6 +1,11 @@
+import {
+  assertDeliveryEligibleForOrder,
+  deliveryFeeForTier,
+} from '@/lib/delivery/deliveryEligibility';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { fetchRestaurantLocation, restaurantLocationToLegacy } from '@/services/location/restaurantLocation';
+import type { DeliveryDistanceTier } from '@/types/deliveryEligibility';
 import type { CustomerLocationRecord } from '@/types/location';
 import { formatOrderTime } from '@/utils/time';
 import { safeToMillis, warnDevIfUnparsableTimestamp } from '@/utils/safeToMillis';
@@ -486,6 +491,7 @@ export async function createOrder(
     const restaurantRecord = await fetchRestaurantLocation(payload.restaurantId);
     restaurantLocation = restaurantLocationToLegacy(restaurantRecord);
   }
+  let restaurantRaw: Record<string, unknown> = {};
   let restaurantSnapshot: RestaurantSnapshot = {
     id: payload.restaurantId,
     name: '',
@@ -507,6 +513,7 @@ export async function createOrder(
     ]);
     if (restaurantSnap.exists()) {
       const r = restaurantSnap.data() as Record<string, unknown>;
+      restaurantRaw = r;
       restaurantSnapshot = {
         id: payload.restaurantId,
         name:
@@ -571,6 +578,38 @@ export async function createOrder(
     });
   }
 
+  let deliveryDistanceKm: number | null = null;
+  let deliveryTier: DeliveryDistanceTier = deliveryType === 'pickup' ? 'near' : 'unknown';
+  let deliveryEligible = deliveryType === 'pickup';
+  let maxDeliveryDistanceKmAtCheckout = 15;
+  let orderDeliveryFee = 0;
+
+  try {
+    const zoneCheck = assertDeliveryEligibleForOrder({
+      deliveryType,
+      customerLat: lat,
+      customerLng: lng,
+      restaurantData: restaurantRaw,
+      restaurantCoords: restaurantLocation,
+    });
+    deliveryDistanceKm = zoneCheck.distanceKm;
+    deliveryTier = zoneCheck.tier;
+    deliveryEligible = true;
+    maxDeliveryDistanceKmAtCheckout = zoneCheck.settings.maxDeliveryDistanceKm;
+    if (deliveryType === 'delivery') {
+      const feeEst = deliveryFeeForTier(
+        zoneCheck.tier,
+        zoneCheck.distanceKm,
+        zoneCheck.settings,
+      );
+      orderDeliveryFee = feeEst.amount ?? 0;
+    }
+  } catch (zoneErr) {
+    if (deliveryType === 'delivery') {
+      throw zoneErr;
+    }
+  }
+
   const orderPayload = {
     userId: customerUid,
     customerId: customerUid,
@@ -581,7 +620,11 @@ export async function createOrder(
     customerPhone: null,
     subtotal: payload.totalPrice,
     tax: 0,
-    deliveryFee: 0,
+    deliveryFee: orderDeliveryFee,
+    deliveryDistanceKm,
+    deliveryEligible,
+    deliveryTier,
+    maxDeliveryDistanceKmAtCheckout,
     totalPrice: payload.totalPrice,
     total: payload.totalPrice,
     deliveryType,

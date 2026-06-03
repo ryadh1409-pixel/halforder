@@ -1,4 +1,5 @@
 export {
+  FRESH_GPS_OPTIONS,
   getCurrentGpsReading,
   getCurrentGpsReadingSafe,
   getCityFromCoordinates,
@@ -21,6 +22,12 @@ export {
   resolveDeliveryLocationForCheckout,
   type ResolveDeliveryLocationOptions,
 } from './customerLocation';
+
+export {
+  CURRENT_LOCATION_LABEL,
+  resolveAddressFromGps,
+  type ResolvedAddressFromGps,
+} from './resolveAddressFromGps';
 
 export {
   fetchRestaurantLocation,

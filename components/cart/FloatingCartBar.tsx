@@ -17,6 +17,8 @@ type Props = {
   savings?: number;
   total: number;
   onCheckout: () => void;
+  disabled?: boolean;
+  label?: string;
 };
 
 export function FloatingCartBar({
@@ -52,21 +54,23 @@ export function FloatingCartBar({
       ]}
     >
       <AnimatedPressable
-        style={[styles.card, pressAnim]}
+        style={[styles.card, pressAnim, disabled && styles.cardDisabled]}
+        disabled={disabled}
         onPressIn={() => {
-          press.value = withSpring(0.98, { damping: 16, stiffness: 400 });
+          if (!disabled) press.value = withSpring(0.98, { damping: 16, stiffness: 400 });
         }}
         onPressOut={() => {
           press.value = withSpring(1, { damping: 12, stiffness: 280 });
         }}
         onPress={() => {
+          if (disabled) return;
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           onCheckout();
         }}
       >
         <Text style={styles.ctaTxt}>
-          View cart · {itemCount} {itemCount === 1 ? 'item' : 'items'} · $
-          {total.toFixed(2)}
+          {label ??
+            `View cart · ${itemCount} ${itemCount === 1 ? 'item' : 'items'} · $${total.toFixed(2)}`}
         </Text>
       </AnimatedPressable>
     </Animated.View>
@@ -80,6 +84,7 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 30,
   },
+  cardDisabled: { opacity: 0.45 },
   card: {
     backgroundColor: RP.blackBtn,
     borderRadius: 999,

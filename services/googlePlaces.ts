@@ -9,11 +9,9 @@ import {
   type NearbyRestaurant,
 } from './api';
 
-const GOOGLE_API_KEY =
-  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
-  process.env.EXPO_PUBLIC_GOOGLE_API_KEY?.trim() ||
-  process.env.GOOGLE_MAPS_API_KEY?.trim() ||
-  '';
+import { resolveGoogleMapsApiKey } from '@/lib/maps/googleMapsApiKey';
+
+const GOOGLE_API_KEY = resolveGoogleMapsApiKey();
 
 export type PlaceRestaurant = {
   id: string;

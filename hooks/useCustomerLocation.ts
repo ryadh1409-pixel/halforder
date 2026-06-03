@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
+import * as Location from 'expo-location';
 
 import type { CustomerLocationRecord } from '@/types/location';
 import { useAuth } from '@/services/AuthContext';
 import {
-  getCurrentGpsReadingSafe,
+  CURRENT_LOCATION_LABEL,
+  resolveAddressFromGps,
+} from '@/services/location/resolveAddressFromGps';
+import {
+  getCurrentGpsReading,
   persistCustomerLocation,
   requestForegroundLocationPermission,
-  reverseGeocodeAddress,
   type GpsPermissionStatus,
   type GpsReading,
 } from '@/services/location';
+import { persistGpsCoordinatesOnly } from '@/services/profile/savedLocation';
 
 export type CustomerLocationState = {
   reading: GpsReading | null;
@@ -44,8 +49,13 @@ export function useCustomerLocation(options?: { autoFetch?: boolean }) {
       return null;
     }
 
-    const reading = await getCurrentGpsReadingSafe();
-    if (!reading) {
+    let reading: GpsReading;
+    try {
+      reading = await getCurrentGpsReading({
+        accuracy: Location.Accuracy.BestForNavigation,
+        fresh: true,
+      });
+    } catch {
       setState({
         reading: null,
         address: null,
@@ -56,11 +66,23 @@ export function useCustomerLocation(options?: { autoFetch?: boolean }) {
       return null;
     }
 
-    const address = await reverseGeocodeAddress(reading.latitude, reading.longitude);
+    const resolved = await resolveAddressFromGps(reading.latitude, reading.longitude);
+    const address = resolved.address || CURRENT_LOCATION_LABEL;
     const uid = user?.uid?.trim();
     if (uid) {
       try {
         await persistCustomerLocation(uid, reading.latitude, reading.longitude);
+        if (resolved.geocoded) {
+          const { saveUserSavedLocation } = await import('@/services/profile/savedLocation');
+          await saveUserSavedLocation(uid, {
+            address: resolved.address,
+            latitude: reading.latitude,
+            longitude: reading.longitude,
+            ...(resolved.placeId ? { placeId: resolved.placeId } : {}),
+          });
+        } else {
+          await persistGpsCoordinatesOnly(uid, reading.latitude, reading.longitude);
+        }
       } catch {
         /* profile sync is best-effort */
       }
@@ -71,7 +93,10 @@ export function useCustomerLocation(options?: { autoFetch?: boolean }) {
       address,
       permission,
       loading: false,
-      error: null,
+      error: resolved.geocoded
+        ? null
+        : (resolved.geocodeError ??
+            'Showing your GPS position. Add a Google Maps API key for street addresses.'),
     });
     return reading;
   }, [user?.uid]);

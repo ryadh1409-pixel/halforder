@@ -58,6 +58,16 @@ function requireApiKey(): string {
   return key;
 }
 
+export type SafeGeocodeResult =
+  | {
+      ok: true;
+      address: string;
+      placeId: string;
+      latitude: number;
+      longitude: number;
+    }
+  | { ok: false; status: string; message: string };
+
 function mapGeocodeStatus(status: string, errorMessage?: string): never {
   if (status === 'ZERO_RESULTS') {
     throw new PlacesApiError(
@@ -170,50 +180,114 @@ export async function fetchPlaceDetails(
  * Reverse geocode GPS via Google Geocoding API.
  * https://maps.googleapis.com/maps/api/geocode/json?latlng=LAT,LNG&key=API_KEY
  */
-export async function reverseGeocodeCoordinates(
+/**
+ * Reverse geocode without throwing — used when checkout/profile must keep GPS even if API fails.
+ */
+export async function reverseGeocodeCoordinatesSafe(
   latitude: number,
   longitude: number,
-): Promise<PlaceDetailsResult> {
+): Promise<SafeGeocodeResult> {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new PlacesApiError('Invalid GPS coordinates.', 'INVALID_INPUT');
+    return {
+      ok: false,
+      status: 'INVALID_INPUT',
+      message: 'Invalid GPS coordinates.',
+    };
   }
 
-  const key = requireApiKey();
+  let key: string;
+  try {
+    key = requireApiKey();
+  } catch (e) {
+    const msg = e instanceof PlacesApiError ? e.message : 'API key missing';
+    return { ok: false, status: 'MISSING_KEY', message: msg };
+  }
+
   const latlng = `${latitude},${longitude}`;
   const params = new URLSearchParams({ latlng, key });
   const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
 
   console.log('[GEOCODE REQUEST]', { latlng, url: url.replace(key, '***') });
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new PlacesApiError(`Reverse geocoding failed (${res.status}).`, 'HTTP_ERROR');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: 'HTTP_ERROR',
+        message: `Reverse geocoding failed (${res.status}).`,
+      };
+    }
+
+    const data = (await res.json()) as GeocodeResponse;
+    console.log('[GEOCODE RESPONSE]', {
+      status: data.status,
+      resultCount: data.results?.length ?? 0,
+      error_message: data.error_message,
+    });
+
+    if (data.status !== 'OK' || !data.results?.length) {
+      return {
+        ok: false,
+        status: data.status || 'UNKNOWN',
+        message:
+          data.error_message ??
+          (data.status === 'REQUEST_DENIED'
+            ? 'The provided API key is invalid or Geocoding API is not enabled.'
+            : 'Could not resolve your address.'),
+      };
+    }
+
+    const first = data.results[0]!;
+    const formatted = first.formatted_address?.trim() ?? '';
+    if (!formatted) {
+      return {
+        ok: false,
+        status: 'INVALID_RESULT',
+        message: 'Google returned no formatted address for your location.',
+      };
+    }
+
+    console.log('[GEOCODE PARSED ADDRESS]', formatted);
+
+    return {
+      ok: true,
+      address: formatted,
+      placeId: first.place_id ?? '',
+      latitude,
+      longitude,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: 'NETWORK_ERROR',
+      message: e instanceof Error ? e.message : 'Network error during geocoding.',
+    };
   }
+}
 
-  const data = (await res.json()) as GeocodeResponse;
-  console.log('[GEOCODE RESPONSE]', {
-    status: data.status,
-    resultCount: data.results?.length ?? 0,
-    error_message: data.error_message,
-  });
-
-  if (data.status !== 'OK' || !data.results?.length) {
-    mapGeocodeStatus(data.status, data.error_message);
+export async function reverseGeocodeCoordinates(
+  latitude: number,
+  longitude: number,
+): Promise<PlaceDetailsResult> {
+  const result = await reverseGeocodeCoordinatesSafe(latitude, longitude);
+  if (!result.ok) {
+    if (result.status === 'ZERO_RESULTS') {
+      throw new PlacesApiError(
+        'No address found for your location. Try searching manually.',
+        result.status,
+      );
+    }
+    if (result.status === 'REQUEST_DENIED') {
+      throw new PlacesApiError(result.message, result.status);
+    }
+    throw new PlacesApiError(result.message, result.status);
   }
-
-  const first = data.results![0];
-  const formatted = first.formatted_address?.trim() ?? '';
-  if (!formatted) {
-    throw new PlacesApiError('Google returned no formatted address for your location.', 'INVALID_RESULT');
-  }
-
-  console.log('[GEOCODE PARSED ADDRESS]', formatted);
-
   return {
-    placeId: first.place_id ?? '',
-    address: formatted,
-    latitude,
-    longitude,
+    placeId: result.placeId,
+    address: result.address,
+    latitude: result.latitude,
+    longitude: result.longitude,
   };
 }
 
