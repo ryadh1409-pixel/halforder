@@ -29,6 +29,9 @@ import { useMenuItemImageEditor } from '../hooks/useMenuItemImageEditor';
 import { menuImageDisplayUri } from '../utils/menuImageUrl';
 import { requireRole } from '../utils/requireRole';
 import { stripeConnectErrorMessage } from '../utils/stripeConnectErrors';
+import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
+import { LOCATION_PALETTE_LIGHT } from '@/components/location/locationPalette';
+import { parseSavedLocation } from '@/lib/location/parseSavedLocation';
 import { showError, showSuccess } from '../utils/toast';
 
 type RestaurantView = {
@@ -162,7 +165,11 @@ export default function RestaurantDashboardScreen() {
           id: user.uid,
           name: typeof data.name === 'string' ? data.name : 'Restaurant',
           logo: typeof data.logo === 'string' ? data.logo : null,
-          location: typeof data.location === 'string' ? data.location : '',
+          location: (() => {
+            const parsed = parseSavedLocation(data.location);
+            if (parsed) return parsed.address;
+            return typeof data.location === 'string' ? data.location : '';
+          })(),
           isOpen: data.isOpen !== false,
           profileCompleted: data.profileCompleted === true,
           stripeAccountId:
@@ -434,6 +441,15 @@ export default function RestaurantDashboardScreen() {
             <StatCard key={stat.label} label={stat.label} value={stat.value} />
           ))}
         </ScrollView>
+        {user?.uid ? (
+          <AccountLocationPicker
+            role="restaurant"
+            accountId={user.uid}
+            palette={LOCATION_PALETTE_LIGHT}
+            hint="Update your restaurant address for customers and drivers."
+            saveSuccessMessage="Venue location updated"
+          />
+        ) : null}
         {restaurant?.id ? (
           <RestaurantOrdersPanel
             restaurantId={restaurant.id}

@@ -3,8 +3,9 @@ import { BootstrapProvider, useBootstrap } from '@/contexts/BootstrapContext';
 import { isBootstrapInteractive } from '@/lib/startup/bootstrapMachine';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { logBoot } from '@/utils/startupDiagnostics';
+import { clearDeliveryLocationCacheOnStartup } from '@/services/location/startupLocationCache';
 import React, { useEffect, type ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
 type Props = {
   children: ReactNode;
@@ -17,6 +18,12 @@ type Props = {
 function BootstrapShellOverlay({ children }: Props) {
   const { phase } = useBootstrap();
   const showOverlay = !isBootstrapInteractive(phase);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      void clearDeliveryLocationCacheOnStartup();
+    }
+  }, []);
 
   useEffect(() => {
     if (!showOverlay) {

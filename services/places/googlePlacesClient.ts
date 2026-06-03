@@ -1,4 +1,6 @@
+import { pickSavedLocationFieldsFromComponents } from '@/lib/location/addressComponents';
 import { resolveGoogleMapsApiKey } from '@/lib/maps/googleMapsApiKey';
+import type { SavedLocation } from '@/types/savedLocation';
 import type {
   PlaceAutocompleteSuggestion,
   PlaceDetailsResult,
@@ -27,12 +29,19 @@ type AutocompleteResponse = {
   error_message?: string;
 };
 
+type GoogleAddressComponent = {
+  long_name?: string;
+  short_name?: string;
+  types?: string[];
+};
+
 type PlaceDetailsResponse = {
   status: string;
   result?: {
     place_id: string;
     formatted_address?: string;
     geometry?: { location?: { lat: number; lng: number } };
+    address_components?: GoogleAddressComponent[];
   };
   error_message?: string;
 };
@@ -43,9 +52,26 @@ type GeocodeResponse = {
     place_id?: string;
     formatted_address?: string;
     geometry?: { location?: { lat: number; lng: number } };
+    address_components?: GoogleAddressComponent[];
   }[];
   error_message?: string;
 };
+
+function placeDetailsToSavedLocation(
+  placeId: string,
+  address: string,
+  lat: number,
+  lng: number,
+  addressComponents?: GoogleAddressComponent[],
+): SavedLocation {
+  return {
+    address,
+    latitude: lat,
+    longitude: lng,
+    placeId,
+    ...pickSavedLocationFieldsFromComponents(addressComponents),
+  };
+}
 
 function requireApiKey(): string {
   const key = resolveGoogleMapsApiKey();
@@ -65,6 +91,10 @@ export type SafeGeocodeResult =
       placeId: string;
       latitude: number;
       longitude: number;
+      city?: string;
+      province?: string;
+      country?: string;
+      postalCode?: string;
     }
   | { ok: false; status: string; message: string };
 
@@ -96,7 +126,11 @@ function mapGeocodeStatus(status: string, errorMessage?: string): never {
  */
 export async function fetchPlaceAutocompleteSuggestions(
   input: string,
-  options?: { origin?: { latitude: number; longitude: number } },
+  options?: {
+    origin?: { latitude: number; longitude: number };
+    /** Include establishments + geocode (street, city, postal, restaurants). */
+    broadTypes?: boolean;
+  },
 ): Promise<PlaceAutocompleteSuggestion[]> {
   const query = input.trim();
   if (query.length < 2) return [];
@@ -105,9 +139,11 @@ export async function fetchPlaceAutocompleteSuggestions(
   const params = new URLSearchParams({
     input: query,
     key,
-    types: 'address',
     components: 'country:ca',
   });
+  if (!options?.broadTypes) {
+    params.set('types', 'geocode');
+  }
   if (options?.origin) {
     params.set(
       'location',
@@ -117,19 +153,32 @@ export async function fetchPlaceAutocompleteSuggestions(
   }
 
   const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`;
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new PlacesApiError(`Places search failed (${res.status}).`, 'HTTP_ERROR');
   }
 
   const data = (await res.json()) as AutocompleteResponse;
+  if (data.status === 'REQUEST_DENIED') {
+    throw new PlacesApiError(
+      'Location search unavailable. Please check API key.',
+      'REQUEST_DENIED',
+    );
+  }
   if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
-    return (data.predictions ?? []).map((p) => ({
-      placeId: p.place_id,
-      description: p.description,
-      mainText: p.structured_formatting?.main_text ?? p.description,
-      secondaryText: p.structured_formatting?.secondary_text ?? '',
-    }));
+    return (data.predictions ?? []).map((p) => {
+      const mainText = p.structured_formatting?.main_text ?? p.description;
+      const secondaryText =
+        p.structured_formatting?.secondary_text?.trim() || p.description;
+      return {
+        placeId: p.place_id,
+        description: p.description,
+        mainText,
+        secondaryText,
+        formattedAddress: p.description,
+      };
+    });
   }
   mapGeocodeStatus(data.status, data.error_message);
 }
@@ -147,7 +196,7 @@ export async function fetchPlaceDetails(
   const params = new URLSearchParams({
     place_id: id,
     key,
-    fields: 'place_id,formatted_address,geometry',
+    fields: 'place_id,formatted_address,geometry,address_components',
   });
   const url = `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`;
   const res = await fetch(url);
@@ -168,11 +217,40 @@ export async function fetchPlaceDetails(
     throw new PlacesApiError('Selected place has no usable address.', 'INVALID_RESULT');
   }
 
-  return {
-    placeId: result.place_id,
+  const saved = placeDetailsToSavedLocation(
+    result.place_id,
     address,
-    latitude: lat,
-    longitude: lng,
+    lat,
+    lng,
+    result.address_components,
+  );
+
+  return {
+    placeId: saved.placeId ?? result.place_id,
+    address: saved.address,
+    latitude: saved.latitude,
+    longitude: saved.longitude,
+    city: saved.city,
+    province: saved.province,
+    country: saved.country,
+    postalCode: saved.postalCode,
+  };
+}
+
+/** Full saved location from a Places place id. */
+export async function fetchPlaceDetailsAsSavedLocation(
+  placeId: string,
+): Promise<SavedLocation> {
+  const details = await fetchPlaceDetails(placeId);
+  return {
+    address: details.address,
+    latitude: details.latitude,
+    longitude: details.longitude,
+    placeId: details.placeId,
+    ...(details.city ? { city: details.city } : {}),
+    ...(details.province ? { province: details.province } : {}),
+    ...(details.country ? { country: details.country } : {}),
+    ...(details.postalCode ? { postalCode: details.postalCode } : {}),
   };
 }
 
@@ -207,8 +285,6 @@ export async function reverseGeocodeCoordinatesSafe(
   const params = new URLSearchParams({ latlng, key });
   const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
 
-  console.log('[GEOCODE REQUEST]', { latlng, url: url.replace(key, '***') });
-
   try {
     const res = await fetch(url);
     if (!res.ok) {
@@ -220,11 +296,6 @@ export async function reverseGeocodeCoordinatesSafe(
     }
 
     const data = (await res.json()) as GeocodeResponse;
-    console.log('[GEOCODE RESPONSE]', {
-      status: data.status,
-      resultCount: data.results?.length ?? 0,
-      error_message: data.error_message,
-    });
 
     if (data.status !== 'OK' || !data.results?.length) {
       return {
@@ -248,7 +319,7 @@ export async function reverseGeocodeCoordinatesSafe(
       };
     }
 
-    console.log('[GEOCODE PARSED ADDRESS]', formatted);
+    const fields = pickSavedLocationFieldsFromComponents(first.address_components);
 
     return {
       ok: true,
@@ -256,6 +327,7 @@ export async function reverseGeocodeCoordinatesSafe(
       placeId: first.place_id ?? '',
       latitude,
       longitude,
+      ...fields,
     };
   } catch (e) {
     return {
@@ -288,6 +360,10 @@ export async function reverseGeocodeCoordinates(
     address: result.address,
     latitude: result.latitude,
     longitude: result.longitude,
+    city: result.city,
+    province: result.province,
+    country: result.country,
+    postalCode: result.postalCode,
   };
 }
 
@@ -309,19 +385,12 @@ export async function geocodeAddressToCoordinates(
   });
   const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
 
-  console.log('[GEOCODE REQUEST]', { address: query, url: url.replace(key, '***') });
-
   const res = await fetch(url);
   if (!res.ok) {
     throw new PlacesApiError(`Geocoding failed (${res.status}).`, 'HTTP_ERROR');
   }
 
   const data = (await res.json()) as GeocodeResponse;
-  console.log('[GEOCODE RESPONSE]', {
-    status: data.status,
-    resultCount: data.results?.length ?? 0,
-    error_message: data.error_message,
-  });
 
   if (data.status !== 'OK' || !data.results?.length) {
     mapGeocodeStatus(data.status, data.error_message);
@@ -335,12 +404,39 @@ export async function geocodeAddressToCoordinates(
     throw new PlacesApiError('Could not geocode that address.', 'INVALID_RESULT');
   }
 
-  console.log('[GEOCODE PARSED ADDRESS]', formatted);
+  const saved = placeDetailsToSavedLocation(
+    first.place_id ?? '',
+    formatted,
+    lat,
+    lng,
+    first.address_components,
+  );
 
   return {
-    placeId: first.place_id ?? '',
-    address: formatted,
-    latitude: lat,
-    longitude: lng,
+    placeId: saved.placeId ?? '',
+    address: saved.address,
+    latitude: saved.latitude,
+    longitude: saved.longitude,
+    city: saved.city,
+    province: saved.province,
+    country: saved.country,
+    postalCode: saved.postalCode,
+  };
+}
+
+/** Geocode free text into a {@link SavedLocation}. */
+export async function geocodeAddressToSavedLocation(
+  address: string,
+): Promise<SavedLocation> {
+  const details = await geocodeAddressToCoordinates(address);
+  return {
+    address: details.address,
+    latitude: details.latitude,
+    longitude: details.longitude,
+    ...(details.placeId ? { placeId: details.placeId } : {}),
+    ...(details.city ? { city: details.city } : {}),
+    ...(details.province ? { province: details.province } : {}),
+    ...(details.country ? { country: details.country } : {}),
+    ...(details.postalCode ? { postalCode: details.postalCode } : {}),
   };
 }

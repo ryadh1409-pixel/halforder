@@ -3,6 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import 'react-native-svg';
 
+import { AppLaunchLocationSync } from '@/components/AppLaunchLocationSync';
 import { BootstrapShell } from '@/components/BootstrapShell';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
@@ -120,6 +121,7 @@ export default function RootLayout() {
         <ThemeProvider value={DarkTheme}>
           <View style={styles.ltrRoot}>
             <AuthProvider>
+              <AppLaunchLocationSync />
               <CartProvider>
                 <BootstrapShell>
                   <Slot />

@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { getDistance } from 'geolib';
 
 import type { DriverLocationRecord, DriverLiveCoordinate } from '@/types/location';
@@ -70,6 +70,30 @@ function shouldWriteDriverLocation(key: string, coord: DriverLiveCoordinate): bo
 
 export function resetDriverLocationThrottle(orderId: string, driverId: string): void {
   throttleByKey.delete(`${driverId}:${orderId}`);
+}
+
+/** Profile / dispatch base — updates `drivers/{driverId}` live coordinates (no order). */
+export async function syncDriverProfileBaseLocation(
+  driverId: string,
+  coord: DriverLiveCoordinate,
+): Promise<void> {
+  const did = driverId.trim();
+  if (!did) return;
+
+  const payload = buildDriverLocationFirestorePayload(coord);
+  await setDoc(
+    doc(db, 'drivers', did),
+    {
+      liveLocation: payload,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      lat: coord.latitude,
+      lng: coord.longitude,
+      lastLocationUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 /**

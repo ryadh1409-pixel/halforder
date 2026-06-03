@@ -217,6 +217,8 @@ export default function DriverHubScreen() {
       if (!uid || acceptingIdRef.current) return;
       setAcceptingId(order.id);
       try {
+        const { refreshGpsIfAllowed } = await import('@/services/location/productionGps');
+        await refreshGpsIfAllowed(`driver_accept:${uid}`, { forceFresh: true });
         marketplaceLog.acceptStart(order.id, { driverId: uid });
         const res = await acceptQueuedDeliveryOrder(order.id, {
           id: uid,

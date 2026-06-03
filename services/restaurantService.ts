@@ -1,3 +1,5 @@
+import { parseSavedLocation, savedLocationToFirestore } from '@/lib/location/parseSavedLocation';
+import type { SavedLocation } from '@/types/savedLocation';
 import { db } from './firebase';
 import {
   doc,
@@ -7,11 +9,19 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
+function restaurantLocationLabel(data: Record<string, unknown>): string {
+  const parsed = parseSavedLocation(data.location);
+  if (parsed) return parsed.address;
+  return typeof data.location === 'string' ? data.location : '';
+}
+
 export type RestaurantProfile = {
   id: string;
   name: string;
   logo: string | null;
+  /** Display address (from `location` map or legacy string). */
   location: string;
+  savedLocation: SavedLocation | null;
   ownerId: string;
   type: 'restaurant' | 'food_truck';
   profileCompleted: boolean;
@@ -34,7 +44,8 @@ export async function getRestaurant(
     id: userId,
     name: typeof data.name === 'string' ? data.name : '',
     logo: typeof data.logo === 'string' ? data.logo : null,
-    location: typeof data.location === 'string' ? data.location : '',
+    location: restaurantLocationLabel(data),
+    savedLocation: parseSavedLocation(data.location),
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : userId,
     type: data.type === 'food_truck' ? 'food_truck' : 'restaurant',
     profileCompleted: data.profileCompleted === true,
@@ -52,16 +63,24 @@ export async function createRestaurant(data: {
   userId: string;
   name: string;
   logo: string | null;
-  location: string;
+  /** Legacy string address when `savedLocation` is omitted. */
+  location?: string;
+  savedLocation?: SavedLocation | null;
   type?: 'restaurant' | 'food_truck';
   profileCompleted?: boolean;
   description?: string;
 }): Promise<void> {
-  const payload = {
+  const saved = data.savedLocation ?? null;
+  const legacyLocation = data.location?.trim() ?? saved?.address?.trim() ?? '';
+  const locationPayload = saved
+    ? savedLocationToFirestore(saved)
+    : legacyLocation;
+
+  const payload: Record<string, unknown> = {
     id: data.userId,
     name: data.name.trim(),
     logo: data.logo ?? null,
-    location: data.location.trim(),
+    location: locationPayload,
     ownerId: data.userId,
     isOpen: true,
     type: data.type ?? 'restaurant',
@@ -71,10 +90,13 @@ export async function createRestaurant(data: {
     stripeAccountId: null,
     createdAt: serverTimestamp(),
   };
-  console.log('[venue.create] auth uid:', data.userId);
-  console.log('[venue.create] document id:', data.userId);
-  console.log('[venue.create] firestore path:', `restaurants/${data.userId}`);
-  console.log('[venue.create] payload:', JSON.stringify(payload));
+
+  if (saved) {
+    payload.latitude = saved.latitude;
+    payload.longitude = saved.longitude;
+    payload.address = saved.address;
+  }
+
   await setDoc(
     doc(db, 'restaurants', data.userId),
     payload,

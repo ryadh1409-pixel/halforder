@@ -120,7 +120,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      void refreshCustomerLocation();
+      void refreshCustomerLocation(false);
     }, [refreshCustomerLocation]),
   );
 

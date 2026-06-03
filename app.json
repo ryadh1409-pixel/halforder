@@ -30,6 +30,7 @@
         "applinks:www.halforder.app"
       ],
       "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "HalfOrder needs your precise location to set your delivery address and show nearby restaurants.",
         "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
         "NSPhotoLibraryAddUsageDescription": "HalfOrder may save images you share only when you choose to save them.",
         "NSCameraUsageDescription": "We need access to your camera to take a profile photo.",
@@ -256,7 +257,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "HalfOrder needs your location to create and show orders on the map."
+          "locationWhenInUsePermission": "HalfOrder needs your precise location to set your delivery address and show nearby restaurants."
         }
       ],
       [

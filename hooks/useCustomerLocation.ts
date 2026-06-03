@@ -1,26 +1,29 @@
 import { useCallback, useEffect, useState } from 'react';
-import * as Location from 'expo-location';
 
 import type { CustomerLocationRecord } from '@/types/location';
 import { useAuth } from '@/services/AuthContext';
 import {
-  CURRENT_LOCATION_LABEL,
-  resolveAddressFromGps,
-} from '@/services/location/resolveAddressFromGps';
+  GPS_IMPROVING_MESSAGE,
+  getProductionGpsReading,
+  resolveProductionGpsSavedLocation,
+} from '@/services/location/productionGps';
+import { LIVE_GPS_PRECISE_ERROR } from '@/services/location/gps';
 import {
-  getCurrentGpsReading,
-  persistCustomerLocation,
+  claimGpsRefreshSession,
+  getSessionGpsReading,
+} from '@/services/location/gpsSession';
+import {
   requestForegroundLocationPermission,
   type GpsPermissionStatus,
   type GpsReading,
-} from '@/services/location';
-import { persistGpsCoordinatesOnly } from '@/services/profile/savedLocation';
+} from '@/services/location/gps';
 
 export type CustomerLocationState = {
   reading: GpsReading | null;
   address: string | null;
   permission: GpsPermissionStatus;
   loading: boolean;
+  improving: boolean;
   error: string | null;
 };
 
@@ -32,78 +35,97 @@ export function useCustomerLocation(options?: { autoFetch?: boolean }) {
     address: null,
     permission: 'undetermined',
     loading: autoFetch,
+    improving: false,
     error: null,
   });
 
-  const refresh = useCallback(async (): Promise<GpsReading | null> => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    const permission = await requestForegroundLocationPermission();
-    if (permission !== 'granted') {
-      setState({
-        reading: null,
-        address: null,
-        permission,
-        loading: false,
-        error: 'Location permission is required for delivery.',
-      });
-      return null;
-    }
+  const refresh = useCallback(
+    async (forceFresh = false): Promise<GpsReading | null> => {
+      const uid = user?.uid?.trim() ?? 'guest';
+      const sessionKey = `customer:${uid}`;
 
-    let reading: GpsReading;
-    try {
-      reading = await getCurrentGpsReading({
-        accuracy: Location.Accuracy.BestForNavigation,
-        fresh: true,
-      });
-    } catch {
-      setState({
-        reading: null,
-        address: null,
-        permission,
-        loading: false,
-        error: 'Could not determine your location.',
-      });
-      return null;
-    }
-
-    const resolved = await resolveAddressFromGps(reading.latitude, reading.longitude);
-    const address = resolved.address || CURRENT_LOCATION_LABEL;
-    const uid = user?.uid?.trim();
-    if (uid) {
-      try {
-        await persistCustomerLocation(uid, reading.latitude, reading.longitude);
-        if (resolved.geocoded) {
-          const { saveUserSavedLocation } = await import('@/services/profile/savedLocation');
-          await saveUserSavedLocation(uid, {
-            address: resolved.address,
-            latitude: reading.latitude,
-            longitude: reading.longitude,
-            ...(resolved.placeId ? { placeId: resolved.placeId } : {}),
-          });
-        } else {
-          await persistGpsCoordinatesOnly(uid, reading.latitude, reading.longitude);
+      if (!forceFresh) {
+        if (!claimGpsRefreshSession(sessionKey)) {
+          const recent = getSessionGpsReading();
+          if (recent) {
+            setState((s) => ({
+              ...s,
+              reading: recent,
+              loading: false,
+              improving: false,
+              error: null,
+            }));
+            return recent;
+          }
         }
-      } catch {
-        /* profile sync is best-effort */
       }
-    }
 
-    setState({
-      reading,
-      address,
-      permission,
-      loading: false,
-      error: resolved.geocoded
-        ? null
-        : (resolved.geocodeError ??
-            'Showing your GPS position. Add a Google Maps API key for street addresses.'),
-    });
-    return reading;
-  }, [user?.uid]);
+      setState((s) => ({
+        ...s,
+        loading: true,
+        improving: true,
+        error: null,
+      }));
+
+      const permission = await requestForegroundLocationPermission();
+      if (permission !== 'granted') {
+        setState({
+          reading: null,
+          address: null,
+          permission,
+          loading: false,
+          improving: false,
+          error: LIVE_GPS_PRECISE_ERROR,
+        });
+        return null;
+      }
+
+      try {
+        const { reading, location } = await resolveProductionGpsSavedLocation({
+          forceFresh,
+        });
+        setState({
+          reading,
+          address: location.address,
+          permission: 'granted',
+          loading: false,
+          improving: false,
+          error: null,
+        });
+        return reading;
+      } catch {
+        try {
+          const reading = await getProductionGpsReading({ forceFresh });
+          setState({
+            reading,
+            address: null,
+            permission: 'granted',
+            loading: false,
+            improving: false,
+            error: 'GPS found but address could not be resolved. Set your address in Profile.',
+          });
+          return reading;
+        } catch (e) {
+          const msg =
+            e instanceof Error ? e.message : LIVE_GPS_PRECISE_ERROR;
+          setState({
+            reading: null,
+            address: null,
+            permission,
+            loading: false,
+            improving: false,
+            error: msg,
+          });
+          return null;
+        }
+      }
+    },
+    [user?.uid],
+  );
 
   useEffect(() => {
     if (!autoFetch) return;
-    void refresh();
+    void refresh(false);
   }, [autoFetch, refresh]);
 
   const toCustomerLocationRecord = useCallback((): CustomerLocationRecord | null => {
@@ -117,6 +139,7 @@ export function useCustomerLocation(options?: { autoFetch?: boolean }) {
 
   return {
     ...state,
+    improvingMessage: state.improving ? GPS_IMPROVING_MESSAGE : null,
     refresh,
     toCustomerLocationRecord,
     coords: state.reading

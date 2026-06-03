@@ -258,7 +258,7 @@ export function SwipeDiscoveryScreen() {
       if (cancelled) return;
       const city = loc
         ? await getCityFromCoordinates(loc.latitude, loc.longitude)
-        : 'Toronto';
+        : 'Nearby';
       const currentUid = auth.currentUser?.uid ?? '';
       const promiseId = beginFirestoreQuery({
         file: 'components/swipe/SwipeDiscoveryScreen.tsx',
@@ -276,7 +276,7 @@ export function SwipeDiscoveryScreen() {
               d.data() as Record<string, unknown>,
               currentUid,
               loc,
-              city || 'Toronto',
+              city || 'Nearby',
             ),
           );
           setCards(live.length > 0 ? live : mockToSwipeCards());

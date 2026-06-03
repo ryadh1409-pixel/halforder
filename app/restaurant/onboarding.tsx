@@ -1,3 +1,6 @@
+import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
+import { LOCATION_PALETTE_LIGHT } from '@/components/location/locationPalette';
+import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { useAuth } from '@/services/AuthContext';
 import { createRestaurant, getRestaurant } from '@/services/restaurantService';
 import { pickAndUploadImage } from '@/services/uploadImage';
@@ -5,7 +8,19 @@ import { requireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
 import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,25 +28,23 @@ export default function RestaurantOnboardingScreen() {
   const { authorized, loading } = requireRole(['restaurant', 'admin']);
   const { user } = useAuth();
   const router = useRouter();
+  const uid = user?.uid ?? null;
+  const { saved: savedVenueLocation } = useAccountSavedLocation('restaurants', uid);
+
   const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<'restaurant' | 'food_truck'>('restaurant');
   const [logo, setLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [query, setQuery] = useState('');
-  const [predictions, setPredictions] = useState<string[]>([]);
-  const [searching, setSearching] = useState(false);
-  const placesKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!uid) {
       setChecking(false);
       return;
     }
     let active = true;
-    getRestaurant(user.uid)
+    getRestaurant(uid)
       .then((restaurant) => {
         if (!active) return;
         if (restaurant?.profileCompleted) {
@@ -39,7 +52,6 @@ export default function RestaurantOnboardingScreen() {
           return;
         }
         setName(restaurant?.name ?? '');
-        setLocation(restaurant?.location ?? '');
         setDescription(restaurant?.description ?? '');
         setType(restaurant?.type ?? 'restaurant');
         setLogo(restaurant?.logo ?? null);
@@ -53,33 +65,7 @@ export default function RestaurantOnboardingScreen() {
     return () => {
       active = false;
     };
-  }, [user?.uid, router]);
-
-  useEffect(() => {
-    if (!placesKey || query.trim().length < 3) {
-      setPredictions([]);
-      return;
-    }
-    const handle = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query.trim())}&key=${placesKey}`;
-        const response = await fetch(url);
-        const json = (await response.json()) as { predictions?: Array<{ description?: string }> };
-        const next = (json.predictions ?? [])
-          .map((p) => (typeof p.description === 'string' ? p.description : ''))
-          .filter(Boolean)
-          .slice(0, 5);
-        setPredictions(next);
-      } catch (error) {
-        console.log('[restaurant-onboarding] places autocomplete failed', error);
-        setPredictions([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [placesKey, query]);
+  }, [uid, router]);
 
   const typeLabel = useMemo(
     () => (type === 'food_truck' ? 'Food Truck' : 'Restaurant'),
@@ -87,9 +73,9 @@ export default function RestaurantOnboardingScreen() {
   );
 
   async function pickLogo() {
-    if (!user?.uid) return;
+    if (!uid) return;
     const result = await pickAndUploadImage({
-      uid: user.uid,
+      uid,
       folder: 'restaurants',
     });
     if (result.error) {
@@ -100,17 +86,21 @@ export default function RestaurantOnboardingScreen() {
   }
 
   async function saveProfile() {
-    if (!user?.uid) return;
-    if (!name.trim() || !location.trim()) {
-      showError('Please fill restaurant name and location.');
+    if (!uid) return;
+    if (!name.trim()) {
+      showError('Please enter your restaurant name.');
+      return;
+    }
+    if (!savedVenueLocation?.address?.trim()) {
+      showError('Save your restaurant location before continuing.');
       return;
     }
     setSaving(true);
     try {
       await createRestaurant({
-        userId: user.uid,
+        userId: uid,
         name,
-        location,
+        savedLocation: savedVenueLocation,
         logo,
         description,
         type,
@@ -133,11 +123,14 @@ export default function RestaurantOnboardingScreen() {
     );
   }
 
-  if (!user?.uid) return <Redirect href="/(auth)/login" />;
+  if (!uid) return <Redirect href="/(auth)/login" />;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>Restaurant Profile Setup</Text>
@@ -147,29 +140,13 @@ export default function RestaurantOnboardingScreen() {
               value={name}
               onChangeText={setName}
             />
-            <AppTextInput
-              style={styles.input}
-              placeholder="Search location"
-              value={query}
-              onChangeText={(text) => {
-                setQuery(text);
-                setLocation(text);
-              }}
+
+            <AccountLocationPicker
+              role="restaurant"
+              accountId={uid}
+              palette={LOCATION_PALETTE_LIGHT}
             />
-            {searching ? <ActivityIndicator color="#16a34a" style={{ marginBottom: 8 }} /> : null}
-            {predictions.map((prediction) => (
-              <Pressable
-                key={prediction}
-                style={styles.suggestion}
-                onPress={() => {
-                  setQuery(prediction);
-                  setLocation(prediction);
-                  setPredictions([]);
-                }}
-              >
-                <Text style={styles.suggestionText}>{prediction}</Text>
-              </Pressable>
-            ))}
+
             <AppTextInput
               style={[styles.input, styles.textArea]}
               placeholder="Short description"
@@ -183,13 +160,27 @@ export default function RestaurantOnboardingScreen() {
                 style={[styles.typeChip, type === 'restaurant' ? styles.typeChipActive : null]}
                 onPress={() => setType('restaurant')}
               >
-                <Text style={[styles.typeChipText, type === 'restaurant' ? styles.typeChipTextActive : null]}>Restaurant</Text>
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    type === 'restaurant' ? styles.typeChipTextActive : null,
+                  ]}
+                >
+                  Restaurant
+                </Text>
               </Pressable>
               <Pressable
                 style={[styles.typeChip, type === 'food_truck' ? styles.typeChipActive : null]}
                 onPress={() => setType('food_truck')}
               >
-                <Text style={[styles.typeChipText, type === 'food_truck' ? styles.typeChipTextActive : null]}>Food Truck</Text>
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    type === 'food_truck' ? styles.typeChipTextActive : null,
+                  ]}
+                >
+                  Food Truck
+                </Text>
               </Pressable>
             </View>
             <Pressable style={styles.secondaryButton} onPress={pickLogo}>
@@ -197,7 +188,11 @@ export default function RestaurantOnboardingScreen() {
             </Pressable>
             {logo ? <Image source={{ uri: logo }} style={styles.logoPreview} /> : null}
             <Pressable style={styles.primaryButton} onPress={saveProfile} disabled={saving}>
-              {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Save Restaurant</Text>}
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryText}>Save Restaurant</Text>
+              )}
             </Pressable>
           </ScrollView>
         </TouchableWithoutFeedback>
@@ -209,7 +204,7 @@ export default function RestaurantOnboardingScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { padding: 16, paddingBottom: 40, gap: 4 },
   title: { color: '#0F172A', fontSize: 28, fontWeight: '800', marginBottom: 14 },
   input: {
     height: 44,
@@ -225,16 +220,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     paddingTop: 10,
   },
-  suggestion: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  suggestionText: { color: '#334155', fontWeight: '600' },
   typeLabel: { color: '#0F172A', fontWeight: '700', marginBottom: 8, marginTop: 2 },
   typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   typeChip: {

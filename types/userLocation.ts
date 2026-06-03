@@ -1,10 +1,7 @@
+import type { SavedLocation } from '@/types/savedLocation';
+
 /** Saved delivery address on `users/{uid}.location`. */
-export type UserSavedLocation = {
-  address: string;
-  latitude: number;
-  longitude: number;
-  placeId?: string;
-};
+export type UserSavedLocation = SavedLocation;
 
 export type SavedAddressLabel = 'home' | 'apartment' | 'building' | 'custom';
 
@@ -22,8 +19,11 @@ export const SAVED_ADDRESS_LABELS: {
 export type PlaceAutocompleteSuggestion = {
   placeId: string;
   description: string;
+  /** Place name (main line). */
   mainText: string;
+  /** Formatted address (secondary line). */
   secondaryText: string;
+  formattedAddress: string;
 };
 
 export type PlaceDetailsResult = {
@@ -31,4 +31,8 @@ export type PlaceDetailsResult = {
   address: string;
   latitude: number;
   longitude: number;
+  city?: string;
+  province?: string;
+  country?: string;
+  postalCode?: string;
 };

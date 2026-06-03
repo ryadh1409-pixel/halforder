@@ -239,7 +239,7 @@ function useProfilePalette(): Palette {
       border: 'rgba(255,255,255,0.12)',
       inputBg: '#141414',
       chipBg: 'rgba(255,255,255,0.08)',
-      primary: '#FF7A00',
+      primary: '#FF6B00',
       onPrimary: '#FFFFFF',
       danger: '#F87171',
       success: '#34D399',

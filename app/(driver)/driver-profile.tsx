@@ -1,14 +1,17 @@
+import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
+import { LOCATION_PALETTE_DARK } from '@/components/location/locationPalette';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { router } from 'expo-router';
 import React, { useCallback } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /** Driver profile tab — unique route name avoids collision with `app/(tabs)/profile.tsx`. */
 export default function DriverProfileTab() {
   const { user, signOutUser } = useAuth();
+  const uid = user?.uid ?? null;
 
   const handleSignOut = useCallback(async () => {
     await logoutAndResetSession(signOutUser);
@@ -17,24 +20,37 @@ export default function DriverProfileTab() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <Text style={styles.title}>Driver profile</Text>
-      <Text style={styles.meta}>{user?.displayName?.trim() || 'Driver'}</Text>
-      <Text style={styles.meta}>{user?.email ?? user?.phoneNumber ?? ''}</Text>
-      <Pressable
-        style={styles.btn}
-        onPress={() => router.push(TABS_ROUTES.profile as never)}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.btnText}>Account settings</Text>
-      </Pressable>
-      <Pressable style={styles.signOutBtn} onPress={() => void handleSignOut()}>
-        <Text style={styles.signOutText}>Sign out</Text>
-      </Pressable>
+        <Text style={styles.title}>Driver profile</Text>
+        <Text style={styles.meta}>{user?.displayName?.trim() || 'Driver'}</Text>
+        <Text style={styles.meta}>{user?.email ?? user?.phoneNumber ?? ''}</Text>
+
+        <AccountLocationPicker
+          role="driver"
+          accountId={uid}
+          palette={LOCATION_PALETTE_DARK}
+        />
+
+        <Pressable
+          style={styles.btn}
+          onPress={() => router.push(TABS_ROUTES.profile as never)}
+        >
+          <Text style={styles.btnText}>Account settings</Text>
+        </Pressable>
+        <Pressable style={styles.signOutBtn} onPress={() => void handleSignOut()}>
+          <Text style={styles.signOutText}>Sign out</Text>
+        </Pressable>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#1a1a2e', padding: 20 },
+  screen: { flex: 1, backgroundColor: '#1a1a2e' },
+  scroll: { padding: 20, paddingBottom: 40, gap: 4 },
   title: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   meta: { color: '#9CA3AF', marginTop: 8, fontWeight: '600' },
   btn: {
