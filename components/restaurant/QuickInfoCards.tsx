@@ -50,7 +50,7 @@ export function QuickInfoCards({
         </Text>
         <Text style={styles.sub}>
           {etaUnavailable
-            ? 'Enable location for a delivery estimate'
+            ? 'Enable location access for a delivery estimate'
             : mode === 'group'
               ? 'Everyone pays their share separately'
               : 'Updates once your order is placed'}

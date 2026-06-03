@@ -33,7 +33,7 @@ import {
   fetchRestaurantLocation,
   resolveDeliveryLocationForCheckout,
 } from '@/services/location';
-import { useCustomerLocation } from '@/hooks/useCustomerLocation';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
 import { isOwnerHost } from '@/services/roles';
@@ -71,11 +71,12 @@ export default function CheckoutPremiumScreen() {
   const { profile } = useRestaurantProfile(restaurantId || null);
   const { items: menuItems, loading: menuLoading } = useMenu(restaurantId || null);
   const {
-    reading: customerGps,
-    address: customerAddress,
-    loading: locationLoading,
-    refresh: refreshCustomerLocation,
-  } = useCustomerLocation({ autoFetch: true });
+    userCoords,
+    addressLine: customerAddressLine,
+    locationLoading,
+    locationReady,
+    refreshLocation: refreshCustomerLocation,
+  } = useHomeMarketplaceLocation();
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler({
@@ -118,19 +119,13 @@ export default function CheckoutPremiumScreen() {
     [cartItems],
   );
 
-  const customerCoords = useMemo(
-    () =>
-      customerGps
-        ? { lat: customerGps.latitude, lng: customerGps.longitude }
-        : null,
-    [customerGps],
-  );
-
-  const eligibility = useDeliveryEligibility({
-    customer: customerCoords,
-    restaurant: profile?.coords ?? null,
+  const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
+    customerEntity: userCoords,
+    restaurantEntity: profile?.raw,
     restaurantRaw: profile?.raw,
     mode: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
+    locationResolving: locationLoading && !userCoords,
+    locationReady,
   });
 
   const deliveryFee =
@@ -224,7 +219,7 @@ export default function CheckoutPremiumScreen() {
   const addressPrimary =
     fulfillmentMode === 'pickup'
       ? (profile?.address ?? 'Restaurant pickup')
-      : (customerAddress ?? 'Fetching your location…');
+      : (customerAddressLine ?? 'Enable location access');
   const addressSecondary = fulfillmentMode === 'pickup' ? 'Pickup parking — side entrance' : 'Leave at door · Add delivery notes at checkout';
   const phoneDisplay = '+1 (416) 555-0199';
 
@@ -299,10 +294,10 @@ export default function CheckoutPremiumScreen() {
           lng: restaurantLoc.longitude,
           address: restaurantLoc.address ?? profile?.address ?? 'Restaurant pickup',
         };
-        if (customerGps) {
+        if (userCoords) {
           customerLocation = {
-            latitude: customerGps.latitude,
-            longitude: customerGps.longitude,
+            latitude: userCoords.lat,
+            longitude: userCoords.lng,
             timestamp: Date.now(),
           };
         }
@@ -428,7 +423,7 @@ export default function CheckoutPremiumScreen() {
     authLoading ||
     stripeReady === false ||
     (fulfillmentMode === 'delivery' &&
-      (locationLoading || !customerGps || eligibility.blocked));
+      (distanceCheckLoading || !userCoords || eligibility.blocked));
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -446,25 +441,25 @@ export default function CheckoutPremiumScreen() {
         {fulfillmentMode === 'delivery' ? (
           <DeliveryEligibilityBanner
             eligibility={eligibility}
-            loading={locationLoading}
+            loading={distanceCheckLoading}
           />
         ) : null}
 
-        {fulfillmentMode === 'delivery' && customerGps ? (
+        {fulfillmentMode === 'delivery' && userCoords ? (
           <DeliveryMapCard
-            center={{ latitude: customerGps.latitude, longitude: customerGps.longitude }}
+            center={{ latitude: userCoords.lat, longitude: userCoords.lng }}
             markers={[
               {
                 id: 'drop',
-                latitude: customerGps.latitude,
-                longitude: customerGps.longitude,
+                latitude: userCoords.lat,
+                longitude: userCoords.lng,
               },
             ]}
             addressPrimary={addressPrimary}
             addressSecondary={addressSecondary}
             onEditPin={() => void refreshCustomerLocation()}
           />
-        ) : fulfillmentMode === 'delivery' && locationLoading ? (
+        ) : fulfillmentMode === 'delivery' && distanceCheckLoading ? (
           <View style={styles.locationLoading}>
             <Text style={styles.locationLoadingText}>Getting your delivery location…</Text>
           </View>

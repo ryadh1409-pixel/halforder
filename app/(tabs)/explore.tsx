@@ -1,12 +1,12 @@
 import { FeaturedSection } from '@/components/home/FeaturedSection';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { UE } from '@/constants/uberEatsTheme';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
 import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BROWSE_SECTIONS = [
-  { title: 'Featured near you', subtitle: 'Top picks in Toronto' },
+  { title: 'Featured near you', subtitle: 'Top picks near you' },
   { title: 'Places you might like', subtitle: undefined },
   { title: 'Popular now', subtitle: 'Trending this week' },
   { title: 'Late night', subtitle: 'Open now' },
@@ -24,6 +24,7 @@ const BROWSE_SECTIONS = [
 /** Browse tab — full-width discovery rails without duplicate home chrome. */
 export default function ExploreTab() {
   const router = useRouter();
+  const { addressLine } = useHomeMarketplaceLocation();
   const { restaurants, loading } = useHomeRestaurants();
 
   const openRestaurant = useCallback(
@@ -39,13 +40,9 @@ export default function ExploreTab() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <HomeHeader
-        addressLine="Browse · Toronto"
-        onAddressPress={() =>
-          Alert.alert('Browse', 'Filter by neighborhood — coming soon.')
-        }
-        onNotificationsPress={() =>
-          Alert.alert('Notifications', 'Inbox coming soon.')
-        }
+        addressLine={addressLine}
+        onAddressPress={() => router.push('/(tabs)/profile' as never)}
+        onNotificationsPress={() => router.push('/(tabs)/profile' as never)}
       />
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -81,8 +78,8 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '900',
     color: UE.text,
-    paddingHorizontal: 16,
     letterSpacing: -0.5,
+    paddingHorizontal: 16,
   },
   sub: {
     fontSize: 15,

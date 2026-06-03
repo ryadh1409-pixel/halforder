@@ -1,4 +1,8 @@
 import { CK } from '@/constants/checkoutUi';
+import {
+  LOCATION_UNAVAILABLE_MESSAGE,
+  RESTAURANT_LOCATION_UNAVAILABLE_MESSAGE,
+} from '@/lib/delivery/deliveryEligibility';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +21,44 @@ export function DeliveryEligibilityBanner({ eligibility, loading }: Props) {
       <View style={[styles.card, styles.cardNeutral]}>
         <ActivityIndicator size="small" color={CK.textMuted} />
         <Text style={styles.loadingText}>Checking delivery distance…</Text>
+      </View>
+    );
+  }
+
+  const restaurantUnavailable =
+    eligibility.statusLabel === RESTAURANT_LOCATION_UNAVAILABLE_MESSAGE ||
+    eligibility.message === RESTAURANT_LOCATION_UNAVAILABLE_MESSAGE;
+
+  const customerUnavailable =
+    eligibility.statusLabel === 'Location unavailable' ||
+    eligibility.etaLabel === 'Location unavailable' ||
+    eligibility.message === LOCATION_UNAVAILABLE_MESSAGE;
+
+  if (restaurantUnavailable) {
+    return (
+      <View style={[styles.card, styles.cardWarn]}>
+        <Ionicons name="storefront-outline" size={20} color="#B45309" />
+        <View style={styles.copy}>
+          <Text style={styles.title}>Restaurant location unavailable</Text>
+          <Text style={styles.sub}>
+            {eligibility.message ??
+              'This restaurant has not set a delivery address with GPS yet.'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (customerUnavailable) {
+    return (
+      <View style={[styles.card, styles.cardWarn]}>
+        <Ionicons name="location-outline" size={20} color="#B45309" />
+        <View style={styles.copy}>
+          <Text style={styles.title}>Location unavailable</Text>
+          <Text style={styles.sub}>
+            {eligibility.message ?? 'Enable location access to see delivery distance and ETA.'}
+          </Text>
+        </View>
       </View>
     );
   }

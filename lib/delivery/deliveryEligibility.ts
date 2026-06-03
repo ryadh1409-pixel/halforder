@@ -1,3 +1,4 @@
+import { logDistanceCoordInputs } from '@/lib/location/extractCoords';
 import { haversineDistanceKm } from '@/lib/haversine';
 import {
   calculateETA,
@@ -22,6 +23,11 @@ export const TIER_LONG_MAX_KM = 15;
 
 export const OUTSIDE_DELIVERY_AREA_MESSAGE =
   'This restaurant is outside your delivery area';
+
+export const LOCATION_UNAVAILABLE_MESSAGE = 'Location unavailable';
+
+export const RESTAURANT_LOCATION_UNAVAILABLE_MESSAGE =
+  'Restaurant location unavailable';
 
 const LONG_DISTANCE_UNSUPPORTED_MESSAGE =
   'This restaurant does not deliver to your address';
@@ -62,10 +68,42 @@ export function parseRestaurantDeliverySettings(
 }
 
 export function computeCustomerRestaurantDistanceKm(
-  customer: { lat: number; lng: number } | null,
-  restaurant: { lat: number; lng: number } | null,
+  customer: unknown,
+  restaurant: unknown,
 ): number | null {
   return distanceKmBetween(customer, restaurant);
+}
+
+export function unavailableEligibilityResult(
+  message: string = LOCATION_UNAVAILABLE_MESSAGE,
+): DeliveryEligibilityResult {
+  return {
+    distanceKm: null,
+    tier: 'unknown',
+    deliverable: false,
+    blocked: true,
+    distanceLabel: null,
+    etaLabel: 'Location unavailable',
+    deliveryFee: { amount: null, label: 'Delivery unavailable' },
+    message,
+    statusLabel: 'Location unavailable',
+  };
+}
+
+export function restaurantUnavailableEligibilityResult(
+  message: string = RESTAURANT_LOCATION_UNAVAILABLE_MESSAGE,
+): DeliveryEligibilityResult {
+  return {
+    distanceKm: null,
+    tier: 'unknown',
+    deliverable: false,
+    blocked: true,
+    distanceLabel: null,
+    etaLabel: 'ETA unavailable',
+    deliveryFee: { amount: null, label: 'Delivery unavailable' },
+    message,
+    statusLabel: RESTAURANT_LOCATION_UNAVAILABLE_MESSAGE,
+  };
 }
 
 function tierFromDistance(
@@ -138,21 +176,25 @@ function roundCad(amount: number): number {
 }
 
 export function evaluateDeliveryEligibility(params: {
-  customer: { lat: number; lng: number } | null;
-  restaurant: { lat: number; lng: number } | null;
+  customer?: unknown;
+  restaurant?: unknown;
   settings: RestaurantDeliverySettings;
   mode?: DeliveryMode;
 }): DeliveryEligibilityResult {
-  const { customer, restaurant, settings, mode = 'delivery' } = params;
+  const { settings, mode = 'delivery' } = params;
+  const { userCoords: customerCoords, restaurantCoords } = logDistanceCoordInputs(
+    params.customer,
+    params.restaurant,
+  );
 
   if (mode === 'pickup') {
     return {
-      distanceKm: computeCustomerRestaurantDistanceKm(customer, restaurant),
+      distanceKm: computeCustomerRestaurantDistanceKm(customerCoords, restaurantCoords),
       tier: 'near',
       deliverable: true,
       blocked: false,
       distanceLabel: formatDistanceKm(
-        computeCustomerRestaurantDistanceKm(customer, restaurant),
+        computeCustomerRestaurantDistanceKm(customerCoords, restaurantCoords),
       ),
       etaLabel: calculateETA({ mode: 'pickup', distanceKm: null }),
       deliveryFee: { amount: 0, label: 'No delivery fee' },
@@ -161,9 +203,13 @@ export function evaluateDeliveryEligibility(params: {
     };
   }
 
-  const distanceKm = computeCustomerRestaurantDistanceKm(customer, restaurant);
+  if (!restaurantCoords) {
+    return restaurantUnavailableEligibilityResult();
+  }
 
-  if (!customer || !restaurant) {
+  const distanceKm = computeCustomerRestaurantDistanceKm(customerCoords, restaurantCoords);
+
+  if (!customerCoords) {
     return {
       distanceKm,
       tier: 'unknown',
@@ -172,8 +218,8 @@ export function evaluateDeliveryEligibility(params: {
       distanceLabel: null,
       etaLabel: 'ETA unavailable',
       deliveryFee: { amount: null, label: 'Calculated at checkout' },
-      message: 'Enable location to check delivery availability',
-      statusLabel: 'Location required',
+      message: 'Enable location access to check delivery availability',
+      statusLabel: 'Enable location access',
     };
   }
 

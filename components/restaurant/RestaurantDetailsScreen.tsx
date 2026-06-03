@@ -20,7 +20,7 @@ import { QuickInfoCards } from '@/components/restaurant/QuickInfoCards';
 import { RestaurantHero } from '@/components/restaurant/RestaurantHero';
 import { RestaurantInfo } from '@/components/restaurant/RestaurantInfo';
 import { RP } from '@/constants/restaurantPremiumTheme';
-import { useCustomerLocation } from '@/hooks/useCustomerLocation';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { useMenu } from '@/hooks/useMenu';
 import { useRestaurantMenuSections } from '@/hooks/useRestaurantMenuSections';
@@ -113,23 +113,16 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
   );
 
   const {
-    reading: customerGps,
-    loading: locationLoading,
-    refresh: refreshCustomerLocation,
-  } = useCustomerLocation({ autoFetch: true });
+    userCoords,
+    locationLoading,
+    locationReady,
+    refreshLocation: refreshMarketplaceLocation,
+  } = useHomeMarketplaceLocation();
 
   useFocusEffect(
     useCallback(() => {
-      void refreshCustomerLocation(false);
-    }, [refreshCustomerLocation]),
-  );
-
-  const userCoords = useMemo(
-    () =>
-      customerGps
-        ? { lat: customerGps.latitude, lng: customerGps.longitude }
-        : null,
-    [customerGps],
+      void refreshMarketplaceLocation();
+    }, [refreshMarketplaceLocation]),
   );
 
   const resolvedProfile =
@@ -148,11 +141,13 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       raw: {},
     } satisfies RestaurantProfile);
 
-  const eligibility = useDeliveryEligibility({
-    customer: userCoords,
-    restaurant: resolvedProfile.coords,
+  const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
+    customerEntity: userCoords,
+    restaurantEntity: resolvedProfile.raw,
     restaurantRaw: resolvedProfile.raw,
     mode: deliveryMode === 'pickup' ? 'pickup' : 'delivery',
+    locationResolving: locationLoading && !userCoords,
+    locationReady,
   });
 
   const distanceKm = eligibility.distanceKm;
@@ -438,7 +433,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
               {deliveryMode === 'delivery' ? (
                 <DeliveryEligibilityBanner
                   eligibility={eligibility}
-                  loading={locationLoading}
+                  loading={distanceCheckLoading}
                 />
               ) : null}
               <QuickInfoCards

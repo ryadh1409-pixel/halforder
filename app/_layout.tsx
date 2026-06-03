@@ -5,6 +5,7 @@ import 'react-native-svg';
 
 import { AppLocationSync } from '@/components/AppLocationSync';
 import { BootstrapShell } from '@/components/BootstrapShell';
+import { HomeMarketplaceLocationProvider } from '@/contexts/HomeMarketplaceLocationContext';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
@@ -121,15 +122,17 @@ export default function RootLayout() {
         <ThemeProvider value={DarkTheme}>
           <View style={styles.ltrRoot}>
             <AuthProvider>
-              <AppLocationSync />
-              <CartProvider>
-                <BootstrapShell>
-                  <Slot />
-                  <StartupRedirectOrchestrator />
-                  <RoleBoundaryGuard />
-                  <RouteGroupMonitor />
-                </BootstrapShell>
-              </CartProvider>
+              <HomeMarketplaceLocationProvider>
+                <AppLocationSync />
+                <CartProvider>
+                  <BootstrapShell>
+                    <Slot />
+                    <StartupRedirectOrchestrator />
+                    <RoleBoundaryGuard />
+                    <RouteGroupMonitor />
+                  </BootstrapShell>
+                </CartProvider>
+              </HomeMarketplaceLocationProvider>
             </AuthProvider>
           </View>
         </ThemeProvider>

@@ -7,12 +7,12 @@ import { HomeHeader } from '@/components/home/HomeHeader';
 import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
 import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
 import { UE } from '@/constants/uberEatsTheme';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
 import type { HomeRestaurant } from '@/types/homeRestaurant';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -42,6 +42,7 @@ function filterByCategory(
  */
 export function UberEatsHomeScreen() {
   const router = useRouter();
+  const { addressLine, refreshLocation, locationLoading } = useHomeMarketplaceLocation();
   const { restaurants, loading, error } = useHomeRestaurants();
   const [category, setCategory] = useState<HomeCategory>('All');
   const [refreshing, setRefreshing] = useState(false);
@@ -75,25 +76,27 @@ export function UberEatsHomeScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 600);
-  }, []);
+    void refreshLocation().finally(() => setRefreshing(false));
+  }, [refreshLocation]);
+
+  const onAddressPress = useCallback(() => {
+    router.push('/(tabs)/profile' as never);
+  }, [router]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <HomeHeader
-        addressLine="123 Queen St W · Toronto, ON"
-        onAddressPress={() =>
-          Alert.alert('Delivery address', 'Wire to users/{uid} addresses.')
-        }
+        addressLine={addressLine}
+        onAddressPress={onAddressPress}
         onNotificationsPress={() =>
-          Alert.alert('Notifications', 'Inbox coming soon.')
+          router.push('/(tabs)/profile' as never)
         }
       />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={refreshing || locationLoading}
             onRefresh={onRefresh}
             tintColor={UE.text}
           />

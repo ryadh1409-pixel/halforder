@@ -1,4 +1,5 @@
 import { db } from '@/services/firebase';
+import { parseRestaurantDeliveryLocation } from '@/lib/location/restaurantDeliveryLocation';
 import {
   extractRestaurantCoords,
   pickFirestoreDeliveryFee,
@@ -46,16 +47,11 @@ function parseProfile(
     };
   }
 
-  const loc =
-    data.location && typeof data.location === 'object'
-      ? (data.location as Record<string, unknown>)
-      : null;
+  const venue = parseRestaurantDeliveryLocation(data);
   const addr =
-    typeof data.address === 'string'
-      ? data.address
-      : loc && typeof loc.address === 'string'
-        ? loc.address
-        : null;
+    venue?.address ??
+    (typeof data.address === 'string' ? data.address : null) ??
+    (typeof data.formattedAddress === 'string' ? data.formattedAddress : null);
   const img =
     typeof data.image === 'string'
       ? data.image

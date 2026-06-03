@@ -88,6 +88,36 @@ export async function mergeHostRestaurantProfile(
   if (patch.location !== undefined) cleaned.location = String(patch.location).trim();
   if (patch.locationLat !== undefined) cleaned.locationLat = patch.locationLat;
   if (patch.locationLng !== undefined) cleaned.locationLng = patch.locationLng;
+
+  const lat =
+    typeof patch.locationLat === 'number' && Number.isFinite(patch.locationLat)
+      ? patch.locationLat
+      : null;
+  const lng =
+    typeof patch.locationLng === 'number' && Number.isFinite(patch.locationLng)
+      ? patch.locationLng
+      : null;
+  if (lat != null && lng != null) {
+    const addressLine =
+      patch.location !== undefined
+        ? String(patch.location).trim()
+        : typeof existing.data()?.location === 'string'
+          ? String(existing.data()?.location).trim()
+          : typeof existing.data()?.address === 'string'
+            ? String(existing.data()?.address).trim()
+            : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    cleaned.deliveryLocation = {
+      latitude: lat,
+      longitude: lng,
+      address: addressLine || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+      updatedAt: serverTimestamp(),
+    };
+    cleaned.latitude = lat;
+    cleaned.longitude = lng;
+    cleaned.lat = lat;
+    cleaned.lng = lng;
+    if (addressLine) cleaned.address = addressLine;
+  }
   if (patch.isOpen !== undefined) cleaned.isOpen = patch.isOpen;
 
   if (!existing.exists()) {

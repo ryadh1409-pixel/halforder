@@ -26,6 +26,8 @@ export function FloatingCartBar({
   itemCount,
   total,
   onCheckout,
+  disabled = false,
+  label,
 }: Props) {
   const insets = useSafeAreaInsets();
   const open = useSharedValue(0);

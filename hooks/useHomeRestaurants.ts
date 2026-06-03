@@ -1,9 +1,12 @@
+import {
+  useHomeMarketplaceLocation,
+} from '@/contexts/HomeMarketplaceLocationContext';
 import { db } from '@/services/firebase';
 import {
   beginFirestoreQuery,
   logFirestoreQueryFailed,
 } from '@/services/firestoreQueryDiagnostics';
-import { getUserLocationSafe } from '@/services/location';
+import { normalizeRestaurantFirestoreDoc } from '@/lib/location/normalizeRestaurantDoc';
 import { mapFirestoreRestaurant, type HomeRestaurant } from '@/types/homeRestaurant';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
@@ -14,29 +17,16 @@ type State = {
   error: string | null;
 };
 
-/** Realtime Firestore `restaurants` list for marketplace home. */
+/** Realtime Firestore `restaurants` list for marketplace home (live GPS distances). */
 export function useHomeRestaurants(): State {
+  const { userCoords, locationReady } = useHomeMarketplaceLocation();
   const [restaurants, setRestaurants] = useState<HomeRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userCoords, setUserCoords] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const loc = await getUserLocationSafe();
-      if (cancelled) return;
-      if (loc) setUserCoords({ lat: loc.latitude, lng: loc.longitude });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!locationReady) return undefined;
 
-  useEffect(() => {
     let unsub: (() => void) | undefined;
     const promiseId = beginFirestoreQuery({
       file: 'hooks/useHomeRestaurants.ts',
@@ -50,13 +40,14 @@ export function useHomeRestaurants(): State {
     unsub = onSnapshot(
       q,
       (snap) => {
-        const rows = snap.docs.map((d) =>
-          mapFirestoreRestaurant(
-            d.id,
-            d.data() as Record<string, unknown>,
-            userCoords,
-          ),
-        );
+        const rows = snap.docs.map((d) => {
+          const raw = d.data() as Record<string, unknown>;
+          if (__DEV__) {
+            console.log('[RAW RESTAURANT]', { id: d.id, ...raw });
+          }
+          const normalized = normalizeRestaurantFirestoreDoc(d.id, raw);
+          return mapFirestoreRestaurant(d.id, normalized, userCoords);
+        });
         rows.sort((a, b) => a.name.localeCompare(b.name));
         setRestaurants(rows);
         setError(null);
@@ -76,7 +67,7 @@ export function useHomeRestaurants(): State {
     );
 
     return () => unsub?.();
-  }, [userCoords]);
+  }, [userCoords, locationReady]);
 
   return { restaurants, loading, error };
 }

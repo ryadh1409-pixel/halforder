@@ -10,6 +10,11 @@ import {
 import { savedAddressLabelToDeliveryType } from '@/lib/location/deliveryAddressType';
 import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import {
+  restaurantDeliveryLocationToFirestore,
+  parseRestaurantDeliveryLocation,
+  savedLocationFromRestaurantDelivery,
+} from '@/lib/location/restaurantDeliveryLocation';
+import {
   parseSavedLocation,
   savedLocationToFirestore,
 } from '@/lib/location/parseSavedLocation';
@@ -42,6 +47,11 @@ export function readSavedLocationFromDoc(
 ): SavedLocation | null {
   if (!data) return null;
 
+  const deliveryVenue = parseRestaurantDeliveryLocation(data);
+  if (deliveryVenue) {
+    return savedLocationFromRestaurantDelivery(deliveryVenue);
+  }
+
   const fromMap = parseSavedLocation(data.location);
   if (fromMap) return fromMap;
 
@@ -51,13 +61,17 @@ export function readSavedLocationFromDoc(
       ? data.lat
       : typeof data.latitude === 'number'
         ? data.latitude
-        : null;
+        : typeof data.locationLat === 'number'
+          ? data.locationLat
+          : null;
   const lng =
     typeof data.lng === 'number'
       ? data.lng
       : typeof data.longitude === 'number'
         ? data.longitude
-        : null;
+        : typeof data.locationLng === 'number'
+          ? data.locationLng
+          : null;
 
   if (!address || lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
     return null;
@@ -142,32 +156,58 @@ export async function saveAccountSavedLocation(
     ...(deliveryType ? { type: deliveryType } : {}),
   };
 
-  const firestorePayload: Record<string, unknown> = {
-    location: locationWithTimestamp,
-    latitude: base.latitude,
-    longitude: base.longitude,
-    lat: base.latitude,
-    lng: base.longitude,
-    formattedAddress: base.formattedAddress ?? base.address,
-    lastLocationUpdatedAt: serverTimestamp(),
-  };
+  let firestorePayload: Record<string, unknown>;
 
-  if (base.gpsAccuracy != null && Number.isFinite(base.gpsAccuracy)) {
-    firestorePayload.gpsAccuracy = base.gpsAccuracy;
-  }
-
-  if (collection === 'users') {
-    firestorePayload.address = base.address;
-    firestorePayload.city = base.city ?? '';
-    if (options?.label) {
-      firestorePayload.locationLabel = options.label;
-      firestorePayload.type = deliveryType;
+  if (collection === 'restaurants') {
+    firestorePayload = {
+      deliveryLocation: {
+        ...restaurantDeliveryLocationToFirestore(enriched),
+        updatedAt: serverTimestamp(),
+      },
+      normalizedCoords: {
+        lat: base.latitude,
+        lng: base.longitude,
+      },
+      latitude: base.latitude,
+      longitude: base.longitude,
+      lat: base.latitude,
+      lng: base.longitude,
+      address: base.address,
+      formattedAddress: base.formattedAddress ?? base.address,
+      lastLocationUpdatedAt: serverTimestamp(),
+      ...(base.city ? { city: base.city } : {}),
+    };
+    if (base.gpsAccuracy != null && Number.isFinite(base.gpsAccuracy)) {
+      firestorePayload.gpsAccuracy = base.gpsAccuracy;
     }
-  }
+  } else {
+    firestorePayload = {
+      location: locationWithTimestamp,
+      latitude: base.latitude,
+      longitude: base.longitude,
+      lat: base.latitude,
+      lng: base.longitude,
+      formattedAddress: base.formattedAddress ?? base.address,
+      lastLocationUpdatedAt: serverTimestamp(),
+    };
 
-  if (collection === 'restaurants' || collection === 'drivers') {
-    firestorePayload.address = base.address;
-    if (base.city) firestorePayload.city = base.city;
+    if (base.gpsAccuracy != null && Number.isFinite(base.gpsAccuracy)) {
+      firestorePayload.gpsAccuracy = base.gpsAccuracy;
+    }
+
+    if (collection === 'users') {
+      firestorePayload.address = base.address;
+      firestorePayload.city = base.city ?? '';
+      if (options?.label) {
+        firestorePayload.locationLabel = options.label;
+        firestorePayload.type = deliveryType;
+      }
+    }
+
+    if (collection === 'drivers') {
+      firestorePayload.address = base.address;
+      if (base.city) firestorePayload.city = base.city;
+    }
   }
 
   const ref = doc(db, collection, id);

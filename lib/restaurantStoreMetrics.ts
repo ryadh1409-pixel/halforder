@@ -1,3 +1,5 @@
+import { extractCoords } from '@/lib/location/extractCoords';
+import { extractRestaurantCoords as extractRestaurantCoordsFromDelivery } from '@/lib/location/restaurantDeliveryLocation';
 import { haversineDistanceKm } from '@/lib/haversine';
 
 export type DeliveryMode = 'delivery' | 'pickup' | 'group';
@@ -82,45 +84,21 @@ export function formatRatingCompact(
   return `${rating.toFixed(1)} ★ (${reviewCount.toLocaleString('en-CA')})`;
 }
 
+/** @see {@link extractRestaurantCoordsFromDelivery} in `restaurantDeliveryLocation.ts` */
 export function extractRestaurantCoords(
   data: Record<string, unknown>,
 ): { lat: number; lng: number } | null {
-  const loc =
-    data.location && typeof data.location === 'object'
-      ? (data.location as Record<string, unknown>)
-      : null;
-
-  const lat =
-    (typeof data.lat === 'number' && data.lat) ||
-    (typeof data.latitude === 'number' && data.latitude) ||
-    (loc && typeof loc.lat === 'number' && loc.lat) ||
-    (loc && typeof loc.latitude === 'number' && loc.latitude) ||
-    null;
-
-  const lng =
-    (typeof data.lng === 'number' && data.lng) ||
-    (typeof data.longitude === 'number' && data.longitude) ||
-    (loc && typeof loc.lng === 'number' && loc.lng) ||
-    (loc && typeof loc.longitude === 'number' && loc.longitude) ||
-    null;
-
-  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null;
-  }
-  return { lat, lng };
+  return extractRestaurantCoordsFromDelivery(data);
 }
 
 export function distanceKmBetween(
-  user: { lat: number; lng: number } | null,
-  restaurant: { lat: number; lng: number } | null,
+  user: unknown,
+  restaurant: unknown,
 ): number | null {
-  if (!user || !restaurant) return null;
-  const km = haversineDistanceKm(
-    user.lat,
-    user.lng,
-    restaurant.lat,
-    restaurant.lng,
-  );
+  const u = extractCoords(user);
+  const r = extractCoords(restaurant);
+  if (!u || !r) return null;
+  const km = haversineDistanceKm(u.lat, u.lng, r.lat, r.lng);
   return Number.isFinite(km) && km >= 0 ? km : null;
 }
 

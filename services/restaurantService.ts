@@ -94,7 +94,17 @@ export async function createRestaurant(data: {
   if (saved) {
     payload.latitude = saved.latitude;
     payload.longitude = saved.longitude;
+    payload.lat = saved.latitude;
+    payload.lng = saved.longitude;
     payload.address = saved.address;
+    payload.deliveryLocation = {
+      latitude: saved.latitude,
+      longitude: saved.longitude,
+      address: saved.address,
+      formattedAddress: saved.formattedAddress ?? saved.address,
+      ...(saved.city ? { city: saved.city } : {}),
+      updatedAt: serverTimestamp(),
+    };
   }
 
   await setDoc(

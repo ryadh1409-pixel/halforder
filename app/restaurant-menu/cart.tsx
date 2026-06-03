@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppHeader from '../../components/AppHeader';
 import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
-import { useCustomerLocation } from '@/hooks/useCustomerLocation';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { useMenu } from '../../hooks/useMenu';
 import { useRestaurantProfile } from '@/hooks/useRestaurantProfile';
@@ -43,10 +43,11 @@ export default function CartScreen() {
   const { items, loading } = useMenu(restaurantId || null);
   const { profile } = useRestaurantProfile(restaurantId || null);
   const {
-    reading: customerGps,
-    loading: locationLoading,
-    refresh: refreshCustomerLocation,
-  } = useCustomerLocation({ autoFetch: true });
+    userCoords,
+    locationLoading,
+    locationReady,
+    refreshLocation: refreshCustomerLocation,
+  } = useHomeMarketplaceLocation();
   const [placing, setPlacing] = useState(false);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   const [checkingStripe, setCheckingStripe] = useState(false);
@@ -92,19 +93,13 @@ export default function CartScreen() {
     }, [refreshCustomerLocation, refreshStripeReadiness]),
   );
 
-  const customerCoords = useMemo(
-    () =>
-      customerGps
-        ? { lat: customerGps.latitude, lng: customerGps.longitude }
-        : null,
-    [customerGps],
-  );
-
-  const eligibility = useDeliveryEligibility({
-    customer: customerCoords,
-    restaurant: profile?.coords ?? null,
+  const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
+    customerEntity: userCoords,
+    restaurantEntity: profile?.raw,
     restaurantRaw: profile?.raw,
     mode: 'delivery',
+    locationResolving: locationLoading && !userCoords,
+    locationReady,
   });
 
   useEffect(() => {
@@ -225,7 +220,7 @@ export default function CartScreen() {
         {cartItems.length > 0 ? (
           <DeliveryEligibilityBanner
             eligibility={eligibility}
-            loading={locationLoading}
+            loading={distanceCheckLoading}
           />
         ) : null}
         {stripeReady === false && cartItems.length > 0 && !authLoading ? (
@@ -274,8 +269,8 @@ export default function CartScreen() {
               authLoading ||
               stripeReady === false ||
               eligibility.blocked ||
-              locationLoading ||
-              !customerGps) &&
+              distanceCheckLoading ||
+              !userCoords) &&
               styles.disabled,
           ]}
           onPress={placeOrder}
@@ -286,8 +281,8 @@ export default function CartScreen() {
             authLoading ||
             stripeReady === false ||
             eligibility.blocked ||
-            locationLoading ||
-            !customerGps
+            distanceCheckLoading ||
+            !userCoords
           }
         >
           {placing || checkingStripe ? (

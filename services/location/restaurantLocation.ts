@@ -1,5 +1,6 @@
 import { doc, getDoc } from 'firebase/firestore';
 
+import { parseRestaurantDeliveryLocation } from '@/lib/location/restaurantDeliveryLocation';
 import { extractRestaurantCoords } from '@/lib/restaurantStoreMetrics';
 import type { RestaurantLocationRecord } from '@/types/location';
 import { db } from '@/services/firebase';
@@ -33,14 +34,10 @@ export async function fetchRestaurantLocation(
     throw new RestaurantLocationMissingError(id);
   }
 
+  const venue = parseRestaurantDeliveryLocation(data);
   const address =
-    typeof data.address === 'string'
-      ? data.address
-      : data.location &&
-          typeof data.location === 'object' &&
-          typeof (data.location as { address?: unknown }).address === 'string'
-        ? String((data.location as { address: string }).address)
-        : null;
+    venue?.address ??
+    (typeof data.address === 'string' ? data.address : null);
 
   return {
     latitude: coords.lat,

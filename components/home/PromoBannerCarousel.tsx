@@ -1,4 +1,5 @@
 import { UE } from '@/constants/uberEatsTheme';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -39,7 +40,7 @@ const DEFAULT_BANNERS: Banner[] = [
   {
     id: 'sale',
     title: 'Items on sale',
-    subtitle: 'Save up to 40% in Toronto',
+    subtitle: 'Save up to 40% near you',
     cta: 'See deals',
     imageUri:
       'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&q=80&auto=format&fit=crop',
@@ -65,6 +66,12 @@ function PromoBannerCarouselInner({
   banners = DEFAULT_BANNERS,
   onBannerPress,
 }: Props) {
+  const { addressLine } = useHomeMarketplaceLocation();
+  const regionEyebrow =
+    addressLine && !addressLine.toLowerCase().includes('enable location')
+      ? `HalfOrder · ${addressLine.split('·').pop()?.trim() ?? addressLine}`
+      : 'HalfOrder';
+
   return (
     <ScrollView
       horizontal
@@ -101,7 +108,9 @@ function PromoBannerCarouselInner({
           />
           <View style={[styles.accentBar, { backgroundColor: b.accent }]} />
           <View style={styles.copy}>
-            <Text style={styles.eyebrow}>HalfOrder · Toronto</Text>
+            <Text style={styles.eyebrow} numberOfLines={1}>
+              {regionEyebrow}
+            </Text>
             <Text style={styles.title}>{b.title}</Text>
             <Text style={styles.sub}>{b.subtitle}</Text>
             <View style={styles.ctaPill}>

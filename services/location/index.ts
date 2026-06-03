@@ -119,11 +119,29 @@ export {
 export {
   clearDeliveryLocationCache,
   isCachedGpsBiasStale,
+  MARKETPLACE_USER_LOCATION_KEY,
   readLiveGpsBiasCache,
+  readMarketplaceUserLocationCache,
   refreshLiveGpsBiasCache,
   setLiveGpsBiasCache,
+  setMarketplaceUserLocationCache,
   type CachedLiveGpsBias,
+  type MarketplaceUserLocationCache,
 } from './locationLocalCache';
+
+export {
+  extractCoords,
+  logDistanceCoordInputs,
+  type LatLngCoords,
+} from '@/lib/location/extractCoords';
+
+export {
+  extractRestaurantCoords,
+  parseRestaurantDeliveryLocation,
+  restaurantDeliveryLocationToFirestore,
+  savedLocationFromRestaurantDelivery,
+  type RestaurantDeliveryLocation,
+} from '@/lib/location/restaurantDeliveryLocation';
 
 export {
   fetchSavedLocationFromServer,

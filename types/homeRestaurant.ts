@@ -3,8 +3,10 @@ import {
   parseRestaurantDeliverySettings,
 } from '@/lib/delivery/deliveryEligibility';
 import {
-  distanceKmBetween,
   extractRestaurantCoords,
+  restaurantEntityForDistance,
+} from '@/lib/location/restaurantMarketplaceCoords';
+import {
   pickRatingAverage,
   pickReviewCount,
   resolvePromoTags,
@@ -29,6 +31,8 @@ export type HomeRestaurant = {
   deliverable: boolean;
   /** e.g. "Delivery unavailable" for card badges. */
   deliveryStatusLabel: string;
+  /** Canonical WGS84 pair — marketplace distance uses this only. */
+  normalizedCoords: { lat: number; lng: number } | null;
 };
 
 export function mapFirestoreRestaurant(
@@ -52,20 +56,19 @@ export function mapFirestoreRestaurant(
   const reviewCount = pickReviewCount(data);
   const rating = pickRatingAverage(data, reviewCount);
 
-  const restaurantCoords = extractRestaurantCoords(data);
-  const distanceKm = distanceKmBetween(userCoords ?? null, restaurantCoords);
+  const normalizedCoords = extractRestaurantCoords(data);
   const settings = parseRestaurantDeliverySettings(data);
   const eligibility = evaluateDeliveryEligibility({
     customer: userCoords ?? null,
-    restaurant: restaurantCoords,
+    restaurant: restaurantEntityForDistance(normalizedCoords),
     settings,
     mode: 'delivery',
   });
 
   const isPopularNearby =
     data.popular === true &&
-    distanceKm != null &&
-    distanceKm <= 3;
+    eligibility.distanceKm != null &&
+    eligibility.distanceKm <= 3;
 
   const promoTags = resolvePromoTags({
     data,
@@ -90,5 +93,6 @@ export function mapFirestoreRestaurant(
     distanceKmLabel: eligibility.distanceLabel,
     deliverable: eligibility.deliverable,
     deliveryStatusLabel: eligibility.statusLabel,
+    normalizedCoords,
   };
 }
