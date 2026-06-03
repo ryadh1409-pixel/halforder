@@ -47,15 +47,11 @@ export function buildRestaurantKitchenPatch(action: RestaurantKitchenAction): Ki
       };
     case 'ready':
       return {
-        status: 'ready',
-        deliveryStatus: 'ready',
+        status: 'ready_for_pickup',
+        deliveryStatus: 'ready_for_pickup',
         updatedBy: 'restaurantReady',
         preparedAt: serverTimestamp(),
         readyAt: serverTimestamp(),
-        driverId: null,
-        assignedDriverId: null,
-        driverName: null,
-        driverPhone: null,
       };
     case 'picked_up':
       return {
@@ -103,9 +99,6 @@ export function optimisticRestaurantOrderPatch(
   if (action === 'ready') {
     base.preparedAtMs = base.preparedAtMs ?? now;
     base.readyAtMs = now;
-    base.driverId = null;
-    base.driverName = null;
-    base.driverPhone = null;
   }
   if (action === 'picked_up') {
     base.pickedUpAtMs = now;

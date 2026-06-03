@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '../../services/AuthContext';
+import { DriverHubActiveOrderCard } from '@/components/driver/DriverHubActiveOrderCard';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
@@ -117,7 +118,9 @@ function ordersListSignature(orders: DriverOrder[]): string {
       [
         o.id,
         o.status,
+        o.deliveryStatus ?? '',
         o.driverId ?? '',
+        o.assignedDriverId ?? '',
         o.total,
         o.createdAtMs ?? '',
         o.estimatedDeliveryTime,
@@ -158,17 +161,26 @@ export default function DriverHubScreen() {
   const acceptingIdRef = useRef<string | null>(null);
   acceptingIdRef.current = acceptingId;
 
-  const applyAvailableOrders = useCallback((orders: DriverOrder[]) => {
-    const unique = Array.from(
-      new Map(
-        orders.filter((o) => !o.driverId).map((o) => [o.id, o]),
-      ).values(),
-    );
+  const applyAvailableOrders = useCallback(
+    (orders: DriverOrder[]) => {
+      const unique = Array.from(
+        new Map(
+          orders
+            .filter((o) => {
+              if (o.driverId) return false;
+              if (uid && o.assignedDriverId === uid) return false;
+              return true;
+            })
+            .map((o) => [o.id, o]),
+        ).values(),
+      );
     const sig = ordersListSignature(unique);
     if (sig === availableSigRef.current) return;
     availableSigRef.current = sig;
-    setAvailableOrders(unique);
-  }, []);
+      setAvailableOrders(unique);
+    },
+    [uid],
+  );
 
   const applyActiveOrders = useCallback((rows: DriverOrder[]) => {
     const sig = ordersListSignature(rows);
@@ -249,7 +261,13 @@ export default function DriverHubScreen() {
     [uid, user?.displayName, user?.phoneNumber],
   );
 
-  const pinnedActiveOrder = activeOrders[0] ?? null;
+  const hubActiveOrders = useMemo(
+    () =>
+      activeOrders.filter(
+        (o) => o.driverId === uid || o.assignedDriverId === uid,
+      ),
+    [activeOrders, uid],
+  );
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -309,41 +327,35 @@ export default function DriverHubScreen() {
           </View>
         </View>
 
-        {pinnedActiveOrder ? (
-          <Pressable
-            style={styles.activeCard}
-            onPress={() => router.push(DRIVER_ROUTES.activeOrder(pinnedActiveOrder.id) as never)}
-          >
-            <View style={styles.activeRow}>
-              <Text style={styles.activeTitle}>Active Delivery</Text>
-              <Text style={styles.activePayout}>${pinnedActiveOrder.total.toFixed(2)}</Text>
-            </View>
-            <Text style={styles.activeRestaurant}>{pinnedActiveOrder.restaurantName}</Text>
-            <Text style={styles.activeMeta}>Customer: {pinnedActiveOrder.customerName ?? 'Customer'}</Text>
-            <Text style={styles.activeMeta}>Drop-off: {pinnedActiveOrder.deliveryAddress ?? 'Address unavailable'}</Text>
-            <Text style={styles.activeMeta}>
-              Pickup: {pinnedActiveOrder.restaurantAddress ?? 'Restaurant address unavailable'}
-            </Text>
-          </Pressable>
-        ) : (
-          <>
+        {hubActiveOrders.length > 0 ? (
+          <View style={styles.activeSection}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Available Orders</Text>
-              <Text style={styles.sectionCount}>{availableOrders.length}</Text>
+              <Text style={styles.sectionTitle}>Current delivery</Text>
+              <Text style={styles.sectionCount}>{hubActiveOrders.length}</Text>
             </View>
+            {hubActiveOrders.map((order) => (
+              <DriverHubActiveOrderCard key={order.id} order={order} driverUid={uid} />
+            ))}
+          </View>
+        ) : null}
 
-            {!isOnline ? (
-              <View style={styles.stateCard}>
-                <Text style={styles.stateTitle}>You are offline</Text>
-                <Text style={styles.stateSub}>Turn on the switch above to start receiving delivery offers.</Text>
-              </View>
-            ) : availableOrders.length === 0 ? (
-              <View style={styles.stateCard}>
-                <Text style={styles.stateTitle}>No delivery requests nearby yet.</Text>
-                <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
-              </View>
-            ) : (
-              availableOrders.map((order) => {
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Available orders</Text>
+          <Text style={styles.sectionCount}>{availableOrders.length}</Text>
+        </View>
+
+        {!isOnline ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateTitle}>You are offline</Text>
+            <Text style={styles.stateSub}>Turn on the switch above to start receiving delivery offers.</Text>
+          </View>
+        ) : availableOrders.length === 0 ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateTitle}>No delivery requests nearby yet.</Text>
+            <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
+          </View>
+        ) : (
+          availableOrders.map((order) => {
             const isExpired = false;
             const restaurantAddress = order.restaurantAddress ?? 'Address unavailable';
             const customerAddress =
@@ -453,8 +465,6 @@ export default function DriverHubScreen() {
               </View>
             );
           })
-            )}
-          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -528,20 +538,14 @@ const styles = StyleSheet.create({
   statValue: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
   statLabel: { color: '#9CA3AF', marginTop: 2, fontWeight: '600', fontSize: 11 },
   statLabelMid: { color: '#E7FBEA', marginTop: 2, fontWeight: '700', fontSize: 11 },
-  activeCard: {
-    backgroundColor: '#132B1E',
-    borderWidth: 1,
-    borderColor: '#00C853',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
+  activeSection: { marginBottom: 8 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    marginTop: 4,
   },
-  activeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  activeTitle: { color: '#A7F3D0', fontWeight: '800' },
-  activePayout: { color: '#00E676', fontWeight: '900', fontSize: 18 },
-  activeRestaurant: { color: '#FFFFFF', marginTop: 8, fontSize: 16, fontWeight: '800' },
-  activeMeta: { color: '#D1FAE5', marginTop: 4, fontWeight: '600' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   sectionCount: { color: '#9CA3AF', fontWeight: '700' },
   stateCard: {

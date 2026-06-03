@@ -1,17 +1,18 @@
 import AppHeader from '@/components/AppHeader';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
-import type { OrderStatus } from '@/services/orderService';
-import { updateOrderStatus, type RestaurantOrder } from '@/services/orderService';
+import {
+  applyDriverMarketplaceFulfillment,
+  driverMarketplaceFulfillmentStatusHint,
+  getDriverMarketplaceFulfillmentButton,
+} from '@/lib/driverMarketplaceFulfillment';
+import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
+import type { RestaurantOrder } from '@/services/orderService';
 import {
   acceptQueuedDeliveryOrder,
   type DriverProfile,
 } from '@/services/driverService';
 import { useAuth } from '@/services/AuthContext';
-import {
-  formatAddress,
-  formatRestaurantName,
-  formatOrderStatus,
-} from '@/utils/orderFormatters';
+import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import * as Linking from 'expo-linking';
 import { orderRoomHref } from '@/services/orderChat';
@@ -25,28 +26,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 function navUrl(lat: number, lng: number, label: string) {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=driving`;
-}
-
-function nextDriverStep(status: OrderStatus): {
-  label: string;
-  next: OrderStatus;
-} | null {
-  if (status === 'driver_accepted' || status === 'driver_assigned') {
-    return { label: 'Arrived at restaurant', next: 'arriving_restaurant' };
-  }
-  if (status === 'arriving_restaurant') {
-    return { label: 'Confirm pickup', next: 'picked_up' };
-  }
-  if (status === 'picked_up') {
-    return { label: 'Start delivery', next: 'on_the_way' };
-  }
-  if (status === 'on_the_way') {
-    return { label: 'Arrived at customer', next: 'arrived_customer' };
-  }
-  if (status === 'arrived_customer') {
-    return { label: 'Mark delivered', next: 'delivered' };
-  }
-  return null;
 }
 
 export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) {
@@ -110,7 +89,13 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     };
   }, [assignedToMe, user?.uid, order.id, order.status]);
 
-  const primaryAction = assignedToMe ? nextDriverStep(order.status) : null;
+  const fulfillmentAction = assignedToMe
+    ? getDriverMarketplaceFulfillmentButton(order, user?.uid)
+    : null;
+  const fulfillmentHint = assignedToMe
+    ? driverMarketplaceFulfillmentStatusHint(order, user?.uid)
+    : null;
+  const statusLabel = marketplaceDeliveryStatusLabel(order.deliveryStatus);
 
   const payoutEst = Math.max(0, order.deliveryFee) * 0.72;
 
@@ -139,9 +124,9 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     }
   }
 
-  async function onAdvance() {
-    if (!primaryAction || busy) return;
-    if (primaryAction.next === 'delivered' && order.deliveryPin) {
+  async function onFulfillment() {
+    if (!fulfillmentAction || busy) return;
+    if (fulfillmentAction.action === 'deliver' && order.deliveryPin) {
       if (deliverPin.trim() !== order.deliveryPin) {
         showError('Enter the 4-digit delivery PIN from the customer.');
         return;
@@ -149,9 +134,23 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     }
     setBusy(true);
     try {
-      await updateOrderStatus(order.id, primaryAction.next);
-      showSuccess('Updated');
-      if (primaryAction.next === 'delivered') {
+      const result = await applyDriverMarketplaceFulfillment(
+        order.id,
+        fulfillmentAction.action,
+        order,
+      );
+      if (result === 'skipped_illegal') {
+        showError(
+          fulfillmentAction.action === 'pickup'
+            ? 'Order is not ready for pickup yet.'
+            : 'Pick up the order before completing delivery.',
+        );
+        return;
+      }
+      showSuccess(
+        fulfillmentAction.action === 'pickup' ? 'Picked up' : 'Delivery completed',
+      );
+      if (fulfillmentAction.action === 'deliver') {
         showNotice('Great job', 'Delivery completed.');
         setDeliverPin('');
       }
@@ -169,7 +168,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
       <AppHeader title="Delivery" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
-          <Text style={styles.status}>{formatOrderStatus(order.status)}</Text>
+          <Text style={styles.status}>{statusLabel}</Text>
           <Text style={styles.restaurant}>{formatRestaurantName(order.restaurant?.name)}</Text>
           <Text style={styles.meta}>{formatAddress(order.restaurant?.address)}</Text>
           <View style={styles.payout}>
@@ -211,7 +210,11 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
           </Pressable>
         ) : null}
 
-        {primaryAction?.next === 'delivered' && order.deliveryPin ? (
+        {fulfillmentHint && !fulfillmentAction ? (
+          <Text style={styles.waitingHint}>{fulfillmentHint}</Text>
+        ) : null}
+
+        {fulfillmentAction?.action === 'deliver' && order.deliveryPin ? (
           <View style={styles.pinBox}>
             <Text style={styles.pinLabel}>Customer delivery PIN</Text>
             <AppTextInput
@@ -226,12 +229,12 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
           </View>
         ) : null}
 
-        {primaryAction ? (
-          <Pressable style={styles.secondaryBtn} disabled={busy} onPress={() => void onAdvance()}>
+        {fulfillmentAction ? (
+          <Pressable style={styles.secondaryBtn} disabled={busy} onPress={() => void onFulfillment()}>
             {busy ? (
               <ActivityIndicator color="#e0f2fe" />
             ) : (
-              <Text style={styles.secondaryBtnText}>{primaryAction.label}</Text>
+              <Text style={styles.secondaryBtnText}>{fulfillmentAction.label}</Text>
             )}
           </Pressable>
         ) : null}
@@ -371,4 +374,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(56,189,248,0.12)',
   },
   linkBtnText: { color: '#7dd3fc', fontWeight: '800', fontSize: 15 },
+  waitingHint: { color: '#94a3b8', fontWeight: '600', fontSize: 14, marginTop: 12, lineHeight: 20 },
 });

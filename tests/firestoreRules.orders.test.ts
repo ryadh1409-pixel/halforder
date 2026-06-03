@@ -1179,6 +1179,94 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows driver pickup when order is ready_for_pickup and assigned', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'pickup1'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'ready_for_pickup',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'pickup1'), {
+          deliveryStatus: 'picked_up',
+          pickedUpAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverMarketplacePickup',
+        }),
+      );
+    });
+
+    it('allows driver deliver when order is picked_up', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'deliver1'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          status: 'picked_up',
+          deliveryStatus: 'picked_up',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          pickedUpAt: Timestamp.now(),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'deliver1'), {
+          deliveryStatus: 'delivered',
+          status: 'completed',
+          deliveredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverMarketplaceDelivered',
+        }),
+      );
+    });
+
+    it('denies driver pickup before ready_for_pickup', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'pickup_early'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          deliveryStatus: 'driver_assigned',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'pickup_early'), {
+          deliveryStatus: 'picked_up',
+          pickedUpAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverMarketplacePickup',
+        }),
+      );
+    });
+
     it('denies driver claim when order already assigned to another driver', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv2'), { name: 'Driver Two' });

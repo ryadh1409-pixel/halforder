@@ -24,10 +24,10 @@ describe('restaurantKitchenActions', () => {
     expect(patch.preparedAt).toBeDefined();
   });
 
-  it('builds ready patch with ready statuses', () => {
+  it('builds ready patch with ready_for_pickup statuses', () => {
     const patch = buildRestaurantKitchenPatch('ready');
-    expect(patch.status).toBe('ready');
-    expect(patch.deliveryStatus).toBe('ready');
+    expect(patch.status).toBe('ready_for_pickup');
+    expect(patch.deliveryStatus).toBe('ready_for_pickup');
   });
 
   it('detects duplicate transitions', () => {

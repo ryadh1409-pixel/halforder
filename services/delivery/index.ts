@@ -4,6 +4,10 @@ import {
   type DeliveryLifecycleStatus,
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
+import {
+  normalizeMarketplaceDeliveryStatus,
+  type MarketplaceDeliveryStatus,
+} from '@/lib/orderStatus';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import {
   driverPresenceDoc,
@@ -119,6 +123,8 @@ export type DeliveryQueueOrder = {
 };
 
 export type ActiveDelivery = DeliveryQueueOrder & {
+  /** Canonical marketplace courier status (driver_assigned, ready_for_pickup, picked_up, delivered). */
+  marketplaceCourierStatus: MarketplaceDeliveryStatus;
   assignedDriverId: string | null;
   acceptedAtMs: number | null;
   pickedUpAtMs: number | null;
@@ -259,6 +265,7 @@ function mapActiveDelivery(
   warnDevIfUnparsableTimestamp(d.id, 'deliveredAt', data.deliveredAt);
   return {
     ...base,
+    marketplaceCourierStatus: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
     assignedDriverId:
       typeof data.assignedDriverId === 'string'
         ? data.assignedDriverId

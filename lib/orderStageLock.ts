@@ -102,8 +102,8 @@ export function applyStageLockToOrder<T extends OrderStageInput>(order: T): T {
   if (lock.stage === 'driver_assignment') {
     return {
       ...order,
-      status: 'ready',
-      deliveryStatus: 'ready',
+      status: 'ready_for_pickup',
+      deliveryStatus: 'ready_for_pickup',
       readyAtMs: (order as { readyAtMs?: number | null }).readyAtMs ?? Date.now(),
       preparedAtMs:
         (order as { preparedAtMs?: number | null }).preparedAtMs ?? Date.now(),

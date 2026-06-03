@@ -1597,6 +1597,56 @@ service cloud.firestore {
         && driverClaimUpdatedByOk()
         && driverClaimImmutableFieldsOk(before, after);
     }
+    function driverActivePatchAllowedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'driverId',
+        'assignedDriverId',
+        'driverName',
+        'driverPhone',
+        'driver',
+        'deliveryStatus',
+        'acceptedAt',
+        'pickedUpAt',
+        'deliveredAt',
+        'updatedAt',
+        'deliveryPin',
+        'estimatedDeliveryMinutes',
+        'estimatedDeliveryTime',
+        'updatedBy',
+        'status',
+        'driverLocation',
+      ]);
+    }
+    function driverReadyForPickupBeforeStatus(ds) {
+      return ds == 'ready_for_pickup'
+        || ds == 'ready'
+        || ds == 'waiting_driver'
+        || ds == 'accepted_for_delivery';
+    }
+    function driverMarketplacePickupTransitionOk(before, after) {
+      let beforeDs = before.get('deliveryStatus', '');
+      return driverAssignedToMarketplaceOrder(before)
+        && driverReadyForPickupBeforeStatus(beforeDs)
+        && after.get('deliveryStatus', '') == 'picked_up'
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverClaimImmutableFieldsOk(before, after);
+    }
+    function driverMarketplaceDeliverTransitionOk(before, after) {
+      return driverAssignedToMarketplaceOrder(before)
+        && before.get('deliveryStatus', '') == 'picked_up'
+        && after.get('deliveryStatus', '') == 'delivered'
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && (after.get('status', '') == 'completed' || after.get('status', '') == before.get('status', ''))
+        && driverClaimImmutableFieldsOk(before, after);
+    }
+    function driverLocationOnlyPatchOk() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'driverLocation',
+        'updatedAt',
+      ]);
+    }
     function isValidDriverActivePatch() {
       let before = resource.data;
       let after = request.resource.data;
@@ -1606,12 +1656,13 @@ service cloud.firestore {
         && !noDriverAssignedYet(before)
         && after.get('driverId', '') == before.get('driverId', '')
         && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
-        && driverMarketplaceActiveDeliveryStatusOk(after.get('deliveryStatus', ''))
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'driverLocation','status','deliveryStatus','pickedUpAt','deliveredAt',
-          'estimatedDeliveryTime','estimatedDeliveryMinutes','updatedAt','driver',
-          'driverName','driverPhone','driverVehicle','acceptedAt'
-        ]);
+        && driverActivePatchAllowedKeys()
+        && driverClaimUpdatedByOk()
+        && (
+          driverMarketplacePickupTransitionOk(before, after)
+          || driverMarketplaceDeliverTransitionOk(before, after)
+          || driverLocationOnlyPatchOk()
+        );
     }
     function marketplaceDriverPatchOk() {
       return isValidDriverClaim() || isValidDriverActivePatch();

@@ -35,6 +35,7 @@ import {
 import { auth, db, syncAuthForFirestoreReads } from './firebase';
 import { isMarketplaceOrderExpired } from '@/lib/marketplaceActiveOrder';
 import { getHumanOrderAge } from '@/lib/orderExpiry';
+import { isDriverActiveMarketplaceOrder } from '@/lib/driverHubActiveOrders';
 import {
   isDriverMarketplaceClaimable,
   isPaidMarketplaceDeliveryOrder,
@@ -112,6 +113,7 @@ export type DriverOrder = {
   acceptedAtMs: number | null;
   createdAtMs: number | null;
   driverId: string | null;
+  assignedDriverId: string | null;
 };
 
 type LatLng = { lat: number; lng: number };
@@ -298,8 +300,12 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     })(),
     distanceKm: distanceKm(driverLocation ?? restaurantLocation, dropoffLocation),
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
+    assignedDriverId:
+      typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
   };
 }
+
+export { isDriverActiveMarketplaceOrder } from '@/lib/driverHubActiveOrders';
 
 export function subscribeDrivers(
   onData: (drivers: DriverProfile[]) => void,
@@ -713,15 +719,13 @@ export async function acceptGroupDelivery(groupId: string, driver: DriverProfile
 }
 
 export async function driverMarkPickedUp(orderId: string): Promise<void> {
-  await protectedUpdateOrder(
-    orderId,
-    {
-      deliveryStatus: 'picked_up',
-      pickedUpAt: serverTimestamp(),
-      estimatedDeliveryTime: 14,
-    },
-    { fileName: 'driverService.ts', functionName: 'driverMarkPickedUp' },
+  const { applyDriverMarketplaceFulfillment } = await import(
+    '@/lib/driverMarketplaceFulfillment'
   );
+  const result = await applyDriverMarketplaceFulfillment(orderId, 'pickup');
+  if (result === 'skipped_illegal') {
+    throw new Error('Order is not ready for pickup');
+  }
 }
 
 export async function driverMarkOnTheWay(orderId: string): Promise<void> {
@@ -747,15 +751,13 @@ export async function driverMarkArrivedCustomer(orderId: string): Promise<void> 
 }
 
 export async function driverMarkDelivered(orderId: string): Promise<void> {
-  await protectedUpdateOrder(
-    orderId,
-    {
-      deliveryStatus: 'delivered',
-      status: 'completed',
-      deliveredAt: serverTimestamp(),
-    },
-    { fileName: 'driverService.ts', functionName: 'driverMarkDelivered' },
+  const { applyDriverMarketplaceFulfillment } = await import(
+    '@/lib/driverMarketplaceFulfillment'
   );
+  const result = await applyDriverMarketplaceFulfillment(orderId, 'deliver');
+  if (result === 'skipped_illegal') {
+    throw new Error('Order must be picked up before delivery');
+  }
 }
 
 export async function driverMarkHeadingToRestaurant(orderId: string): Promise<void> {
@@ -962,20 +964,9 @@ export function getDriverActiveOrders(
   driverId: string,
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
-  return subscribeToDriverOrders(driverId, (rows) => {
-    onData(
-      rows.filter((o) =>
-        [
-          'driver_assigned',
-          'driver_accepted',
-          'arriving_restaurant',
-          'picked_up_pending',
-          'picked_up',
-          'on_the_way',
-          'arrived_customer',
-        ].includes(o.status),
-      ),
-    );
+  const uid = driverId.trim();
+  return subscribeToDriverOrders(uid, (rows) => {
+    onData(rows.filter((o) => isDriverActiveMarketplaceOrder(o, uid)));
   });
 }
 

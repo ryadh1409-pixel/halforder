@@ -1,13 +1,11 @@
 import { DriverActiveRouteMap } from '@/components/maps/DriverActiveRouteMap';
-import { DELIVERY_STATUS, DELIVERY_STATUS_LABEL, type DeliveryLifecycleStatus } from '@/constants/deliveryStatus';
-import { DeliveryActionBar } from '@/components/delivery/DeliveryActionBar';
-import { DeliveryTimeline } from '@/components/delivery/DeliveryTimeline';
+import { MarketplaceDeliveryActionBar } from '@/components/delivery/MarketplaceDeliveryActionBar';
+import { MarketplaceDeliveryTimeline } from '@/components/delivery/MarketplaceDeliveryTimeline';
+import { applyDriverMarketplaceFulfillment } from '@/lib/driverMarketplaceFulfillment';
+import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
-import {
-  updateDeliveryStatus,
-} from '@/services/delivery';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
@@ -71,14 +69,35 @@ export default function DriverActiveDeliveryDetailsScreen() {
     return list;
   }, [driverLocationForMap, order]);
 
-  async function onAdvance(nextStatus: DeliveryLifecycleStatus) {
-    if (!id || !user?.uid || busy) return;
+  async function onPickup() {
+    if (!id || busy) return;
     setBusy(true);
     try {
-      await updateDeliveryStatus(id, user.uid, nextStatus);
-      showSuccess(DELIVERY_STATUS_LABEL[nextStatus]);
+      const result = await applyDriverMarketplaceFulfillment(id, 'pickup', order ?? undefined);
+      if (result === 'skipped_illegal') {
+        showError('Order is not ready for pickup yet.');
+        return;
+      }
+      showSuccess('Picked up');
     } catch {
-      showError('Could not update delivery status');
+      showError('Could not mark order picked up');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDeliver() {
+    if (!id || busy) return;
+    setBusy(true);
+    try {
+      const result = await applyDriverMarketplaceFulfillment(id, 'deliver', order ?? undefined);
+      if (result === 'skipped_illegal') {
+        showError('Pick up the order before completing delivery.');
+        return;
+      }
+      showSuccess('Delivered');
+    } catch {
+      showError('Could not complete delivery');
     } finally {
       setBusy(false);
     }
@@ -100,7 +119,8 @@ export default function DriverActiveDeliveryDetailsScreen() {
     );
   }
 
-  const status = order.deliveryStatus ?? DELIVERY_STATUS.ACCEPTED;
+  const courierStatus = order.marketplaceCourierStatus;
+  const statusLabel = marketplaceDeliveryStatusLabel(courierStatus);
   const routeDestination = order.deliveryAddress;
 
   return (
@@ -108,7 +128,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerCard}>
           <View style={styles.pill}>
-            <Text style={styles.pillText}>{DELIVERY_STATUS_LABEL[status]}</Text>
+            <Text style={styles.pillText}>{statusLabel}</Text>
           </View>
           <View style={styles.metrics}>
             <Text style={styles.metric}>Earnings {money(order.payout)}</Text>
@@ -252,8 +272,14 @@ export default function DriverActiveDeliveryDetailsScreen() {
           </View>
         </View>
 
-        <DeliveryTimeline status={status} />
-        <DeliveryActionBar status={status} busy={busy} onAdvance={onAdvance} />
+        <MarketplaceDeliveryTimeline status={courierStatus} />
+        <MarketplaceDeliveryActionBar
+          order={order}
+          driverUid={user?.uid}
+          busy={busy}
+          onPickup={() => void onPickup()}
+          onDeliver={() => void onDeliver()}
+        />
       </ScrollView>
     </SafeAreaView>
   );
