@@ -14,6 +14,8 @@ import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperi
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
 import type { RestaurantOrder } from '@/services/orderService';
+import { showRestaurantAcceptedCancelAlert } from '@/lib/customerOrderCancelAlert';
+import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
 import {
   customerCancelMarketplaceOrder,
   customerCanCancelMarketplaceOrder,
@@ -243,14 +245,29 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   const driverChatEnabled =
     typeof order.driverId === 'string' && order.driverId.length > 0 && order.paymentStatus === 'paid';
 
+  const cancelAllowed = customerCanCancelMarketplaceOrder({
+    status: order.status,
+    deliveryStatus: order.deliveryStatus,
+    paymentStatus: order.paymentStatus,
+  });
+
   async function onCancel() {
-    if (!customerCanCancelMarketplaceOrder(order.status) || cancelling) return;
+    if (!cancelAllowed || cancelling) return;
     setCancelling(true);
     try {
       await customerCancelMarketplaceOrder(order.id);
       showNotice('Order cancelled', 'Your order was cancelled.');
-    } catch {
-      showError('Could not cancel order');
+    } catch (e) {
+      const cancelErr = resolveCustomerCancelOrderError(e, {
+        status: order.status,
+        deliveryStatus: order.deliveryStatus,
+        paymentStatus: order.paymentStatus,
+      });
+      if (cancelErr === 'restaurant_accepted') {
+        showRestaurantAcceptedCancelAlert();
+      } else {
+        showError('Could not cancel order');
+      }
     } finally {
       setCancelling(false);
     }
@@ -500,10 +517,9 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           <Pressable
             style={[
               styles.cancelBtn,
-              (!customerCanCancelMarketplaceOrder(order.status) || cancelling) &&
-                styles.secondaryBtnDisabled,
+              (!cancelAllowed || cancelling) && styles.secondaryBtnDisabled,
             ]}
-            disabled={!customerCanCancelMarketplaceOrder(order.status) || cancelling}
+            disabled={!cancelAllowed || cancelling}
             onPress={() => void onCancel()}
           >
             {cancelling ? (
@@ -512,7 +528,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
               <Text style={styles.cancelBtnText}>Cancel order</Text>
             )}
           </Pressable>
-          {!customerCanCancelMarketplaceOrder(order.status) ? (
+          {!cancelAllowed ? (
             <Text style={styles.hint}>Cancellation is no longer available for this order.</Text>
           ) : null}
         </View>

@@ -4,6 +4,7 @@ import { safeToMillis } from '@/utils/safeToMillis';
 import {
   isRestaurantPrePaymentCheckout,
 } from '@/lib/restaurantLiveOrders';
+import { deriveOrderStage } from '@/services/orderStage';
 
 /** Restaurant dashboard visibility window — exactly 24 hours. */
 export const RESTAURANT_ORDER_FRESH_MS = 24 * 60 * 60 * 1000;
@@ -65,10 +66,10 @@ export function computeRestaurantDashboardMetrics(
     if (isRestaurantPrePaymentCheckout(order)) {
       continue;
     }
-    const status = typeof order.status === 'string' ? order.status : '';
-    if (status === 'delivered') {
+    const stage = deriveOrderStage(order);
+    if (stage === 'delivered') {
       completed += 1;
-    } else if (status !== 'rejected' && status !== 'cancelled') {
+    } else if (stage !== 'cancelled') {
       active += 1;
     }
     revenue += typeof order.totalPrice === 'number' ? order.totalPrice : 0;

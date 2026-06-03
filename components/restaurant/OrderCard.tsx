@@ -1,14 +1,13 @@
-import React from 'react';
+import type { OrderStageInput } from '@/services/orderStage';
+import { getRestaurantOrderPresentation } from '@/services/orderStage';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-export type DashboardOrderStatus = 'pending' | 'preparing' | 'ready' | 'picked_up';
-
-export type DashboardOrder = {
+export type DashboardOrder = OrderStageInput & {
   id: string;
   items: string;
   totalPrice: number;
   timeAgo: string;
-  status: DashboardOrderStatus;
 };
 
 type OrderCardProps = {
@@ -17,23 +16,18 @@ type OrderCardProps = {
   onAssignDriver: (orderId: string) => void;
 };
 
-const STATUS_STYLES: Record<DashboardOrderStatus, { bg: string; text: string; label: string }> =
-  {
-    pending: { bg: '#F1F5F9', text: '#334155', label: 'Pending' },
-    preparing: { bg: '#FFEDD5', text: '#C2410C', label: 'Preparing' },
-    ready: { bg: '#DBEAFE', text: '#1D4ED8', label: 'Ready' },
-    picked_up: { bg: '#DCFCE7', text: '#166534', label: 'Picked up' },
-  };
-
+/** Legacy compact card — UI from {@link getRestaurantOrderPresentation} only. */
 export function OrderCard({ order, onMarkReady, onAssignDriver }: OrderCardProps) {
-  const badge = STATUS_STYLES[order.status];
-  const canMarkReady = order.status === 'preparing' || order.status === 'pending';
+  const presentation = useMemo(() => getRestaurantOrderPresentation(order), [order]);
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>
         <Text style={styles.orderId}>Order #{order.id}</Text>
-        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-          <Text style={[styles.badgeText, { color: badge.text }]}>{badge.label}</Text>
+        <View style={[styles.badge, { backgroundColor: presentation.badgeColor.bg }]}>
+          <Text style={[styles.badgeText, { color: presentation.badgeColor.fg }]}>
+            {presentation.badgeText}
+          </Text>
         </View>
       </View>
       <Text style={styles.items}>{order.items}</Text>
@@ -44,13 +38,17 @@ export function OrderCard({ order, onMarkReady, onAssignDriver }: OrderCardProps
 
       <View style={styles.actions}>
         <Pressable
-          style={[styles.readyButton, !canMarkReady ? styles.disabledButton : null]}
+          style={[styles.readyButton, !presentation.canReady ? styles.disabledButton : null]}
           onPress={() => onMarkReady(order.id)}
-          disabled={!canMarkReady}
+          disabled={!presentation.canReady}
         >
           <Text style={styles.readyText}>Mark as Ready</Text>
         </Pressable>
-        <Pressable style={styles.assignButton} onPress={() => onAssignDriver(order.id)}>
+        <Pressable
+          style={[styles.assignButton, !presentation.canAssignDriver ? styles.disabledButton : null]}
+          onPress={() => onAssignDriver(order.id)}
+          disabled={!presentation.canAssignDriver}
+        >
           <Text style={styles.assignText}>Assign Driver</Text>
         </Pressable>
       </View>

@@ -11,9 +11,10 @@ import { AssignDriverModal } from '../components/AssignDriverModal';
 import { StatCard } from '../components/restaurant/StatCard';
 import { useDrivers } from '../hooks/useDrivers';
 import { useMenu } from '../hooks/useMenu';
-import { RestaurantOrdersPanel } from '../components/restaurant/RestaurantOrdersPanel';
-import { computeRestaurantDashboardMetrics } from '../lib/restaurantOrderFreshness';
-import { useRestaurantOrders } from '../hooks/useRestaurantOrders';
+import {
+  RestaurantOrdersPanel,
+  type RestaurantDashboardMetrics,
+} from '../components/restaurant/RestaurantOrdersPanel';
 import { useAuth } from '../services/AuthContext';
 import { assignDriverToOrder } from '../services/driverService';
 import { db } from '../services/firebase';
@@ -56,10 +57,9 @@ export default function RestaurantDashboardScreen() {
   const { user } = useAuth();
   const [restaurant, setRestaurant] = useState<RestaurantView | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState(true);
-  const { allOrders: orders, loading: ordersLoading } = useRestaurantOrders({
-    restaurantId: restaurant?.id,
-    restaurantTimeZone: restaurant?.timezone,
-    filter: 'active',
+  const [dashboardMetrics, setDashboardMetrics] = useState<RestaurantDashboardMetrics>({
+    ordersToday: 0,
+    revenue: 0,
   });
   const { drivers, loading: driversLoading } = useDrivers();
   const { items: menu, loading: menuLoading } = useMenu(restaurant?.id);
@@ -193,19 +193,12 @@ export default function RestaurantDashboardScreen() {
     return () => unsub();
   }, [user?.uid]);
 
-  const orderMetrics = useMemo(
-    () => computeRestaurantDashboardMetrics(orders),
-    [orders],
-  );
-
   const stats = useMemo(
     () => [
-      { label: 'Orders (24h)', value: `${orderMetrics.total}` },
-      { label: 'Active orders', value: `${orderMetrics.active}` },
-      { label: 'Completed', value: `${orderMetrics.completed}` },
-      { label: 'Revenue', value: `$${orderMetrics.revenue.toFixed(2)}` },
+      { label: 'Orders (24h)', value: `${dashboardMetrics.ordersToday}` },
+      { label: 'Revenue', value: `$${dashboardMetrics.revenue.toFixed(2)}` },
     ],
-    [orderMetrics],
+    [dashboardMetrics],
   );
 
   async function handleToggleOpen(value: boolean) {
@@ -225,7 +218,6 @@ export default function RestaurantDashboardScreen() {
 
   async function handleAssignDriver(driver: (typeof drivers)[number]) {
     if (!selectedOrderId) return;
-    const order = orders.find((o) => o.id === selectedOrderId);
     try {
       await assignDriverToOrder(
         selectedOrderId,
@@ -235,7 +227,7 @@ export default function RestaurantDashboardScreen() {
           phone: driver.phone,
           isOnline: driver.isOnline,
         },
-        order?.status ?? 'pending',
+        'ready_for_pickup',
       );
       showSuccess('Driver assigned');
       setAssignDriverModalOpen(false);
@@ -406,7 +398,7 @@ export default function RestaurantDashboardScreen() {
     );
   }
 
-  if (restaurantLoading || ordersLoading || menuLoading) {
+  if (restaurantLoading || menuLoading) {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" color="#16a34a" />
@@ -428,7 +420,7 @@ export default function RestaurantDashboardScreen() {
           <Text style={styles.restaurantName}>{restaurant.name || user?.displayName?.trim() || 'Restaurant Dashboard'}</Text>
           {restaurant.logo ? <Image source={{ uri: restaurant.logo }} style={styles.logoThumb} /> : null}
           <Text style={styles.locationText}>{restaurant.location || 'No location set'}</Text>
-          <Text style={styles.earnings}>24h: ${orderMetrics.revenue.toFixed(2)}</Text>
+          <Text style={styles.earnings}>24h: ${dashboardMetrics.revenue.toFixed(2)}</Text>
         </View>
         <View style={styles.openToggleWrap}>
           <Text style={styles.openLabel}>{restaurant.isOpen ? 'Open' : 'Closed'}</Text>
@@ -456,6 +448,7 @@ export default function RestaurantDashboardScreen() {
             restaurantTimeZone={restaurant.timezone}
             title="Live orders"
             onAssignDriver={openAssignDriverModal}
+            onDashboardMetrics={setDashboardMetrics}
           />
         ) : null}
         <View style={styles.stripePaymentsSection}>

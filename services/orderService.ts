@@ -3,16 +3,29 @@ import {
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
-import { reconcileOrderSnapshotStage } from '@/lib/orderListenerCommit';
+import {
+  clearOrderListenerCommitCache,
+  reconcileOrderSnapshotStage,
+} from '@/lib/orderListenerCommit';
 import { traceOrderStageRender } from '@/lib/orderStageTrace';
+import { ENABLE_ORDER_TRACE } from '@/lib/orderTraceFlags';
+import {
+  getActiveRestaurantOrdersQuery,
+  isActiveRestaurantOrder,
+} from '@/lib/restaurantActiveOrdersQuery';
+import { canCustomerCancelMarketplaceOrder as canCustomerCancelByStage } from '@/lib/customerOrderCancelUx';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
-import { deriveOrderStage, isOrderStageAtLeast, logOrderStage } from '@/services/orderStage';
+import {
+  deriveOrderStage,
+  isOrderStageAtLeast,
+  logOrderStage,
+  type OrderStageInput,
+} from '@/services/orderStage';
 import {
   protectedUpdateOrder,
   rawUpdateOrder,
   tracedAddOrder,
 } from '@/services/orderFirestoreWrite';
-import { isRestaurantMarketplaceKitchenOrder } from '@/lib/restaurantLiveOrders';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { fetchRestaurantLocation, restaurantLocationToLegacy } from '@/services/location/restaurantLocation';
 import type { DeliveryDistanceTier } from '@/types/deliveryEligibility';
@@ -40,7 +53,6 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 
-const RESTAURANT_ORDERS_LIST_LIMIT = 120;
 
 /** Full delivery lifecycle (plus rejected / ready for handoff). */
 export type OrderStatus =
@@ -121,9 +133,13 @@ export type RestaurantOrder = {
   customer: CustomerSnapshot;
   driver: DriverSnapshot | null;
   acceptedAtMs: number | null;
+  preparedAtMs: number | null;
+  readyAtMs: number | null;
   pickedUpAtMs: number | null;
   deliveredAtMs: number | null;
   cancelledAtMs: number | null;
+  /** Firestore `updatedAt` millis — listener deduplication. */
+  updatedAtMs: number | null;
   /** 4-digit handoff PIN — shown to customer, entered by driver to complete. */
   deliveryPin: string | null;
   /** Encoded polyline for map route (optional; from Directions API). */
@@ -427,9 +443,12 @@ function mapDocToRestaurantOrder(
           }
         : null,
     acceptedAtMs: safeToMillis(data.acceptedAt),
+    preparedAtMs: safeToMillis(data.preparedAt),
+    readyAtMs: safeToMillis(data.readyAt),
     pickedUpAtMs: safeToMillis(data.pickedUpAt),
     deliveredAtMs: safeToMillis(data.deliveredAt),
     cancelledAtMs: safeToMillis(data.cancelledAt),
+    updatedAtMs: safeToMillis(data.updatedAt),
     deliveryPin:
       typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
         ? data.deliveryPin
@@ -723,19 +742,16 @@ export async function rejectOrder(orderId: string): Promise<void> {
   });
 }
 
-const CUSTOMER_CANCELLABLE_STATUSES: OrderStatus[] = [
-  'awaiting_payment',
-  'payment_processing',
-  'payment_confirmed',
-  'pending',
-  'pending_driver',
-  'accepted',
-  'restaurant_accepted',
-  'preparing',
-];
-
-export function customerCanCancelMarketplaceOrder(status: OrderStatus): boolean {
-  return CUSTOMER_CANCELLABLE_STATUSES.includes(status);
+export function customerCanCancelMarketplaceOrder(
+  input: OrderStageInput | OrderStatus,
+  deliveryStatus?: string | null,
+  paymentStatus?: string | null,
+): boolean {
+  const order: OrderStageInput =
+    typeof input === 'string'
+      ? { status: input, deliveryStatus, paymentStatus }
+      : input;
+  return canCustomerCancelByStage(order);
 }
 
 export async function customerCancelMarketplaceOrder(orderId: string): Promise<void> {
@@ -752,62 +768,80 @@ export type GetRestaurantOrdersOptions = {
   timeZone?: string;
 };
 
-export function getOrders(
+/**
+ * Sole restaurant dashboard listener — active stages only (last 24h).
+ * @see getActiveRestaurantOrdersQuery
+ */
+export function subscribeActiveRestaurantOrders(
   restaurantId: string,
   onData: (orders: RestaurantOrder[]) => void,
   options?: GetRestaurantOrdersOptions,
 ): Unsubscribe {
   const unsub = onSnapshot(
-    query(
-      collection(db, 'orders'),
-      where('restaurantId', '==', restaurantId),
-      orderBy('createdAt', 'desc'),
-      limit(RESTAURANT_ORDERS_LIST_LIMIT),
-    ),
+    getActiveRestaurantOrdersQuery(restaurantId),
     (snap) => {
       try {
-        const rows = snap.docs
-          .map((docSnap) => {
-            const raw = docSnap.data() as Record<string, unknown>;
-            const pending = docSnap.metadata.hasPendingWrites;
-            if (__DEV__ && pending) {
-              logOrderStage(
-                { id: docSnap.id, ...raw },
-                { hasPendingWrites: true },
-              );
-            }
-            const reconciled = reconcileOrderSnapshotStage(
-              docSnap.id,
-              { id: docSnap.id, ...raw },
-              pending,
-            );
-            const merged = applyStageLockToOrder({
-              ...raw,
+        const rows: RestaurantOrder[] = [];
+        for (const docSnap of snap.docs) {
+          const raw = docSnap.data() as Record<string, unknown>;
+          if (
+            !isActiveRestaurantOrder({
               id: docSnap.id,
-              status: reconciled.status ?? raw.status,
-              deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
-              paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
+              ...raw,
+            })
+          ) {
+            continue;
+          }
+
+          const pending = docSnap.metadata.hasPendingWrites;
+          if (ENABLE_ORDER_TRACE && pending) {
+            logOrderStage(
+              { id: docSnap.id, ...raw },
+              { hasPendingWrites: true },
+            );
+          }
+
+          const snapshot: OrderStageInput = { id: docSnap.id, ...raw };
+          const reconciled = reconcileOrderSnapshotStage(
+            docSnap.id,
+            snapshot,
+            pending,
+          );
+          if (reconciled == null) {
+            continue;
+          }
+
+          const merged = applyStageLockToOrder({
+            ...raw,
+            id: docSnap.id,
+            status: reconciled.status ?? raw.status,
+            deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
+            paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
+          });
+
+          if (ENABLE_ORDER_TRACE && !pending) {
+            traceOrderStageRender(merged, {
+              hasPendingWrites: false,
+              sourceScreen: 'subscribeActiveRestaurantOrders',
             });
-            if (__DEV__ && !pending) {
-              traceOrderStageRender(merged, {
-                hasPendingWrites: false,
-                sourceScreen: 'getOrders',
-              });
-            }
-            return mapDocToRestaurantOrder(
+          }
+
+          rows.push(
+            mapDocToRestaurantOrder(
               {
                 id: docSnap.id,
                 data: () => merged as Record<string, unknown>,
               },
               restaurantId,
               { timeZone: options?.timeZone },
-            );
-          })
-          .filter(isRestaurantMarketplaceKitchenOrder);
+            ),
+          );
+        }
+
         onData(filterFreshRestaurantOrders(rows));
       } catch (e) {
         if (__DEV__) {
-          console.error('[getOrders:restaurantId]', e);
+          console.error('[subscribeActiveRestaurantOrders]', e);
         }
         onData([]);
       }
@@ -819,7 +853,17 @@ export function getOrders(
 
   return () => {
     unsub();
+    clearOrderListenerCommitCache();
   };
+}
+
+/** @deprecated Use {@link subscribeActiveRestaurantOrders}. */
+export function getOrders(
+  restaurantId: string,
+  onData: (orders: RestaurantOrder[]) => void,
+  options?: GetRestaurantOrdersOptions,
+): Unsubscribe {
+  return subscribeActiveRestaurantOrders(restaurantId, onData, options);
 }
 
 function etaForStatus(status: OrderStatus): number {
@@ -891,42 +935,13 @@ const RESTAURANT_ACCEPTABLE_KITCHEN_STATUSES = new Set<OrderStatus>([
 ]);
 
 export async function acceptRestaurantOrder(orderId: string): Promise<void> {
-  const trimmed = orderId.trim();
-  if (!trimmed) throw new Error('Order id is required');
-
-  const ref = doc(db, 'orders', trimmed);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('Order not found');
-
-  const current = snap.data() as Record<string, unknown>;
-  const currentStatus =
-    typeof current.status === 'string' ? (current.status as OrderStatus) : 'pending';
-
-  if (!RESTAURANT_ACCEPTABLE_KITCHEN_STATUSES.has(currentStatus)) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.log('[RESTAURANT FLOW] skipping — order already processed', {
-        orderId: trimmed,
-        status: currentStatus,
-        deliveryStatus: current.deliveryStatus ?? null,
-      });
-    }
-    return;
+  const { applyRestaurantKitchenAction } = await import(
+    '@/lib/restaurantKitchenActions'
+  );
+  const result = await applyRestaurantKitchenAction(orderId, 'accept');
+  if (result === 'skipped_illegal') {
+    throw new Error('Order cannot be accepted in its current state');
   }
-
-  if (isOrderStageAtLeast({ id: trimmed, ...current }, 'preparing')) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.log('[RESTAURANT FLOW] skipping — already at preparing or later', {
-        orderId: trimmed,
-        status: currentStatus,
-      });
-    }
-    return;
-  }
-
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    console.log('[RESTAURANT FLOW] acceptRestaurantOrder', { orderId: trimmed });
-  }
-  await updateOrderStatus(trimmed, 'accepted');
 }
 
 /** Firestore order patch that refuses backward lifecycle transitions. */
@@ -944,21 +959,35 @@ export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
 ): Promise<void> {
-  const normalizedStatus: OrderStatus = status === 'ready' ? 'ready_for_pickup' : status;
+  const requested = status;
+  const restaurantKitchenStatus =
+    requested === 'accepted' ||
+    requested === 'restaurant_accepted' ||
+    requested === 'preparing' ||
+    requested === 'ready' ||
+    requested === 'ready_for_pickup';
+
+  if (restaurantKitchenStatus) {
+    const { applyRestaurantKitchenAction } = await import(
+      '@/lib/restaurantKitchenActions'
+    );
+    const action =
+      requested === 'accepted' || requested === 'restaurant_accepted'
+        ? 'accept'
+        : requested === 'preparing'
+          ? 'preparing'
+          : 'ready';
+    await applyRestaurantKitchenAction(orderId, action);
+    return;
+  }
+
+  // Driver/courier path — kitchen statuses return above; widen for legacy patch branches.
+  const normalizedStatus = requested as OrderStatus;
   const patch: Record<string, unknown> = {
     status: normalizedStatus,
     estimatedDeliveryTime: etaForStatus(normalizedStatus),
     updatedAt: serverTimestamp(),
   };
-  if (normalizedStatus === 'accepted' || normalizedStatus === 'restaurant_accepted') {
-    patch.acceptedAt = serverTimestamp();
-    patch.deliveryStatus = 'accepted';
-    patch.updatedBy = 'restaurantAccept';
-  }
-  if (normalizedStatus === 'preparing') {
-    patch.deliveryStatus = 'preparing';
-    patch.updatedBy = patch.updatedBy ?? 'restaurantPreparing';
-  }
   if (normalizedStatus === 'ready_for_pickup') {
     patch.preparedAt = serverTimestamp();
     patch.deliveryStatus = 'ready_for_pickup';
@@ -1073,12 +1102,12 @@ export function subscribeOrderById(
       try {
         const raw = snap.data() as Record<string, unknown>;
         const pending = snap.metadata.hasPendingWrites;
-        const reconciled = reconcileOrderSnapshotStage(
-          snap.id,
-          { id: snap.id, ...raw },
-          pending,
-        );
-        if (__DEV__ && pending) {
+        const snapshot: OrderStageInput = { id: snap.id, ...raw };
+        const reconciled = reconcileOrderSnapshotStage(snap.id, snapshot, pending);
+        if (reconciled == null) {
+          return;
+        }
+        if (ENABLE_ORDER_TRACE && pending) {
           logOrderStage({ id: snap.id, ...raw }, { hasPendingWrites: true });
         }
         const merged = applyStageLockToOrder({
@@ -1088,7 +1117,7 @@ export function subscribeOrderById(
           deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
           paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
         });
-        if (__DEV__ && !pending) {
+        if (ENABLE_ORDER_TRACE && !pending) {
           traceOrderStageRender(merged, {
             hasPendingWrites: false,
             sourceScreen: 'subscribeOrderById',

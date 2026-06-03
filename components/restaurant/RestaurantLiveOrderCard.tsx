@@ -1,16 +1,11 @@
 import OrderActions from '@/components/orders/OrderActions';
 import { PaymentBadge } from '@/components/orders/StatusBadge';
-import { merchantStatusFromOrder } from '@/components/orders/statusFlow';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
-import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import { traceOrderStageRender } from '@/lib/orderStageTrace';
-import {
-  deriveOrderStage,
-  restaurantCourierBadgeLabel,
-  restaurantKitchenBadgeTone,
-  restaurantStageBadgeLabel,
-} from '@/services/orderStage';
+import type { RestaurantKitchenAction } from '@/lib/restaurantKitchenActions';
+import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import { getRestaurantOrderPresentation } from '@/services/orderStage';
 import {
   formatOrderDate,
   formatOrderTime,
@@ -28,6 +23,7 @@ type Props = {
   onStatus: (status: OrderStatus) => void;
   onReject: () => void;
   loading?: boolean;
+  pendingAction?: RestaurantKitchenAction | null;
 };
 
 function customerDisplayName(order: RestaurantOrder): string {
@@ -35,17 +31,6 @@ function customerDisplayName(order: RestaurantOrder): string {
   if (name) return name;
   const uid = order.userId?.trim();
   return uid ? `Guest ${uid.slice(0, 8)}` : 'Guest';
-}
-
-function driverStatusLabel(order: RestaurantOrder, stage: ReturnType<typeof deriveOrderStage>): string {
-  if (order.driverId && (order.driverName || order.driver?.name)) {
-    const name = order.driverName?.trim() || order.driver?.name?.trim() || 'Assigned';
-    return `Driver: ${name}`;
-  }
-  if (stage === 'driver_assignment') {
-    return 'Awaiting driver';
-  }
-  return 'No driver assigned';
 }
 
 function deliveryAddressLine(order: RestaurantOrder): string {
@@ -75,10 +60,15 @@ export function RestaurantLiveOrderCard({
   onStatus,
   onReject,
   loading,
+  pendingAction = null,
 }: Props) {
   const displayOrder = useMemo(() => applyStageLockToOrder(order), [order]);
-  const stage = traceOrderStageRender(displayOrder, { sourceScreen });
-  const merchantStatus = merchantStatusFromOrder(displayOrder);
+
+  const presentation = useMemo(() => {
+    traceOrderStageRender(displayOrder, { sourceScreen });
+    return getRestaurantOrderPresentation(displayOrder);
+  }, [displayOrder, sourceScreen]);
+
   const timeOpts = { timeZone };
 
   const itemLines = useMemo(
@@ -114,10 +104,6 @@ export function RestaurantLiveOrderCard({
 
   if (!isOrderFresh(order)) return null;
 
-  const deliveryLabel = restaurantCourierBadgeLabel(stage, order);
-  const kitchenLabel = restaurantStageBadgeLabel(stage, order);
-  const kitchenTone = restaurantKitchenBadgeTone(stage, order);
-
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -127,9 +113,14 @@ export function RestaurantLiveOrderCard({
             {safePhone(order.customerPhone, null)}
           </Text>
         </View>
-        <View style={[styles.kitchenBadge, { backgroundColor: kitchenTone.bg }]}>
-          <Text style={[styles.kitchenBadgeText, { color: kitchenTone.fg }]}>
-            {kitchenLabel}
+        <View
+          style={[
+            styles.kitchenBadge,
+            { backgroundColor: presentation.badgeColor.bg },
+          ]}
+        >
+          <Text style={[styles.kitchenBadgeText, { color: presentation.badgeColor.fg }]}>
+            {presentation.badgeText}
           </Text>
         </View>
       </View>
@@ -143,10 +134,13 @@ export function RestaurantLiveOrderCard({
       </View>
 
       <View style={styles.badgeRow}>
-        <PaymentBadge paymentStatus={order.paymentStatus} />
-        <View style={styles.deliveryBadge}>
-          <Text style={styles.deliveryBadgeText}>{deliveryLabel}</Text>
-        </View>
+        {presentation.showPaymentBadge ? (
+          <PaymentBadge paymentStatus="unpaid" />
+        ) : (
+          <View style={styles.courierBadge}>
+            <Text style={styles.courierBadgeText}>{presentation.courierBadgeText}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -176,7 +170,7 @@ export function RestaurantLiveOrderCard({
         <View style={[styles.metaCell, styles.metaCellWide]}>
           <Text style={styles.metaLabel}>Driver</Text>
           <Text style={styles.metaValue} numberOfLines={2}>
-            {driverStatusLabel(order, stage)}
+            {presentation.driverDetailText}
           </Text>
         </View>
       </View>
@@ -187,8 +181,9 @@ export function RestaurantLiveOrderCard({
       </View>
 
       <OrderActions
-        status={merchantStatus}
+        status={presentation.merchantActionStatus}
         loading={loading}
+        pendingAction={pendingAction}
         onAccept={() => onStatus('accepted')}
         onStartPreparing={() => onStatus('preparing')}
         onMarkReady={() => onStatus('ready')}
@@ -244,7 +239,6 @@ const styles = StyleSheet.create({
   kitchenBadgeText: {
     fontSize: 12,
     fontWeight: '800',
-    textTransform: 'capitalize',
   },
   timeBlock: {
     marginTop: 12,
@@ -284,13 +278,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  deliveryBadge: {
+  courierBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
     backgroundColor: '#EEF2FF',
   },
-  deliveryBadgeText: {
+  courierBadgeText: {
     fontSize: 12,
     fontWeight: '800',
     color: '#3730A3',

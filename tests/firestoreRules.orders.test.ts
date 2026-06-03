@@ -1011,7 +1011,6 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           assignedDriverId: 'drv1',
           driverName: 'Driver One',
           driverPhone: '+15551234567',
-          driverVehicle: 'Sedan',
           driver: {
             id: 'drv1',
             name: 'Driver One',
@@ -1025,11 +1024,48 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           estimatedDeliveryTime: 18,
           estimatedDeliveryMinutes: 18,
           deliveryPin: '1234',
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
         }),
       );
     });
 
-    it('allows driver claim on full marketplace order (ready_for_pickup, production schema)', async () => {
+    it('allows driver claim when users/{uid}.role is driver (pending → driver_assigned)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', 'drv_role'), {
+          role: 'driver',
+          displayName: 'Role Driver',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_role'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv_role').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'claim_role'), {
+          driverId: 'drv_role',
+          assignedDriverId: 'drv_role',
+          driverName: 'Role Driver',
+          driver: { id: 'drv_role', name: 'Role Driver', phone: null, vehicle: null, avatar: null },
+          deliveryStatus: 'driver_assigned',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          estimatedDeliveryMinutes: 18,
+          updatedBy: 'driverService.ts#claim',
+        }),
+      );
+    });
+
+    it('allows driver claim on full marketplace order (pending courier, production schema)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), {
           name: 'Driver One',
@@ -1050,8 +1086,8 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           total: 15,
           deliveryType: 'delivery',
           estimatedPrepTime: 25,
-          status: 'ready_for_pickup',
-          deliveryStatus: 'ready_for_pickup',
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
           paymentStatus: 'paid',
           stripePaymentIntentId: 'pi_test',
           paymentIntentId: 'pi_test',
@@ -1108,6 +1144,37 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           estimatedDeliveryTime: 20,
           estimatedDeliveryMinutes: 20,
           deliveryPin: '5678',
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+        }),
+      );
+    });
+
+    it('denies driver claim when deliveryStatus is not pending', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_ready'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'ready_for_pickup',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'claim_ready'), {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          driverName: 'Driver One',
+          driver: { id: 'drv1', name: 'Driver One', phone: null, vehicle: null, avatar: null },
+          deliveryStatus: 'driver_assigned',
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driver',
         }),
       );
     });

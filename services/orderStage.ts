@@ -1,42 +1,20 @@
-import { ORDER_STAGE_PRIORITY as LIFECYCLE_STATUS_PRIORITY } from '@/lib/orderLifecyclePriority';
+import {
+  compareOrderStage,
+  ORDER_STAGE_RANK,
+  type DerivedOrderStage,
+  type OrderStageInput
+} from '@/lib/orderSharedTypes';
 import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
+import { ENABLE_ORDER_TRACE } from '@/lib/orderTraceFlags';
 import { safeToMillis } from '@/utils/safeToMillis';
 
-/** Monotonic status ranks for raw `status` field writes (see prepareProtectedOrderPatch). */
-export const ORDER_STAGE_PRIORITY = LIFECYCLE_STATUS_PRIORITY;
-
-export type DerivedOrderStage =
-  | 'awaiting_payment'
-  | 'awaiting_restaurant'
-  | 'preparing'
-  | 'driver_assignment'
-  | 'driver_assigned'
-  | 'picked_up'
-  | 'delivered'
-  | 'cancelled';
-
-/** Monotonic lifecycle rank — higher means further along fulfillment. */
-export const ORDER_STAGE_RANK: Record<DerivedOrderStage, number> = {
-  awaiting_payment: 0,
-  awaiting_restaurant: 1,
-  preparing: 2,
-  driver_assignment: 3,
-  driver_assigned: 4,
-  picked_up: 5,
-  delivered: 6,
-  cancelled: 7,
-};
-
-/**
- * Compare canonical stages.
- * @returns negative if `a` is earlier than `b`, positive if later, 0 if equal
- */
-export function compareOrderStage(
-  a: DerivedOrderStage,
-  b: DerivedOrderStage,
-): number {
-  return ORDER_STAGE_RANK[a] - ORDER_STAGE_RANK[b];
-}
+export {
+  compareOrderStage,
+  ORDER_STAGE_PRIORITY,
+  ORDER_STAGE_RANK,
+  type DerivedOrderStage,
+  type OrderStageInput
+} from '@/lib/orderSharedTypes';
 
 export function isOrderStageAtLeast(
   order: OrderStageInput | null | undefined,
@@ -148,21 +126,6 @@ export function sanitizeOrderPatchAgainstRegression(
 
   return safe;
 }
-
-export type OrderStageInput = {
-  id?: string;
-  status?: unknown;
-  paymentStatus?: unknown;
-  deliveryStatus?: unknown;
-  driverId?: unknown;
-  assignedDriverId?: unknown;
-  pickedUpAt?: unknown;
-  pickedUpAtMs?: number | null;
-  deliveredAt?: unknown;
-  deliveredAtMs?: number | null;
-  cancelledAt?: unknown;
-  cancelledAtMs?: number | null;
-};
 
 function norm(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -301,12 +264,214 @@ export function deriveOrderStage(order: OrderStageInput | null | undefined): Der
   return 'awaiting_payment';
 }
 
+/** Kitchen action rail status for OrderActions (derived from stage only). */
+export type RestaurantMerchantActionStatus =
+  | 'pending'
+  | 'accepted'
+  | 'preparing'
+  | 'ready'
+  | 'picked_up'
+  | 'delivered';
+
+export type RestaurantOrderPresentation = {
+  derivedStage: DerivedOrderStage;
+  badgeText: string;
+  badgeColor: { bg: string; fg: string };
+  courierBadgeText: string;
+  actionText: string | null;
+  canAccept: boolean;
+  canReject: boolean;
+  canStartPreparing: boolean;
+  canReady: boolean;
+  canAssignDriver: boolean;
+  showPaymentBadge: boolean;
+  merchantActionStatus: RestaurantMerchantActionStatus;
+  driverDetailText: string;
+};
+
+/** Sub-kitchen step within `preparing` — uses fulfillment timestamps only, not status fields. */
+export function restaurantKitchenSubstage(
+  order: OrderStageInput,
+): 'accepted' | 'preparing' | null {
+  if (deriveOrderStage(order) !== 'preparing') return null;
+  if (hasTimestamp(order.preparedAt, order.preparedAtMs)) return 'preparing';
+  if (hasTimestamp(order.acceptedAt, order.acceptedAtMs)) return 'accepted';
+  return 'accepted';
+}
+
+function badgeTextForDerivedStage(
+  stage: DerivedOrderStage,
+  kitchenSubstage: 'accepted' | 'preparing' | null,
+): string {
+  switch (stage) {
+    case 'awaiting_payment':
+      return 'Waiting Payment';
+    case 'awaiting_restaurant':
+      return 'Awaiting Restaurant';
+    case 'preparing':
+      return kitchenSubstage === 'preparing' ? 'Preparing' : 'Accepted';
+    case 'driver_assignment':
+      return 'Ready For Pickup';
+    case 'driver_assigned':
+      return 'Driver Assigned';
+    case 'picked_up':
+      return 'Picked Up';
+    case 'delivered':
+      return 'Delivered';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return 'Order';
+  }
+}
+
+function badgeColorForDerivedStage(stage: DerivedOrderStage): { bg: string; fg: string } {
+  switch (stage) {
+    case 'awaiting_payment':
+    case 'awaiting_restaurant':
+      return { bg: '#FEF3C7', fg: '#92400E' };
+    case 'preparing':
+      return { bg: '#DBEAFE', fg: '#1D4ED8' };
+    case 'driver_assignment':
+      return { bg: '#DCFCE7', fg: '#166534' };
+    case 'driver_assigned':
+      return { bg: '#DBEAFE', fg: '#1D4ED8' };
+    case 'picked_up':
+      return { bg: '#E0E7FF', fg: '#3730A3' };
+    case 'delivered':
+      return { bg: '#E5E7EB', fg: '#374151' };
+    case 'cancelled':
+      return { bg: '#FEE2E2', fg: '#991B1B' };
+    default:
+      return { bg: '#F1F5F9', fg: '#475569' };
+  }
+}
+
+function courierBadgeTextForStage(stage: DerivedOrderStage): string {
+  switch (stage) {
+    case 'awaiting_payment':
+      return 'Awaiting payment';
+    case 'awaiting_restaurant':
+      return 'Payment confirmed';
+    case 'preparing':
+      return 'In kitchen';
+    case 'driver_assignment':
+      return 'Awaiting driver';
+    case 'driver_assigned':
+      return 'Driver en route';
+    case 'picked_up':
+      return 'Out for delivery';
+    case 'delivered':
+      return 'Delivered';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return 'Order';
+  }
+}
+
+function merchantActionStatusForPresentation(
+  stage: DerivedOrderStage,
+  kitchenSubstage: 'accepted' | 'preparing' | null,
+): RestaurantMerchantActionStatus {
+  switch (stage) {
+    case 'awaiting_payment':
+    case 'awaiting_restaurant':
+      return 'pending';
+    case 'preparing':
+      return kitchenSubstage === 'preparing' ? 'preparing' : 'accepted';
+    case 'driver_assignment':
+    case 'driver_assigned':
+      return 'ready';
+    case 'picked_up':
+      return 'picked_up';
+    case 'delivered':
+    case 'cancelled':
+      return 'delivered';
+    default:
+      return 'pending';
+  }
+}
+
+function primaryActionTextForPresentation(
+  stage: DerivedOrderStage,
+  kitchenSubstage: 'accepted' | 'preparing' | null,
+  flags: Pick<
+    RestaurantOrderPresentation,
+    'canAccept' | 'canStartPreparing' | 'canReady' | 'canAssignDriver'
+  >,
+): string | null {
+  if (flags.canAccept) return 'Accept Order';
+  if (flags.canStartPreparing) return 'Start Preparing';
+  if (flags.canReady) return 'Mark Ready';
+  if (flags.canAssignDriver) return 'Assign Driver';
+  if (stage === 'driver_assignment') return 'Waiting for Driver';
+  if (stage === 'picked_up') return 'Out for Delivery';
+  if (stage === 'delivered' || stage === 'cancelled') return null;
+  if (stage === 'preparing' && kitchenSubstage === 'accepted') return 'Start Preparing';
+  return null;
+}
+
+function driverDetailTextForOrder(order: OrderStageInput, stage: DerivedOrderStage): string {
+  if (hasDriver(order)) {
+    const name =
+      typeof order.driverName === 'string' ? order.driverName.trim() : '';
+    if (name) return `Driver: ${name}`;
+    const id = order.driverId ?? order.assignedDriverId;
+    return typeof id === 'string' ? `Driver: ${id.slice(0, 8)}` : 'Driver assigned';
+  }
+  if (stage === 'driver_assignment') return 'Awaiting driver';
+  return 'No driver assigned';
+}
+
+/**
+ * Single restaurant UI selector — derive labels and actions from canonical stage only.
+ */
+export function getRestaurantOrderPresentation(
+  order: OrderStageInput | null | undefined,
+): RestaurantOrderPresentation {
+  const derivedStage = deriveOrderStage(order);
+  const kitchenSubstage = order ? restaurantKitchenSubstage(order) : null;
+
+  const canAccept = derivedStage === 'awaiting_restaurant';
+  const canReject =
+    derivedStage === 'awaiting_restaurant' ||
+    (derivedStage === 'preparing' && kitchenSubstage === 'accepted');
+  const canStartPreparing =
+    derivedStage === 'preparing' && kitchenSubstage === 'accepted';
+  const canReady = derivedStage === 'preparing' && kitchenSubstage === 'preparing';
+  const canAssignDriver = derivedStage === 'driver_assignment';
+
+  const flags = { canAccept, canStartPreparing, canReady, canAssignDriver };
+
+  return {
+    derivedStage,
+    badgeText: badgeTextForDerivedStage(derivedStage, kitchenSubstage),
+    badgeColor: badgeColorForDerivedStage(derivedStage),
+    courierBadgeText: courierBadgeTextForStage(derivedStage),
+    actionText: primaryActionTextForPresentation(derivedStage, kitchenSubstage, flags),
+    canAccept,
+    canReject,
+    canStartPreparing,
+    canReady,
+    canAssignDriver,
+    showPaymentBadge: derivedStage === 'awaiting_payment',
+    merchantActionStatus: merchantActionStatusForPresentation(
+      derivedStage,
+      kitchenSubstage,
+    ),
+    driverDetailText: order
+      ? driverDetailTextForOrder(order, derivedStage)
+      : 'No driver assigned',
+  };
+}
+
 export function logOrderStage(
   order: OrderStageInput | null | undefined,
   meta?: { hasPendingWrites?: boolean },
 ): DerivedOrderStage {
   const derivedStage = deriveOrderStage(order);
-  if (__DEV__) {
+  if (ENABLE_ORDER_TRACE) {
     const row = order as Record<string, unknown> | null | undefined;
     console.log('[ORDER STAGE]', {
       orderId: order?.id ?? null,
@@ -321,105 +486,31 @@ export function logOrderStage(
   return derivedStage;
 }
 
-/** Kitchen header badge — payment-aware (never "Awaiting payment" when paid). */
+/** @deprecated Use {@link getRestaurantOrderPresentation}.badgeText */
 export function restaurantStageBadgeLabel(
   stage: DerivedOrderStage,
   order?: OrderStageInput | null,
 ): string {
-  const paid = order ? isPaid(order.paymentStatus) : false;
-  const status = order ? kitchenStatus(order) : '';
-
-  if (stage === 'awaiting_restaurant' && paid) {
-    if (
-      status === 'awaiting_payment' ||
-      status === 'payment_confirmed' ||
-      status === 'pending' ||
-      status === 'pending_driver'
-    ) {
-      return 'Awaiting Restaurant';
-    }
-  }
-
-  switch (stage) {
-    case 'awaiting_payment':
-      return 'Awaiting payment';
-    case 'awaiting_restaurant':
-      return paid ? 'Awaiting Restaurant' : 'Pending';
-    case 'preparing':
-      return 'Preparing';
-    case 'driver_assignment':
-      return 'Ready for pickup';
-    case 'driver_assigned':
-      return 'Driver assigned';
-    case 'picked_up':
-      return 'Out for delivery';
-    case 'delivered':
-      return 'Delivered';
-    case 'cancelled':
-      return 'Cancelled';
-    default:
-      return 'Order';
-  }
+  if (order) return getRestaurantOrderPresentation(order).badgeText;
+  return badgeTextForDerivedStage(stage, null);
 }
 
+/** @deprecated Use {@link getRestaurantOrderPresentation}.badgeColor */
 export function restaurantKitchenBadgeTone(
   stage: DerivedOrderStage,
   order?: OrderStageInput | null,
 ): { bg: string; fg: string } {
-  const paid = order ? isPaid(order.paymentStatus) : false;
-  if (stage === 'awaiting_restaurant' && paid) {
-    return { bg: '#DCFCE7', fg: '#166534' };
-  }
-  if (stage === 'preparing' || stage === 'driver_assigned') {
-    return { bg: '#DBEAFE', fg: '#1D4ED8' };
-  }
-  if (stage === 'awaiting_payment' || (stage === 'awaiting_restaurant' && !paid)) {
-    return { bg: '#FEF3C7', fg: '#92400E' };
-  }
-  if (stage === 'driver_assignment') {
-    return { bg: '#DCFCE7', fg: '#166534' };
-  }
-  if (stage === 'picked_up') {
-    return { bg: '#E0E7FF', fg: '#3730A3' };
-  }
-  if (stage === 'delivered') {
-    return { bg: '#E5E7EB', fg: '#374151' };
-  }
-  if (stage === 'cancelled') {
-    return { bg: '#FEE2E2', fg: '#991B1B' };
-  }
-  return { bg: '#F1F5F9', fg: '#475569' };
+  if (order) return getRestaurantOrderPresentation(order).badgeColor;
+  return badgeColorForDerivedStage(stage);
 }
 
+/** @deprecated Use {@link getRestaurantOrderPresentation}.courierBadgeText */
 export function restaurantCourierBadgeLabel(
   stage: DerivedOrderStage,
   order?: OrderStageInput | null,
 ): string {
-  const paid = order ? isPaid(order.paymentStatus) : false;
-  if (stage === 'awaiting_restaurant' && paid) {
-    return 'Payment confirmed';
-  }
-
-  switch (stage) {
-    case 'awaiting_payment':
-      return 'Awaiting payment';
-    case 'awaiting_restaurant':
-      return 'Awaiting restaurant';
-    case 'preparing':
-      return 'Preparing';
-    case 'driver_assignment':
-      return 'Awaiting driver';
-    case 'driver_assigned':
-      return 'Driver assigned';
-    case 'picked_up':
-      return 'Picked up';
-    case 'delivered':
-      return 'Delivered';
-    case 'cancelled':
-      return 'Cancelled';
-    default:
-      return 'Order';
-  }
+  if (order) return getRestaurantOrderPresentation(order).courierBadgeText;
+  return courierBadgeTextForStage(stage);
 }
 
 export function customerStageTitle(stage: DerivedOrderStage): string {

@@ -1,5 +1,7 @@
-import type { OrderPaidStateInput } from '@/lib/orderPaidState';
-import { isOrderFulfilledForPaidPatch } from '@/lib/orderPaidState';
+import {
+  isOrderFulfilledForPaidPatch,
+  type OrderPaidStateInput,
+} from '@/lib/orderSharedTypes';
 
 function hasTimestamp(value: unknown): boolean {
   if (value == null) return false;

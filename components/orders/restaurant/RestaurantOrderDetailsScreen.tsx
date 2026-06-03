@@ -1,15 +1,15 @@
 import AppHeader from '@/components/AppHeader';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
-import { orderRoomHref } from '@/services/orderChat';
-import type { OrderStatus } from '@/services/orderService';
 import {
-  acceptRestaurantOrder,
-  rejectOrder,
-  updateOrderStatus,
-  type RestaurantOrder,
-} from '@/services/orderService';
-import { deriveOrderStage, restaurantStageBadgeLabel } from '@/services/orderStage';
+  applyRestaurantKitchenAction,
+  primeRestaurantKitchenOptimistic,
+  type RestaurantKitchenAction,
+} from '@/lib/restaurantKitchenActions';
+import { applyStageLockToOrder, clearOrderStageLock } from '@/lib/orderStageLock';
+import { orderRoomHref } from '@/services/orderChat';
+import { rejectOrder, type RestaurantOrder } from '@/services/orderService';
+import { getRestaurantOrderPresentation } from '@/services/orderStage';
 import { formatAddress, formatOrderStatus, formatRestaurantName } from '@/utils/orderFormatters';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
@@ -33,6 +33,7 @@ function formatElapsed(sec: number): string {
 export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [kitchenOverlay, setKitchenOverlay] = useState<Partial<RestaurantOrder>>({});
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -40,48 +41,52 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
     return () => clearInterval(t);
   }, []);
 
+  const displayOrder = useMemo(
+    () => applyStageLockToOrder({ ...order, ...kitchenOverlay }),
+    [order, kitchenOverlay],
+  );
+
+  const presentation = useMemo(
+    () => getRestaurantOrderPresentation(displayOrder),
+    [displayOrder],
+  );
+
   const prepSeconds = useMemo(() => {
     if (!order.acceptedAtMs) return 0;
     if (
-      order.status === 'delivered' ||
-      order.status === 'cancelled' ||
-      order.status === 'rejected'
+      presentation.derivedStage === 'delivered' ||
+      presentation.derivedStage === 'cancelled'
     ) {
       return 0;
     }
     return Math.max(0, Math.floor((now - order.acceptedAtMs) / 1000));
-  }, [now, order.acceptedAtMs, order.status]);
+  }, [now, order.acceptedAtMs, presentation.derivedStage]);
 
-  const stage = deriveOrderStage(order);
-
-  const canAccept = stage === 'awaiting_restaurant';
-
-  const canReject =
-    stage === 'awaiting_restaurant' || stage === 'preparing';
-
-  const canMarkPreparing =
-    stage === 'preparing' &&
-    order.status !== 'preparing' &&
-    order.status !== 'ready' &&
-    order.status !== 'ready_for_pickup';
-
-  const canMarkReady = stage === 'preparing' && order.status === 'preparing';
-
-  async function run(label: string, fn: () => Promise<void>) {
+  async function runKitchen(action: RestaurantKitchenAction, label: string) {
     if (busy) return;
     setBusy(true);
+    const optimisticPatch = primeRestaurantKitchenOptimistic(order.id, action);
+    setKitchenOverlay(optimisticPatch);
     try {
-      await fn();
+      const result = await applyRestaurantKitchenAction(
+        order.id,
+        action,
+        displayOrder,
+      );
+      if (result === 'skipped_illegal') {
+        setKitchenOverlay({});
+        clearOrderStageLock(order.id);
+        showError('This action is not available for the current order state.');
+        return;
+      }
       showSuccess(label);
     } catch {
+      setKitchenOverlay({});
+      clearOrderStageLock(order.id);
       showError('Could not update order');
     } finally {
       setBusy(false);
     }
-  }
-
-  async function patchStatus(next: OrderStatus) {
-    await updateOrderStatus(order.id, next);
   }
 
   if (!isOrderFresh(order)) {
@@ -105,7 +110,7 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
         <View style={styles.header}>
           <Text style={styles.kicker}>Incoming</Text>
           <Text style={styles.title}>#{order.id.slice(0, 8)}</Text>
-          <Text style={styles.status}>{restaurantStageBadgeLabel(stage)}</Text>
+          <Text style={styles.status}>{presentation.badgeText}</Text>
           {order.acceptedAtMs && prepSeconds > 0 ? (
             <Text style={styles.timer}>Prep timer · {formatElapsed(prepSeconds)}</Text>
           ) : (
@@ -157,45 +162,56 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
         </View>
 
         <View style={styles.actions}>
-          {canAccept ? (
+          {presentation.canAccept ? (
             <Pressable
               style={styles.acceptBtn}
               disabled={busy}
-              onPress={() => void run('Order accepted', () => acceptRestaurantOrder(order.id))}
+              onPress={() => void runKitchen('accept', 'Order accepted')}
             >
               {busy ? <ActivityIndicator color="#0f172a" /> : <Text style={styles.acceptText}>Accept order</Text>}
             </Pressable>
           ) : null}
 
-          {canReject ? (
+          {presentation.canReject ? (
             <Pressable
               style={styles.rejectBtn}
               disabled={busy}
               onPress={() =>
-                void run('Order rejected', async () => {
-                  await rejectOrder(order.id);
-                })
+                void (async () => {
+                  if (busy) return;
+                  setBusy(true);
+                  try {
+                    await rejectOrder(order.id);
+                    clearOrderStageLock(order.id);
+                    setKitchenOverlay({});
+                    showSuccess('Order rejected');
+                  } catch {
+                    showError('Could not update order');
+                  } finally {
+                    setBusy(false);
+                  }
+                })()
               }
             >
               <Text style={styles.rejectText}>Reject</Text>
             </Pressable>
           ) : null}
 
-          {canMarkPreparing ? (
+          {presentation.canStartPreparing ? (
             <Pressable
               style={styles.secondaryBtn}
               disabled={busy}
-              onPress={() => void run('Preparing', () => patchStatus('preparing'))}
+              onPress={() => void runKitchen('preparing', 'Preparing')}
             >
               <Text style={styles.secondaryText}>Start preparing</Text>
             </Pressable>
           ) : null}
 
-          {canMarkReady && order.status !== 'ready_for_pickup' ? (
+          {presentation.canReady ? (
             <Pressable
               style={styles.readyBtn}
               disabled={busy}
-              onPress={() => void run('Ready for pickup', () => patchStatus('ready_for_pickup'))}
+              onPress={() => void runKitchen('ready', 'Ready for pickup')}
             >
               <Text style={styles.readyText}>Mark ready for pickup</Text>
             </Pressable>

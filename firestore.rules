@@ -1291,14 +1291,129 @@ service cloud.firestore {
           || request.resource.data.updatedAt == request.time
         );
     }
-    function customerMarketplaceCancelAllowed(before, after) {
+    /** Terminal marketplace orders — no further lifecycle patches. */
+    function marketplaceOrderIsTerminalForModify(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return status == 'cancelled'
+        || status == 'rejected'
+        || status == 'delivered'
+        || status == 'expired'
+        || status == 'completed'
+        || ds == 'cancelled'
+        || ds == 'delivered';
+    }
+    function marketplaceOrderHasDriverAssigned(d) {
+      return (d.get('driverId', '') is string && d.get('driverId', '').size() > 0)
+        || (
+          d.get('assignedDriverId', '') is string
+          && d.get('assignedDriverId', '').size() > 0
+        );
+    }
+    function marketplaceOrderCancelBlockedStage(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return status == 'ready'
+        || status == 'ready_for_pickup'
+        || ds == 'ready'
+        || ds == 'ready_for_pickup'
+        || status == 'picked_up'
+        || status == 'on_the_way'
+        || status == 'arrived_customer'
+        || ds == 'picked_up'
+        || ds == 'on_the_way';
+    }
+    /**
+     * Restaurant cancel: awaiting_restaurant, accepted, preparing only.
+     * Blocks ready_for_pickup, driver-assigned, picked up, delivered.
+     */
+    function marketplaceOrderRestaurantCancelStageOk(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return !marketplaceOrderIsTerminalForModify(d)
+        && !marketplaceOrderHasDriverAssigned(d)
+        && !marketplaceOrderCancelBlockedStage(d)
+        && (
+          status == 'payment_confirmed'
+          || status == 'pending'
+          || status == 'pending_driver'
+          || status == 'accepted'
+          || status == 'restaurant_accepted'
+          || status == 'preparing'
+          || ds == 'accepted'
+          || ds == 'preparing'
+          || (status == 'awaiting_payment' && marketplaceOrderPaidOk(d))
+        );
+    }
+    /**
+     * Customer cancel: only before kitchen enters preparing (no driver / ready states).
+     */
+    function marketplaceOrderCustomerCancelStageOk(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return !marketplaceOrderIsTerminalForModify(d)
+        && !marketplaceOrderHasDriverAssigned(d)
+        && !marketplaceOrderCancelBlockedStage(d)
+        && status != 'preparing'
+        && ds != 'preparing'
+        && (
+          status == 'awaiting_payment'
+          || status == 'payment_processing'
+          || status == 'payment_confirmed'
+          || status == 'pending'
+          || status == 'pending_driver'
+          || status == 'accepted'
+          || status == 'restaurant_accepted'
+          || ds == 'accepted'
+        );
+    }
+    /** Drivers may not cancel marketplace restaurant lifecycle (claim/active patches only). */
+    function orderCancelActorIsDriverOnly(before) {
+      return isDriver()
+        && driverAssignedToMarketplaceOrder(before)
+        && primaryUidFromOrder(before) != request.auth.uid
+        && !isRestaurantVendorActor(before);
+    }
+    /**
+     * Role-aware cancel eligibility (restaurant vendor or order customer).
+     * Uses restaurantId, customer uid, and driver assignment — not broad allow update.
+     */
+    function canCancelOrder(before) {
       return isSignedIn()
-        && primaryUidFromOrder(before) == request.auth.uid
-        && before.status != 'cancelled'
-        && before.status != 'delivered'
-        && before.status != 'rejected'
+        && !isCurrentUserRestricted()
+        && !marketplaceOrderIsTerminalForModify(before)
+        && !orderCancelActorIsDriverOnly(before)
+        && (
+          (
+            isRestaurantVendorActor(before)
+            && marketplaceOrderRestaurantCancelStageOk(before)
+          )
+          || (
+            primaryUidFromOrder(before) == request.auth.uid
+            && marketplaceOrderCustomerCancelStageOk(before)
+          )
+        );
+    }
+    function marketplaceOrderCancelImmutableOk(before, after) {
+      return before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && orderRestaurantId(before) == orderRestaurantId(after)
+        && before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('items', []) == after.get('items', [])
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('driverId', '') == after.get('driverId', '')
+        && before.get('assignedDriverId', '') == after.get('assignedDriverId', '');
+    }
+    /** Marketplace cancel patch — restaurant dashboard + customer profile. */
+    function marketplaceOrderCancelPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return canCancelOrder(before)
         && after.status == 'cancelled'
         && after.deliveryStatus == 'cancelled'
+        && after.get('cancelledBy', '') == request.auth.uid
+        && marketplaceOrderCancelImmutableOk(before, after)
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
@@ -1308,15 +1423,7 @@ service cloud.firestore {
             'cancelledAt',
             'cancelledBy',
             'updatedAt'
-          ])
-        && before.get('paymentStatus', '') == after.get('paymentStatus', '')
-        && before.get('restaurantId', '') == after.get('restaurantId', '')
-        && before.get('userId', '') == after.get('userId', '')
-        && before.get('items', []) == after.get('items', [])
-        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
-        && before.get('driverId', null) == after.get('driverId', null)
-        && before.get('assignedDriverId', null) == after.get('assignedDriverId', null)
-        && after.get('cancelledBy', '') == request.auth.uid;
+          ]);
     }
     /** Customer uid for marketplace payment patches (customerUid alias + legacy owner fields). */
     function orderCustomerUid(d) {
@@ -1411,24 +1518,49 @@ service cloud.firestore {
           'driverName','driverPhone','driverVehicle','driver','notes','rejectionReason'
         ]);
     }
-    /** Query-safe driver write identity (no users/{uid} get — saves rule eval budget). */
-    function isDriverForClaimWrite() {
-      return authTokenRoleIsDriver() || hasDriverAccountDoc();
+    /** Driver claim/active writes — token role, drivers/{uid}, or users/{uid}.role == driver. */
+    function isAuthenticatedDriverForOrderWrite() {
+      return isDriver();
     }
     function driverClaimAllowedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'driverId','assignedDriverId','driverName','driverPhone','driverVehicle','driver',
-        'deliveryStatus','acceptedAt','estimatedDeliveryTime','estimatedDeliveryMinutes',
-        'updatedAt','deliveryPin'
+        'driverId',
+        'assignedDriverId',
+        'driverName',
+        'driverPhone',
+        'deliveryStatus',
+        'driver',
+        'acceptedAt',
+        'updatedAt',
+        'deliveryPin',
+        'estimatedDeliveryMinutes',
+        'estimatedDeliveryTime',
+        'updatedBy',
       ]);
     }
-    function driverClaimDriverBlobOk(d) {
-      let blob = d.get('driver', {});
-      return blob is map
-        && blob.get('id', '') == request.auth.uid
-        && blob.get('name', '') is string
-        && blob.get('name', '').size() > 0
-        && blob.get('name', '').size() <= 120;
+    /** Claim transition: courier pending → driver_assigned only. */
+    function driverClaimDeliveryTransitionOk(beforeDs, afterDs) {
+      return beforeDs == 'pending' && afterDs == 'driver_assigned';
+    }
+    function driverClaimDriverBlobOk(before, after) {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['driver'])
+        || (
+          after.get('driver', {}) is map
+          && after.get('driver', {}).get('id', '') == request.auth.uid
+          && after.get('driver', {}).get('name', '') is string
+          && after.get('driver', {}).get('name', '').size() > 0
+          && after.get('driver', {}).get('name', '').size() <= 120
+        );
+    }
+    function driverClaimUpdatedByOk() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['updatedBy'])
+        || (
+          request.resource.data.updatedBy is string
+          && request.resource.data.updatedBy.size() > 0
+          && request.resource.data.updatedBy.size() <= 160
+        );
     }
     function driverClaimImmutableFieldsOk(before, after) {
       return before.get('paymentStatus', '') == after.get('paymentStatus', '')
@@ -1446,27 +1578,29 @@ service cloud.firestore {
     function isValidDriverClaim() {
       let before = resource.data;
       let after = request.resource.data;
-      return isDriverForClaimWrite()
+      let beforeDs = before.get('deliveryStatus', '');
+      let afterDs = after.get('deliveryStatus', '');
+      return isAuthenticatedDriverForOrderWrite()
         && before.get('deliveryType', '') == 'delivery'
         && marketplaceOrderPaidOk(before)
         && before.get('marketplaceArchived', false) != true
         && before.get('expired', false) != true
         && marketplaceOrderNotTerminalForClaim(before)
         && noDriverAssignedYet(before)
-        && driverMarketplaceClaimBeforeStatusOk(before.get('deliveryStatus', ''))
+        && driverClaimDeliveryTransitionOk(beforeDs, afterDs)
         && after.get('driverId', '') == request.auth.uid
         && after.get('assignedDriverId', '') == request.auth.uid
         && after.get('driverId', '') == after.get('assignedDriverId', '')
-        && after.get('deliveryStatus', '') == 'driver_assigned'
         && after.get('status', '') == before.get('status', '')
         && driverClaimAllowedKeys()
-        && driverClaimDriverBlobOk(after)
+        && driverClaimDriverBlobOk(before, after)
+        && driverClaimUpdatedByOk()
         && driverClaimImmutableFieldsOk(before, after);
     }
     function isValidDriverActivePatch() {
       let before = resource.data;
       let after = request.resource.data;
-      return isDriverForClaimWrite()
+      return isAuthenticatedDriverForOrderWrite()
         && before.get('deliveryType', '') == 'delivery'
         && driverAssignedToMarketplaceOrder(before)
         && !noDriverAssignedYet(before)
@@ -1692,7 +1826,7 @@ service cloud.firestore {
           )
           || (
             !isCurrentUserRestricted()
-            && customerMarketplaceCancelAllowed(resource.data, request.resource.data)
+            && marketplaceOrderCancelPatchOk()
           )
           || restaurantDashboardPatchOk()
           || isSwipeAcceptUpdate()

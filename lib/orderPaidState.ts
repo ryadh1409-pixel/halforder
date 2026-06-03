@@ -1,86 +1,29 @@
 import { hasFulfillmentProgressMarkers } from '@/lib/orderFulfillmentSignals';
+import {
+  FULFILLED_KITCHEN_STATUSES,
+  isOrderFulfilledForPaidPatch,
+  orderPaymentStatusString,
+  orderStatusString,
+  POST_PAYMENT_ORDER_STATUS,
+  PRE_PAYMENT_ORDER_STATUSES,
+  type OrderPaidStateInput,
+} from '@/lib/orderSharedTypes';
 import { sanitizeOrderPatchAgainstRegression } from '@/services/orderStage';
+
+export {
+  FULFILLED_KITCHEN_STATUSES,
+  isOrderFulfilledForPaidPatch,
+  orderPaymentStatusString,
+  orderStatusString,
+  POST_PAYMENT_ORDER_STATUS,
+  PRE_PAYMENT_ORDER_STATUSES,
+  type OrderPaidStateInput,
+} from '@/lib/orderSharedTypes';
 
 /**
  * Canonical post-Stripe-payment order fields.
  * Webhook + repair Cloud Function must stay in sync with this module.
  */
-
-/** Order `status` after successful payment — restaurant kitchen queue. */
-export const POST_PAYMENT_ORDER_STATUS = 'payment_confirmed' as const;
-
-export const PRE_PAYMENT_ORDER_STATUSES = new Set([
-  'awaiting_payment',
-  'pending_payment',
-  'payment_processing',
-  'payment_failed',
-]);
-
-/** Kitchen/courier stages where paid webhooks must not touch fulfillment fields. */
-export const FULFILLED_KITCHEN_STATUSES = new Set([
-  'accepted',
-  'restaurant_accepted',
-  'preparing',
-  'ready',
-  'ready_for_pickup',
-  'picked_up',
-  'on_the_way',
-  'arrived_customer',
-  'delivered',
-  'completed',
-]);
-
-export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolean {
-  const status = orderStatusString(order.status).toLowerCase();
-  if (FULFILLED_KITCHEN_STATUSES.has(status)) {
-    return true;
-  }
-  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
-  return (
-    courier === 'accepted' ||
-    courier === 'preparing' ||
-    courier === 'ready_for_pickup' ||
-    courier === 'driver_assigned' ||
-    courier === 'picked_up' ||
-    courier === 'delivered'
-  );
-}
-
-export type OrderPaidStateInput = {
-  status?: unknown;
-  paymentStatus?: unknown;
-  deliveryStatus?: unknown;
-  deliveryType?: unknown;
-};
-
-export function orderStatusString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-export function orderPaymentStatusString(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
-/** True when Stripe paid but fulfillment status was never advanced. */
-export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
-  const paymentStatus = orderPaymentStatusString(order.paymentStatus);
-  const status = orderStatusString(order.status);
-  if (paymentStatus !== 'paid' || !PRE_PAYMENT_ORDER_STATUSES.has(status)) {
-    return false;
-  }
-  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
-  if (
-    courier === 'accepted' ||
-    courier === 'preparing' ||
-    courier === 'ready_for_pickup' ||
-    courier === 'driver_assigned' ||
-    courier === 'picked_up' ||
-    courier === 'delivered'
-  ) {
-    return false;
-  }
-  return true;
-}
 
 /** Resolve target `status` after payment without rewinding active fulfillment. */
 export function resolvePostPaymentOrderStatus(
@@ -183,6 +126,27 @@ export function buildOrderPaidStatePatch(
   appendPaidStateMetadata(patch, input);
 
   return sanitizeOrderPatchAgainstRegression(existing, patch);
+}
+
+/** True when Stripe paid but fulfillment status was never advanced. */
+export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
+  const paymentStatus = orderPaymentStatusString(order.paymentStatus);
+  const status = orderStatusString(order.status);
+  if (paymentStatus !== 'paid' || !PRE_PAYMENT_ORDER_STATUSES.has(status)) {
+    return false;
+  }
+  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
+  if (
+    courier === 'accepted' ||
+    courier === 'preparing' ||
+    courier === 'ready_for_pickup' ||
+    courier === 'driver_assigned' ||
+    courier === 'picked_up' ||
+    courier === 'delivered'
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /** Customer-facing label when payment succeeded but legacy status lags. */

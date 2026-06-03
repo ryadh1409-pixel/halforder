@@ -27,6 +27,8 @@ import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOr
 import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
+import { showRestaurantAcceptedCancelAlert } from '@/lib/customerOrderCancelAlert';
+import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
 import { navigateForRole } from '@/lib/navigation';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
@@ -648,13 +650,12 @@ export default function ProfileScreen() {
   );
 
   const handleCancelProfileOrder = useCallback(
-    async (order: ProfileOrderRow) => {
+    async (order: ProfileOrderRow): Promise<boolean> => {
       const currentUid = auth.currentUser?.uid;
       if (!currentUid) {
         showError('Please sign in again.');
-        return;
+        return false;
       }
-      const orderRef = doc(db, 'orders', order.id);
       const payload = {
         status: 'cancelled',
         deliveryStatus: 'cancelled',
@@ -670,9 +671,20 @@ export default function ProfileScreen() {
           functionName: 'handleCancelProfileOrder',
         });
         showSuccess('Order cancelled successfully');
+        return true;
       } catch (e) {
         logError(e);
-        showError(getUserFriendlyError(e));
+        const cancelErr = resolveCustomerCancelOrderError(e, {
+          status: order.status,
+          deliveryStatus: order.deliveryStatus,
+          paymentStatus: order.paymentStatus,
+        });
+        if (cancelErr === 'restaurant_accepted') {
+          showRestaurantAcceptedCancelAlert();
+        } else {
+          showError(getUserFriendlyError(e));
+        }
+        return false;
       } finally {
         setProfileOrdersCancellingIds((prev) => {
           const next = { ...prev };

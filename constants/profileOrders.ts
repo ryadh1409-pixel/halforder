@@ -1,3 +1,6 @@
+import { canCustomerCancelMarketplaceOrder } from '@/lib/customerOrderCancelUx';
+import type { OrderStageInput } from '@/services/orderStage';
+
 export type ProfileOrderBadgeTone = 'orange' | 'blue' | 'green' | 'red' | 'neutral';
 
 export function profileOrderStatusLabel(
@@ -119,7 +122,8 @@ export function profileOrderStatusActive(
   );
 }
 
-export function canCancelProfileOrder(status: string, deliveryStatus?: string | null): boolean {
-  const ds = (deliveryStatus ?? '').trim();
-  return status !== 'delivered' && ds !== 'delivered' && status !== 'cancelled' && status !== 'rejected';
+export function canCancelProfileOrder(
+  order: OrderStageInput & { status?: string; deliveryStatus?: string | null; paymentStatus?: string | null },
+): boolean {
+  return canCustomerCancelMarketplaceOrder(order);
 }

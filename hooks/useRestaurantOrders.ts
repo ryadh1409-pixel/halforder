@@ -10,15 +10,17 @@ import {
   hideOrderForRestaurant,
   restoreOrderForRestaurant,
 } from '@/services/orderArchiveService';
-import {
-  filterFreshRestaurantOrders,
-  isOrderFresh,
-} from '@/lib/restaurantOrderFreshness';
+import { applyStageLockToOrder } from '@/lib/orderStageLock';
+import { areRestaurantOrderListsEqual } from '@/lib/restaurantOrderListDedup';
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import {
   resetRestaurantOrderCleanupState,
   scheduleRestaurantOrderCleanup,
 } from '@/services/orderCleanupService';
-import { getOrders, type RestaurantOrder } from '@/services/orderService';
+import {
+  subscribeActiveRestaurantOrders,
+  type RestaurantOrder,
+} from '@/services/orderService';
 
 export type RestaurantOrdersOptimisticMap = Record<
   string,
@@ -33,6 +35,10 @@ export type UseRestaurantOrdersOptions = {
   enableAutoCleanup?: boolean;
 };
 
+function normField(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
 export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   const {
     restaurantId,
@@ -45,6 +51,9 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<RestaurantOrdersOptimisticMap>({});
+  const [kitchenOptimistic, setKitchenOptimistic] = useState<
+    Record<string, Partial<RestaurantOrder>>
+  >({});
 
   const lastCleanupScheduleKeyRef = useRef<string>('');
 
@@ -53,23 +62,54 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       ? restaurantTimeZone.trim()
       : undefined;
 
+  const mergeKitchenOptimistic = useCallback(
+    (order: RestaurantOrder): RestaurantOrder => {
+      const patch = kitchenOptimistic[order.id];
+      const merged = patch ? { ...order, ...patch } : order;
+      return applyStageLockToOrder(merged);
+    },
+    [kitchenOptimistic],
+  );
+
+  const applyKitchenOptimistic = useCallback(
+    (orderId: string, patch: Partial<RestaurantOrder>) => {
+      setKitchenOptimistic((prev) => ({
+        ...prev,
+        [orderId]: { ...(prev[orderId] ?? {}), ...patch },
+      }));
+    },
+    [],
+  );
+
+  const clearKitchenOptimistic = useCallback((orderId: string) => {
+    setKitchenOptimistic((prev) => {
+      if (!prev[orderId]) return prev;
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (!restaurantId) {
       setOrders([]);
       setLoading(false);
       setError(null);
       setOptimistic({});
+      setKitchenOptimistic({});
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const unsub = getOrders(
+    const unsub = subscribeActiveRestaurantOrders(
       restaurantId,
       (rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        setOrders(filterFreshRestaurantOrders(list));
+        setOrders((prev) =>
+          areRestaurantOrderListsEqual(prev, list) ? prev : list,
+        );
         setLoading(false);
         setError(null);
 
@@ -88,7 +128,31 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       resetRestaurantOrderCleanupState(restaurantId);
       lastCleanupScheduleKeyRef.current = '';
     };
-  }, [restaurantId, timeZone, enableAutoCleanup, filter]);
+  }, [restaurantId, timeZone, enableAutoCleanup]);
+
+  useEffect(() => {
+    if (!orders.length) return;
+    setKitchenOptimistic((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        const order = orders.find((o) => o.id === id);
+        const patch = next[id];
+        if (!order || !patch) continue;
+        const statusMatch =
+          patch.status === undefined ||
+          normField(order.status) === normField(patch.status);
+        const deliveryMatch =
+          patch.deliveryStatus === undefined ||
+          normField(order.deliveryStatus) === normField(patch.deliveryStatus);
+        if (statusMatch && deliveryMatch) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [orders]);
 
   const clearOptimistic = useCallback((orderId: string) => {
     setOptimistic((prev) => {
@@ -106,8 +170,13 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
     [],
   );
 
+  const displayOrders = useMemo(
+    () => orders.map(mergeKitchenOptimistic),
+    [orders, mergeKitchenOptimistic],
+  );
+
   const visibleOrders = useMemo(() => {
-    return orders
+    return displayOrders
       .filter((order) => isOrderFresh(order))
       .filter((order) => {
         const pending = optimistic[order.id];
@@ -124,7 +193,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
         return matchesRestaurantOrderFilter(order, filter);
       })
       .sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));
-  }, [orders, optimistic, filter]);
+  }, [displayOrders, optimistic, filter]);
 
   useEffect(() => {
     if (!orders.length) return;
@@ -192,7 +261,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   return useMemo(
     () => ({
       orders: visibleOrders,
-      allOrders: orders,
+      allOrders: displayOrders,
       loading,
       error,
       timeZone,
@@ -200,10 +269,12 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       hideOrder,
       restoreOrder,
       clearOptimistic,
+      applyKitchenOptimistic,
+      clearKitchenOptimistic,
     }),
     [
       visibleOrders,
-      orders,
+      displayOrders,
       loading,
       error,
       timeZone,
@@ -211,6 +282,8 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       hideOrder,
       restoreOrder,
       clearOptimistic,
+      applyKitchenOptimistic,
+      clearKitchenOptimistic,
     ],
   );
 }

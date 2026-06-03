@@ -1,40 +1,9 @@
-import type { OrderStageInput } from '@/services/orderStage';
-import { compareOrderStage, deriveOrderStage, ORDER_STAGE_RANK } from '@/services/orderStage';
+import {
+  ORDER_STAGE_PRIORITY,
+  type OrderStageInput,
+} from '@/lib/orderSharedTypes';
 
-/**
- * Monotonic kitchen/courier status rank (higher = further along fulfillment).
- * Used before Firestore writes to block stale distributed patches.
- */
-export const ORDER_STAGE_PRIORITY: Record<string, number> = {
-  awaiting_payment: 0,
-  pending_payment: 0,
-  payment_processing: 0,
-  payment_failed: 0,
-  unpaid: 0,
-  pending: 1,
-  payment_confirmed: 1,
-  pending_driver: 1,
-  accepted: 2,
-  restaurant_accepted: 2,
-  preparing: 3,
-  ready: 4,
-  ready_for_pickup: 4,
-  driver_assigned: 4,
-  driver_accepted: 4,
-  arriving_restaurant: 4,
-  picked_up_pending: 4,
-  heading_to_restaurant: 4,
-  waiting_driver: 4,
-  picked_up: 5,
-  on_the_way: 5,
-  near_customer: 5,
-  arrived_customer: 5,
-  delivered: 6,
-  completed: 6,
-  cancelled: 100,
-  rejected: 100,
-  expired: 100,
-};
+export { ORDER_STAGE_PRIORITY } from '@/lib/orderSharedTypes';
 
 const COURIER_PRIORITY: Record<string, number> = {
   pending: 0,
@@ -68,15 +37,13 @@ export function lifecyclePriorityFromCourier(deliveryStatus: unknown): number {
   return COURIER_PRIORITY[ds] ?? 1;
 }
 
-/** Best-effort rank from raw Firestore fields (status + courier). */
+/** Best-effort rank from raw Firestore fields (status + courier) — no deriveOrderStage import. */
 export function lifecyclePriorityFromOrder(order: OrderStageInput | null | undefined): number {
   if (!order) return 0;
-  const fromStage = ORDER_STAGE_RANK[deriveOrderStage(order)];
-  const fromFields = Math.max(
+  return Math.max(
     lifecyclePriorityFromStatus(order.status),
     lifecyclePriorityFromCourier(order.deliveryStatus),
   );
-  return Math.max(fromStage, fromFields);
 }
 
 export function wouldDowngradeLifecycle(
@@ -101,8 +68,5 @@ export function wouldDowngradeLifecycle(
       return true;
     }
   }
-  if (incomingPriority < currentPriority) {
-    return compareOrderStage(deriveOrderStage(merged), deriveOrderStage(current)) < 0;
-  }
-  return false;
+  return incomingPriority < currentPriority;
 }

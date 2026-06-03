@@ -1,5 +1,5 @@
 import {
-  deriveOrderStage,
+  getRestaurantOrderPresentation,
   type DerivedOrderStage,
 } from '@/services/orderStage';
 import type { OrderStageInput } from '@/services/orderStage';
@@ -22,32 +22,9 @@ const ORDER_STEPS: MerchantOrderStatus[] = [
   'delivered',
 ];
 
-/** Kitchen action rail derived from canonical order stage (not raw Firestore status). */
-export function merchantStatusFromOrder(
-  order: OrderStageInput,
-): MerchantOrderStatus {
-  const stage = deriveOrderStage(order);
-  const status = typeof order.status === 'string' ? order.status : '';
-
-  switch (stage) {
-    case 'awaiting_payment':
-    case 'awaiting_restaurant':
-      return 'pending';
-    case 'preparing':
-      if (status === 'preparing') return 'preparing';
-      return 'accepted';
-    case 'driver_assignment':
-      return 'ready';
-    case 'driver_assigned':
-      return 'ready';
-    case 'picked_up':
-      return 'picked_up';
-    case 'delivered':
-    case 'cancelled':
-      return 'delivered';
-    default:
-      return 'pending';
-  }
+/** Kitchen action rail derived from {@link getRestaurantOrderPresentation} only. */
+export function merchantStatusFromOrder(order: OrderStageInput): MerchantOrderStatus {
+  return getRestaurantOrderPresentation(order).merchantActionStatus;
 }
 
 /** @deprecated Use {@link merchantStatusFromOrder} — kept for gradual migration. */

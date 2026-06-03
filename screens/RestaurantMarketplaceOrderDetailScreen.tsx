@@ -3,22 +3,18 @@ import OrderActions from '@/components/orders/OrderActions';
 import OrderItems from '@/components/orders/OrderItems';
 import OrderTimeline from '@/components/orders/OrderTimeline';
 import PaymentSummary from '@/components/orders/PaymentSummary';
-import { PaymentBadge, StatusBadge } from '@/components/orders/StatusBadge';
+import { PaymentBadge } from '@/components/orders/StatusBadge';
+import { merchantStatusFromOrder } from '@/components/orders/statusFlow';
 import {
-  canTransition,
-  merchantStatusFromOrder,
-  type MerchantOrderStatus,
-} from '@/components/orders/statusFlow';
+  applyRestaurantKitchenAction,
+  primeRestaurantKitchenOptimistic,
+  type RestaurantKitchenAction,
+} from '@/lib/restaurantKitchenActions';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
+import { applyStageLockToOrder, clearOrderStageLock } from '@/lib/orderStageLock';
 import { db } from '@/services/firebase';
-import {
-  acceptRestaurantOrder,
-  rejectOrder,
-  subscribeOrderById,
-  updateOrderStatus,
-  type RestaurantOrder,
-} from '@/services/orderService';
-import { logOrderStage } from '@/services/orderStage';
+import { rejectOrder, subscribeOrderById, type RestaurantOrder } from '@/services/orderService';
+import { getRestaurantOrderPresentation, logOrderStage } from '@/services/orderStage';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -45,16 +41,45 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<RestaurantOrder | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<RestaurantKitchenAction | null>(null);
+  const [kitchenOverlay, setKitchenOverlay] = useState<Partial<RestaurantOrder>>({});
   const [customerName, setCustomerName] = useState<string | null>(null);
+  const displayOrder = useMemo(() => {
+    if (!order) return null;
+    return applyStageLockToOrder({ ...order, ...kitchenOverlay });
+  }, [order, kitchenOverlay]);
+  const presentation = useMemo(
+    () => getRestaurantOrderPresentation(displayOrder),
+    [displayOrder],
+  );
   const merchantStatus = useMemo(
-    () => (order ? merchantStatusFromOrder(order) : null),
-    [order],
+    () => (displayOrder ? merchantStatusFromOrder(displayOrder) : null),
+    [displayOrder],
   );
 
   useEffect(() => {
     if (order) logOrderStage(order);
   }, [order]);
+
+  useEffect(() => {
+    if (
+      !order?.id ||
+      (kitchenOverlay.status === undefined && kitchenOverlay.deliveryStatus === undefined)
+    ) {
+      return;
+    }
+    const statusMatch =
+      kitchenOverlay.status === undefined ||
+      String(order.status ?? '').trim().toLowerCase() ===
+        String(kitchenOverlay.status).trim().toLowerCase();
+    const deliveryMatch =
+      kitchenOverlay.deliveryStatus === undefined ||
+      String(order.deliveryStatus ?? '').trim().toLowerCase() ===
+        String(kitchenOverlay.deliveryStatus).trim().toLowerCase();
+    if (statusMatch && deliveryMatch) {
+      setKitchenOverlay({});
+    }
+  }, [order, kitchenOverlay.deliveryStatus, kitchenOverlay.status]);
 
   useEffect(() => {
     if (!id) {
@@ -99,24 +124,27 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
     [order?.items],
   );
 
-  async function setStatus(next: 'accepted' | 'preparing' | 'ready') {
-    if (!order?.id || !merchantStatus || saving) return;
-    const nextMerchant: MerchantOrderStatus =
-      next === 'accepted' ? 'accepted' : next === 'preparing' ? 'preparing' : 'ready';
-    if (!canTransition(merchantStatus, nextMerchant)) return;
-    setSaving(true);
+  async function setStatus(next: RestaurantKitchenAction) {
+    if (!order?.id || !displayOrder || saving) return;
+    setSaving(next);
+    const optimisticPatch = primeRestaurantKitchenOptimistic(order.id, next);
+    setKitchenOverlay(optimisticPatch);
     try {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      if (next === 'accepted') {
-        await acceptRestaurantOrder(order.id);
-      } else {
-        await updateOrderStatus(order.id, next);
+      const result = await applyRestaurantKitchenAction(order.id, next, displayOrder);
+      if (result === 'skipped_illegal') {
+        setKitchenOverlay({});
+        clearOrderStageLock(order.id);
+        showError('This action is not available for the current order state.');
+        return;
       }
       showSuccess('Order updated');
     } catch {
+      setKitchenOverlay({});
+      clearOrderStageLock(order.id);
       showError('Could not update order');
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   }
 
@@ -176,7 +204,16 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.headerTop}>
-            <StatusBadge status={order.status} />
+            <View
+              style={[
+                styles.stageBadge,
+                { backgroundColor: presentation.badgeColor.bg },
+              ]}
+            >
+              <Text style={[styles.stageBadgeText, { color: presentation.badgeColor.fg }]}>
+                {presentation.badgeText}
+              </Text>
+            </View>
             <Text style={styles.timer}>
               {order.createdAtMs
                 ? `${Math.max(1, Math.floor((Date.now() - order.createdAtMs) / 60000))} min`
@@ -193,7 +230,11 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
               <Text style={styles.value}>#{order.id.slice(0, 10)}…</Text>
               <Text style={styles.label}>Order ID</Text>
             </View>
-            <PaymentBadge paymentStatus={order.paymentStatus} />
+            {presentation.showPaymentBadge ? (
+              <PaymentBadge paymentStatus="unpaid" />
+            ) : (
+              <PaymentBadge paymentStatus="paid" />
+            )}
           </View>
         </View>
 
@@ -232,13 +273,14 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
         />
 
         <View style={styles.card}>
-          {order.status === 'awaiting_payment' ? (
+          {presentation.derivedStage === 'awaiting_payment' ? (
             <Text style={styles.waiting}>Waiting for payment</Text>
           ) : (
             <OrderActions
               status={merchantStatus ?? 'pending'}
-              loading={saving}
-              onAccept={() => void setStatus('accepted')}
+              loading={Boolean(saving)}
+              pendingAction={saving}
+              onAccept={() => void setStatus('accept')}
               onStartPreparing={() => void setStatus('preparing')}
               onMarkReady={() => void setStatus('ready')}
               onReject={() => void onReject()}
@@ -263,6 +305,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  stageBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  stageBadgeText: { fontSize: 12, fontWeight: '800' },
   timer: { color: '#334155', fontWeight: '800' },
   headerMain: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: {

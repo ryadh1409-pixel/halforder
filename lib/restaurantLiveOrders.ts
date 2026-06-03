@@ -1,5 +1,6 @@
 import { ORDER_STATUS } from '@/constants/orderStatus';
 import type { OrderStatus } from '@/services/orderService';
+import { deriveOrderStage } from '@/services/orderStage';
 
 /** Post-payment kitchen status (Stripe webhook target). */
 export const RESTAURANT_CONFIRMED_STATUS = ORDER_STATUS.PAYMENT_CONFIRMED;
@@ -28,14 +29,7 @@ export function isRestaurantPaidOrder(order: RestaurantOrderVisibilityInput): bo
 export function isRestaurantMarketplaceKitchenOrder(
   order: RestaurantOrderVisibilityInput,
 ): boolean {
-  if (isRestaurantPaidOrder(order)) return true;
-
-  const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
-  if (status === 'awaiting_payment' || status === 'payment_processing') {
-    return false;
-  }
-
-  return RESTAURANT_KITCHEN_ACTIVE_STATUSES.has(status as OrderStatus);
+  return deriveOrderStage(order) !== 'awaiting_payment';
 }
 
 /** Statuses the restaurant kitchen should never see before payment settles. */
@@ -64,11 +58,7 @@ export const RESTAURANT_KITCHEN_ACTIVE_STATUSES: ReadonlySet<OrderStatus> = new 
 ]);
 
 export function isRestaurantPrePaymentCheckout(order: RestaurantOrderVisibilityInput): boolean {
-  const status = typeof order.status === 'string' ? order.status : '';
-  return (
-    !isRestaurantPaidOrder(order) &&
-    RESTAURANT_PRE_PAYMENT_STATUSES.has(status as OrderStatus)
-  );
+  return deriveOrderStage(order) === 'awaiting_payment';
 }
 
 /**
@@ -77,24 +67,17 @@ export function isRestaurantPrePaymentCheckout(order: RestaurantOrderVisibilityI
  * Caller should enforce the 24h freshness window separately.
  */
 export function isRestaurantActiveLiveOrder(order: RestaurantOrderVisibilityInput): boolean {
-  const status = typeof order.status === 'string' ? order.status : '';
-  if (isRestaurantPrePaymentCheckout(order)) return false;
-  if (status === 'delivered' || status === 'cancelled' || status === 'rejected') {
-    return false;
-  }
-  return isRestaurantPaidOrder(order);
+  const stage = deriveOrderStage(order);
+  return (
+    stage !== 'awaiting_payment' &&
+    stage !== 'delivered' &&
+    stage !== 'cancelled'
+  );
 }
 
-/** Pending tab: paid, awaiting restaurant accept (not yet preparing). */
+/** Pending accept — canonical stage only (never raw status fields). */
 export function isRestaurantPendingAcceptOrder(order: RestaurantOrderVisibilityInput): boolean {
-  if (!isRestaurantPaidOrder(order)) return false;
-  const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
-  return (
-    status === 'awaiting_payment' ||
-    status === 'pending' ||
-    status === 'payment_confirmed' ||
-    status === 'pending_driver'
-  );
+  return deriveOrderStage(order) === 'awaiting_restaurant';
 }
 
 export function isRestaurantPendingKitchenOrder(order: RestaurantOrderVisibilityInput): boolean {

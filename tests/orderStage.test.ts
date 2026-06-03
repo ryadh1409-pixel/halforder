@@ -1,6 +1,8 @@
+import { applyStageLockToOrder, lockOrderStage } from '@/lib/orderStageLock';
 import {
   compareOrderStage,
   deriveOrderStage,
+  getRestaurantOrderPresentation,
   sanitizeOrderPatchAgainstRegression,
   type OrderStageInput,
 } from '@/services/orderStage';
@@ -152,6 +154,41 @@ describe('deriveOrderStage', () => {
     expect(patch.paymentIntentId).toBe('pi_test');
   });
 
+  it('getRestaurantOrderPresentation maps stages to restaurant labels', () => {
+    const { getRestaurantOrderPresentation } = require('@/services/orderStage');
+    expect(
+      getRestaurantOrderPresentation({
+        status: 'payment_confirmed',
+        paymentStatus: 'paid',
+        deliveryStatus: 'pending',
+      }).badgeText,
+    ).toBe('Awaiting Restaurant');
+    expect(
+      getRestaurantOrderPresentation({
+        status: 'accepted',
+        paymentStatus: 'paid',
+        deliveryStatus: 'accepted',
+        acceptedAt: { seconds: 1 },
+      }).badgeText,
+    ).toBe('Accepted');
+    expect(
+      getRestaurantOrderPresentation({
+        status: 'preparing',
+        paymentStatus: 'paid',
+        deliveryStatus: 'preparing',
+        acceptedAt: { seconds: 1 },
+        preparedAt: { seconds: 2 },
+      }).badgeText,
+    ).toBe('Preparing');
+    expect(
+      getRestaurantOrderPresentation({
+        status: 'ready_for_pickup',
+        paymentStatus: 'paid',
+        deliveryStatus: 'ready_for_pickup',
+      }).badgeText,
+    ).toBe('Ready For Pickup');
+  });
+
   it('paid awaiting_payment maps to awaiting_restaurant not awaiting_payment', () => {
     expect(
       deriveOrderStage({
@@ -160,5 +197,20 @@ describe('deriveOrderStage', () => {
         deliveryStatus: 'pending',
       }),
     ).toBe('awaiting_restaurant');
+  });
+
+  it('stage lock advances kitchen substage within preparing', () => {
+    const order: OrderStageInput = {
+      id: 'o-lock',
+      paymentStatus: 'paid',
+      status: 'accepted',
+      deliveryStatus: 'accepted',
+      acceptedAtMs: 1000,
+    };
+    lockOrderStage('o-lock', 'preparing', { kitchenSubstage: 'preparing' });
+    const locked = applyStageLockToOrder(order);
+    expect(getRestaurantOrderPresentation(locked).badgeText).toBe('Preparing');
+    expect(getRestaurantOrderPresentation(locked).canStartPreparing).toBe(false);
+    expect(getRestaurantOrderPresentation(locked).canReady).toBe(true);
   });
 });

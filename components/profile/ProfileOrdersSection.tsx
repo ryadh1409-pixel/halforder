@@ -50,7 +50,7 @@ type Props = {
   indexBuilding: boolean;
   cancellingIds: Record<string, boolean>;
   onOpenOrder: (orderId: string) => void;
-  onCancelOrder: (order: ProfileOrderRow) => Promise<void>;
+  onCancelOrder: (order: ProfileOrderRow) => Promise<boolean>;
   onRetry: () => void | Promise<void>;
 };
 
@@ -132,8 +132,10 @@ export function ProfileOrdersSection({
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     const target = confirmingOrder;
     setConfirmingOrder(null);
-    await onCancelOrder(target);
-    setLocallyCancelledOrderIds((prev) => ({ ...prev, [target.id]: true }));
+    const ok = await onCancelOrder(target);
+    if (ok) {
+      setLocallyCancelledOrderIds((prev) => ({ ...prev, [target.id]: true }));
+    }
   };
 
   const freshOrders = useMemo(
@@ -235,10 +237,11 @@ export function ProfileOrdersSection({
                       : tone === 'orange'
                         ? { bg: 'rgba(251,146,60,0.2)', fg: '#FDBA74' }
                         : { bg: 'rgba(255,255,255,0.1)', fg: pal.textSecondary };
-              const cancelEnabled = canCancelProfileOrder(
-                effectiveStatus,
-                effectiveDeliveryStatus,
-              );
+              const cancelEnabled = canCancelProfileOrder({
+                status: effectiveStatus,
+                deliveryStatus: effectiveDeliveryStatus,
+                paymentStatus: order.paymentStatus,
+              });
               const isCancelling = Boolean(cancellingIds[order.id]);
               const orderTs = getOrderTimestamp(order);
               const expiresLabel = formatOrderExpiresIn(orderTs, nowMs);

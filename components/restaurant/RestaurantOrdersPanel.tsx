@@ -19,16 +19,15 @@ import {
   computeRestaurantDashboardMetrics,
   isOrderFresh,
 } from '@/lib/restaurantOrderFreshness';
-import { isRestaurantPendingAcceptOrder } from '@/lib/restaurantLiveOrders';
-import { clearOrderStageLock, lockOrderStage } from '@/lib/orderStageLock';
-import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
-import type { OrderStatus } from '@/services/orderService';
 import {
-  acceptRestaurantOrder,
-  rejectOrder,
-  updateOrderStatus,
-} from '@/services/orderService';
-import { deriveOrderStage } from '@/services/orderStage';
+  applyRestaurantKitchenAction,
+  primeRestaurantKitchenOptimistic,
+  type RestaurantKitchenAction,
+} from '@/lib/restaurantKitchenActions';
+import { clearOrderStageLock } from '@/lib/orderStageLock';
+import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
+import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
+import { getRestaurantOrderPresentation } from '@/services/orderStage';
 import { showError, showSuccess } from '@/utils/toast';
 
 export type RestaurantDashboardMetrics = {
@@ -41,13 +40,19 @@ type Props = {
   restaurantTimeZone?: string | null;
   onAssignDriver?: (orderId: string) => void;
   title?: string;
-  /** Sole marketplace orders subscription for host dashboard — feeds top-level stats. */
   onDashboardMetrics?: (metrics: RestaurantDashboardMetrics) => void;
 };
 
 const EMPTY_TITLE = 'No active orders';
 const EMPTY_SUBTITLE =
   'Orders placed within the last 24 hours will appear here instantly.';
+
+function kitchenActionFromStatus(status: OrderStatus): RestaurantKitchenAction | null {
+  if (status === 'accepted') return 'accept';
+  if (status === 'preparing') return 'preparing';
+  if (status === 'ready' || status === 'ready_for_pickup') return 'ready';
+  return null;
+}
 
 export function RestaurantOrdersPanel({
   restaurantId,
@@ -57,10 +62,19 @@ export function RestaurantOrdersPanel({
   onDashboardMetrics,
 }: Props) {
   const [filter, setFilter] = useState<RestaurantOrderListFilter>('active');
-  const [actionOrderId, setActionOrderId] = useState<string | null>(null);
-  const acceptInFlightRef = React.useRef<Set<string>>(new Set());
+  const [actionInFlight, setActionInFlight] = useState<{
+    orderId: string;
+    action: RestaurantKitchenAction;
+  } | null>(null);
 
-  const { orders, allOrders, loading, timeZone } = useRestaurantOrders({
+  const {
+    orders,
+    allOrders,
+    loading,
+    timeZone,
+    applyKitchenOptimistic,
+    clearKitchenOptimistic,
+  } = useRestaurantOrders({
     restaurantId,
     restaurantTimeZone,
     filter,
@@ -94,53 +108,67 @@ export function RestaurantOrdersPanel({
     return EMPTY_SUBTITLE;
   }, [allOrders.length, filter, loading]);
 
-  const handleStatus = useCallback(async (orderId: string, status: OrderStatus) => {
-    if (actionOrderId || acceptInFlightRef.current.has(orderId)) return;
+  const handleKitchenAction = useCallback(
+    async (order: RestaurantOrder, status: OrderStatus) => {
+      const action = kitchenActionFromStatus(status);
+      if (!action) return;
+      if (actionInFlight) return;
 
-    setActionOrderId(orderId);
-    if (status === 'accepted') {
-      acceptInFlightRef.current.add(orderId);
-    }
+      const optimisticPatch = primeRestaurantKitchenOptimistic(order.id, action);
+      applyKitchenOptimistic(order.id, optimisticPatch);
+      setActionInFlight({ orderId: order.id, action });
 
-    try {
-      if (status === 'accepted') {
-        await acceptRestaurantOrder(orderId);
-        lockOrderStage(orderId, 'preparing');
-      } else {
-        await updateOrderStatus(orderId, status);
+      try {
+        const result = await applyRestaurantKitchenAction(order.id, action, order);
+        if (result === 'skipped_illegal') {
+          clearKitchenOptimistic(order.id);
+          clearOrderStageLock(order.id);
+          showError('This action is not available for the current order state.');
+          return;
+        }
+        showSuccess('Order updated');
+      } catch {
+        clearKitchenOptimistic(order.id);
+        clearOrderStageLock(order.id);
+        showError('Unable to update order.');
+      } finally {
+        setActionInFlight(null);
       }
-      showSuccess('Order updated');
-    } catch {
-      showError('Unable to update order.');
-    } finally {
-      if (status === 'accepted') {
-        acceptInFlightRef.current.delete(orderId);
-      }
-      setActionOrderId(null);
-    }
-  }, [actionOrderId]);
+    },
+    [actionInFlight, applyKitchenOptimistic, clearKitchenOptimistic],
+  );
 
-  const handleReject = useCallback(async (orderId: string) => {
-    setActionOrderId(orderId);
-    try {
-      await rejectOrder(orderId);
-      clearOrderStageLock(orderId);
-      showSuccess('Order rejected');
-    } catch {
-      showError('Could not reject order.');
-    } finally {
-      setActionOrderId(null);
-    }
-  }, []);
+  const [rejectOrderId, setRejectOrderId] = React.useState<string | null>(null);
+
+  const handleReject = useCallback(
+    async (orderId: string) => {
+      if (actionInFlight || rejectOrderId) return;
+      setRejectOrderId(orderId);
+      try {
+        const { rejectOrder } = await import('@/services/orderService');
+        await rejectOrder(orderId);
+        clearOrderStageLock(orderId);
+        clearKitchenOptimistic(orderId);
+        showSuccess('Order rejected');
+      } catch {
+        showError('Could not reject order.');
+      } finally {
+        setRejectOrderId(null);
+      }
+    },
+    [actionInFlight, clearKitchenOptimistic, rejectOrderId],
+  );
 
   const summary = useMemo(() => {
-    const pending = freshOrders.filter((o) => isRestaurantPendingAcceptOrder(o)).length;
-    const preparing = freshOrders.filter(
-      (o) => deriveOrderStage(o) === 'preparing',
-    ).length;
-    const ready = freshOrders.filter(
-      (o) => deriveOrderStage(o) === 'driver_assignment',
-    ).length;
+    let pending = 0;
+    let preparing = 0;
+    let ready = 0;
+    for (const o of freshOrders) {
+      const p = getRestaurantOrderPresentation(o);
+      if (p.derivedStage === 'awaiting_restaurant') pending += 1;
+      else if (p.derivedStage === 'preparing') preparing += 1;
+      else if (p.derivedStage === 'driver_assignment') ready += 1;
+    }
     return { pending, preparing, ready };
   }, [freshOrders]);
 
@@ -210,11 +238,17 @@ export function RestaurantOrdersPanel({
                 order={order}
                 timeZone={timeZone}
                 sourceScreen="RestaurantOrdersPanel"
-                onStatus={(status) => void handleStatus(order.id, status)}
+                pendingAction={
+                  actionInFlight?.orderId === order.id ? actionInFlight.action : null
+                }
+                onStatus={(status) => void handleKitchenAction(order, status)}
                 onReject={() => void handleReject(order.id)}
-                loading={actionOrderId === order.id}
+                loading={
+                  actionInFlight?.orderId === order.id || rejectOrderId === order.id
+                }
               />
-              {onAssignDriver && deriveOrderStage(order) === 'driver_assignment' ? (
+              {onAssignDriver &&
+              getRestaurantOrderPresentation(order).canAssignDriver ? (
                 <Pressable
                   style={styles.assignBtn}
                   onPress={() => onAssignDriver(order.id)}

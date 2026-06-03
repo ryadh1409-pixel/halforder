@@ -1,4 +1,5 @@
 import type { MerchantOrderStatus } from '@/components/orders/statusFlow';
+import type { RestaurantKitchenAction } from '@/lib/restaurantKitchenActions';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import StatusActionButton from '@/components/orders/StatusActionButton';
@@ -6,6 +7,7 @@ import StatusActionButton from '@/components/orders/StatusActionButton';
 type Props = {
   status: MerchantOrderStatus;
   loading?: boolean;
+  pendingAction?: RestaurantKitchenAction | null;
   onAccept: () => void;
   onStartPreparing: () => void;
   onReject: () => void;
@@ -15,6 +17,7 @@ type Props = {
 export default function OrderActions({
   status,
   loading,
+  pendingAction = null,
   onAccept,
   onStartPreparing,
   onReject,
@@ -24,13 +27,19 @@ export default function OrderActions({
     return (
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <StatusActionButton label="Accept Order" onPress={onAccept} loading={loading} />
+          <StatusActionButton
+            label={
+              loading && pendingAction === 'accept' ? 'Accepting…' : 'Accept Order'
+            }
+            onPress={onAccept}
+            loading={loading && pendingAction === 'accept'}
+          />
         </View>
         <View style={{ width: 110 }}>
           <StatusActionButton
             label="Reject"
             onPress={onReject}
-            loading={loading}
+            loading={loading && pendingAction === 'accept'}
             tone="danger"
           />
         </View>
@@ -40,15 +49,23 @@ export default function OrderActions({
   if (status === 'accepted') {
     return (
       <StatusActionButton
-        label="Start Preparing"
+        label={
+          loading && pendingAction === 'preparing'
+            ? 'Start Preparing…'
+            : 'Start Preparing'
+        }
         onPress={onStartPreparing}
-        loading={loading}
+        loading={loading && pendingAction === 'preparing'}
       />
     );
   }
   if (status === 'preparing') {
     return (
-      <StatusActionButton label="Mark Ready" onPress={onMarkReady} loading={loading} />
+      <StatusActionButton
+        label={loading && pendingAction === 'ready' ? 'Marking Ready…' : 'Mark Ready'}
+        onPress={onMarkReady}
+        loading={loading && pendingAction === 'ready'}
+      />
     );
   }
   if (status === 'ready') {
