@@ -4,6 +4,7 @@ import { normalizeOrderRouteId } from '@/lib/orderRouteParams';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect, useLocalSearchParams, usePathname, useSegments } from 'expo-router';
 import React, { useMemo } from 'react';
+import { StyleSheet } from 'react-native';
 
 type Props = {
   children: React.ReactNode;
