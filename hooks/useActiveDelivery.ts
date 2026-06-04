@@ -1,7 +1,13 @@
+import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
 import {
   reconcileActiveDeliverySnapshot,
   type DriverOrderSnapshotSource,
 } from '@/lib/driverCourierSnapshotMerge';
+import {
+  isDriverHubOrderForceCompleted,
+  markDriverHubOrderCompleted,
+  rememberDriverActiveDelivery,
+} from '@/lib/driverHubOrdersStore';
 import {
   subscribeActiveDelivery,
   subscribeDriverActiveOrders,
@@ -19,6 +25,14 @@ function applySnapshot(
     setOrder(null);
     return;
   }
+  if (isDriverHubOrderForceCompleted(row.id) || isEffectivelyDelivered(row)) {
+    if (!isDriverHubOrderForceCompleted(row.id)) {
+      markDriverHubOrderCompleted(row.id, 'firestore_terminal', { activeDelivery: row });
+    }
+    setOrder(null);
+    return;
+  }
+  rememberDriverActiveDelivery(row);
   setOrder((prev) => {
     const merged = reconcileActiveDeliverySnapshot(prev, row, source, meta);
     return merged ?? prev;
@@ -32,7 +46,9 @@ function applySnapshot(
 export function useActiveDelivery(
   orderId: string | null | undefined,
   driverId?: string | null,
+  options?: { enabled?: boolean },
 ) {
+  const enabled = options?.enabled !== false;
   const [order, setOrder] = useState<ActiveDelivery | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +56,7 @@ export function useActiveDelivery(
 
   useEffect(() => {
     sourcesLoggedRef.current.clear();
-    if (!orderId) {
+    if (!enabled || !orderId) {
       setOrder(null);
       setLoading(false);
       setError(null);
@@ -82,7 +98,7 @@ export function useActiveDelivery(
       unsubDoc();
       unsubList();
     };
-  }, [orderId, driverId]);
+  }, [orderId, driverId, enabled]);
 
   return useMemo(
     () => ({

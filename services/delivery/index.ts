@@ -4,6 +4,8 @@ import {
   type DeliveryLifecycleStatus,
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
+import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
+import { isDriverHubOrderForceCompleted } from '@/lib/driverHubOrdersStore';
 import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
@@ -750,7 +752,13 @@ export function subscribeDriverActiveOrders(
             const rows = snap.docs
               .map((d) => safeMapActiveDelivery(d))
               .filter((order): order is ActiveDelivery => order != null)
-              .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus));
+              .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus))
+              .filter((order) => !isEffectivelyDelivered(order))
+              .filter((order) => !isDriverHubOrderForceCompleted(order.id))
+              .filter(
+                (order) =>
+                  order.marketplaceCourierStatus !== MARKETPLACE_DELIVERY_STATUS.DELIVERED,
+              );
             rows.sort((a, b) => {
               const ca = a.createdAtMs ?? 0;
               const cb = b.createdAtMs ?? 0;

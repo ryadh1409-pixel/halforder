@@ -21,8 +21,16 @@ import { DriverHubActiveOrderCard } from '@/components/driver/DriverHubActiveOrd
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
+import { DriverDeliveryHistorySection } from '@/components/driver/DriverDeliveryHistory';
+import { filterDriverActiveMarketplaceOrders } from '@/lib/driverHubActiveOrders';
+import {
+  pruneHubActiveOrdersState,
+  subscribeDriverHubActiveOrderRemove,
+  subscribeDriverHubCompletedBump,
+} from '@/lib/driverHubOrdersStore';
 import {
   getDriverActiveOrders,
+  getDriverCompletedDeliveries,
   subscribeAvailableOrders,
   type DriverOrder,
 } from '../../services/driverService';
@@ -144,6 +152,8 @@ export default function DriverHubScreen() {
   } = useDriverPresenceContext();
   const [availableOrders, setAvailableOrders] = useState<DriverOrder[]>([]);
   const [activeOrders, setActiveOrders] = useState<DriverOrder[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<DriverOrder[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(true);
   const { stats: deliveryStats } = useDriverDeliveryStats();
   const stats = useMemo(
     () => ({
@@ -158,6 +168,7 @@ export default function DriverHubScreen() {
 
   const availableSigRef = useRef('');
   const activeSigRef = useRef('');
+  const completedSigRef = useRef('');
   const acceptingIdRef = useRef<string | null>(null);
   acceptingIdRef.current = acceptingId;
 
@@ -182,19 +193,51 @@ export default function DriverHubScreen() {
     [uid],
   );
 
-  const applyActiveOrders = useCallback((rows: DriverOrder[]) => {
+  const applyActiveOrders = useCallback(
+    (rows: DriverOrder[]) => {
+      const pruned = pruneHubActiveOrdersState(rows, uid);
+      const sig = ordersListSignature(pruned);
+      if (sig === activeSigRef.current) return;
+      activeSigRef.current = sig;
+      setActiveOrders(pruned);
+    },
+    [uid],
+  );
+
+  const removeActiveOrderImmediately = useCallback((orderId: string) => {
+    setActiveOrders((prev) => {
+      const next = prev.filter((o) => o.id !== orderId);
+      if (next.length === prev.length) return prev;
+      activeSigRef.current = ordersListSignature(next);
+      return next;
+    });
+  }, []);
+
+  const bumpCompletedOrder = useCallback((order: DriverOrder) => {
+    setCompletedOrders((prev) => {
+      if (prev.some((o) => o.id === order.id)) return prev;
+      completedSigRef.current = '';
+      const next = [order, ...prev];
+      completedSigRef.current = ordersListSignature(next);
+      return next;
+    });
+  }, []);
+
+  const applyCompletedOrders = useCallback((rows: DriverOrder[]) => {
     const sig = ordersListSignature(rows);
-    if (sig === activeSigRef.current) return;
-    activeSigRef.current = sig;
-    setActiveOrders(rows);
+    if (sig === completedSigRef.current) return;
+    completedSigRef.current = sig;
+    setCompletedOrders(rows);
   }, []);
 
   useEffect(() => {
     if (!uid || !isOnline) {
       availableSigRef.current = '';
       activeSigRef.current = '';
+      completedSigRef.current = '';
       setAvailableOrders([]);
       setActiveOrders([]);
+      setCompletedOrders([]);
       return undefined;
     }
 
@@ -204,13 +247,32 @@ export default function DriverHubScreen() {
     logListenerSubscribe('hub.activeOrders');
     const unsubActive = getDriverActiveOrders(uid, applyActiveOrders);
 
+    logListenerSubscribe('hub.completedDeliveries');
+    const unsubCompleted = getDriverCompletedDeliveries(uid, applyCompletedOrders);
+
     return () => {
       logListenerUnsubscribe('hub.availableOrders');
       unsubAvailable();
       logListenerUnsubscribe('hub.activeOrders');
       unsubActive();
+      logListenerUnsubscribe('hub.completedDeliveries');
+      unsubCompleted();
     };
-  }, [uid, isOnline, applyAvailableOrders, applyActiveOrders]);
+  }, [uid, isOnline, applyAvailableOrders, applyActiveOrders, applyCompletedOrders]);
+
+  useEffect(() => {
+    if (!uid) return undefined;
+    const unsubRemove = subscribeDriverHubActiveOrderRemove((orderId) => {
+      removeActiveOrderImmediately(orderId);
+    });
+    const unsubBump = subscribeDriverHubCompletedBump((order) => {
+      bumpCompletedOrder(order);
+    });
+    return () => {
+      unsubRemove();
+      unsubBump();
+    };
+  }, [uid, removeActiveOrderImmediately, bumpCompletedOrder]);
 
   const handleToggleOnline = useCallback(
     async (nextValue: boolean) => {
@@ -262,10 +324,7 @@ export default function DriverHubScreen() {
   );
 
   const hubActiveOrders = useMemo(
-    () =>
-      activeOrders.filter(
-        (o) => o.driverId === uid || o.assignedDriverId === uid,
-      ),
+    () => filterDriverActiveMarketplaceOrders(activeOrders, uid),
     [activeOrders, uid],
   );
 
@@ -338,6 +397,12 @@ export default function DriverHubScreen() {
             ))}
           </View>
         ) : null}
+
+        <DriverDeliveryHistorySection
+          orders={completedOrders}
+          expanded={historyExpanded}
+          onToggleExpanded={() => setHistoryExpanded((v) => !v)}
+        />
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Available orders</Text>

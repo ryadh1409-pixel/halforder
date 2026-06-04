@@ -76,6 +76,7 @@ export type OrderStatus =
   | 'on_the_way'
   | 'arrived_customer'
   | 'delivered'
+  | 'completed'
   | 'cancelled'
   | 'rejected';
 

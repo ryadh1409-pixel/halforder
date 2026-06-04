@@ -1,3 +1,4 @@
+import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
 import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
@@ -7,9 +8,35 @@ export type DriverHubOrderAssignment = {
   driverId?: string | null;
   assignedDriverId?: string | null;
   deliveryStatus?: unknown;
+  status?: unknown;
+  deliveredAtMs?: number | null;
 };
 
-/** In-progress marketplace deliveries assigned to this driver (courier status, not kitchen `status`). */
+/** True when kitchen or courier fields indicate a finished delivery. */
+export function isDriverOrderTerminalForActiveList(
+  order: DriverHubOrderAssignment,
+): boolean {
+  const kitchen =
+    typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
+  if (kitchen === 'completed' || kitchen === 'delivered') return true;
+
+  const raw =
+    typeof order.deliveryStatus === 'string'
+      ? order.deliveryStatus.trim().toLowerCase()
+      : '';
+  if (raw === 'delivered' || raw === 'completed') return true;
+
+  const kitchenStatus =
+    typeof order.status === 'string' ? order.status : '';
+  return isEffectivelyDelivered({
+    marketplaceCourierStatus: normalizeMarketplaceDeliveryStatus(order.deliveryStatus),
+    firestoreDeliveryStatus: raw,
+    status: kitchenStatus,
+    deliveredAtMs: order.deliveredAtMs ?? null,
+  });
+}
+
+/** In-progress marketplace deliveries assigned to this driver (excludes delivered/completed). */
 export function isDriverActiveMarketplaceOrder(
   order: DriverHubOrderAssignment,
   driverUid: string,
@@ -18,6 +45,9 @@ export function isDriverActiveMarketplaceOrder(
   if (!uid) return false;
   const assigned = order.driverId === uid || order.assignedDriverId === uid;
   if (!assigned) return false;
+  if (isDriverOrderTerminalForActiveList(order)) return false;
+  if (isDriverCompletedMarketplaceOrder(order, driverUid)) return false;
+
   const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
   return (
     courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED ||
@@ -26,4 +56,37 @@ export function isDriverActiveMarketplaceOrder(
     courier === MARKETPLACE_DELIVERY_STATUS.ACCEPTED ||
     courier === MARKETPLACE_DELIVERY_STATUS.PREPARING
   );
+}
+
+export function filterDriverActiveMarketplaceOrders<T extends DriverHubOrderAssignment>(
+  orders: T[],
+  driverUid: string,
+): T[] {
+  return orders.filter((o) => isDriverActiveMarketplaceOrder(o, driverUid));
+}
+
+function isAssignedToDriver(
+  order: DriverHubOrderAssignment,
+  driverUid: string,
+): boolean {
+  const uid = driverUid.trim();
+  if (!uid) return false;
+  return order.driverId === uid || order.assignedDriverId === uid;
+}
+
+/** Finished marketplace deliveries for this driver (hub history + stats). */
+export function isDriverCompletedMarketplaceOrder(
+  order: DriverHubOrderAssignment,
+  driverUid: string,
+): boolean {
+  if (!isAssignedToDriver(order, driverUid)) return false;
+  const kitchenStatus =
+    typeof order.status === 'string' ? order.status : '';
+  return isEffectivelyDelivered({
+    marketplaceCourierStatus: normalizeMarketplaceDeliveryStatus(order.deliveryStatus),
+    firestoreDeliveryStatus:
+      typeof order.deliveryStatus === 'string' ? order.deliveryStatus.trim().toLowerCase() : '',
+    status: kitchenStatus,
+    deliveredAtMs: order.deliveredAtMs ?? null,
+  });
 }

@@ -7,14 +7,19 @@ import {
   applyDriverMarketplaceFulfillment,
   type DriverMarketplaceFulfillmentAction,
 } from '@/lib/driverMarketplaceFulfillment';
+import {
+  exitDriverActiveDeliveryAfterComplete,
+  isActiveDeliveryComplete,
+} from '@/lib/driverDeliveryCompletion';
 import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
 import { orderRoomHref } from '@/services/orderChat';
 import { showError, showSuccess } from '@/utils/toast';
+import { setDriverActiveRouteOrderId } from '@/lib/driverHubOrdersStore';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -40,14 +45,33 @@ function elapsedLabel(acceptedAtMs: number | null): string {
 export default function DriverActiveDeliveryDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user } = useAuth();
-  const { order, loading } = useActiveDelivery(id, user?.uid);
+  const completionHandledRef = useRef(false);
+  const [exitingToHub, setExitingToHub] = useState(false);
+  const listenersEnabled = !exitingToHub;
+  const { order, loading } = useActiveDelivery(id, user?.uid, { enabled: listenersEnabled });
   const [busy, setBusy] = useState(false);
   const mapRef = useRef<unknown>(null);
+
+  const isDeliveryComplete = useMemo(() => isActiveDeliveryComplete(order), [order]);
+
+  useEffect(() => {
+    if (id) setDriverActiveRouteOrderId(id);
+  }, [id]);
+
+  useEffect(() => {
+    if (loading || !isDeliveryComplete || completionHandledRef.current) return;
+    setExitingToHub(true);
+    exitDriverActiveDeliveryAfterComplete(completionHandledRef, id, {
+      toast: false,
+      activeDelivery: order,
+      reason: 'active_screen_exit',
+    });
+  }, [loading, isDeliveryComplete, id, order]);
 
   const { current: currentLocation, permissionGranted } = useDriverLocationTracking(
     id,
     user?.uid,
-    Boolean(id && user?.uid),
+    Boolean(id && user?.uid && listenersEnabled && !isDeliveryComplete),
   );
 
   const driverLocationForMap = useMemo(
@@ -110,14 +134,27 @@ export default function DriverActiveDeliveryDetailsScreen() {
         showSuccess('Arrived at restaurant');
       } else if (action === 'pickup') {
         showSuccess('Pickup confirmed');
-      } else {
-        showSuccess('Delivery completed');
+      } else if (result === 'applied' && action === 'deliver') {
+        setExitingToHub(true);
+        exitDriverActiveDeliveryAfterComplete(completionHandledRef, id, {
+          activeDelivery: order,
+          reason: 'active_screen_exit',
+        });
       }
     } catch {
       showError('Could not update delivery');
     } finally {
       setBusy(false);
     }
+  }
+
+  if (exitingToHub || isDeliveryComplete) {
+    return (
+      <SafeAreaView style={styles.center} edges={['top']}>
+        <ActivityIndicator size="large" color="#16A34A" />
+        <Text style={styles.exitLabel}>Returning to Driver Hub…</Text>
+      </SafeAreaView>
+    );
   }
 
   if (loading) {
@@ -306,7 +343,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
         <MarketplaceDeliveryTimeline status={courierStatus} />
         <View style={styles.timelineActionSpacer} />
       </ScrollView>
-      {fulfillmentOrder ? (
+      {fulfillmentOrder && !isDeliveryComplete ? (
         <View style={styles.stickyAction}>
           <MarketplaceDeliveryActionBar
             key={`${fulfillmentOrder.id}:${String(fulfillmentOrder.deliveryStatus)}:${activeOrder.updatedAtMs ?? ''}`}
@@ -324,6 +361,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#020617' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617' },
+  exitLabel: { color: '#94A3B8', marginTop: 12, fontSize: 15 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 100 },
   timelineActionSpacer: { height: 8 },

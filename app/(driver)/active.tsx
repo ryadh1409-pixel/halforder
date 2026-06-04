@@ -1,9 +1,15 @@
+import { isDriverActiveMarketplaceOrder } from '@/lib/driverHubActiveOrders';
+import {
+  clearDriverActiveRouteMemory,
+  isDriverHubOrderForceCompleted,
+  setDriverActiveRouteOrderId,
+} from '@/lib/driverHubOrdersStore';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import { useDriverOrders } from '../../hooks/useDriverOrders';
 import { useAuth } from '../../services/AuthContext';
 import { requireRole } from '../../utils/requireRole';
 import { router } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,20 +17,49 @@ export default function DriverActiveScreen() {
   const { authorized, loading: roleLoading } = requireRole(['driver', 'admin']);
   const { user } = useAuth();
   const { orders, loading } = useDriverOrders(user?.uid);
-  /** Firestore snapshots produce a new `orders` array each tick — never depend on that reference for navigation. */
-  const firstOrderId = orders[0]?.id ?? '';
+  const driverUid = user?.uid?.trim() ?? '';
+  /** Only in-progress deliveries — never auto-open completed/delivered orders. */
+  const firstActiveOrderId = useMemo(() => {
+    for (const o of orders) {
+      if (
+        isDriverActiveMarketplaceOrder(
+          {
+            driverId: o.driverId,
+            assignedDriverId: o.assignedDriverId,
+            deliveryStatus: o.marketplaceCourierStatus,
+            status: o.status,
+            deliveredAtMs: o.deliveredAtMs ?? null,
+          },
+          driverUid,
+        )
+      ) {
+        return o.id;
+      }
+    }
+    return '';
+  }, [orders, driverUid]);
   const redirectedForIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
-    if (!firstOrderId) {
+    if (!firstActiveOrderId) {
       redirectedForIdRef.current = null;
+      setDriverActiveRouteOrderId(null);
+      if (orders.length > 0) {
+        router.replace(DRIVER_ROUTES.hub as never);
+      }
       return;
     }
-    if (redirectedForIdRef.current === firstOrderId) return;
-    redirectedForIdRef.current = firstOrderId;
-    router.replace(DRIVER_ROUTES.activeOrder(firstOrderId) as never);
-  }, [loading, firstOrderId]);
+    if (isDriverHubOrderForceCompleted(firstActiveOrderId)) {
+      clearDriverActiveRouteMemory(firstActiveOrderId, 'active_route_guard');
+      router.replace(DRIVER_ROUTES.hub as never);
+      return;
+    }
+    if (redirectedForIdRef.current === firstActiveOrderId) return;
+    redirectedForIdRef.current = firstActiveOrderId;
+    setDriverActiveRouteOrderId(firstActiveOrderId);
+    router.replace(DRIVER_ROUTES.activeOrder(firstActiveOrderId) as never);
+  }, [loading, firstActiveOrderId, orders.length]);
 
   if (roleLoading || !authorized) {
     return (

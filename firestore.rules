@@ -153,8 +153,12 @@ service cloud.firestore {
     function driverDeliveredStatsListReadable() {
       return hasDriverAccountDoc()
         && resource.data.driverId == request.auth.uid
-        && resource.data.status == 'delivered'
-        && resource.data.deliveryType == 'delivery';
+        && resource.data.deliveryType == 'delivery'
+        && (
+          resource.data.status == 'delivered'
+          || resource.data.status == 'completed'
+          || resource.data.get('deliveryStatus', '') == 'delivered'
+        );
     }
     /** Driver active/assigned orders by driverId — mirrors subscribeToDriverOrders. */
     function driverOrdersByDriverIdListReadable() {

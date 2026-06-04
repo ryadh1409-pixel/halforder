@@ -1,4 +1,9 @@
 import {
+  getDriverActiveRouteOrderId,
+  isDriverHubOrderForceCompleted,
+  subscribeDriverHubActiveOrderRemove,
+} from '@/lib/driverHubOrdersStore';
+import {
   subscribeDriverDeliveryStats,
   type DriverDeliveryStats,
 } from '@/services/driverService';
@@ -35,6 +40,8 @@ function statsEqual(a: DriverDeliveryStats, b: DriverDeliveryStats): boolean {
 type DriverRealtimeValue = {
   stats: DriverDeliveryStats;
   statsLoading: boolean;
+  /** Active delivery route target (cleared immediately on completion). */
+  currentDeliveryOrderId: string | null;
 };
 
 const DriverRealtimeContext = createContext<DriverRealtimeValue | null>(null);
@@ -67,6 +74,26 @@ function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeP
 
   const [stats, setStats] = useState<DriverDeliveryStats>(EMPTY_STATS);
   const [statsLoading, setStatsLoading] = useState(() => !uid);
+  const [currentDeliveryOrderId, setCurrentDeliveryOrderId] = useState<string | null>(
+    () => getDriverActiveRouteOrderId(),
+  );
+
+  useEffect(() => {
+    return subscribeDriverHubActiveOrderRemove((orderId) => {
+      setCurrentDeliveryOrderId((prev) => (prev === orderId ? null : prev));
+    });
+  }, []);
+
+  useEffect(() => {
+    const routeId = getDriverActiveRouteOrderId();
+    if (routeId && !isDriverHubOrderForceCompleted(routeId)) {
+      setCurrentDeliveryOrderId(routeId);
+      return;
+    }
+    if (!routeId) {
+      setCurrentDeliveryOrderId(null);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!uid) {
@@ -98,8 +125,9 @@ function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeP
     () => ({
       stats,
       statsLoading,
+      currentDeliveryOrderId,
     }),
-    [stats.deliveries, stats.earnings, stats.rating, statsLoading],
+    [stats.deliveries, stats.earnings, stats.rating, statsLoading, currentDeliveryOrderId],
   );
 
   return (

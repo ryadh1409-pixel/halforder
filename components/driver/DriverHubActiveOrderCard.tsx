@@ -1,8 +1,11 @@
+import { isDriverActiveMarketplaceOrder } from '@/lib/driverHubActiveOrders';
+import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
 import {
   applyDriverMarketplaceFulfillment,
   driverHubActiveStatusLabel,
   getDriverMarketplaceFulfillmentButton,
 } from '@/lib/driverMarketplaceFulfillment';
+import { DRIVER_DELIVERY_COMPLETE_TOAST } from '@/lib/driverDeliveryCompletion';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import type { DriverOrder } from '@/services/driverService';
 import { showError, showSuccess } from '@/utils/toast';
@@ -23,6 +26,17 @@ type Props = {
 
 export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
   const [busy, setBusy] = useState(false);
+  const isActive = isDriverActiveMarketplaceOrder(
+    {
+      driverId: order.driverId,
+      assignedDriverId: order.assignedDriverId,
+      deliveryStatus: order.deliveryStatus,
+      status: order.status,
+      deliveredAtMs: order.deliveredAtMs ?? null,
+    },
+    driverUid,
+  );
+  if (!isActive) return null;
   const statusLabel = driverHubActiveStatusLabel(order.deliveryStatus);
   const action = getDriverMarketplaceFulfillmentButton(
     {
@@ -58,12 +72,16 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
         );
         return;
       }
+      if (action.action === 'deliver') {
+        markDriverHubOrderCompleted(order.id, 'hub_card_deliver', { driverOrder: order });
+        showSuccess(DRIVER_DELIVERY_COMPLETE_TOAST);
+        router.replace(DRIVER_ROUTES.hub as never);
+        return;
+      }
       showSuccess(
         action.action === 'arrive_restaurant'
           ? 'Arrived at restaurant'
-          : action.action === 'pickup'
-            ? 'Pickup confirmed'
-            : 'Delivered',
+          : 'Pickup confirmed',
       );
     } catch {
       showError('Could not update delivery');
@@ -74,7 +92,12 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
 
   return (
     <View style={styles.card}>
-      <Pressable onPress={() => router.push(DRIVER_ROUTES.activeOrder(order.id) as never)}>
+      <Pressable
+        onPress={() => {
+          if (!isActive) return;
+          router.push(DRIVER_ROUTES.activeOrder(order.id) as never);
+        }}
+      >
         <View style={styles.topRow}>
           <Text style={styles.title}>Current delivery</Text>
           <Text style={styles.payout}>${order.total.toFixed(2)}</Text>

@@ -35,10 +35,16 @@ import {
 import { auth, db, syncAuthForFirestoreReads } from './firebase';
 import { isMarketplaceOrderExpired } from '@/lib/marketplaceActiveOrder';
 import { getHumanOrderAge } from '@/lib/orderExpiry';
-import { isDriverActiveMarketplaceOrder } from '@/lib/driverHubActiveOrders';
+import {
+  isDriverActiveMarketplaceOrder,
+  isDriverCompletedMarketplaceOrder,
+  isDriverOrderTerminalForActiveList,
+} from '@/lib/driverHubActiveOrders';
+import { filterHubActiveDriverOrders } from '@/lib/driverHubOrdersStore';
 import {
   isDriverMarketplaceClaimable,
   isPaidMarketplaceDeliveryOrder,
+  MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
@@ -112,6 +118,7 @@ export type DriverOrder = {
   distanceKm: number | null;
   acceptedAtMs: number | null;
   createdAtMs: number | null;
+  deliveredAtMs: number | null;
   driverId: string | null;
   assignedDriverId: string | null;
 };
@@ -158,6 +165,7 @@ function normalizeStatus(value: unknown): OrderStatus {
     s === 'on_the_way' ||
     s === 'arrived_customer' ||
     s === 'delivered' ||
+    s === 'completed' ||
     s === 'cancelled' ||
     s === 'rejected'
   ) {
@@ -269,6 +277,7 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     driverLocation,
     acceptedAtMs: safeToMillis(data.acceptedAt),
     createdAtMs: safeToMillis(data.createdAt),
+    deliveredAtMs: safeToMillis(data.deliveredAt),
     deliveryStatus: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
     expired: isMarketplaceOrderExpired({
       createdAt: data.createdAt,
@@ -305,7 +314,10 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
   };
 }
 
-export { isDriverActiveMarketplaceOrder } from '@/lib/driverHubActiveOrders';
+export {
+  isDriverActiveMarketplaceOrder,
+  isDriverCompletedMarketplaceOrder,
+} from '@/lib/driverHubActiveOrders';
 
 export function subscribeDrivers(
   onData: (drivers: DriverProfile[]) => void,
@@ -573,7 +585,7 @@ export function subscribeDriverDeliveryStats(
 
       const statsFilters = {
         driverId: authUid,
-        status: 'delivered',
+        status: 'completed',
         deliveryType: 'delivery',
       };
       await logDriverQueryStart({
@@ -592,7 +604,7 @@ export function subscribeDriverDeliveryStats(
           query(
             collection(db, 'orders'),
             where('driverId', '==', authUid),
-            where('status', '==', 'delivered'),
+            where('status', '==', 'completed'),
             where('deliveryType', '==', 'delivery'),
           ),
           (snap) => {
@@ -966,7 +978,21 @@ export function getDriverActiveOrders(
 ): Unsubscribe {
   const uid = driverId.trim();
   return subscribeToDriverOrders(uid, (rows) => {
-    onData(rows.filter((o) => isDriverActiveMarketplaceOrder(o, uid)));
+    onData(filterHubActiveDriverOrders(rows, uid));
+  });
+}
+
+/** Recent completed marketplace deliveries for Driver Hub history. */
+export function getDriverCompletedDeliveries(
+  driverId: string,
+  onData: (orders: DriverOrder[]) => void,
+): Unsubscribe {
+  const uid = driverId.trim();
+  return subscribeToDriverOrders(uid, (rows) => {
+    const completed = rows
+      .filter((o) => isDriverCompletedMarketplaceOrder(o, uid))
+      .sort((a, b) => (b.deliveredAtMs ?? b.createdAtMs ?? 0) - (a.deliveredAtMs ?? a.createdAtMs ?? 0));
+    onData(completed);
   });
 }
 

@@ -4,6 +4,7 @@ import {
   normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
 import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
 import type { OrderStageInput } from '@/services/orderStage';
 import { serverTimestamp } from 'firebase/firestore';
@@ -201,5 +202,8 @@ export async function applyDriverMarketplaceFulfillment(
     fileName: 'driverMarketplaceFulfillment.ts',
     functionName: `applyDriverMarketplaceFulfillment:${action}`,
   });
+  if (action === 'deliver') {
+    markDriverHubOrderCompleted(id, 'delivery_completed');
+  }
   return 'applied';
 }
