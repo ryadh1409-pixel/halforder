@@ -16,6 +16,9 @@ export function useActiveDelivery(orderId: string | null | undefined) {
     setLoading(true);
     setError(null);
     const unsub = subscribeActiveDelivery(orderId, (row) => {
+      if (row && __DEV__) {
+        console.log('[ACTIVE DELIVERY SNAPSHOT]', row.id, row.marketplaceCourierStatus, row.updatedAtMs);
+      }
       setOrder(row);
       setLoading(false);
       setError(null);

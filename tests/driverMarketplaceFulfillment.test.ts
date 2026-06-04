@@ -1,6 +1,7 @@
 import {
   applyDriverMarketplaceFulfillment,
   getDriverMarketplaceFulfillmentButton,
+  isDriverMarketplaceDeliveryComplete,
 } from '@/lib/driverMarketplaceFulfillment';
 
 jest.mock('@/services/orderFirestoreWrite', () => ({
@@ -14,17 +15,7 @@ describe('driverMarketplaceFulfillment', () => {
     jest.clearAllMocks();
   });
 
-  it('shows Pick Up Order only when ready_for_pickup', () => {
-    expect(
-      getDriverMarketplaceFulfillmentButton(
-        {
-          driverId: 'drv1',
-          assignedDriverId: 'drv1',
-          deliveryStatus: 'ready_for_pickup',
-        },
-        'drv1',
-      ),
-    ).toEqual({ label: 'Pick Up Order', action: 'pickup' });
+  it('shows Arrived at Restaurant when driver_assigned', () => {
     expect(
       getDriverMarketplaceFulfillmentButton(
         {
@@ -34,10 +25,23 @@ describe('driverMarketplaceFulfillment', () => {
         },
         'drv1',
       ),
-    ).toBeNull();
+    ).toEqual({ label: 'Arrived at Restaurant', action: 'arrive_restaurant' });
   });
 
-  it('shows Deliver Order only after picked_up', () => {
+  it('shows Confirm Pickup when ready_for_pickup', () => {
+    expect(
+      getDriverMarketplaceFulfillmentButton(
+        {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          deliveryStatus: 'ready_for_pickup',
+        },
+        'drv1',
+      ),
+    ).toEqual({ label: 'Confirm Pickup', action: 'pickup' });
+  });
+
+  it('shows Complete Delivery after picked_up', () => {
     expect(
       getDriverMarketplaceFulfillmentButton(
         {
@@ -47,7 +51,7 @@ describe('driverMarketplaceFulfillment', () => {
         },
         'drv1',
       ),
-    ).toEqual({ label: 'Deliver Order', action: 'deliver' });
+    ).toEqual({ label: 'Complete Delivery', action: 'deliver' });
     expect(
       getDriverMarketplaceFulfillmentButton(
         {
@@ -58,6 +62,37 @@ describe('driverMarketplaceFulfillment', () => {
         'drv1',
       )?.action,
     ).not.toBe('deliver');
+  });
+
+  it('hides action and marks complete when delivered', () => {
+    const order = {
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+      deliveryStatus: 'delivered',
+    };
+    expect(getDriverMarketplaceFulfillmentButton(order, 'drv1')).toBeNull();
+    expect(isDriverMarketplaceDeliveryComplete(order, 'drv1')).toBe(true);
+  });
+
+  it('writes ready_for_pickup on arrive_restaurant', async () => {
+    const result = await applyDriverMarketplaceFulfillment(
+      'o1',
+      'arrive_restaurant',
+      {
+        id: 'o1',
+        driverId: 'drv1',
+        deliveryStatus: 'driver_assigned',
+      },
+    );
+    expect(result).toBe('applied');
+    expect(protectedUpdateOrder).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({
+        deliveryStatus: 'ready_for_pickup',
+        status: 'ready_for_pickup',
+      }),
+      expect.any(Object),
+    );
   });
 
   it('writes picked_up on pickup', async () => {

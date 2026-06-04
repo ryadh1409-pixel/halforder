@@ -126,6 +126,11 @@ export type DeliveryQueueOrder = {
 export type ActiveDelivery = DeliveryQueueOrder & {
   /** Canonical marketplace courier status (driver_assigned, ready_for_pickup, picked_up, delivered). */
   marketplaceCourierStatus: MarketplaceDeliveryStatus;
+  /** Raw Firestore `deliveryStatus` before lifecycle normalization. */
+  firestoreDeliveryStatus: string;
+  /** Bumps on each snapshot so UI can key off live writes. */
+  updatedAtMs: number | null;
+  driverId: string | null;
   assignedDriverId: string | null;
   acceptedAtMs: number | null;
   pickedUpAtMs: number | null;
@@ -270,15 +275,28 @@ function mapActiveDelivery(
   warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
   warnDevIfUnparsableTimestamp(d.id, 'pickedUpAt', data.pickedUpAt);
   warnDevIfUnparsableTimestamp(d.id, 'deliveredAt', data.deliveredAt);
+  const driverId =
+    typeof data.driverId === 'string'
+      ? data.driverId
+      : typeof data.assignedDriverId === 'string'
+        ? data.assignedDriverId
+        : null;
+  const assignedDriverId =
+    typeof data.assignedDriverId === 'string'
+      ? data.assignedDriverId
+      : driverId;
+  const firestoreDeliveryStatus =
+    typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
+  const marketplaceCourierStatus = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+  const updatedAtMs = safeToMillis(data.updatedAt);
+  warnDevIfUnparsableTimestamp(d.id, 'updatedAt', data.updatedAt);
   return {
     ...base,
-    marketplaceCourierStatus: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
-    assignedDriverId:
-      typeof data.assignedDriverId === 'string'
-        ? data.assignedDriverId
-        : typeof data.driverId === 'string'
-          ? data.driverId
-          : null,
+    marketplaceCourierStatus,
+    firestoreDeliveryStatus,
+    updatedAtMs,
+    driverId,
+    assignedDriverId,
     acceptedAtMs,
     pickedUpAtMs,
     deliveredAtMs,

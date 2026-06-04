@@ -2,7 +2,11 @@ import { DriverActiveRouteMap } from '@/components/maps/DriverActiveRouteMap';
 import { MarketplaceDeliveryActionBar } from '@/components/delivery/MarketplaceDeliveryActionBar';
 import { MarketplaceDeliveryTimeline } from '@/components/delivery/MarketplaceDeliveryTimeline';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
-import { applyDriverMarketplaceFulfillment } from '@/lib/driverMarketplaceFulfillment';
+import { activeDeliveryToFulfillmentView } from '@/lib/activeDeliveryFulfillment';
+import {
+  applyDriverMarketplaceFulfillment,
+  type DriverMarketplaceFulfillmentAction,
+} from '@/lib/driverMarketplaceFulfillment';
 import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
@@ -71,35 +75,46 @@ export default function DriverActiveDeliveryDetailsScreen() {
     return list;
   }, [driverLocationForMap, order]);
 
-  async function onPickup() {
-    if (!id || busy) return;
-    setBusy(true);
-    try {
-      const result = await applyDriverMarketplaceFulfillment(id, 'pickup', order ?? undefined);
-      if (result === 'skipped_illegal') {
-        showError('Order is not ready for pickup yet.');
-        return;
-      }
-      showSuccess('Picked up');
-    } catch {
-      showError('Could not mark order picked up');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const fulfillmentOrder = useMemo(
+    () => (order && id ? activeDeliveryToFulfillmentView(order, id) : null),
+    [
+      id,
+      order?.marketplaceCourierStatus,
+      order?.firestoreDeliveryStatus,
+      order?.updatedAtMs,
+      order?.driverId,
+      order?.assignedDriverId,
+      order?.status,
+    ],
+  );
 
-  async function onDeliver() {
-    if (!id || busy) return;
+  async function onFulfillmentAction(action: DriverMarketplaceFulfillmentAction) {
+    if (!id || busy || !order || !fulfillmentOrder) return;
     setBusy(true);
     try {
-      const result = await applyDriverMarketplaceFulfillment(id, 'deliver', order ?? undefined);
+      const result = await applyDriverMarketplaceFulfillment(id, action, fulfillmentOrder);
       if (result === 'skipped_illegal') {
-        showError('Pick up the order before completing delivery.');
+        if (action === 'arrive_restaurant') {
+          showError('Cannot mark arrival for this order yet.');
+        } else if (action === 'pickup') {
+          showError('Confirm arrival at the restaurant before pickup.');
+        } else {
+          showError('Pick up the order before completing delivery.');
+        }
         return;
       }
-      showSuccess('Delivered');
+      if (result === 'skipped_duplicate') {
+        return;
+      }
+      if (action === 'arrive_restaurant') {
+        showSuccess('Arrived at restaurant');
+      } else if (action === 'pickup') {
+        showSuccess('Pickup confirmed');
+      } else {
+        showSuccess('Delivery completed');
+      }
     } catch {
-      showError('Could not complete delivery');
+      showError('Could not update delivery');
     } finally {
       setBusy(false);
     }
@@ -158,8 +173,8 @@ export default function DriverActiveDeliveryDetailsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <View style={styles.headerCard}>
           <View style={styles.pill}>
             <Text style={styles.pillText}>{statusLabel}</Text>
@@ -289,14 +304,19 @@ export default function DriverActiveDeliveryDetailsScreen() {
         </View>
 
         <MarketplaceDeliveryTimeline status={courierStatus} />
-        <MarketplaceDeliveryActionBar
-          order={order}
-          driverUid={user?.uid}
-          busy={busy}
-          onPickup={() => void onPickup()}
-          onDeliver={() => void onDeliver()}
-        />
+        <View style={styles.timelineActionSpacer} />
       </ScrollView>
+      {fulfillmentOrder ? (
+        <View style={styles.stickyAction}>
+          <MarketplaceDeliveryActionBar
+            key={`${fulfillmentOrder.id}:${String(fulfillmentOrder.deliveryStatus)}:${activeOrder.updatedAtMs ?? ''}`}
+            order={fulfillmentOrder}
+            driverUid={user?.uid}
+            busy={busy}
+            onAction={(action) => void onFulfillmentAction(action)}
+          />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -304,7 +324,22 @@ export default function DriverActiveDeliveryDetailsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#020617' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617' },
-  content: { padding: 16, paddingBottom: 36 },
+  scroll: { flex: 1 },
+  content: { padding: 16, paddingBottom: 100 },
+  timelineActionSpacer: { height: 8 },
+  stickyAction: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#1F2937',
+    backgroundColor: '#111827',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 12,
+  },
   headerCard: {
     backgroundColor: '#111827',
     borderRadius: 16,

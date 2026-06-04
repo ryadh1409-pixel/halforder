@@ -141,14 +141,20 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
       );
       if (result === 'skipped_illegal') {
         showError(
-          fulfillmentAction.action === 'pickup'
-            ? 'Order is not ready for pickup yet.'
-            : 'Pick up the order before completing delivery.',
+          fulfillmentAction.action === 'arrive_restaurant'
+            ? 'Cannot mark arrival for this order yet.'
+            : fulfillmentAction.action === 'pickup'
+              ? 'Confirm arrival at the restaurant before pickup.'
+              : 'Pick up the order before completing delivery.',
         );
         return;
       }
       showSuccess(
-        fulfillmentAction.action === 'pickup' ? 'Picked up' : 'Delivery completed',
+        fulfillmentAction.action === 'arrive_restaurant'
+          ? 'Arrived at restaurant'
+          : fulfillmentAction.action === 'pickup'
+            ? 'Pickup confirmed'
+            : 'Delivery completed',
       );
       if (fulfillmentAction.action === 'deliver') {
         showNotice('Great job', 'Delivery completed.');

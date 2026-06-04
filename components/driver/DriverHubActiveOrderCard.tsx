@@ -50,13 +50,21 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
       );
       if (result === 'skipped_illegal') {
         showError(
-          action.action === 'pickup'
-            ? 'Order is not ready for pickup yet.'
-            : 'Pick up the order before completing delivery.',
+          action.action === 'arrive_restaurant'
+            ? 'Cannot mark arrival for this order yet.'
+            : action.action === 'pickup'
+              ? 'Confirm arrival at the restaurant before pickup.'
+              : 'Pick up the order before completing delivery.',
         );
         return;
       }
-      showSuccess(action.action === 'pickup' ? 'Picked up' : 'Delivered');
+      showSuccess(
+        action.action === 'arrive_restaurant'
+          ? 'Arrived at restaurant'
+          : action.action === 'pickup'
+            ? 'Pickup confirmed'
+            : 'Delivered',
+      );
     } catch {
       showError('Could not update delivery');
     } finally {

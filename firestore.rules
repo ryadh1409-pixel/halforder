@@ -1623,6 +1623,15 @@ service cloud.firestore {
         || ds == 'waiting_driver'
         || ds == 'accepted_for_delivery';
     }
+    function driverMarketplaceArriveRestaurantTransitionOk(before, after) {
+      let beforeDs = before.get('deliveryStatus', '');
+      return driverAssignedToMarketplaceOrder(before)
+        && beforeDs == 'driver_assigned'
+        && after.get('deliveryStatus', '') == 'ready_for_pickup'
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverClaimImmutableFieldsOk(before, after);
+    }
     function driverMarketplacePickupTransitionOk(before, after) {
       let beforeDs = before.get('deliveryStatus', '');
       return driverAssignedToMarketplaceOrder(before)
@@ -1720,7 +1729,8 @@ service cloud.firestore {
         && driverActivePatchAllowedKeys()
         && driverClaimUpdatedByOk()
         && (
-          driverMarketplacePickupTransitionOk(before, after)
+          driverMarketplaceArriveRestaurantTransitionOk(before, after)
+          || driverMarketplacePickupTransitionOk(before, after)
           || driverMarketplaceDeliverTransitionOk(before, after)
           || driverLocationOnlyPatchOk()
         );

@@ -8,7 +8,7 @@ import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
 import type { OrderStageInput } from '@/services/orderStage';
 import { serverTimestamp } from 'firebase/firestore';
 
-export type DriverMarketplaceFulfillmentAction = 'pickup' | 'deliver';
+export type DriverMarketplaceFulfillmentAction = 'arrive_restaurant' | 'pickup' | 'deliver';
 
 export type DriverMarketplaceFulfillmentView = OrderStageInput & {
   driverId?: unknown;
@@ -39,9 +39,23 @@ function isReadyForDriverPickup(courier: MarketplaceDeliveryStatus, raw: string)
   return raw === 'ready' || raw === 'waiting_driver' || raw === 'accepted_for_delivery';
 }
 
+/** True when assigned driver has finished this marketplace delivery. */
+export function isDriverMarketplaceDeliveryComplete(
+  order: DriverMarketplaceFulfillmentView | null | undefined,
+  driverUid: string | null | undefined,
+): boolean {
+  if (!order || !driverUid?.trim() || !isAssignedToDriver(order, driverUid)) {
+    return false;
+  }
+  return (
+    normalizeMarketplaceDeliveryStatus(order.deliveryStatus) ===
+    MARKETPLACE_DELIVERY_STATUS.DELIVERED
+  );
+}
+
 /**
- * Primary action for assigned marketplace deliveries.
- * Pickup only when courier is ready_for_pickup; deliver only after picked_up.
+ * UberEats-style primary action for assigned marketplace deliveries.
+ * driver_assigned → ready_for_pickup → picked_up → delivered
  */
 export function getDriverMarketplaceFulfillmentButton(
   order: DriverMarketplaceFulfillmentView | null | undefined,
@@ -53,11 +67,17 @@ export function getDriverMarketplaceFulfillmentButton(
   const raw = normCourier(order.deliveryStatus);
   const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
 
+  if (courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
+    return null;
+  }
+  if (courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED) {
+    return { label: 'Arrived at Restaurant', action: 'arrive_restaurant' };
+  }
   if (isReadyForDriverPickup(courier, raw)) {
-    return { label: 'Pick Up Order', action: 'pickup' };
+    return { label: 'Confirm Pickup', action: 'pickup' };
   }
   if (courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP) {
-    return { label: 'Deliver Order', action: 'deliver' };
+    return { label: 'Complete Delivery', action: 'deliver' };
   }
   return null;
 }
@@ -85,9 +105,6 @@ export function driverMarketplaceFulfillmentStatusHint(
     return null;
   }
   const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
-  if (courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED) {
-    return 'Head to the restaurant — waiting for order to be marked ready.';
-  }
   if (courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
     return 'Delivery completed.';
   }
@@ -95,6 +112,13 @@ export function driverMarketplaceFulfillmentStatusHint(
 }
 
 function buildFulfillmentPatch(action: DriverMarketplaceFulfillmentAction): Record<string, unknown> {
+  if (action === 'arrive_restaurant') {
+    return {
+      deliveryStatus: MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP,
+      status: 'ready_for_pickup',
+      updatedBy: 'driverMarketplaceArrivedRestaurant',
+    };
+  }
   if (action === 'pickup') {
     return {
       deliveryStatus: MARKETPLACE_DELIVERY_STATUS.PICKED_UP,
@@ -125,6 +149,9 @@ function isLegalFulfillment(
 ): boolean {
   const raw = normCourier(current.deliveryStatus);
   const courier = normalizeMarketplaceDeliveryStatus(current.deliveryStatus);
+  if (action === 'arrive_restaurant') {
+    return courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED;
+  }
   if (action === 'pickup') {
     return isReadyForDriverPickup(courier, raw);
   }
