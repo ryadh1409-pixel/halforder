@@ -12,8 +12,17 @@ const HIDDEN_TAB = { href: null } as const;
  * Wrong-role recovery is handled by {@link StartupRedirectOrchestrator} at root.
  */
 export default function TabLayout() {
-  const { canMountTabs, role } = useCustomerTabsAccess();
+  const tabsAccess = useCustomerTabsAccess();
+  const { canMountTabs, role, blockReason, customerWorkspace, firestoreRole } = tabsAccess;
   const customerTabs = useMemo(() => ({ allow: ['user', 'admin'] as const }), []);
+
+  console.log('[CustomerTabsLayout]', {
+    customerWorkspaceStatus: canMountTabs ? 'ready' : 'blocked',
+    blockReason,
+    customerWorkspace,
+    roleDetected: role,
+    firestoreRole,
+  });
 
   if (!canMountTabs) {
     return null;

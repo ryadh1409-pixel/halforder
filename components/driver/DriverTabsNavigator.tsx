@@ -43,7 +43,6 @@ function DriverTabsNavigator() {
       <Tabs.Screen name="dashboard" options={TAB_HIDDEN} />
       <Tabs.Screen name="active" options={TAB_HIDDEN} />
       <Tabs.Screen name="active/[id]" options={TAB_HIDDEN} />
-      <Tabs.Screen name="order/[id]" options={TAB_HIDDEN} />
     </Tabs>
   );
 }

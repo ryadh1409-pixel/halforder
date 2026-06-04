@@ -1,13 +1,10 @@
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
-import { RoleScopedOrderDetailGateway } from '@/components/layout/RoleScopedOrderDetailGateway';
 import {
-  PaymentNavigationBoundary,
   PostPaymentLoadingShell,
 } from '@/components/payment/PaymentNavigationBoundary';
 import { CustomerOrderDetailsScreen } from '@/components/orders/customer/CustomerOrderDetailsScreen';
 import { DriverOrderDetailsScreen } from '@/components/orders/driver/DriverOrderDetailsScreen';
 import { RestaurantOrderDetailsScreen } from '@/components/orders/restaurant/RestaurantOrderDetailsScreen';
-import { normalizeOrderRouteId } from '@/lib/orderRouteParams';
 import { useMarketplaceOrderDetail } from '@/hooks/useMarketplaceOrderDetail';
 import HalfOrderDetailsScreen from '@/screens/HalfOrderDetailsScreen';
 import { useAuth } from '@/services/AuthContext';
@@ -45,7 +42,8 @@ function OrderDetailErrorShell({
   );
 }
 
-export function OrderDetailScreen() {
+/** Marketplace / half-order detail body for `app/order/[id].tsx` (not an Expo route). */
+export default function OrderDetailScreen() {
   const router = useRouter();
   const { user, firestoreUserRole } = useAuth();
   const detail = useMarketplaceOrderDetail('order/[id]');
@@ -115,16 +113,6 @@ export function OrderDetailScreen() {
   }
 
   return <CustomerOrderDetailsScreen order={order} />;
-}
-
-export function OrderDetailRouteRoot() {
-  return (
-    <PaymentNavigationBoundary screenName="order/[id]">
-      <RoleScopedOrderDetailGateway>
-        <OrderDetailScreen />
-      </RoleScopedOrderDetailGateway>
-    </PaymentNavigationBoundary>
-  );
 }
 
 const styles = StyleSheet.create({

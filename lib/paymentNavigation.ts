@@ -1,3 +1,4 @@
+import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
 import type { Href } from 'expo-router';
 
 /** Post-payment live tracking — DoorDash-style customer screen. */
@@ -8,8 +9,7 @@ export function postPaymentLiveOrderHref(orderId: string): Href {
 
 /** Order details fallback when live tracking cannot hydrate. */
 export function postPaymentOrderDetailsHref(orderId: string): Href {
-  const id = orderId.trim();
-  return { pathname: '/order/[id]', params: { id } };
+  return customerOrderDetailHref(orderId);
 }
 
 export function logPaymentNavigation(

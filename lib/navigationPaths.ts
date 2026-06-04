@@ -1,3 +1,4 @@
+import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
 import type { Href } from 'expo-router';
 
 /** Canonical driver stack — always use these hrefs (never `/profile`, `/dispatch`, etc.). */
@@ -12,7 +13,8 @@ export const DRIVER_ROUTES = {
   active: '/(driver)/active',
   activeOrder: (orderId: string) =>
     `/(driver)/active/${encodeURIComponent(orderId)}` as const,
-  order: (orderId: string) => `/(driver)/order/${encodeURIComponent(orderId)}` as const,
+  /** Same root route as customers — viewer role picks driver UI in OrderDetailScreen. */
+  order: (orderId: string) => customerOrderDetailHref(orderId),
 } as const;
 
 export type DriverTabKey = 'index' | 'earnings' | 'driver-profile';
@@ -30,11 +32,8 @@ export const DRIVER_TAB_HREFS: Record<DriverTabKey, Href> = {
 export const USER_ROUTES = {
   hub: '/(tabs)',
   orders: '/orders',
-  /** Canonical marketplace order detail — matches `app/order/[id].tsx`. */
-  order: (orderId: string): Href => ({
-    pathname: '/order/[id]',
-    params: { id: orderId.trim() },
-  }),
+  /** Canonical marketplace order detail — root `app/order/[id].tsx` only. */
+  order: (orderId: string): Href => customerOrderDetailHref(orderId),
   trackOrder: (orderId: string) => `/track-order/${encodeURIComponent(orderId)}` as const,
 } as const;
 

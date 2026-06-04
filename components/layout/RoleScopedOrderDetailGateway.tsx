@@ -1,19 +1,17 @@
 import { PostPaymentLoadingShell } from '@/components/payment/PaymentNavigationBoundary';
-import { orderDetailHref } from '@/lib/orderRoutes';
+import { resolveOrderDetailGate } from '@/lib/orderDetailGate';
 import { normalizeOrderRouteId } from '@/lib/orderRouteParams';
-import { isInDriverGroup, isInHostGroup } from '@/lib/routing/routeConstants';
-import { normalizeRoleForRouting } from '@/lib/authRole';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect, useLocalSearchParams, usePathname, useSegments } from 'expo-router';
-import React from 'react';
+import React, { useMemo } from 'react';
 
 type Props = {
   children: React.ReactNode;
 };
 
 /**
- * Keeps signed-in drivers and restaurants on role-scoped order routes
- * instead of the shared `/order/[id]` entry.
+ * Keeps signed-in drivers and restaurants on role-scoped order routes.
+ * Customer (`user` / `admin`) accounts always render children — never driver workspace.
  */
 export function RoleScopedOrderDetailGateway({ children }: Props) {
   const { authReady, roleResolved, loading, firestoreUserRole, user } = useAuth();
@@ -21,21 +19,51 @@ export function RoleScopedOrderDetailGateway({ children }: Props) {
   const pathname = usePathname();
   const segments = useSegments();
   const orderId = normalizeOrderRouteId(params.id);
-  const role = normalizeRoleForRouting(firestoreUserRole);
   const segmentList = segments as string[];
+  const segmentKey = segmentList.join('/');
+
+  const decision = useMemo(
+    () =>
+      resolveOrderDetailGate({
+        authReady,
+        loading,
+        roleResolved,
+        firestoreUserRole,
+        userUid: user?.uid,
+        orderId,
+        pathname,
+        segments: segmentList,
+      }),
+    [
+      authReady,
+      firestoreUserRole,
+      loading,
+      orderId,
+      pathname,
+      roleResolved,
+      segmentKey,
+      user?.uid,
+    ],
+  );
 
   console.log('[RoleScopedOrderDetailGateway]', {
-    rawId: params.id,
+    gateState: decision.action,
+    loadingReason: decision.action === 'loading' ? decision.reason : null,
+    passReason: decision.action === 'render' ? decision.reason : null,
+    redirectReason: decision.action === 'redirect' ? decision.reason : null,
+    roleDetected: decision.role,
+    firestoreRole: decision.firestoreRole,
+    customerWorkspace: decision.customerWorkspace,
+    driverWorkspace: decision.driverWorkspace,
     orderId: orderId || null,
-    role,
-    roleResolved,
-    authReady,
-    loading,
     pathname,
     segments: segmentList,
+    authReady,
+    roleResolved,
+    authLoading: loading,
   });
 
-  if (!authReady || loading) {
+  if (decision.action === 'loading') {
     return (
       <PostPaymentLoadingShell
         title="Loading order…"
@@ -44,34 +72,8 @@ export function RoleScopedOrderDetailGateway({ children }: Props) {
     );
   }
 
-  if (!user?.uid || !orderId) {
-    return <>{children}</>;
-  }
-
-  if (!roleResolved) {
-    return <>{children}</>;
-  }
-
-  if (role === 'driver' && !isInDriverGroup(segmentList, pathname)) {
-    if (__DEV__) {
-      console.warn('[Route assertion] driver on shared /order — redirecting to (driver) order', {
-        orderId,
-        pathname,
-        segments: segmentList,
-      });
-    }
-    return <Redirect href={orderDetailHref('driver', orderId)} />;
-  }
-
-  if (role === 'restaurant' && !isInHostGroup(segmentList, pathname)) {
-    if (__DEV__) {
-      console.warn('[Route assertion] restaurant on shared /order — redirecting to (host) order', {
-        orderId,
-        pathname,
-        segments: segmentList,
-      });
-    }
-    return <Redirect href={orderDetailHref('restaurant', orderId)} />;
+  if (decision.action === 'redirect') {
+    return <Redirect href={decision.href} />;
   }
 
   return <>{children}</>;
