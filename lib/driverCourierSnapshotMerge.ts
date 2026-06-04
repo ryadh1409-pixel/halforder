@@ -54,6 +54,67 @@ function isTerminalCourierReset(status: MarketplaceDeliveryStatus): boolean {
   return status === MARKETPLACE_DELIVERY_STATUS.CANCELLED;
 }
 
+type ActiveDeliveryCourierFields = Pick<
+  ActiveDelivery,
+  | 'marketplaceCourierStatus'
+  | 'firestoreDeliveryStatus'
+  | 'deliveredAtMs'
+  | 'status'
+>;
+
+/** True when the order has completed marketplace delivery (any reliable signal). */
+export function isEffectivelyDelivered(order: ActiveDeliveryCourierFields): boolean {
+  if (order.marketplaceCourierStatus === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
+    return true;
+  }
+  const raw = order.firestoreDeliveryStatus;
+  if (raw === 'delivered' || raw === 'completed') return true;
+  const kitchen = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
+  if (kitchen === 'completed' || kitchen === 'delivered') return true;
+  const ms = order.deliveredAtMs;
+  return ms != null && Number.isFinite(ms) && ms > 0;
+}
+
+/** Align courier field when kitchen/delivery timestamps say delivered but courier lags. */
+export function withResolvedMarketplaceCourier(order: ActiveDelivery): ActiveDelivery {
+  if (
+    order.marketplaceCourierStatus === MARKETPLACE_DELIVERY_STATUS.DELIVERED ||
+    !isEffectivelyDelivered(order)
+  ) {
+    return order;
+  }
+  return {
+    ...order,
+    marketplaceCourierStatus: MARKETPLACE_DELIVERY_STATUS.DELIVERED,
+    firestoreDeliveryStatus:
+      order.firestoreDeliveryStatus === 'delivered'
+        ? order.firestoreDeliveryStatus
+        : 'delivered',
+  };
+}
+
+function logDeliveredSnapshot(
+  phase: 'received' | 'applied',
+  source: DriverOrderSnapshotSource,
+  order: ActiveDelivery,
+  meta?: DriverOrderSnapshotLogMeta,
+): void {
+  console.log(
+    phase === 'received' ? '[DELIVERED SNAPSHOT RECEIVED]' : '[DELIVERED SNAPSHOT APPLIED]',
+    {
+      source,
+      orderId: order.id,
+      deliveryStatus: order.marketplaceCourierStatus,
+      firestoreDeliveryStatus: order.firestoreDeliveryStatus,
+      status: order.status,
+      deliveredAtMs: order.deliveredAtMs ?? null,
+      updatedAt: order.updatedAtMs ?? null,
+      fromCache: meta?.fromCache ?? false,
+      hasPendingWrites: meta?.hasPendingWrites ?? false,
+    },
+  );
+}
+
 /**
  * Whether `incoming` may replace `current` for driver active-delivery UI.
  * Courier never regresses along driver_assigned → ready_for_pickup → picked_up → delivered.
@@ -67,6 +128,12 @@ export function shouldAcceptDriverCourierSnapshot(
 
   const incomingCourier = incoming.marketplaceCourierStatus;
   if (isTerminalCourierReset(incomingCourier)) return true;
+
+  const incomingDelivered = isEffectivelyDelivered(incoming);
+  const currentDelivered = isEffectivelyDelivered(current);
+
+  if (incomingDelivered && !currentDelivered) return true;
+  if (incomingDelivered && currentDelivered) return true;
 
   const curRank = driverCourierForwardRank(current.marketplaceCourierStatus);
   const incRank = driverCourierForwardRank(incomingCourier);
@@ -90,39 +157,51 @@ export function reconcileActiveDeliverySnapshot(
   source: DriverOrderSnapshotSource,
   meta?: DriverOrderSnapshotLogMeta,
 ): ActiveDelivery | null {
-  logDriverOrderSnapshot(source, incoming, meta);
+  const resolved = withResolvedMarketplaceCourier(incoming);
+  logDriverOrderSnapshot(source, resolved, meta);
 
   if (!current) {
-    return incoming;
+    if (isEffectivelyDelivered(resolved)) {
+      logDeliveredSnapshot('received', source, resolved, meta);
+      logDeliveredSnapshot('applied', source, resolved, meta);
+    }
+    return resolved;
   }
-  if (current.id !== incoming.id) {
-    return incoming;
+  if (current.id !== resolved.id) {
+    return resolved;
   }
 
-  if (shouldAcceptDriverCourierSnapshot(current, incoming)) {
+  if (isEffectivelyDelivered(resolved)) {
+    logDeliveredSnapshot('received', source, resolved, meta);
+  }
+
+  if (shouldAcceptDriverCourierSnapshot(current, resolved)) {
+    if (isEffectivelyDelivered(resolved)) {
+      logDeliveredSnapshot('applied', source, resolved, meta);
+    }
     if (
-      current.marketplaceCourierStatus !== incoming.marketplaceCourierStatus ||
-      resolveUpdatedAtMs(current) !== resolveUpdatedAtMs(incoming)
+      current.marketplaceCourierStatus !== resolved.marketplaceCourierStatus ||
+      resolveUpdatedAtMs(current) !== resolveUpdatedAtMs(resolved)
     ) {
       console.log('[DRIVER ORDER SNAPSHOT] applied', {
         source,
-        orderId: incoming.id,
+        orderId: resolved.id,
         from: current.marketplaceCourierStatus,
-        to: incoming.marketplaceCourierStatus,
+        to: resolved.marketplaceCourierStatus,
         fromUpdatedAt: current.updatedAtMs ?? null,
-        toUpdatedAt: incoming.updatedAtMs ?? null,
+        toUpdatedAt: resolved.updatedAtMs ?? null,
       });
     }
-    return incoming;
+    return resolved;
   }
 
   console.log('[DRIVER ORDER SNAPSHOT] ignored stale', {
     source,
-    orderId: incoming.id,
+    orderId: resolved.id,
     keptDeliveryStatus: current.marketplaceCourierStatus,
-    rejectedDeliveryStatus: incoming.marketplaceCourierStatus,
+    rejectedDeliveryStatus: resolved.marketplaceCourierStatus,
     keptUpdatedAt: current.updatedAtMs ?? null,
-    rejectedUpdatedAt: incoming.updatedAtMs ?? null,
+    rejectedUpdatedAt: resolved.updatedAtMs ?? null,
     fromCache: meta?.fromCache ?? false,
   });
   return null;
@@ -131,9 +210,9 @@ export function reconcileActiveDeliverySnapshot(
 /** Pick the freshest row when several sources hold the same order id. */
 export function pickFreshestActiveDelivery(rows: ActiveDelivery[]): ActiveDelivery | null {
   if (!rows.length) return null;
-  let best = rows[0];
+  let best = withResolvedMarketplaceCourier(rows[0]);
   for (let i = 1; i < rows.length; i += 1) {
-    const candidate = rows[i];
+    const candidate = withResolvedMarketplaceCourier(rows[i]);
     if (shouldAcceptDriverCourierSnapshot(best, candidate)) {
       best = candidate;
       continue;

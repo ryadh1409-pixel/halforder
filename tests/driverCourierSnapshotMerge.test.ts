@@ -1,5 +1,6 @@
 import {
   driverCourierForwardRank,
+  isEffectivelyDelivered,
   pickFreshestActiveDelivery,
   reconcileActiveDeliverySnapshot,
   shouldAcceptDriverCourierSnapshot,
@@ -129,5 +130,54 @@ describe('pickFreshestActiveDelivery', () => {
     const a = stubActive({ id: 'o1', marketplaceCourierStatus: 'driver_assigned', updatedAtMs: 500 });
     const b = stubActive({ id: 'o1', marketplaceCourierStatus: 'ready_for_pickup', updatedAtMs: 400 });
     expect(pickFreshestActiveDelivery([a, b])?.marketplaceCourierStatus).toBe('ready_for_pickup');
+  });
+});
+
+describe('delivered snapshot merge', () => {
+  it('detects delivered from status completed when courier field lags', () => {
+    const row = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'picked_up',
+      firestoreDeliveryStatus: 'picked_up',
+      status: 'completed',
+      deliveredAtMs: 5000,
+    });
+    expect(isEffectivelyDelivered(row)).toBe(true);
+  });
+
+  it('accepts picked_up -> delivered even when delivered updatedAt is older', () => {
+    const current = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'picked_up',
+      updatedAtMs: 5000,
+    });
+    const incoming = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'delivered',
+      updatedAtMs: 1000,
+    });
+    expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
+    expect(
+      reconcileActiveDeliverySnapshot(current, incoming, 'active_delivery')?.marketplaceCourierStatus,
+    ).toBe('delivered');
+  });
+
+  it('never keeps picked_up when incoming is effectively delivered via completed status', () => {
+    const current = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'picked_up',
+      updatedAtMs: 9000,
+    });
+    const incoming = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'picked_up',
+      firestoreDeliveryStatus: 'picked_up',
+      status: 'completed',
+      deliveredAtMs: 8000,
+      updatedAtMs: 1000,
+    });
+    expect(
+      reconcileActiveDeliverySnapshot(current, incoming, 'active_delivery')?.marketplaceCourierStatus,
+    ).toBe('delivered');
   });
 });

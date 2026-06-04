@@ -5,6 +5,7 @@ import {
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
 import {
+  MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
@@ -287,7 +288,18 @@ function mapActiveDelivery(
       : driverId;
   const firestoreDeliveryStatus =
     typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
-  const marketplaceCourierStatus = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+  const kitchenStatus =
+    typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
+  let marketplaceCourierStatus = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+  if (
+    marketplaceCourierStatus !== MARKETPLACE_DELIVERY_STATUS.DELIVERED &&
+    (kitchenStatus === 'completed' ||
+      kitchenStatus === 'delivered' ||
+      (deliveredAtMs != null && deliveredAtMs > 0) ||
+      firestoreDeliveryStatus === 'delivered')
+  ) {
+    marketplaceCourierStatus = MARKETPLACE_DELIVERY_STATUS.DELIVERED;
+  }
   const updatedAtMs = safeToMillis(data.updatedAt);
   warnDevIfUnparsableTimestamp(d.id, 'updatedAt', data.updatedAt);
   return {
@@ -665,11 +677,13 @@ export function subscribeActiveDelivery(
           onData(null, meta);
           return;
         }
-        if (snap.metadata.hasPendingWrites) {
-          console.log('[ACTIVE DELIVERY SNAPSHOT] skipping — pending local write', orderId);
-          return;
-        }
         const mapped = safeMapActiveDelivery(snap);
+        if (snap.metadata.hasPendingWrites) {
+          console.log('[ACTIVE DELIVERY SNAPSHOT] pending local write', orderId, {
+            deliveryStatus: mapped?.marketplaceCourierStatus ?? null,
+            firestoreDeliveryStatus: mapped?.firestoreDeliveryStatus ?? null,
+          });
+        }
         onData(mapped, meta);
       } catch (err) {
         warnMalformedDeliveryDoc(orderId, 'subscribeActiveDelivery snapshot', err);
