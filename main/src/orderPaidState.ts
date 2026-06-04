@@ -2,6 +2,7 @@
  * Mirror of `lib/orderPaidState.ts` for Cloud Functions (main codebase).
  * Keep in sync when changing paid-state rules.
  */
+import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
 import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {sanitizeOrderPatchAgainstRegression} from "./orderStageMonotonic.js";
 export const POST_PAYMENT_ORDER_STATUS = "payment_confirmed" as const;
@@ -27,6 +28,9 @@ export const FULFILLED_KITCHEN_STATUSES = new Set([
 ]);
 
 export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolean {
+  if (isDriverFulfillmentAdvanced(order.deliveryStatus)) {
+    return true;
+  }
   const status = orderStatusString(order.status).toLowerCase();
   if (FULFILLED_KITCHEN_STATUSES.has(status)) {
     return true;
@@ -35,7 +39,6 @@ export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolea
   return (
     courier === "accepted" ||
     courier === "preparing" ||
-    courier === "ready_for_pickup" ||
     courier === "driver_assigned" ||
     courier === "picked_up" ||
     courier === "delivered"
@@ -63,11 +66,13 @@ export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
   if (paymentStatus !== "paid" || !PRE_PAYMENT_ORDER_STATUSES.has(status)) {
     return false;
   }
+  if (isDriverFulfillmentAdvanced(order.deliveryStatus)) {
+    return false;
+  }
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
   if (
     courier === "accepted" ||
     courier === "preparing" ||
-    courier === "ready_for_pickup" ||
     courier === "driver_assigned" ||
     courier === "picked_up" ||
     courier === "delivered"
@@ -139,14 +144,18 @@ export function buildOrderPaidStatePatch(
     status: resolvePostPaymentOrderStatus(existing, currentStatus),
   };
 
-  const courier = orderStatusString(existing.deliveryStatus).toLowerCase();
   const courierFulfillmentAdvanced =
-    courier === "accepted" ||
-    courier === "preparing" ||
-    courier === "ready_for_pickup" ||
-    courier === "driver_assigned" ||
-    courier === "picked_up" ||
-    courier === "delivered";
+    isDriverFulfillmentAdvanced(existing.deliveryStatus) ||
+    (() => {
+      const courier = orderStatusString(existing.deliveryStatus).toLowerCase();
+      return (
+        courier === "accepted" ||
+        courier === "preparing" ||
+        courier === "driver_assigned" ||
+        courier === "picked_up" ||
+        courier === "delivered"
+      );
+    })();
 
   if (!input.repairOnly) {
     if (!courierFulfillmentAdvanced) {

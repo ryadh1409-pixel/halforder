@@ -22,6 +22,7 @@ import {
   marketplacePoolRemoveReason,
   shouldRemoveFromDriverPool,
 } from "./marketplacePoolLifecycle.js";
+import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
 import {repairOrderPaidStateIfNeeded} from "./repairOrderPaidState.js";
 
 const db = getFirestore();
@@ -125,7 +126,12 @@ async function handleOrderWrite(
     courier === "picked_up" ||
     courier === "delivered";
 
-  if (!fulfillmentAdvanced) {
+  if (isDriverFulfillmentAdvanced(data.deliveryStatus)) {
+    logger.info("[marketplace-sync] skip repair — driver fulfillment advanced", {
+      orderId,
+      deliveryStatus: data.deliveryStatus,
+    });
+  } else if (!fulfillmentAdvanced) {
     const paid = String(data.paymentStatus ?? "").trim().toLowerCase() === "paid";
     const kitchenStatus = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";
     if (paid && kitchenStatus !== "awaiting_payment" && kitchenStatus !== "pending_payment") {

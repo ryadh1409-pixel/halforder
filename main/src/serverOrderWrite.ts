@@ -1,3 +1,4 @@
+import {guardPatchForDriverFulfillment} from "./driverFulfillmentGuard.js";
 import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {wouldDowngradeLifecycle} from "./orderLifecyclePriority.js";
 import {
@@ -26,10 +27,14 @@ export function prepareServerOrderPatch(
   patch: Record<string, unknown>,
   updatedBy: string,
 ): Record<string, unknown> {
-  const withMeta = {
-    ...patch,
+  const withMeta = guardPatchForDriverFulfillment(
+    current,
+    {
+      ...patch,
+      updatedBy,
+    },
     updatedBy,
-  };
+  );
 
   if (hasFulfillmentProgressMarkers(current)) {
     const paymentOnly = stripFulfillmentFields(withMeta);

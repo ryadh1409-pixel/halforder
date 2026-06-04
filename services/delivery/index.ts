@@ -649,10 +649,15 @@ export function subscribeActiveDelivery(
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'orders', orderId),
+    { includeMetadataChanges: true },
     (snap) => {
       try {
         if (!snap.exists()) {
           onData(null);
+          return;
+        }
+        if (snap.metadata.hasPendingWrites) {
+          console.log('[ACTIVE DELIVERY SNAPSHOT] skipping — pending local write', orderId);
           return;
         }
         const mapped = safeMapActiveDelivery(snap);

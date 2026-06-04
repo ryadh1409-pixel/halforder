@@ -7,6 +7,7 @@ import {
   orderPaymentStatusString,
   orderStatusString,
 } from "./orderPaidState.js";
+import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
 import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 
@@ -20,6 +21,15 @@ export async function repairOrderPaidStateIfNeeded(
   orderId: string,
   data: DocumentData,
 ): Promise<boolean> {
+  if (isDriverFulfillmentAdvanced(data.deliveryStatus)) {
+    console.log(
+      "[FUNCTION] skipping — driver already advanced:",
+      data.deliveryStatus,
+      {orderId, logSource: "repairOrderPaidState"},
+    );
+    return false;
+  }
+
   if (hasFulfillmentProgressMarkers(data) || isOrderFulfilledForPaidPatch(data)) {
     console.log(
       "[REPAIR] skipping — order already fulfilled:",
@@ -48,6 +58,14 @@ export async function repairOrderPaidStateIfNeeded(
     if (!snap.exists) return;
 
     const fresh = snap.data() ?? {};
+    if (isDriverFulfillmentAdvanced(fresh.deliveryStatus)) {
+      console.log(
+        "[FUNCTION] skipping — driver already advanced:",
+        fresh.deliveryStatus,
+        {orderId, logSource: "repairOrderPaidState:txn"},
+      );
+      return;
+    }
     if (hasFulfillmentProgressMarkers(fresh) || isOrderFulfilledForPaidPatch(fresh)) {
       console.log("[REPAIR] txn skip — fulfilled", {orderId});
       return;
