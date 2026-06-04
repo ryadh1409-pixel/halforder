@@ -1641,11 +1641,72 @@ service cloud.firestore {
         && (after.get('status', '') == 'completed' || after.get('status', '') == before.get('status', ''))
         && driverClaimImmutableFieldsOk(before, after);
     }
+    /** Assigned-driver live GPS on orders/{id}.driverLocation (canonical + legacy fields). */
+    function driverLocationOptionalNumber(m, key) {
+      return !m.keys().hasAny([key])
+        || m.get(key, null) == null
+        || m.get(key, null) is number;
+    }
+    function driverLocationCoordsOk(loc) {
+      return loc is map
+        && (
+          (loc.get('lat', null) is number && loc.get('lng', null) is number)
+          || (
+            loc.get('latitude', null) is number
+            && loc.get('longitude', null) is number
+          )
+        );
+    }
+    function driverLocationMapOk(loc) {
+      return loc is map
+        && loc.keys().hasOnly([
+          'lat',
+          'lng',
+          'latitude',
+          'longitude',
+          'heading',
+          'speed',
+          'timestamp',
+          'updatedAt',
+        ])
+        && driverLocationCoordsOk(loc)
+        && driverLocationOptionalNumber(loc, 'heading')
+        && driverLocationOptionalNumber(loc, 'speed');
+    }
     function driverLocationOnlyPatchOk() {
+      let after = request.resource.data;
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'driverLocation',
         'updatedAt',
-      ]);
+      ])
+        && driverLocationMapOk(after.get('driverLocation', {}));
+    }
+    /**
+     * Lightweight GPS-only path — evaluated before heavy HalfOrder/marketplace branches.
+     * Assigned driver (driverId or assignedDriverId), or unassigned delivery preview.
+     */
+    function isValidDriverLocationOnlyPatch() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && driverLocationOnlyPatchOk()
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && (
+          (
+            (
+              before.get('driverId', '') == request.auth.uid
+              || before.get('assignedDriverId', '') == request.auth.uid
+            )
+            && before.get('deliveryType', '') == 'delivery'
+          )
+          || (
+            isDriver()
+            && before.get('deliveryType', '') == 'delivery'
+            && noDriverAssignedYet(before)
+          )
+        );
     }
     function isValidDriverActivePatch() {
       let before = resource.data;
@@ -1872,6 +1933,10 @@ service cloud.firestore {
           )
           || (
             !isCurrentUserRestricted()
+            && isValidDriverLocationOnlyPatch()
+          )
+          || (
+            !isCurrentUserRestricted()
             && resource.data.get('deliveryType', '') == 'delivery'
             && isValidDriverActivePatch()
           )
@@ -2060,6 +2125,7 @@ service cloud.firestore {
           authTokenRoleIsRestaurant()
           && resource.data.isOnline == true
         );
+      // Driver self-service profile + liveLocation / presence (syncDriverLiveLocation batch).
       allow create, update, delete: if isSignedIn()
         && request.auth.uid == driverId;
     }
@@ -2073,19 +2139,40 @@ service cloud.firestore {
       function liveLocOrderData() {
         return get(/databases/$(database)/documents/orders/$(orderId)).data;
       }
+      function liveLocationDocKeysOk() {
+        return request.resource.data.keys().hasOnly([
+          'orderId',
+          'driverId',
+          'lat',
+          'lng',
+          'latitude',
+          'longitude',
+          'heading',
+          'speed',
+          'timestamp',
+          'updatedAt',
+        ]);
+      }
+      function liveLocationCoordsOk() {
+        return request.resource.data.lat is number
+          && request.resource.data.lng is number
+          && request.resource.data.latitude is number
+          && request.resource.data.longitude is number;
+      }
       allow read: if isSignedIn()
         && !isCurrentUserRestricted()
         && canAccessMarketplaceDeliveryOrder(liveLocOrderData());
       allow create, update: if isSignedIn()
         && !isCurrentUserRestricted()
-        && requestUserIsDriver()
-        && canAccessMarketplaceDeliveryOrder(liveLocOrderData())
-        && liveLocOrderData().driverId == request.auth.uid
+        && isDriver()
+        && liveLocOrderData().get('deliveryType', '') == 'delivery'
+        && driverAssignedToMarketplaceOrder(liveLocOrderData())
         && request.resource.data.orderId == orderId
         && request.resource.data.driverId == request.auth.uid
-        && request.resource.data.lat is number
-        && request.resource.data.lng is number
-        && request.resource.data.keys().hasOnly(['orderId','driverId','lat','lng','heading','speed','updatedAt']);
+        && liveLocationCoordsOk()
+        && liveLocationDocKeysOk()
+        && driverLocationOptionalNumber(request.resource.data, 'heading')
+        && driverLocationOptionalNumber(request.resource.data, 'speed');
       allow delete: if false;
     }
     /**
