@@ -30,6 +30,7 @@ import { isRegisteredAuthUser } from '@/lib/authSession';
 import { showRestaurantAcceptedCancelAlert } from '@/lib/customerOrderCancelAlert';
 import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
 import { navigateForRole } from '@/lib/navigation';
+import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
@@ -645,8 +646,13 @@ export default function ProfileScreen() {
 
   const handleOpenOrderDetails = useCallback(
     (orderId: string) => {
-      const href = USER_ROUTES.order(orderId);
-      console.log('[Profile] open order', { orderId, href });
+      // Root stack `app/order/[id].tsx` — not `(driver)/order` or `(tabs)/orders`
+      const href = customerOrderDetailHref(orderId);
+      console.log('[Profile] open order', {
+        orderId,
+        href,
+        note: 'root /order/:id outside driver layout',
+      });
       router.push(href);
     },
     [router],
