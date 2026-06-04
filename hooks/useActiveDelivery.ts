@@ -1,12 +1,45 @@
-import { subscribeActiveDelivery, type ActiveDelivery } from '@/services/delivery';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  reconcileActiveDeliverySnapshot,
+  type DriverOrderSnapshotSource,
+} from '@/lib/driverCourierSnapshotMerge';
+import {
+  subscribeActiveDelivery,
+  subscribeDriverActiveOrders,
+  type ActiveDelivery,
+} from '@/services/delivery';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 
-export function useActiveDelivery(orderId: string | null | undefined) {
+function applySnapshot(
+  setOrder: Dispatch<SetStateAction<ActiveDelivery | null>>,
+  source: DriverOrderSnapshotSource,
+  row: ActiveDelivery | null,
+  meta?: { fromCache?: boolean; hasPendingWrites?: boolean },
+): void {
+  if (!row) {
+    setOrder(null);
+    return;
+  }
+  setOrder((prev) => {
+    const merged = reconcileActiveDeliverySnapshot(prev, row, source, meta);
+    return merged ?? prev;
+  });
+}
+
+/**
+ * Live order for `/(driver)/active/[id]` — merges doc listener + driver active list
+ * so stale cache/query snapshots never regress courier status.
+ */
+export function useActiveDelivery(
+  orderId: string | null | undefined,
+  driverId?: string | null,
+) {
   const [order, setOrder] = useState<ActiveDelivery | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const sourcesLoggedRef = useRef<Set<DriverOrderSnapshotSource>>(new Set());
 
   useEffect(() => {
+    sourcesLoggedRef.current.clear();
     if (!orderId) {
       setOrder(null);
       setLoading(false);
@@ -15,16 +48,41 @@ export function useActiveDelivery(orderId: string | null | undefined) {
     }
     setLoading(true);
     setError(null);
-    const unsub = subscribeActiveDelivery(orderId, (row) => {
-      if (row && __DEV__) {
-        console.log('[ACTIVE DELIVERY SNAPSHOT]', row.id, row.marketplaceCourierStatus, row.updatedAtMs);
+
+    const unsubDoc = subscribeActiveDelivery(
+      orderId,
+      (row, meta) => {
+        if (row && __DEV__ && !sourcesLoggedRef.current.has('active_delivery')) {
+          sourcesLoggedRef.current.add('active_delivery');
+          console.log('[ACTIVE DELIVERY] subscribed', orderId);
+        }
+        applySnapshot(setOrder, 'active_delivery', row, meta);
+        setLoading(false);
+        setError(null);
+      },
+    );
+
+    const did = typeof driverId === 'string' ? driverId.trim() : '';
+    if (!did) {
+      return () => {
+        unsubDoc();
+      };
+    }
+
+    const unsubList = subscribeDriverActiveOrders(did, (rows) => {
+      const match = Array.isArray(rows) ? rows.find((r) => r.id === orderId) : null;
+      if (match) {
+        applySnapshot(setOrder, 'driver_orders', match);
       }
-      setOrder(row);
       setLoading(false);
       setError(null);
     });
-    return () => unsub();
-  }, [orderId]);
+
+    return () => {
+      unsubDoc();
+      unsubList();
+    };
+  }, [orderId, driverId]);
 
   return useMemo(
     () => ({

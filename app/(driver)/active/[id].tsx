@@ -40,7 +40,7 @@ function elapsedLabel(acceptedAtMs: number | null): string {
 export default function DriverActiveDeliveryDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user } = useAuth();
-  const { order, loading } = useActiveDelivery(id);
+  const { order, loading } = useActiveDelivery(id, user?.uid);
   const [busy, setBusy] = useState(false);
   const mapRef = useRef<unknown>(null);
 

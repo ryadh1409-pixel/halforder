@@ -47,6 +47,7 @@ export const DELIVERY_STATUS_LABEL: Record<DeliveryLifecycleStatus, string> = {
 const LEGACY_TO_LIFECYCLE: Record<string, DeliveryLifecycleStatus> = {
   waiting_driver: DELIVERY_STATUS.AVAILABLE,
   driver_assigned: DELIVERY_STATUS.ACCEPTED,
+  ready_for_pickup: DELIVERY_STATUS.ARRIVED_AT_RESTAURANT,
   heading_to_restaurant: DELIVERY_STATUS.ACCEPTED,
   arrived_restaurant: DELIVERY_STATUS.ARRIVED_AT_RESTAURANT,
   near_customer: DELIVERY_STATUS.ARRIVED_CUSTOMER,

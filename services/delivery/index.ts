@@ -643,17 +643,26 @@ export async function declineOrder(orderId: string, driverId: string): Promise<v
   }
 }
 
+export type ActiveDeliverySnapshotMeta = {
+  fromCache: boolean;
+  hasPendingWrites: boolean;
+};
+
 export function subscribeActiveDelivery(
   orderId: string,
-  onData: (order: ActiveDelivery | null) => void,
+  onData: (order: ActiveDelivery | null, meta?: ActiveDeliverySnapshotMeta) => void,
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'orders', orderId),
     { includeMetadataChanges: true },
     (snap) => {
       try {
+        const meta: ActiveDeliverySnapshotMeta = {
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites,
+        };
         if (!snap.exists()) {
-          onData(null);
+          onData(null, meta);
           return;
         }
         if (snap.metadata.hasPendingWrites) {
@@ -661,7 +670,7 @@ export function subscribeActiveDelivery(
           return;
         }
         const mapped = safeMapActiveDelivery(snap);
-        onData(mapped);
+        onData(mapped, meta);
       } catch (err) {
         warnMalformedDeliveryDoc(orderId, 'subscribeActiveDelivery snapshot', err);
         onData(null);
