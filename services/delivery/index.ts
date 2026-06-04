@@ -103,6 +103,7 @@ export type DriverIdentity = {
 
 export type DeliveryQueueOrder = {
   id: string;
+  customerId: string | null;
   restaurantName: string;
   restaurantImage: string | null;
   restaurantPhone: string | null;
@@ -200,6 +201,12 @@ function mapQueueOrder(d: { id: string; data: () => Record<string, unknown> }): 
         : subtotal + fees;
   return {
     id: d.id,
+    customerId:
+      typeof data.userId === 'string'
+        ? data.userId
+        : typeof data.customerId === 'string'
+          ? data.customerId
+          : null,
     restaurantName:
       typeof data.restaurantName === 'string'
         ? data.restaurantName

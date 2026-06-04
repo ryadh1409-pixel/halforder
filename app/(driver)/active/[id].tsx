@@ -1,13 +1,15 @@
 import { DriverActiveRouteMap } from '@/components/maps/DriverActiveRouteMap';
 import { MarketplaceDeliveryActionBar } from '@/components/delivery/MarketplaceDeliveryActionBar';
 import { MarketplaceDeliveryTimeline } from '@/components/delivery/MarketplaceDeliveryTimeline';
+import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { applyDriverMarketplaceFulfillment } from '@/lib/driverMarketplaceFulfillment';
 import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
+import { orderRoomHref } from '@/services/orderChat';
 import { showError, showSuccess } from '@/utils/toast';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -119,9 +121,41 @@ export default function DriverActiveDeliveryDetailsScreen() {
     );
   }
 
-  const courierStatus = order.marketplaceCourierStatus;
+  const activeOrder = order;
+
+  const courierStatus = activeOrder.marketplaceCourierStatus;
   const statusLabel = marketplaceDeliveryStatusLabel(courierStatus);
-  const routeDestination = order.deliveryAddress;
+  const routeDestination = activeOrder.deliveryAddress;
+
+  function onCall(phone: string | null | undefined, label: string) {
+    const normalized = typeof phone === 'string' ? phone.replace(/\s/g, '').trim() : '';
+    console.log('[CALL BUTTON]', { label, phone: normalized || phone || null, orderId: id });
+    if (!normalized) {
+      showError(`${label} phone unavailable`);
+      return;
+    }
+    void Linking.openURL(`tel:${normalized}`).catch(() => {
+      showError('Could not open phone app');
+    });
+  }
+
+  function onChatCustomer() {
+    console.log('[CHAT BUTTON]', activeOrder.customerId ?? null);
+    if (!id) {
+      showError('Order id missing');
+      return;
+    }
+    router.push(orderRoomHref(id, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never);
+  }
+
+  function onChatRestaurant() {
+    console.log('[CHAT BUTTON]', activeOrder.customerId ?? null);
+    if (!id) {
+      showError('Order id missing');
+      return;
+    }
+    router.push(orderRoomHref(id, ORDER_CHAT_TYPE.RESTAURANT_DRIVER) as never);
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -200,20 +234,11 @@ export default function DriverActiveDeliveryDetailsScreen() {
           <View style={styles.rowButtons}>
             <Pressable
               style={styles.smallBtn}
-              onPress={() => (order.restaurantPhone ? Linking.openURL(`tel:${order.restaurantPhone}`) : undefined)}
+              onPress={() => onCall(order.restaurantPhone, 'Restaurant')}
             >
               <Text style={styles.smallBtnText}>Call</Text>
             </Pressable>
-            <Pressable
-              style={styles.smallBtn}
-              onPress={() => {
-                if (!order.restaurantPhone) {
-                  showError('Restaurant phone unavailable');
-                  return;
-                }
-                void Linking.openURL(`sms:${order.restaurantPhone}`);
-              }}
-            >
+            <Pressable style={styles.smallBtn} onPress={onChatRestaurant}>
               <Text style={styles.smallBtnText}>Chat</Text>
             </Pressable>
           </View>
@@ -227,20 +252,11 @@ export default function DriverActiveDeliveryDetailsScreen() {
           <View style={styles.rowButtons}>
             <Pressable
               style={styles.smallBtn}
-              onPress={() => (order.customerPhone ? Linking.openURL(`tel:${order.customerPhone}`) : undefined)}
+              onPress={() => onCall(order.customerPhone, 'Customer')}
             >
               <Text style={styles.smallBtnText}>Call</Text>
             </Pressable>
-            <Pressable
-              style={styles.smallBtn}
-              onPress={() => {
-                if (!order.customerPhone) {
-                  showError('Customer phone unavailable');
-                  return;
-                }
-                void Linking.openURL(`sms:${order.customerPhone}`);
-              }}
-            >
+            <Pressable style={styles.smallBtn} onPress={onChatCustomer}>
               <Text style={styles.smallBtnText}>Chat</Text>
             </Pressable>
           </View>
