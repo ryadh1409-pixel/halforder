@@ -20,6 +20,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 /** Run with: `RUN_FIRESTORE_RULES_TESTS=1 firebase emulators:exec --only firestore -- npm test` */
@@ -1239,6 +1240,111 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           updatedBy: 'driverMarketplaceDelivered',
         }),
       );
+    });
+
+    function driverLiveLocationPayload(lat: number, lng: number) {
+      return {
+        latitude: lat,
+        longitude: lng,
+        heading: 90,
+        speed: 12.5,
+        timestamp: serverTimestamp(),
+        lat,
+        lng,
+        updatedAt: serverTimestamp(),
+      };
+    }
+
+    it('allows assigned driver live location batch (orders + live_locations + drivers)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One', isOnline: true });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc1'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'driver_assigned',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      const payload = driverLiveLocationPayload(40.7128, -74.006);
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'orders', 'loc1'), { driverLocation: payload });
+      batch.set(
+        doc(db, 'live_locations', 'loc1'),
+        { orderId: 'loc1', driverId: 'drv1', ...payload },
+        { merge: true },
+      );
+      batch.set(
+        doc(db, 'drivers', 'drv1'),
+        { liveLocation: payload, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
+      await assertSucceeds(batch.commit());
+    });
+
+    it('allows driver location patch with drivers/{uid} doc only (no role token)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv_doc'), { name: 'Doc Driver' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc_doc'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          assignedDriverId: 'drv_doc',
+          driverId: null,
+          deliveryStatus: 'picked_up',
+          totalPrice: 10,
+          items: [{ id: 'i1', name: 'Salad', price: 10, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv_doc').firestore();
+      const payload = driverLiveLocationPayload(40.71, -74.01);
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'orders', 'loc_doc'), { driverLocation: payload });
+      batch.set(
+        doc(db, 'live_locations', 'loc_doc'),
+        { orderId: 'loc_doc', driverId: 'drv_doc', ...payload },
+        { merge: true },
+      );
+      await assertSucceeds(batch.commit());
+    });
+
+    it('denies driver live location for unassigned order', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc_other'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: 'drv2',
+          assignedDriverId: 'drv2',
+          deliveryStatus: 'driver_assigned',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      const payload = driverLiveLocationPayload(40.71, -74.01);
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'orders', 'loc_other'), { driverLocation: payload });
+      batch.set(
+        doc(db, 'live_locations', 'loc_other'),
+        { orderId: 'loc_other', driverId: 'drv1', ...payload },
+        { merge: true },
+      );
+      await assertFails(batch.commit());
     });
 
     it('denies driver pickup before ready_for_pickup', async () => {
