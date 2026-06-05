@@ -1,10 +1,11 @@
+import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
 import { doc, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 import { db } from '../services/firebase';
 
 /**
- * Live `orders/{orderId}` document snapshot.
+ * Live `orders/{orderId}` document snapshot (raw Firestore — no stage cache).
  */
 export function useOrder(orderId: string) {
   const oid = orderId.trim();
@@ -26,6 +27,9 @@ export function useOrder(orderId: string) {
     const unsub = onSnapshot(
       ref,
       (snap) => {
+        if (snap.exists()) {
+          logCustomerOrderSnapshot(snap.id, snap.data() as Record<string, unknown>);
+        }
         setSnapshot(snap);
         setLoading(false);
         setError(null);

@@ -13,13 +13,24 @@ describe('customerMarketplaceTimeline', () => {
     expect(labels).toContain('Delivered');
   });
 
-  it('advances index for payment_confirmed marketplace docs', () => {
+  it('starts at Order placed for payment_confirmed marketplace docs', () => {
     const idx = customerMarketplaceTimelineIndex({
       status: 'payment_confirmed',
       paymentStatus: 'paid',
       deliveryStatus: 'pending',
     });
-    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(idx).toBe(0);
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('order_placed');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Order placed');
+  });
+
+  it('shows Ready for pickup when kitchen marks ready_for_pickup', () => {
+    const idx = customerMarketplaceTimelineIndex({
+      status: 'ready_for_pickup',
+      paymentStatus: 'paid',
+      deliveryStatus: 'waiting_driver',
+    });
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Ready for pickup');
   });
 
   it('returns -1 when cancelled', () => {

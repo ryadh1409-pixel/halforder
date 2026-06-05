@@ -43,6 +43,7 @@ export const DRIVER_MARKETPLACE_RAW_VISIBLE = [
   'preparing',
   'ready_for_pickup',
   'waiting_driver',
+  'awaiting_driver',
   'ready',
   'accepted_for_delivery',
   'pending_driver',
@@ -54,6 +55,7 @@ const RAW_VISIBLE_SET = new Set<string>(DRIVER_MARKETPLACE_RAW_VISIBLE);
 export const MARKETPLACE_READY_COURIER_RAW_STATUSES = [
   'ready_for_pickup',
   'waiting_driver',
+  'awaiting_driver',
   'accepted_for_delivery',
   'ready',
 ] as const;
@@ -69,6 +71,7 @@ export function isMarketplaceReadyCourierStatus(deliveryStatus: unknown): boolea
 
 const LEGACY_DELIVERY_STATUS_MAP: Record<string, MarketplaceDeliveryStatus> = {
   waiting_driver: MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP,
+  awaiting_driver: MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP,
   pending_driver: MARKETPLACE_DELIVERY_STATUS.ACCEPTED,
   ready: MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP,
   accepted_for_delivery: MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP,

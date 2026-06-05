@@ -1,12 +1,10 @@
 import { normalizeOrderRouteId } from '@/lib/orderRouteParams';
-import { db } from '@/services/firebase';
 import {
   isMarketplaceDeliveryOrderData,
-  mapDocToRestaurantOrder,
+  subscribeCustomerOrderById,
   type RestaurantOrder,
 } from '@/services/orderService';
 import { useLocalSearchParams } from 'expo-router';
-import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 export type MarketplaceOrderDetailState =
@@ -47,51 +45,44 @@ export function useMarketplaceOrderDetail(
       console.log(`[${logTag}] Firestore subscribe`, { orderId });
     }
 
-    const unsub = onSnapshot(
-      doc(db, 'orders', orderId),
-      (snap) => {
-        if (__DEV__) {
-          console.log(`[${logTag}] snapshot`, {
-            orderId,
-            exists: snap.exists(),
-            hasPendingWrites: snap.metadata.hasPendingWrites,
-          });
-        }
-        if (!snap.exists()) {
+    return subscribeCustomerOrderById(
+      orderId,
+      (mapped) => {
+        if (!mapped) {
           setOrder(null);
           setMapError(null);
           return;
         }
-        try {
-          const raw = snap.data() as Record<string, unknown>;
-          const mapped = mapDocToRestaurantOrder(snap);
-          const isMarketplace = isMarketplaceDeliveryOrderData(raw, mapped);
-          if (__DEV__) {
-            console.log(`[${logTag}] mapped order`, {
-              orderId,
-              status: mapped.status,
-              deliveryStatus: mapped.deliveryStatus,
-              paymentStatus: mapped.paymentStatus,
-              isMarketplace,
-            });
-          }
-          setMapError(null);
-          setOrder(mapped);
-        } catch (e) {
-          const message = e instanceof Error ? e.message : 'Could not read order';
-          console.warn(`[${logTag}] mapDocToRestaurantOrder failed`, { orderId, e });
-          setMapError(message);
-          setOrder(null);
+        const isMarketplace = isMarketplaceDeliveryOrderData(
+          {
+            deliveryType: mapped.deliveryType,
+            restaurantId: mapped.restaurantId,
+            items: mapped.items,
+            deliveryAddress: mapped.deliveryAddress,
+            deliveryLocation: mapped.deliveryLocation,
+          },
+          mapped,
+        );
+        if (__DEV__) {
+          console.log(`[${logTag}] mapped order`, {
+            orderId,
+            status: mapped.status,
+            deliveryStatus: mapped.deliveryStatus,
+            paymentStatus: mapped.paymentStatus,
+            isMarketplace,
+          });
         }
+        setMapError(null);
+        setOrder(mapped);
       },
-      (err) => {
-        console.warn(`[${logTag}] listener error`, { orderId, err });
-        setMapError(err instanceof Error ? err.message : 'Listener error');
-        setOrder(null);
+      {
+        onListenError: (err) => {
+          console.warn(`[${logTag}] listener error`, { orderId, err });
+          setMapError(err.message);
+          setOrder(null);
+        },
       },
     );
-
-    return unsub;
   }, [logTag, orderId]);
 
   return useMemo((): MarketplaceOrderDetailState => {

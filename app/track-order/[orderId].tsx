@@ -3,18 +3,22 @@
  * Route: /track-order/[orderId]
  */
 import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
+import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
+import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
+import { db } from '@/services/firebase';
 import {
   looksLikeMarketplaceRestaurantOrder,
-  subscribeOrderById,
+  mapDocToRestaurantOrder,
   type RestaurantOrder,
 } from '@/services/orderService';
+import { doc, onSnapshot } from 'firebase/firestore';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -64,34 +68,53 @@ function TrackOrderScreen() {
     }
     setListenError(false);
     setOrder(undefined);
-    return subscribeOrderById(
-      orderId,
-      (next) => {
-        setListenError(false);
-        setOrder(next);
-        if (next) {
+
+    const orderRef = doc(db, 'orders', orderId);
+    const unsubscribe = onSnapshot(
+      orderRef,
+      (snap) => {
+        if (!snap.exists()) {
+          setListenError(false);
+          setOrder(null);
+          return;
+        }
+        try {
+          const raw = snap.data() as Record<string, unknown>;
+          logCustomerOrderSnapshot(snap.id, raw);
+          const mapped = mapDocToRestaurantOrder(snap);
+          setListenError(false);
+          setOrder(mapped);
           logPaidStatusRepairIfNeeded(orderId, {
-            paymentStatus: next.paymentStatus,
-            status: next.status,
+            paymentStatus: mapped.paymentStatus,
+            status: mapped.status,
           });
           logPaymentNavigation('track_order_snapshot', {
             orderId,
-            paymentStatus: next.paymentStatus,
-            status: next.status,
+            paymentStatus: mapped.paymentStatus,
+            status: mapped.status,
+            deliveryStatus: mapped.deliveryStatus,
+            updatedAtMs: mapped.updatedAtMs,
           });
-        }
-      },
-      {
-        onListenError: (err) => {
+        } catch (e) {
+          const err = e instanceof Error ? e : new Error(String(e));
           setListenError(true);
           setOrder(null);
           logPaymentNavigation('track_order_listen_error', {
             orderId,
             error: err.message,
           });
-        },
+        }
+      },
+      (err) => {
+        setListenError(true);
+        setOrder(null);
+        logPaymentNavigation('track_order_listen_error', {
+          orderId,
+          error: err.message,
+        });
       },
     );
+    return () => unsubscribe();
   }, [orderId]);
 
   const phase = useMemo(() => {
@@ -101,8 +124,29 @@ function TrackOrderScreen() {
       paymentStatus: order.paymentStatus,
       deliveryStatus: order.deliveryStatus,
       driverId: order.driverId,
+      pickedUpAtMs: order.pickedUpAtMs,
+      deliveredAtMs: order.deliveredAtMs,
     });
-  }, [order]);
+  }, [
+    order?.status,
+    order?.deliveryStatus,
+    order?.paymentStatus,
+    order?.driverId,
+    order?.pickedUpAtMs,
+    order?.deliveredAtMs,
+  ]);
+
+  const etaText = useMemo(() => {
+    if (!order) return '';
+    if (order.status === 'delivered' || order.deliveryStatus === 'delivered') {
+      return 'Delivered!';
+    }
+    const eta = order.estimatedDeliveryTime;
+    if (typeof eta === 'number' && eta > 0 && eta < 180) {
+      return `Arriving in about ${eta} min`;
+    }
+    return 'Updating estimate…';
+  }, [order?.status, order?.deliveryStatus, order?.estimatedDeliveryTime]);
 
   const driverChatEnabled =
     !!order &&
@@ -167,11 +211,6 @@ function TrackOrderScreen() {
     );
   }
 
-  const etaText =
-    order.status === 'delivered'
-      ? 'Completed'
-      : `Arriving in about ${order.estimatedDeliveryTime} min`;
-
   return (
     <View style={styles.screenRoot}>
       <View style={[styles.mapSection, { height: MAP_HEIGHT }]}>
@@ -215,6 +254,8 @@ function TrackOrderScreen() {
               />
             </View>
           </View>
+
+          <CustomerMarketplaceTimeline order={order} variant="light" />
 
           <View style={styles.etaCard}>
             <Text style={styles.etaLabel}>Estimated arrival</Text>

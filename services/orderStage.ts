@@ -170,11 +170,14 @@ function isRestaurantAccepted(order: OrderStageInput): boolean {
 
 function isReadyForDriver(order: OrderStageInput): boolean {
   const status = kitchenStatus(order);
+  const courierRaw = norm(order.deliveryStatus);
   const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
   return (
     status === 'ready' ||
     status === 'ready_for_pickup' ||
-    courier === 'ready_for_pickup'
+    courier === 'ready_for_pickup' ||
+    courierRaw === 'waiting_driver' ||
+    courierRaw === 'awaiting_driver'
   );
 }
 

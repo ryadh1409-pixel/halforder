@@ -19,6 +19,9 @@ type CachedStageFields = {
 
 const highestStageByOrderId = new Map<string, CachedStageFields>();
 
+/** Restaurant dashboard listeners only — customer paths use {@link subscribeCustomerOrderById}. */
+export type OrderSnapshotReconcileMode = 'restaurant';
+
 function resolveUpdatedAtMs(order: OrderStageInput): number {
   if (order.updatedAtMs != null && Number.isFinite(order.updatedAtMs)) {
     return order.updatedAtMs;
@@ -57,12 +60,15 @@ function cacheFromOrder(order: OrderStageInput, stage: DerivedOrderStage): Cache
  * Commits a restaurant listener snapshot: drops older/duplicate Firestore events,
  * never visually downgrades marketplace stage unless explicit cancel/reject/expire.
  *
+ * Customer UIs must not call this — use raw Firestore via {@link subscribeCustomerOrderById}.
+ *
  * @returns `null` when the snapshot should be ignored (no UI/state update).
  */
 export function reconcileOrderSnapshotStage<T extends OrderStageInput>(
   orderId: string,
   snapshot: T,
   hasPendingWrites: boolean,
+  _options?: { mode?: OrderSnapshotReconcileMode },
 ): T | null {
   const id = orderId.trim();
   if (!id) return snapshot;

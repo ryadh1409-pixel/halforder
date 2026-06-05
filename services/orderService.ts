@@ -2,6 +2,7 @@ import {
   assertDeliveryEligibleForOrder,
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
+import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
   clearOrderListenerCommitCache,
@@ -1206,7 +1207,10 @@ export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean
   );
 }
 
-export function subscribeOrderById(
+/**
+ * Customer-facing realtime listener — always uses raw Firestore fields (no stage cache).
+ */
+export function subscribeCustomerOrderById(
   orderId: string,
   onData: (order: RestaurantOrder | null) => void,
   options?: { onListenError?: (err: Error) => void },
@@ -1220,9 +1224,48 @@ export function subscribeOrderById(
       }
       try {
         const raw = snap.data() as Record<string, unknown>;
+        logCustomerOrderSnapshot(snap.id, raw);
+        onData(mapDocToRestaurantOrder(snap));
+      } catch (e) {
+        console.warn('[subscribeCustomerOrderById] mapDoc failed', orderId, e);
+        options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));
+      }
+    },
+    (err) => {
+      console.warn('[subscribeCustomerOrderById] listener error', orderId, err);
+      options?.onListenError?.(err);
+    },
+  );
+}
+
+export function subscribeOrderById(
+  orderId: string,
+  onData: (order: RestaurantOrder | null) => void,
+  options?: {
+    onListenError?: (err: Error) => void;
+    /** Customer paths use raw Firestore; restaurant detail keeps stage regression guard. */
+    trackingMode?: 'customer' | 'restaurant';
+  },
+): Unsubscribe {
+  const trackingMode = options?.trackingMode ?? 'customer';
+  if (trackingMode === 'customer') {
+    return subscribeCustomerOrderById(orderId, onData, options);
+  }
+
+  return onSnapshot(
+    doc(db, 'orders', orderId),
+    (snap) => {
+      if (!snap.exists()) {
+        onData(null);
+        return;
+      }
+      try {
+        const raw = snap.data() as Record<string, unknown>;
         const pending = snap.metadata.hasPendingWrites;
         const snapshot: OrderStageInput = { id: snap.id, ...raw };
-        const reconciled = reconcileOrderSnapshotStage(snap.id, snapshot, pending);
+        const reconciled = reconcileOrderSnapshotStage(snap.id, snapshot, pending, {
+          mode: 'restaurant',
+        });
         if (reconciled == null) {
           return;
         }

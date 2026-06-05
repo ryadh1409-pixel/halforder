@@ -1,14 +1,15 @@
 /**
  * Customer-facing delivery phases (Uber Eats–style labels).
- * Derived from canonical {@link deriveOrderStage} only.
+ * Derived from live Firestore `orders/{id}` fields via {@link resolveCustomerTrackStep}.
  */
 import {
-  customerStageSubtitle,
-  customerStageTitle,
-  deriveOrderStage,
-  type DerivedOrderStage,
-  type OrderStageInput,
-} from '@/services/orderStage';
+  customerTrackHeaderTitle,
+  customerTrackProgress,
+  customerTrackStepSubtitle,
+  resolveCustomerTrackStep,
+  type CustomerTrackPhase,
+} from '@/lib/customerTrackStatus';
+import type { OrderStageInput } from '@/services/orderStage';
 
 export type CustomerDeliveryPhase =
   | 'awaiting_payment'
@@ -30,27 +31,13 @@ export type CustomerPhaseInfo = {
   progress: number;
 };
 
-const PHASE_ORDER: CustomerDeliveryPhase[] = [
-  'awaiting_payment',
-  'payment_confirmed',
-  'finding_driver',
-  'driver_assigned',
-  'arriving_restaurant',
-  'picked_up',
-  'heading_to_customer',
-  'arrived_nearby',
-  'delivered',
-];
-
-function mapStageToCustomerPhase(stage: DerivedOrderStage): CustomerDeliveryPhase {
-  switch (stage) {
-    case 'awaiting_payment':
-      return 'awaiting_payment';
-    case 'awaiting_restaurant':
-      return 'payment_confirmed';
+function mapTrackStepToCustomerPhase(step: CustomerTrackPhase): CustomerDeliveryPhase {
+  switch (step) {
+    case 'order_placed':
+    case 'restaurant_accepted':
     case 'preparing':
       return 'payment_confirmed';
-    case 'driver_assignment':
+    case 'ready_for_pickup':
       return 'finding_driver';
     case 'driver_assigned':
       return 'driver_assigned';
@@ -65,20 +52,12 @@ function mapStageToCustomerPhase(stage: DerivedOrderStage): CustomerDeliveryPhas
   }
 }
 
-function progressFor(phase: CustomerDeliveryPhase): number {
-  if (phase === 'cancelled') return 0;
-  const i = PHASE_ORDER.indexOf(phase);
-  if (i < 0) return 0.08;
-  return Math.min(1, (i + 1) / PHASE_ORDER.length);
-}
-
 export function resolveCustomerDeliveryPhase(input: OrderStageInput): CustomerPhaseInfo {
-  const stage = deriveOrderStage(input);
-  const phase = mapStageToCustomerPhase(stage);
+  const step = resolveCustomerTrackStep(input);
   return {
-    phase,
-    title: customerStageTitle(stage),
-    subtitle: customerStageSubtitle(stage),
-    progress: progressFor(phase),
+    phase: mapTrackStepToCustomerPhase(step),
+    title: customerTrackHeaderTitle(step),
+    subtitle: customerTrackStepSubtitle(step),
+    progress: customerTrackProgress(step),
   };
 }

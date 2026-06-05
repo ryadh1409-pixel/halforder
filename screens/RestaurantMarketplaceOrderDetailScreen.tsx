@@ -86,10 +86,14 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
       setLoading(false);
       return;
     }
-    const unsub = subscribeOrderById(id, (next) => {
-      setOrder(next);
-      setLoading(false);
-    });
+    const unsub = subscribeOrderById(
+      id,
+      (next) => {
+        setOrder(next);
+        setLoading(false);
+      },
+      { trackingMode: 'restaurant' },
+    );
     return () => unsub();
   }, [id]);
 
