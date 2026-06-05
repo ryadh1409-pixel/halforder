@@ -571,6 +571,24 @@ export async function createOrder(
 
   const deliveryType = payload.deliveryType ?? 'delivery';
 
+  try {
+    const existingUnpaid = await getDocs(
+      query(
+        collection(db, 'orders'),
+        where('customerId', '==', customerUid),
+        where('restaurantId', '==', payload.restaurantId),
+        where('paymentStatus', '==', 'unpaid'),
+        where('status', '==', 'awaiting_payment'),
+        limit(1),
+      ),
+    );
+    if (!existingUnpaid.empty) {
+      return existingUnpaid.docs[0].id;
+    }
+  } catch {
+    /* composite index may be missing — continue to create */
+  }
+
   let existingOrderId: string | null = null;
   try {
     const pendingSnap = await getDocs(
@@ -843,13 +861,22 @@ export function customerCanCancelMarketplaceOrder(
 }
 
 export async function customerCancelMarketplaceOrder(orderId: string): Promise<void> {
-  await applyProtectedOrderPatch(orderId, {
+  const uid = auth.currentUser?.uid?.trim() ?? '';
+  if (!uid) throw new Error('Not signed in');
+  const payload = {
     status: 'cancelled',
     deliveryStatus: 'cancelled',
     updatedAt: serverTimestamp(),
     cancelledAt: serverTimestamp(),
-    cancelledBy: 'customer',
+    cancelledBy: uid,
+  };
+  console.log('[CUSTOMER ORDER CANCEL WRITE]', {
+    documentPath: `orders/${orderId}`,
+    uid,
+    orderId,
+    payload,
   });
+  await applyProtectedOrderPatch(orderId, payload);
 }
 
 export type GetRestaurantOrdersOptions = {

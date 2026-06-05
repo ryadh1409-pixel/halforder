@@ -1349,27 +1349,23 @@ service cloud.firestore {
           || (status == 'awaiting_payment' && marketplaceOrderPaidOk(d))
         );
     }
+    /** Customer-owned order statuses that may be cancelled before pickup. */
+    function marketplaceOrderCustomerCancellableStatusOk(status) {
+      return status in ['awaiting_payment', 'accepted', 'preparing'];
+    }
     /**
-     * Customer cancel: only before kitchen enters preparing (no driver / ready states).
+     * Customer cancel: own order, not yet picked up (awaiting_payment, accepted, preparing).
      */
     function marketplaceOrderCustomerCancelStageOk(d) {
       let status = d.get('status', '');
-      let ds = d.get('deliveryStatus', '');
       return !marketplaceOrderIsTerminalForModify(d)
         && !marketplaceOrderHasDriverAssigned(d)
         && !marketplaceOrderCancelBlockedStage(d)
-        && status != 'preparing'
-        && ds != 'preparing'
         && (
-          status == 'awaiting_payment'
-          || status == 'payment_processing'
-          || status == 'payment_confirmed'
-          || status == 'pending'
-          || status == 'pending_driver'
-          || status == 'accepted'
-          || status == 'restaurant_accepted'
-          || ds == 'accepted'
-        );
+          request.auth.uid == d.get('customerId', '')
+          || primaryUidFromOrder(d) == request.auth.uid
+        )
+        && marketplaceOrderCustomerCancellableStatusOk(status);
     }
     /** Drivers may not cancel marketplace restaurant lifecycle (claim/active patches only). */
     function orderCancelActorIsDriverOnly(before) {
@@ -1409,6 +1405,36 @@ service cloud.firestore {
         && before.get('driverId', '') == after.get('driverId', '')
         && before.get('assignedDriverId', '') == after.get('assignedDriverId', '');
     }
+    /**
+     * FAST PATH: customer cancels own order (awaiting_payment | accepted | preparing).
+     * Evaluated before driver claim/active branches to stay under the 1000-expr budget.
+     */
+    function marketplaceOrderCustomerCancelFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return (
+        request.auth.uid == before.get('customerId', '')
+        || primaryUidFromOrder(before) == request.auth.uid
+      )
+        && after.status == 'cancelled'
+        && marketplaceOrderCustomerCancellableStatusOk(before.get('status', ''))
+        && !marketplaceOrderHasDriverAssigned(before)
+        && !marketplaceOrderCancelBlockedStage(before)
+        && after.deliveryStatus == 'cancelled'
+        && after.get('cancelledBy', '') == request.auth.uid
+        && marketplaceOrderCancelImmutableOk(before, after)
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'deliveryStatus',
+            'cancelledAt',
+            'cancelledBy',
+            'updatedAt',
+            'updatedBy'
+          ]);
+    }
     /** Marketplace cancel patch — restaurant dashboard + customer profile. */
     function marketplaceOrderCancelPatchOk() {
       let before = resource.data;
@@ -1426,7 +1452,8 @@ service cloud.firestore {
             'deliveryStatus',
             'cancelledAt',
             'cancelledBy',
-            'updatedAt'
+            'updatedAt',
+            'updatedBy'
           ]);
     }
     /** Customer uid for marketplace payment patches (customerUid alias + legacy owner fields). */
@@ -1939,6 +1966,11 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && (
           isAdmin()
+          // FAST PATH: customer profile cancel — minimal expressions.
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceOrderCustomerCancelFastPathOk()
+          )
           // FAST PATH: marketplace driver claim/active — before HalfOrder evaluators (1000-expr budget).
           || (
             !isCurrentUserRestricted()

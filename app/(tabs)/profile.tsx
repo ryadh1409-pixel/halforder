@@ -302,6 +302,22 @@ export default function ProfileScreen() {
     refresh: refreshProfileOrders,
     indexBuilding: profileOrdersIndexBuilding,
   } = useProfileOrders(uid);
+  const visibleProfileOrders = useMemo(() => {
+    const staleUnpaidMs = 30 * 60 * 1000;
+    return profileOrders.filter((order) => {
+      if (order.paymentStatus !== 'unpaid') return true;
+      const createdAtMs =
+        order.createdAtMs > 0
+          ? order.createdAtMs
+          : typeof order.createdAt === 'object' &&
+              order.createdAt !== null &&
+              typeof (order.createdAt as { toMillis?: () => number }).toMillis === 'function'
+            ? (order.createdAt as { toMillis: () => number }).toMillis()
+            : 0;
+      if (!createdAtMs) return true;
+      return Date.now() - createdAtMs < staleUnpaidMs;
+    });
+  }, [profileOrders]);
   const {
     blockedUsers,
     blockedUserIds,
@@ -674,6 +690,16 @@ export default function ProfileScreen() {
       };
       setProfileOrdersCancellingIds((prev) => ({ ...prev, [order.id]: true }));
       try {
+        const documentPath = `orders/${order.id}`;
+        console.log('[PROFILE ORDER CANCEL WRITE]', {
+          documentPath,
+          uid: currentUid,
+          orderId: order.id,
+          payload,
+          orderStatus: order.status,
+          paymentStatus: order.paymentStatus,
+          deliveryStatus: order.deliveryStatus,
+        });
         const { protectedUpdateOrder } = await import('@/services/orderFirestoreWrite');
         await protectedUpdateOrder(order.id, payload, {
           fileName: 'app/(tabs)/profile.tsx',
@@ -1139,7 +1165,7 @@ export default function ProfileScreen() {
               danger: pal.danger,
               success: pal.success,
             }}
-            orders={profileOrders}
+            orders={visibleProfileOrders}
             loading={profileOrdersLoading}
             refreshing={profileOrdersRefreshing}
             errorMessage={profileOrdersError}
