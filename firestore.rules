@@ -1155,6 +1155,17 @@ service cloud.firestore {
         || isOrderMember(d)
         || driverPoolOrderReadable(d);
     }
+    /** Order chat: customer, assigned driver, or restaurant — no driver-role doc required. */
+    function orderChatParticipantOk(d) {
+      return isAdmin()
+        || (
+          primaryUidFromOrder(d) is string
+          && primaryUidFromOrder(d).size() > 0
+          && primaryUidFromOrder(d) == request.auth.uid
+        )
+        || driverAssignedToMarketplaceOrder(d)
+        || isRestaurantVendorActor(d);
+    }
     function isMarketplaceDeliveryOrderDoc(d) {
       return d.get('deliveryType', '') == 'delivery';
     }
@@ -2041,7 +2052,7 @@ service cloud.firestore {
             isAdmin()
             || (
               !isCurrentUserRestricted()
-              && canAccessMarketplaceDeliveryOrder(
+              && orderChatParticipantOk(
                 get(/databases/$(database)/documents/orders/$(orderId)).data
               )
             )
@@ -2050,7 +2061,7 @@ service cloud.firestore {
           && !isCurrentUserRestricted()
           && (
             isAdmin()
-            || canAccessMarketplaceDeliveryOrder(
+            || orderChatParticipantOk(
               get(/databases/$(database)/documents/orders/$(orderId)).data
             )
           )
