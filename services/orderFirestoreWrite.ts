@@ -26,7 +26,7 @@ import {
   sanitizeOrderPatchAgainstRegression,
   type OrderStageInput,
 } from '@/services/orderStage';
-import { db } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 
 export type OrderWriteSource = {
   fileName: string;
@@ -156,8 +156,28 @@ export async function protectedUpdateOrder(
   tracePreparedPatch(trimmed, currentInput, patch, safePatch, source);
 
   if (Object.keys(safePatch).length === 0) {
+    console.warn('[FIRESTORE ORDER WRITE SKIPPED]', {
+      documentPath: `orders/${trimmed}`,
+      uid: auth.currentUser?.uid ?? null,
+      orderId: trimmed,
+      requestedPatch: patch,
+      source: sourceLabel(source),
+      rejectBranch:
+        patch.status === 'cancelled' ?
+          'client:prepareProtectedOrderPatch_empty — check ORDER DOWNGRADE BLOCKED or ORDER STAGE blocked regression'
+        : 'client:prepareProtectedOrderPatch_empty',
+    });
     return;
   }
+
+  const documentPath = `orders/${trimmed}`;
+  console.log('[FIRESTORE ORDER WRITE]', {
+    documentPath,
+    uid: auth.currentUser?.uid ?? null,
+    orderId: trimmed,
+    payload: safePatch,
+    source: sourceLabel(source),
+  });
 
   await updateDoc(ref, safePatch as UpdateData<Record<string, unknown>>);
 }

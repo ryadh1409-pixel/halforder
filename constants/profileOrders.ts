@@ -100,6 +100,15 @@ export function profileOrderStatusIcon(
   return 'schedule';
 }
 
+export function isProfileOrderCancelled(
+  order: { status?: string | null; deliveryStatus?: string | null },
+): boolean {
+  const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
+  const ds =
+    typeof order.deliveryStatus === 'string' ? order.deliveryStatus.trim().toLowerCase() : '';
+  return status === 'cancelled' || ds === 'cancelled';
+}
+
 export function profileOrderStatusActive(
   status: string,
   deliveryStatus?: string | null,

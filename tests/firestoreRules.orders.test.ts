@@ -349,7 +349,63 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
-    it('allows customer cancellation patch on own pending delivery order', async () => {
+    it('allows customer cancellation on own unpaid awaiting_payment order (with updatedBy)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_unpaid'), {
+          userId: 'cust_cancel',
+          customerId: 'cust_cancel',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'awaiting_payment',
+          deliveryStatus: 'pending',
+          paymentStatus: 'unpaid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_cancel').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_unpaid'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cust_cancel',
+          updatedAt: serverTimestamp(),
+          updatedBy: 'app/(tabs)/profile.tsx#handleCancelProfileOrder',
+        }),
+      );
+    });
+
+    it('allows customer cancellation on paid payment_confirmed order before driver', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_paid_confirmed'), {
+          userId: 'cust_cancel',
+          customerId: 'cust_cancel',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
+          paymentStatus: 'paid',
+          createdAt: serverTimestamp(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('cust_cancel').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_paid_confirmed'), {
+          status: 'cancelled',
+          deliveryStatus: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cust_cancel',
+          updatedAt: serverTimestamp(),
+          updatedBy: 'app/(tabs)/profile.tsx#handleCancelProfileOrder',
+        }),
+      );
+    });
+
+    it('allows customer cancellation patch on paid pending_driver order before driver claim', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_ok'), {
           userId: 'cust_cancel',
@@ -372,6 +428,7 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           cancelledAt: serverTimestamp(),
           cancelledBy: 'cust_cancel',
           updatedAt: serverTimestamp(),
+          updatedBy: 'app/(tabs)/profile.tsx#handleCancelProfileOrder',
         }),
       );
     });
@@ -439,9 +496,9 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
-    it('denies customer cancellation patch when status transition is not pending_driver', async () => {
+    it('allows customer cancellation patch when status is preparing (paid)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
-        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_wrong_status'), {
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_cancel_preparing'), {
           userId: 'cust_cancel',
           customerId: 'cust_cancel',
           restaurantId: 'rest_abc',
@@ -455,13 +512,14 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
         });
       });
       const db = te().authenticatedContext('cust_cancel').firestore();
-      await assertFails(
-        updateDoc(doc(db, 'orders', 'mkt_cancel_wrong_status'), {
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'mkt_cancel_preparing'), {
           status: 'cancelled',
           deliveryStatus: 'cancelled',
           cancelledAt: serverTimestamp(),
           cancelledBy: 'cust_cancel',
           updatedAt: serverTimestamp(),
+          updatedBy: 'app/(tabs)/profile.tsx#handleCancelProfileOrder',
         }),
       );
     });

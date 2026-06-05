@@ -1349,12 +1349,24 @@ service cloud.firestore {
           || (status == 'awaiting_payment' && marketplaceOrderPaidOk(d))
         );
     }
-    /** Customer-owned order statuses that may be cancelled before pickup. */
+    /**
+     * Customer-owned kitchen statuses cancellable before driver pickup.
+     * Includes paid awaiting_restaurant (payment_confirmed, pending_driver).
+     */
     function marketplaceOrderCustomerCancellableStatusOk(status) {
-      return status in ['awaiting_payment', 'accepted', 'preparing'];
+      return status in [
+        'awaiting_payment',
+        'payment_processing',
+        'payment_confirmed',
+        'pending',
+        'pending_driver',
+        'accepted',
+        'preparing',
+        'restaurant_accepted'
+      ];
     }
     /**
-     * Customer cancel: own order, not yet picked up (awaiting_payment, accepted, preparing).
+     * Customer cancel: own order, not yet picked up or driver-assigned.
      */
     function marketplaceOrderCustomerCancelStageOk(d) {
       let status = d.get('status', '');
@@ -1406,7 +1418,7 @@ service cloud.firestore {
         && before.get('assignedDriverId', '') == after.get('assignedDriverId', '');
     }
     /**
-     * FAST PATH: customer cancels own order (awaiting_payment | accepted | preparing).
+     * FAST PATH: customer cancels own order (unpaid + paid pre-driver statuses).
      * Evaluated before driver claim/active branches to stay under the 1000-expr budget.
      */
     function marketplaceOrderCustomerCancelFastPathOk() {

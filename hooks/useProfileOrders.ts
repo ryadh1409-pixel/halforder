@@ -1,3 +1,4 @@
+import { isProfileOrderCancelled } from '@/constants/profileOrders';
 import { getOrderTimestamp } from '@/lib/userOrderFreshness';
 import { db } from '@/services/firebase';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -265,9 +266,24 @@ export function useProfileOrders(uid: string | null) {
     };
   }, [clearRetryTimer, mergeRows, scheduleRetry, uid, retryTick]);
 
+  const { activeRows, cancelledRows } = useMemo(() => {
+    const active: ProfileOrderRow[] = [];
+    const cancelled: ProfileOrderRow[] = [];
+    for (const row of rows) {
+      if (isProfileOrderCancelled(row)) {
+        cancelled.push(row);
+      } else {
+        active.push(row);
+      }
+    }
+    return { activeRows: active, cancelledRows: cancelled };
+  }, [rows]);
+
   return useMemo(
     () => ({
       rows,
+      activeRows,
+      cancelledRows,
       loading,
       refreshing,
       errorMessage,
@@ -275,6 +291,8 @@ export function useProfileOrders(uid: string | null) {
       indexBuilding,
     }),
     [
+      activeRows,
+      cancelledRows,
       errorMessage,
       indexBuilding,
       loading,

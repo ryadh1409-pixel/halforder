@@ -295,16 +295,17 @@ export default function ProfileScreen() {
   const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
   const {
-    rows: profileOrders,
+    activeRows: profileActiveOrders,
+    cancelledRows: profileCancelledOrders,
     loading: profileOrdersLoading,
     refreshing: profileOrdersRefreshing,
     errorMessage: profileOrdersError,
     refresh: refreshProfileOrders,
     indexBuilding: profileOrdersIndexBuilding,
   } = useProfileOrders(uid);
-  const visibleProfileOrders = useMemo(() => {
+  const visibleActiveProfileOrders = useMemo(() => {
     const staleUnpaidMs = 30 * 60 * 1000;
-    return profileOrders.filter((order) => {
+    return profileActiveOrders.filter((order) => {
       if (order.paymentStatus !== 'unpaid') return true;
       const createdAtMs =
         order.createdAtMs > 0
@@ -317,7 +318,7 @@ export default function ProfileScreen() {
       if (!createdAtMs) return true;
       return Date.now() - createdAtMs < staleUnpaidMs;
     });
-  }, [profileOrders]);
+  }, [profileActiveOrders]);
   const {
     blockedUsers,
     blockedUserIds,
@@ -691,6 +692,20 @@ export default function ProfileScreen() {
       setProfileOrdersCancellingIds((prev) => ({ ...prev, [order.id]: true }));
       try {
         const documentPath = `orders/${order.id}`;
+        const { diagnoseCustomerCancelOrderWrite, logCustomerCancelWriteDiagnostic } =
+          await import('@/lib/customerOrderCancelEligibility');
+        const cancelDiagnostic = diagnoseCustomerCancelOrderWrite(
+          {
+            status: order.status,
+            deliveryStatus: order.deliveryStatus,
+            paymentStatus: order.paymentStatus,
+            customerId: currentUid,
+            userId: currentUid,
+          },
+          currentUid,
+          payload,
+        );
+        logCustomerCancelWriteDiagnostic(order.id, cancelDiagnostic);
         console.log('[PROFILE ORDER CANCEL WRITE]', {
           documentPath,
           uid: currentUid,
@@ -699,6 +714,7 @@ export default function ProfileScreen() {
           orderStatus: order.status,
           paymentStatus: order.paymentStatus,
           deliveryStatus: order.deliveryStatus,
+          cancelDiagnostic,
         });
         const { protectedUpdateOrder } = await import('@/services/orderFirestoreWrite');
         await protectedUpdateOrder(order.id, payload, {
@@ -1165,7 +1181,8 @@ export default function ProfileScreen() {
               danger: pal.danger,
               success: pal.success,
             }}
-            orders={visibleProfileOrders}
+            orders={visibleActiveProfileOrders}
+            cancelledOrders={profileCancelledOrders}
             loading={profileOrdersLoading}
             refreshing={profileOrdersRefreshing}
             errorMessage={profileOrdersError}
