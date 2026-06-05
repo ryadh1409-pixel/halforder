@@ -1209,16 +1209,21 @@ export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean
 }
 
 /**
- * Customer-facing realtime listener — always uses raw Firestore fields (no stage cache).
+ * Customer-facing realtime listener — `orders/{orderId}` only (same path as restaurant writes).
+ * Uses `source: 'server'` so stale local cache never masks kitchen status updates.
  */
 export function subscribeCustomerOrderById(
   orderId: string,
   onData: (order: RestaurantOrder | null) => void,
   options?: { onListenError?: (err: Error) => void },
 ): Unsubscribe {
+  const id = orderId.trim();
+  if (__DEV__) {
+    console.log('[subscribeCustomerOrderById] listening', { documentPath: `orders/${id}` });
+  }
   return onSnapshot(
-    doc(db, 'orders', orderId),
-    { includeMetadataChanges: true },
+    doc(db, 'orders', id),
+    { source: 'server' },
     (snap) => {
       if (!snap.exists()) {
         onData(null);

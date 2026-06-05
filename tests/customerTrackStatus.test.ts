@@ -4,6 +4,18 @@ import {
   customerTrackStepLabel,
   resolveCustomerTrackStep,
 } from '@/lib/customerTrackStatus';
+import {
+  MARKETPLACE_DELIVERY_STATUS,
+  normalizeMarketplaceDeliveryStatus,
+} from '@/lib/orderStatus';
+
+describe('normalizeMarketplaceDeliveryStatus', () => {
+  it('preserves preparing (does not map to pending)', () => {
+    expect(normalizeMarketplaceDeliveryStatus('preparing')).toBe(
+      MARKETPLACE_DELIVERY_STATUS.PREPARING,
+    );
+  });
+});
 
 describe('resolveCustomerTrackStep', () => {
   it('maps payment_confirmed to order_placed', () => {

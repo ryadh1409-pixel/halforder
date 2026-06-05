@@ -26,6 +26,7 @@ export function useOrder(orderId: string) {
     const ref = doc(db, 'orders', oid);
     const unsub = onSnapshot(
       ref,
+      { source: 'server' },
       (snap) => {
         if (snap.exists()) {
           logCustomerOrderSnapshot(snap.id, snap.data() as Record<string, unknown>);
