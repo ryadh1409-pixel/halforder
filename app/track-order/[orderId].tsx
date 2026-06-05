@@ -73,8 +73,11 @@ function TrackOrderScreen() {
     const orderRef = doc(db, 'orders', orderId);
     const unsubscribe = onSnapshot(
       orderRef,
-      { source: 'server' },
+      { includeMetadataChanges: true },
       (snap) => {
+        if (snap.metadata.fromCache) {
+          return;
+        }
         if (!snap.exists()) {
           setListenError(false);
           setOrder(null);

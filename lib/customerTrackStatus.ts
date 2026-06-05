@@ -1,4 +1,7 @@
-import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
+import {
+  MARKETPLACE_DELIVERY_STATUS,
+  normalizeMarketplaceDeliveryStatus,
+} from '@/lib/orderStatus';
 import type { OrderStageInput } from '@/services/orderStage';
 import { safeToMillis } from '@/utils/safeToMillis';
 
@@ -86,13 +89,27 @@ function hasDriver(order: OrderStageInput): boolean {
   return typeof id === 'string' && id.trim().length > 0;
 }
 
+/** Kitchen `status` aliases — mirrors orderStage kitchenStatus for lifecycle fields. */
+function lifecycleStatusValue(value: unknown): string {
+  const s = norm(value);
+  if (s === 'completed') return 'delivered';
+  return s;
+}
+
 function stageIndexFromField(value: unknown): number {
-  const raw = norm(value);
+  const raw = lifecycleStatusValue(value);
   if (!raw) return -1;
   const direct = STATUS_TO_STAGE_INDEX.get(raw);
   if (direct != null) return direct;
   const normalized = normalizeMarketplaceDeliveryStatus(raw);
   return STATUS_TO_STAGE_INDEX.get(normalized) ?? -1;
+}
+
+function courierStageFromOrder(order: OrderStageInput): CustomerTrackStep | null {
+  const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
+  if (courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED) return 'delivered';
+  if (courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP) return 'picked_up';
+  return null;
 }
 
 function indexToStep(index: number): CustomerTrackStep {
@@ -132,8 +149,10 @@ export function resolveCustomerTrackStep(
 ): CustomerTrackPhase {
   if (!order) return 'order_placed';
   if (isCancelled(order)) return 'cancelled';
-  if (isDelivered(order)) return 'delivered';
-  if (isPickedUp(order)) return 'picked_up';
+
+  const courierStep = courierStageFromOrder(order);
+  if (courierStep === 'delivered' || isDelivered(order)) return 'delivered';
+  if (courierStep === 'picked_up' || isPickedUp(order)) return 'picked_up';
 
   let index = Math.max(
     stageIndexFromField(order.status),
@@ -141,6 +160,7 @@ export function resolveCustomerTrackStep(
     STAGE_INDEX.order_placed,
   );
 
+  // Driver claimed but courier field still early — never regress below assigned.
   if (hasDriver(order) && index < STAGE_INDEX.driver_assigned) {
     index = STAGE_INDEX.driver_assigned;
   }

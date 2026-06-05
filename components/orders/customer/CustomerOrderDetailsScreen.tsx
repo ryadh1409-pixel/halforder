@@ -176,12 +176,23 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   const customerPhase = useMemo(
     () =>
       resolveCustomerDeliveryPhase({
+        id: order.id,
         status: order.status,
         paymentStatus: order.paymentStatus,
         deliveryStatus: order.deliveryStatus,
         driverId: order.driverId,
+        pickedUpAtMs: order.pickedUpAtMs,
+        deliveredAtMs: order.deliveredAtMs,
       }),
-    [order.status, order.paymentStatus, order.deliveryStatus, order.driverId],
+    [
+      order.id,
+      order.status,
+      order.paymentStatus,
+      order.deliveryStatus,
+      order.driverId,
+      order.pickedUpAtMs,
+      order.deliveredAtMs,
+    ],
   );
 
   const mapPoints = useMemo(() => {

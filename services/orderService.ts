@@ -181,6 +181,7 @@ function parseStatus(value: unknown): OrderStatus {
     s === 'on_the_way' ||
     s === 'arrived_customer' ||
     s === 'delivered' ||
+    s === 'completed' ||
     s === 'cancelled' ||
     s === 'rejected'
   ) {
@@ -1223,8 +1224,11 @@ export function subscribeCustomerOrderById(
   }
   return onSnapshot(
     doc(db, 'orders', id),
-    { source: 'server' },
+    { includeMetadataChanges: true },
     (snap) => {
+      if (snap.metadata.fromCache) {
+        return;
+      }
       if (!snap.exists()) {
         onData(null);
         return;
