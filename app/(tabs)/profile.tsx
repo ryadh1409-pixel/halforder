@@ -19,6 +19,7 @@ import {
   profilePhoneForFirestore,
   profileWhatsAppOnChangeText,
 } from '../../lib/profileWhatsAppPhone';
+import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
 import { ProfileLocationPicker } from '../../components/profile/ProfileLocationPicker';
@@ -306,6 +307,12 @@ export default function ProfileScreen() {
   const visibleActiveProfileOrders = useMemo(() => {
     const staleUnpaidMs = 30 * 60 * 1000;
     return profileActiveOrders.filter((order) => {
+      const visibleStatus = isProfileOrderVisibleStatus(order.status);
+      if (!visibleStatus && order.paymentStatus === 'paid') {
+        // Paid marketplace orders must appear even if kitchen status string is unexpected.
+        return true;
+      }
+      if (!visibleStatus) return false;
       if (order.paymentStatus !== 'unpaid') return true;
       const createdAtMs =
         order.createdAtMs > 0

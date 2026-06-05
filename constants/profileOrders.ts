@@ -1,6 +1,32 @@
 import { canCustomerCancelMarketplaceOrder } from '@/lib/customerOrderCancelUx';
 import type { OrderStageInput } from '@/services/orderStage';
 
+/** Kitchen statuses shown in Profile → Your Orders (last 24h). No status filter on Firestore query. */
+export const PROFILE_VISIBLE_ORDER_STATUSES = [
+  'awaiting_payment',
+  'payment_processing',
+  'payment_confirmed',
+  'pending',
+  'pending_driver',
+  'accepted',
+  'restaurant_accepted',
+  'preparing',
+  'ready',
+  'ready_for_pickup',
+  'driver_assigned',
+  'picked_up',
+  'on_the_way',
+  'arrived_customer',
+  'delivered',
+  'completed',
+  'cancelled',
+] as const;
+
+export function isProfileOrderVisibleStatus(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return (PROFILE_VISIBLE_ORDER_STATUSES as readonly string[]).includes(s);
+}
+
 export type ProfileOrderBadgeTone = 'orange' | 'blue' | 'green' | 'red' | 'neutral';
 
 export function profileOrderStatusLabel(

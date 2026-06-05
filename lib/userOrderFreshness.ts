@@ -116,9 +116,8 @@ export function buildFreshProfileOrders<T extends FreshOrderInput & { id?: strin
     }
 
     if (!ts) {
-      if (options?.debug) {
-        console.log('[profile-order-filtered]', order.id, ts);
-      }
+      // Keep rows from the profile listener when createdAt is missing on the client parse.
+      freshOrders.push(order);
       continue;
     }
 

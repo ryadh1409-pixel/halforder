@@ -1,5 +1,5 @@
 import { isProfileOrderCancelled } from '@/constants/profileOrders';
-import { getOrderTimestamp } from '@/lib/userOrderFreshness';
+import { DAY_MS, getOrderTimestamp } from '@/lib/userOrderFreshness';
 import { db } from '@/services/firebase';
 import { safeToMillis } from '@/utils/safeToMillis';
 import {
@@ -9,13 +9,16 @@ import {
   onSnapshot,
   orderBy,
   query,
+  Timestamp,
   where,
   type DocumentData,
   type FirestoreError,
+  type Query,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const ORDERS_LIMIT = 15;
+const ORDERS_LIMIT = 25;
 const BASE_RETRY_MS = 15000;
 const MAX_RETRY_MS = 120000;
 
@@ -37,6 +40,10 @@ export type ProfileOrderRow = {
   updatedAtMs?: number | null;
   imageUrl: string | null;
 };
+
+function profileOrdersSince24h(): Timestamp {
+  return Timestamp.fromMillis(Date.now() - DAY_MS);
+}
 
 function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
   const items = Array.isArray(d?.items) ? d.items : [];
@@ -90,6 +97,7 @@ function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
     createdAtMs:
       safeToMillis(d?.createdAtMs) ??
       safeToMillis(d?.createdAt) ??
+      safeToMillis(d?.updatedAt) ??
       0,
     createdAt: d?.createdAt,
     updatedAtMs:
@@ -108,21 +116,42 @@ function primaryUidFromOrderDoc(d: DocumentData): string {
   return candidate.trim();
 }
 
+function orderSortMs(order: ProfileOrderRow): number {
+  const ts = getOrderTimestamp(order);
+  if (ts > 0) return ts;
+  if (order.updatedAtMs != null && order.updatedAtMs > 0) return order.updatedAtMs;
+  if (order.createdAtMs > 0) return order.createdAtMs;
+  return Date.now();
+}
+
+function buildProfileOrdersQuery(
+  uid: string,
+  field: 'userId' | 'customerId' | 'createdBy' | 'creatorId',
+): Query {
+  return query(
+    collection(db, 'orders'),
+    where(field, '==', uid),
+    where('createdAt', '>=', profileOrdersSince24h()),
+    orderBy('createdAt', 'desc'),
+    limit(ORDERS_LIMIT),
+  );
+}
+
+function mapSnapshotDocs(
+  uid: string,
+  docs: { id: string; data: () => DocumentData }[],
+): ProfileOrderRow[] {
+  return docs
+    .filter((s) => primaryUidFromOrderDoc(s.data()) === uid)
+    .map((s) => parseOrderRow(s.id, s.data()));
+}
+
 async function fetchOrdersFor(
   uid: string,
   field: 'userId' | 'customerId' | 'createdBy' | 'creatorId',
 ): Promise<ProfileOrderRow[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, 'orders'),
-      where(field, '==', uid),
-      orderBy('createdAt', 'desc'),
-      limit(ORDERS_LIMIT),
-    ),
-  );
-  return snap.docs
-    .filter((s) => primaryUidFromOrderDoc(s.data()) === uid)
-    .map((s) => parseOrderRow(s.id, s.data()));
+  const snap = await getDocs(buildProfileOrdersQuery(uid, field));
+  return mapSnapshotDocs(uid, snap.docs);
 }
 
 async function fetchLegacyOrders(uid: string): Promise<ProfileOrderRow[]> {
@@ -134,6 +163,14 @@ async function fetchLegacyOrders(uid: string): Promise<ProfileOrderRow[]> {
   return [...customerRows, ...createdByRows, ...creatorRows];
 }
 
+function mergeRows(input: ProfileOrderRow[]): ProfileOrderRow[] {
+  const dedup = new Map<string, ProfileOrderRow>();
+  input.forEach((r) => dedup.set(r.id, r));
+  return [...dedup.values()]
+    .sort((a, b) => orderSortMs(b) - orderSortMs(a))
+    .slice(0, ORDERS_LIMIT);
+}
+
 export function useProfileOrders(uid: string | null) {
   const [rows, setRows] = useState<ProfileOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,6 +180,9 @@ export function useProfileOrders(uid: string | null) {
   const [retryTick, setRetryTick] = useState(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryDelayMsRef = useRef(BASE_RETRY_MS);
+  const userIdRowsRef = useRef<ProfileOrderRow[]>([]);
+  const customerIdRowsRef = useRef<ProfileOrderRow[]>([]);
+  const legacyRowsRef = useRef<ProfileOrderRow[]>([]);
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current) {
@@ -162,26 +202,29 @@ export function useProfileOrders(uid: string | null) {
       : Math.min(waitMs * 2, MAX_RETRY_MS);
   }, [clearRetryTimer]);
 
-  const mergeRows = useCallback(
-    (input: ProfileOrderRow[]): ProfileOrderRow[] => {
-      const dedup = new Map<string, ProfileOrderRow>();
-      input.forEach((r) => dedup.set(r.id, r));
-      return [...dedup.values()]
-        .sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a))
-        .slice(0, ORDERS_LIMIT);
-    },
-    [],
-  );
+  const publishMergedRows = useCallback(() => {
+    setRows(
+      mergeRows([
+        ...userIdRowsRef.current,
+        ...customerIdRowsRef.current,
+        ...legacyRowsRef.current,
+      ]),
+    );
+  }, []);
 
   const runRefresh = useCallback(async () => {
     if (!uid) return;
     setRefreshing(true);
     try {
-      const [primaryRows, legacyRows] = await Promise.all([
+      const [userIdRows, customerIdRows, legacyRows] = await Promise.all([
         fetchOrdersFor(uid, 'userId'),
+        fetchOrdersFor(uid, 'customerId'),
         fetchLegacyOrders(uid),
       ]);
-      setRows(mergeRows([...primaryRows, ...legacyRows]));
+      userIdRowsRef.current = userIdRows;
+      customerIdRowsRef.current = customerIdRows;
+      legacyRowsRef.current = legacyRows;
+      publishMergedRows();
       setErrorMessage(null);
       setIndexBuilding(false);
       retryDelayMsRef.current = BASE_RETRY_MS;
@@ -202,10 +245,13 @@ export function useProfileOrders(uid: string | null) {
     } finally {
       setRefreshing(false);
     }
-  }, [clearRetryTimer, mergeRows, scheduleRetry, uid]);
+  }, [clearRetryTimer, publishMergedRows, scheduleRetry, uid]);
 
   useEffect(() => {
     if (!uid) {
+      userIdRowsRef.current = [];
+      customerIdRowsRef.current = [];
+      legacyRowsRef.current = [];
       setRows([]);
       setLoading(false);
       setErrorMessage(null);
@@ -213,47 +259,56 @@ export function useProfileOrders(uid: string | null) {
       clearRetryTimer();
       return;
     }
+
     setLoading(true);
-    const unsubscribePrimary = onSnapshot(
-      query(
-        collection(db, 'orders'),
-        where('userId', '==', uid),
-        orderBy('createdAt', 'desc'),
-        limit(ORDERS_LIMIT),
-      ),
-      (snap) => {
-        const mapped = snap.docs
-          .filter((d) => primaryUidFromOrderDoc(d.data()) === uid)
-          .map((d) => parseOrderRow(d.id, d.data()));
-        setRows((prev) => mergeRows([...prev, ...mapped]));
-        setLoading(false);
-        setErrorMessage(null);
-        setIndexBuilding(false);
-        retryDelayMsRef.current = BASE_RETRY_MS;
-        clearRetryTimer();
-      },
-      (e) => {
-        setLoading(false);
-        const msg = e.message || 'Could not load orders.';
-        const isIndexBuild =
-          e.code === 'failed-precondition' &&
-          /requires an index|index is currently building/i.test(msg);
-        setIndexBuilding(isIndexBuild);
-        setErrorMessage(
-          isIndexBuild
-            ? "We're optimizing your order history. This usually takes a few minutes."
-            : msg,
-        );
-        if (isIndexBuild) {
-          scheduleRetry(true);
-        }
-      },
-    );
+    const unsubs: Unsubscribe[] = [];
+
+    const attachListener = (
+      field: 'userId' | 'customerId',
+      targetRef: { current: ProfileOrderRow[] },
+    ) => {
+      const unsub = onSnapshot(
+        buildProfileOrdersQuery(uid, field),
+        (snap) => {
+          targetRef.current = mapSnapshotDocs(uid, snap.docs);
+          publishMergedRows();
+          setLoading(false);
+          setErrorMessage(null);
+          setIndexBuilding(false);
+          retryDelayMsRef.current = BASE_RETRY_MS;
+          clearRetryTimer();
+        },
+        (e) => {
+          setLoading(false);
+          const msg = e.message || 'Could not load orders.';
+          const isIndexBuild =
+            e.code === 'failed-precondition' &&
+            /requires an index|index is currently building/i.test(msg);
+          setIndexBuilding(isIndexBuild);
+          setErrorMessage(
+            isIndexBuild
+              ? "We're optimizing your order history. This usually takes a few minutes."
+              : msg,
+          );
+          if (isIndexBuild) {
+            scheduleRetry(true);
+          }
+        },
+      );
+      unsubs.push(unsub);
+    };
+
+    attachListener('userId', userIdRowsRef);
+    attachListener('customerId', customerIdRowsRef);
 
     void (async () => {
       try {
-        const legacyRows = await fetchLegacyOrders(uid);
-        setRows((prev) => mergeRows([...prev, ...legacyRows]));
+        const [createdByRows, creatorRows] = await Promise.all([
+          fetchOrdersFor(uid, 'createdBy'),
+          fetchOrdersFor(uid, 'creatorId'),
+        ]);
+        legacyRowsRef.current = [...createdByRows, ...creatorRows];
+        publishMergedRows();
         setIndexBuilding(false);
       } finally {
         setLoading(false);
@@ -261,10 +316,10 @@ export function useProfileOrders(uid: string | null) {
     })();
 
     return () => {
-      unsubscribePrimary();
+      for (const unsub of unsubs) unsub();
       clearRetryTimer();
     };
-  }, [clearRetryTimer, mergeRows, scheduleRetry, uid, retryTick]);
+  }, [clearRetryTimer, publishMergedRows, scheduleRetry, uid, retryTick]);
 
   const { activeRows, cancelledRows } = useMemo(() => {
     const active: ProfileOrderRow[] = [];
