@@ -63,15 +63,13 @@ export function useMarketplaceOrderDetail(
           },
           mapped,
         );
-        if (__DEV__) {
-          console.log(`[${logTag}] mapped order`, {
-            orderId,
-            status: mapped.status,
-            deliveryStatus: mapped.deliveryStatus,
-            paymentStatus: mapped.paymentStatus,
-            isMarketplace,
-          });
-        }
+        console.log(`[${logTag}] CUSTOMER_ORDER_DETAIL mapped`, {
+          orderId,
+          status: mapped.status,
+          deliveryStatus: mapped.deliveryStatus,
+          paymentStatus: mapped.paymentStatus,
+          isMarketplace,
+        });
         setMapError(null);
         setOrder(mapped);
       },

@@ -197,16 +197,26 @@ export async function applyRestaurantKitchenAction(
   patch.estimatedDeliveryTime = 35;
 
   if (isDuplicateKitchenTransition(current, patch)) {
-    console.log('[ORDER ACTION] skipped duplicate transition', {
+    console.warn('[ORDER ACTION] skipped duplicate transition — Firestore NOT updated', {
       orderId: id,
       action,
-      status: patch.status,
-      deliveryStatus: patch.deliveryStatus,
+      seedStatus: current.status ?? null,
+      seedDeliveryStatus: current.deliveryStatus ?? null,
+      patchStatus: patch.status ?? null,
+      patchDeliveryStatus: patch.deliveryStatus ?? null,
     });
     return 'skipped_duplicate';
   }
 
   logRestaurantAction(id, action, current, patch);
+  console.log('[RESTAURANT FIRESTORE WRITE] applying kitchen patch', {
+    orderId: id,
+    action,
+    seedStatus: current.status ?? null,
+    seedDeliveryStatus: current.deliveryStatus ?? null,
+    patchStatus: patch.status ?? null,
+    patchDeliveryStatus: patch.deliveryStatus ?? null,
+  });
   await applyProtectedOrderPatch(id, patch);
   return 'applied';
 }

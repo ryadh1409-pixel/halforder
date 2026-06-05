@@ -2,6 +2,7 @@ import {
   assertDeliveryEligibleForOrder,
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
+import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
 import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
@@ -1217,6 +1218,7 @@ export function subscribeCustomerOrderById(
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'orders', orderId),
+    { includeMetadataChanges: true },
     (snap) => {
       if (!snap.exists()) {
         onData(null);
@@ -1224,8 +1226,18 @@ export function subscribeCustomerOrderById(
       }
       try {
         const raw = snap.data() as Record<string, unknown>;
-        logCustomerOrderSnapshot(snap.id, raw);
-        onData(mapDocToRestaurantOrder(snap));
+        const meta = {
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites,
+          source: 'subscribeCustomerOrderById' as const,
+        };
+        logCustomerOrderSnapshot(snap.id, raw, meta);
+        const mapped = mapDocToRestaurantOrder(snap);
+        logCustomerOrderPipeline('subscribeCustomerOrderById', snap.id, raw, mapped, {
+          fromCache: meta.fromCache,
+          hasPendingWrites: meta.hasPendingWrites,
+        });
+        onData(mapped);
       } catch (e) {
         console.warn('[subscribeCustomerOrderById] mapDoc failed', orderId, e);
         options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));

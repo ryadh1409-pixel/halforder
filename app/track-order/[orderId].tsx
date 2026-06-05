@@ -4,6 +4,7 @@
  */
 import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
 import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
+import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
@@ -72,6 +73,7 @@ function TrackOrderScreen() {
     const orderRef = doc(db, 'orders', orderId);
     const unsubscribe = onSnapshot(
       orderRef,
+      { includeMetadataChanges: true },
       (snap) => {
         if (!snap.exists()) {
           setListenError(false);
@@ -80,8 +82,17 @@ function TrackOrderScreen() {
         }
         try {
           const raw = snap.data() as Record<string, unknown>;
-          logCustomerOrderSnapshot(snap.id, raw);
+          const snapshotMeta = {
+            fromCache: snap.metadata.fromCache,
+            hasPendingWrites: snap.metadata.hasPendingWrites,
+            source: 'track-order' as const,
+          };
+          logCustomerOrderSnapshot(snap.id, raw, snapshotMeta);
           const mapped = mapDocToRestaurantOrder(snap);
+          logCustomerOrderPipeline('track-order', snap.id, raw, mapped, {
+            fromCache: snapshotMeta.fromCache,
+            hasPendingWrites: snapshotMeta.hasPendingWrites,
+          });
           setListenError(false);
           setOrder(mapped);
           logPaidStatusRepairIfNeeded(orderId, {
