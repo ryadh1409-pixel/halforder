@@ -25,6 +25,13 @@ describe('restaurantActiveOrdersQuery', () => {
     ).toBe(false);
     expect(
       isActiveRestaurantOrder({
+        status: 'completed',
+        paymentStatus: 'paid',
+        deliveryStatus: 'picked_up',
+      }),
+    ).toBe(false);
+    expect(
+      isActiveRestaurantOrder({
         status: 'cancelled',
         paymentStatus: 'paid',
         deliveryStatus: 'cancelled',

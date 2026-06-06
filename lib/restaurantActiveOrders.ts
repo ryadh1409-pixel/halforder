@@ -3,6 +3,7 @@ import {
   type DerivedOrderStage,
   type OrderStageInput,
 } from '@/services/orderStage';
+import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 
 /** Canonical stages shown on the restaurant live dashboard subscription. */
 export const ACTIVE_RESTAURANT_DERIVED_STAGES: readonly DerivedOrderStage[] = [
@@ -33,6 +34,7 @@ export function isActiveRestaurantDerivedStage(stage: DerivedOrderStage): boolea
 export function isActiveRestaurantOrder(
   order: OrderStageInput & RestaurantOrderArchiveFields,
 ): boolean {
+  if (isTerminalMarketplaceOrder(order)) return false;
   if (order.archivedByRestaurant === true || order.hiddenForRestaurant === true) {
     return false;
   }

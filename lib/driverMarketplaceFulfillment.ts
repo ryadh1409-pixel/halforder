@@ -5,9 +5,13 @@ import {
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
 import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
+import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
+import { clearOrderStageLock } from '@/lib/orderStageLock';
+import { clearOrderListenerCommitCache } from '@/lib/orderListenerCommit';
+import { db } from '@/services/firebase';
 import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
 import type { OrderStageInput } from '@/services/orderStage';
-import { serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 export type DriverMarketplaceFulfillmentAction = 'arrive_restaurant' | 'pickup' | 'deliver';
 
@@ -131,8 +135,30 @@ function buildFulfillmentPatch(action: DriverMarketplaceFulfillmentAction): Reco
     deliveryStatus: MARKETPLACE_DELIVERY_STATUS.DELIVERED,
     status: 'completed',
     deliveredAt: serverTimestamp(),
+    completedAt: serverTimestamp(),
+    marketplaceArchived: true,
     updatedBy: 'driverMarketplaceDelivered',
   };
+}
+
+async function loadFulfillmentView(
+  orderId: string,
+  seed?: DriverMarketplaceFulfillmentView | null,
+): Promise<DriverMarketplaceFulfillmentView> {
+  if (
+    seed &&
+    (seed.deliveryStatus !== undefined ||
+      seed.status !== undefined ||
+      seed.driverId !== undefined ||
+      seed.assignedDriverId !== undefined)
+  ) {
+    return { id: orderId, ...seed };
+  }
+  const snap = await getDoc(doc(db, 'orders', orderId));
+  if (!snap.exists()) {
+    throw new Error('Order not found');
+  }
+  return { id: orderId, ...(snap.data() as Record<string, unknown>) };
 }
 
 function isDuplicateFulfillment(
@@ -167,9 +193,16 @@ export async function applyDriverMarketplaceFulfillment(
   const id = orderId.trim();
   if (!id) throw new Error('Order id is required');
 
-  const current: DriverMarketplaceFulfillmentView = seedCurrent
-    ? { id, ...seedCurrent }
-    : { id };
+  const current = await loadFulfillmentView(id, seedCurrent);
+
+  if (isTerminalMarketplaceOrder(current)) {
+    if (action === 'deliver') {
+      markDriverHubOrderCompleted(id, 'delivery_completed', {
+        driverOrder: null,
+      });
+    }
+    return 'skipped_duplicate';
+  }
 
   if (!isLegalFulfillment(current, action)) {
     console.warn('[DRIVER FULFILLMENT] rejected illegal transition', {
@@ -198,12 +231,21 @@ export async function applyDriverMarketplaceFulfillment(
     timestamp: Date.now(),
   });
 
-  await protectedUpdateOrder(id, patch, {
+  const wrote = await protectedUpdateOrder(id, patch, {
     fileName: 'driverMarketplaceFulfillment.ts',
     functionName: `applyDriverMarketplaceFulfillment:${action}`,
   });
   if (action === 'deliver') {
-    markDriverHubOrderCompleted(id, 'delivery_completed');
+    if (wrote) {
+      clearOrderStageLock(id);
+      clearOrderListenerCommitCache(id);
+      markDriverHubOrderCompleted(id, 'delivery_completed');
+    } else {
+      console.warn('[DRIVER FULFILLMENT] deliver write skipped — hub stays until Firestore confirms', {
+        orderId: id,
+      });
+      return 'skipped_duplicate';
+    }
   }
-  return 'applied';
+  return wrote ? 'applied' : 'skipped_duplicate';
 }

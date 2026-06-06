@@ -140,7 +140,9 @@ export function profileOrderStatusActive(
   deliveryStatus?: string | null,
 ): boolean {
   const ds = (deliveryStatus ?? '').trim();
-  if (status === 'delivered' || status === 'cancelled' || ds === 'delivered') return false;
+  if (status === 'delivered' || status === 'cancelled' || status === 'completed' || ds === 'delivered') {
+    return false;
+  }
   return (
     status === 'payment_processing' ||
     status === 'pending_driver' ||

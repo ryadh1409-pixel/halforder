@@ -22,7 +22,7 @@ import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
 import { DriverDeliveryHistorySection } from '@/components/driver/DriverDeliveryHistory';
-import { filterDriverActiveMarketplaceOrders } from '@/lib/driverHubActiveOrders';
+import { filterDriverActiveMarketplaceOrders, pickPrimaryDriverHubActiveOrder } from '@/lib/driverHubActiveOrders';
 import {
   pruneHubActiveOrdersState,
   subscribeDriverHubActiveOrderRemove,
@@ -324,7 +324,7 @@ export default function DriverHubScreen() {
   );
 
   const hubActiveOrders = useMemo(
-    () => filterDriverActiveMarketplaceOrders(activeOrders, uid),
+    () => pickPrimaryDriverHubActiveOrder(activeOrders, uid),
     [activeOrders, uid],
   );
 

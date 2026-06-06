@@ -20,6 +20,7 @@ import {
 
 import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
 import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
+import { logOrderStatusTransition } from '@/lib/orderTerminalStatus';
 import { traceOrderLifecycleWrite, traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import {
   deriveOrderStage,
@@ -136,12 +137,12 @@ function tracePreparedPatch(
   });
 }
 
-/** Read → monotonic guard → sanitize → traced update. */
+/** Read → monotonic guard → sanitize → traced update. @returns true when Firestore was updated. */
 export async function protectedUpdateOrder(
   orderId: string,
   patch: Record<string, unknown>,
   source: OrderWriteSource,
-): Promise<void> {
+): Promise<boolean> {
   const trimmed = orderId.trim();
   if (!trimmed) throw new Error('Order id is required');
 
@@ -167,7 +168,7 @@ export async function protectedUpdateOrder(
           'client:prepareProtectedOrderPatch_empty — check ORDER DOWNGRADE BLOCKED or ORDER STAGE blocked regression'
         : 'client:prepareProtectedOrderPatch_empty',
     });
-    return;
+    return false;
   }
 
   const documentPath = `orders/${trimmed}`;
@@ -179,7 +180,16 @@ export async function protectedUpdateOrder(
     source: sourceLabel(source),
   });
 
+  if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
+    logOrderStatusTransition(trimmed, current.status ?? null, safePatch.status ?? current.status ?? null, {
+      source: sourceLabel(source),
+      previousDeliveryStatus: current.deliveryStatus ?? null,
+      newDeliveryStatus: safePatch.deliveryStatus ?? current.deliveryStatus ?? null,
+    });
+  }
+
   await updateDoc(ref, safePatch as UpdateData<Record<string, unknown>>);
+  return true;
 }
 
 /** Transactional lifecycle write with the same monotonic protection. */

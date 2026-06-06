@@ -1,4 +1,7 @@
-import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
+import {
+  driverCourierForwardRank,
+  isEffectivelyDelivered,
+} from '@/lib/driverCourierSnapshotMerge';
 import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
@@ -63,6 +66,23 @@ export function filterDriverActiveMarketplaceOrders<T extends DriverHubOrderAssi
   driverUid: string,
 ): T[] {
   return orders.filter((o) => isDriverActiveMarketplaceOrder(o, driverUid));
+}
+
+/** Driver Hub shows one current delivery — highest courier stage wins. */
+export function pickPrimaryDriverHubActiveOrder<T extends DriverHubOrderAssignment & { id?: string; createdAtMs?: number | null }>(
+  orders: T[],
+  driverUid: string,
+): T[] {
+  const active = filterDriverActiveMarketplaceOrders(orders, driverUid);
+  if (active.length <= 1) return active;
+
+  const ranked = [...active].sort((a, b) => {
+    const rankA = driverCourierForwardRank(a.deliveryStatus);
+    const rankB = driverCourierForwardRank(b.deliveryStatus);
+    if (rankA !== rankB) return rankB - rankA;
+    return (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
+  });
+  return [ranked[0]];
 }
 
 function isAssignedToDriver(

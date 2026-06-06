@@ -43,13 +43,11 @@ function kitchenStatus(data: DocumentData): string {
 }
 
 function isKitchenTerminalForPool(data: DocumentData): boolean {
-  const ks = kitchenStatus(data);
+  const ks = kitchenStatus(data).trim().toLowerCase();
   if (KITCHEN_TERMINAL.has(ks)) return true;
-  if (ks === "delivered" || ks === "completed") {
-    const ds = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
-    return ds === "delivered" || ds === "cancelled";
-  }
-  return false;
+  if (ks === "delivered" || ks === "completed") return true;
+  const ds = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+  return ds === "delivered" || ds === "cancelled";
 }
 
 export function isPoolExpiredByAge(data: DocumentData): boolean {

@@ -13,6 +13,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
+import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import {
   DRIVER_PRESENCE_COLLECTION,
   driverPresenceDoc,
@@ -355,7 +356,9 @@ export function subscribeToDriverOrders(
     try {
       const merged = new Map<string, DriverOrder>();
       for (const row of [...byDriverId, ...byAssignedId]) merged.set(row.id, row);
-      const rows = Array.from(merged.values()).sort(
+      const rows = Array.from(merged.values())
+        .filter((row) => !isTerminalMarketplaceOrder(row))
+        .sort(
         (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
       );
       onData(rows);
@@ -524,6 +527,7 @@ export function subscribeAvailableOrders(
               .map((docSnap) => mapDriverOrder(docSnap))
               .filter((order) => {
                 const raw = snap.docs.find((d) => d.id === order.id)?.data() ?? {};
+                if (isTerminalMarketplaceOrder({ id: order.id, ...raw })) return false;
                 return !isDriverPoolRowStale(raw.createdAt, order.createdAtMs);
               });
             marketplaceLog.listenerUpdate(rows.length, {

@@ -5,7 +5,29 @@ import {
 } from '@/lib/driverMarketplaceFulfillment';
 
 jest.mock('@/services/orderFirestoreWrite', () => ({
-  protectedUpdateOrder: jest.fn().mockResolvedValue(undefined),
+  protectedUpdateOrder: jest.fn().mockResolvedValue(true),
+}));
+
+jest.mock('@/services/firebase', () => ({
+  db: {},
+}));
+
+jest.mock('firebase/firestore', () => ({
+  doc: jest.fn(),
+  getDoc: jest.fn(),
+  serverTimestamp: jest.fn(() => ({ _methodName: 'serverTimestamp' })),
+}));
+
+jest.mock('@/lib/driverHubOrdersStore', () => ({
+  markDriverHubOrderCompleted: jest.fn(),
+}));
+
+jest.mock('@/lib/orderStageLock', () => ({
+  clearOrderStageLock: jest.fn(),
+}));
+
+jest.mock('@/lib/orderListenerCommit', () => ({
+  clearOrderListenerCommitCache: jest.fn(),
 }));
 
 import { protectedUpdateOrder } from '@/services/orderFirestoreWrite';
@@ -109,6 +131,28 @@ describe('driverMarketplaceFulfillment', () => {
     expect(protectedUpdateOrder).toHaveBeenCalledWith(
       'o1',
       expect.objectContaining({ deliveryStatus: 'picked_up' }),
+      expect.any(Object),
+    );
+  });
+
+  it('writes completed delivery fields on deliver', async () => {
+    const result = await applyDriverMarketplaceFulfillment(
+      'o1',
+      'deliver',
+      {
+        id: 'o1',
+        driverId: 'drv1',
+        deliveryStatus: 'picked_up',
+      },
+    );
+    expect(result).toBe('applied');
+    expect(protectedUpdateOrder).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({
+        deliveryStatus: 'delivered',
+        status: 'completed',
+        marketplaceArchived: true,
+      }),
       expect.any(Object),
     );
   });

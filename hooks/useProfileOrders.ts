@@ -1,4 +1,5 @@
 import { isProfileOrderCancelled } from '@/constants/profileOrders';
+import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import { DAY_MS, getOrderTimestamp } from '@/lib/userOrderFreshness';
 import { db } from '@/services/firebase';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -327,6 +328,8 @@ export function useProfileOrders(uid: string | null) {
     for (const row of rows) {
       if (isProfileOrderCancelled(row)) {
         cancelled.push(row);
+      } else if (isTerminalMarketplaceOrder(row)) {
+        continue;
       } else {
         active.push(row);
       }

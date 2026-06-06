@@ -73,9 +73,11 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
         return;
       }
       if (action.action === 'deliver') {
-        markDriverHubOrderCompleted(order.id, 'hub_card_deliver', { driverOrder: order });
-        showSuccess(DRIVER_DELIVERY_COMPLETE_TOAST);
-        router.replace(DRIVER_ROUTES.hub as never);
+        if (result === 'applied' || result === 'skipped_duplicate') {
+          markDriverHubOrderCompleted(order.id, 'hub_card_deliver', { driverOrder: order });
+          showSuccess(DRIVER_DELIVERY_COMPLETE_TOAST);
+          router.replace(DRIVER_ROUTES.hub as never);
+        }
         return;
       }
       showSuccess(

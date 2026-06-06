@@ -31,11 +31,17 @@ function resolveUpdatedAtMs(order: OrderStageInput): number {
 
 function isExplicitLifecycleReset(order: OrderStageInput): boolean {
   const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
+  const courier =
+    typeof order.deliveryStatus === 'string' ? order.deliveryStatus.trim().toLowerCase() : '';
   return (
     status === 'cancelled' ||
     status === 'rejected' ||
     status === 'expired' ||
-    status === 'payment_failed'
+    status === 'payment_failed' ||
+    status === 'completed' ||
+    status === 'delivered' ||
+    courier === 'delivered' ||
+    courier === 'cancelled'
   );
 }
 

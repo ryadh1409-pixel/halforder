@@ -1138,8 +1138,10 @@ export async function updateOrderStatus(
   }
   if (normalizedStatus === 'delivered') {
     patch.deliveredAt = serverTimestamp();
+    patch.completedAt = serverTimestamp();
     patch.deliveryStatus = 'delivered';
     patch.status = 'completed';
+    patch.marketplaceArchived = true;
   }
   if (normalizedStatus === 'arrived_customer') {
     patch.deliveryStatus = 'near_customer';
