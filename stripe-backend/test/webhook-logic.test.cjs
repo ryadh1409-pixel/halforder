@@ -10,6 +10,7 @@ const {
   buildOrderPaidStatePatch,
   needsPaidStatusRepair,
   resolvePostPaymentOrderStatus,
+  shouldBlockStripePaymentOverwrite,
 } = require("../lib/orderPaidState.js");
 
 test("trimMetadata trims and rejects empty", () => {
@@ -91,6 +92,31 @@ test("buildOrderPaidStatePatch skips fulfillment when delivered", () => {
   assert.equal(patch.paymentStatus, "paid");
   assert.equal(patch.status, undefined);
   assert.equal(patch.deliveryStatus, undefined);
+});
+
+test("shouldBlockStripePaymentOverwrite blocks completed and driver_assigned", () => {
+  assert.equal(
+    shouldBlockStripePaymentOverwrite({
+      status: "completed",
+      deliveryStatus: "delivered",
+      earningsRecorded: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldBlockStripePaymentOverwrite({
+      status: "payment_confirmed",
+      deliveryStatus: "driver_assigned",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldBlockStripePaymentOverwrite({
+      status: "awaiting_payment",
+      deliveryStatus: "pending",
+    }),
+    false,
+  );
 });
 
 test("resolvePostPaymentOrderStatus keeps active fulfillment", () => {

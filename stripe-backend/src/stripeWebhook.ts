@@ -11,13 +11,12 @@ import { defineSecret } from "firebase-functions/params";
 import type { DocumentSnapshot, Transaction } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { paymentIntentIdFromSession, trimMetadata } from "./stripeWebhookLogic.js";
-import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {
   buildOrderPaidStatePatch,
   buildPaymentOnlyPaidStatePatch,
-  isOrderFulfilledForPaidPatch,
   orderPaymentStatusString,
   orderStatusString,
+  shouldBlockStripePaymentOverwrite,
 } from "./orderPaidState.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 
@@ -123,57 +122,24 @@ function mergeOrderPaidSync(
     return;
   }
   const data = orderSnap.data() ?? {};
+
+  if (shouldBlockStripePaymentOverwrite(data)) {
+    console.log("[stripeWebhook] BLOCKED overwrite — order already past payment", {
+      orderId,
+      status: data.status ?? null,
+      deliveryStatus: data.deliveryStatus ?? null,
+      stripeEventId,
+      sourceEventType,
+    });
+    return;
+  }
+
   const before = {
     paymentStatus: orderPaymentStatusString(data.paymentStatus),
     status: orderStatusString(data.status),
   };
 
   const alreadyPaid = before.paymentStatus === "paid";
-
-  const fulfillmentLocked =
-    hasFulfillmentProgressMarkers(data) || isOrderFulfilledForPaidPatch(data);
-
-  if (fulfillmentLocked) {
-    console.log(
-      "[STRIPE WEBHOOK] skipping fulfillment patch — order already fulfilled:",
-      orderStatusString(data.status),
-      {orderId, deliveryStatus: data.deliveryStatus ?? null},
-    );
-
-    const paymentOnly: Record<string, unknown> = {
-      ...buildPaymentOnlyPaidStatePatch({
-        paymentIntentId,
-        checkoutSessionId,
-        stripeWebhookLastEventType: sourceEventType,
-        stripeWebhookLastEventId: stripeEventId,
-      }),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    if (!alreadyPaid) {
-      paymentOnly.paidAt = admin.firestore.FieldValue.serverTimestamp();
-    }
-
-    const safe = prepareServerOrderPatch(
-      orderId,
-      data,
-      paymentOnly,
-      "stripeWebhook:fulfilled",
-    );
-    if (Object.keys(safe).length === 0) return;
-
-    console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync:fulfilled", {
-      orderId,
-      status: safe.status ?? null,
-      deliveryStatus: safe.deliveryStatus ?? null,
-      paymentStatus: safe.paymentStatus ?? null,
-      updatedBy: safe.updatedBy ?? null,
-      op: "set",
-      merge: true,
-    });
-
-    tx.set(orderSnap.ref, safe, {merge: true});
-    return;
-  }
 
   /** Once paid, webhook must never re-assert payment_confirmed/pending (repair runs in main CF). */
   if (alreadyPaid) {
@@ -277,6 +243,15 @@ function mergeOrderPaymentFailed(
   const { paymentIntentId, sourceEventType, stripeEventId } = params;
   if (!orderSnap.exists) return;
   const data = orderSnap.data() ?? {};
+  if (shouldBlockStripePaymentOverwrite(data)) {
+    console.log("[stripeWebhook] BLOCKED payment_failed — order already past payment", {
+      orderId: orderSnap.id,
+      status: data.status ?? null,
+      deliveryStatus: data.deliveryStatus ?? null,
+      stripeEventId,
+    });
+    return;
+  }
   if (data.paymentStatus === "paid") {
     logStripeDebug("payment_failed_ignored_already_paid", { stripeEventId });
     return;

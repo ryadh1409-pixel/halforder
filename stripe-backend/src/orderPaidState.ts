@@ -44,6 +44,19 @@ export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolea
   return FULFILLED_STATUSES.has(courier);
 }
 
+/** Hard stop — Stripe webhook / repair must not touch the order document at all. */
+export function shouldBlockStripePaymentOverwrite(
+  order: OrderPaidStateInput & Record<string, unknown>,
+): boolean {
+  if (hasFulfillmentProgressMarkers(order)) return true;
+  if (isOrderFulfilledForPaidPatch(order)) return true;
+  if (order.earningsRecorded === true) return true;
+  if (order.marketplaceArchived === true) return true;
+  const status = orderStatusString(order.status).toLowerCase();
+  const courier = orderStatusString(order.deliveryStatus).toLowerCase();
+  return FULFILLED_STATUSES.has(status) || FULFILLED_STATUSES.has(courier);
+}
+
 export type OrderPaidStateInput = {
   status?: unknown;
   paymentStatus?: unknown;

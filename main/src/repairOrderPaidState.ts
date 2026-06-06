@@ -6,6 +6,7 @@ import {
   needsPaidStatusRepair,
   orderPaymentStatusString,
   orderStatusString,
+  shouldBlockStripePaymentOverwrite,
 } from "./orderPaidState.js";
 import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
 import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
@@ -21,6 +22,15 @@ export async function repairOrderPaidStateIfNeeded(
   orderId: string,
   data: DocumentData,
 ): Promise<boolean> {
+  if (shouldBlockStripePaymentOverwrite(data)) {
+    console.log("[repairOrderPaidState] BLOCKED overwrite — order already past payment", {
+      orderId,
+      status: data.status ?? null,
+      deliveryStatus: data.deliveryStatus ?? null,
+    });
+    return false;
+  }
+
   if (isDriverFulfillmentAdvanced(data.deliveryStatus)) {
     console.log(
       "[FUNCTION] skipping — driver already advanced:",
@@ -58,6 +68,15 @@ export async function repairOrderPaidStateIfNeeded(
     if (!snap.exists) return;
 
     const fresh = snap.data() ?? {};
+    if (shouldBlockStripePaymentOverwrite(fresh)) {
+      console.log("[repairOrderPaidState] BLOCKED overwrite — order already past payment", {
+        orderId,
+        status: fresh.status ?? null,
+        deliveryStatus: fresh.deliveryStatus ?? null,
+        logSource: "repairOrderPaidState:txn",
+      });
+      return;
+    }
     if (isDriverFulfillmentAdvanced(fresh.deliveryStatus)) {
       console.log(
         "[FUNCTION] skipping — driver already advanced:",
