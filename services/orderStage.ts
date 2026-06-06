@@ -199,9 +199,10 @@ function isPickedUp(order: OrderStageInput): boolean {
 
 function isDelivered(order: OrderStageInput): boolean {
   if (hasTimestamp(order.deliveredAt, order.deliveredAtMs)) return true;
+  if (hasTimestamp(order.completedAt, order.completedAtMs)) return true;
   const status = kitchenStatus(order);
   const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
-  return status === 'delivered' || courier === 'delivered';
+  return status === 'delivered' || status === 'completed' || courier === 'delivered';
 }
 
 function isCancelled(order: OrderStageInput): boolean {

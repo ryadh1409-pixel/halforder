@@ -1,4 +1,5 @@
 import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
+import { logServerOrCacheOrder } from '@/lib/orderSnapshotFreshness';
 import { logOrderStatusTransition, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
 import { resolveCustomerTrackStep } from '@/lib/customerTrackStatus';
@@ -54,6 +55,11 @@ export function logCustomerOrderSnapshot(
     deliveredAtMs:
       typeof data.deliveredAtMs === 'number' ? data.deliveredAtMs : undefined,
   });
+
+  logServerOrCacheOrder(orderId, data, {
+    fromCache: meta?.fromCache ?? false,
+    hasPendingWrites: meta?.hasPendingWrites ?? false,
+  }, meta?.source ?? 'customer_snapshot');
 
   console.log('CUSTOMER SNAPSHOT', {
     orderId,

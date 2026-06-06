@@ -1,3 +1,4 @@
+import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
 import { isProfileOrderCancelled } from '@/constants/profileOrders';
 import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import { DAY_MS, getOrderTimestamp } from '@/lib/userOrderFreshness';
@@ -268,9 +269,27 @@ export function useProfileOrders(uid: string | null) {
       field: 'userId' | 'customerId',
       targetRef: { current: ProfileOrderRow[] },
     ) => {
+      const queryGate = new QuerySnapshotFreshnessGate();
       const unsub = onSnapshot(
         buildProfileOrdersQuery(uid, field),
         (snap) => {
+          if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+            console.log('CACHE ORDER', {
+              source: 'useProfileOrders:ignored',
+              field,
+              uid,
+              docCount: snap.docs.length,
+              fromCache: true,
+            });
+            return;
+          }
+          console.log('SERVER ORDER', {
+            source: 'useProfileOrders',
+            field,
+            uid,
+            docCount: snap.docs.length,
+            fromCache: snap.metadata.fromCache,
+          });
           targetRef.current = mapSnapshotDocs(uid, snap.docs);
           publishMergedRows();
           setLoading(false);

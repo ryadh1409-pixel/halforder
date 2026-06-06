@@ -1,4 +1,5 @@
 import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
+import { logServerOrCacheOrder, OrderSnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
 import { doc, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -24,16 +25,28 @@ export function useOrder(orderId: string) {
     setLoading(true);
     setError(null);
     const ref = doc(db, 'orders', oid);
+    const freshnessGate = new OrderSnapshotFreshnessGate();
     const unsub = onSnapshot(
       ref,
       { includeMetadataChanges: true },
       (snap) => {
-        if (snap.metadata.fromCache) {
+        if (!snap.exists()) {
+          setSnapshot(snap);
+          setLoading(false);
+          setError(null);
           return;
         }
-        if (snap.exists()) {
-          logCustomerOrderSnapshot(snap.id, snap.data() as Record<string, unknown>);
+        const raw = snap.data() as Record<string, unknown>;
+        const meta = {
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites,
+        };
+        if (!freshnessGate.shouldApply(raw, meta)) {
+          logServerOrCacheOrder(snap.id, raw, meta, 'useOrder:ignored');
+          return;
         }
+        logServerOrCacheOrder(snap.id, raw, meta, 'useOrder');
+        logCustomerOrderSnapshot(snap.id, raw, { ...meta, source: 'useOrder' });
         setSnapshot(snap);
         setLoading(false);
         setError(null);

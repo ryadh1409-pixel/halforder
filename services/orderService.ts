@@ -4,6 +4,11 @@ import {
 } from '@/lib/delivery/deliveryEligibility';
 import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
 import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
+import {
+  logServerOrCacheOrder,
+  OrderSnapshotFreshnessGate,
+  QuerySnapshotFreshnessGate,
+} from '@/lib/orderSnapshotFreshness';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
   clearOrderListenerCommitCache,
@@ -920,9 +925,27 @@ export function subscribeActiveRestaurantOrders(
   onData: (orders: RestaurantOrder[]) => void,
   options?: GetRestaurantOrdersOptions,
 ): Unsubscribe {
+  const queryGate = new QuerySnapshotFreshnessGate();
   const unsub = onSnapshot(
     getActiveRestaurantOrdersQuery(restaurantId),
     (snap) => {
+      if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+        console.log('CACHE ORDER', {
+          source: 'subscribeActiveRestaurantOrders:ignored',
+          restaurantId,
+          docCount: snap.docs.length,
+          fromCache: true,
+          hasPendingWrites: snap.metadata.hasPendingWrites,
+        });
+        return;
+      }
+      console.log('SERVER ORDER', {
+        source: 'subscribeActiveRestaurantOrders',
+        restaurantId,
+        docCount: snap.docs.length,
+        fromCache: snap.metadata.fromCache,
+        hasPendingWrites: snap.metadata.hasPendingWrites,
+      });
       try {
         const rows: RestaurantOrder[] = [];
         for (const docSnap of snap.docs) {
@@ -1006,9 +1029,27 @@ export function subscribeRestaurantArchivedOrders(
   onData: (orders: RestaurantOrder[]) => void,
   options?: GetRestaurantOrdersOptions,
 ): Unsubscribe {
+  const queryGate = new QuerySnapshotFreshnessGate();
   const unsub = onSnapshot(
     getRestaurantArchivedOrdersQuery(restaurantId),
     (snap) => {
+      if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+        console.log('CACHE ORDER', {
+          source: 'subscribeRestaurantArchivedOrders:ignored',
+          restaurantId,
+          docCount: snap.docs.length,
+          fromCache: true,
+          hasPendingWrites: snap.metadata.hasPendingWrites,
+        });
+        return;
+      }
+      console.log('SERVER ORDER', {
+        source: 'subscribeRestaurantArchivedOrders',
+        restaurantId,
+        docCount: snap.docs.length,
+        fromCache: snap.metadata.fromCache,
+        hasPendingWrites: snap.metadata.hasPendingWrites,
+      });
       try {
         const rows: RestaurantOrder[] = [];
         for (const docSnap of snap.docs) {
@@ -1319,6 +1360,7 @@ export function subscribeCustomerOrderById(
   let cancelled = false;
   let lastSignature = '';
   let unsub: Unsubscribe | null = null;
+  const freshnessGate = new OrderSnapshotFreshnessGate();
 
   const emitSnapshot = (snap: DocumentSnapshot) => {
     if (cancelled) return;
@@ -1329,6 +1371,18 @@ export function subscribeCustomerOrderById(
     }
     try {
       const raw = snap.data() as Record<string, unknown>;
+      const meta = {
+        fromCache: snap.metadata.fromCache,
+        hasPendingWrites: snap.metadata.hasPendingWrites,
+      };
+
+      if (!freshnessGate.shouldApply(raw, meta)) {
+        logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById:ignored');
+        return;
+      }
+
+      logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById');
+
       const signature = [
         raw.status,
         raw.deliveryStatus,
@@ -1337,18 +1391,18 @@ export function subscribeCustomerOrderById(
         safeToMillis(raw.pickedUpAt),
         safeToMillis(raw.deliveredAt),
         safeToMillis(raw.completedAt),
-        snap.metadata.hasPendingWrites,
-        snap.metadata.fromCache,
+        raw.marketplaceArchived,
+        raw.earningsRecorded,
       ].join('|');
       if (signature === lastSignature) return;
       lastSignature = signature;
 
-      const meta = {
-        fromCache: snap.metadata.fromCache,
-        hasPendingWrites: snap.metadata.hasPendingWrites,
+      const snapshotMeta = {
+        fromCache: meta.fromCache,
+        hasPendingWrites: meta.hasPendingWrites,
         source: 'subscribeCustomerOrderById' as const,
       };
-      logCustomerOrderSnapshot(snap.id, raw, meta);
+      logCustomerOrderSnapshot(snap.id, raw, snapshotMeta);
       const mapped = mapDocToRestaurantOrder(snap);
       logCustomerOrderPipeline('subscribeCustomerOrderById', snap.id, raw, mapped, {
         fromCache: meta.fromCache,
