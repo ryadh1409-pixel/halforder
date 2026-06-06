@@ -133,7 +133,11 @@ function isCancelled(order: OrderStageInput): boolean {
 }
 
 function isDelivered(order: OrderStageInput): boolean {
-  if (hasTimestamp(order.deliveredAt, order.deliveredAtMs)) return true;
+  if (hasTimestamp(order.deliveredAt, order.deliveredAtMs, order.completedAt, order.completedAtMs)) {
+    return true;
+  }
+  const status = norm(order.status);
+  if (status === 'completed') return true;
   return (
     stageIndexFromField(order.status) >= STAGE_INDEX.delivered ||
     stageIndexFromField(order.deliveryStatus) >= STAGE_INDEX.delivered
@@ -149,8 +153,8 @@ function isPickedUp(order: OrderStageInput): boolean {
 }
 
 /**
- * Resolves the active customer timeline step from live Firestore `status` + `deliveryStatus`.
- * Uses the furthest-forward signal (never regresses below Firestore).
+ * Resolves the active customer timeline step — courier `deliveryStatus` is authoritative.
+ * Kitchen `status` (e.g. payment_confirmed) must never cap delivery progress.
  */
 export function resolveCustomerTrackStep(
   order: OrderStageInput | null | undefined,
@@ -158,18 +162,26 @@ export function resolveCustomerTrackStep(
   if (!order) return 'order_placed';
   if (isCancelled(order)) return 'cancelled';
 
+  const statusNorm = norm(order.status);
+  const courierNorm = norm(order.deliveryStatus);
+  const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
+
+  if (
+    courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED ||
+    courierNorm === 'completed' ||
+    statusNorm === 'completed' ||
+    isDelivered(order)
+  ) {
+    return 'delivered';
+  }
+
   const courierStep = courierStageFromOrder(order);
-  if (courierStep === 'delivered' || isDelivered(order)) return 'delivered';
   if (courierStep === 'picked_up' || isPickedUp(order)) return 'picked_up';
   if (courierStep === 'at_restaurant') return 'at_restaurant';
 
-  let index = Math.max(
-    stageIndexFromField(order.status),
-    stageIndexFromField(order.deliveryStatus),
-    STAGE_INDEX.order_placed,
-  );
+  let index = stageIndexFromField(order.deliveryStatus);
+  if (index < 0) index = STAGE_INDEX.order_placed;
 
-  // Driver claimed but courier field still early — never regress below assigned.
   if (hasDriver(order) && index < STAGE_INDEX.driver_assigned) {
     index = STAGE_INDEX.driver_assigned;
   }
@@ -254,5 +266,14 @@ export function customerTrackProgress(step: CustomerTrackPhase): number {
 /** True when the customer should see the delivered completion state. */
 export function isCustomerOrderDelivered(order: OrderStageInput | null | undefined): boolean {
   if (!order) return false;
+  const statusNorm = norm(order.status);
+  const courierNorm = norm(order.deliveryStatus);
+  if (
+    courierNorm === 'delivered' ||
+    courierNorm === 'completed' ||
+    statusNorm === 'completed'
+  ) {
+    return true;
+  }
   return resolveCustomerTrackStep(order) === 'delivered';
 }

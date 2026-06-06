@@ -43,9 +43,8 @@ import {
 } from '@/lib/driverHubActiveOrders';
 import { filterHubActiveDriverOrders } from '@/lib/driverHubOrdersStore';
 import {
-  calculateDriverEarningForOrder,
-  isSameLocalDay,
-} from '@/lib/driverEarnings';
+  subscribeDriverEarnings,
+} from '@/services/driverEarnings';
 import {
   isDriverMarketplaceClaimable,
   isPaidMarketplaceDeliveryOrder,
@@ -492,7 +491,10 @@ export type DriverDeliveryStats = {
   deliveries: number;
   earnings: number;
   earningsToday: number;
+  earningsWeek: number;
   deliveriesToday: number;
+  deliveriesWeek: number;
+  averageEarning: number;
   rating: number;
   breakdown: DriverDeliveryBreakdownItem[];
 };
@@ -501,68 +503,71 @@ const EMPTY_DRIVER_STATS: DriverDeliveryStats = {
   deliveries: 0,
   earnings: 0,
   earningsToday: 0,
+  earningsWeek: 0,
   deliveriesToday: 0,
+  deliveriesWeek: 0,
+  averageEarning: 0,
   rating: 5.0,
   breakdown: [],
 };
 
-const DRIVER_COMPLETED_STATUSES = ['delivered', 'completed'] as const;
+/** Completed deliveries + earnings for driver dashboard stats. */
+export function subscribeDriverDeliveryStats(
+  driverId: string,
+  onStats: (stats: DriverDeliveryStats) => void,
+): Unsubscribe {
+  const noopUnsub = () => {};
+  let innerUnsub: Unsubscribe | null = null;
+  let cancelled = false;
 
-function isDriverCompletedDeliveryOrder(data: Record<string, unknown>): boolean {
-  const status = typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
-  const courier =
-    typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
-  return (
-    status === 'delivered' ||
-    status === 'completed' ||
-    courier === 'delivered'
-  );
-}
+  const emitEmpty = () => onStats(EMPTY_DRIVER_STATS);
 
-function resolveDriverDeliveryCompletedMs(data: Record<string, unknown>): number | null {
-  return (
-    safeToMillis(data.deliveredAt) ??
-    safeToMillis(data.completedAt) ??
-    safeToMillis(data.updatedAt) ??
-    safeToMillis(data.createdAt)
-  );
-}
+  try {
+    runListenerBootstrap('subscribeDriverDeliveryStats', async () => {
+      const authUid = await prepareDriverFirestoreAccess(driverId);
+      if (cancelled || !authUid) {
+        emitEmpty();
+        return;
+      }
 
-function buildDriverDeliveryStats(
-  docs: Array<{ id: string; data: () => Record<string, unknown> }>,
-): DriverDeliveryStats {
-  const breakdown: DriverDeliveryBreakdownItem[] = [];
-  let earnings = 0;
-  let earningsToday = 0;
-  let deliveriesToday = 0;
+      await logDriverQueryStart({
+        listener: 'subscribeDriverDeliveryStats',
+        collection: 'orders',
+        filters: {
+          driverId: authUid,
+          assignedDriverId: authUid,
+          status: ['delivered', 'completed'],
+        },
+      });
 
-  for (const docSnap of docs) {
-    const data = docSnap.data();
-    if (!isDriverCompletedDeliveryOrder(data)) continue;
+      if (cancelled) {
+        emitEmpty();
+        return;
+      }
 
-    const earning = calculateDriverEarningForOrder(data);
-    const deliveredAtMs = resolveDriverDeliveryCompletedMs(data);
-    earnings += earning;
-    if (isSameLocalDay(deliveredAtMs)) {
-      earningsToday += earning;
-      deliveriesToday += 1;
+      innerUnsub = subscribeDriverEarnings(authUid, (next) => {
+        if (cancelled) return;
+        onStats({
+          ...next,
+          rating: 5.0,
+        });
+      });
+    }, emitEmpty);
+  } catch (error) {
+    if (isFirestorePermissionDenied(error)) {
+      // eslint-disable-next-line no-console
+      console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
+      emitEmpty();
+      return noopUnsub;
     }
-    breakdown.push({
-      orderId: docSnap.id,
-      earning,
-      deliveredAtMs,
-    });
+    logDriverQueryError('subscribeDriverDeliveryStats.bootstrap', error);
+    emitEmpty();
+    return noopUnsub;
   }
 
-  breakdown.sort((a, b) => (b.deliveredAtMs ?? 0) - (a.deliveredAtMs ?? 0));
-
-  return {
-    deliveries: breakdown.length,
-    earnings: Math.round(earnings * 100) / 100,
-    earningsToday: Math.round(earningsToday * 100) / 100,
-    deliveriesToday,
-    rating: 5.0,
-    breakdown,
+  return () => {
+    cancelled = true;
+    innerUnsub?.();
   };
 }
 
@@ -636,147 +641,6 @@ export function subscribeAvailableOrders(
   return () => {
     cancelled = true;
     unsub?.();
-  };
-}
-
-/** Completed deliveries + earnings for driver dashboard stats. */
-export function subscribeDriverDeliveryStats(
-  driverId: string,
-  onStats: (stats: DriverDeliveryStats) => void,
-): Unsubscribe {
-  const noopUnsub = () => {};
-  const unsubs: Unsubscribe[] = [];
-  let cancelled = false;
-  let byDriverId: Array<{ id: string; data: () => Record<string, unknown> }> = [];
-  let byAssignedId: Array<{ id: string; data: () => Record<string, unknown> }> = [];
-
-  const emitEmpty = () => onStats(EMPTY_DRIVER_STATS);
-
-  const emitMerged = () => {
-    if (cancelled) return;
-    const merged = new Map<string, { id: string; data: () => Record<string, unknown> }>();
-    for (const row of byAssignedId) merged.set(row.id, row);
-    for (const row of byDriverId) merged.set(row.id, row);
-    onStats(buildDriverDeliveryStats(Array.from(merged.values())));
-  };
-
-  try {
-    runListenerBootstrap('subscribeDriverDeliveryStats', async () => {
-      const authUid = await prepareDriverFirestoreAccess(driverId);
-      if (cancelled || !authUid) {
-        emitEmpty();
-        return;
-      }
-
-      const statsFilters = {
-        driverId: authUid,
-        assignedDriverId: authUid,
-        status: DRIVER_COMPLETED_STATUSES,
-        deliveryType: 'delivery',
-      };
-      await logDriverQueryStart({
-        listener: 'subscribeDriverDeliveryStats',
-        collection: 'orders',
-        filters: statsFilters,
-      });
-
-      if (cancelled) {
-        emitEmpty();
-        return;
-      }
-
-      const completedStatusFilter = where(
-        'status',
-        'in',
-        [...DRIVER_COMPLETED_STATUSES],
-      );
-
-      try {
-        const unsubDriverId = onSnapshot(
-          query(
-            collection(db, 'orders'),
-            where('driverId', '==', authUid),
-            completedStatusFilter,
-            where('deliveryType', '==', 'delivery'),
-          ),
-          (snap) => {
-            if (cancelled) return;
-            byDriverId = snap.docs.map((docSnap) => ({
-              id: docSnap.id,
-              data: () => docSnap.data() as Record<string, unknown>,
-            }));
-            emitMerged();
-          },
-          (error) => {
-            if (cancelled) return;
-            if (isFirestorePermissionDenied(error)) {
-              // eslint-disable-next-line no-console
-              console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
-              byDriverId = [];
-              emitMerged();
-              return;
-            }
-            logDriverQueryError('subscribeDriverDeliveryStats.driverId', error);
-            byDriverId = [];
-            emitMerged();
-          },
-        );
-        unsubs.push(unsubDriverId);
-      } catch (error) {
-        logDriverQueryError('subscribeDriverDeliveryStats.driverId.setup', error);
-      }
-
-      try {
-        const unsubAssigned = onSnapshot(
-          query(
-            collection(db, 'orders'),
-            where('assignedDriverId', '==', authUid),
-            completedStatusFilter,
-            where('deliveryType', '==', 'delivery'),
-          ),
-          (snap) => {
-            if (cancelled) return;
-            byAssignedId = snap.docs.map((docSnap) => ({
-              id: docSnap.id,
-              data: () => docSnap.data() as Record<string, unknown>,
-            }));
-            emitMerged();
-          },
-          (error) => {
-            if (cancelled) return;
-            if (isFirestorePermissionDenied(error)) {
-              // eslint-disable-next-line no-console
-              console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
-              byAssignedId = [];
-              emitMerged();
-              return;
-            }
-            logDriverQueryError('subscribeDriverDeliveryStats.assignedDriverId', error);
-            byAssignedId = [];
-            emitMerged();
-          },
-        );
-        unsubs.push(unsubAssigned);
-      } catch (error) {
-        logDriverQueryError('subscribeDriverDeliveryStats.assignedDriverId.setup', error);
-      }
-    }, emitEmpty);
-  } catch (error) {
-    if (isFirestorePermissionDenied(error)) {
-      // eslint-disable-next-line no-console
-      console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
-      emitEmpty();
-      return noopUnsub;
-    }
-    logDriverQueryError('subscribeDriverDeliveryStats.bootstrap', error);
-    emitEmpty();
-    return noopUnsub;
-  }
-
-  return () => {
-    cancelled = true;
-    for (const unsub of unsubs) unsub();
-    unsubs.length = 0;
   };
 }
 

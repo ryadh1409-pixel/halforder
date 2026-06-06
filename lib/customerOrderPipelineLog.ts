@@ -23,8 +23,26 @@ function norm(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-/** Per-step completion flags for comparing restaurant vs customer views. */
-export function customerTrackStepFlags(step: CustomerTrackPhase): Record<string, boolean> {
+function isCustomerDeliveryComplete(order?: OrderStageInput | null): boolean {
+  if (!order) return false;
+  const ds = norm(order.deliveryStatus);
+  const st = norm(order.status);
+  return ds === 'delivered' || ds === 'completed' || st === 'completed';
+}
+
+/** Per-step completion flags — deliveryStatus drives courier steps, not kitchen status. */
+export function customerTrackStepFlags(
+  step: CustomerTrackPhase,
+  order?: OrderStageInput | null,
+): Record<string, boolean> {
+  if (isCustomerDeliveryComplete(order) || step === 'delivered') {
+    const allDone: Record<string, boolean> = {};
+    for (const stage of DELIVERY_STAGES) {
+      allDone[stage.key] = true;
+    }
+    return allDone;
+  }
+
   const activeIdx = customerTrackStepIndex(step);
   const flags: Record<string, boolean> = {};
   for (let i = 0; i < DELIVERY_STAGES.length; i += 1) {
@@ -35,8 +53,7 @@ export function customerTrackStepFlags(step: CustomerTrackPhase): Record<string,
 
 /**
  * Logs the full customer order data pipeline for debugging realtime desync.
- * Compare `rawStatus` / `rawDeliveryStatus` with `mappedStatus` / `mappedDeliveryStatus`
- * and `derivedCustomerStage` on restaurant + customer simulators for the same orderId.
+ * Stage derivation uses deliveryStatus only — kitchen status must not block advancement.
  */
 export function logCustomerOrderPipeline(
   source: CustomerOrderPipelineSource,
@@ -60,10 +77,12 @@ export function logCustomerOrderPipeline(
       typeof raw.pickedUpAtMs === 'number' ? raw.pickedUpAtMs : undefined,
     deliveredAtMs:
       typeof raw.deliveredAtMs === 'number' ? raw.deliveredAtMs : undefined,
+    completedAtMs:
+      typeof raw.completedAtMs === 'number' ? raw.completedAtMs : undefined,
   };
 
   const derivedStage = resolveCustomerTrackStep(mappedInput);
-  const stepFlags = customerTrackStepFlags(derivedStage);
+  const stepFlags = customerTrackStepFlags(derivedStage, mappedInput);
 
   console.log('CUSTOMER_ORDER_PIPELINE', {
     source,

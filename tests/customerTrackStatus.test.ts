@@ -128,7 +128,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('delivered');
-    expect(customerTrackHeaderTitle('delivered')).toBe('Delivered!');
+    expect(customerTrackHeaderTitle('delivered')).toBe('Your order has been delivered! 🎉');
   });
 
   it('advances to picked_up when only deliveryStatus is picked_up (driver pickup patch)', () => {
@@ -154,6 +154,18 @@ describe('resolveCustomerTrackStep', () => {
     ).toBe('picked_up');
   });
 
+  it('advances to delivered from completedAtMs when courier field lags', () => {
+    expect(
+      resolveCustomerTrackStep({
+        paymentStatus: 'paid',
+        status: 'driver_assigned',
+        deliveryStatus: 'driver_assigned',
+        driverId: 'driver-1',
+        completedAtMs: Date.now(),
+      }),
+    ).toBe('delivered');
+  });
+
   it('maps completed status and delivered courier to delivered', () => {
     expect(
       resolveCustomerTrackStep({
@@ -176,7 +188,19 @@ describe('resolveCustomerTrackStep', () => {
     ).toBe('picked_up');
   });
 
-  it('uses furthest-forward signal between status and deliveryStatus', () => {
+  it('reaches delivered when deliveryStatus is delivered while status stays payment_confirmed', () => {
+    expect(
+      resolveCustomerTrackStep({
+        paymentStatus: 'paid',
+        status: 'payment_confirmed',
+        deliveryStatus: 'delivered',
+        driverId: 'driver-1',
+      }),
+    ).toBe('delivered');
+    expect(customerTrackHeaderTitle('delivered')).toBe('Your order has been delivered! 🎉');
+  });
+
+  it('uses furthest-forward signal from deliveryStatus not kitchen status', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',

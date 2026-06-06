@@ -5,6 +5,37 @@ import {
 import { resolveCustomerTrackStep } from '@/lib/customerTrackStatus';
 
 describe('customerOrderPipelineLog', () => {
+  it('flags driver_assigned when kitchen status is still payment_confirmed', () => {
+    const flags = customerTrackStepFlags(
+      resolveCustomerTrackStep({
+        status: 'payment_confirmed',
+        paymentStatus: 'paid',
+        deliveryStatus: 'driver_assigned',
+        driverId: 'driver-1',
+      }),
+      {
+        status: 'payment_confirmed',
+        deliveryStatus: 'driver_assigned',
+        driverId: 'driver-1',
+      },
+    );
+    expect(flags.driver_assigned).toBe(true);
+    expect(flags.delivered).toBe(false);
+  });
+
+  it('flags all steps when deliveryStatus is delivered despite payment_confirmed status', () => {
+    const order = {
+      status: 'payment_confirmed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'delivered',
+      driverId: 'driver-1',
+    };
+    const flags = customerTrackStepFlags(resolveCustomerTrackStep(order), order);
+    expect(flags.delivered).toBe(true);
+    expect(flags.picked_up).toBe(true);
+    expect(flags.driver_assigned).toBe(true);
+  });
+
   it('flags only order_placed when Firestore is still payment_confirmed', () => {
     const flags = customerTrackStepFlags(
       resolveCustomerTrackStep({

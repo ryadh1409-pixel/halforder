@@ -14,6 +14,7 @@ if (__DEV__) {
 
 /**
  * Expo Router entry for `/order/:id` (file: `app/order/[id].tsx`).
+ * Customer tracking uses deliveryStatus-first stage resolution via useMarketplaceOrderDetail.
  */
 export default function OrderDetailRoute() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
