@@ -27,7 +27,10 @@ const EMPTY_STATS: DriverDeliveryStats = {
   deliveries: 0,
   earnings: 0,
   earningsToday: 0,
+  earningsWeek: 0,
   deliveriesToday: 0,
+  deliveriesWeek: 0,
+  averageEarning: 0,
   rating: 5.0,
   breakdown: [],
 };
@@ -37,7 +40,10 @@ function statsEqual(a: DriverDeliveryStats, b: DriverDeliveryStats): boolean {
     a.deliveries === b.deliveries &&
     a.earnings === b.earnings &&
     a.earningsToday === b.earningsToday &&
+    a.earningsWeek === b.earningsWeek &&
     a.deliveriesToday === b.deliveriesToday &&
+    a.deliveriesWeek === b.deliveriesWeek &&
+    a.averageEarning === b.averageEarning &&
     a.rating === b.rating &&
     a.breakdown.length === b.breakdown.length &&
     a.breakdown.every(
@@ -139,7 +145,7 @@ function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeP
       statsLoading,
       currentDeliveryOrderId,
     }),
-    [stats.deliveries, stats.earnings, stats.earningsToday, stats.deliveriesToday, stats.rating, stats.breakdown, statsLoading, currentDeliveryOrderId],
+    [stats.deliveries, stats.earnings, stats.earningsToday, stats.earningsWeek, stats.deliveriesToday, stats.deliveriesWeek, stats.averageEarning, stats.rating, stats.breakdown, statsLoading, currentDeliveryOrderId],
   );
 
   return (

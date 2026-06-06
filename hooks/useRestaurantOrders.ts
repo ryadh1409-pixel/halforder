@@ -53,7 +53,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   const {
     restaurantId,
     restaurantTimeZone,
-    filter = 'active',
+    filter = 'new',
     enableAutoCleanup = true,
   } = options;
 

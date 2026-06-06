@@ -297,6 +297,7 @@ export default function ProfileScreen() {
   const trustScore = useTrustScore(uid);
   const {
     activeRows: profileActiveOrders,
+    historyRows: profileHistoryOrders,
     cancelledRows: profileCancelledOrders,
     loading: profileOrdersLoading,
     refreshing: profileOrdersRefreshing,
@@ -1189,6 +1190,7 @@ export default function ProfileScreen() {
               success: pal.success,
             }}
             orders={visibleActiveProfileOrders}
+            completedOrders={profileHistoryOrders}
             cancelledOrders={profileCancelledOrders}
             loading={profileOrdersLoading}
             refreshing={profileOrdersRefreshing}

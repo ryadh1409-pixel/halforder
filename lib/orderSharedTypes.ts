@@ -81,6 +81,8 @@ export type OrderStageInput = {
   readyAt?: unknown;
   deliveredAt?: unknown;
   deliveredAtMs?: number | null;
+  completedAt?: unknown;
+  completedAtMs?: number | null;
   cancelledAt?: unknown;
   cancelledAtMs?: number | null;
   updatedAt?: unknown;

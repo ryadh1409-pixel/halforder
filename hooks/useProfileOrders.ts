@@ -322,25 +322,27 @@ export function useProfileOrders(uid: string | null) {
     };
   }, [clearRetryTimer, publishMergedRows, scheduleRetry, uid, retryTick]);
 
-  const { activeRows, cancelledRows } = useMemo(() => {
+  const { activeRows, historyRows, cancelledRows } = useMemo(() => {
     const active: ProfileOrderRow[] = [];
+    const history: ProfileOrderRow[] = [];
     const cancelled: ProfileOrderRow[] = [];
     for (const row of rows) {
       if (isProfileOrderCancelled(row)) {
         cancelled.push(row);
       } else if (isTerminalMarketplaceOrder(row)) {
-        continue;
+        history.push(row);
       } else {
         active.push(row);
       }
     }
-    return { activeRows: active, cancelledRows: cancelled };
+    return { activeRows: active, historyRows: history, cancelledRows: cancelled };
   }, [rows]);
 
   return useMemo(
     () => ({
       rows,
       activeRows,
+      historyRows,
       cancelledRows,
       loading,
       refreshing,
@@ -350,6 +352,7 @@ export function useProfileOrders(uid: string | null) {
     }),
     [
       activeRows,
+      historyRows,
       cancelledRows,
       errorMessage,
       indexBuilding,

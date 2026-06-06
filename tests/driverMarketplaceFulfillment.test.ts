@@ -130,7 +130,7 @@ describe('driverMarketplaceFulfillment', () => {
     expect(result).toBe('applied');
     expect(protectedUpdateOrder).toHaveBeenCalledWith(
       'o1',
-      expect.objectContaining({ deliveryStatus: 'picked_up' }),
+      expect.objectContaining({ deliveryStatus: 'picked_up', status: 'picked_up' }),
       expect.any(Object),
     );
   });
@@ -152,6 +152,9 @@ describe('driverMarketplaceFulfillment', () => {
         deliveryStatus: 'delivered',
         status: 'completed',
         marketplaceArchived: true,
+        earningsRecorded: true,
+        driverPayout: expect.any(Number),
+        platformFee: expect.any(Number),
       }),
       expect.any(Object),
     );

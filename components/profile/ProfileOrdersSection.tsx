@@ -43,8 +43,10 @@ type Palette = {
 
 type Props = {
   pal: Palette;
-  /** In-progress and completed orders — excludes cancelled. */
+  /** In-progress orders — excludes completed/cancelled. */
   orders: ProfileOrderRow[];
+  /** Completed/delivered orders (order history). */
+  completedOrders?: ProfileOrderRow[];
   /** Recently cancelled orders (separate from active list). */
   cancelledOrders?: ProfileOrderRow[];
   loading: boolean;
@@ -77,6 +79,7 @@ function groupLabel(order: ProfileOrderRow): 'Today' | 'Yesterday' | 'Earlier' {
 export function ProfileOrdersSection({
   pal,
   orders,
+  completedOrders = [],
   cancelledOrders = [],
   loading,
   refreshing,
@@ -152,6 +155,11 @@ export function ProfileOrdersSection({
     [cancelledOrders, nowMs],
   );
 
+  const freshCompletedOrders = useMemo(
+    () => buildFreshProfileOrders(completedOrders, { nowMs }),
+    [completedOrders, nowMs],
+  );
+
   const grouped = useMemo(
     () =>
       freshOrders.reduce<Record<'Today' | 'Yesterday' | 'Earlier', ProfileOrderRow[]>>(
@@ -204,7 +212,7 @@ export function ProfileOrdersSection({
               <Text style={{ color: pal.onPrimary, fontWeight: '700' }}>Retry</Text>
             </TouchableOpacity>
           </View>
-        ) : freshOrders.length === 0 && freshCancelledOrders.length === 0 ? (
+        ) : freshOrders.length === 0 && freshCompletedOrders.length === 0 && freshCancelledOrders.length === 0 ? (
           <View style={styles.centerState}>
             <MaterialIcons name="receipt-long" size={30} color={pal.textTertiary} />
             <Text style={[styles.emptyTitle, { color: pal.text }]}>
@@ -388,6 +396,45 @@ export function ProfileOrdersSection({
                 </View>
               );
             })}
+            {freshCompletedOrders.length > 0 ? (
+              <View style={styles.groupWrap}>
+                <Text style={[styles.groupTitle, { color: pal.textSecondary }]}>
+                  Order history
+                </Text>
+                {freshCompletedOrders.map((order) => {
+                  const orderTs = getOrderTimestamp(order);
+                  return (
+                    <TouchableOpacity
+                      key={order.id}
+                      style={[styles.rowCard, { borderColor: pal.border }]}
+                      activeOpacity={0.85}
+                      onPress={() => onOpenOrder(order.id)}
+                    >
+                      <Image
+                        source={order.imageUrl ?? undefined}
+                        style={styles.thumb}
+                        contentFit="cover"
+                      />
+                      <View style={styles.mainCol}>
+                        <View style={styles.topLine}>
+                          <Text style={[styles.restaurant, { color: pal.text }]} numberOfLines={1}>
+                            {order.restaurantName}
+                          </Text>
+                          <View style={[styles.badge, { backgroundColor: '#16A34A' }]}>
+                            <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>Delivered</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.meta, { color: pal.textSecondary }]}>
+                          {formatMoney(order.totalPrice)}
+                          {' · '}
+                          {formatProfileOrderAge(orderTs, nowMs)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
             {freshCancelledOrders.length > 0 ? (
               <View style={styles.groupWrap}>
                 <Text style={[styles.groupTitle, { color: pal.textSecondary }]}>

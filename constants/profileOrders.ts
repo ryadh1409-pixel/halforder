@@ -44,7 +44,7 @@ export function profileOrderStatusLabel(
   const ds = (deliveryStatus ?? '').trim();
   if (ds === 'waiting_driver') return 'Finding Driver';
   if (status === 'payment_processing') return 'Processing payment';
-  if (status === 'delivered' || ds === 'delivered') return 'Delivered';
+  if (status === 'delivered' || status === 'completed' || ds === 'delivered') return 'Delivered';
   if (status === 'cancelled') return 'Cancelled';
   if (status === 'pending_driver') return 'Finding Driver';
   if (status === 'driver_assigned' || ds === 'driver_assigned') return 'Driver assigned';

@@ -4,6 +4,7 @@ import {
   normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import { calculateOrderPayout } from '@/lib/driverEarnings';
 import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
 import { isTerminalMarketplaceOrder, logOrderStatusTransition, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
@@ -18,6 +19,9 @@ export type DriverMarketplaceFulfillmentAction = 'arrive_restaurant' | 'pickup' 
 export type DriverMarketplaceFulfillmentView = OrderStageInput & {
   driverId?: unknown;
   assignedDriverId?: unknown;
+  totalPrice?: unknown;
+  deliveryFee?: unknown;
+  fees?: unknown;
 };
 
 export type DriverMarketplaceFulfillmentButton = {
@@ -116,7 +120,10 @@ export function driverMarketplaceFulfillmentStatusHint(
   return null;
 }
 
-function buildFulfillmentPatch(action: DriverMarketplaceFulfillmentAction): Record<string, unknown> {
+function buildFulfillmentPatch(
+  action: DriverMarketplaceFulfillmentAction,
+  current?: DriverMarketplaceFulfillmentView,
+): Record<string, unknown> {
   if (action === 'arrive_restaurant') {
     return {
       deliveryStatus: MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP,
@@ -127,16 +134,26 @@ function buildFulfillmentPatch(action: DriverMarketplaceFulfillmentAction): Reco
   if (action === 'pickup') {
     return {
       deliveryStatus: MARKETPLACE_DELIVERY_STATUS.PICKED_UP,
+      status: 'picked_up',
       pickedUpAt: serverTimestamp(),
       updatedBy: 'driverMarketplacePickup',
     };
   }
+  const payout = calculateOrderPayout({
+    totalPrice: current?.totalPrice,
+    deliveryFee: current?.deliveryFee,
+    fees: current?.fees,
+  });
   return {
     deliveryStatus: MARKETPLACE_DELIVERY_STATUS.DELIVERED,
     status: 'completed',
     deliveredAt: serverTimestamp(),
     completedAt: serverTimestamp(),
     marketplaceArchived: true,
+    earningsRecorded: true,
+    customerTotal: payout.customerTotal,
+    driverPayout: payout.driverPayout,
+    platformFee: payout.platformFee,
     updatedBy: 'driverMarketplaceDelivered',
   };
 }
@@ -213,7 +230,7 @@ export async function applyDriverMarketplaceFulfillment(
     return 'skipped_illegal';
   }
 
-  const patch = buildFulfillmentPatch(action);
+  const patch = buildFulfillmentPatch(action, current);
   if (isDuplicateFulfillment(current, patch)) {
     console.log('[DRIVER FULFILLMENT] skipped duplicate transition', {
       orderId: id,

@@ -126,6 +126,19 @@ function TrackOrderScreen() {
     order?.deliveredAtMs,
   ]);
 
+  const deliveredAtLabel = useMemo(() => {
+    if (!order) return null;
+    const ms = order.deliveredAtMs ?? order.completedAtMs;
+    if (ms == null || !Number.isFinite(ms)) return null;
+    return new Date(ms).toLocaleString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }, [order?.deliveredAtMs, order?.completedAtMs]);
+
   const delivered = order ? isCustomerOrderDelivered(order) : false;
 
   const etaText = useMemo(() => {
@@ -238,18 +251,30 @@ function TrackOrderScreen() {
         <View style={styles.sheetGrab} />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetScroll}>
           <View style={styles.statusBlock}>
-            <Text style={styles.statusTitle}>{phase?.title ?? 'Order update'}</Text>
-            <Text style={styles.statusSubtitle}>
-              {phase?.subtitle ?? 'We’ll keep this page updated in real time.'}
+            <Text style={styles.statusTitle}>
+              {delivered ? 'Order completed' : (phase?.title ?? 'Order update')}
             </Text>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.round((phase?.progress ?? 0.1) * 100)}%` },
-                ]}
-              />
-            </View>
+            <Text style={styles.statusSubtitle}>
+              {delivered
+                ? deliveredAtLabel
+                  ? `Delivered ${deliveredAtLabel}`
+                  : 'Your order has been delivered.'
+                : (phase?.subtitle ?? 'We’ll keep this page updated in real time.')}
+            </Text>
+            {!delivered ? (
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${Math.round((phase?.progress ?? 0.1) * 100)}%` },
+                  ]}
+                />
+              </View>
+            ) : (
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedBadgeText}>✓ Delivered</Text>
+              </View>
+            )}
           </View>
 
           <CustomerMarketplaceTimeline order={order} variant="light" />
@@ -444,6 +469,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   progressFill: { height: '100%', backgroundColor: '#FF3008', borderRadius: 2 },
+  completedBadge: {
+    marginTop: 16,
+    alignSelf: 'flex-start',
+    backgroundColor: '#DCFCE7',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  completedBadgeText: { color: '#166534', fontWeight: '900', fontSize: 14 },
   etaCard: {
     backgroundColor: '#F9FAFB',
     borderRadius: 16,

@@ -143,7 +143,13 @@ export type RestaurantOrder = {
   readyAtMs: number | null;
   pickedUpAtMs: number | null;
   deliveredAtMs: number | null;
+  completedAtMs: number | null;
   cancelledAtMs: number | null;
+  /** Persisted driver payout (80% of delivery fee) — set on completion. */
+  driverPayout: number | null;
+  platformFee: number | null;
+  customerTotal: number | null;
+  earningsRecorded: boolean;
   /** Firestore `updatedAt` millis — listener deduplication. */
   updatedAtMs: number | null;
   /** 4-digit handoff PIN — shown to customer, entered by driver to complete. */
@@ -528,7 +534,21 @@ function mapDocToRestaurantOrderFromData(
     readyAtMs: safeToMillis(data.readyAt),
     pickedUpAtMs: safeToMillis(data.pickedUpAt),
     deliveredAtMs: safeToMillis(data.deliveredAt),
+    completedAtMs: safeToMillis(data.completedAt),
     cancelledAtMs: safeToMillis(data.cancelledAt),
+    driverPayout:
+      typeof data.driverPayout === 'number' && Number.isFinite(data.driverPayout)
+        ? data.driverPayout
+        : null,
+    platformFee:
+      typeof data.platformFee === 'number' && Number.isFinite(data.platformFee)
+        ? data.platformFee
+        : null,
+    customerTotal:
+      typeof data.customerTotal === 'number' && Number.isFinite(data.customerTotal)
+        ? data.customerTotal
+        : null,
+    earningsRecorded: data.earningsRecorded === true,
     updatedAtMs: safeToMillis(data.updatedAt),
     deliveryPin:
       typeof data.deliveryPin === 'string' && /^\d{4}$/.test(data.deliveryPin)
@@ -1277,7 +1297,7 @@ export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean
 
 /**
  * Customer-facing realtime listener — `orders/{orderId}` only (same path as restaurant writes).
- * Uses `source: 'server'` so stale local cache never masks kitchen status updates.
+ * Emits every snapshot so courier lifecycle updates are never dropped behind cache metadata.
  */
 export function subscribeCustomerOrderById(
   orderId: string,
@@ -1288,19 +1308,31 @@ export function subscribeCustomerOrderById(
   if (__DEV__) {
     console.log('[subscribeCustomerOrderById] listening', { documentPath: `orders/${id}` });
   }
+  let lastSignature = '';
   return onSnapshot(
     doc(db, 'orders', id),
-    { includeMetadataChanges: true },
     (snap) => {
-      if (snap.metadata.fromCache) {
-        return;
-      }
       if (!snap.exists()) {
         onData(null);
+        lastSignature = '';
         return;
       }
       try {
         const raw = snap.data() as Record<string, unknown>;
+        const signature = [
+          raw.status,
+          raw.deliveryStatus,
+          raw.paymentStatus,
+          safeToMillis(raw.updatedAt),
+          safeToMillis(raw.pickedUpAt),
+          safeToMillis(raw.deliveredAt),
+          safeToMillis(raw.completedAt),
+          snap.metadata.hasPendingWrites,
+          snap.metadata.fromCache,
+        ].join('|');
+        if (signature === lastSignature) return;
+        lastSignature = signature;
+
         const meta = {
           fromCache: snap.metadata.fromCache,
           hasPendingWrites: snap.metadata.hasPendingWrites,

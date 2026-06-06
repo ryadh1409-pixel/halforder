@@ -1671,6 +1671,10 @@ service cloud.firestore {
         'updatedBy',
         'status',
         'driverLocation',
+        'driverPayout',
+        'platformFee',
+        'customerTotal',
+        'earningsRecorded',
       ]);
     }
     function driverReadyForPickupBeforeStatus(ds) {

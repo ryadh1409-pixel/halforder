@@ -1,13 +1,15 @@
 import { isOrderFresh, isOrderStale } from '@/lib/restaurantOrderFreshness';
 import {
   isRestaurantActiveLiveOrder,
+  isRestaurantPendingAcceptOrder,
   RESTAURANT_KITCHEN_ACTIVE_STATUSES,
 } from '@/lib/restaurantLiveOrders';
 import type { RestaurantOrder } from '@/services/orderService';
 import { deriveOrderStage } from '@/services/orderStage';
 
 export type RestaurantOrderListFilter =
-  | 'active'
+  | 'new'
+  | 'preparing'
   | 'ready'
   | 'driver_assigned'
   | 'delivered'
@@ -17,7 +19,8 @@ export const RESTAURANT_ORDER_FILTERS: ReadonlyArray<{
   id: RestaurantOrderListFilter;
   label: string;
 }> = [
-  { id: 'active', label: 'Active' },
+  { id: 'new', label: 'New' },
+  { id: 'preparing', label: 'Preparing' },
   { id: 'ready', label: 'Ready' },
   { id: 'driver_assigned', label: 'Driver' },
   { id: 'delivered', label: 'Delivered' },
@@ -71,17 +74,21 @@ export function matchesRestaurantOrderFilter(
   if (archived) return false;
   if (!isOrderFresh(order)) return false;
 
+  const stage = deriveOrderStage(order);
+
   switch (filter) {
-    case 'active':
-      return isRestaurantActiveLiveOrder(order);
+    case 'new':
+      return isRestaurantPendingAcceptOrder(order) || stage === 'awaiting_restaurant';
+    case 'preparing':
+      return stage === 'preparing';
     case 'ready':
-      return deriveOrderStage(order) === 'driver_assignment';
+      return stage === 'driver_assignment';
     case 'driver_assigned':
-      return deriveOrderStage(order) === 'driver_assigned';
+      return stage === 'driver_assigned' || stage === 'picked_up';
     case 'delivered':
       return isRestaurantOrderDelivered(order);
     default:
-      return true;
+      return isRestaurantActiveLiveOrder(order);
   }
 }
 
@@ -91,6 +98,10 @@ export function restaurantOrderFilterEmptyTitle(
   switch (filter) {
     case 'archived':
       return 'No archived orders';
+    case 'new':
+      return 'No new orders';
+    case 'preparing':
+      return 'Nothing preparing right now';
     case 'ready':
       return 'No orders ready for pickup';
     case 'driver_assigned':
@@ -98,7 +109,7 @@ export function restaurantOrderFilterEmptyTitle(
     case 'delivered':
       return 'No delivered orders';
     default:
-      return 'No active orders';
+      return 'No orders';
   }
 }
 

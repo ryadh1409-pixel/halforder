@@ -6,11 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
+import { RestaurantDeliveredOrderCard } from '@/components/restaurant/RestaurantDeliveredOrderCard';
 import { RestaurantLiveOrderCard } from '@/components/restaurant/RestaurantLiveOrderCard';
 import {
+  isRestaurantOrderDelivered,
   RESTAURANT_ORDER_FILTERS,
   restaurantOrderFilterEmptyTitle,
   type RestaurantOrderListFilter,
@@ -27,7 +30,7 @@ import {
 import { clearOrderStageLock } from '@/lib/orderStageLock';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
-import { getRestaurantOrderPresentation } from '@/services/orderStage';
+import { deriveOrderStage, getRestaurantOrderPresentation } from '@/services/orderStage';
 import { showError, showSuccess } from '@/utils/toast';
 
 export type RestaurantDashboardMetrics = {
@@ -43,7 +46,6 @@ type Props = {
   onDashboardMetrics?: (metrics: RestaurantDashboardMetrics) => void;
 };
 
-const EMPTY_TITLE = 'No active orders';
 const EMPTY_SUBTITLE =
   'Orders placed within the last 24 hours will appear here instantly.';
 
@@ -54,6 +56,22 @@ function kitchenActionFromStatus(status: OrderStatus): RestaurantKitchenAction |
   return null;
 }
 
+function matchesArchivedSearch(order: RestaurantOrder, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [
+    order.id,
+    order.customerName,
+    order.customer?.name,
+    order.driverName,
+    order.driver?.name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
 export function RestaurantOrdersPanel({
   restaurantId,
   restaurantTimeZone,
@@ -61,7 +79,8 @@ export function RestaurantOrdersPanel({
   title = 'Live orders',
   onDashboardMetrics,
 }: Props) {
-  const [filter, setFilter] = useState<RestaurantOrderListFilter>('active');
+  const [filter, setFilter] = useState<RestaurantOrderListFilter>('new');
+  const [archivedSearch, setArchivedSearch] = useState('');
   const [actionInFlight, setActionInFlight] = useState<{
     orderId: string;
     action: RestaurantKitchenAction;
@@ -86,6 +105,19 @@ export function RestaurantOrdersPanel({
     [orders],
   );
 
+  const archivedFiltered = useMemo(() => {
+    if (filter !== 'archived') return freshOrders;
+    return freshOrders.filter((order) => matchesArchivedSearch(order, archivedSearch));
+  }, [archivedSearch, filter, freshOrders]);
+
+  const archivedRevenue = useMemo(() => {
+    if (filter !== 'archived') return 0;
+    return archivedFiltered.reduce(
+      (sum, order) => sum + (isRestaurantOrderDelivered(order) ? order.totalPrice : 0),
+      0,
+    );
+  }, [archivedFiltered, filter]);
+
   React.useEffect(() => {
     if (!onDashboardMetrics) return;
     const m = computeRestaurantDashboardMetrics(allOrders);
@@ -93,17 +125,14 @@ export function RestaurantOrdersPanel({
   }, [allOrders, onDashboardMetrics]);
 
   const emptyTitle = useMemo(() => {
-    if (!loading && allOrders.length === 0) return EMPTY_TITLE;
-    if (!loading && freshOrders.length === 0) {
-      return restaurantOrderFilterEmptyTitle(filter);
-    }
+    if (!loading && allOrders.length === 0) return 'No orders yet';
     return restaurantOrderFilterEmptyTitle(filter);
-  }, [allOrders.length, filter, freshOrders.length, loading]);
+  }, [allOrders.length, filter, loading]);
 
   const emptySubtitle = useMemo(() => {
     if (!loading && allOrders.length === 0) return EMPTY_SUBTITLE;
     if (filter === 'archived') {
-      return 'Archived and hidden orders from the last 24 hours appear here.';
+      return 'Historical orders older than 24h or manually archived.';
     }
     return EMPTY_SUBTITLE;
   }, [allOrders.length, filter, loading]);
@@ -163,22 +192,24 @@ export function RestaurantOrdersPanel({
     let pending = 0;
     let preparing = 0;
     let ready = 0;
-    for (const o of freshOrders) {
-      const p = getRestaurantOrderPresentation(o);
-      if (p.derivedStage === 'awaiting_restaurant') pending += 1;
-      else if (p.derivedStage === 'preparing') preparing += 1;
-      else if (p.derivedStage === 'driver_assignment') ready += 1;
+    let withDriver = 0;
+    for (const o of allOrders.filter(isOrderFresh)) {
+      const stage = deriveOrderStage(o);
+      if (stage === 'awaiting_restaurant') pending += 1;
+      else if (stage === 'preparing') preparing += 1;
+      else if (stage === 'driver_assignment') ready += 1;
+      else if (stage === 'driver_assigned' || stage === 'picked_up') withDriver += 1;
     }
-    return { pending, preparing, ready };
-  }, [freshOrders]);
+    return { pending, preparing, ready, withDriver };
+  }, [allOrders]);
+
+  const listOrders = filter === 'archived' ? archivedFiltered : freshOrders;
 
   return (
     <View style={styles.wrap}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{title}</Text>
-        {!loading ? (
-          <Text style={styles.count}>{freshOrders.length} shown</Text>
-        ) : null}
+        {!loading ? <Text style={styles.count}>{listOrders.length} shown</Text> : null}
       </View>
 
       <ScrollView
@@ -202,11 +233,11 @@ export function RestaurantOrdersPanel({
         })}
       </ScrollView>
 
-      {filter === 'active' && !loading ? (
+      {!loading ? (
         <View style={styles.summaryRow}>
           <View style={styles.summaryTile}>
             <Text style={styles.summaryValue}>{summary.pending}</Text>
-            <Text style={styles.summaryLabel}>Pending</Text>
+            <Text style={styles.summaryLabel}>New</Text>
           </View>
           <View style={styles.summaryTile}>
             <Text style={styles.summaryValue}>{summary.preparing}</Text>
@@ -216,6 +247,25 @@ export function RestaurantOrdersPanel({
             <Text style={styles.summaryValue}>{summary.ready}</Text>
             <Text style={styles.summaryLabel}>Ready</Text>
           </View>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryValue}>{summary.withDriver}</Text>
+            <Text style={styles.summaryLabel}>With driver</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {filter === 'archived' ? (
+        <View style={styles.archivedTools}>
+          <TextInput
+            value={archivedSearch}
+            onChangeText={setArchivedSearch}
+            placeholder="Search order, customer, driver…"
+            placeholderTextColor="#94a3b8"
+            style={styles.searchInput}
+          />
+          <Text style={styles.revenueLine}>
+            Delivered revenue in view: ${archivedRevenue.toFixed(2)}
+          </Text>
         </View>
       ) : null}
 
@@ -224,7 +274,7 @@ export function RestaurantOrdersPanel({
           <ActivityIndicator size="small" color="#16a34a" />
           <Text style={styles.loadingText}>Loading orders…</Text>
         </View>
-      ) : freshOrders.length === 0 ? (
+      ) : listOrders.length === 0 ? (
         <View style={styles.emptyCard}>
           <Ionicons name="receipt-outline" size={36} color="#94a3b8" />
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
@@ -232,30 +282,36 @@ export function RestaurantOrdersPanel({
         </View>
       ) : (
         <View style={styles.list}>
-          {freshOrders.map((order) => (
+          {listOrders.map((order) => (
             <View key={order.id} style={styles.cardWrap}>
-              <RestaurantLiveOrderCard
-                order={order}
-                timeZone={timeZone}
-                sourceScreen="RestaurantOrdersPanel"
-                pendingAction={
-                  actionInFlight?.orderId === order.id ? actionInFlight.action : null
-                }
-                onStatus={(status) => void handleKitchenAction(order, status)}
-                onReject={() => void handleReject(order.id)}
-                loading={
-                  actionInFlight?.orderId === order.id || rejectOrderId === order.id
-                }
-              />
-              {onAssignDriver &&
-              getRestaurantOrderPresentation(order).canAssignDriver ? (
-                <Pressable
-                  style={styles.assignBtn}
-                  onPress={() => onAssignDriver(order.id)}
-                >
-                  <Text style={styles.assignBtnText}>Assign driver</Text>
-                </Pressable>
-              ) : null}
+              {filter === 'delivered' ? (
+                <RestaurantDeliveredOrderCard order={order} timeZone={timeZone} />
+              ) : (
+                <>
+                  <RestaurantLiveOrderCard
+                    order={order}
+                    timeZone={timeZone}
+                    sourceScreen="RestaurantOrdersPanel"
+                    pendingAction={
+                      actionInFlight?.orderId === order.id ? actionInFlight.action : null
+                    }
+                    onStatus={(status) => void handleKitchenAction(order, status)}
+                    onReject={() => void handleReject(order.id)}
+                    loading={
+                      actionInFlight?.orderId === order.id || rejectOrderId === order.id
+                    }
+                  />
+                  {onAssignDriver &&
+                  getRestaurantOrderPresentation(order).canAssignDriver ? (
+                    <Pressable
+                      style={styles.assignBtn}
+                      onPress={() => onAssignDriver(order.id)}
+                    >
+                      <Text style={styles.assignBtnText}>Assign driver</Text>
+                    </Pressable>
+                  ) : null}
+                </>
+              )}
             </View>
           ))}
         </View>
@@ -288,22 +344,31 @@ const styles = StyleSheet.create({
   },
   filterChipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
   filterChipTextActive: { color: '#fff' },
-  summaryRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  summaryRow: { flexDirection: 'row', gap: 8 },
   summaryTile: {
     flex: 1,
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
   },
-  summaryValue: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  summaryLabel: { marginTop: 2, fontSize: 11, fontWeight: '700', color: '#64748b' },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  summaryLabel: { marginTop: 2, fontSize: 10, fontWeight: '700', color: '#64748b' },
+  archivedTools: { gap: 8 },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  revenueLine: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
   loadingBox: {
     flexDirection: 'row',
     alignItems: 'center',
