@@ -46,6 +46,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   limit,
   onSnapshot,
@@ -1297,7 +1298,7 @@ export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean
 
 /**
  * Customer-facing realtime listener — `orders/{orderId}` only (same path as restaurant writes).
- * Emits every snapshot so courier lifecycle updates are never dropped behind cache metadata.
+ * Bootstraps with getDocFromServer, then listens with source: 'server' only.
  */
 export function subscribeCustomerOrderById(
   orderId: string,
@@ -1305,57 +1306,87 @@ export function subscribeCustomerOrderById(
   options?: { onListenError?: (err: Error) => void },
 ): Unsubscribe {
   const id = orderId.trim();
+  if (!id) {
+    onData(null);
+    return () => {};
+  }
+
   if (__DEV__) {
     console.log('[subscribeCustomerOrderById] listening', { documentPath: `orders/${id}` });
   }
-  let lastSignature = '';
-  return onSnapshot(
-    doc(db, 'orders', id),
-    { source: 'server' },
-    (snap) => {
-      if (!snap.exists()) {
-        onData(null);
-        lastSignature = '';
-        return;
-      }
-      try {
-        const raw = snap.data() as Record<string, unknown>;
-        const signature = [
-          raw.status,
-          raw.deliveryStatus,
-          raw.paymentStatus,
-          safeToMillis(raw.updatedAt),
-          safeToMillis(raw.pickedUpAt),
-          safeToMillis(raw.deliveredAt),
-          safeToMillis(raw.completedAt),
-          snap.metadata.hasPendingWrites,
-          snap.metadata.fromCache,
-        ].join('|');
-        if (signature === lastSignature) return;
-        lastSignature = signature;
 
-        const meta = {
-          fromCache: snap.metadata.fromCache,
-          hasPendingWrites: snap.metadata.hasPendingWrites,
-          source: 'subscribeCustomerOrderById' as const,
-        };
-        logCustomerOrderSnapshot(snap.id, raw, meta);
-        const mapped = mapDocToRestaurantOrder(snap);
-        logCustomerOrderPipeline('subscribeCustomerOrderById', snap.id, raw, mapped, {
-          fromCache: meta.fromCache,
-          hasPendingWrites: meta.hasPendingWrites,
-        });
-        onData(mapped);
-      } catch (e) {
-        console.warn('[subscribeCustomerOrderById] mapDoc failed', orderId, e);
-        options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));
-      }
-    },
+  const orderRef = doc(db, 'orders', id);
+  let cancelled = false;
+  let lastSignature = '';
+  let unsub: Unsubscribe | null = null;
+
+  const emitSnapshot = (snap: DocumentSnapshot) => {
+    if (cancelled) return;
+    if (!snap.exists()) {
+      onData(null);
+      lastSignature = '';
+      return;
+    }
+    try {
+      const raw = snap.data() as Record<string, unknown>;
+      const signature = [
+        raw.status,
+        raw.deliveryStatus,
+        raw.paymentStatus,
+        safeToMillis(raw.updatedAt),
+        safeToMillis(raw.pickedUpAt),
+        safeToMillis(raw.deliveredAt),
+        safeToMillis(raw.completedAt),
+        snap.metadata.hasPendingWrites,
+        snap.metadata.fromCache,
+      ].join('|');
+      if (signature === lastSignature) return;
+      lastSignature = signature;
+
+      const meta = {
+        fromCache: snap.metadata.fromCache,
+        hasPendingWrites: snap.metadata.hasPendingWrites,
+        source: 'subscribeCustomerOrderById' as const,
+      };
+      logCustomerOrderSnapshot(snap.id, raw, meta);
+      const mapped = mapDocToRestaurantOrder(snap);
+      logCustomerOrderPipeline('subscribeCustomerOrderById', snap.id, raw, mapped, {
+        fromCache: meta.fromCache,
+        hasPendingWrites: meta.hasPendingWrites,
+      });
+      onData(mapped);
+    } catch (e) {
+      console.warn('[subscribeCustomerOrderById] mapDoc failed', orderId, e);
+      options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));
+    }
+  };
+
+  void getDocFromServer(orderRef)
+    .then((snap) => {
+      if (cancelled) return;
+      emitSnapshot(snap);
+    })
+    .catch((err) => {
+      if (cancelled) return;
+      console.warn('[subscribeCustomerOrderById] getDocFromServer failed', orderId, err);
+      options?.onListenError?.(err instanceof Error ? err : new Error(String(err)));
+    });
+
+  unsub = onSnapshot(
+    orderRef,
+    { source: 'server' },
+    emitSnapshot,
     (err) => {
+      if (cancelled) return;
       console.warn('[subscribeCustomerOrderById] listener error', orderId, err);
       options?.onListenError?.(err);
     },
   );
+
+  return () => {
+    cancelled = true;
+    unsub?.();
+  };
 }
 
 export function subscribeOrderById(
