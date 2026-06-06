@@ -99,19 +99,24 @@ export const PRE_PAYMENT_ORDER_STATUSES = new Set([
   'payment_failed',
 ]);
 
-/** Kitchen/courier stages where paid webhooks must not touch fulfillment fields. */
-export const FULFILLED_KITCHEN_STATUSES = new Set([
+/** Stages where Stripe/repair must not reset fulfillment (kitchen or courier). */
+export const FULFILLED_STATUSES = new Set([
   'accepted',
   'restaurant_accepted',
   'preparing',
   'ready',
   'ready_for_pickup',
+  'driver_assigned',
   'picked_up',
   'on_the_way',
   'arrived_customer',
   'delivered',
   'completed',
+  'cancelled',
 ]);
+
+/** @deprecated Use {@link FULFILLED_STATUSES} — kept for imports that reference kitchen-only name. */
+export const FULFILLED_KITCHEN_STATUSES = FULFILLED_STATUSES;
 
 export type OrderPaidStateInput = {
   status?: unknown;
@@ -130,16 +135,9 @@ export function orderPaymentStatusString(value: unknown): string {
 
 export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolean {
   const status = orderStatusString(order.status).toLowerCase();
-  if (FULFILLED_KITCHEN_STATUSES.has(status)) {
+  if (FULFILLED_STATUSES.has(status)) {
     return true;
   }
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
-  return (
-    courier === 'accepted' ||
-    courier === 'preparing' ||
-    courier === 'ready_for_pickup' ||
-    courier === 'driver_assigned' ||
-    courier === 'picked_up' ||
-    courier === 'delivered'
-  );
+  return FULFILLED_STATUSES.has(courier);
 }

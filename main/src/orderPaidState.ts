@@ -14,35 +14,35 @@ export const PRE_PAYMENT_ORDER_STATUSES = new Set([
   "payment_failed",
 ]);
 
-export const FULFILLED_KITCHEN_STATUSES = new Set([
+/** Stages where Stripe/repair must not reset fulfillment (kitchen or courier). */
+export const FULFILLED_STATUSES = new Set([
   "accepted",
   "restaurant_accepted",
   "preparing",
   "ready",
   "ready_for_pickup",
+  "driver_assigned",
   "picked_up",
   "on_the_way",
   "arrived_customer",
   "delivered",
   "completed",
+  "cancelled",
 ]);
+
+/** @deprecated Use {@link FULFILLED_STATUSES} — kept for imports that reference kitchen-only name. */
+export const FULFILLED_KITCHEN_STATUSES = FULFILLED_STATUSES;
 
 export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolean {
   if (isDriverFulfillmentAdvanced(order.deliveryStatus)) {
     return true;
   }
   const status = orderStatusString(order.status).toLowerCase();
-  if (FULFILLED_KITCHEN_STATUSES.has(status)) {
+  if (FULFILLED_STATUSES.has(status)) {
     return true;
   }
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
-  return (
-    courier === "accepted" ||
-    courier === "preparing" ||
-    courier === "driver_assigned" ||
-    courier === "picked_up" ||
-    courier === "delivered"
-  );
+  return FULFILLED_STATUSES.has(courier);
 }
 
 export type OrderPaidStateInput = {
@@ -70,13 +70,7 @@ export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
     return false;
   }
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
-  if (
-    courier === "accepted" ||
-    courier === "preparing" ||
-    courier === "driver_assigned" ||
-    courier === "picked_up" ||
-    courier === "delivered"
-  ) {
+  if (FULFILLED_STATUSES.has(courier)) {
     return false;
   }
   return true;
@@ -146,16 +140,7 @@ export function buildOrderPaidStatePatch(
 
   const courierFulfillmentAdvanced =
     isDriverFulfillmentAdvanced(existing.deliveryStatus) ||
-    (() => {
-      const courier = orderStatusString(existing.deliveryStatus).toLowerCase();
-      return (
-        courier === "accepted" ||
-        courier === "preparing" ||
-        courier === "driver_assigned" ||
-        courier === "picked_up" ||
-        courier === "delivered"
-      );
-    })();
+    FULFILLED_STATUSES.has(orderStatusString(existing.deliveryStatus).toLowerCase());
 
   if (!input.repairOnly) {
     if (!courierFulfillmentAdvanced) {

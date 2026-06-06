@@ -63,6 +63,36 @@ test("buildOrderPaidStatePatch repairOnly preserves drivers", () => {
   assert.equal("driverId" in patch, false);
 });
 
+test("buildOrderPaidStatePatch skips fulfillment when driver_assigned", () => {
+  const patch = buildOrderPaidStatePatch(
+    {
+      paymentStatus: "unpaid",
+      status: "payment_confirmed",
+      deliveryStatus: "driver_assigned",
+      driverId: "drv1",
+    },
+    { paymentIntentId: "pi_test" },
+  );
+  assert.equal(patch.paymentStatus, "paid");
+  assert.equal(patch.status, undefined);
+  assert.equal(patch.deliveryStatus, undefined);
+  assert.equal("driverId" in patch, false);
+});
+
+test("buildOrderPaidStatePatch skips fulfillment when delivered", () => {
+  const patch = buildOrderPaidStatePatch(
+    {
+      paymentStatus: "unpaid",
+      status: "payment_confirmed",
+      deliveryStatus: "delivered",
+    },
+    { paymentIntentId: "pi_test" },
+  );
+  assert.equal(patch.paymentStatus, "paid");
+  assert.equal(patch.status, undefined);
+  assert.equal(patch.deliveryStatus, undefined);
+});
+
 test("resolvePostPaymentOrderStatus keeps active fulfillment", () => {
   assert.equal(resolvePostPaymentOrderStatus({ status: "preparing" }), "preparing");
   assert.equal(

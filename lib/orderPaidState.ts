@@ -1,6 +1,7 @@
 import { hasFulfillmentProgressMarkers } from '@/lib/orderFulfillmentSignals';
 import {
   FULFILLED_KITCHEN_STATUSES,
+  FULFILLED_STATUSES,
   isOrderFulfilledForPaidPatch,
   orderPaymentStatusString,
   orderStatusString,
@@ -12,6 +13,7 @@ import { sanitizeOrderPatchAgainstRegression } from '@/services/orderStage';
 
 export {
   FULFILLED_KITCHEN_STATUSES,
+  FULFILLED_STATUSES,
   isOrderFulfilledForPaidPatch,
   orderPaymentStatusString,
   orderStatusString,
@@ -100,12 +102,7 @@ export function buildOrderPaidStatePatch(
 
   const courier = orderStatusString(existing.deliveryStatus).toLowerCase();
   const courierFulfillmentAdvanced =
-    courier === 'accepted' ||
-    courier === 'preparing' ||
-    courier === 'ready_for_pickup' ||
-    courier === 'driver_assigned' ||
-    courier === 'picked_up' ||
-    courier === 'delivered';
+    FULFILLED_STATUSES.has(courier);
 
   if (!input.repairOnly) {
     if (!courierFulfillmentAdvanced) {
@@ -136,14 +133,7 @@ export function needsPaidStatusRepair(order: OrderPaidStateInput): boolean {
     return false;
   }
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
-  if (
-    courier === 'accepted' ||
-    courier === 'preparing' ||
-    courier === 'ready_for_pickup' ||
-    courier === 'driver_assigned' ||
-    courier === 'picked_up' ||
-    courier === 'delivered'
-  ) {
+  if (FULFILLED_STATUSES.has(courier)) {
     return false;
   }
   return true;
