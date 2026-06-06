@@ -41,6 +41,8 @@ function mapTrackStepToCustomerPhase(step: CustomerTrackPhase): CustomerDelivery
       return 'finding_driver';
     case 'driver_assigned':
       return 'driver_assigned';
+    case 'at_restaurant':
+      return 'arriving_restaurant';
     case 'picked_up':
       return 'heading_to_customer';
     case 'delivered':

@@ -3,8 +3,6 @@
  * Route: /track-order/[orderId]
  */
 import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
-import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
-import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
@@ -13,13 +11,11 @@ import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketpl
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
-import { db } from '@/services/firebase';
 import {
   looksLikeMarketplaceRestaurantOrder,
-  mapDocToRestaurantOrder,
+  subscribeCustomerOrderById,
   type RestaurantOrder,
 } from '@/services/orderService';
-import { doc, onSnapshot } from 'firebase/firestore';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -70,62 +66,37 @@ function TrackOrderScreen() {
     setListenError(false);
     setOrder(undefined);
 
-    const orderRef = doc(db, 'orders', orderId);
-    const unsubscribe = onSnapshot(
-      orderRef,
-      { includeMetadataChanges: true },
-      (snap) => {
-        if (snap.metadata.fromCache) {
-          return;
-        }
-        if (!snap.exists()) {
+    const unsubscribe = subscribeCustomerOrderById(
+      orderId,
+      (mapped) => {
+        if (!mapped) {
           setListenError(false);
           setOrder(null);
           return;
         }
-        try {
-          const raw = snap.data() as Record<string, unknown>;
-          const snapshotMeta = {
-            fromCache: snap.metadata.fromCache,
-            hasPendingWrites: snap.metadata.hasPendingWrites,
-            source: 'track-order' as const,
-          };
-          logCustomerOrderSnapshot(snap.id, raw, snapshotMeta);
-          const mapped = mapDocToRestaurantOrder(snap);
-          logCustomerOrderPipeline('track-order', snap.id, raw, mapped, {
-            fromCache: snapshotMeta.fromCache,
-            hasPendingWrites: snapshotMeta.hasPendingWrites,
-          });
-          setListenError(false);
-          setOrder(mapped);
-          logPaidStatusRepairIfNeeded(orderId, {
-            paymentStatus: mapped.paymentStatus,
-            status: mapped.status,
-          });
-          logPaymentNavigation('track_order_snapshot', {
-            orderId,
-            paymentStatus: mapped.paymentStatus,
-            status: mapped.status,
-            deliveryStatus: mapped.deliveryStatus,
-            updatedAtMs: mapped.updatedAtMs,
-          });
-        } catch (e) {
-          const err = e instanceof Error ? e : new Error(String(e));
+        setListenError(false);
+        setOrder(mapped);
+        logPaidStatusRepairIfNeeded(orderId, {
+          paymentStatus: mapped.paymentStatus,
+          status: mapped.status,
+        });
+        logPaymentNavigation('track_order_snapshot', {
+          orderId,
+          paymentStatus: mapped.paymentStatus,
+          status: mapped.status,
+          deliveryStatus: mapped.deliveryStatus,
+          updatedAtMs: mapped.updatedAtMs,
+        });
+      },
+      {
+        onListenError: (err) => {
           setListenError(true);
           setOrder(null);
           logPaymentNavigation('track_order_listen_error', {
             orderId,
             error: err.message,
           });
-        }
-      },
-      (err) => {
-        setListenError(true);
-        setOrder(null);
-        logPaymentNavigation('track_order_listen_error', {
-          orderId,
-          error: err.message,
-        });
+        },
       },
     );
     return () => unsubscribe();
@@ -138,6 +109,7 @@ function TrackOrderScreen() {
       paymentStatus: order.paymentStatus,
       deliveryStatus: order.deliveryStatus,
       driverId: order.driverId,
+      assignedDriverId: order.assignedDriverId,
       pickedUpAtMs: order.pickedUpAtMs,
       deliveredAtMs: order.deliveredAtMs,
     });
@@ -146,6 +118,7 @@ function TrackOrderScreen() {
     order?.deliveryStatus,
     order?.paymentStatus,
     order?.driverId,
+    order?.assignedDriverId,
     order?.pickedUpAtMs,
     order?.deliveredAtMs,
   ]);

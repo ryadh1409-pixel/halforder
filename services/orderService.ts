@@ -113,6 +113,7 @@ export type RestaurantOrder = {
   paymentIntentId: string | null;
   checkoutSessionId: string | null;
   driverId: string | null;
+  assignedDriverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
   driverVehicle: string | null;
@@ -414,6 +415,8 @@ function mapDocToRestaurantOrderFromData(
     estimatedDeliveryTime:
       typeof data.estimatedDeliveryTime === 'number' ? data.estimatedDeliveryTime : 35,
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
+    assignedDriverId:
+      typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
     driverName: typeof data.driverName === 'string' ? data.driverName : null,
     driverPhone: typeof data.driverPhone === 'string' ? data.driverPhone : null,
     driverVehicle: typeof data.driverVehicle === 'string' ? data.driverVehicle : null,

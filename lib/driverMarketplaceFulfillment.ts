@@ -5,7 +5,7 @@ import {
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
 import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
-import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
+import { isTerminalMarketplaceOrder, logOrderStatusTransition, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
 import { clearOrderListenerCommitCache } from '@/lib/orderListenerCommit';
 import { db } from '@/services/firebase';
@@ -235,6 +235,14 @@ export async function applyDriverMarketplaceFulfillment(
     fileName: 'driverMarketplaceFulfillment.ts',
     functionName: `applyDriverMarketplaceFulfillment:${action}`,
   });
+  if (wrote) {
+    logOrderStatusTransition(id, current.status ?? null, patch.status ?? current.status ?? null, {
+      source: `driverMarketplaceFulfillment:${action}`,
+      firestorePath: orderDocumentPath(id),
+      previousDeliveryStatus: current.deliveryStatus ?? null,
+      newDeliveryStatus: patch.deliveryStatus ?? current.deliveryStatus ?? null,
+    });
+  }
   if (action === 'deliver') {
     if (wrote) {
       clearOrderStageLock(id);

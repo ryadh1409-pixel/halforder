@@ -95,6 +95,11 @@ export function isActiveMarketplaceOrder(
   return !isTerminalMarketplaceOrder(order);
 }
 
+/** Single source of truth for marketplace order documents. */
+export function orderDocumentPath(orderId: string): string {
+  return `orders/${orderId.trim()}`;
+}
+
 /** Mandatory log for every lifecycle status mutation (prod + dev). */
 export function logOrderStatusTransition(
   orderId: string,
@@ -104,6 +109,7 @@ export function logOrderStatusTransition(
     source?: string;
     previousDeliveryStatus?: unknown;
     newDeliveryStatus?: unknown;
+    firestorePath?: string;
   },
 ): void {
   const prev = previousStatus ?? null;
@@ -112,12 +118,15 @@ export function logOrderStatusTransition(
   const nextCourier = meta?.newDeliveryStatus ?? null;
   if (prev === next && prevCourier === nextCourier) return;
 
+  const firestorePath = meta?.firestorePath ?? orderDocumentPath(orderId);
+  console.log(orderId, prev, next, firestorePath);
   console.log('[ORDER STATUS TRANSITION]', {
     orderId,
     previousStatus: prev,
     newStatus: next,
     previousDeliveryStatus: prevCourier,
     newDeliveryStatus: nextCourier,
+    firestorePath,
     source: meta?.source ?? null,
     timestamp: Date.now(),
   });

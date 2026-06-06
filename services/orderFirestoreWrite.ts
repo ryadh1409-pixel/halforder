@@ -20,7 +20,7 @@ import {
 
 import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
 import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
-import { logOrderStatusTransition } from '@/lib/orderTerminalStatus';
+import { logOrderStatusTransition, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { traceOrderLifecycleWrite, traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import {
   deriveOrderStage,
@@ -183,6 +183,7 @@ export async function protectedUpdateOrder(
   if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
     logOrderStatusTransition(trimmed, current.status ?? null, safePatch.status ?? current.status ?? null, {
       source: sourceLabel(source),
+      firestorePath: orderDocumentPath(trimmed),
       previousDeliveryStatus: current.deliveryStatus ?? null,
       newDeliveryStatus: safePatch.deliveryStatus ?? current.deliveryStatus ?? null,
     });
