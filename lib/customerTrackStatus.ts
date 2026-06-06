@@ -205,7 +205,7 @@ export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
     case 'picked_up':
       return 'Driver heading to you';
     case 'delivered':
-      return 'Delivered!';
+      return 'Your order has been delivered! 🎉';
     case 'cancelled':
       return 'Order cancelled';
     default:
@@ -247,5 +247,12 @@ export function customerTrackProgress(step: CustomerTrackPhase): number {
   if (step === 'cancelled') return 0;
   const idx = customerTrackStepIndex(step);
   if (idx < 0) return 0.08;
+  if (step === 'delivered') return 1;
   return Math.min(1, (idx + 1) / DELIVERY_STAGES.length);
+}
+
+/** True when the customer should see the delivered completion state. */
+export function isCustomerOrderDelivered(order: OrderStageInput | null | undefined): boolean {
+  if (!order) return false;
+  return resolveCustomerTrackStep(order) === 'delivered';
 }

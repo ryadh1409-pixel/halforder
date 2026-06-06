@@ -13,7 +13,8 @@ import { traceOrderStageRender } from '@/lib/orderStageTrace';
 import { ENABLE_ORDER_TRACE } from '@/lib/orderTraceFlags';
 import {
   getActiveRestaurantOrdersQuery,
-  isActiveRestaurantOrder,
+  getRestaurantArchivedOrdersQuery,
+  isRestaurantDashboardOrder,
 } from '@/lib/restaurantActiveOrdersQuery';
 import { canCustomerCancelMarketplaceOrder as canCustomerCancelByStage } from '@/lib/customerOrderCancelUx';
 import { filterFreshRestaurantOrders } from '@/lib/restaurantOrderFreshness';
@@ -906,7 +907,7 @@ export function subscribeActiveRestaurantOrders(
         for (const docSnap of snap.docs) {
           const raw = docSnap.data() as Record<string, unknown>;
           if (
-            !isActiveRestaurantOrder({
+            !isRestaurantDashboardOrder({
               id: docSnap.id,
               ...raw,
             })
@@ -976,6 +977,66 @@ export function subscribeActiveRestaurantOrders(
     unsub();
     clearOrderListenerCommitCache();
   };
+}
+
+/** Terminal orders older than 24h — merged with live listener for Archived tab. */
+export function subscribeRestaurantArchivedOrders(
+  restaurantId: string,
+  onData: (orders: RestaurantOrder[]) => void,
+  options?: GetRestaurantOrdersOptions,
+): Unsubscribe {
+  const unsub = onSnapshot(
+    getRestaurantArchivedOrdersQuery(restaurantId),
+    (snap) => {
+      try {
+        const rows: RestaurantOrder[] = [];
+        for (const docSnap of snap.docs) {
+          const raw = docSnap.data() as Record<string, unknown>;
+          if (
+            !isRestaurantDashboardOrder({
+              id: docSnap.id,
+              ...raw,
+            })
+          ) {
+            continue;
+          }
+
+          const snapshot: OrderStageInput = { id: docSnap.id, ...raw };
+          const reconciled = reconcileOrderSnapshotStage(
+            docSnap.id,
+            snapshot,
+            docSnap.metadata.hasPendingWrites,
+          );
+          if (reconciled == null) continue;
+
+          const merged = applyStageLockToOrder({
+            ...raw,
+            id: docSnap.id,
+            status: reconciled.status ?? raw.status,
+            deliveryStatus: reconciled.deliveryStatus ?? raw.deliveryStatus,
+            paymentStatus: reconciled.paymentStatus ?? raw.paymentStatus,
+          });
+
+          rows.push(
+            mapDocToRestaurantOrder(
+              { id: docSnap.id, data: () => merged },
+              restaurantId,
+              { timeZone: options?.timeZone },
+            ),
+          );
+        }
+        onData(rows);
+      } catch (e) {
+        if (__DEV__) {
+          console.error('[subscribeRestaurantArchivedOrders]', e);
+        }
+        onData([]);
+      }
+    },
+    () => onData([]),
+  );
+
+  return () => unsub();
 }
 
 /** @deprecated Use {@link subscribeActiveRestaurantOrders}. */

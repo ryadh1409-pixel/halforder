@@ -26,14 +26,26 @@ import React, {
 const EMPTY_STATS: DriverDeliveryStats = {
   deliveries: 0,
   earnings: 0,
+  earningsToday: 0,
+  deliveriesToday: 0,
   rating: 5.0,
+  breakdown: [],
 };
 
 function statsEqual(a: DriverDeliveryStats, b: DriverDeliveryStats): boolean {
   return (
     a.deliveries === b.deliveries &&
     a.earnings === b.earnings &&
-    a.rating === b.rating
+    a.earningsToday === b.earningsToday &&
+    a.deliveriesToday === b.deliveriesToday &&
+    a.rating === b.rating &&
+    a.breakdown.length === b.breakdown.length &&
+    a.breakdown.every(
+      (row, idx) =>
+        row.orderId === b.breakdown[idx]?.orderId &&
+        row.earning === b.breakdown[idx]?.earning &&
+        row.deliveredAtMs === b.breakdown[idx]?.deliveredAtMs,
+    )
   );
 }
 
@@ -127,7 +139,7 @@ function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeP
       statsLoading,
       currentDeliveryOrderId,
     }),
-    [stats.deliveries, stats.earnings, stats.rating, statsLoading, currentDeliveryOrderId],
+    [stats.deliveries, stats.earnings, stats.earningsToday, stats.deliveriesToday, stats.rating, stats.breakdown, statsLoading, currentDeliveryOrderId],
   );
 
   return (

@@ -2,6 +2,7 @@ import {
   CUSTOMER_MARKETPLACE_TIMELINE,
   customerMarketplaceTimelineIndex,
 } from '@/lib/customerMarketplaceTimeline';
+import { isCustomerOrderDelivered } from '@/lib/customerTrackStatus';
 import type { OrderStageInput } from '@/services/orderStage';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -14,6 +15,7 @@ export function CustomerMarketplaceTimeline({
   variant?: 'light' | 'dark';
 }) {
   const activeIdx = customerMarketplaceTimelineIndex(order);
+  const delivered = isCustomerOrderDelivered(order);
   const isDark = variant === 'dark';
   const cancelled = activeIdx < 0;
 
@@ -24,8 +26,8 @@ export function CustomerMarketplaceTimeline({
         <Text style={[styles.cancelled, isDark && styles.cancelledDark]}>Order cancelled</Text>
       ) : (
         CUSTOMER_MARKETPLACE_TIMELINE.map((step, idx) => {
-          const done = idx <= activeIdx;
-          const active = idx === activeIdx;
+          const done = delivered || idx <= activeIdx;
+          const active = !delivered && idx === activeIdx;
           return (
             <View key={step.key} style={styles.row}>
               <View
@@ -35,7 +37,9 @@ export function CustomerMarketplaceTimeline({
                   done && styles.dotOn,
                   active && styles.dotActive,
                 ]}
-              />
+              >
+                {done ? <Text style={styles.check}>✓</Text> : null}
+              </View>
               <View style={styles.labelCol}>
                 <Text
                   style={[
@@ -86,7 +90,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#CBD5E1',
     marginRight: 12,
     marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  check: { color: '#FFFFFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
   dotDark: { backgroundColor: 'rgba(148,163,184,0.35)' },
   dotOn: { backgroundColor: '#22C55E' },
   dotActive: {

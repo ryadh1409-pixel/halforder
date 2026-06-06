@@ -8,7 +8,9 @@ import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
+import { OrderRatingPrompt } from '@/components/order-rating-prompt';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
+import { isCustomerOrderDelivered } from '@/lib/customerTrackStatus';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
 import {
@@ -49,6 +51,7 @@ function TrackOrderScreen() {
 
   const [order, setOrder] = useState<RestaurantOrder | null | undefined>(undefined);
   const [listenError, setListenError] = useState(false);
+  const [ratePromptVisible, setRatePromptVisible] = useState(false);
 
   useEffect(() => {
     logPaymentNavigation('track_order_mount', { orderId });
@@ -123,9 +126,16 @@ function TrackOrderScreen() {
     order?.deliveredAtMs,
   ]);
 
+  const delivered = order ? isCustomerOrderDelivered(order) : false;
+
   const etaText = useMemo(() => {
     if (!order) return '';
-    if (order.status === 'delivered' || order.deliveryStatus === 'delivered') {
+    if (
+      delivered ||
+      order.status === 'delivered' ||
+      order.status === 'completed' ||
+      order.deliveryStatus === 'delivered'
+    ) {
       return 'Delivered!';
     }
     const eta = order.estimatedDeliveryTime;
@@ -133,7 +143,7 @@ function TrackOrderScreen() {
       return `Arriving in about ${eta} min`;
     }
     return 'Updating estimate…';
-  }, [order?.status, order?.deliveryStatus, order?.estimatedDeliveryTime]);
+  }, [order?.status, order?.deliveryStatus, order?.estimatedDeliveryTime, delivered]);
 
   const driverChatEnabled =
     !!order &&
@@ -244,6 +254,12 @@ function TrackOrderScreen() {
 
           <CustomerMarketplaceTimeline order={order} variant="light" />
 
+          {delivered ? (
+            <Pressable style={styles.rateBtn} onPress={() => setRatePromptVisible(true)}>
+              <Text style={styles.rateBtnText}>Rate your experience</Text>
+            </Pressable>
+          ) : null}
+
           <View style={styles.etaCard}>
             <Text style={styles.etaLabel}>Estimated arrival</Text>
             <Text style={styles.etaValue}>{etaText}</Text>
@@ -296,7 +312,7 @@ function TrackOrderScreen() {
             </View>
           </View>
 
-          {order.deliveryPin && order.status !== 'delivered' && order.paymentStatus === 'paid' ? (
+          {order.deliveryPin && !delivered && order.paymentStatus === 'paid' ? (
             <View style={styles.pinBanner}>
               <Text style={styles.pinBannerLabel}>Show PIN at dropoff</Text>
               <Text style={styles.pinBannerDigits}>{order.deliveryPin}</Text>
@@ -334,6 +350,11 @@ function TrackOrderScreen() {
           </View>
         </ScrollView>
       </View>
+      <OrderRatingPrompt
+        orderId={order.id}
+        visible={ratePromptVisible}
+        onDismiss={() => setRatePromptVisible(false)}
+      />
     </View>
   );
 }
@@ -525,6 +546,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   primaryBtnText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
+  rateBtn: {
+    marginBottom: 16,
+    backgroundColor: '#FF3008',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  rateBtnText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
 });
 
 export default function TrackOrderRoute() {

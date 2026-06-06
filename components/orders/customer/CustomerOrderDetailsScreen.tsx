@@ -1,5 +1,6 @@
 import AppHeader from '@/components/AppHeader';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
+import { OrderRatingPrompt } from '@/components/order-rating-prompt';
 import { DeliveryProgressBar } from '@/components/order/DeliveryProgressBar';
 import { OrderPaymentTimeline } from '@/components/order/OrderPaymentTimeline';
 import { ETAChip } from '@/components/order/ETAChip';
@@ -12,6 +13,7 @@ import {
   CUSTOMER_MARKETPLACE_TIMELINE,
   customerMarketplaceTimelineIndex,
 } from '@/lib/customerMarketplaceTimeline';
+import { isCustomerOrderDelivered } from '@/lib/customerTrackStatus';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
@@ -62,6 +64,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   }>({ name: 'Unknown restaurant', image: null, address: null });
   const [driverMeta, setDriverMeta] = useState<{ avatar: string | null }>({ avatar: null });
   const [cancelling, setCancelling] = useState(false);
+  const [ratePromptVisible, setRatePromptVisible] = useState(false);
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -161,17 +164,20 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     if (order.status === 'arrived_customer') {
       showNotice('Order update', 'Your driver is near your location.');
     }
-    if (order.status === 'delivered') {
+    if (order.status === 'delivered' || order.status === 'completed') {
       showNotice('Order update', 'Your order was delivered.');
     }
     lastStatusRef.current = order.status;
   }, [order.status]);
 
+  const delivered = isCustomerOrderDelivered(order);
+
   const timelineIndex = useMemo(() => customerMarketplaceTimelineIndex(order), [order]);
   const timelineProgress = useMemo(() => {
+    if (delivered) return 1;
     if (timelineIndex < 0) return 0;
     return (timelineIndex + 1) / CUSTOMER_MARKETPLACE_TIMELINE.length;
-  }, [timelineIndex]);
+  }, [timelineIndex, delivered]);
 
   const customerPhase = useMemo(
     () =>
@@ -353,7 +359,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           </View>
         </View>
 
-        {order.deliveryPin && order.status !== 'delivered' && order.paymentStatus === 'paid' ? (
+        {order.deliveryPin && !delivered && order.paymentStatus === 'paid' ? (
           <View style={styles.pinCard}>
             <Text style={styles.pinLabel}>Your delivery PIN</Text>
             <Text style={styles.pinDigits}>{order.deliveryPin}</Text>
@@ -444,6 +450,12 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
         </View>
 
         <CustomerMarketplaceTimeline order={order} variant="dark" />
+
+        {delivered ? (
+          <Pressable style={styles.rateBtn} onPress={() => setRatePromptVisible(true)}>
+            <Text style={styles.rateBtnText}>Rate your experience</Text>
+          </Pressable>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Items</Text>
@@ -549,6 +561,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           ) : null}
         </View>
       </ScrollView>
+      <OrderRatingPrompt
+        orderId={order.id}
+        visible={ratePromptVisible}
+        onDismiss={() => setRatePromptVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -752,4 +769,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelBtnText: { color: '#FECACA', fontWeight: '800', fontSize: 15 },
+  rateBtn: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: '#FF3008',
+    alignItems: 'center',
+  },
+  rateBtnText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
 });

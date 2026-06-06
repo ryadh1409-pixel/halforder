@@ -1,4 +1,4 @@
-import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
+import { isOrderFresh, isOrderStale } from '@/lib/restaurantOrderFreshness';
 import {
   isRestaurantActiveLiveOrder,
   RESTAURANT_KITCHEN_ACTIVE_STATUSES,
@@ -35,18 +35,41 @@ export function isRestaurantOrderArchived(o: RestaurantOrder): boolean {
   return o.archivedByRestaurant === true || o.hiddenForRestaurant === true;
 }
 
+function normStatus(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+/** Delivered/completed within the restaurant dashboard window. */
+export function isRestaurantOrderDelivered(order: RestaurantOrder): boolean {
+  const status = normStatus(order.status);
+  const courier = normStatus(order.deliveryStatus);
+  return status === 'delivered' || status === 'completed' || courier === 'delivered';
+}
+
+function isRestaurantOrderCancelled(order: RestaurantOrder): boolean {
+  const status = normStatus(order.status);
+  const courier = normStatus(order.deliveryStatus);
+  return status === 'cancelled' || status === 'rejected' || courier === 'cancelled';
+}
+
+export function isRestaurantOrderTerminalForArchive(order: RestaurantOrder): boolean {
+  return isRestaurantOrderDelivered(order) || isRestaurantOrderCancelled(order);
+}
+
 export function matchesRestaurantOrderFilter(
   order: RestaurantOrder,
   filter: RestaurantOrderListFilter,
 ): boolean {
-  if (!isOrderFresh(order)) return false;
-
   const archived = isRestaurantOrderArchived(order);
 
   if (filter === 'archived') {
-    return archived;
+    if (archived) return true;
+    if (!isRestaurantOrderTerminalForArchive(order)) return false;
+    return isOrderStale(order);
   }
+
   if (archived) return false;
+  if (!isOrderFresh(order)) return false;
 
   switch (filter) {
     case 'active':
@@ -56,7 +79,7 @@ export function matchesRestaurantOrderFilter(
     case 'driver_assigned':
       return deriveOrderStage(order) === 'driver_assigned';
     case 'delivered':
-      return deriveOrderStage(order) === 'delivered';
+      return isRestaurantOrderDelivered(order);
     default:
       return true;
   }

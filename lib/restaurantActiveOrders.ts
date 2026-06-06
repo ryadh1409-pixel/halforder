@@ -1,3 +1,5 @@
+import { isRestaurantPrePaymentCheckout } from '@/lib/restaurantLiveOrders';
+import type { RestaurantOrderVisibilityInput } from '@/lib/restaurantLiveOrders';
 import {
   deriveOrderStage,
   type DerivedOrderStage,
@@ -28,7 +30,7 @@ export function isActiveRestaurantDerivedStage(stage: DerivedOrderStage): boolea
 }
 
 /**
- * Client-side guard after the Firestore query — excludes terminal/archived rows
+ * Client-side guard for kitchen Active tab — excludes terminal/archived rows
  * and unpaid checkout snapshots.
  */
 export function isActiveRestaurantOrder(
@@ -39,4 +41,12 @@ export function isActiveRestaurantOrder(
     return false;
   }
   return isActiveRestaurantDerivedStage(deriveOrderStage(order));
+}
+
+/** Paid marketplace orders for the restaurant dashboard listener (includes delivered in 24h). */
+export function isRestaurantDashboardOrder(
+  order: OrderStageInput & RestaurantOrderArchiveFields,
+): boolean {
+  if (isRestaurantPrePaymentCheckout(order as RestaurantOrderVisibilityInput)) return false;
+  return deriveOrderStage(order) !== 'awaiting_payment';
 }

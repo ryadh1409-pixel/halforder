@@ -34,6 +34,16 @@ export function isOrderFresh(
   return nowMs - createdMs < RESTAURANT_ORDER_FRESH_MS;
 }
 
+/** True when the order is older than the 24h restaurant dashboard window. */
+export function isOrderStale(
+  order: OrderFreshnessInput,
+  nowMs: number = Date.now(),
+): boolean {
+  const createdMs = resolveOrderCreatedAtMs(order);
+  if (createdMs == null || !Number.isFinite(createdMs)) return false;
+  return nowMs - createdMs >= RESTAURANT_ORDER_FRESH_MS;
+}
+
 export function filterFreshRestaurantOrders<T extends OrderFreshnessInput>(
   orders: T[],
   nowMs: number = Date.now(),

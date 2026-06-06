@@ -43,6 +43,10 @@ import {
 } from '@/lib/driverHubActiveOrders';
 import { filterHubActiveDriverOrders } from '@/lib/driverHubOrdersStore';
 import {
+  calculateDriverEarningForOrder,
+  isSameLocalDay,
+} from '@/lib/driverEarnings';
+import {
   isDriverMarketplaceClaimable,
   isPaidMarketplaceDeliveryOrder,
   MARKETPLACE_DELIVERY_STATUS,
@@ -478,17 +482,89 @@ export function subscribeToDriverOrders(
   };
 }
 
+export type DriverDeliveryBreakdownItem = {
+  orderId: string;
+  earning: number;
+  deliveredAtMs: number | null;
+};
+
 export type DriverDeliveryStats = {
   deliveries: number;
   earnings: number;
+  earningsToday: number;
+  deliveriesToday: number;
   rating: number;
+  breakdown: DriverDeliveryBreakdownItem[];
 };
 
 const EMPTY_DRIVER_STATS: DriverDeliveryStats = {
   deliveries: 0,
   earnings: 0,
+  earningsToday: 0,
+  deliveriesToday: 0,
   rating: 5.0,
+  breakdown: [],
 };
+
+const DRIVER_COMPLETED_STATUSES = ['delivered', 'completed'] as const;
+
+function isDriverCompletedDeliveryOrder(data: Record<string, unknown>): boolean {
+  const status = typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
+  const courier =
+    typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
+  return (
+    status === 'delivered' ||
+    status === 'completed' ||
+    courier === 'delivered'
+  );
+}
+
+function resolveDriverDeliveryCompletedMs(data: Record<string, unknown>): number | null {
+  return (
+    safeToMillis(data.deliveredAt) ??
+    safeToMillis(data.completedAt) ??
+    safeToMillis(data.updatedAt) ??
+    safeToMillis(data.createdAt)
+  );
+}
+
+function buildDriverDeliveryStats(
+  docs: Array<{ id: string; data: () => Record<string, unknown> }>,
+): DriverDeliveryStats {
+  const breakdown: DriverDeliveryBreakdownItem[] = [];
+  let earnings = 0;
+  let earningsToday = 0;
+  let deliveriesToday = 0;
+
+  for (const docSnap of docs) {
+    const data = docSnap.data();
+    if (!isDriverCompletedDeliveryOrder(data)) continue;
+
+    const earning = calculateDriverEarningForOrder(data);
+    const deliveredAtMs = resolveDriverDeliveryCompletedMs(data);
+    earnings += earning;
+    if (isSameLocalDay(deliveredAtMs)) {
+      earningsToday += earning;
+      deliveriesToday += 1;
+    }
+    breakdown.push({
+      orderId: docSnap.id,
+      earning,
+      deliveredAtMs,
+    });
+  }
+
+  breakdown.sort((a, b) => (b.deliveredAtMs ?? 0) - (a.deliveredAtMs ?? 0));
+
+  return {
+    deliveries: breakdown.length,
+    earnings: Math.round(earnings * 100) / 100,
+    earningsToday: Math.round(earningsToday * 100) / 100,
+    deliveriesToday,
+    rating: 5.0,
+    breakdown,
+  };
+}
 
 /**
  * Paid delivery queue: awaiting driver (`pending_driver`), unassigned, delivery only.
@@ -569,10 +645,20 @@ export function subscribeDriverDeliveryStats(
   onStats: (stats: DriverDeliveryStats) => void,
 ): Unsubscribe {
   const noopUnsub = () => {};
-  let unsub: Unsubscribe | null = null;
+  const unsubs: Unsubscribe[] = [];
   let cancelled = false;
+  let byDriverId: Array<{ id: string; data: () => Record<string, unknown> }> = [];
+  let byAssignedId: Array<{ id: string; data: () => Record<string, unknown> }> = [];
 
   const emitEmpty = () => onStats(EMPTY_DRIVER_STATS);
+
+  const emitMerged = () => {
+    if (cancelled) return;
+    const merged = new Map<string, { id: string; data: () => Record<string, unknown> }>();
+    for (const row of byAssignedId) merged.set(row.id, row);
+    for (const row of byDriverId) merged.set(row.id, row);
+    onStats(buildDriverDeliveryStats(Array.from(merged.values())));
+  };
 
   try {
     runListenerBootstrap('subscribeDriverDeliveryStats', async () => {
@@ -582,14 +668,10 @@ export function subscribeDriverDeliveryStats(
         return;
       }
 
-      if (cancelled) {
-        emitEmpty();
-        return;
-      }
-
       const statsFilters = {
         driverId: authUid,
-        status: 'completed',
+        assignedDriverId: authUid,
+        status: DRIVER_COMPLETED_STATUSES,
         deliveryType: 'delivery',
       };
       await logDriverQueryStart({
@@ -603,52 +685,80 @@ export function subscribeDriverDeliveryStats(
         return;
       }
 
+      const completedStatusFilter = where(
+        'status',
+        'in',
+        [...DRIVER_COMPLETED_STATUSES],
+      );
+
       try {
-        unsub = onSnapshot(
+        const unsubDriverId = onSnapshot(
           query(
             collection(db, 'orders'),
             where('driverId', '==', authUid),
-            where('status', '==', 'completed'),
+            completedStatusFilter,
             where('deliveryType', '==', 'delivery'),
           ),
           (snap) => {
             if (cancelled) return;
-            let earnings = 0;
-            for (const docSnap of snap.docs) {
-              const data = docSnap.data();
-              const fee =
-                typeof data.deliveryFee === 'number' && Number.isFinite(data.deliveryFee)
-                  ? data.deliveryFee
-                  : 0;
-              earnings += fee;
-            }
-            onStats({
-              deliveries: snap.size,
-              earnings: Math.round(earnings * 100) / 100,
-              rating: 5.0,
-            });
+            byDriverId = snap.docs.map((docSnap) => ({
+              id: docSnap.id,
+              data: () => docSnap.data() as Record<string, unknown>,
+            }));
+            emitMerged();
           },
           (error) => {
             if (cancelled) return;
             if (isFirestorePermissionDenied(error)) {
               // eslint-disable-next-line no-console
               console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
-              emitEmpty();
+              byDriverId = [];
+              emitMerged();
               return;
             }
-            logDriverQueryError('subscribeDriverDeliveryStats', error);
-            safeListenerError('subscribeDriverDeliveryStats orders', emitEmpty)(error);
+            logDriverQueryError('subscribeDriverDeliveryStats.driverId', error);
+            byDriverId = [];
+            emitMerged();
           },
         );
+        unsubs.push(unsubDriverId);
       } catch (error) {
-        if (isFirestorePermissionDenied(error)) {
-          // eslint-disable-next-line no-console
-          console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
-          emitEmpty();
-          return;
-        }
-        logDriverQueryError('subscribeDriverDeliveryStats.setup', error);
-        emitEmpty();
+        logDriverQueryError('subscribeDriverDeliveryStats.driverId.setup', error);
+      }
+
+      try {
+        const unsubAssigned = onSnapshot(
+          query(
+            collection(db, 'orders'),
+            where('assignedDriverId', '==', authUid),
+            completedStatusFilter,
+            where('deliveryType', '==', 'delivery'),
+          ),
+          (snap) => {
+            if (cancelled) return;
+            byAssignedId = snap.docs.map((docSnap) => ({
+              id: docSnap.id,
+              data: () => docSnap.data() as Record<string, unknown>,
+            }));
+            emitMerged();
+          },
+          (error) => {
+            if (cancelled) return;
+            if (isFirestorePermissionDenied(error)) {
+              // eslint-disable-next-line no-console
+              console.warn('[driver] subscribeDriverDeliveryStats permission denied', error);
+              byAssignedId = [];
+              emitMerged();
+              return;
+            }
+            logDriverQueryError('subscribeDriverDeliveryStats.assignedDriverId', error);
+            byAssignedId = [];
+            emitMerged();
+          },
+        );
+        unsubs.push(unsubAssigned);
+      } catch (error) {
+        logDriverQueryError('subscribeDriverDeliveryStats.assignedDriverId.setup', error);
       }
     }, emitEmpty);
   } catch (error) {
@@ -665,7 +775,8 @@ export function subscribeDriverDeliveryStats(
 
   return () => {
     cancelled = true;
-    unsub?.();
+    for (const unsub of unsubs) unsub();
+    unsubs.length = 0;
   };
 }
 

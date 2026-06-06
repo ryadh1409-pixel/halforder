@@ -12,13 +12,13 @@ import {
 } from '@/services/orderArchiveService';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import { areRestaurantOrderListsEqual } from '@/lib/restaurantOrderListDedup';
-import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import {
   resetRestaurantOrderCleanupState,
   scheduleRestaurantOrderCleanup,
 } from '@/services/orderCleanupService';
 import {
   subscribeActiveRestaurantOrders,
+  subscribeRestaurantArchivedOrders,
   type RestaurantOrder,
 } from '@/services/orderService';
 
@@ -39,6 +39,16 @@ function normField(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
+function mergeRestaurantOrderLists(
+  active: RestaurantOrder[],
+  archived: RestaurantOrder[],
+): RestaurantOrder[] {
+  const byId = new Map<string, RestaurantOrder>();
+  for (const order of archived) byId.set(order.id, order);
+  for (const order of active) byId.set(order.id, order);
+  return Array.from(byId.values());
+}
+
 export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   const {
     restaurantId,
@@ -47,7 +57,8 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
     enableAutoCleanup = true,
   } = options;
 
-  const [orders, setOrders] = useState<RestaurantOrder[]>([]);
+  const [activeOrders, setActiveOrders] = useState<RestaurantOrder[]>([]);
+  const [archivedOrders, setArchivedOrders] = useState<RestaurantOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<RestaurantOrdersOptimisticMap>({});
@@ -61,6 +72,11 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
     typeof restaurantTimeZone === 'string' && restaurantTimeZone.trim()
       ? restaurantTimeZone.trim()
       : undefined;
+
+  const orders = useMemo(
+    () => mergeRestaurantOrderLists(activeOrders, archivedOrders),
+    [activeOrders, archivedOrders],
+  );
 
   const mergeKitchenOptimistic = useCallback(
     (order: RestaurantOrder): RestaurantOrder => {
@@ -92,7 +108,8 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
 
   useEffect(() => {
     if (!restaurantId) {
-      setOrders([]);
+      setActiveOrders([]);
+      setArchivedOrders([]);
       setLoading(false);
       setError(null);
       setOptimistic({});
@@ -103,15 +120,23 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
     setLoading(true);
     setError(null);
 
-    const unsub = subscribeActiveRestaurantOrders(
+    let activeReady = false;
+    let archivedReady = false;
+
+    const maybeDoneLoading = () => {
+      if (activeReady && archivedReady) setLoading(false);
+    };
+
+    const unsubActive = subscribeActiveRestaurantOrders(
       restaurantId,
       (rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        setOrders((prev) =>
+        setActiveOrders((prev) =>
           areRestaurantOrderListsEqual(prev, list) ? prev : list,
         );
-        setLoading(false);
+        activeReady = true;
         setError(null);
+        maybeDoneLoading();
 
         if (!enableAutoCleanup) return;
 
@@ -123,8 +148,22 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       { timeZone },
     );
 
+    const unsubArchived = subscribeRestaurantArchivedOrders(
+      restaurantId,
+      (rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setArchivedOrders((prev) =>
+          areRestaurantOrderListsEqual(prev, list) ? prev : list,
+        );
+        archivedReady = true;
+        maybeDoneLoading();
+      },
+      { timeZone },
+    );
+
     return () => {
-      unsub();
+      unsubActive();
+      unsubArchived();
       resetRestaurantOrderCleanupState(restaurantId);
       lastCleanupScheduleKeyRef.current = '';
     };
@@ -177,7 +216,6 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
 
   const visibleOrders = useMemo(() => {
     return displayOrders
-      .filter((order) => isOrderFresh(order))
       .filter((order) => {
         const pending = optimistic[order.id];
         if (pending === 'restore') {
@@ -187,7 +225,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
           return filter === 'archived';
         }
         if (filter === 'archived') {
-          return isRestaurantOrderArchived(order);
+          return isRestaurantOrderArchived(order) || matchesRestaurantOrderFilter(order, filter);
         }
         if (isRestaurantOrderArchived(order)) return false;
         return matchesRestaurantOrderFilter(order, filter);
