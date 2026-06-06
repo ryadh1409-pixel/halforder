@@ -95,8 +95,16 @@ export const DRIVER_COMPLETED_STATUSES = ['delivered', 'completed'] as const;
 export type DriverEarningsBreakdownItem = {
   orderId: string;
   earning: number;
+  platformFee: number;
   deliveredAtMs: number | null;
 };
+
+function resolveCompletionMs(data: Record<string, unknown>): number | null {
+  if (typeof data.completedAtMs === 'number' && data.completedAtMs > 0) return data.completedAtMs;
+  if (typeof data.deliveredAtMs === 'number' && data.deliveredAtMs > 0) return data.deliveredAtMs;
+  if (typeof data.updatedAtMs === 'number' && data.updatedAtMs > 0) return data.updatedAtMs;
+  return null;
+}
 
 export type DriverEarningsStats = {
   deliveries: number;
@@ -106,6 +114,7 @@ export type DriverEarningsStats = {
   deliveriesToday: number;
   deliveriesWeek: number;
   averageEarning: number;
+  platformFees: number;
   breakdown: DriverEarningsBreakdownItem[];
 };
 
@@ -138,19 +147,20 @@ export function buildDriverEarningsStats(
   let earningsWeek = 0;
   let deliveriesToday = 0;
   let deliveriesWeek = 0;
+  let platformFees = 0;
 
   for (const docSnap of docs) {
     const data = docSnap.data();
     if (!isDriverCompletedEarningsOrder(data)) continue;
 
     const earning = resolveDriverPayoutFromOrder(data);
-    const deliveredAtMs =
-      typeof data.completedAtMs === 'number'
-        ? data.completedAtMs
-        : typeof data.deliveredAtMs === 'number'
-          ? data.deliveredAtMs
-          : null;
+    const fee =
+      typeof data.platformFee === 'number' && Number.isFinite(data.platformFee)
+        ? data.platformFee
+        : 0;
+    const deliveredAtMs = resolveCompletionMs(data);
     earnings += earning;
+    platformFees += fee;
     if (isSameLocalDay(deliveredAtMs, nowMs)) {
       earningsToday += earning;
       deliveriesToday += 1;
@@ -159,7 +169,7 @@ export function buildDriverEarningsStats(
       earningsWeek += earning;
       deliveriesWeek += 1;
     }
-    breakdown.push({ orderId: docSnap.id, earning, deliveredAtMs });
+    breakdown.push({ orderId: docSnap.id, earning, platformFee: fee, deliveredAtMs });
   }
 
   breakdown.sort((a, b) => (b.deliveredAtMs ?? 0) - (a.deliveredAtMs ?? 0));
@@ -174,6 +184,7 @@ export function buildDriverEarningsStats(
     deliveriesWeek,
     averageEarning:
       deliveries > 0 ? Math.round((earnings / deliveries) * 100) / 100 : 0,
+    platformFees: Math.round(platformFees * 100) / 100,
     breakdown,
   };
 }

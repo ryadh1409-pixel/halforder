@@ -50,6 +50,11 @@ export default function DriverEarningsScreen() {
 
           <View style={styles.grid}>
             <StatTile
+              label="Completed"
+              value={`${stats.deliveries}`}
+              sub="Lifetime deliveries"
+            />
+            <StatTile
               label="This week"
               value={`$${stats.earningsWeek.toFixed(2)}`}
               sub={`${stats.deliveriesWeek} trips`}
@@ -57,14 +62,18 @@ export default function DriverEarningsScreen() {
             <StatTile
               label="All time"
               value={`$${stats.earnings.toFixed(2)}`}
-              sub={`${stats.deliveries} trips`}
+              sub="Lifetime earnings"
             />
             <StatTile
               label="Avg / trip"
               value={`$${stats.averageEarning.toFixed(2)}`}
-              sub="Completed deliveries"
+              sub="Driver payout"
             />
-            <StatTile label="Rating" value={`${stats.rating.toFixed(1)} ★`} sub="On-time score" />
+            <StatTile
+              label="Platform fees"
+              value={`$${stats.platformFees.toFixed(2)}`}
+              sub="Collected on trips"
+            />
           </View>
 
           <Text style={styles.sectionTitle}>Recent deliveries</Text>

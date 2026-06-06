@@ -42,11 +42,9 @@ function normStatus(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-/** Delivered/completed within the restaurant dashboard window. */
+/** Delivered/completed — canonical stage, timestamps, and courier fields. */
 export function isRestaurantOrderDelivered(order: RestaurantOrder): boolean {
-  const status = normStatus(order.status);
-  const courier = normStatus(order.deliveryStatus);
-  return status === 'delivered' || status === 'completed' || courier === 'delivered';
+  return deriveOrderStage(order) === 'delivered';
 }
 
 function isRestaurantOrderCancelled(order: RestaurantOrder): boolean {

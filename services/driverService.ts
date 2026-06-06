@@ -495,6 +495,7 @@ export type DriverDeliveryStats = {
   deliveriesToday: number;
   deliveriesWeek: number;
   averageEarning: number;
+  platformFees: number;
   rating: number;
   breakdown: DriverDeliveryBreakdownItem[];
 };
@@ -507,6 +508,7 @@ const EMPTY_DRIVER_STATS: DriverDeliveryStats = {
   deliveriesToday: 0,
   deliveriesWeek: 0,
   averageEarning: 0,
+  platformFees: 0,
   rating: 5.0,
   breakdown: [],
 };

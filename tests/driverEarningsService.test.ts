@@ -37,6 +37,7 @@ describe('driver earnings aggregation', () => {
     ]);
     expect(stats.deliveries).toBe(2);
     expect(stats.earnings).toBe(1.99);
+    expect(stats.platformFees).toBeGreaterThanOrEqual(0);
     expect(resolveDriverPayoutFromOrder({ earningsRecorded: true, driverPayout: 0.79 })).toBe(
       0.79,
     );

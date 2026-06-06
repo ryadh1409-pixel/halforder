@@ -40,6 +40,9 @@ export type ProfileOrderRow = {
   createdAtMs: number;
   createdAt?: unknown;
   updatedAtMs?: number | null;
+  deliveredAtMs?: number | null;
+  completedAtMs?: number | null;
+  marketplaceArchived?: boolean;
   imageUrl: string | null;
 };
 
@@ -104,6 +107,11 @@ function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
     createdAt: d?.createdAt,
     updatedAtMs:
       safeToMillis(d?.updatedAtMs) ?? safeToMillis(d?.updatedAt) ?? null,
+    deliveredAtMs:
+      safeToMillis(d?.deliveredAtMs) ?? safeToMillis(d?.deliveredAt) ?? null,
+    completedAtMs:
+      safeToMillis(d?.completedAtMs) ?? safeToMillis(d?.completedAt) ?? null,
+    marketplaceArchived: d?.marketplaceArchived === true,
     imageUrl: imageFromItem || imageFromRestaurant,
   };
 }

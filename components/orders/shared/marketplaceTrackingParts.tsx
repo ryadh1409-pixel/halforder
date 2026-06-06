@@ -54,6 +54,7 @@ export function chipForFulfillment(status: OrderStatus | undefined): { bg: strin
     case 'arrived_customer':
       return { bg: 'rgba(56,189,248,0.22)', fg: '#E0F2FE' };
     case 'delivered':
+    case 'completed':
       return { bg: 'rgba(34,197,94,0.28)', fg: '#DCFCE7' };
     case 'cancelled':
     case 'rejected':

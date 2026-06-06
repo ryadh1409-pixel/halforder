@@ -9,6 +9,7 @@ import {
   OrderSnapshotFreshnessGate,
   QuerySnapshotFreshnessGate,
 } from '@/lib/orderSnapshotFreshness';
+import { customerOrderSnapshotSignature } from '@/lib/customerOrderSnapshotSignature';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
   clearOrderListenerCommitCache,
@@ -539,8 +540,14 @@ function mapDocToRestaurantOrderFromData(
     preparedAtMs: safeToMillis(data.preparedAt),
     readyAtMs: safeToMillis(data.readyAt),
     pickedUpAtMs: safeToMillis(data.pickedUpAt),
-    deliveredAtMs: safeToMillis(data.deliveredAt),
-    completedAtMs: safeToMillis(data.completedAt),
+    deliveredAtMs:
+      typeof data.deliveredAtMs === 'number' && Number.isFinite(data.deliveredAtMs)
+        ? data.deliveredAtMs
+        : safeToMillis(data.deliveredAt),
+    completedAtMs:
+      typeof data.completedAtMs === 'number' && Number.isFinite(data.completedAtMs)
+        ? data.completedAtMs
+        : safeToMillis(data.completedAt),
     cancelledAtMs: safeToMillis(data.cancelledAt),
     driverPayout:
       typeof data.driverPayout === 'number' && Number.isFinite(data.driverPayout)
@@ -1383,17 +1390,7 @@ export function subscribeCustomerOrderById(
 
       logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById');
 
-      const signature = [
-        raw.status,
-        raw.deliveryStatus,
-        raw.paymentStatus,
-        safeToMillis(raw.updatedAt),
-        safeToMillis(raw.pickedUpAt),
-        safeToMillis(raw.deliveredAt),
-        safeToMillis(raw.completedAt),
-        raw.marketplaceArchived,
-        raw.earningsRecorded,
-      ].join('|');
+      const signature = customerOrderSnapshotSignature(raw);
       if (signature === lastSignature) return;
       lastSignature = signature;
 

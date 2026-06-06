@@ -149,16 +149,24 @@ service cloud.firestore {
         && resource.data.driverId == null
         && resource.data.assignedDriverId == null;
     }
-    /** Driver delivered-stats list — mirrors subscribeDriverDeliveryStats filters. */
-    function driverDeliveredStatsListReadable() {
+    /** Driver earnings / delivered-stats list — mirrors subscribeDriverEarnings filters. */
+    function driverEarningsOrderListReadable() {
       return hasDriverAccountDoc()
-        && resource.data.driverId == request.auth.uid
-        && resource.data.deliveryType == 'delivery'
+        && resource.data.get('deliveryType', 'delivery') == 'delivery'
         && (
-          resource.data.status == 'delivered'
+          resource.data.driverId == request.auth.uid
+          || resource.data.get('assignedDriverId', '') == request.auth.uid
+        )
+        && (
+          resource.data.get('earningsRecorded', false) == true
+          || resource.data.status == 'delivered'
           || resource.data.status == 'completed'
           || resource.data.get('deliveryStatus', '') == 'delivered'
         );
+    }
+    /** @deprecated Use driverEarningsOrderListReadable */
+    function driverDeliveredStatsListReadable() {
+      return driverEarningsOrderListReadable();
     }
     /** Driver active/assigned orders by driverId — mirrors subscribeToDriverOrders. */
     function driverOrdersByDriverIdListReadable() {
@@ -1966,6 +1974,7 @@ service cloud.firestore {
       allow read: if driverMarketplacePoolReadable();
       allow list: if driverMarketplacePoolReadable();
       // Driver list queries (query-safe via drivers/{auth.uid} membership; no custom claim).
+      allow list: if driverEarningsOrderListReadable();
       allow list: if driverDeliveredStatsListReadable();
       allow list: if driverOrdersByDriverIdListReadable();
       allow list: if driverOrdersByAssignedDriverIdListReadable();

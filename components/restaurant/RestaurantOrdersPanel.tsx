@@ -101,14 +101,14 @@ export function RestaurantOrdersPanel({
   });
 
   const freshOrders = useMemo(
-    () => orders.filter((order) => isOrderFresh(order)),
-    [orders],
+    () => (filter === 'archived' ? orders : orders.filter((order) => isOrderFresh(order))),
+    [filter, orders],
   );
 
   const archivedFiltered = useMemo(() => {
     if (filter !== 'archived') return freshOrders;
-    return freshOrders.filter((order) => matchesArchivedSearch(order, archivedSearch));
-  }, [archivedSearch, filter, freshOrders]);
+    return orders.filter((order) => matchesArchivedSearch(order, archivedSearch));
+  }, [archivedSearch, filter, freshOrders, orders]);
 
   const archivedRevenue = useMemo(() => {
     if (filter !== 'archived') return 0;

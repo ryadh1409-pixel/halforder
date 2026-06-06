@@ -150,11 +150,14 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     order.driver?.avatar,
   ]);
 
+  const delivered = isCustomerOrderDelivered(order);
+
   const lastStatusRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!order.status) return;
+    if (!order.status && !order.deliveryStatus) return;
+    const terminalKey = delivered ? 'delivered' : `${order.status}|${order.deliveryStatus}`;
     const prev = lastStatusRef.current;
-    if (prev === order.status) return;
+    if (prev === terminalKey) return;
     if (order.status === 'restaurant_accepted') {
       showNotice('Order update', 'Restaurant accepted your order.');
     }
@@ -164,13 +167,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     if (order.status === 'arrived_customer') {
       showNotice('Order update', 'Your driver is near your location.');
     }
-    if (order.status === 'delivered' || order.status === 'completed') {
+    if (delivered) {
       showNotice('Order update', 'Your order was delivered.');
     }
-    lastStatusRef.current = order.status;
-  }, [order.status]);
-
-  const delivered = isCustomerOrderDelivered(order);
+    lastStatusRef.current = terminalKey;
+  }, [delivered, order.deliveryStatus, order.status]);
 
   const timelineIndex = useMemo(() => customerMarketplaceTimelineIndex(order), [order]);
   const timelineProgress = useMemo(() => {
@@ -190,6 +191,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
         assignedDriverId: order.assignedDriverId,
         pickedUpAtMs: order.pickedUpAtMs,
         deliveredAtMs: order.deliveredAtMs,
+        completedAtMs: order.completedAtMs,
       }),
     [
       order.id,
@@ -200,8 +202,21 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
       order.assignedDriverId,
       order.pickedUpAtMs,
       order.deliveredAtMs,
+      order.completedAtMs,
     ],
   );
+
+  const deliveredAtLabel = useMemo(() => {
+    const ms = order.deliveredAtMs ?? order.completedAtMs;
+    if (ms == null || !Number.isFinite(ms)) return null;
+    return new Date(ms).toLocaleString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }, [order.completedAtMs, order.deliveredAtMs]);
 
   const mapPoints = useMemo(() => {
     return [
@@ -261,7 +276,9 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     return out;
   }, [order]);
 
-  const statusChip = chipForFulfillment(order.status);
+  const statusChip = chipForFulfillment(
+    delivered ? 'completed' : order.status,
+  );
   const payChip = paymentBadge(order.paymentStatus);
 
   const driverChatEnabled =
@@ -305,33 +322,53 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
       >
         <View style={styles.stickyHeader}>
           <Text style={styles.orderId}>Live order tracking</Text>
-          <Text style={styles.phaseHeadline}>{customerPhase.title}</Text>
-          <Text style={styles.phaseSubtitle}>{customerPhase.subtitle}</Text>
-          <Pressable
-            style={styles.trackFullscreenBtn}
-            onPress={() => router.push(`/track-order/${encodeURIComponent(order.id)}` as never)}
-          >
-            <Text style={styles.trackFullscreenBtnText}>Fullscreen live map</Text>
-          </Pressable>
+          <Text style={styles.phaseHeadline}>
+            {delivered ? 'Order completed' : customerPhase.title}
+          </Text>
+          <Text style={styles.phaseSubtitle}>
+            {delivered
+              ? deliveredAtLabel
+                ? `Delivered ${deliveredAtLabel}`
+                : 'Your order has been delivered.'
+              : customerPhase.subtitle}
+          </Text>
+          {!delivered ? (
+            <Pressable
+              style={styles.trackFullscreenBtn}
+              onPress={() => router.push(`/track-order/${encodeURIComponent(order.id)}` as never)}
+            >
+              <Text style={styles.trackFullscreenBtnText}>Fullscreen live map</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.chipRow}>
             <View style={[styles.chip, { backgroundColor: statusChip.bg }]}>
               <Text style={[styles.chipText, { color: statusChip.fg }]}>
-                {(order.status ?? 'pending').replace(/_/g, ' ')}
+                {delivered
+                  ? 'delivered'
+                  : (order.status ?? 'pending').replace(/_/g, ' ')}
               </Text>
             </View>
             <View style={[styles.chip, { backgroundColor: payChip.bg }]}>
               <Text style={[styles.chipText, { color: payChip.fg }]}>{payChip.label}</Text>
             </View>
           </View>
-          <Text style={styles.driverLine}>Driver: {driverStatusLabel(order)}</Text>
-          {formatETA(order.estimatedDeliveryTime) ? (
-            <View style={styles.etaWrap}>
-              <ETAChip minutes={order.estimatedDeliveryTime} />
+          {!delivered ? (
+            <>
+              <Text style={styles.driverLine}>Driver: {driverStatusLabel(order)}</Text>
+              {formatETA(order.estimatedDeliveryTime) ? (
+                <View style={styles.etaWrap}>
+                  <ETAChip minutes={order.estimatedDeliveryTime} />
+                </View>
+              ) : null}
+              <View style={styles.progressWrap}>
+                <DeliveryProgressBar progress={timelineProgress} />
+              </View>
+            </>
+          ) : (
+            <View style={styles.completedBadge}>
+              <Text style={styles.completedBadgeText}>✓ Delivered</Text>
             </View>
-          ) : null}
-          <View style={styles.progressWrap}>
-            <DeliveryProgressBar progress={timelineProgress} />
-          </View>
+          )}
         </View>
 
         <OrderPaymentTimeline order={order} variant="dark" />
@@ -408,45 +445,58 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Apple Maps</Text>
-          <Text style={styles.mapHint}>
-            {order.status === 'on_the_way' ||
-            order.status === 'picked_up' ||
-            order.status === 'arrived_customer'
-              ? 'Driver location updates automatically.'
-              : 'Map highlights restaurant and dropoff.'}
-          </Text>
-          <View style={styles.mapHost}>
-            {mapPoints.length > 0 ? (
-              <MapRenderer
-                style={styles.mapReal}
-                initialRegion={{
-                  latitude: mapPoints[0].latitude,
-                  longitude: mapPoints[0].longitude,
-                  latitudeDelta: 0.08,
-                  longitudeDelta: 0.08,
-                }}
-                markers={mapMarkers}
-                polylines={
-                  mapPoints.length >= 2
-                    ? [
-                        {
-                          id: 'route',
-                          coordinates: mapPoints,
-                          strokeWidth: 4,
-                          strokeColor: '#34D399',
-                        },
-                      ]
-                    : []
-                }
-                webTitle="Apple Maps"
-                webSubtitle="Restaurant → dropoff route"
-              />
-            ) : (
-              <View style={styles.mapPlaceholder}>
-                <Text style={styles.muted}>Map preview unavailable</Text>
+          {delivered ? (
+            <View style={styles.completedCard}>
+              <Text style={styles.completedCardTitle}>Delivery complete</Text>
+              <Text style={styles.completedCardBody}>
+                {deliveredAtLabel
+                  ? `Delivered ${deliveredAtLabel}`
+                  : 'Thanks for ordering with us.'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.mapHint}>
+                {order.status === 'on_the_way' ||
+                order.status === 'picked_up' ||
+                order.status === 'arrived_customer'
+                  ? 'Driver location updates automatically.'
+                  : 'Map highlights restaurant and dropoff.'}
+              </Text>
+              <View style={styles.mapHost}>
+                {mapPoints.length > 0 ? (
+                  <MapRenderer
+                    style={styles.mapReal}
+                    initialRegion={{
+                      latitude: mapPoints[0].latitude,
+                      longitude: mapPoints[0].longitude,
+                      latitudeDelta: 0.08,
+                      longitudeDelta: 0.08,
+                    }}
+                    markers={mapMarkers}
+                    polylines={
+                      mapPoints.length >= 2
+                        ? [
+                            {
+                              id: 'route',
+                              coordinates: mapPoints,
+                              strokeWidth: 4,
+                              strokeColor: '#34D399',
+                            },
+                          ]
+                        : []
+                    }
+                    webTitle="Apple Maps"
+                    webSubtitle="Restaurant → dropoff route"
+                  />
+                ) : (
+                  <View style={styles.mapPlaceholder}>
+                    <Text style={styles.muted}>Map preview unavailable</Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
+            </>
+          )}
         </View>
 
         <CustomerMarketplaceTimeline order={order} variant="dark" />
@@ -637,6 +687,25 @@ const styles = StyleSheet.create({
   },
   etaWrap: { marginTop: 10, paddingHorizontal: 16 },
   progressWrap: { marginTop: 14, paddingHorizontal: 16 },
+  completedBadge: {
+    marginTop: 14,
+    marginHorizontal: 16,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(34,197,94,0.18)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  completedBadgeText: { color: '#86EFAC', fontWeight: '900', fontSize: 14 },
+  completedCard: {
+    borderRadius: 14,
+    backgroundColor: 'rgba(34,197,94,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.35)',
+    padding: 16,
+  },
+  completedCardTitle: { color: '#86EFAC', fontWeight: '900', fontSize: 18 },
+  completedCardBody: { color: '#CBD5E1', marginTop: 8, fontWeight: '600', lineHeight: 20 },
   card: {
     marginHorizontal: 16,
     marginTop: 14,

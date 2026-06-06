@@ -1,5 +1,5 @@
 /**
- * Driver earnings Firestore listeners — queries `orders/` with status in (delivered, completed).
+ * Driver earnings Firestore listeners — `orders/` where driver completed delivery.
  */
 import {
   buildDriverEarningsStats,
@@ -36,12 +36,13 @@ export const EMPTY_DRIVER_EARNINGS_STATS: DriverEarningsStats = {
   deliveriesToday: 0,
   deliveriesWeek: 0,
   averageEarning: 0,
+  platformFees: 0,
   breakdown: [],
 };
 
-const completedStatusFilter = where('status', 'in', [...DRIVER_COMPLETED_STATUSES]);
+type MappedDoc = { id: string; data: () => Record<string, unknown> };
 
-function mapDoc(docSnap: { id: string; data: () => Record<string, unknown> }) {
+function mapDoc(docSnap: { id: string; data: () => Record<string, unknown> }): MappedDoc {
   const data = docSnap.data();
   return {
     id: docSnap.id,
@@ -55,98 +56,110 @@ function mapDoc(docSnap: { id: string; data: () => Record<string, unknown> }) {
         typeof data.completedAtMs === 'number'
           ? data.completedAtMs
           : safeToMillis(data.completedAt),
+      updatedAtMs:
+        typeof data.updatedAtMs === 'number'
+          ? data.updatedAtMs
+          : safeToMillis(data.updatedAt),
     }),
   };
 }
 
-function driverCompletedOrdersQuery(uid: string, field: 'driverId' | 'assignedDriverId'): Query {
-  return query(collection(db, 'orders'), where(field, '==', uid), completedStatusFilter);
-}
+type EarningsQueryKind = 'earningsRecorded' | 'completedStatus';
 
-async function bootstrapCompletedOrders(
+function driverEarningsQuery(
   uid: string,
   field: 'driverId' | 'assignedDriverId',
-): Promise<ReturnType<typeof mapDoc>[]> {
-  const snap = await getDocsFromServer(driverCompletedOrdersQuery(uid, field));
-  console.log('SERVER ORDER', {
-    source: 'subscribeDriverEarnings:bootstrap',
-    field,
-    driverUid: uid,
-    docCount: snap.docs.length,
-    fromCache: snap.metadata.fromCache,
-    hasPendingWrites: snap.metadata.hasPendingWrites,
-  });
-  return snap.docs.map((docSnap) =>
-    mapDoc({
-      id: docSnap.id,
-      data: () => docSnap.data() as Record<string, unknown>,
-    }),
+  kind: EarningsQueryKind,
+): Query {
+  const base = [collection(db, 'orders'), where(field, '==', uid)];
+  if (kind === 'earningsRecorded') {
+    return query(...base, where('earningsRecorded', '==', true));
+  }
+  return query(
+    ...base,
+    where('deliveryType', '==', 'delivery'),
+    where('status', 'in', [...DRIVER_COMPLETED_STATUSES]),
   );
 }
 
-function attachCompletedOrdersListener(
+async function bootstrapQuery(
   uid: string,
   field: 'driverId' | 'assignedDriverId',
-  onRows: (rows: ReturnType<typeof mapDoc>[]) => void,
+  kind: EarningsQueryKind,
+): Promise<MappedDoc[]> {
+  const snap = await getDocsFromServer(driverEarningsQuery(uid, field, kind));
+  console.log('SERVER ORDER', {
+    source: 'subscribeDriverEarnings:bootstrap',
+    field,
+    kind,
+    driverUid: uid,
+    docCount: snap.docs.length,
+    fromCache: snap.metadata.fromCache,
+  });
+  return snap.docs.map((docSnap) =>
+    mapDoc({ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }),
+  );
+}
+
+function attachEarningsListener(
+  uid: string,
+  field: 'driverId' | 'assignedDriverId',
+  kind: EarningsQueryKind,
+  onRows: (rows: MappedDoc[]) => void,
 ): Unsubscribe {
   const queryGate = new QuerySnapshotFreshnessGate();
-  let serverRows: ReturnType<typeof mapDoc>[] | null = null;
+  let serverRows: MappedDoc[] | null = null;
 
-  void bootstrapCompletedOrders(uid, field)
+  void bootstrapQuery(uid, field, kind)
     .then((rows) => {
       serverRows = rows;
       onRows(rows);
     })
     .catch((err) => {
-      console.warn('[subscribeDriverEarnings] bootstrap failed', { field, uid, err });
+      console.warn('[subscribeDriverEarnings] bootstrap failed', { field, kind, uid, err });
     });
 
   return onSnapshot(
-    driverCompletedOrdersQuery(uid, field),
+    driverEarningsQuery(uid, field, kind),
     (snap) => {
       const rows = snap.docs.map((docSnap) =>
-        mapDoc({
-          id: docSnap.id,
-          data: () => docSnap.data() as Record<string, unknown>,
-        }),
+        mapDoc({ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }),
       );
 
       if (!queryGate.shouldApply(snap.metadata.fromCache)) {
         console.log('CACHE ORDER', {
           source: 'subscribeDriverEarnings:ignored',
           field,
+          kind,
           driverUid: uid,
           docCount: rows.length,
           fromCache: true,
-          hasPendingWrites: snap.metadata.hasPendingWrites,
         });
-        if (serverRows != null) {
-          onRows(serverRows);
-        }
+        if (serverRows != null) onRows(serverRows);
         return;
       }
 
       console.log('SERVER ORDER', {
         source: 'subscribeDriverEarnings',
         field,
+        kind,
         driverUid: uid,
         docCount: rows.length,
         fromCache: snap.metadata.fromCache,
-        hasPendingWrites: snap.metadata.hasPendingWrites,
       });
       serverRows = rows;
       onRows(rows);
     },
     (err) => {
-      console.warn('[subscribeDriverEarnings] listener error', { field, uid, err });
-      onRows([]);
+      console.warn('[subscribeDriverEarnings] listener error', { field, kind, uid, err });
+      if (serverRows != null) onRows(serverRows);
     },
   );
 }
 
 /**
- * Live earnings — merges driverId + assignedDriverId queries, dedupes by orderId,
- * totals persisted `driverPayout` per order.
+ * Live earnings — merges driverId + assignedDriverId queries (earningsRecorded + completed status),
+ * dedupes by orderId, totals persisted `driverPayout` per order.
  */
 export function subscribeDriverEarnings(
   driverUid: string,
@@ -158,28 +171,41 @@ export function subscribeDriverEarnings(
     return () => {};
   }
 
-  let byDriverId: ReturnType<typeof mapDoc>[] = [];
-  let byAssignedId: ReturnType<typeof mapDoc>[] = [];
+  const rowSets: Record<string, MappedDoc[]> = {
+    driverIdEarnings: [],
+    driverIdStatus: [],
+    assignedEarnings: [],
+    assignedStatus: [],
+  };
 
   const emitMerged = () => {
-    const merged = new Map<string, ReturnType<typeof mapDoc>>();
-    for (const row of byAssignedId) merged.set(row.id, row);
-    for (const row of byDriverId) merged.set(row.id, row);
+    const merged = new Map<string, MappedDoc>();
+    for (const rows of Object.values(rowSets)) {
+      for (const row of rows) merged.set(row.id, row);
+    }
     onStats(buildDriverEarningsStats(Array.from(merged.values())));
   };
 
-  const unsubDriverId = attachCompletedOrdersListener(uid, 'driverId', (rows) => {
-    byDriverId = rows;
-    emitMerged();
-  });
-
-  const unsubAssigned = attachCompletedOrdersListener(uid, 'assignedDriverId', (rows) => {
-    byAssignedId = rows;
-    emitMerged();
-  });
+  const unsubs = [
+    attachEarningsListener(uid, 'driverId', 'earningsRecorded', (rows) => {
+      rowSets.driverIdEarnings = rows;
+      emitMerged();
+    }),
+    attachEarningsListener(uid, 'driverId', 'completedStatus', (rows) => {
+      rowSets.driverIdStatus = rows;
+      emitMerged();
+    }),
+    attachEarningsListener(uid, 'assignedDriverId', 'earningsRecorded', (rows) => {
+      rowSets.assignedEarnings = rows;
+      emitMerged();
+    }),
+    attachEarningsListener(uid, 'assignedDriverId', 'completedStatus', (rows) => {
+      rowSets.assignedStatus = rows;
+      emitMerged();
+    }),
+  ];
 
   return () => {
-    unsubDriverId();
-    unsubAssigned();
+    for (const unsub of unsubs) unsub();
   };
 }
