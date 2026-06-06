@@ -1311,6 +1311,7 @@ export function subscribeCustomerOrderById(
   let lastSignature = '';
   return onSnapshot(
     doc(db, 'orders', id),
+    { source: 'server' },
     (snap) => {
       if (!snap.exists()) {
         onData(null);
