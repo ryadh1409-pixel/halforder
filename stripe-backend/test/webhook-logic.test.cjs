@@ -12,7 +12,7 @@ const {
   resolvePostPaymentOrderStatus,
   shouldBlockStripePaymentOverwrite,
 } = require("../lib/orderPaidState.js");
-const { isWebhookOrderWriteBlocked } = require("../lib/webhookOrderWriteGuard.js");
+const { isWebhookOrderWriteBlockedForData } = require("../lib/webhookOrderWriteGuard.js");
 
 test("trimMetadata trims and rejects empty", () => {
   assert.equal(trimMetadata("  abc  "), "abc");
@@ -95,7 +95,7 @@ test("buildOrderPaidStatePatch skips fulfillment when delivered", () => {
   assert.equal(patch.deliveryStatus, undefined);
 });
 
-test("isWebhookOrderWriteBlocked logs [STRIPE BLOCKED] and blocks fulfilled rows", () => {
+test("isWebhookOrderWriteBlockedForData logs [STRIPE BLOCKED] and blocks fulfilled rows", () => {
   const spy = console.log;
   let blockedLog = null;
   console.log = (...args) => {
@@ -103,7 +103,7 @@ test("isWebhookOrderWriteBlocked logs [STRIPE BLOCKED] and blocks fulfilled rows
   };
   try {
     assert.equal(
-      isWebhookOrderWriteBlocked("o1", {
+      isWebhookOrderWriteBlockedForData("o1", {
         status: "completed",
         deliveryStatus: "delivered",
       }),
@@ -115,27 +115,38 @@ test("isWebhookOrderWriteBlocked logs [STRIPE BLOCKED] and blocks fulfilled rows
   }
 });
 
-test("isWebhookOrderWriteBlocked blocks completed and driver_assigned", () => {
+test("isWebhookOrderWriteBlockedForData blocks completed and driver_assigned", () => {
   assert.equal(
-    isWebhookOrderWriteBlocked("o1", {
+    isWebhookOrderWriteBlockedForData("o1", {
       status: "completed",
       deliveryStatus: "delivered",
     }),
     true,
   );
   assert.equal(
-    isWebhookOrderWriteBlocked("o2", {
+    isWebhookOrderWriteBlockedForData("o2", {
       status: "payment_confirmed",
       deliveryStatus: "driver_assigned",
     }),
     true,
   );
   assert.equal(
-    isWebhookOrderWriteBlocked("o3", {
+    isWebhookOrderWriteBlockedForData("o3", {
       status: "awaiting_payment",
       deliveryStatus: "pending",
     }),
     false,
+  );
+});
+
+test("isWebhookOrderWriteBlockedForData blocks earningsRecorded even if status stale", () => {
+  assert.equal(
+    isWebhookOrderWriteBlockedForData("o4", {
+      status: "payment_confirmed",
+      deliveryStatus: "pending",
+      earningsRecorded: true,
+    }),
+    true,
   );
 });
 

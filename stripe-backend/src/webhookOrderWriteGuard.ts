@@ -16,11 +16,16 @@ function normStatus(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** True when the order must not receive any webhook write. */
-export function isWebhookOrderWriteBlocked(
+/** True when in-memory order data must not receive any webhook lifecycle write. */
+export function isWebhookOrderWriteBlockedForData(
   orderId: string,
   data: Record<string, unknown>,
 ): boolean {
+  if (data.earningsRecorded === true || data.marketplaceArchived === true) {
+    console.log("[STRIPE BLOCKED]", orderId, data.status ?? null, data.deliveryStatus ?? null, "fulfillment_markers");
+    return true;
+  }
+
   const status = normStatus(data.status);
   const deliveryStatus = normStatus(data.deliveryStatus);
   if (
@@ -31,6 +36,19 @@ export function isWebhookOrderWriteBlocked(
     return true;
   }
   return false;
+}
+
+/**
+ * Read current server state before any `orders/{id}` write.
+ * Returns `true` when the webhook must skip the order write entirely.
+ */
+export async function isWebhookOrderWriteBlocked(orderId: string): Promise<boolean> {
+  const db = getFirestore();
+  const snap = await db.collection("orders").doc(orderId).get();
+  if (!snap.exists) {
+    return false;
+  }
+  return isWebhookOrderWriteBlockedForData(orderId, snap.data() ?? {});
 }
 
 /**
@@ -46,5 +64,5 @@ export async function assertWebhookCanWriteOrder(orderId: string): Promise<boole
     return false;
   }
   const data = snap.data() ?? {};
-  return !isWebhookOrderWriteBlocked(orderId, data);
+  return !isWebhookOrderWriteBlockedForData(orderId, data);
 }

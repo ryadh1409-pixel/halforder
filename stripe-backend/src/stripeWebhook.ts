@@ -21,6 +21,7 @@ import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 import {
   assertWebhookCanWriteOrder,
   isWebhookOrderWriteBlocked,
+  isWebhookOrderWriteBlockedForData,
 } from "./webhookOrderWriteGuard.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
@@ -126,7 +127,7 @@ function mergeOrderPaidSync(
   }
   const data = orderSnap.data() ?? {};
 
-  if (isWebhookOrderWriteBlocked(orderId, data)) {
+  if (isWebhookOrderWriteBlockedForData(orderId, data)) {
     return;
   }
 
@@ -201,6 +202,15 @@ function mergeOrderPaidSync(
     return;
   }
 
+  console.log("[STATUS WRITE]", {
+    orderId,
+    previousStatus: data.status ?? null,
+    newStatus: safe.status ?? data.status ?? null,
+    previousDeliveryStatus: data.deliveryStatus ?? null,
+    newDeliveryStatus: safe.deliveryStatus ?? data.deliveryStatus ?? null,
+    firestorePath: `orders/${orderId}`,
+    source: "stripeWebhook.ts#mergeOrderPaidSync",
+  });
   console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync", {
     orderId,
     status: safe.status ?? null,
@@ -239,7 +249,7 @@ function mergeOrderPaymentFailed(
   const { paymentIntentId, sourceEventType, stripeEventId } = params;
   if (!orderSnap.exists) return;
   const data = orderSnap.data() ?? {};
-  if (isWebhookOrderWriteBlocked(orderSnap.id, data)) {
+  if (isWebhookOrderWriteBlockedForData(orderSnap.id, data)) {
     return;
   }
   if (data.paymentStatus === "paid") {
@@ -296,6 +306,11 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
           msg: "payment_intent.succeeded_no_order_id",
           stripeEventId: event.id,
         });
+        return;
+      }
+
+      if (await isWebhookOrderWriteBlocked(orderId)) {
+        console.log("[STRIPE WEBHOOK] blocked write for completed order", orderId);
         return;
       }
 
