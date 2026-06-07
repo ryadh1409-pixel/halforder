@@ -9,6 +9,7 @@ import { safeToMillis } from '@/utils/safeToMillis';
 import {
   collection,
   getDocs,
+  getDocsFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -36,6 +37,8 @@ export type ProfileOrderRow = {
   subtotal: number;
   fees: number;
   deliveryAddress: string;
+  driverId: string | null;
+  assignedDriverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
   itemsCount: number;
@@ -95,6 +98,9 @@ function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
         ? String((d.deliveryLocation as Record<string, unknown>).address)
         : '') ||
       '—',
+    driverId: typeof d?.driverId === 'string' ? d.driverId : null,
+    assignedDriverId:
+      typeof d?.assignedDriverId === 'string' ? d.assignedDriverId : null,
     driverName: typeof d?.driverName === 'string' ? d.driverName : null,
     driverPhone: typeof d?.driverPhone === 'string' ? d.driverPhone : null,
     itemsCount: items.reduce((acc: number, item: unknown) => {
@@ -161,26 +167,34 @@ function mapSnapshotDocs(
 async function fetchOrdersFor(
   uid: string,
   field: 'userId' | 'customerId' | 'createdBy' | 'creatorId',
+  options?: { fromServer?: boolean },
 ): Promise<ProfileOrderRow[]> {
-  const snap = await getDocs(buildProfileOrdersQuery(uid, field));
+  const q = buildProfileOrdersQuery(uid, field);
+  const snap = options?.fromServer ? await getDocsFromServer(q) : await getDocs(q);
   return mapSnapshotDocs(uid, snap.docs);
 }
 
-async function fetchLegacyOrders(uid: string): Promise<ProfileOrderRow[]> {
+async function fetchLegacyOrders(
+  uid: string,
+  options?: { fromServer?: boolean },
+): Promise<ProfileOrderRow[]> {
   const [customerRows, createdByRows, creatorRows] = await Promise.all([
-    fetchOrdersFor(uid, 'customerId'),
-    fetchOrdersFor(uid, 'createdBy'),
-    fetchOrdersFor(uid, 'creatorId'),
+    fetchOrdersFor(uid, 'customerId', options),
+    fetchOrdersFor(uid, 'createdBy', options),
+    fetchOrdersFor(uid, 'creatorId', options),
   ]);
-  return [...customerRows, ...createdByRows, ...creatorRows];
+  return mergeProfileOrderRowsById(
+    mergeProfileOrderRowsById(customerRows, createdByRows),
+    creatorRows,
+  );
 }
 
 function mergeRows(input: ProfileOrderRow[]): ProfileOrderRow[] {
-  const dedup = new Map<string, ProfileOrderRow>();
-  input.forEach((r) => dedup.set(r.id, r));
-  return [...dedup.values()]
-    .sort((a, b) => orderSortMs(b) - orderSortMs(a))
-    .slice(0, ORDERS_LIMIT);
+  let merged: ProfileOrderRow[] = [];
+  for (const row of input) {
+    merged = mergeProfileOrderRowsById(merged, [row]);
+  }
+  return merged.sort((a, b) => orderSortMs(b) - orderSortMs(a)).slice(0, ORDERS_LIMIT);
 }
 
 export function useProfileOrders(uid: string | null) {
@@ -229,9 +243,9 @@ export function useProfileOrders(uid: string | null) {
     setRefreshing(true);
     try {
       const [userIdRows, customerIdRows, legacyRows] = await Promise.all([
-        fetchOrdersFor(uid, 'userId'),
-        fetchOrdersFor(uid, 'customerId'),
-        fetchLegacyOrders(uid),
+        fetchOrdersFor(uid, 'userId', { fromServer: true }),
+        fetchOrdersFor(uid, 'customerId', { fromServer: true }),
+        fetchLegacyOrders(uid, { fromServer: true }),
       ]);
       userIdRowsRef.current = userIdRows;
       customerIdRowsRef.current = customerIdRows;

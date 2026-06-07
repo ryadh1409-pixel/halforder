@@ -1,4 +1,8 @@
 import { resolveCustomerCourierRank } from '@/lib/customerCourierRank';
+import {
+  logCustomerStatusResolve,
+  resolveCustomerDeliveryStage,
+} from '@/lib/customerDeliveryStatus';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import { resolveOrderFreshnessMs, type OrderSnapshotMeta } from '@/lib/orderSnapshotFreshness';
 import {
@@ -20,13 +24,15 @@ export type CustomerTrackingSnapshotReason =
 export function logCustomerTrackingSnapshot(
   orderId: string,
   raw: Record<string, unknown>,
-  meta: OrderSnapshotMeta & { source?: string },
+  meta: OrderSnapshotMeta & { source?: string; freshnessReason?: string; listenerInstanceId?: string },
   reason: CustomerTrackingSnapshotReason,
 ): void {
   console.log('[CUSTOMER TRACKING SNAPSHOT]', {
     orderId,
     reason,
     source: meta.source ?? null,
+    listenerInstanceId: meta.listenerInstanceId ?? null,
+    freshnessReason: meta.freshnessReason ?? null,
     status: raw.status ?? null,
     deliveryStatus: raw.deliveryStatus ?? null,
     updatedAt: resolveOrderFreshnessMs(raw) || null,
@@ -44,6 +50,14 @@ export function logCustomerTimeline(
   source?: string,
 ): void {
   const derivedStage = resolveCustomerTrackStep(order);
+  if (orderId) {
+    logCustomerStatusResolve(
+      orderId,
+      order?.deliveryStatus ?? null,
+      resolveCustomerDeliveryStage(order),
+      { trackStep: derivedStage },
+    );
+  }
   console.log('[CUSTOMER TIMELINE]', {
     orderId,
     source: source ?? null,

@@ -235,14 +235,21 @@ export function ProfileOrdersSection({
               const effectiveDeliveryStatus = forcedCancelled
                 ? 'cancelled'
                 : order.deliveryStatus;
+              const driverContext = {
+                driverId: order.driverId,
+                assignedDriverId: order.assignedDriverId,
+                orderId: order.id,
+              };
               const tone = profileOrderBadgeTone(effectiveStatus, effectiveDeliveryStatus);
               const badgeIcon = profileOrderStatusIcon(
                 effectiveStatus,
                 effectiveDeliveryStatus,
+                driverContext,
               );
               const active = profileOrderStatusActive(
                 effectiveStatus,
                 effectiveDeliveryStatus,
+                driverContext,
               );
               const badgeStyle =
                 tone === 'green'
@@ -324,6 +331,7 @@ export function ProfileOrdersSection({
                             effectiveStatus,
                             effectiveDeliveryStatus,
                             order.paymentStatus,
+                            driverContext,
                           )}
                         </Text>
                       </Animated.View>
@@ -335,6 +343,7 @@ export function ProfileOrdersSection({
                         effectiveStatus,
                         effectiveDeliveryStatus,
                         order.paymentStatus,
+                        driverContext,
                       )}
                     </Text>
                     <View style={styles.ageRow}>

@@ -35,7 +35,12 @@ type InitSheetResult = {
 type OpenPaymentSheetResult =
   | ({ status: 'success' } & InitSheetResult)
   | ({ status: 'canceled' } & InitSheetResult)
-  | ({ status: 'failed'; message: string } & InitSheetResult);
+  | ({ status: 'failed'; message: string } & InitSheetResult)
+  | ({
+      status: 'redirected';
+      checkoutSessionId?: string;
+      checkoutUrl?: string;
+    } & InitSheetResult);
 
 function parsePaymentIntentId(clientSecret: string): string {
   const idx = clientSecret.indexOf('_secret_');

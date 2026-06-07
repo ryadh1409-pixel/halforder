@@ -7,18 +7,30 @@ import {
   resolveCustomerCourierRank,
 } from '@/lib/customerCourierRank';
 import { isOrderCompleted } from '@/lib/orderCompletion';
+import {
+  registerCustomerOrderListener,
+  unregisterCustomerOrderListener,
+} from '@/lib/customerOrderListenerRegistry';
 import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
-import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
+import {
+  logCustomerOrderSnapshot,
+  logRawFirestoreCustomerDoc,
+} from '@/lib/customerOrderSnapshotLog';
 import {
   logCustomerTrackingSnapshot,
   logCustomerTrackingUi,
 } from '@/lib/customerTrackingLog';
 import {
+  evaluateCustomerSnapshotFreshness,
+  logCustomerSnapshotRejected,
   logServerOrCacheOrder,
   OrderSnapshotFreshnessGate,
   QuerySnapshotFreshnessGate,
+  resolveOrderFreshnessMs,
+  resolveOrderUpdatedAtMs,
 } from '@/lib/orderSnapshotFreshness';
 import { customerOrderSnapshotSignature } from '@/lib/customerOrderSnapshotSignature';
+import { logStatusRead } from '@/lib/orderTerminalStatus';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
   clearOrderListenerCommitCache,
@@ -1373,20 +1385,30 @@ export function subscribeCustomerOrderById(
   }
 
   const orderRef = doc(db, 'orders', id);
+  const listenerInstanceId = `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  registerCustomerOrderListener(id, listenerInstanceId);
+
   let cancelled = false;
   let lastSignature = '';
   let lastEmittedOrder: RestaurantOrder | null = null;
+  let lastEmittedUpdatedAtMs = 0;
+  let lastEmittedCourierRank = 0;
+  let completionLocked = false;
+  let serverBootstrapDone = false;
   let serverRefreshInFlight = false;
   let unsub: Unsubscribe | null = null;
   const freshnessGate = new OrderSnapshotFreshnessGate();
 
-  const scheduleServerRefresh = () => {
+  const scheduleServerRefresh = (reason: string) => {
     if (serverRefreshInFlight || cancelled) return;
     serverRefreshInFlight = true;
+    if (__DEV__) {
+      console.log('[subscribeCustomerOrderById] server refresh', { orderId: id, reason });
+    }
     void getDocFromServer(orderRef)
       .then((serverSnap) => {
         if (cancelled) return;
-        emitSnapshot(serverSnap);
+        emitSnapshot(serverSnap, 'server_refresh');
       })
       .catch((err) => {
         if (__DEV__) {
@@ -1398,12 +1420,18 @@ export function subscribeCustomerOrderById(
       });
   };
 
-  const emitSnapshot = (snap: DocumentSnapshot) => {
+  const emitSnapshot = (
+    snap: DocumentSnapshot,
+    ingress: 'bootstrap' | 'listener' | 'server_refresh' = 'listener',
+  ) => {
     if (cancelled) return;
     if (!snap.exists()) {
       onData(null);
       lastSignature = '';
       lastEmittedOrder = null;
+      lastEmittedUpdatedAtMs = 0;
+      lastEmittedCourierRank = 0;
+      completionLocked = false;
       return;
     }
     try {
@@ -1412,35 +1440,96 @@ export function subscribeCustomerOrderById(
         fromCache: snap.metadata.fromCache,
         hasPendingWrites: snap.metadata.hasPendingWrites,
         source: 'subscribeCustomerOrderById' as const,
+        listenerInstanceId,
+      };
+      const updatedAtMs = resolveOrderUpdatedAtMs(raw);
+      const courierRank = resolveCustomerCourierRank(raw);
+
+      logRawFirestoreCustomerDoc(snap.id, raw, meta);
+
+      if (!serverBootstrapDone && meta.fromCache && ingress !== 'bootstrap') {
+        logCustomerTrackingSnapshot(snap.id, raw, meta, 'ignored_stale');
+        scheduleServerRefresh('cache_before_bootstrap');
+        return;
+      }
+
+      if (ingress === 'bootstrap' || !meta.fromCache) {
+        serverBootstrapDone = true;
+        freshnessGate.markServerBootstrap();
+      }
+
+      const currentState = {
+        lastCourierRank: lastEmittedCourierRank,
+        lastUpdatedAtMs: lastEmittedUpdatedAtMs,
+        hasServerSnapshot: serverBootstrapDone,
+        completionLocked,
+        currentStatus: lastEmittedOrder?.status ?? null,
+        currentDeliveryStatus: lastEmittedOrder?.deliveryStatus ?? null,
       };
 
-      if (!freshnessGate.shouldApply(raw, meta)) {
-        logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById:ignored');
-        logCustomerTrackingSnapshot(snap.id, raw, meta, 'ignored_stale');
-        if (lastEmittedOrder && isOrderCompleted(lastEmittedOrder)) {
+      const gateDecision = evaluateCustomerSnapshotFreshness(raw, meta, currentState);
+
+      if (!gateDecision.apply) {
+        logCustomerSnapshotRejected(
+          snap.id,
+          raw,
+          {
+            updatedAtMs: lastEmittedUpdatedAtMs,
+            deliveryStatus: lastEmittedOrder?.deliveryStatus ?? null,
+            status: lastEmittedOrder?.status ?? null,
+          },
+          gateDecision.reason,
+          { fromCache: meta.fromCache, source: meta.source },
+        );
+        logServerOrCacheOrder(snap.id, raw, meta, `subscribeCustomerOrderById:ignored:${gateDecision.reason}`);
+        logCustomerTrackingSnapshot(snap.id, raw, { ...meta, freshnessReason: gateDecision.reason }, 'ignored_stale');
+        if (lastEmittedOrder) {
           logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
           onData(lastEmittedOrder);
         }
+        scheduleServerRefresh(gateDecision.reason);
         return;
       }
 
       logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById');
       logCustomerTrackingSnapshot(snap.id, raw, meta, 'applied');
+      logStatusRead(snap.id, raw.deliveryStatus ?? null, raw.status ?? null, {
+        source: meta.source,
+        fromCache: meta.fromCache,
+        hasPendingWrites: meta.hasPendingWrites,
+      });
 
       const mapped = mapDocToRestaurantOrder(snap);
       const mappedRank = resolveCustomerCourierRank(mapped);
+      const mappedUpdatedAtMs = resolveOrderUpdatedAtMs(raw);
       const lastRank = lastEmittedOrder ? resolveCustomerCourierRank(lastEmittedOrder) : 0;
       if (
         lastEmittedOrder &&
-        (isCustomerCourierRankRegression(lastRank, mappedRank) ||
-          (isOrderCompleted(lastEmittedOrder) && !isOrderCompleted(mapped)))
+        (completionLocked && !isOrderCompleted(mapped) ||
+          isCustomerCourierRankRegression(lastRank, mappedRank) ||
+          (mappedUpdatedAtMs > 0 &&
+            lastEmittedUpdatedAtMs > 0 &&
+            mappedUpdatedAtMs < lastEmittedUpdatedAtMs) ||
+          (mappedUpdatedAtMs > 0 &&
+            lastEmittedUpdatedAtMs > 0 &&
+            mappedUpdatedAtMs === lastEmittedUpdatedAtMs &&
+            mappedRank < lastRank))
       ) {
+        logCustomerSnapshotRejected(
+          snap.id,
+          raw,
+          {
+            updatedAtMs: lastEmittedUpdatedAtMs,
+            deliveryStatus: lastEmittedOrder.deliveryStatus,
+            status: lastEmittedOrder.status,
+          },
+          'emit_regression_blocked',
+          { fromCache: meta.fromCache, source: meta.source },
+        );
         logCustomerTrackingSnapshot(snap.id, raw, meta, 'regression_blocked');
         logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
         onData(lastEmittedOrder);
-        if (meta.fromCache) {
-          scheduleServerRefresh();
-        }
+        scheduleServerRefresh('emit_regression_blocked');
         return;
       }
 
@@ -1452,6 +1541,12 @@ export function subscribeCustomerOrderById(
       }
       lastSignature = signature;
       lastEmittedOrder = mapped;
+      lastEmittedUpdatedAtMs = Math.max(lastEmittedUpdatedAtMs, mappedUpdatedAtMs);
+      lastEmittedCourierRank = Math.max(lastEmittedCourierRank, mappedRank);
+      if (isOrderCompleted(mapped)) {
+        completionLocked = true;
+      }
+      freshnessGate.seedFromEmitted(raw);
 
       logCustomerOrderSnapshot(snap.id, raw, meta);
       logCustomerOrderPipeline('subscribeCustomerOrderById', snap.id, raw, mapped, {
@@ -1462,7 +1557,7 @@ export function subscribeCustomerOrderById(
       onData(mapped);
 
       if (meta.fromCache && !isOrderCompleted(raw)) {
-        scheduleServerRefresh();
+        scheduleServerRefresh('post_cache_emit');
       }
     } catch (e) {
       console.warn('[subscribeCustomerOrderById] mapDoc failed', orderId, e);
@@ -1473,18 +1568,19 @@ export function subscribeCustomerOrderById(
   void getDocFromServer(orderRef)
     .then((snap) => {
       if (cancelled) return;
-      emitSnapshot(snap);
+      emitSnapshot(snap, 'bootstrap');
     })
     .catch((err) => {
       if (cancelled) return;
       console.warn('[subscribeCustomerOrderById] getDocFromServer failed', orderId, err);
+      serverBootstrapDone = true;
       options?.onListenError?.(err instanceof Error ? err : new Error(String(err)));
     });
 
   unsub = onSnapshot(
     orderRef,
     { includeMetadataChanges: true },
-    emitSnapshot,
+    (snap) => emitSnapshot(snap, 'listener'),
     (err) => {
       if (cancelled) return;
       console.warn('[subscribeCustomerOrderById] listener error', orderId, err);
@@ -1495,6 +1591,7 @@ export function subscribeCustomerOrderById(
   return () => {
     cancelled = true;
     unsub?.();
+    unregisterCustomerOrderListener(id, listenerInstanceId);
   };
 }
 

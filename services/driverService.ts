@@ -22,6 +22,7 @@ import {
   updateDriverOnlineStatus,
 } from '@/services/driverPresence';
 import { acceptOrderWithLock } from '@/services/delivery';
+import { logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import {
   prepareProtectedOrderPatch,
   protectedUpdateOrder,
@@ -861,6 +862,14 @@ export async function claimMarketplaceDriverOrder(
           { fileName: 'driverService.ts', functionName: 'claimMarketplaceDriverOrder' },
         );
         if (Object.keys(safePatch).length > 0) {
+          if (safePatch.deliveryStatus !== undefined || safePatch.status !== undefined) {
+            logStatusWrite(orderId, data.status ?? null, safePatch.status ?? data.status ?? null, {
+              source: 'driverService.ts#claimMarketplaceDriverOrder',
+              firestorePath: orderDocumentPath(orderId),
+              previousDeliveryStatus: data.deliveryStatus ?? null,
+              newDeliveryStatus: safePatch.deliveryStatus ?? data.deliveryStatus ?? null,
+            });
+          }
           tx.update(orderRef, safePatch);
         }
         marketplaceLog.acceptSuccess(orderId, { normalizedDelivery, ruleSafePayload });

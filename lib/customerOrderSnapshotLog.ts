@@ -1,5 +1,9 @@
 import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
-import { logServerOrCacheOrder } from '@/lib/orderSnapshotFreshness';
+import {
+  logServerOrCacheOrder,
+  resolveOrderFreshnessMs,
+  type OrderSnapshotMeta,
+} from '@/lib/orderSnapshotFreshness';
 import { logOrderStatusTransition, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
 import { resolveCustomerTrackStep } from '@/lib/customerTrackStatus';
@@ -10,11 +14,31 @@ const lastCustomerSnapshotByOrderId = new Map<
   { status: unknown; deliveryStatus: unknown }
 >();
 
-export type CustomerSnapshotMeta = {
-  fromCache?: boolean;
-  hasPendingWrites?: boolean;
+export type CustomerSnapshotMeta = OrderSnapshotMeta & {
   source?: 'track-order' | 'subscribeCustomerOrderById' | 'useOrder';
+  listenerInstanceId?: string;
+  freshnessReason?: string;
 };
+
+/** Raw Firestore document as seen by customer listeners — before any UI mapping. */
+export function logRawFirestoreCustomerDoc(
+  orderId: string,
+  raw: Record<string, unknown>,
+  meta: CustomerSnapshotMeta,
+): void {
+  console.log('[RAW FIRESTORE CUSTOMER DOC]', {
+    orderId,
+    deliveryStatus: raw.deliveryStatus ?? null,
+    status: raw.status ?? null,
+    updatedAt: resolveOrderFreshnessMs(raw) || null,
+    fromCache: meta.fromCache ?? null,
+    hasPendingWrites: meta.hasPendingWrites ?? null,
+    source: meta.source ?? null,
+    listenerInstanceId: meta.listenerInstanceId ?? null,
+    freshnessReason: meta.freshnessReason ?? null,
+    timestamp: Date.now(),
+  });
+}
 
 /** Logs raw Firestore fields + mapped courier + derived customer stage. */
 export function logCustomerOrderSnapshot(

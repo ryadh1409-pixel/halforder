@@ -11,6 +11,8 @@ function stub(partial: Partial<ProfileOrderRow> & { id: string }): ProfileOrderR
     subtotal: 10,
     fees: 0,
     deliveryAddress: '—',
+    driverId: null,
+    assignedDriverId: null,
     driverName: null,
     driverPhone: null,
     itemsCount: 1,
@@ -26,29 +28,45 @@ describe('profileOrderMerge', () => {
       id: 'o1',
       status: 'payment_confirmed',
       deliveryStatus: 'driver_assigned',
-      updatedAtMs: 5000,
+      updatedAtMs: 1_700_000_004_000,
     });
     const done = stub({
       id: 'o1',
       status: 'completed',
       deliveryStatus: 'delivered',
-      completedAtMs: 4000,
-      updatedAtMs: 4000,
+      completedAtMs: 1_700_000_001_000,
+      updatedAtMs: 1_700_000_001_000,
     });
     expect(pickBetterProfileOrder(stale, done)).toBe(done);
     expect(pickBetterProfileOrder(done, stale)).toBe(done);
   });
 
-  it('prefers forward courier rank when not completed', () => {
+  it('prefers newer updatedAt when timestamps differ', () => {
     const assigned = stub({
       id: 'o2',
       deliveryStatus: 'driver_assigned',
-      updatedAtMs: 9000,
+      updatedAtMs: 1_700_000_004_000,
     });
     const pickedUp = stub({
       id: 'o2',
       deliveryStatus: 'picked_up',
-      updatedAtMs: 1000,
+      updatedAtMs: 1_700_000_001_000,
+    });
+    expect(pickBetterProfileOrder(assigned, pickedUp)).toBe(assigned);
+  });
+
+  it('prefers higher delivery rank when updatedAt is equal', () => {
+    const assigned = stub({
+      id: 'o3',
+      deliveryStatus: 'driver_assigned',
+      driverId: 'd1',
+      updatedAtMs: 1_700_000_003_000,
+    });
+    const pickedUp = stub({
+      id: 'o3',
+      deliveryStatus: 'picked_up',
+      driverId: 'd1',
+      updatedAtMs: 1_700_000_003_000,
     });
     expect(pickBetterProfileOrder(assigned, pickedUp)).toBe(pickedUp);
   });

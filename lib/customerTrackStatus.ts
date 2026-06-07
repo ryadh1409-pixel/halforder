@@ -1,4 +1,9 @@
 import {
+  CUSTOMER_DELIVERY_STAGE,
+  logCustomerStatusResolve,
+  resolveCustomerDeliveryStage,
+} from '@/lib/customerDeliveryStatus';
+import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
@@ -36,9 +41,13 @@ export const DELIVERY_STAGES = [
     ],
   },
   {
-    key: 'at_restaurant',
+    key: 'driver_at_restaurant',
     label: 'Driver at restaurant',
-    statuses: ['arrived_restaurant', 'heading_to_restaurant'],
+    statuses: [
+      'driver_at_restaurant',
+      'arrived_restaurant',
+      'arriving_restaurant',
+    ],
   },
   {
     key: 'picked_up',
@@ -112,12 +121,13 @@ function stageIndexFromField(value: unknown): number {
 }
 
 function courierStageFromOrder(order: OrderStageInput): CustomerTrackStep | null {
-  const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
-  if (courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED) return 'delivered';
-  if (courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP) return 'picked_up';
-  if (courier === MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP && hasDriver(order)) {
-    return 'at_restaurant';
+  const deliveryStage = resolveCustomerDeliveryStage(order);
+  if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DELIVERED) return 'delivered';
+  if (deliveryStage === CUSTOMER_DELIVERY_STAGE.PICKED_UP) return 'picked_up';
+  if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DRIVER_AT_RESTAURANT) {
+    return 'driver_at_restaurant';
   }
+  if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DRIVER_ASSIGNED) return 'driver_assigned';
   return null;
 }
 
@@ -165,8 +175,18 @@ export function resolveCustomerTrackStep(
   }
 
   const courierStep = courierStageFromOrder(order);
-  if (courierStep === 'picked_up' || isPickedUp(order)) return 'picked_up';
-  if (courierStep === 'at_restaurant') return 'at_restaurant';
+  if (courierStep === 'picked_up' || isPickedUp(order)) {
+    logResolvedCustomerTrackStep(order, 'picked_up');
+    return 'picked_up';
+  }
+  if (courierStep === 'driver_at_restaurant') {
+    logResolvedCustomerTrackStep(order, 'driver_at_restaurant');
+    return 'driver_at_restaurant';
+  }
+  if (courierStep === 'driver_assigned') {
+    logResolvedCustomerTrackStep(order, 'driver_assigned');
+    return 'driver_assigned';
+  }
 
   let index = stageIndexFromField(order.deliveryStatus);
   if (index < 0) index = STAGE_INDEX.order_placed;
@@ -175,7 +195,23 @@ export function resolveCustomerTrackStep(
     index = STAGE_INDEX.driver_assigned;
   }
 
-  return indexToStep(index);
+  const step = indexToStep(index);
+  logResolvedCustomerTrackStep(order, step);
+  return step;
+}
+
+function logResolvedCustomerTrackStep(
+  order: OrderStageInput,
+  trackStep: CustomerTrackPhase,
+): void {
+  const orderId = typeof order.id === 'string' ? order.id.trim() : '';
+  if (!orderId) return;
+  logCustomerStatusResolve(
+    orderId,
+    order.deliveryStatus ?? null,
+    resolveCustomerDeliveryStage(order),
+    { trackStep },
+  );
 }
 
 export function customerTrackStepIndex(step: CustomerTrackPhase): number {
@@ -201,7 +237,7 @@ export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
       return 'Ready for pickup - Driver on the way';
     case 'driver_assigned':
       return 'Driver heading to restaurant';
-    case 'at_restaurant':
+    case 'driver_at_restaurant':
       return 'Driver at restaurant';
     case 'picked_up':
       return 'Driver heading to you';
@@ -231,7 +267,7 @@ export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
       return 'Your order is ready — matching you with a courier.';
     case 'driver_assigned':
       return 'Your courier is heading to the restaurant.';
-    case 'at_restaurant':
+    case 'driver_at_restaurant':
       return 'Your courier has arrived at the restaurant.';
     case 'picked_up':
       return 'Your order is on the way to you.';

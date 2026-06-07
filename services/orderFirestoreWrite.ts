@@ -20,7 +20,7 @@ import {
 
 import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
 import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
-import { logOrderStatusTransition, orderDocumentPath } from '@/lib/orderTerminalStatus';
+import { logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { traceOrderLifecycleWrite, traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import {
   deriveOrderStage,
@@ -181,7 +181,7 @@ export async function protectedUpdateOrder(
   });
 
   if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
-    logOrderStatusTransition(trimmed, current.status ?? null, safePatch.status ?? current.status ?? null, {
+    logStatusWrite(trimmed, current.status ?? null, safePatch.status ?? current.status ?? null, {
       source: sourceLabel(source),
       firestorePath: orderDocumentPath(trimmed),
       previousDeliveryStatus: current.deliveryStatus ?? null,
@@ -217,6 +217,15 @@ export async function protectedTransactionUpdateOrder(
     tracePreparedPatch(trimmed, currentInput, requested, safePatch, source);
 
     if (Object.keys(safePatch).length === 0) return;
+
+    if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
+      logStatusWrite(trimmed, current.status ?? null, safePatch.status ?? current.status ?? null, {
+        source: sourceLabel(source),
+        firestorePath: orderDocumentPath(trimmed),
+        previousDeliveryStatus: current.deliveryStatus ?? null,
+        newDeliveryStatus: safePatch.deliveryStatus ?? current.deliveryStatus ?? null,
+      });
+    }
 
     tx.update(ref, safePatch as WithFieldValue<Record<string, unknown>>);
     wrote = true;
@@ -287,6 +296,14 @@ export function tracedTransactionUpdateOrder(
   const safePatch = prepareProtectedOrderPatch(orderId, currentInput, patch, source);
   tracePreparedPatch(orderId, currentInput, patch, safePatch, source);
   if (Object.keys(safePatch).length === 0) return;
+  if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
+    logStatusWrite(orderId, current.status ?? null, safePatch.status ?? current.status ?? null, {
+      source: sourceLabel(source),
+      firestorePath: orderDocumentPath(orderId),
+      previousDeliveryStatus: current.deliveryStatus ?? null,
+      newDeliveryStatus: safePatch.deliveryStatus ?? current.deliveryStatus ?? null,
+    });
+  }
   tx.update(ref, safePatch as WithFieldValue<Record<string, unknown>>);
 }
 

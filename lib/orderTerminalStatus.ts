@@ -90,17 +90,19 @@ export function orderDocumentPath(orderId: string): string {
   return `orders/${orderId.trim()}`;
 }
 
-/** Mandatory log for every lifecycle status mutation (prod + dev). */
-export function logOrderStatusTransition(
+export type StatusWriteMeta = {
+  source?: string;
+  previousDeliveryStatus?: unknown;
+  newDeliveryStatus?: unknown;
+  firestorePath?: string;
+};
+
+/** Mandatory `[STATUS WRITE]` log before every lifecycle Firestore mutation (prod + dev). */
+export function logStatusWrite(
   orderId: string,
   previousStatus: unknown,
   newStatus: unknown,
-  meta?: {
-    source?: string;
-    previousDeliveryStatus?: unknown;
-    newDeliveryStatus?: unknown;
-    firestorePath?: string;
-  },
+  meta?: StatusWriteMeta,
 ): void {
   const prev = previousStatus ?? null;
   const next = newStatus ?? null;
@@ -109,8 +111,7 @@ export function logOrderStatusTransition(
   if (prev === next && prevCourier === nextCourier) return;
 
   const firestorePath = meta?.firestorePath ?? orderDocumentPath(orderId);
-  console.log(orderId, prev, next, firestorePath);
-  console.log('[ORDER STATUS TRANSITION]', {
+  console.log('[STATUS WRITE]', {
     orderId,
     previousStatus: prev,
     newStatus: next,
@@ -120,4 +121,32 @@ export function logOrderStatusTransition(
     source: meta?.source ?? null,
     timestamp: Date.now(),
   });
+}
+
+/** Customer / listener read trace — log on every applied `orders/{id}` snapshot. */
+export function logStatusRead(
+  orderId: string,
+  deliveryStatus: unknown,
+  status: unknown,
+  meta?: { source?: string; fromCache?: boolean; hasPendingWrites?: boolean },
+): void {
+  console.log('[STATUS READ]', {
+    orderId,
+    deliveryStatus: deliveryStatus ?? null,
+    status: status ?? null,
+    source: meta?.source ?? null,
+    fromCache: meta?.fromCache ?? null,
+    hasPendingWrites: meta?.hasPendingWrites ?? null,
+    timestamp: Date.now(),
+  });
+}
+
+/** @deprecated Use {@link logStatusWrite} — kept for existing call sites. */
+export function logOrderStatusTransition(
+  orderId: string,
+  previousStatus: unknown,
+  newStatus: unknown,
+  meta?: StatusWriteMeta,
+): void {
+  logStatusWrite(orderId, previousStatus, newStatus, meta);
 }

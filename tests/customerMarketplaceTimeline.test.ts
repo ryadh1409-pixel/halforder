@@ -33,6 +33,17 @@ describe('customerMarketplaceTimeline', () => {
     expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Ready for pickup');
   });
 
+  it('shows Driver at restaurant when driver arrives (ready_for_pickup + driverId)', () => {
+    const idx = customerMarketplaceTimelineIndex({
+      status: 'ready_for_pickup',
+      paymentStatus: 'paid',
+      deliveryStatus: 'ready_for_pickup',
+      driverId: 'driver-1',
+    });
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('driver_at_restaurant');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Driver at restaurant');
+  });
+
   it('returns -1 when cancelled', () => {
     expect(
       customerMarketplaceTimelineIndex({

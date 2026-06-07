@@ -111,6 +111,15 @@ export async function repairOrderPaidStateIfNeeded(
       return;
     }
 
+    console.log("[STATUS WRITE]", {
+      orderId,
+      previousStatus: fresh.status ?? null,
+      newStatus: safePatch.status ?? fresh.status ?? null,
+      previousDeliveryStatus: fresh.deliveryStatus ?? null,
+      newDeliveryStatus: safePatch.deliveryStatus ?? fresh.deliveryStatus ?? null,
+      firestorePath: `orders/${orderId}`,
+      source: "repairOrderPaidState.ts#repairOrderPaidStateIfNeeded",
+    });
     console.log("[ORDER WRITE TRACE]", "repairOrderPaidState.ts", "repairOrderPaidStateIfNeeded", {
       orderId,
       status: safePatch.status ?? null,

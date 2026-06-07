@@ -98,7 +98,7 @@ describe('resolveCustomerTrackStep', () => {
     expect(customerTrackHeaderTitle('driver_assigned')).toBe('Driver heading to restaurant');
   });
 
-  it('maps at_restaurant when assigned driver and courier ready_for_pickup', () => {
+  it('maps driver_at_restaurant when assigned driver and courier ready_for_pickup', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
@@ -106,8 +106,8 @@ describe('resolveCustomerTrackStep', () => {
         deliveryStatus: 'ready_for_pickup',
         driverId: 'driver-1',
       }),
-    ).toBe('at_restaurant');
-    expect(customerTrackHeaderTitle('at_restaurant')).toBe('Driver at restaurant');
+    ).toBe('driver_at_restaurant');
+    expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe('Driver at restaurant');
   });
 
   it('maps picked_up and delivered', () => {

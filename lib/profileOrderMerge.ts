@@ -2,7 +2,20 @@ import { resolveCustomerCourierRank } from '@/lib/customerCourierRank';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import type { ProfileOrderRow } from '@/hooks/useProfileOrders';
 
-/** Prefer completed / forward courier progress when the same orderId appears in multiple queries. */
+function resolveProfileOrderUpdatedAtMs(row: ProfileOrderRow): number {
+  return Math.max(
+    row.updatedAtMs ?? 0,
+    row.completedAtMs ?? 0,
+    row.deliveredAtMs ?? 0,
+  );
+}
+
+/**
+ * Pick the authoritative row for a duplicate orderId.
+ * 1. Terminal completed/delivered always wins
+ * 2. Newest `updatedAtMs`
+ * 3. Highest delivery stage rank (tiebreaker at equal timestamp)
+ */
 export function pickBetterProfileOrder(
   previous: ProfileOrderRow,
   incoming: ProfileOrderRow,
@@ -12,15 +25,15 @@ export function pickBetterProfileOrder(
   if (prevCompleted && !nextCompleted) return previous;
   if (nextCompleted && !prevCompleted) return incoming;
 
+  const prevUpdated = resolveProfileOrderUpdatedAtMs(previous);
+  const nextUpdated = resolveProfileOrderUpdatedAtMs(incoming);
+  if (nextUpdated > prevUpdated) return incoming;
+  if (prevUpdated > nextUpdated) return previous;
+
   const prevRank = resolveCustomerCourierRank(previous);
   const nextRank = resolveCustomerCourierRank(incoming);
   if (nextRank > prevRank) return incoming;
   if (prevRank > nextRank) return previous;
-
-  const prevUpdated = previous.updatedAtMs ?? 0;
-  const nextUpdated = incoming.updatedAtMs ?? 0;
-  if (nextUpdated > prevUpdated) return incoming;
-  if (prevUpdated > nextUpdated) return previous;
 
   return incoming;
 }
