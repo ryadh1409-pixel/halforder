@@ -1,3 +1,4 @@
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import { deriveOrderStage, type OrderStageInput } from '@/services/orderStage';
 import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
 
@@ -41,9 +42,6 @@ export const ACTIVE_MARKETPLACE_STATUSES = [
   'full',
 ] as const;
 
-const TERMINAL_KITCHEN_SET = new Set<string>(TERMINAL_KITCHEN_STATUSES);
-const TERMINAL_DELIVERY_SET = new Set<string>(TERMINAL_DELIVERY_STATUSES);
-
 export type TerminalOrderFields = OrderStageInput & {
   expired?: unknown;
   marketplaceArchived?: unknown;
@@ -64,28 +62,20 @@ export function isTerminalMarketplaceOrder(
   if (!order) return false;
 
   if (order.expired === true) return true;
-  if (order.marketplaceArchived === true) return true;
   if (order.archivedByRestaurant === true || order.hiddenForRestaurant === true) {
     return true;
   }
 
   const kitchen = norm(order.status);
-  const courier = norm(order.deliveryStatus);
   const normalizedCourier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
 
-  if (TERMINAL_KITCHEN_SET.has(kitchen)) return true;
-  if (TERMINAL_DELIVERY_SET.has(courier)) return true;
-  if (normalizedCourier === 'delivered' || normalizedCourier === 'cancelled') return true;
+  if (kitchen === 'cancelled' || kitchen === 'rejected' || kitchen === 'expired') return true;
+  if (normalizedCourier === 'cancelled') return true;
 
-  if (order.completedAtMs != null && Number.isFinite(order.completedAtMs) && order.completedAtMs > 0) {
-    return true;
-  }
-  if (order.deliveredAtMs != null && Number.isFinite(order.deliveredAtMs) && order.deliveredAtMs > 0) {
-    return true;
-  }
+  if (isOrderCompleted(order)) return true;
 
   const stage = deriveOrderStage(order);
-  return stage === 'delivered' || stage === 'cancelled';
+  return stage === 'cancelled';
 }
 
 /** Inverse helper for active-order queries and listeners. */

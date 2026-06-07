@@ -1,3 +1,4 @@
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import { isOrderFresh, isOrderStale } from '@/lib/restaurantOrderFreshness';
 import {
   isRestaurantActiveLiveOrder,
@@ -42,9 +43,9 @@ function normStatus(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-/** Delivered/completed — canonical stage, timestamps, and courier fields. */
+/** Delivered tab — `status=completed` OR `deliveryStatus=delivered` only. */
 export function isRestaurantOrderDelivered(order: RestaurantOrder): boolean {
-  return deriveOrderStage(order) === 'delivered';
+  return isOrderCompleted(order);
 }
 
 function isRestaurantOrderCancelled(order: RestaurantOrder): boolean {

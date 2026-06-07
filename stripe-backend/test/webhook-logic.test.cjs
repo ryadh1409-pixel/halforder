@@ -12,6 +12,7 @@ const {
   resolvePostPaymentOrderStatus,
   shouldBlockStripePaymentOverwrite,
 } = require("../lib/orderPaidState.js");
+const { isWebhookOrderWriteBlocked } = require("../lib/webhookOrderWriteGuard.js");
 
 test("trimMetadata trims and rejects empty", () => {
   assert.equal(trimMetadata("  abc  "), "abc");
@@ -92,6 +93,50 @@ test("buildOrderPaidStatePatch skips fulfillment when delivered", () => {
   assert.equal(patch.paymentStatus, "paid");
   assert.equal(patch.status, undefined);
   assert.equal(patch.deliveryStatus, undefined);
+});
+
+test("isWebhookOrderWriteBlocked logs [STRIPE BLOCKED] and blocks fulfilled rows", () => {
+  const spy = console.log;
+  let blockedLog = null;
+  console.log = (...args) => {
+    if (args[0] === "[STRIPE BLOCKED]") blockedLog = args;
+  };
+  try {
+    assert.equal(
+      isWebhookOrderWriteBlocked("o1", {
+        status: "completed",
+        deliveryStatus: "delivered",
+      }),
+      true,
+    );
+    assert.deepEqual(blockedLog, ["[STRIPE BLOCKED]", "o1", "completed", "delivered"]);
+  } finally {
+    console.log = spy;
+  }
+});
+
+test("isWebhookOrderWriteBlocked blocks completed and driver_assigned", () => {
+  assert.equal(
+    isWebhookOrderWriteBlocked("o1", {
+      status: "completed",
+      deliveryStatus: "delivered",
+    }),
+    true,
+  );
+  assert.equal(
+    isWebhookOrderWriteBlocked("o2", {
+      status: "payment_confirmed",
+      deliveryStatus: "driver_assigned",
+    }),
+    true,
+  );
+  assert.equal(
+    isWebhookOrderWriteBlocked("o3", {
+      status: "awaiting_payment",
+      deliveryStatus: "pending",
+    }),
+    false,
+  );
 });
 
 test("shouldBlockStripePaymentOverwrite blocks completed and driver_assigned", () => {

@@ -13,7 +13,10 @@ import {
   CUSTOMER_MARKETPLACE_TIMELINE,
   customerMarketplaceTimelineIndex,
 } from '@/lib/customerMarketplaceTimeline';
-import { isCustomerOrderDelivered } from '@/lib/customerTrackStatus';
+import {
+  logCustomerTrackingUi,
+  resolveCustomerTrackingUi,
+} from '@/lib/customerTrackingLog';
 import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
@@ -150,7 +153,17 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     order.driver?.avatar,
   ]);
 
-  const delivered = isCustomerOrderDelivered(order);
+  const trackingUi = useMemo(() => resolveCustomerTrackingUi(order), [
+    order.status,
+    order.deliveryStatus,
+    order.completedAtMs,
+    order.deliveredAtMs,
+  ]);
+  const delivered = trackingUi.delivered;
+
+  useEffect(() => {
+    logCustomerTrackingUi(order.id, order, 'CustomerOrderDetailsScreen');
+  }, [order, order.deliveryStatus, order.id, order.status]);
 
   const lastStatusRef = useRef<string | null>(null);
   useEffect(() => {
@@ -323,7 +336,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
         <View style={styles.stickyHeader}>
           <Text style={styles.orderId}>Live order tracking</Text>
           <Text style={styles.phaseHeadline}>
-            {delivered ? 'Order completed' : customerPhase.title}
+            {delivered ? 'Order completed' : trackingUi.title}
           </Text>
           <Text style={styles.phaseSubtitle}>
             {delivered

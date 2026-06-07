@@ -671,16 +671,41 @@ export default function ProfileScreen() {
 
   const handleOpenOrderDetails = useCallback(
     (orderId: string) => {
-      // Root stack `app/order/[id].tsx` — not `(driver)/order` or `(tabs)/orders`
-      const href = customerOrderDetailHref(orderId);
-      console.log('[Profile] open order', {
+      const fromActive = profileActiveOrders.find((o) => o.id === orderId) ?? null;
+      const fromHistory = profileHistoryOrders.find((o) => o.id === orderId) ?? null;
+      const fromCancelled = profileCancelledOrders.find((o) => o.id === orderId) ?? null;
+      const picked =
+        fromHistory ?? fromActive ?? fromCancelled ?? profileActiveOrders.concat(profileHistoryOrders).find((o) => o.id === orderId) ?? null;
+      console.log('[PROFILE ORDER]', {
+        source: 'profile:open',
         orderId,
-        href,
-        note: 'root /order/:id outside driver layout',
+        openedFrom: fromHistory
+          ? 'history'
+          : fromActive
+            ? 'active'
+            : fromCancelled
+              ? 'cancelled'
+              : 'unknown',
+        status: picked?.status ?? null,
+        deliveryStatus: picked?.deliveryStatus ?? null,
+        completedAtMs: picked?.completedAtMs ?? null,
+        updatedAtMs: picked?.updatedAtMs ?? null,
+        createdAtMs: picked?.createdAtMs ?? null,
+        completed:
+          picked != null &&
+          (picked.status === 'completed' || picked.deliveryStatus === 'delivered'),
+        allProfileOrderIds: profileActiveOrders
+          .concat(profileHistoryOrders, profileCancelledOrders)
+          .map((o) => ({
+            orderId: o.id,
+            status: o.status,
+            deliveryStatus: o.deliveryStatus,
+          })),
       });
+      const href = customerOrderDetailHref(orderId);
       router.push(href);
     },
-    [router],
+    [profileActiveOrders, profileCancelledOrders, profileHistoryOrders, router],
   );
 
   const handleCancelProfileOrder = useCallback(

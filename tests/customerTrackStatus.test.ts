@@ -154,7 +154,7 @@ describe('resolveCustomerTrackStep', () => {
     ).toBe('picked_up');
   });
 
-  it('advances to delivered from completedAtMs when courier field lags', () => {
+  it('does not advance to delivered from timestamp alone (SSOT: status or courier)', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
@@ -163,7 +163,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
         completedAtMs: Date.now(),
       }),
-    ).toBe('delivered');
+    ).toBe('driver_assigned');
   });
 
   it('maps completed status and delivered courier to delivered', () => {

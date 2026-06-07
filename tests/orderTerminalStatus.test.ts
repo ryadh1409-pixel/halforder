@@ -22,11 +22,14 @@ describe('orderTerminalStatus', () => {
     ).toBe(true);
   });
 
-  it('treats archived and expired as terminal', () => {
+  it('treats expired and restaurant-hidden as terminal', () => {
     expect(isTerminalMarketplaceOrder({ status: 'preparing', marketplaceArchived: true })).toBe(
-      true,
+      false,
     );
     expect(isTerminalMarketplaceOrder({ status: 'preparing', expired: true })).toBe(true);
+    expect(
+      isTerminalMarketplaceOrder({ status: 'preparing', hiddenForRestaurant: true }),
+    ).toBe(true);
   });
 
   it('keeps in-progress marketplace orders active', () => {

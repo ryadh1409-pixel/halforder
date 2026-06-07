@@ -1,3 +1,5 @@
+import { isOrderCompleted } from '@/lib/orderCompletion';
+
 /** Driver share of delivery fee (Uber-style). */
 export const DRIVER_EARNING_PERCENT = 0.8;
 
@@ -118,19 +120,8 @@ export type DriverEarningsStats = {
   breakdown: DriverEarningsBreakdownItem[];
 };
 
-function normStatus(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
 export function isDriverCompletedEarningsOrder(data: Record<string, unknown>): boolean {
-  const status = normStatus(data.status);
-  const courier = normStatus(data.deliveryStatus);
-  return (
-    status === 'delivered' ||
-    status === 'completed' ||
-    courier === 'delivered' ||
-    courier === 'completed'
-  );
+  return isOrderCompleted(data);
 }
 
 export function resolveDriverPayoutFromOrder(data: Record<string, unknown>): number {

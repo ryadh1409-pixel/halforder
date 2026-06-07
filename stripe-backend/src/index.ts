@@ -1,6 +1,8 @@
 /**
  * Stripe HTTPS callables (Firebase Functions **1st gen**) — matches existing deployed API version.
  * Webhook is exported from Firebase Functions **v2** (see `stripeWebhook.ts`).
+ * Order writes in stripeWebhook use a transaction read-then-write guard — see
+ * `webhookOrderWriteGuard.ts` ([STRIPE BLOCKED] when status/deliveryStatus is fulfilled).
  */
 
 import * as admin from "firebase-admin";

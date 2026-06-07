@@ -1,6 +1,8 @@
+import { isOrderCompleted } from '@/lib/orderCompletion';
+import { logProfileOrderList } from '@/lib/profileOrderLog';
+import { mergeProfileOrderRowsById } from '@/lib/profileOrderMerge';
 import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
 import { isProfileOrderCancelled } from '@/constants/profileOrders';
-import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import { DAY_MS, getOrderTimestamp } from '@/lib/userOrderFreshness';
 import { db } from '@/services/firebase';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -281,7 +283,7 @@ export function useProfileOrders(uid: string | null) {
       const unsub = onSnapshot(
         buildProfileOrdersQuery(uid, field),
         (snap) => {
-          if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+          if (!queryGate.shouldApply(snap.metadata.fromCache, snap.docs.length)) {
             console.log('CACHE ORDER', {
               source: 'useProfileOrders:ignored',
               field,
@@ -298,7 +300,13 @@ export function useProfileOrders(uid: string | null) {
             docCount: snap.docs.length,
             fromCache: snap.metadata.fromCache,
           });
-          targetRef.current = mapSnapshotDocs(uid, snap.docs);
+          const mapped = mapSnapshotDocs(uid, snap.docs);
+          logProfileOrderList(mapped, 'useProfileOrders:query', {
+            field,
+            fromCache: snap.metadata.fromCache,
+            docCount: snap.docs.length,
+          });
+          targetRef.current = mergeProfileOrderRowsById(targetRef.current, mapped);
           publishMergedRows();
           setLoading(false);
           setErrorMessage(null);
@@ -356,12 +364,14 @@ export function useProfileOrders(uid: string | null) {
     for (const row of rows) {
       if (isProfileOrderCancelled(row)) {
         cancelled.push(row);
-      } else if (isTerminalMarketplaceOrder(row)) {
+      } else if (isOrderCompleted(row)) {
         history.push(row);
       } else {
         active.push(row);
       }
     }
+    logProfileOrderList(history, 'useProfileOrders:split', { bucket: 'history' });
+    logProfileOrderList(active, 'useProfileOrders:split', { bucket: 'active' });
     return { activeRows: active, historyRows: history, cancelledRows: cancelled };
   }, [rows]);
 

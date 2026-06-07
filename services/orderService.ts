@@ -2,8 +2,17 @@ import {
   assertDeliveryEligibleForOrder,
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
+import {
+  isCustomerCourierRankRegression,
+  resolveCustomerCourierRank,
+} from '@/lib/customerCourierRank';
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
 import { logCustomerOrderSnapshot } from '@/lib/customerOrderSnapshotLog';
+import {
+  logCustomerTrackingSnapshot,
+  logCustomerTrackingUi,
+} from '@/lib/customerTrackingLog';
 import {
   logServerOrCacheOrder,
   OrderSnapshotFreshnessGate,
@@ -936,7 +945,7 @@ export function subscribeActiveRestaurantOrders(
   const unsub = onSnapshot(
     getActiveRestaurantOrdersQuery(restaurantId),
     (snap) => {
-      if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+      if (!queryGate.shouldApply(snap.metadata.fromCache, snap.docs.length)) {
         console.log('CACHE ORDER', {
           source: 'subscribeActiveRestaurantOrders:ignored',
           restaurantId,
@@ -1040,7 +1049,7 @@ export function subscribeRestaurantArchivedOrders(
   const unsub = onSnapshot(
     getRestaurantArchivedOrdersQuery(restaurantId),
     (snap) => {
-      if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+      if (!queryGate.shouldApply(snap.metadata.fromCache, snap.docs.length)) {
         console.log('CACHE ORDER', {
           source: 'subscribeRestaurantArchivedOrders:ignored',
           restaurantId,
@@ -1346,7 +1355,7 @@ export function looksLikeMarketplaceRestaurantOrder(o: RestaurantOrder): boolean
 
 /**
  * Customer-facing realtime listener — `orders/{orderId}` only (same path as restaurant writes).
- * Bootstraps with getDocFromServer, then listens with source: 'server' only.
+ * Bootstraps with getDocFromServer, then listens with completion-locked freshness gate.
  */
 export function subscribeCustomerOrderById(
   orderId: string,
@@ -1366,14 +1375,35 @@ export function subscribeCustomerOrderById(
   const orderRef = doc(db, 'orders', id);
   let cancelled = false;
   let lastSignature = '';
+  let lastEmittedOrder: RestaurantOrder | null = null;
+  let serverRefreshInFlight = false;
   let unsub: Unsubscribe | null = null;
   const freshnessGate = new OrderSnapshotFreshnessGate();
+
+  const scheduleServerRefresh = () => {
+    if (serverRefreshInFlight || cancelled) return;
+    serverRefreshInFlight = true;
+    void getDocFromServer(orderRef)
+      .then((serverSnap) => {
+        if (cancelled) return;
+        emitSnapshot(serverSnap);
+      })
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('[subscribeCustomerOrderById] server refresh failed', orderId, err);
+        }
+      })
+      .finally(() => {
+        serverRefreshInFlight = false;
+      });
+  };
 
   const emitSnapshot = (snap: DocumentSnapshot) => {
     if (cancelled) return;
     if (!snap.exists()) {
       onData(null);
       lastSignature = '';
+      lastEmittedOrder = null;
       return;
     }
     try {
@@ -1381,31 +1411,59 @@ export function subscribeCustomerOrderById(
       const meta = {
         fromCache: snap.metadata.fromCache,
         hasPendingWrites: snap.metadata.hasPendingWrites,
+        source: 'subscribeCustomerOrderById' as const,
       };
 
       if (!freshnessGate.shouldApply(raw, meta)) {
         logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById:ignored');
+        logCustomerTrackingSnapshot(snap.id, raw, meta, 'ignored_stale');
+        if (lastEmittedOrder && isOrderCompleted(lastEmittedOrder)) {
+          logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
+          onData(lastEmittedOrder);
+        }
         return;
       }
 
       logServerOrCacheOrder(snap.id, raw, meta, 'subscribeCustomerOrderById');
+      logCustomerTrackingSnapshot(snap.id, raw, meta, 'applied');
 
-      const signature = customerOrderSnapshotSignature(raw);
-      if (signature === lastSignature) return;
-      lastSignature = signature;
-
-      const snapshotMeta = {
-        fromCache: meta.fromCache,
-        hasPendingWrites: meta.hasPendingWrites,
-        source: 'subscribeCustomerOrderById' as const,
-      };
-      logCustomerOrderSnapshot(snap.id, raw, snapshotMeta);
       const mapped = mapDocToRestaurantOrder(snap);
+      const mappedRank = resolveCustomerCourierRank(mapped);
+      const lastRank = lastEmittedOrder ? resolveCustomerCourierRank(lastEmittedOrder) : 0;
+      if (
+        lastEmittedOrder &&
+        (isCustomerCourierRankRegression(lastRank, mappedRank) ||
+          (isOrderCompleted(lastEmittedOrder) && !isOrderCompleted(mapped)))
+      ) {
+        logCustomerTrackingSnapshot(snap.id, raw, meta, 'regression_blocked');
+        logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
+        onData(lastEmittedOrder);
+        if (meta.fromCache) {
+          scheduleServerRefresh();
+        }
+        return;
+      }
+
+      const forceEmit = isOrderCompleted(mapped);
+      const signature = customerOrderSnapshotSignature(raw);
+      if (!forceEmit && signature === lastSignature) {
+        logCustomerTrackingSnapshot(snap.id, raw, meta, 'signature_dedup');
+        return;
+      }
+      lastSignature = signature;
+      lastEmittedOrder = mapped;
+
+      logCustomerOrderSnapshot(snap.id, raw, meta);
       logCustomerOrderPipeline('subscribeCustomerOrderById', snap.id, raw, mapped, {
         fromCache: meta.fromCache,
         hasPendingWrites: meta.hasPendingWrites,
       });
+      logCustomerTrackingUi(snap.id, mapped, meta.source);
       onData(mapped);
+
+      if (meta.fromCache && !isOrderCompleted(raw)) {
+        scheduleServerRefresh();
+      }
     } catch (e) {
       console.warn('[subscribeCustomerOrderById] mapDoc failed', orderId, e);
       options?.onListenError?.(e instanceof Error ? e : new Error(String(e)));
@@ -1425,7 +1483,7 @@ export function subscribeCustomerOrderById(
 
   unsub = onSnapshot(
     orderRef,
-    { source: 'server' },
+    { includeMetadataChanges: true },
     emitSnapshot,
     (err) => {
       if (cancelled) return;

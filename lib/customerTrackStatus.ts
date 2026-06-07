@@ -2,6 +2,7 @@ import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import type { OrderStageInput } from '@/services/orderStage';
 import { safeToMillis } from '@/utils/safeToMillis';
 
@@ -132,18 +133,6 @@ function isCancelled(order: OrderStageInput): boolean {
   return status === 'cancelled' || status === 'rejected' || courier === 'cancelled';
 }
 
-function isDelivered(order: OrderStageInput): boolean {
-  if (hasTimestamp(order.deliveredAt, order.deliveredAtMs, order.completedAt, order.completedAtMs)) {
-    return true;
-  }
-  const status = norm(order.status);
-  if (status === 'completed') return true;
-  return (
-    stageIndexFromField(order.status) >= STAGE_INDEX.delivered ||
-    stageIndexFromField(order.deliveryStatus) >= STAGE_INDEX.delivered
-  );
-}
-
 function isPickedUp(order: OrderStageInput): boolean {
   if (hasTimestamp(order.pickedUpAt, order.pickedUpAtMs)) return true;
   return (
@@ -161,6 +150,7 @@ export function resolveCustomerTrackStep(
 ): CustomerTrackPhase {
   if (!order) return 'order_placed';
   if (isCancelled(order)) return 'cancelled';
+  if (isOrderCompleted(order)) return 'delivered';
 
   const statusNorm = norm(order.status);
   const courierNorm = norm(order.deliveryStatus);
@@ -169,8 +159,7 @@ export function resolveCustomerTrackStep(
   if (
     courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED ||
     courierNorm === 'completed' ||
-    statusNorm === 'completed' ||
-    isDelivered(order)
+    statusNorm === 'completed'
   ) {
     return 'delivered';
   }
@@ -265,15 +254,5 @@ export function customerTrackProgress(step: CustomerTrackPhase): number {
 
 /** True when the customer should see the delivered completion state. */
 export function isCustomerOrderDelivered(order: OrderStageInput | null | undefined): boolean {
-  if (!order) return false;
-  const statusNorm = norm(order.status);
-  const courierNorm = norm(order.deliveryStatus);
-  if (
-    courierNorm === 'delivered' ||
-    courierNorm === 'completed' ||
-    statusNorm === 'completed'
-  ) {
-    return true;
-  }
-  return resolveCustomerTrackStep(order) === 'delivered';
+  return isOrderCompleted(order);
 }

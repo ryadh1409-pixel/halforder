@@ -2,6 +2,7 @@
  * Customer-facing delivery phases (Uber Eats–style labels).
  * Derived from live Firestore `orders/{id}` fields via {@link resolveCustomerTrackStep}.
  */
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import {
   customerTrackHeaderTitle,
   customerTrackProgress,
@@ -55,6 +56,15 @@ function mapTrackStepToCustomerPhase(step: CustomerTrackPhase): CustomerDelivery
 }
 
 export function resolveCustomerDeliveryPhase(input: OrderStageInput): CustomerPhaseInfo {
+  if (isOrderCompleted(input)) {
+    return {
+      phase: 'delivered',
+      title: 'Delivered',
+      subtitle: 'Your order has been delivered.',
+      progress: 1,
+    };
+  }
+
   const step = resolveCustomerTrackStep(input);
   return {
     phase: mapTrackStepToCustomerPhase(step),

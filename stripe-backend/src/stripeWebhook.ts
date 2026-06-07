@@ -16,9 +16,12 @@ import {
   buildPaymentOnlyPaidStatePatch,
   orderPaymentStatusString,
   orderStatusString,
-  shouldBlockStripePaymentOverwrite,
 } from "./orderPaidState.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
+import {
+  assertWebhookCanWriteOrder,
+  isWebhookOrderWriteBlocked,
+} from "./webhookOrderWriteGuard.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -123,14 +126,7 @@ function mergeOrderPaidSync(
   }
   const data = orderSnap.data() ?? {};
 
-  if (shouldBlockStripePaymentOverwrite(data)) {
-    console.log("[stripeWebhook] BLOCKED overwrite — order already past payment", {
-      orderId,
-      status: data.status ?? null,
-      deliveryStatus: data.deliveryStatus ?? null,
-      stripeEventId,
-      sourceEventType,
-    });
+  if (isWebhookOrderWriteBlocked(orderId, data)) {
     return;
   }
 
@@ -243,13 +239,7 @@ function mergeOrderPaymentFailed(
   const { paymentIntentId, sourceEventType, stripeEventId } = params;
   if (!orderSnap.exists) return;
   const data = orderSnap.data() ?? {};
-  if (shouldBlockStripePaymentOverwrite(data)) {
-    console.log("[stripeWebhook] BLOCKED payment_failed — order already past payment", {
-      orderId: orderSnap.id,
-      status: data.status ?? null,
-      deliveryStatus: data.deliveryStatus ?? null,
-      stripeEventId,
-    });
+  if (isWebhookOrderWriteBlocked(orderSnap.id, data)) {
     return;
   }
   if (data.paymentStatus === "paid") {
@@ -351,6 +341,10 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
+      if (!(await assertWebhookCanWriteOrder(orderId))) {
+        return;
+      }
+
       const outcome = await withEventIdempotency(event, orderId, (tx, orderSnap) => {
         mergeOrderPaidSync(tx, orderSnap, {
           orderId,
@@ -385,6 +379,10 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
           msg: "payment_failed_no_order_id",
           stripeEventId: event.id,
         });
+        return;
+      }
+
+      if (!(await assertWebhookCanWriteOrder(orderId))) {
         return;
       }
 

@@ -1,9 +1,11 @@
 /**
- * Driver earnings Firestore listeners — `orders/` where driver completed delivery.
+ * Driver earnings Firestore listeners — completed `orders/` only.
  */
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import {
   buildDriverEarningsStats,
   DRIVER_COMPLETED_STATUSES,
+  isDriverCompletedEarningsOrder,
   type DriverEarningsStats,
 } from '@/lib/driverEarnings';
 import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
@@ -64,6 +66,10 @@ function mapDoc(docSnap: { id: string; data: () => Record<string, unknown> }): M
   };
 }
 
+function isEarningsEligible(data: Record<string, unknown>): boolean {
+  return isOrderCompleted(data) || isDriverCompletedEarningsOrder(data);
+}
+
 type EarningsQueryKind = 'earningsRecorded' | 'completedStatus';
 
 function driverEarningsQuery(
@@ -96,9 +102,11 @@ async function bootstrapQuery(
     docCount: snap.docs.length,
     fromCache: snap.metadata.fromCache,
   });
-  return snap.docs.map((docSnap) =>
-    mapDoc({ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }),
-  );
+  return snap.docs
+    .map((docSnap) =>
+      mapDoc({ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }),
+    )
+    .filter((row) => isEarningsEligible(row.data()));
 }
 
 function attachEarningsListener(
@@ -112,6 +120,7 @@ function attachEarningsListener(
 
   void bootstrapQuery(uid, field, kind)
     .then((rows) => {
+      if (rows.length === 0) return;
       serverRows = rows;
       onRows(rows);
     })
@@ -122,20 +131,30 @@ function attachEarningsListener(
   return onSnapshot(
     driverEarningsQuery(uid, field, kind),
     (snap) => {
-      const rows = snap.docs.map((docSnap) =>
-        mapDoc({ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }),
-      );
+      const rows = snap.docs
+        .map((docSnap) =>
+          mapDoc({ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }),
+        )
+        .filter((row) => isEarningsEligible(row.data()));
 
-      if (!queryGate.shouldApply(snap.metadata.fromCache)) {
+      if (!queryGate.shouldApply(snap.metadata.fromCache, rows.length)) {
         console.log('CACHE ORDER', {
           source: 'subscribeDriverEarnings:ignored',
           field,
           kind,
           driverUid: uid,
           docCount: rows.length,
-          fromCache: true,
+          fromCache: snap.metadata.fromCache,
+          keptDocCount: serverRows?.length ?? 0,
         });
-        if (serverRows != null) onRows(serverRows);
+        if (serverRows != null && serverRows.length > 0) onRows(serverRows);
+        return;
+      }
+
+      if (rows.length === 0) {
+        if (serverRows != null && serverRows.length > 0) {
+          onRows(serverRows);
+        }
         return;
       }
 
@@ -152,14 +171,13 @@ function attachEarningsListener(
     },
     (err) => {
       console.warn('[subscribeDriverEarnings] listener error', { field, kind, uid, err });
-      if (serverRows != null) onRows(serverRows);
+      if (serverRows != null && serverRows.length > 0) onRows(serverRows);
     },
   );
 }
 
 /**
- * Live earnings — merges driverId + assignedDriverId queries (earningsRecorded + completed status),
- * dedupes by orderId, totals persisted `driverPayout` per order.
+ * Live earnings — sticky merge by orderId; empty snapshots never zero out completed orders.
  */
 export function subscribeDriverEarnings(
   driverUid: string,
@@ -171,38 +189,23 @@ export function subscribeDriverEarnings(
     return () => {};
   }
 
-  const rowSets: Record<string, MappedDoc[]> = {
-    driverIdEarnings: [],
-    driverIdStatus: [],
-    assignedEarnings: [],
-    assignedStatus: [],
-  };
+  const completedById = new Map<string, MappedDoc>();
 
-  const emitMerged = () => {
-    const merged = new Map<string, MappedDoc>();
-    for (const rows of Object.values(rowSets)) {
-      for (const row of rows) merged.set(row.id, row);
+  const ingest = (rows: MappedDoc[]) => {
+    if (rows.length === 0) return;
+    for (const row of rows) {
+      if (isEarningsEligible(row.data())) {
+        completedById.set(row.id, row);
+      }
     }
-    onStats(buildDriverEarningsStats(Array.from(merged.values())));
+    onStats(buildDriverEarningsStats(Array.from(completedById.values())));
   };
 
   const unsubs = [
-    attachEarningsListener(uid, 'driverId', 'earningsRecorded', (rows) => {
-      rowSets.driverIdEarnings = rows;
-      emitMerged();
-    }),
-    attachEarningsListener(uid, 'driverId', 'completedStatus', (rows) => {
-      rowSets.driverIdStatus = rows;
-      emitMerged();
-    }),
-    attachEarningsListener(uid, 'assignedDriverId', 'earningsRecorded', (rows) => {
-      rowSets.assignedEarnings = rows;
-      emitMerged();
-    }),
-    attachEarningsListener(uid, 'assignedDriverId', 'completedStatus', (rows) => {
-      rowSets.assignedStatus = rows;
-      emitMerged();
-    }),
+    attachEarningsListener(uid, 'driverId', 'earningsRecorded', ingest),
+    attachEarningsListener(uid, 'driverId', 'completedStatus', ingest),
+    attachEarningsListener(uid, 'assignedDriverId', 'earningsRecorded', ingest),
+    attachEarningsListener(uid, 'assignedDriverId', 'completedStatus', ingest),
   ];
 
   return () => {

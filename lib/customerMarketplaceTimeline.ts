@@ -1,3 +1,4 @@
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import {
   DELIVERY_STAGES,
   customerTrackStepIndex,
@@ -20,6 +21,9 @@ export const CUSTOMER_MARKETPLACE_TIMELINE: CustomerMarketplaceTimelineStep[] =
 
 /** Index of the active timeline step (0-based), or -1 when cancelled. */
 export function customerMarketplaceTimelineIndex(order: OrderStageInput): number {
+  if (isOrderCompleted(order)) {
+    return DELIVERY_STAGES.length - 1;
+  }
   const step = resolveCustomerTrackStep(order);
   return customerTrackStepIndex(step);
 }

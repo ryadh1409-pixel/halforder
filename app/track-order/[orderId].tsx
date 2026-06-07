@@ -9,8 +9,10 @@ import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
 import { OrderRatingPrompt } from '@/components/order-rating-prompt';
-import { resolveCustomerDeliveryPhase } from '@/constants/deliveryCustomerExperience';
-import { isCustomerOrderDelivered } from '@/lib/customerTrackStatus';
+import {
+  logCustomerTrackingUi,
+  resolveCustomerTrackingUi,
+} from '@/lib/customerTrackingLog';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
 import {
@@ -105,26 +107,15 @@ function TrackOrderScreen() {
     return () => unsubscribe();
   }, [orderId]);
 
-  const phase = useMemo(() => {
-    if (!order) return null;
-    return resolveCustomerDeliveryPhase({
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      deliveryStatus: order.deliveryStatus,
-      driverId: order.driverId,
-      assignedDriverId: order.assignedDriverId,
-      pickedUpAtMs: order.pickedUpAtMs,
-      deliveredAtMs: order.deliveredAtMs,
-    });
-  }, [
-    order?.status,
-    order?.deliveryStatus,
-    order?.paymentStatus,
-    order?.driverId,
-    order?.assignedDriverId,
-    order?.pickedUpAtMs,
-    order?.deliveredAtMs,
-  ]);
+  const trackingUi = useMemo(
+    () => (order ? resolveCustomerTrackingUi(order) : null),
+    [order?.status, order?.deliveryStatus, order?.completedAtMs, order?.deliveredAtMs, order],
+  );
+
+  useEffect(() => {
+    if (!orderId || !order) return;
+    logCustomerTrackingUi(orderId, order, 'track-order');
+  }, [order, orderId, order?.status, order?.deliveryStatus]);
 
   const deliveredAtLabel = useMemo(() => {
     if (!order) return null;
@@ -139,7 +130,7 @@ function TrackOrderScreen() {
     });
   }, [order?.deliveredAtMs, order?.completedAtMs]);
 
-  const delivered = order ? isCustomerOrderDelivered(order) : false;
+  const delivered = trackingUi?.delivered ?? false;
 
   const etaText = useMemo(() => {
     if (!order) return '';
@@ -223,10 +214,23 @@ function TrackOrderScreen() {
 
   return (
     <View style={styles.screenRoot}>
-      <View style={[styles.mapSection, { height: MAP_HEIGHT }]}>
-        <TrackingMap order={order} />
+      {!delivered ? (
+        <View style={[styles.mapSection, { height: MAP_HEIGHT }]}>
+          <TrackingMap order={order} />
 
-        <SafeAreaView edges={['top']} style={styles.mapOverlay}>
+          <SafeAreaView edges={['top']} style={styles.mapOverlay}>
+            <View style={styles.mapTopRow}>
+              <Pressable onPress={onClose} style={styles.circleBtnLight} accessibilityLabel="Close">
+                <Text style={styles.circleBtnX}>✕</Text>
+              </Pressable>
+              <Pressable onPress={onHelp} style={styles.helpPill}>
+                <Text style={styles.helpPillText}>Help</Text>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </View>
+      ) : (
+        <SafeAreaView edges={['top']} style={styles.completedHeader}>
           <View style={styles.mapTopRow}>
             <Pressable onPress={onClose} style={styles.circleBtnLight} accessibilityLabel="Close">
               <Text style={styles.circleBtnX}>✕</Text>
@@ -236,7 +240,7 @@ function TrackOrderScreen() {
             </Pressable>
           </View>
         </SafeAreaView>
-      </View>
+      )}
 
       <View
         style={[
@@ -252,21 +256,21 @@ function TrackOrderScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetScroll}>
           <View style={styles.statusBlock}>
             <Text style={styles.statusTitle}>
-              {delivered ? 'Order completed' : (phase?.title ?? 'Order update')}
+              {delivered ? 'Order completed' : (trackingUi?.title ?? 'Order update')}
             </Text>
             <Text style={styles.statusSubtitle}>
               {delivered
                 ? deliveredAtLabel
                   ? `Delivered ${deliveredAtLabel}`
                   : 'Your order has been delivered.'
-                : (phase?.subtitle ?? 'We’ll keep this page updated in real time.')}
+                : (trackingUi?.displayStatus ?? 'We’ll keep this page updated in real time.')}
             </Text>
             {!delivered ? (
               <View style={styles.progressTrack}>
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${Math.round((phase?.progress ?? 0.1) * 100)}%` },
+                    { width: `${Math.round((trackingUi?.progress ?? 0.1) * 100)}%` },
                   ]}
                 />
               </View>
@@ -285,11 +289,14 @@ function TrackOrderScreen() {
             </Pressable>
           ) : null}
 
-          <View style={styles.etaCard}>
-            <Text style={styles.etaLabel}>Estimated arrival</Text>
-            <Text style={styles.etaValue}>{etaText}</Text>
-          </View>
+          {!delivered ? (
+            <View style={styles.etaCard}>
+              <Text style={styles.etaLabel}>Estimated arrival</Text>
+              <Text style={styles.etaValue}>{etaText}</Text>
+            </View>
+          ) : null}
 
+          {!delivered ? (
           <View style={styles.card}>
             <Text style={styles.cardHeading}>Your courier</Text>
             <View style={styles.driverRow}>
@@ -336,6 +343,7 @@ function TrackOrderScreen() {
               )}
             </View>
           </View>
+          ) : null}
 
           {order.deliveryPin && !delivered && order.paymentStatus === 'paid' ? (
             <View style={styles.pinBanner}>
@@ -386,6 +394,11 @@ function TrackOrderScreen() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1, backgroundColor: '#FFFFFF' },
+  completedHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
   lightRoot: { flex: 1, backgroundColor: '#FFFFFF', padding: 24 },
   mapSection: {
     width: '100%',
