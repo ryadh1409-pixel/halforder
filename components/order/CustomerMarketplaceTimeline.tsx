@@ -1,11 +1,38 @@
 import {
-  CUSTOMER_MARKETPLACE_TIMELINE,
-  customerMarketplaceTimelineIndex,
+  buildCustomerTimelineRenderSteps,
+  type CustomerTimelineRenderStep,
 } from '@/lib/customerMarketplaceTimeline';
-import { isCustomerOrderDelivered } from '@/lib/customerTrackStatus';
+import { resolveCustomerTrackStep } from '@/lib/customerTrackStatus';
 import type { OrderStageInput } from '@/services/orderStage';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+
+function logTimelineRender(
+  timelineSteps: CustomerTimelineRenderStep[],
+  context: {
+    currentStep: ReturnType<typeof resolveCustomerTrackStep>;
+    deliveryStatus: unknown;
+    status: unknown;
+  },
+): void {
+  for (const step of timelineSteps) {
+    console.log('[TIMELINE ROW]', step.id, {
+      completed: step.completed,
+      current: step.current,
+      currentStep: context.currentStep,
+      deliveryStatus: context.deliveryStatus,
+      status: context.status,
+    });
+  }
+  console.log(
+    '[FINAL TIMELINE RENDER]',
+    timelineSteps.map((s) => ({
+      id: s.id,
+      completed: s.completed,
+      current: s.current,
+    })),
+  );
+}
 
 export function CustomerMarketplaceTimeline({
   order,
@@ -14,10 +41,44 @@ export function CustomerMarketplaceTimeline({
   order: OrderStageInput;
   variant?: 'light' | 'dark';
 }) {
-  const activeIdx = customerMarketplaceTimelineIndex(order);
-  const delivered = isCustomerOrderDelivered(order);
+  const currentStep = useMemo(() => resolveCustomerTrackStep(order), [
+    order.status,
+    order.deliveryStatus,
+    order.paymentStatus,
+    order.driverId,
+    order.assignedDriverId,
+    order.pickedUpAtMs,
+    order.deliveredAtMs,
+    order.completedAtMs,
+    order.cancelledAtMs,
+  ]);
+
+  const timelineSteps = useMemo(
+    () => buildCustomerTimelineRenderSteps(order),
+    [
+      order.status,
+      order.deliveryStatus,
+      order.paymentStatus,
+      order.driverId,
+      order.assignedDriverId,
+      order.pickedUpAtMs,
+      order.deliveredAtMs,
+      order.completedAtMs,
+      order.cancelledAtMs,
+      currentStep,
+    ],
+  );
+
   const isDark = variant === 'dark';
-  const cancelled = activeIdx < 0;
+  const cancelled = currentStep === 'cancelled';
+
+  if (__DEV__) {
+    logTimelineRender(timelineSteps, {
+      currentStep,
+      deliveryStatus: order.deliveryStatus ?? null,
+      status: order.status ?? null,
+    });
+  }
 
   return (
     <View style={[styles.card, isDark && styles.cardDark]}>
@@ -25,40 +86,35 @@ export function CustomerMarketplaceTimeline({
       {cancelled ? (
         <Text style={[styles.cancelled, isDark && styles.cancelledDark]}>Order cancelled</Text>
       ) : (
-        CUSTOMER_MARKETPLACE_TIMELINE.map((step, idx) => {
-          const done = delivered || idx <= activeIdx;
-          const active = !delivered && idx === activeIdx;
-          return (
-            <View key={step.key} style={styles.row}>
-              <View
+        timelineSteps.map((step) => (
+          <View key={step.id} style={styles.row}>
+            <View
+              style={[
+                styles.dot,
+                isDark && styles.dotDark,
+                step.completed && styles.dotOn,
+                step.current && styles.dotActive,
+              ]}
+            >
+              {step.completed ? <Text style={styles.check}>✓</Text> : null}
+            </View>
+            <View style={styles.labelCol}>
+              <Text
                 style={[
-                  styles.dot,
-                  isDark && styles.dotDark,
-                  done && styles.dotOn,
-                  active && styles.dotActive,
+                  styles.label,
+                  isDark && styles.labelDark,
+                  step.completed && (isDark ? styles.labelOnDark : styles.labelOn),
+                  step.current && styles.labelActive,
                 ]}
               >
-                {done ? <Text style={styles.check}>✓</Text> : null}
-              </View>
-              <View style={styles.labelCol}>
-                <Text
-                  style={[
-                    styles.label,
-                    isDark && styles.labelDark,
-                    done && styles.labelOn,
-                    done && isDark && styles.labelOnDark,
-                    active && styles.labelActive,
-                  ]}
-                >
-                  {step.label}
-                </Text>
-                {active ? (
-                  <Text style={[styles.now, isDark && styles.nowDark]}>Current step</Text>
-                ) : null}
-              </View>
+                {step.label}
+              </Text>
+              {step.current ? (
+                <Text style={[styles.now, isDark && styles.nowDark]}>Current step</Text>
+              ) : null}
             </View>
-          );
-        })
+          </View>
+        ))
       )}
     </View>
   );
@@ -108,7 +164,7 @@ const styles = StyleSheet.create({
   label: { color: '#64748B', fontWeight: '600', fontSize: 14 },
   labelDark: { color: 'rgba(148,163,184,0.95)' },
   labelOn: { color: '#0F172A', fontWeight: '800' },
-  labelOnDark: { color: '#F8FAFC' },
+  labelOnDark: { color: '#F8FAFC', fontWeight: '800' },
   labelActive: { color: '#34D399' },
   now: { marginTop: 2, fontSize: 12, fontWeight: '700', color: '#16A34A' },
   nowDark: { color: '#6EE7B7' },

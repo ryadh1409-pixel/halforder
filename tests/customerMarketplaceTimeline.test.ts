@@ -1,4 +1,5 @@
 import {
+  buildCustomerTimelineRenderSteps,
   CUSTOMER_MARKETPLACE_TIMELINE,
   customerMarketplaceTimelineIndex,
 } from '@/lib/customerMarketplaceTimeline';
@@ -52,5 +53,49 @@ describe('customerMarketplaceTimeline', () => {
         deliveryStatus: 'cancelled',
       }),
     ).toBe(-1);
+  });
+
+  it('marks every stage completed for status=completed and deliveryStatus=delivered', () => {
+    const steps = buildCustomerTimelineRenderSteps({
+      status: 'completed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'delivered',
+      driverId: 'driver-1',
+    });
+
+    expect(steps).toHaveLength(CUSTOMER_MARKETPLACE_TIMELINE.length);
+    expect(steps.every((s) => s.completed)).toBe(true);
+    expect(steps.some((s) => s.current)).toBe(false);
+    expect(steps.map((s) => s.id)).toEqual(
+      CUSTOMER_MARKETPLACE_TIMELINE.map((s) => s.key),
+    );
+  });
+
+  it('marks every stage completed when deliveryStatus=delivered despite payment_confirmed status', () => {
+    const steps = buildCustomerTimelineRenderSteps({
+      status: 'payment_confirmed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'delivered',
+      driverId: 'driver-1',
+    });
+
+    expect(steps.every((s) => s.completed)).toBe(true);
+    expect(steps.some((s) => s.current)).toBe(false);
+  });
+
+  it('uses step.completed flags — not only currentStep match — for in-progress orders', () => {
+    const steps = buildCustomerTimelineRenderSteps({
+      status: 'payment_confirmed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'driver_assigned',
+      driverId: 'driver-1',
+    });
+
+    const byId = Object.fromEntries(steps.map((s) => [s.id, s]));
+    expect(byId.order_placed?.completed).toBe(true);
+    expect(byId.driver_assigned?.completed).toBe(true);
+    expect(byId.driver_assigned?.current).toBe(true);
+    expect(byId.driver_at_restaurant?.completed).toBe(false);
+    expect(byId.delivered?.completed).toBe(false);
   });
 });
