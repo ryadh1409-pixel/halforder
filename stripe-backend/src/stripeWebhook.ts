@@ -321,9 +321,11 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
+      // guard-deployed: 2026-06-08 — FULFILLED_STATUSES pre-check before mergeOrderPaidSync
       if (await isWebhookOrderWriteBlocked(orderId)) {
         console.log("[stripeWebhook] BLOCKED - order already fulfilled, skipping write", {
           orderId,
+          outcome: "blocked_fulfilled",
         });
         return;
       }
