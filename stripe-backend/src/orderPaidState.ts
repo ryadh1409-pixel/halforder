@@ -45,6 +45,16 @@ export function isOrderFulfilledForPaidPatch(order: OrderPaidStateInput): boolea
 }
 
 /** Hard stop — Stripe webhook / repair must not touch the order document at all. */
+export function hasAssignedDriver(
+  order: OrderPaidStateInput & Record<string, unknown>,
+): boolean {
+  const driverId = orderStatusString(order.driverId);
+  const assignedDriverId = orderStatusString(
+    (order as Record<string, unknown>).assignedDriverId,
+  );
+  return driverId.length > 0 || assignedDriverId.length > 0;
+}
+
 export function shouldBlockStripePaymentOverwrite(
   order: OrderPaidStateInput & Record<string, unknown>,
 ): boolean {
@@ -52,6 +62,7 @@ export function shouldBlockStripePaymentOverwrite(
   if (isOrderFulfilledForPaidPatch(order)) return true;
   if (order.earningsRecorded === true) return true;
   if (order.marketplaceArchived === true) return true;
+  if (hasAssignedDriver(order)) return true;
   const status = orderStatusString(order.status).toLowerCase();
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
   return FULFILLED_STATUSES.has(status) || FULFILLED_STATUSES.has(courier);
@@ -140,7 +151,7 @@ export function buildOrderPaidStatePatch(
   existing: OrderPaidStateInput & Record<string, unknown>,
   input: BuildOrderPaidStatePatchInput = {},
 ): Record<string, unknown> {
-  if (hasFulfillmentProgressMarkers(existing) || isOrderFulfilledForPaidPatch(existing)) {
+  if (shouldBlockStripePaymentOverwrite(existing)) {
     return buildPaymentOnlyPaidStatePatch(input);
   }
 
@@ -152,7 +163,8 @@ export function buildOrderPaidStatePatch(
 
   const courierFulfillmentAdvanced =
     isDriverFulfillmentAdvanced(existing.deliveryStatus) ||
-    FULFILLED_STATUSES.has(orderStatusString(existing.deliveryStatus).toLowerCase());
+    FULFILLED_STATUSES.has(orderStatusString(existing.deliveryStatus).toLowerCase()) ||
+    hasAssignedDriver(existing);
 
   if (!input.repairOnly) {
     if (!courierFulfillmentAdvanced) {

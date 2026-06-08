@@ -154,6 +154,7 @@ function buildFulfillmentPatch(
     customerTotal: payout.customerTotal,
     driverPayout: payout.driverPayout,
     platformFee: payout.platformFee,
+    updatedAt: serverTimestamp(),
     updatedBy: 'driverMarketplaceDelivered',
   };
 }

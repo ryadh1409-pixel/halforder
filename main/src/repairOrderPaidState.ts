@@ -23,10 +23,10 @@ export async function repairOrderPaidStateIfNeeded(
   data: DocumentData,
 ): Promise<boolean> {
   if (shouldBlockStripePaymentOverwrite(data)) {
-    console.log("[repairOrderPaidState] BLOCKED overwrite — order already past payment", {
+    console.log("[repairOrderPaidState] BLOCKED - order already fulfilled, skipping write", {
       orderId,
-      status: data.status ?? null,
-      deliveryStatus: data.deliveryStatus ?? null,
+      currentStatus: data.status ?? null,
+      currentDeliveryStatus: data.deliveryStatus ?? null,
     });
     return false;
   }
@@ -69,10 +69,10 @@ export async function repairOrderPaidStateIfNeeded(
 
     const fresh = snap.data() ?? {};
     if (shouldBlockStripePaymentOverwrite(fresh)) {
-      console.log("[repairOrderPaidState] BLOCKED overwrite — order already past payment", {
+      console.log("[repairOrderPaidState] BLOCKED - order already fulfilled, skipping write", {
         orderId,
-        status: fresh.status ?? null,
-        deliveryStatus: fresh.deliveryStatus ?? null,
+        currentStatus: fresh.status ?? null,
+        currentDeliveryStatus: fresh.deliveryStatus ?? null,
         logSource: "repairOrderPaidState:txn",
       });
       return;

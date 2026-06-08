@@ -16,6 +16,7 @@ import {
   buildPaymentOnlyPaidStatePatch,
   orderPaymentStatusString,
   orderStatusString,
+  shouldBlockStripePaymentOverwrite,
 } from "./orderPaidState.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 import {
@@ -208,7 +209,7 @@ function mergeOrderPaidSync(
     return;
   }
 
-  if (isWebhookOrderWriteBlockedForData(orderId, data)) {
+  if (shouldBlockStripePaymentOverwrite(data) || isWebhookOrderWriteBlockedForData(orderId, data)) {
     logBlockedFulfilledWebhookWrite(orderId, data);
     return;
   }
@@ -321,7 +322,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       }
 
       if (await isWebhookOrderWriteBlocked(orderId)) {
-        console.log("[STRIPE WEBHOOK] blocked write for completed order", orderId);
+        console.log("[stripeWebhook] BLOCKED - order already fulfilled, skipping write", {
+          orderId,
+        });
         return;
       }
 

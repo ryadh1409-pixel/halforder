@@ -1,6 +1,5 @@
 import {getFirestore} from "firebase-admin/firestore";
-import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
-import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
+import {shouldBlockStripePaymentOverwrite} from "./orderPaidState.js";
 
 /** Kitchen/courier stages where Stripe webhook must not touch `orders/{id}`. */
 export const WEBHOOK_BLOCK_STATUSES = [
@@ -25,12 +24,7 @@ export function isWebhookOrderWriteBlockedForData(
   orderId: string,
   data: Record<string, unknown>,
 ): boolean {
-  if (data.earningsRecorded === true || data.marketplaceArchived === true) {
-    console.log("[STRIPE BLOCKED]", orderId, data.status ?? null, data.deliveryStatus ?? null, "fulfillment_markers");
-    return true;
-  }
-
-  if (hasFulfillmentProgressMarkers(data) || isDriverFulfillmentAdvanced(data.deliveryStatus)) {
+  if (shouldBlockStripePaymentOverwrite(data)) {
     return true;
   }
 
@@ -47,7 +41,7 @@ export function logBlockedFulfilledWebhookWrite(
   orderId: string,
   data: Record<string, unknown>,
 ): void {
-  console.log("[stripeWebhook] BLOCKED retry event - order already fulfilled", {
+  console.log("[stripeWebhook] BLOCKED - order already fulfilled, skipping write", {
     orderId,
     currentStatus: data.status ?? null,
     currentDeliveryStatus: data.deliveryStatus ?? null,
