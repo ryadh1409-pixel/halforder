@@ -22,6 +22,7 @@ import {
   assertWebhookCanWriteOrder,
   isWebhookOrderWriteBlocked,
   isWebhookOrderWriteBlockedForData,
+  logBlockedFulfilledWebhookWrite,
 } from "./webhookOrderWriteGuard.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
@@ -128,6 +129,7 @@ function mergeOrderPaidSync(
   const data = orderSnap.data() ?? {};
 
   if (isWebhookOrderWriteBlockedForData(orderId, data)) {
+    logBlockedFulfilledWebhookWrite(orderId, data);
     return;
   }
 
@@ -159,6 +161,10 @@ function mergeOrderPaidSync(
       });
       return;
     }
+    delete safe.deliveryStatus;
+    delete safe.status;
+    if (safe.driverId === null) delete safe.driverId;
+    if (safe.assignedDriverId === null) delete safe.assignedDriverId;
     console.log("[ORDER WRITE TRACE]", "stripeWebhook.ts", "mergeOrderPaidSync:alreadyPaid", {
       orderId,
       status: safe.status ?? null,
@@ -199,6 +205,11 @@ function mergeOrderPaidSync(
   const safe = prepareServerOrderPatch(orderId, data, patch, "stripeWebhook:mergeOrderPaidSync");
   if (Object.keys(safe).length === 0) {
     logStripeDebug("order_paid_update_blocked_downgrade", {orderId, stripeEventId, before});
+    return;
+  }
+
+  if (isWebhookOrderWriteBlockedForData(orderId, data)) {
+    logBlockedFulfilledWebhookWrite(orderId, data);
     return;
   }
 

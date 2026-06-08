@@ -1,4 +1,6 @@
 import {getFirestore} from "firebase-admin/firestore";
+import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
+import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 
 /** Kitchen/courier stages where Stripe webhook must not touch `orders/{id}`. */
 export const WEBHOOK_BLOCK_STATUSES = [
@@ -12,8 +14,10 @@ export const WEBHOOK_BLOCK_STATUSES = [
   "cancelled",
 ] as const;
 
+const BLOCK_STATUS_SET = new Set<string>(WEBHOOK_BLOCK_STATUSES);
+
 function normStatus(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 /** True when in-memory order data must not receive any webhook lifecycle write. */
@@ -26,16 +30,28 @@ export function isWebhookOrderWriteBlockedForData(
     return true;
   }
 
+  if (hasFulfillmentProgressMarkers(data) || isDriverFulfillmentAdvanced(data.deliveryStatus)) {
+    return true;
+  }
+
   const status = normStatus(data.status);
   const deliveryStatus = normStatus(data.deliveryStatus);
-  if (
-    (WEBHOOK_BLOCK_STATUSES as readonly string[]).includes(status) ||
-    (WEBHOOK_BLOCK_STATUSES as readonly string[]).includes(deliveryStatus)
-  ) {
-    console.log("[STRIPE BLOCKED]", orderId, data.status ?? null, data.deliveryStatus ?? null);
+  if (BLOCK_STATUS_SET.has(status) || BLOCK_STATUS_SET.has(deliveryStatus)) {
     return true;
   }
   return false;
+}
+
+/** Log + short-circuit before any merge write on fulfilled orders (retry events). */
+export function logBlockedFulfilledWebhookWrite(
+  orderId: string,
+  data: Record<string, unknown>,
+): void {
+  console.log("[stripeWebhook] BLOCKED retry event - order already fulfilled", {
+    orderId,
+    currentStatus: data.status ?? null,
+    currentDeliveryStatus: data.deliveryStatus ?? null,
+  });
 }
 
 /**
