@@ -52,3 +52,4 @@ app-example
 .env
 .env.local
 .env.production
+main/sa.json
