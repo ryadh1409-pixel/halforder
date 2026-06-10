@@ -892,6 +892,7 @@ export async function claimMarketplaceDriverOrder(
     status: 'driver_assigned',
   };
 
+  let lastReadBeforeClaim: Record<string, unknown> | null = null;
   try {
     return await runTransaction(db, async (tx) => {
       const snap = await tx.get(orderRef);
@@ -900,6 +901,7 @@ export async function claimMarketplaceDriverOrder(
         return { ok: false, reason: 'missing' };
       }
       const data = snap.data();
+      lastReadBeforeClaim = data as Record<string, unknown>;
       if (isOrderTerminalForAssignment(data as Record<string, unknown>)) {
         marketplaceLog.acceptFailed(orderId, {
           reason: 'order_terminal',
@@ -1001,6 +1003,15 @@ export async function claimMarketplaceDriverOrder(
               newDeliveryStatus: safePatch.deliveryStatus ?? data.deliveryStatus ?? null,
             });
           }
+          console.log('[DRIVER CLAIM WRITE]', {
+            uid: auth.currentUser?.uid ?? null,
+            orderId,
+            assignedDriverId: data.assignedDriverId ?? null,
+            status: data.status ?? null,
+            deliveryStatus: data.deliveryStatus ?? null,
+            patch: safePatch,
+            firestorePath: `orders/${orderId}`,
+          });
           tx.update(orderRef, safePatch);
         }
         marketplaceLog.acceptSuccess(orderId, { normalizedDelivery, ruleSafePayload });
@@ -1016,13 +1027,26 @@ export async function claimMarketplaceDriverOrder(
       return { ok: false, reason: 'invalid_state' };
     });
   } catch (error) {
+    const permissionDenied =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === 'permission-denied';
+    if (permissionDenied) {
+      console.error('[DRIVER CLAIM WRITE DENIED]', {
+        uid: auth.currentUser?.uid ?? null,
+        orderId,
+        assignedDriverId: lastReadBeforeClaim?.assignedDriverId ?? null,
+        status: lastReadBeforeClaim?.status ?? null,
+        deliveryStatus: lastReadBeforeClaim?.deliveryStatus ?? null,
+        ruleSafePayload,
+        message: error instanceof Error ? error.message : String(error),
+        firestorePath: `orders/${orderId}`,
+      });
+    }
     marketplaceLog.acceptError(orderId, error, {
       ruleSafePayload,
-      permissionDenied:
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === 'permission-denied',
+      permissionDenied,
     });
     return { ok: false, reason: 'permission_denied' };
   }

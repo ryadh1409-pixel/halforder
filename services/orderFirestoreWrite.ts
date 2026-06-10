@@ -208,6 +208,9 @@ export async function protectedUpdateOrder(
     documentPath,
     uid: auth.currentUser?.uid ?? null,
     orderId: trimmed,
+    assignedDriverId: current.assignedDriverId ?? null,
+    status: current.status ?? null,
+    deliveryStatus: current.deliveryStatus ?? null,
     payload: safePatch,
     source: sourceLabel(source),
   });
@@ -221,8 +224,28 @@ export async function protectedUpdateOrder(
     });
   }
 
-  await updateDoc(ref, safePatch as UpdateData<Record<string, unknown>>);
-  return true;
+  try {
+    await updateDoc(ref, safePatch as UpdateData<Record<string, unknown>>);
+    return true;
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+    if (code === 'permission-denied') {
+      console.error('[FIRESTORE ORDER WRITE DENIED]', {
+        documentPath,
+        uid: auth.currentUser?.uid ?? null,
+        orderId: trimmed,
+        assignedDriverId: current.assignedDriverId ?? null,
+        status: current.status ?? null,
+        deliveryStatus: current.deliveryStatus ?? null,
+        payload: safePatch,
+        source: sourceLabel(source),
+      });
+    }
+    throw error;
+  }
 }
 
 /** Transactional lifecycle write with the same monotonic protection. */

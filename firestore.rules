@@ -1590,6 +1590,7 @@ service cloud.firestore {
         'assignedDriverId',
         'driverName',
         'driverPhone',
+        'driverVehicle',
         'deliveryStatus',
         'status',
         'driver',
@@ -1621,9 +1622,14 @@ service cloud.firestore {
           )
         );
     }
-    /** Claim transition: courier pending → driver_assigned only. */
+    /**
+     * Claim transition: any unassigned pool courier status → driver_assigned.
+     * Must mirror marketplacePoolDeliveryStatusOk + client isDriverMarketplaceClaimable.
+     */
     function driverClaimDeliveryTransitionOk(beforeDs, afterDs) {
-      return beforeDs == 'pending' && afterDs == 'driver_assigned';
+      return afterDs == 'driver_assigned'
+        && marketplacePoolDeliveryStatusOk(beforeDs)
+        && beforeDs != 'driver_assigned';
     }
     function driverClaimDriverBlobOk(before, after) {
       let keys = request.resource.data.diff(resource.data).affectedKeys();

@@ -1251,7 +1251,7 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
-    it('denies driver claim when deliveryStatus is not pending', async () => {
+    it('allows driver claim when deliveryStatus is ready_for_pickup (pool-visible)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
         await setDoc(doc(ctx.firestore(), 'orders', 'claim_ready'), {
@@ -1263,13 +1263,113 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           deliveryType: 'delivery',
           driverId: null,
           assignedDriverId: null,
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'claim_ready'), {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          driverName: 'Driver One',
+          driver: { id: 'drv1', name: 'Driver One', phone: null, vehicle: null, avatar: null },
+          deliveryStatus: 'driver_assigned',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+        }),
+      );
+    });
+
+    it('allows driver claim when deliveryStatus is waiting_driver', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_waiting'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          status: 'payment_confirmed',
+          deliveryStatus: 'waiting_driver',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'claim_waiting'), {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          driverName: 'Driver One',
+          driver: { id: 'drv1', name: 'Driver One', phone: null, vehicle: null, avatar: null },
+          deliveryStatus: 'driver_assigned',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+        }),
+      );
+    });
+
+    it('allows driver claim patch with driverVehicle', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_vehicle'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'claim_vehicle'), {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          driverName: 'Driver One',
+          driverVehicle: 'Sedan',
+          driver: { id: 'drv1', name: 'Driver One', phone: null, vehicle: 'Sedan', avatar: null },
+          deliveryStatus: 'driver_assigned',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+        }),
+      );
+    });
+
+    it('denies driver claim when deliveryStatus is already driver_assigned', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_taken'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          status: 'payment_confirmed',
+          deliveryStatus: 'driver_assigned',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: 'other_driver',
+          assignedDriverId: 'other_driver',
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
       });
       const db = te().authenticatedContext('drv1').firestore();
       await assertFails(
-        updateDoc(doc(db, 'orders', 'claim_ready'), {
+        updateDoc(doc(db, 'orders', 'claim_taken'), {
           driverId: 'drv1',
           assignedDriverId: 'drv1',
           driverName: 'Driver One',
