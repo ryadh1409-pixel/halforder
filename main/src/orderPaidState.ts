@@ -157,6 +157,19 @@ export function buildOrderPaidStatePatch(
   }
 
   const currentStatus = orderStatusString(existing.status);
+  const currentCourier = orderStatusString(existing.deliveryStatus).toLowerCase();
+
+  /** Never re-assert payment_confirmed when courier has advanced past pending. */
+  if (
+    FULFILLED_STATUSES.has(currentCourier) ||
+    hasAssignedDriver(existing) ||
+    currentStatus === "completed" ||
+    currentStatus === "delivered" ||
+    existing.earningsRecorded === true
+  ) {
+    return buildPaymentOnlyPaidStatePatch(input);
+  }
+
   const patch: Record<string, unknown> = {
     paymentStatus: "paid",
     status: resolvePostPaymentOrderStatus(existing, currentStatus),

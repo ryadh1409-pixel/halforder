@@ -1,19 +1,7 @@
 import {getFirestore} from "firebase-admin/firestore";
-import {shouldBlockStripePaymentOverwrite} from "./orderPaidState.js";
 
-/** Kitchen/courier stages where Stripe webhook must not touch `orders/{id}`. */
-export const WEBHOOK_BLOCK_STATUSES = [
-  "accepted",
-  "preparing",
-  "ready_for_pickup",
-  "driver_assigned",
-  "picked_up",
-  "delivered",
-  "completed",
-  "cancelled",
-] as const;
-
-const BLOCK_STATUS_SET = new Set<string>(WEBHOOK_BLOCK_STATUSES);
+const BLOCK_STATUSES = ["completed", "delivered", "picked_up", "ready_for_pickup"] as const;
+const BLOCK_STATUS_SET = new Set<string>(BLOCK_STATUSES);
 
 function normStatus(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -24,28 +12,21 @@ export function isWebhookOrderWriteBlockedForData(
   orderId: string,
   data: Record<string, unknown>,
 ): boolean {
-  if (shouldBlockStripePaymentOverwrite(data)) {
-    return true;
-  }
+  const currentStatus = normStatus(data.status);
+  const currentDeliveryStatus = normStatus(data.deliveryStatus);
 
-  const status = normStatus(data.status);
-  const deliveryStatus = normStatus(data.deliveryStatus);
-  if (BLOCK_STATUS_SET.has(status) || BLOCK_STATUS_SET.has(deliveryStatus)) {
+  if (
+    BLOCK_STATUS_SET.has(currentStatus) ||
+    BLOCK_STATUS_SET.has(currentDeliveryStatus)
+  ) {
+    console.log("[WEBHOOK GUARD] Blocked overwrite", {
+      orderId,
+      currentStatus: data.status ?? null,
+      currentDeliveryStatus: data.deliveryStatus ?? null,
+    });
     return true;
   }
   return false;
-}
-
-/** Log + short-circuit before any merge write on fulfilled orders (retry events). */
-export function logBlockedFulfilledWebhookWrite(
-  orderId: string,
-  data: Record<string, unknown>,
-): void {
-  console.log("[stripeWebhook] BLOCKED - order already fulfilled, skipping write", {
-    orderId,
-    currentStatus: data.status ?? null,
-    currentDeliveryStatus: data.deliveryStatus ?? null,
-  });
 }
 
 /**
@@ -54,11 +35,11 @@ export function logBlockedFulfilledWebhookWrite(
  */
 export async function isWebhookOrderWriteBlocked(orderId: string): Promise<boolean> {
   const db = getFirestore();
-  const snap = await db.collection("orders").doc(orderId).get();
-  if (!snap.exists) {
+  const currentOrder = await db.collection("orders").doc(orderId).get();
+  if (!currentOrder.exists) {
     return false;
   }
-  return isWebhookOrderWriteBlockedForData(orderId, snap.data() ?? {});
+  return isWebhookOrderWriteBlockedForData(orderId, currentOrder.data() ?? {});
 }
 
 /**
@@ -66,13 +47,8 @@ export async function isWebhookOrderWriteBlocked(orderId: string): Promise<boole
  * Returns `false` when the write must be skipped entirely.
  */
 export async function assertWebhookCanWriteOrder(orderId: string): Promise<boolean> {
-  const db = getFirestore();
-  const orderRef = db.collection("orders").doc(orderId);
-  const snap = await orderRef.get();
-  if (!snap.exists) {
-    console.log("[STRIPE BLOCKED]", orderId, null, null, "missing");
+  if (await isWebhookOrderWriteBlocked(orderId)) {
     return false;
   }
-  const data = snap.data() ?? {};
-  return !isWebhookOrderWriteBlockedForData(orderId, data);
+  return true;
 }

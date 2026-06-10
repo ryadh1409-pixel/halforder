@@ -1,4 +1,4 @@
-import { resolveCustomerCourierRank } from '@/lib/customerCourierRank';
+import { resolveDeliveryStageRank } from '@/lib/deliveryStageRank';
 import {
   logCustomerOrderSnapshot,
   logRawFirestoreCustomerDoc,
@@ -103,8 +103,10 @@ export function useOrder(orderId: string) {
       }
 
       const updatedAtMs = resolveOrderUpdatedAtMs(raw);
-      const rank = resolveCustomerCourierRank(raw);
-      lastUpdatedAtMs = Math.max(lastUpdatedAtMs, updatedAtMs);
+      const rank = resolveDeliveryStageRank(raw);
+      if (updatedAtMs > 0) {
+        lastUpdatedAtMs = Math.max(lastUpdatedAtMs, updatedAtMs);
+      }
       lastCourierRank = Math.max(lastCourierRank, rank);
       lastStatus = raw.status ?? lastStatus;
       lastDeliveryStatus = raw.deliveryStatus ?? lastDeliveryStatus;

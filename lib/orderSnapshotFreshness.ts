@@ -1,4 +1,4 @@
-import { resolveCustomerCourierRank } from '@/lib/customerCourierRank';
+import { isDeliveryStageRegression, resolveDeliveryStageRank } from '@/lib/deliveryStageRank';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import { safeToMillis } from '@/utils/safeToMillis';
 
@@ -7,7 +7,7 @@ export type OrderSnapshotMeta = {
   hasPendingWrites: boolean;
 };
 
-/** Document `updatedAt` only — used for monotonic snapshot ordering. */
+/** Document `updatedAt` only — tiebreaker when delivery stage rank is unchanged. */
 export function resolveOrderUpdatedAtMs(raw: Record<string, unknown>): number {
   return Math.max(
     safeToMillis(raw.updatedAt) ?? 0,
@@ -41,7 +41,7 @@ export function logServerOrCacheOrder(
     status: raw.status ?? null,
     deliveryStatus: raw.deliveryStatus ?? null,
     updatedAtMs: resolveOrderUpdatedAtMs(raw) || null,
-    deliveryStageRank: resolveCustomerCourierRank(raw),
+    deliveryStageRank: resolveDeliveryStageRank(raw),
     fromCache: meta.fromCache,
     hasPendingWrites: meta.hasPendingWrites,
   });
@@ -65,8 +65,8 @@ export type CustomerSnapshotState = {
  * Compare incoming snapshot against the best-known customer state.
  *
  * Rules:
- * - Never allow older `updatedAt` to overwrite newer `updatedAt`
- * - Equal `updatedAt`: never allow lower delivery rank to overwrite higher rank
+ * - Delivery stage rank is primary — forward stage always wins (even when `updatedAt` is null/older)
+ * - Same stage: use `updatedAt` only as tiebreaker when both sides have a resolved timestamp
  * - Terminal lock: delivered/completed cannot regress
  */
 export function evaluateCustomerSnapshotFreshness(
@@ -75,7 +75,7 @@ export function evaluateCustomerSnapshotFreshness(
   state: CustomerSnapshotState,
 ): SnapshotFreshnessDecision {
   const updatedAtMs = resolveOrderUpdatedAtMs(raw);
-  const rank = resolveCustomerCourierRank(raw);
+  const rank = resolveDeliveryStageRank(raw);
 
   if (isOrderCompleted(raw)) {
     return { apply: true, reason: 'completed' };
@@ -89,51 +89,32 @@ export function evaluateCustomerSnapshotFreshness(
     return { apply: true, reason: 'pending_writes' };
   }
 
+  if (rank > state.lastCourierRank) {
+    return { apply: true, reason: 'delivery_stage_forward' };
+  }
+
+  if (isDeliveryStageRegression(state.lastCourierRank, rank)) {
+    return { apply: false, reason: 'delivery_stage_regression' };
+  }
+
   if (
-    state.lastUpdatedAtMs > 0 &&
     updatedAtMs > 0 &&
+    state.lastUpdatedAtMs > 0 &&
     updatedAtMs < state.lastUpdatedAtMs
   ) {
-    return { apply: false, reason: 'older_updatedAt' };
-  }
-
-  if (
-    state.lastUpdatedAtMs > 0 &&
-    updatedAtMs > 0 &&
-    updatedAtMs === state.lastUpdatedAtMs &&
-    rank < state.lastCourierRank
-  ) {
-    return { apply: false, reason: 'equal_timestamp_lower_rank' };
+    return { apply: false, reason: 'older_updatedAt_same_stage' };
   }
 
   if (
     updatedAtMs > 0 &&
     state.lastUpdatedAtMs > 0 &&
-    updatedAtMs === state.lastUpdatedAtMs &&
-    rank === state.lastCourierRank
+    updatedAtMs === state.lastUpdatedAtMs
   ) {
     return { apply: false, reason: 'duplicate_snapshot' };
   }
 
-  if (
-    rank < state.lastCourierRank &&
-    !(updatedAtMs > state.lastUpdatedAtMs)
-  ) {
-    return { apply: false, reason: 'courier_rank_regression' };
-  }
-
-  if (rank > state.lastCourierRank) {
-    return { apply: true, reason: 'courier_rank_forward' };
-  }
-
   if (!meta.fromCache) {
-    if (updatedAtMs > state.lastUpdatedAtMs) {
-      return { apply: true, reason: 'server_newer_updatedAt' };
-    }
-    if (rank >= state.lastCourierRank) {
-      return { apply: true, reason: 'server_same_or_forward_rank' };
-    }
-    return { apply: false, reason: 'server_rank_regression' };
+    return { apply: true, reason: 'server_same_or_forward_stage' };
   }
 
   if (!state.hasServerSnapshot) {
@@ -142,6 +123,10 @@ export function evaluateCustomerSnapshotFreshness(
 
   if (updatedAtMs > state.lastUpdatedAtMs) {
     return { apply: true, reason: 'cache_newer_updatedAt' };
+  }
+
+  if (updatedAtMs === 0) {
+    return { apply: true, reason: 'cache_same_stage_null_updatedAt' };
   }
 
   return { apply: false, reason: 'stale_cache_after_server' };
@@ -168,8 +153,8 @@ export function logCustomerSnapshotRejected(
     currentDeliveryStatus: current.deliveryStatus ?? null,
     incomingStatus: incoming.status ?? null,
     currentStatus: current.status ?? null,
-    incomingRank: resolveCustomerCourierRank(incoming),
-    currentRank: resolveCustomerCourierRank({
+    incomingRank: resolveDeliveryStageRank(incoming),
+    currentRank: resolveDeliveryStageRank({
       status: current.status,
       deliveryStatus: current.deliveryStatus,
     }),
@@ -181,7 +166,7 @@ export function logCustomerSnapshotRejected(
 
 /**
  * Per-document gate for customer order listeners.
- * Uses monotonic courier rank + `updatedAtMs` — never rejects forward server progress.
+ * Uses monotonic delivery stage rank — never rejects forward server progress.
  * Once `status=completed` or `deliveryStatus=delivered`, never regress.
  */
 export class OrderSnapshotFreshnessGate {
@@ -211,14 +196,16 @@ export class OrderSnapshotFreshnessGate {
     }
 
     const updatedAtMs = resolveOrderUpdatedAtMs(raw);
-    const rank = resolveCustomerCourierRank(raw);
+    const rank = resolveDeliveryStageRank(raw);
 
     if (isOrderCompleted(raw)) {
       this.completionLocked = true;
     }
 
     this.lastCourierRank = Math.max(this.lastCourierRank, rank);
-    this.lastUpdatedAtMs = Math.max(this.lastUpdatedAtMs, updatedAtMs);
+    if (updatedAtMs > 0) {
+      this.lastUpdatedAtMs = Math.max(this.lastUpdatedAtMs, updatedAtMs);
+    }
     this.lastStatus = raw.status ?? this.lastStatus;
     this.lastDeliveryStatus = raw.deliveryStatus ?? this.lastDeliveryStatus;
     if (!meta.fromCache || isOrderCompleted(raw)) {
@@ -234,9 +221,11 @@ export class OrderSnapshotFreshnessGate {
 
   seedFromEmitted(raw: Record<string, unknown>): void {
     const updatedAtMs = resolveOrderUpdatedAtMs(raw);
-    const rank = resolveCustomerCourierRank(raw);
+    const rank = resolveDeliveryStageRank(raw);
     this.lastCourierRank = Math.max(this.lastCourierRank, rank);
-    this.lastUpdatedAtMs = Math.max(this.lastUpdatedAtMs, updatedAtMs);
+    if (updatedAtMs > 0) {
+      this.lastUpdatedAtMs = Math.max(this.lastUpdatedAtMs, updatedAtMs);
+    }
     this.lastStatus = raw.status ?? this.lastStatus;
     this.lastDeliveryStatus = raw.deliveryStatus ?? this.lastDeliveryStatus;
     if (isOrderCompleted(raw)) {

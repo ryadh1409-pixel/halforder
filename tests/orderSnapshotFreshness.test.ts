@@ -1,7 +1,8 @@
 import {
-  CUSTOMER_COURIER_RANK,
-  resolveCustomerCourierRank,
-} from '@/lib/customerCourierRank';
+  DELIVERY_STAGE_RANK,
+  isDeliveryStageRegression,
+  resolveDeliveryStageRank,
+} from '@/lib/deliveryStageRank';
 import {
   evaluateCustomerSnapshotFreshness,
   OrderSnapshotFreshnessGate,
@@ -15,6 +16,30 @@ const T2 = 1_700_000_001_000;
 const T3 = 1_700_000_002_000;
 const T4 = 1_700_000_003_000;
 const T5 = 1_700_000_004_000;
+
+describe('deliveryStageRank', () => {
+  it('DELIVERY_STAGE_RANK matches customer lifecycle order', () => {
+    expect(DELIVERY_STAGE_RANK.driver_assigned).toBe(1);
+    expect(DELIVERY_STAGE_RANK.ready_for_pickup).toBe(2);
+    expect(DELIVERY_STAGE_RANK.picked_up).toBe(3);
+    expect(DELIVERY_STAGE_RANK.delivered).toBe(4);
+  });
+
+  it('resolveDeliveryStageRank uses max of status and deliveryStatus', () => {
+    expect(
+      resolveDeliveryStageRank({
+        status: 'payment_confirmed',
+        deliveryStatus: 'picked_up',
+      }),
+    ).toBe(3);
+    expect(
+      resolveDeliveryStageRank({
+        status: 'completed',
+        deliveryStatus: 'delivered',
+      }),
+    ).toBe(4);
+  });
+});
 
 describe('orderSnapshotFreshness', () => {
   it('resolveOrderUpdatedAtMs uses updatedAt fields only', () => {
@@ -32,7 +57,7 @@ describe('orderSnapshotFreshness', () => {
     ).toBe(T5);
   });
 
-  it('rejects older updatedAt unconditionally', () => {
+  it('accepts forward delivery stage even when updatedAt is older', () => {
     const decision = evaluateCustomerSnapshotFreshness(
       {
         status: 'payment_confirmed',
@@ -40,19 +65,58 @@ describe('orderSnapshotFreshness', () => {
         updatedAtMs: T1,
         driverId: 'd1',
       },
-      { fromCache: true, hasPendingWrites: false },
+      { fromCache: false, hasPendingWrites: false },
       {
-        lastCourierRank: CUSTOMER_COURIER_RANK.DRIVER_ASSIGNED,
+        lastCourierRank: DELIVERY_STAGE_RANK.driver_assigned,
         lastUpdatedAtMs: T5,
         hasServerSnapshot: true,
         completionLocked: false,
       },
     );
-    expect(decision.apply).toBe(false);
-    expect(decision.reason).toBe('older_updatedAt');
+    expect(decision.apply).toBe(true);
+    expect(decision.reason).toBe('delivery_stage_forward');
   });
 
-  it('rejects equal updatedAt with lower delivery rank', () => {
+  it('accepts delivered snapshot when updatedAt is null (serverTimestamp pending)', () => {
+    const decision = evaluateCustomerSnapshotFreshness(
+      {
+        status: 'completed',
+        deliveryStatus: 'delivered',
+        driverId: 'd1',
+      },
+      { fromCache: false, hasPendingWrites: false },
+      {
+        lastCourierRank: DELIVERY_STAGE_RANK.driver_assigned,
+        lastUpdatedAtMs: T5,
+        hasServerSnapshot: true,
+        completionLocked: false,
+      },
+    );
+    expect(decision.apply).toBe(true);
+    expect(decision.reason).toBe('completed');
+  });
+
+  it('rejects same-stage snapshot with older updatedAt', () => {
+    const decision = evaluateCustomerSnapshotFreshness(
+      {
+        status: 'payment_confirmed',
+        deliveryStatus: 'driver_assigned',
+        updatedAtMs: T1,
+        driverId: 'd1',
+      },
+      { fromCache: true, hasPendingWrites: false },
+      {
+        lastCourierRank: DELIVERY_STAGE_RANK.driver_assigned,
+        lastUpdatedAtMs: T3,
+        hasServerSnapshot: true,
+        completionLocked: false,
+      },
+    );
+    expect(decision.apply).toBe(false);
+    expect(decision.reason).toBe('older_updatedAt_same_stage');
+  });
+
+  it('rejects delivery stage regression from cache', () => {
     const decision = evaluateCustomerSnapshotFreshness(
       {
         status: 'payment_confirmed',
@@ -62,17 +126,17 @@ describe('orderSnapshotFreshness', () => {
       },
       { fromCache: true, hasPendingWrites: false },
       {
-        lastCourierRank: CUSTOMER_COURIER_RANK.PICKED_UP,
+        lastCourierRank: DELIVERY_STAGE_RANK.picked_up,
         lastUpdatedAtMs: T3,
         hasServerSnapshot: true,
         completionLocked: false,
       },
     );
     expect(decision.apply).toBe(false);
-    expect(decision.reason).toBe('equal_timestamp_lower_rank');
+    expect(decision.reason).toBe('delivery_stage_regression');
   });
 
-  it('rejects older updatedAt when courier rank does not advance', () => {
+  it('rejects older updatedAt when delivery stage does not advance', () => {
     const gate = new OrderSnapshotFreshnessGate();
 
     gate.shouldApply(
@@ -96,7 +160,7 @@ describe('orderSnapshotFreshness', () => {
     ).toBe(false);
   });
 
-  it('accepts server forward courier progress through full delivery lifecycle', () => {
+  it('accepts server forward delivery progress through full lifecycle', () => {
     const gate = new OrderSnapshotFreshnessGate();
     const steps = [
       { deliveryStatus: 'driver_assigned', driverId: 'd1', updatedAtMs: T1 },
@@ -119,7 +183,7 @@ describe('orderSnapshotFreshness', () => {
     ).toBe(false);
   });
 
-  it('accepts server forward courier progress even when updatedAt is missing on first cache', () => {
+  it('accepts server forward delivery progress even when updatedAt is missing', () => {
     const gate = new OrderSnapshotFreshnessGate();
 
     expect(
@@ -174,18 +238,12 @@ describe('orderSnapshotFreshness', () => {
     ).toBe(false);
   });
 
-  it('resolveCustomerCourierRank follows driver_assigned → ready_for_pickup → picked_up → delivered', () => {
-    expect(resolveCustomerCourierRank({ deliveryStatus: 'driver_assigned' })).toBe(
-      CUSTOMER_COURIER_RANK.DRIVER_ASSIGNED,
+  it('isDeliveryStageRegression detects backward stage', () => {
+    expect(isDeliveryStageRegression(DELIVERY_STAGE_RANK.picked_up, DELIVERY_STAGE_RANK.driver_assigned)).toBe(
+      true,
     );
-    expect(
-      resolveCustomerCourierRank({ deliveryStatus: 'ready_for_pickup', driverId: 'd1' }),
-    ).toBe(CUSTOMER_COURIER_RANK.READY_FOR_PICKUP);
-    expect(resolveCustomerCourierRank({ deliveryStatus: 'picked_up' })).toBe(
-      CUSTOMER_COURIER_RANK.PICKED_UP,
-    );
-    expect(resolveCustomerCourierRank({ status: 'completed', deliveryStatus: 'delivered' })).toBe(
-      CUSTOMER_COURIER_RANK.DELIVERED,
+    expect(isDeliveryStageRegression(DELIVERY_STAGE_RANK.driver_assigned, DELIVERY_STAGE_RANK.delivered)).toBe(
+      false,
     );
   });
 

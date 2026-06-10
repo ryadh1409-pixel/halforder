@@ -4,6 +4,7 @@ const { strict: assert } = require("assert");
 const { test } = require("node:test");
 const {
   trimMetadata,
+  paymentIntentIdFromCharge,
   paymentIntentIdFromSession,
 } = require("../lib/stripeWebhookLogic.js");
 const {
@@ -24,6 +25,12 @@ test("paymentIntentIdFromSession resolves expanded object or string", () => {
   assert.equal(paymentIntentIdFromSession({ payment_intent: "pi_123" }), "pi_123");
   assert.equal(paymentIntentIdFromSession({ payment_intent: { id: "pi_obj" } }), "pi_obj");
   assert.equal(paymentIntentIdFromSession({}), null);
+});
+
+test("paymentIntentIdFromCharge resolves expanded object or string", () => {
+  assert.equal(paymentIntentIdFromCharge({ payment_intent: "pi_456" }), "pi_456");
+  assert.equal(paymentIntentIdFromCharge({ payment_intent: { id: "pi_charge" } }), "pi_charge");
+  assert.equal(paymentIntentIdFromCharge({}), null);
 });
 
 test("needsPaidStatusRepair detects split paid/status", () => {
@@ -95,11 +102,11 @@ test("buildOrderPaidStatePatch skips fulfillment when delivered", () => {
   assert.equal(patch.deliveryStatus, undefined);
 });
 
-test("isWebhookOrderWriteBlockedForData logs [STRIPE BLOCKED] and blocks fulfilled rows", () => {
+test("isWebhookOrderWriteBlockedForData logs [WEBHOOK GUARD] and blocks terminal rows", () => {
   const spy = console.log;
   let blockedLog = null;
   console.log = (...args) => {
-    if (args[0] === "[STRIPE BLOCKED]") blockedLog = args;
+    if (args[0] === "[WEBHOOK GUARD] Blocked overwrite") blockedLog = args;
   };
   try {
     assert.equal(
@@ -109,13 +116,20 @@ test("isWebhookOrderWriteBlockedForData logs [STRIPE BLOCKED] and blocks fulfill
       }),
       true,
     );
-    assert.deepEqual(blockedLog, ["[STRIPE BLOCKED]", "o1", "completed", "delivered"]);
+    assert.deepEqual(blockedLog, [
+      "[WEBHOOK GUARD] Blocked overwrite",
+      {
+        orderId: "o1",
+        currentStatus: "completed",
+        currentDeliveryStatus: "delivered",
+      },
+    ]);
   } finally {
     console.log = spy;
   }
 });
 
-test("isWebhookOrderWriteBlockedForData blocks completed and driver_assigned", () => {
+test("isWebhookOrderWriteBlockedForData blocks only late-stage statuses", () => {
   assert.equal(
     isWebhookOrderWriteBlockedForData("o1", {
       status: "completed",
@@ -126,12 +140,19 @@ test("isWebhookOrderWriteBlockedForData blocks completed and driver_assigned", (
   assert.equal(
     isWebhookOrderWriteBlockedForData("o2", {
       status: "payment_confirmed",
-      deliveryStatus: "driver_assigned",
+      deliveryStatus: "ready_for_pickup",
     }),
     true,
   );
   assert.equal(
     isWebhookOrderWriteBlockedForData("o3", {
+      status: "payment_confirmed",
+      deliveryStatus: "driver_assigned",
+    }),
+    false,
+  );
+  assert.equal(
+    isWebhookOrderWriteBlockedForData("o4", {
       status: "awaiting_payment",
       deliveryStatus: "pending",
     }),
@@ -139,14 +160,14 @@ test("isWebhookOrderWriteBlockedForData blocks completed and driver_assigned", (
   );
 });
 
-test("isWebhookOrderWriteBlockedForData blocks earningsRecorded even if status stale", () => {
+test("isWebhookOrderWriteBlockedForData does not block earningsRecorded alone", () => {
   assert.equal(
     isWebhookOrderWriteBlockedForData("o4", {
       status: "payment_confirmed",
       deliveryStatus: "pending",
       earningsRecorded: true,
     }),
-    true,
+    false,
   );
 });
 

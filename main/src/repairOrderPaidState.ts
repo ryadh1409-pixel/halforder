@@ -6,11 +6,11 @@ import {
   needsPaidStatusRepair,
   orderPaymentStatusString,
   orderStatusString,
-  shouldBlockStripePaymentOverwrite,
 } from "./orderPaidState.js";
 import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
 import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
+import {isOrderTerminalForServerWrite} from "./orderTerminalWriteGuard.js";
 
 const db = getFirestore();
 
@@ -22,11 +22,12 @@ export async function repairOrderPaidStateIfNeeded(
   orderId: string,
   data: DocumentData,
 ): Promise<boolean> {
-  if (shouldBlockStripePaymentOverwrite(data)) {
-    console.log("[repairOrderPaidState] BLOCKED - order already fulfilled, skipping write", {
+  if (isOrderTerminalForServerWrite(data)) {
+    console.log("[repairOrderPaidState] BLOCKED - order terminal, skipping write", {
       orderId,
       currentStatus: data.status ?? null,
       currentDeliveryStatus: data.deliveryStatus ?? null,
+      earningsRecorded: data.earningsRecorded ?? null,
     });
     return false;
   }
@@ -68,11 +69,12 @@ export async function repairOrderPaidStateIfNeeded(
     if (!snap.exists) return;
 
     const fresh = snap.data() ?? {};
-    if (shouldBlockStripePaymentOverwrite(fresh)) {
-      console.log("[repairOrderPaidState] BLOCKED - order already fulfilled, skipping write", {
+    if (isOrderTerminalForServerWrite(fresh)) {
+      console.log("[repairOrderPaidState] BLOCKED - order terminal, skipping write", {
         orderId,
         currentStatus: fresh.status ?? null,
         currentDeliveryStatus: fresh.deliveryStatus ?? null,
+        earningsRecorded: fresh.earningsRecorded ?? null,
         logSource: "repairOrderPaidState:txn",
       });
       return;

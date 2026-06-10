@@ -10,7 +10,11 @@ import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import type { DocumentSnapshot, Transaction } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { paymentIntentIdFromSession, trimMetadata } from "./stripeWebhookLogic.js";
+import {
+  paymentIntentIdFromCharge,
+  paymentIntentIdFromSession,
+  trimMetadata,
+} from "./stripeWebhookLogic.js";
 import {
   buildOrderPaidStatePatch,
   buildPaymentOnlyPaidStatePatch,
@@ -23,8 +27,8 @@ import {
   assertWebhookCanWriteOrder,
   isWebhookOrderWriteBlocked,
   isWebhookOrderWriteBlockedForData,
-  logBlockedFulfilledWebhookWrite,
 } from "./webhookOrderWriteGuard.js";
+import {isOrderTerminalForServerWrite} from "./orderTerminalWriteGuard.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -130,7 +134,6 @@ function mergeOrderPaidSync(
   const data = orderSnap.data() ?? {};
 
   if (isWebhookOrderWriteBlockedForData(orderId, data)) {
-    logBlockedFulfilledWebhookWrite(orderId, data);
     return;
   }
 
@@ -209,9 +212,24 @@ function mergeOrderPaidSync(
     return;
   }
 
-  if (shouldBlockStripePaymentOverwrite(data) || isWebhookOrderWriteBlockedForData(orderId, data)) {
-    logBlockedFulfilledWebhookWrite(orderId, data);
+  if (
+    isOrderTerminalForServerWrite(data) ||
+    shouldBlockStripePaymentOverwrite(data) ||
+    isWebhookOrderWriteBlockedForData(orderId, data)
+  ) {
     return;
+  }
+
+  if (safe.status === "payment_confirmed" || safe.deliveryStatus === "pending") {
+    const courier = typeof data.deliveryStatus === "string" ? data.deliveryStatus.trim().toLowerCase() : "";
+    if (courier === "delivered" || courier === "completed" || data.status === "completed") {
+      console.log("[stripeWebhook] BLOCKED - refusing payment_confirmed/pending on terminal order", {
+        orderId,
+        currentStatus: data.status ?? null,
+        currentDeliveryStatus: data.deliveryStatus ?? null,
+      });
+      return;
+    }
   }
 
   console.log("[STATUS WRITE]", {
@@ -295,6 +313,19 @@ function mergeOrderPaymentFailed(
   tx.set(orderSnap.ref, patch, { merge: true });
 }
 
+async function orderIdFromCharge(charge: Stripe.Charge): Promise<{
+  orderId: string | null;
+  paymentIntentId: string | null;
+}> {
+  const paymentIntentId = paymentIntentIdFromCharge(charge);
+  let orderId = trimMetadata(charge.metadata?.orderId);
+  if (!orderId && paymentIntentId) {
+    const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
+    orderId = trimMetadata(pi.metadata?.orderId);
+  }
+  return {orderId, paymentIntentId};
+}
+
 async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   logStripeDebug("event_dispatch", {
     type: event.type,
@@ -321,12 +352,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
-      // guard-deployed: 2026-06-08 — FULFILLED_STATUSES pre-check before mergeOrderPaidSync
       if (await isWebhookOrderWriteBlocked(orderId)) {
-        console.log("[stripeWebhook] BLOCKED - order already fulfilled, skipping write", {
-          orderId,
-          outcome: "blocked_fulfilled",
-        });
         return;
       }
 
@@ -346,6 +372,51 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         outcome,
         orderId,
         paymentIntentId: pi.id,
+        stripeEventId: event.id,
+      });
+      return;
+    }
+
+    case "charge.succeeded": {
+      const charge = event.data.object as Stripe.Charge;
+      const {orderId, paymentIntentId} = await orderIdFromCharge(charge);
+      logStripeDebug("charge_succeeded", {
+        chargeId: charge.id,
+        orderId,
+        paymentIntentId,
+        hasMetadata: Boolean(charge.metadata && Object.keys(charge.metadata).length > 0),
+      });
+      if (!orderId) {
+        logStripe({
+          level: "info",
+          msg: "charge.succeeded_no_order_id",
+          stripeEventId: event.id,
+          chargeId: charge.id,
+        });
+        return;
+      }
+
+      if (await isWebhookOrderWriteBlocked(orderId)) {
+        return;
+      }
+
+      const outcome = await withEventIdempotency(event, orderId, (tx, orderSnap) => {
+        mergeOrderPaidSync(tx, orderSnap, {
+          orderId,
+          paymentIntentId,
+          checkoutSessionId: null,
+          sourceEventType: event.type,
+          stripeEventId: event.id,
+        });
+      });
+
+      logStripe({
+        level: "info",
+        msg: "charge_succeeded_handled",
+        outcome,
+        orderId,
+        chargeId: charge.id,
+        paymentIntentId,
         stripeEventId: event.id,
       });
       return;

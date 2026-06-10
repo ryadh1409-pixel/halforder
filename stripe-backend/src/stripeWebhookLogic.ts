@@ -11,7 +11,16 @@ export function trimMetadata(value: unknown): string | null {
 export function paymentIntentIdFromSession(session: {
   payment_intent?: unknown;
 }): string | null {
-  const piRaw = session.payment_intent;
+  return paymentIntentIdFromRef(session.payment_intent);
+}
+
+export function paymentIntentIdFromCharge(charge: {
+  payment_intent?: unknown;
+}): string | null {
+  return paymentIntentIdFromRef(charge.payment_intent);
+}
+
+function paymentIntentIdFromRef(piRaw: unknown): string | null {
   if (typeof piRaw === "string" && piRaw.trim()) return piRaw.trim();
   if (
     piRaw &&

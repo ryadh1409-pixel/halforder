@@ -19,7 +19,8 @@ export function hasFulfillmentProgressMarkers(
     hasTimestamp(order.preparedAt) ||
     hasTimestamp(order.readyAt) ||
     hasTimestamp(order.pickedUpAt) ||
-    hasTimestamp(order.deliveredAt)
+    hasTimestamp(order.deliveredAt) ||
+    hasTimestamp(order.completedAt)
   ) {
     return true;
   }

@@ -3,9 +3,9 @@ import {
   deliveryFeeForTier,
 } from '@/lib/delivery/deliveryEligibility';
 import {
-  isCustomerCourierRankRegression,
-  resolveCustomerCourierRank,
-} from '@/lib/customerCourierRank';
+  isDeliveryStageRegression,
+  resolveDeliveryStageRank,
+} from '@/lib/deliveryStageRank';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import {
   registerCustomerOrderListener,
@@ -1443,7 +1443,6 @@ export function subscribeCustomerOrderById(
         listenerInstanceId,
       };
       const updatedAtMs = resolveOrderUpdatedAtMs(raw);
-      const courierRank = resolveCustomerCourierRank(raw);
 
       logRawFirestoreCustomerDoc(snap.id, raw, meta);
 
@@ -1500,20 +1499,13 @@ export function subscribeCustomerOrderById(
       });
 
       const mapped = mapDocToRestaurantOrder(snap);
-      const mappedRank = resolveCustomerCourierRank(mapped);
+      const mappedRank = resolveDeliveryStageRank(mapped);
       const mappedUpdatedAtMs = resolveOrderUpdatedAtMs(raw);
-      const lastRank = lastEmittedOrder ? resolveCustomerCourierRank(lastEmittedOrder) : 0;
+      const lastRank = lastEmittedOrder ? resolveDeliveryStageRank(lastEmittedOrder) : 0;
       if (
         lastEmittedOrder &&
         (completionLocked && !isOrderCompleted(mapped) ||
-          isCustomerCourierRankRegression(lastRank, mappedRank) ||
-          (mappedUpdatedAtMs > 0 &&
-            lastEmittedUpdatedAtMs > 0 &&
-            mappedUpdatedAtMs < lastEmittedUpdatedAtMs) ||
-          (mappedUpdatedAtMs > 0 &&
-            lastEmittedUpdatedAtMs > 0 &&
-            mappedUpdatedAtMs === lastEmittedUpdatedAtMs &&
-            mappedRank < lastRank))
+          isDeliveryStageRegression(lastRank, mappedRank))
       ) {
         logCustomerSnapshotRejected(
           snap.id,
@@ -1541,7 +1533,10 @@ export function subscribeCustomerOrderById(
       }
       lastSignature = signature;
       lastEmittedOrder = mapped;
-      lastEmittedUpdatedAtMs = Math.max(lastEmittedUpdatedAtMs, mappedUpdatedAtMs);
+      lastEmittedUpdatedAtMs =
+        mappedUpdatedAtMs > 0
+          ? Math.max(lastEmittedUpdatedAtMs, mappedUpdatedAtMs)
+          : lastEmittedUpdatedAtMs;
       lastEmittedCourierRank = Math.max(lastEmittedCourierRank, mappedRank);
       if (isOrderCompleted(mapped)) {
         completionLocked = true;
