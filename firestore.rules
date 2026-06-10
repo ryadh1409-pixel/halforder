@@ -1107,6 +1107,10 @@ service cloud.firestore {
       return !(d.get('driverId', '') is string && d.get('driverId', '').size() > 0)
         && !(d.get('assignedDriverId', '') is string && d.get('assignedDriverId', '').size() > 0);
     }
+    /** Unassigned for claim: assignedDriverId and driverId null, absent, or empty. */
+    function orderUnassignedForDriverClaim(d) {
+      return noDriverAssignedYet(d);
+    }
     /** Courier statuses a driver may claim from (unassigned marketplace delivery). */
     function driverMarketplaceClaimBeforeStatusOk(ds) {
       return marketplacePoolDeliveryStatusOk(ds);
@@ -1661,21 +1665,20 @@ service cloud.firestore {
         && before.get('items', []) == after.get('items', []);
     }
     /**
-     * Driver self-assign from unassigned paid marketplace delivery order.
-     * Must stay lightweight — evaluated on the fast orders/{id} update path.
+     * Patch guards for driver claim/accept (claimMarketplaceDriverOrder).
+     * Auth checked separately so role=driver fast paths avoid extra get() calls.
      */
-    function isValidDriverClaim() {
+    function driverMarketplaceClaimPatchOk() {
       let before = resource.data;
       let after = request.resource.data;
       let beforeDs = before.get('deliveryStatus', '');
       let afterDs = after.get('deliveryStatus', '');
-      return isAuthenticatedDriverForOrderWrite()
-        && before.get('deliveryType', '') == 'delivery'
+      return before.get('deliveryType', '') == 'delivery'
         && marketplaceOrderPaidOk(before)
         && before.get('marketplaceArchived', false) != true
         && before.get('expired', false) != true
         && marketplaceOrderNotTerminalForClaim(before)
-        && noDriverAssignedYet(before)
+        && orderUnassignedForDriverClaim(before)
         && driverClaimDeliveryTransitionOk(beforeDs, afterDs)
         && after.get('driverId', '') == request.auth.uid
         && after.get('assignedDriverId', '') == request.auth.uid
@@ -1685,6 +1688,28 @@ service cloud.firestore {
         && driverClaimDriverBlobOk(before, after)
         && driverClaimUpdatedByOk()
         && driverClaimImmutableFieldsOk(before, after);
+    }
+    /** Any supported driver identity source (token role, drivers/{uid}, users/{uid}.role). */
+    function isMarketplaceDriverActor() {
+      return authTokenRoleIsDriver()
+        || hasDriverAccountDoc()
+        || (
+          isSignedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver'
+        );
+    }
+    /**
+     * Driver claim/accept on unassigned paid marketplace delivery (claimMarketplaceDriverOrder).
+     * Single evaluator — keeps orders/{id} update under the 1000-expr budget.
+     */
+    function marketplaceDriverUnassignedClaimOk() {
+      return isMarketplaceDriverActor()
+        && driverMarketplaceClaimPatchOk();
+    }
+    /** @deprecated alias — use marketplaceDriverUnassignedClaimOk */
+    function isValidDriverClaim() {
+      return marketplaceDriverUnassignedClaimOk();
     }
     function driverActivePatchAllowedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -2048,11 +2073,10 @@ service cloud.firestore {
             !isCurrentUserRestricted()
             && marketplaceOrderCustomerCancelFastPathOk()
           )
-          // FAST PATH: marketplace driver claim/active — before HalfOrder evaluators (1000-expr budget).
+          // FAST PATH: driver claim — role=driver / drivers/{uid} / users role on unassigned order.
           || (
             !isCurrentUserRestricted()
-            && resource.data.get('deliveryType', '') == 'delivery'
-            && isValidDriverClaim()
+            && marketplaceDriverUnassignedClaimOk()
           )
           || (
             !isCurrentUserRestricted()

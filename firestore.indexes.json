@@ -221,7 +221,7 @@
         { "fieldPath": "deliveryType", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
-    },
+    }
   ],
   "fieldOverrides": []
 }
