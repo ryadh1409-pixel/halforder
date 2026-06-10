@@ -4,7 +4,11 @@ import {
   normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
-import { calculateOrderPayout } from '@/lib/driverEarnings';
+import {
+  buildMarketplaceDeliveryCompletionPatch,
+  logDeliveryCompletionAfter,
+  logDeliveryCompletionBefore,
+} from '@/lib/marketplaceDeliveryCompletion';
 import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
 import { isTerminalMarketplaceOrder, logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
@@ -139,24 +143,10 @@ function buildFulfillmentPatch(
       updatedBy: 'driverMarketplacePickup',
     };
   }
-  const payout = calculateOrderPayout({
-    totalPrice: current?.totalPrice,
-    deliveryFee: current?.deliveryFee,
-    fees: current?.fees,
-  });
-  return {
-    deliveryStatus: MARKETPLACE_DELIVERY_STATUS.DELIVERED,
-    status: 'completed',
-    deliveredAt: serverTimestamp(),
-    completedAt: serverTimestamp(),
-    marketplaceArchived: true,
-    earningsRecorded: true,
-    customerTotal: payout.customerTotal,
-    driverPayout: payout.driverPayout,
-    platformFee: payout.platformFee,
-    updatedAt: serverTimestamp(),
-    updatedBy: 'driverMarketplaceDelivered',
-  };
+  return buildMarketplaceDeliveryCompletionPatch(
+    current ?? {},
+    'driverMarketplaceDelivered',
+  );
 }
 
 async function loadFulfillmentView(orderId: string): Promise<DriverMarketplaceFulfillmentView> {
@@ -237,10 +227,19 @@ export async function applyDriverMarketplaceFulfillment(
     timestamp: Date.now(),
   });
 
-  const wrote = await protectedUpdateOrder(id, patch, {
+  const source = {
     fileName: 'driverMarketplaceFulfillment.ts',
     functionName: `applyDriverMarketplaceFulfillment:${action}`,
-  });
+  };
+  if (action === 'deliver') {
+    logDeliveryCompletionBefore(id, current as Record<string, unknown>, `${source.fileName}#${source.functionName}`);
+  }
+
+  const wrote = await protectedUpdateOrder(id, patch, source);
+
+  if (action === 'deliver') {
+    logDeliveryCompletionAfter(id, patch, `${source.fileName}#${source.functionName}`, wrote);
+  }
   if (wrote) {
     logStatusWrite(id, current.status ?? null, patch.status ?? current.status ?? null, {
       source: `driverMarketplaceFulfillment:${action}`,

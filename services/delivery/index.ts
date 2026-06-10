@@ -29,6 +29,12 @@ import {
 } from '@/services/firestoreDriverQueryLog';
 import { auth, db } from '@/services/firebase';
 import { syncDriverLiveLocation } from '@/services/location/driverTracking';
+import {
+  buildMarketplaceDeliveryCompletionPatch,
+  logDeliveryCompletionAfter,
+  logDeliveryCompletionBefore,
+} from '@/lib/marketplaceDeliveryCompletion';
+import { isOrderTerminalForAssignment } from '@/lib/terminalOrderAssignment';
 import { tracedTransactionUpdateOrder } from '@/services/orderFirestoreWrite';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
@@ -596,6 +602,9 @@ export async function acceptOrderWithLock(orderId: string, driver: DriverIdentit
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('missing_order');
       const data = snap.data() ?? {};
+      if (isOrderTerminalForAssignment(data as Record<string, unknown>)) {
+        throw new Error('order_terminal');
+      }
       if (data.assignedDriverId || data.driverId) throw new Error('already_assigned');
       const status = normalizeDeliveryLifecycleStatus(data.deliveryStatus);
       if (status !== DELIVERY_STATUS.AVAILABLE) throw new Error('not_available');
@@ -867,24 +876,45 @@ export async function updateDeliveryStatus(
         throw new Error('delivery_finalized');
       }
 
-      const patch: Record<string, unknown> = {
-        deliveryStatus: nextStatus,
-        legacyDeliveryStatus: toLegacyDeliveryStatus(nextStatus),
-        status: toLegacyOrderStatus(nextStatus),
-        timeline: arrayUnion({
-          type: nextStatus,
-          actor: 'driver',
-          actorId: driverId,
-          at: serverTimestamp(),
-        }),
-        updatedAt: serverTimestamp(),
-      };
-      if (nextStatus === DELIVERY_STATUS.PICKED_UP) patch.pickedUpAt = serverTimestamp();
-      if (nextStatus === DELIVERY_STATUS.DELIVERED) patch.deliveredAt = serverTimestamp();
+      let patch: Record<string, unknown>;
+      if (nextStatus === DELIVERY_STATUS.DELIVERED) {
+        logDeliveryCompletionBefore(orderId, data, 'delivery/index.ts#updateDeliveryStatus');
+        patch = {
+          ...buildMarketplaceDeliveryCompletionPatch(data, 'delivery/index.ts#updateDeliveryStatus'),
+          timeline: arrayUnion({
+            type: nextStatus,
+            actor: 'driver',
+            actorId: driverId,
+            at: serverTimestamp(),
+          }),
+        };
+      } else {
+        patch = {
+          deliveryStatus: nextStatus,
+          legacyDeliveryStatus: toLegacyDeliveryStatus(nextStatus),
+          status: toLegacyOrderStatus(nextStatus),
+          timeline: arrayUnion({
+            type: nextStatus,
+            actor: 'driver',
+            actorId: driverId,
+            at: serverTimestamp(),
+          }),
+          updatedAt: serverTimestamp(),
+        };
+        if (nextStatus === DELIVERY_STATUS.PICKED_UP) patch.pickedUpAt = serverTimestamp();
+      }
       tracedTransactionUpdateOrder(tx, ref, patch, {
         fileName: 'delivery/index.ts',
         functionName: 'updateDeliveryStatus',
       }, data);
+      if (nextStatus === DELIVERY_STATUS.DELIVERED) {
+        logDeliveryCompletionAfter(
+          orderId,
+          patch,
+          'delivery/index.ts#updateDeliveryStatus',
+          true,
+        );
+      }
       tx.set(
         doc(db, 'drivers', driverId),
         {

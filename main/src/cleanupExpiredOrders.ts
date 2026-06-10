@@ -13,6 +13,7 @@ import {
   shouldRemoveFromDriverPool,
 } from "./marketplacePoolLifecycle.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
+import {repairStaleAssignedDeliveriesBatch} from "./repairStaleMarketplaceDeliveries.js";
 
 const db = getFirestore();
 
@@ -146,16 +147,19 @@ export const cleanupExpiredOrders = onSchedule(
     const started = Date.now();
     logger.info("[marketplace-cleanup] run_start");
 
-    const [poolRemoved, publicRemoved, ordersExpired] = await Promise.all([
-      cleanupDriverMarketplacePool(),
-      cleanupPublicMatchableOrders(),
-      cleanupStaleDeliveryOrders(),
-    ]);
+    const [poolRemoved, publicRemoved, ordersExpired, staleAssignedRepaired] =
+      await Promise.all([
+        cleanupDriverMarketplacePool(),
+        cleanupPublicMatchableOrders(),
+        cleanupStaleDeliveryOrders(),
+        repairStaleAssignedDeliveriesBatch({limit: 100}),
+      ]);
 
     logger.info("[marketplace-cleanup] run_complete", {
       poolRemoved,
       publicRemoved,
       ordersExpired,
+      staleAssignedRepaired,
       durationMs: Date.now() - started,
     });
   },

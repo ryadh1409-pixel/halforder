@@ -24,7 +24,9 @@
     "generate:app-icon": "node ./scripts/generate-app-icon.mjs",
     "legal:dev": "vite --config vite.legal.config.ts",
     "legal:build": "vite build --config vite.legal.config.ts && mv dist-legal/index.vite.html dist-legal/index.html",
-    "legal:preview": "vite preview --config vite.legal.config.ts"
+    "legal:preview": "vite preview --config vite.legal.config.ts",
+    "repair:driver-orders": "npx ts-node --transpile-only scripts/repairHistoricalDriverOrders.ts",
+    "repair:driver-orders:dry": "DRY_RUN=1 npx ts-node --transpile-only scripts/repairHistoricalDriverOrders.ts"
   },
   "dependencies": {
     "@expo/ngrok": "^4.1.3",

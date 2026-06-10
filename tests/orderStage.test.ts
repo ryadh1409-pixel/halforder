@@ -148,6 +148,23 @@ describe('deriveOrderStage', () => {
     expect(safe.status).toBe('picked_up');
   });
 
+  it('blocks payment_confirmed rewrite when order is already completed', () => {
+    const current = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'completed',
+      deliveryStatus: 'delivered',
+      earningsRecorded: true,
+      marketplaceArchived: true,
+    } as OrderStageInput;
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      status: 'payment_confirmed',
+      deliveryStatus: 'driver_assigned',
+    });
+    expect(safe.status).toBeUndefined();
+    expect(safe.deliveryStatus).toBeUndefined();
+  });
+
   it('blocks pending_driver kitchen status when courier is already driver_assigned', () => {
     const current: OrderStageInput = {
       id: 'o1',

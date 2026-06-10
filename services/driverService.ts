@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -42,6 +43,7 @@ import {
 } from './firestoreDriverQueryLog';
 import { auth, db, syncAuthForFirestoreReads } from './firebase';
 import { isMarketplaceOrderExpired } from '@/lib/marketplaceActiveOrder';
+import { isOrderTerminalForAssignment } from '@/lib/terminalOrderAssignment';
 import { getHumanOrderAge } from '@/lib/orderExpiry';
 import {
   isDriverActiveMarketplaceOrder,
@@ -898,6 +900,14 @@ export async function claimMarketplaceDriverOrder(
         return { ok: false, reason: 'missing' };
       }
       const data = snap.data();
+      if (isOrderTerminalForAssignment(data as Record<string, unknown>)) {
+        marketplaceLog.acceptFailed(orderId, {
+          reason: 'order_terminal',
+          currentStatus: data.status ?? null,
+          currentDeliveryStatus: data.deliveryStatus ?? null,
+        });
+        return { ok: false, reason: 'order_terminal' };
+      }
       const currentStatus = normOrderStatusField(data.status);
       const currentDeliveryStatus = normOrderStatusField(data.deliveryStatus);
       if (
@@ -1053,12 +1063,26 @@ export async function updateOrderStatus(
   orderId: string,
   status: 'driver_accepted' | 'picked_up' | 'on_the_way' | 'delivered',
 ): Promise<void> {
+  if (status === 'delivered') {
+    const snap = await getDoc(doc(db, 'orders', orderId));
+    if (!snap.exists()) throw new Error('Order not found');
+    const { writeMarketplaceDeliveryCompletion } = await import(
+      '@/lib/marketplaceDeliveryCompletion'
+    );
+    const wrote = await writeMarketplaceDeliveryCompletion(
+      orderId,
+      snap.data() as Record<string, unknown>,
+      { fileName: 'driverService.ts', functionName: 'updateOrderStatus' },
+      'driverService.ts#updateOrderStatus',
+    );
+    if (!wrote) throw new Error('delivery_completion_write_blocked');
+    return;
+  }
   const updates: Record<string, unknown> = {
     status,
     updatedAt: serverTimestamp(),
   };
   if (status === 'picked_up') updates.pickedUpAt = serverTimestamp();
-  if (status === 'delivered') updates.deliveredAt = serverTimestamp();
   await protectedUpdateOrder(orderId, updates, {
     fileName: 'driverService.ts',
     functionName: 'updateOrderStatus',

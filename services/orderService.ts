@@ -1293,11 +1293,20 @@ export async function updateOrderStatus(
     patch.deliveryStatus = 'picked_up';
   }
   if (normalizedStatus === 'delivered') {
-    patch.deliveredAt = serverTimestamp();
-    patch.completedAt = serverTimestamp();
-    patch.deliveryStatus = 'delivered';
-    patch.status = 'completed';
-    patch.marketplaceArchived = true;
+    const currentSnap = await getDoc(doc(db, 'orders', orderId));
+    const currentData = currentSnap.exists()
+      ? ({ id: orderId, ...(currentSnap.data() as Record<string, unknown>) } as Record<string, unknown>)
+      : { id: orderId };
+    const { writeMarketplaceDeliveryCompletion } = await import(
+      '@/lib/marketplaceDeliveryCompletion'
+    );
+    await writeMarketplaceDeliveryCompletion(
+      orderId,
+      currentData,
+      { fileName: 'orderService.ts', functionName: 'updateOrderStatus' },
+      'orderService.ts#updateOrderStatus',
+    );
+    return;
   }
   if (normalizedStatus === 'arrived_customer') {
     patch.deliveryStatus = 'near_customer';

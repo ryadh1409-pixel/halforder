@@ -13,6 +13,7 @@ import {
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
+import { isOrderTerminalForAssignment } from '@/lib/terminalOrderAssignment';
 import { tracedTransactionUpdateOrder } from '@/services/orderFirestoreWrite';
 import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import {
@@ -243,6 +244,9 @@ export async function acceptDelivery(orderId: string, driver: DispatchDriver): P
     const snap = await tx.get(orderRef);
     if (!snap.exists()) throw new Error('missing_order');
     const data = snap.data();
+    if (isOrderTerminalForAssignment(data as Record<string, unknown>)) {
+      throw new Error('order_terminal');
+    }
     if (data.deliveryStatus === 'delivered' || data.deliveryStatus === 'cancelled') {
       throw new Error('finalized_order');
     }

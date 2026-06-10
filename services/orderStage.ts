@@ -86,6 +86,37 @@ const ASSIGNED_OR_LATER_COURIER_VALUES = new Set([
   'completed',
 ]);
 
+function patchRegressesTerminalDelivery(
+  current: OrderStageInput,
+  patch: Record<string, unknown>,
+): boolean {
+  const terminal =
+    isOrderCompleted(current) ||
+    (current as Record<string, unknown>).marketplaceArchived === true ||
+    (current as Record<string, unknown>).earningsRecorded === true;
+  if (!terminal) return false;
+
+  const nextKitchen = norm(patch.status);
+  if (
+    nextKitchen &&
+    nextKitchen !== 'completed' &&
+    nextKitchen !== 'delivered' &&
+    nextKitchen !== 'cancelled'
+  ) {
+    return true;
+  }
+  const nextCourier = norm(patch.deliveryStatus);
+  if (
+    nextCourier &&
+    nextCourier !== 'delivered' &&
+    nextCourier !== 'completed' &&
+    nextCourier !== 'cancelled'
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function patchRegressesAssignedCourierKitchen(
   current: OrderStageInput,
   patch: Record<string, unknown>,
@@ -183,6 +214,15 @@ export function sanitizeOrderPatchAgainstRegression(
 
   if (patchRegressesAssignedCourierKitchen(current, safe)) {
     delete safe.status;
+  }
+
+  if (patchRegressesTerminalDelivery(current, safe)) {
+    delete safe.status;
+    delete safe.deliveryStatus;
+    delete safe.driverId;
+    delete safe.assignedDriverId;
+    if (safe.marketplaceArchived === false) delete safe.marketplaceArchived;
+    if (safe.earningsRecorded === false) delete safe.earningsRecorded;
   }
 
   // Timestamps can advance deriveOrderStage to `delivered` while status/deliveryStatus

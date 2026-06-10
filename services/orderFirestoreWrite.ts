@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 
 import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
 import { logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { traceOrderLifecycleWrite, traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
@@ -77,6 +78,37 @@ export function prepareProtectedOrderPatch(
 ): Record<string, unknown> {
   const trimmed = orderId.trim();
   const currentInput = { id: trimmed, ...current };
+
+  const currentRecord = current as Record<string, unknown>;
+  const terminal =
+    isOrderCompleted(currentInput) ||
+    currentRecord.earningsRecorded === true ||
+    currentRecord.marketplaceArchived === true;
+  const patchCompletes =
+    patch.status === 'completed' || patch.deliveryStatus === 'delivered';
+  if (terminal && !patchCompletes) {
+    const lifecycleOnly = { ...patch };
+    delete lifecycleOnly.updatedAt;
+    delete lifecycleOnly.updatedBy;
+    const touchesLifecycle = [
+      'status',
+      'deliveryStatus',
+      'marketplaceArchived',
+      'earningsRecorded',
+      'driverId',
+      'assignedDriverId',
+    ].some((k) => lifecycleOnly[k] !== undefined);
+    if (touchesLifecycle) {
+      console.warn('[ORDER TERMINAL BLOCKED]', {
+        orderId: trimmed,
+        currentStatus: current.status ?? null,
+        currentDeliveryStatus: current.deliveryStatus ?? null,
+        source: sourceLabel(source),
+      });
+      return {};
+    }
+  }
+
   const withMeta = ensureUpdatedBy(
     {
       ...patch,
