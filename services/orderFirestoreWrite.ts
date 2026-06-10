@@ -347,17 +347,23 @@ export function tracedTransactionUpdateOrder(
   current?: Record<string, unknown>,
 ): void {
   const orderId = ref.id;
-  const currentInput = { id: orderId, ...(current ?? {}) };
+  const currentRecord = (current ?? {}) as Record<string, unknown>;
+  const currentInput = { id: orderId, ...currentRecord };
   const safePatch = prepareProtectedOrderPatch(orderId, currentInput, patch, source);
   tracePreparedPatch(orderId, currentInput, patch, safePatch, source);
   if (Object.keys(safePatch).length === 0) return;
   if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
-    logStatusWrite(orderId, current.status ?? null, safePatch.status ?? current.status ?? null, {
-      source: sourceLabel(source),
-      firestorePath: orderDocumentPath(orderId),
-      previousDeliveryStatus: current.deliveryStatus ?? null,
-      newDeliveryStatus: safePatch.deliveryStatus ?? current.deliveryStatus ?? null,
-    });
+    logStatusWrite(
+      orderId,
+      currentRecord.status ?? null,
+      safePatch.status ?? currentRecord.status ?? null,
+      {
+        source: sourceLabel(source),
+        firestorePath: orderDocumentPath(orderId),
+        previousDeliveryStatus: currentRecord.deliveryStatus ?? null,
+        newDeliveryStatus: safePatch.deliveryStatus ?? currentRecord.deliveryStatus ?? null,
+      },
+    );
   }
   tx.update(ref, safePatch as WithFieldValue<Record<string, unknown>>);
 }
