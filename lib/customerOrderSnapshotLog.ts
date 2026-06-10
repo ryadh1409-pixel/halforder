@@ -20,6 +20,28 @@ export type CustomerSnapshotMeta = OrderSnapshotMeta & {
   freshnessReason?: string;
 };
 
+export type CustomerRawDocStage =
+  | 'listener'
+  | 'mapper'
+  | 'useProfileOrders'
+  | 'track-order-render';
+
+/** Trace deliveryStatus across listener → mapper → UI (debug stale snapshot regressions). */
+export function logCustomerRawDoc(
+  orderId: string,
+  data: Record<string, unknown>,
+  stage: CustomerRawDocStage,
+): void {
+  console.log('[CUSTOMER RAW DOC]', {
+    stage,
+    orderId,
+    deliveryStatus: data.deliveryStatus ?? null,
+    status: data.status ?? null,
+    updatedAt: data.updatedAt ?? null,
+    updatedAtMs: data.updatedAtMs ?? null,
+  });
+}
+
 /** Raw Firestore document as seen by customer listeners — before any UI mapping. */
 export function logRawFirestoreCustomerDoc(
   orderId: string,

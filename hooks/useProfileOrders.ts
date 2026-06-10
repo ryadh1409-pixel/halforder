@@ -1,4 +1,5 @@
 import { isOrderCompleted } from '@/lib/orderCompletion';
+import { logCustomerRawDoc } from '@/lib/customerOrderSnapshotLog';
 import { logProfileOrderList } from '@/lib/profileOrderLog';
 import { mergeProfileOrderRowsById } from '@/lib/profileOrderMerge';
 import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
@@ -314,6 +315,9 @@ export function useProfileOrders(uid: string | null) {
             docCount: snap.docs.length,
             fromCache: snap.metadata.fromCache,
           });
+          for (const docSnap of snap.docs) {
+            logCustomerRawDoc(docSnap.id, docSnap.data(), 'useProfileOrders');
+          }
           const mapped = mapSnapshotDocs(uid, snap.docs);
           logProfileOrderList(mapped, 'useProfileOrders:query', {
             field,

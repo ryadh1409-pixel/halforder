@@ -1709,9 +1709,14 @@ service cloud.firestore {
         && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
         && driverClaimImmutableFieldsOk(before, after);
     }
+    function driverMarketplaceDeliverBeforeStatusOk(ds) {
+      return ds == 'picked_up'
+        || ds == 'on_the_way'
+        || ds == 'near_customer';
+    }
     function driverMarketplaceDeliverTransitionOk(before, after) {
       return driverAssignedToMarketplaceOrder(before)
-        && before.get('deliveryStatus', '') == 'picked_up'
+        && driverMarketplaceDeliverBeforeStatusOk(before.get('deliveryStatus', ''))
         && after.get('deliveryStatus', '') == 'delivered'
         && after.get('driverId', '') == before.get('driverId', '')
         && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')

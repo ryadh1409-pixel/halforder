@@ -14,6 +14,7 @@ import {
 import { logCustomerOrderPipeline } from '@/lib/customerOrderPipelineLog';
 import {
   logCustomerOrderSnapshot,
+  logCustomerRawDoc,
   logRawFirestoreCustomerDoc,
 } from '@/lib/customerOrderSnapshotLog';
 import {
@@ -326,6 +327,7 @@ function mapDocToRestaurantOrderFromData(
   options?: { timeZone?: string },
 ): RestaurantOrder {
   const data = d.data();
+  logCustomerRawDoc(d.id, data, 'mapper');
   warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
   warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
   warnDevIfUnparsableTimestamp(d.id, 'pickedUpAt', data.pickedUpAt);
@@ -1442,6 +1444,7 @@ export function subscribeCustomerOrderById(
         source: 'subscribeCustomerOrderById' as const,
         listenerInstanceId,
       };
+      logCustomerRawDoc(snap.id, raw, 'listener');
       const updatedAtMs = resolveOrderUpdatedAtMs(raw);
 
       logRawFirestoreCustomerDoc(snap.id, raw, meta);

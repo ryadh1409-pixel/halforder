@@ -2,6 +2,7 @@ import {
   driverCourierForwardRank,
   isEffectivelyDelivered,
 } from '@/lib/driverCourierSnapshotMerge';
+import { logDriverActiveFilter, logQuerySource } from '@/lib/driverActiveOrderFilter';
 import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
@@ -61,11 +62,30 @@ export function isDriverActiveMarketplaceOrder(
   );
 }
 
-export function filterDriverActiveMarketplaceOrders<T extends DriverHubOrderAssignment>(
+export function filterDriverActiveMarketplaceOrders<T extends DriverHubOrderAssignment & { id?: string }>(
   orders: T[],
   driverUid: string,
 ): T[] {
-  return orders.filter((o) => isDriverActiveMarketplaceOrder(o, driverUid));
+  return orders.filter((o) => {
+    const kept = isDriverActiveMarketplaceOrder(o, driverUid);
+    const id = typeof o.id === 'string' ? o.id.trim() : '';
+    if (id) {
+      logQuerySource(id, o.status, o.deliveryStatus, 'filterDriverActiveMarketplaceOrders', {
+        firestorePath: `orders/${id}`,
+        driverId: o.driverId,
+        assignedDriverId: o.assignedDriverId,
+        entersActiveList: kept,
+      });
+      logDriverActiveFilter(
+        id,
+        o,
+        kept,
+        kept ? undefined : 'hub_active_filter',
+        'filterDriverActiveMarketplaceOrders',
+      );
+    }
+    return kept;
+  });
 }
 
 /** Driver Hub shows one current delivery — highest courier stage wins. */

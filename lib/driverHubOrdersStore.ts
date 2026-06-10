@@ -3,6 +3,7 @@ import {
   isDriverOrderTerminalForActiveList,
   type DriverHubOrderAssignment,
 } from '@/lib/driverHubActiveOrders';
+import { logQuerySource } from '@/lib/driverActiveOrderFilter';
 import { MARKETPLACE_DELIVERY_STATUS } from '@/lib/orderStatus';
 import type { ActiveDelivery } from '@/services/delivery';
 import type { DriverOrder } from '@/services/driverService';
@@ -112,6 +113,7 @@ export function markDriverHubOrderCompleted(
   if (wasNew) {
     logCurrentDeliveryCleared(id, reason);
     logActiveOrdersRemove(id, reason);
+    console.log('[ACTIVE DELIVERY CACHE CLEARED]', { orderId: id, reason });
     for (const listener of activeRemoveListeners) {
       listener(id, reason);
     }
@@ -183,7 +185,16 @@ export function filterHubActiveDriverOrders<T extends DriverHubOrderAssignment &
   driverUid: string,
 ): T[] {
   const kept = orders.filter((o) => !shouldDropHubActiveOrder(o));
-  return filterDriverActiveMarketplaceOrders(kept, driverUid);
+  const result = filterDriverActiveMarketplaceOrders(kept, driverUid);
+  for (const o of result) {
+    logQuerySource(o.id, o.status, o.deliveryStatus, 'filterHubActiveDriverOrders', {
+      firestorePath: `orders/${o.id}`,
+      driverId: o.driverId,
+      assignedDriverId: o.assignedDriverId,
+      entersActiveList: true,
+    });
+  }
+  return result;
 }
 
 export function pruneHubActiveOrdersState(

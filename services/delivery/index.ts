@@ -5,6 +5,11 @@ import {
   normalizeDeliveryLifecycleStatus,
 } from '@/constants/deliveryStatus';
 import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
+import {
+  isRawDriverActiveTerminal,
+  logDriverActiveFilter,
+  logQuerySource,
+} from '@/lib/driverActiveOrderFilter';
 import { isDriverHubOrderForceCompleted } from '@/lib/driverHubOrdersStore';
 import {
   MARKETPLACE_DELIVERY_STATUS,
@@ -679,6 +684,19 @@ export function subscribeActiveDelivery(
           onData(null, meta);
           return;
         }
+        const raw = snap.data() as Record<string, unknown>;
+        logQuerySource(
+          snap.id,
+          raw.status,
+          raw.deliveryStatus,
+          'subscribeActiveDelivery',
+          {
+            firestorePath: `orders/${snap.id}`,
+            driverId: raw.driverId,
+            assignedDriverId: raw.assignedDriverId,
+            fromCache: meta.fromCache,
+          },
+        );
         const mapped = safeMapActiveDelivery(snap);
         if (snap.metadata.hasPendingWrites) {
           console.log('[ACTIVE DELIVERY SNAPSHOT] pending local write', orderId, {
@@ -749,16 +767,50 @@ export function subscribeDriverActiveOrders(
         (snap) => {
           if (cancelled) return;
           try {
-            const rows = snap.docs
-              .map((d) => safeMapActiveDelivery(d))
-              .filter((order): order is ActiveDelivery => order != null)
-              .filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus))
-              .filter((order) => !isEffectivelyDelivered(order))
-              .filter((order) => !isDriverHubOrderForceCompleted(order.id))
-              .filter(
-                (order) =>
-                  order.marketplaceCourierStatus !== MARKETPLACE_DELIVERY_STATUS.DELIVERED,
+            const rows: ActiveDelivery[] = [];
+            const queryName = 'subscribeDriverActiveOrders';
+            for (const d of snap.docs) {
+              const raw = d.data();
+              logQuerySource(
+                d.id,
+                raw.status,
+                raw.deliveryStatus,
+                queryName,
+                {
+                  firestorePath: `orders/${d.id}`,
+                  driverId: raw.driverId,
+                  assignedDriverId: raw.assignedDriverId,
+                  fromCache: snap.metadata.fromCache,
+                },
               );
+              if (isRawDriverActiveTerminal(raw)) {
+                logDriverActiveFilter(d.id, raw, false, 'terminal_raw_status', queryName);
+                continue;
+              }
+              const mapped = safeMapActiveDelivery(d);
+              if (!mapped) {
+                logDriverActiveFilter(d.id, raw, false, 'map_failed', queryName);
+                continue;
+              }
+              if (!ACTIVE_DELIVERY_STATUSES.includes(mapped.deliveryStatus)) {
+                logDriverActiveFilter(d.id, raw, false, 'inactive_lifecycle_status', queryName);
+                continue;
+              }
+              if (isEffectivelyDelivered(mapped)) {
+                logDriverActiveFilter(d.id, raw, false, 'effectively_delivered', queryName);
+                continue;
+              }
+              if (isDriverHubOrderForceCompleted(mapped.id)) {
+                logDriverActiveFilter(d.id, raw, false, 'force_completed', queryName);
+                continue;
+              }
+              if (mapped.marketplaceCourierStatus === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
+                logDriverActiveFilter(d.id, raw, false, 'courier_delivered', queryName);
+                continue;
+              }
+              logDriverActiveFilter(d.id, raw, true, undefined, queryName);
+              rows.push(mapped);
+            }
             rows.sort((a, b) => {
               const ca = a.createdAtMs ?? 0;
               const cb = b.createdAtMs ?? 0;

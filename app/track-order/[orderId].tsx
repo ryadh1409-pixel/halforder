@@ -9,6 +9,7 @@ import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
 import { OrderRatingPrompt } from '@/components/order-rating-prompt';
+import { logCustomerRawDoc } from '@/lib/customerOrderSnapshotLog';
 import {
   logCustomerTrackingUi,
   resolveCustomerTrackingUi,
@@ -114,6 +115,16 @@ function TrackOrderScreen() {
 
   useEffect(() => {
     if (!orderId || !order) return;
+    logCustomerRawDoc(
+      orderId,
+      {
+        deliveryStatus: order.deliveryStatus,
+        status: order.status,
+        updatedAt: null,
+        updatedAtMs: order.updatedAtMs,
+      },
+      'track-order-render',
+    );
     logCustomerTrackingUi(orderId, order, 'track-order');
   }, [order, orderId, order?.status, order?.deliveryStatus]);
 

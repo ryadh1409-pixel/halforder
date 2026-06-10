@@ -149,6 +149,10 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
         );
         return;
       }
+      if (result === 'skipped_duplicate') {
+        showError('Could not save delivery status. Pull to refresh and try again.');
+        return;
+      }
       showSuccess(
         fulfillmentAction.action === 'arrive_restaurant'
           ? 'Arrived at restaurant'

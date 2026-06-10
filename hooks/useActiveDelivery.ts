@@ -1,3 +1,4 @@
+import { logQuerySource } from '@/lib/driverActiveOrderFilter';
 import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
 import {
   reconcileActiveDeliverySnapshot,
@@ -29,6 +30,12 @@ function applySnapshot(
     if (!isDriverHubOrderForceCompleted(row.id)) {
       markDriverHubOrderCompleted(row.id, 'firestore_terminal', { activeDelivery: row });
     }
+    console.log('[ACTIVE DELIVERY SNAPSHOT] terminal — clearing currentDelivery', {
+      orderId: row.id,
+      deliveryStatus: row.firestoreDeliveryStatus ?? row.marketplaceCourierStatus,
+      status: row.status,
+      source,
+    });
     setOrder(null);
     return;
   }
@@ -88,6 +95,12 @@ export function useActiveDelivery(
     const unsubList = subscribeDriverActiveOrders(did, (rows) => {
       const match = Array.isArray(rows) ? rows.find((r) => r.id === orderId) : null;
       if (match) {
+        logQuerySource(match.id, match.status, match.deliveryStatus, 'useActiveDelivery.driverList', {
+          firestorePath: `orders/${match.id}`,
+          driverId: match.driverId,
+          assignedDriverId: match.assignedDriverId,
+          entersActiveList: true,
+        });
         applySnapshot(setOrder, 'driver_orders', match);
       }
       setLoading(false);

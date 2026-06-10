@@ -12,9 +12,10 @@ jest.mock('@/services/firebase', () => ({
   db: {},
 }));
 
+const mockGetDoc = jest.fn();
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(),
-  getDoc: jest.fn(),
+  getDoc: (...args: unknown[]) => mockGetDoc(...args),
   serverTimestamp: jest.fn(() => ({ _methodName: 'serverTimestamp' })),
 }));
 
@@ -136,6 +137,17 @@ describe('driverMarketplaceFulfillment', () => {
   });
 
   it('writes completed delivery fields on deliver', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        driverId: 'drv1',
+        assignedDriverId: 'drv1',
+        deliveryStatus: 'picked_up',
+        status: 'picked_up',
+        totalPrice: 20,
+        deliveryFee: 4,
+      }),
+    });
     const result = await applyDriverMarketplaceFulfillment(
       'o1',
       'deliver',

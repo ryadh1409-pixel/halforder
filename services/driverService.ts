@@ -15,6 +15,10 @@ import {
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import {
+  logDuplicateQueryDocMatch,
+  logQuerySource,
+} from '@/lib/driverActiveOrderFilter';
+import {
   DRIVER_PRESENCE_COLLECTION,
   driverPresenceDoc,
   ensureDriverPresenceDoc,
@@ -354,6 +358,25 @@ export function subscribeToDriverOrders(
   let cancelled = false;
   let byDriverId: DriverOrder[] = [];
   let byAssignedId: DriverOrder[] = [];
+  const querySourcesByOrderId = new Map<string, Set<string>>();
+
+  const trackQueryDoc = (
+    docSnap: { id: string; data: () => Record<string, unknown> },
+    snapshotQueryName: string,
+    fromCache: boolean,
+  ) => {
+    const raw = docSnap.data();
+    const sources = querySourcesByOrderId.get(docSnap.id) ?? new Set<string>();
+    sources.add(snapshotQueryName);
+    querySourcesByOrderId.set(docSnap.id, sources);
+    logQuerySource(docSnap.id, raw.status, raw.deliveryStatus, snapshotQueryName, {
+      firestorePath: `orders/${docSnap.id}`,
+      driverId: raw.driverId,
+      assignedDriverId: raw.assignedDriverId,
+      fromCache,
+    });
+    logDuplicateQueryDocMatch(docSnap.id, Array.from(sources), raw);
+  };
 
   const emitMerged = () => {
     if (cancelled) return;
@@ -361,10 +384,38 @@ export function subscribeToDriverOrders(
       const merged = new Map<string, DriverOrder>();
       for (const row of [...byDriverId, ...byAssignedId]) merged.set(row.id, row);
       const rows = Array.from(merged.values())
-        .filter((row) => !isTerminalMarketplaceOrder(row))
+        .filter((row) => {
+          const terminal = isTerminalMarketplaceOrder(row);
+          if (terminal) {
+            logQuerySource(
+              row.id,
+              row.status,
+              row.deliveryStatus,
+              'subscribeToDriverOrders.merged',
+              {
+                firestorePath: `orders/${row.id}`,
+                driverId: row.driverId,
+                assignedDriverId: row.assignedDriverId,
+                entersActiveList: false,
+              },
+            );
+          }
+          return !terminal;
+        })
         .sort(
         (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
       );
+      for (const row of rows) {
+        const sources = Array.from(querySourcesByOrderId.get(row.id) ?? ['subscribeToDriverOrders.merged']);
+        const queryLabel = sources.length > 1 ? sources.join('+') : sources[0] ?? 'subscribeToDriverOrders.merged';
+        logQuerySource(row.id, row.status, row.deliveryStatus, queryLabel, {
+          firestorePath: `orders/${row.id}`,
+          driverId: row.driverId,
+          assignedDriverId: row.assignedDriverId,
+          entersActiveList: true,
+          duplicateQueryMatch: sources.length > 1,
+        });
+      }
       onData(rows);
     } catch {
       onData([]);
@@ -400,6 +451,9 @@ export function subscribeToDriverOrders(
         (snap) => {
           if (cancelled) return;
           try {
+            for (const docSnap of snap.docs) {
+              trackQueryDoc(docSnap, 'subscribeToDriverOrders.driverId', snap.metadata.fromCache);
+            }
             byDriverId = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
             emitMerged();
           } catch (err) {
@@ -448,6 +502,13 @@ export function subscribeToDriverOrders(
         (snap) => {
           if (cancelled) return;
           try {
+            for (const docSnap of snap.docs) {
+              trackQueryDoc(
+                docSnap,
+                'subscribeToDriverOrders.assignedDriverId',
+                snap.metadata.fromCache,
+              );
+            }
             byAssignedId = snap.docs.map((docSnap) => mapDriverOrder(docSnap));
             emitMerged();
           } catch (err) {
@@ -772,6 +833,18 @@ export async function markPickedUp(orderId: string): Promise<void> {
  * Driver claims a paid matching-queue order (`pending_driver`) or a restaurant-released dispatch order (`ready_for_pickup` + `waiting_driver`).
  * Updates embedded `driver` snapshot for customer/restaurant UIs.
  */
+const CLAIM_BLOCK_STATUSES = new Set([
+  'completed',
+  'delivered',
+  'picked_up',
+  'ready_for_pickup',
+  'driver_assigned',
+]);
+
+function normOrderStatusField(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
 export async function claimMarketplaceDriverOrder(
   orderId: string,
   driver: DriverProfile,
@@ -795,6 +868,24 @@ export async function claimMarketplaceDriverOrder(
         return { ok: false, reason: 'missing' };
       }
       const data = snap.data();
+      const currentStatus = normOrderStatusField(data.status);
+      const currentDeliveryStatus = normOrderStatusField(data.deliveryStatus);
+      if (
+        CLAIM_BLOCK_STATUSES.has(currentStatus) ||
+        CLAIM_BLOCK_STATUSES.has(currentDeliveryStatus)
+      ) {
+        console.warn('[claimMarketplaceDriverOrder] BLOCKED - order already advanced/terminal', {
+          orderId,
+          currentStatus: data.status ?? null,
+          currentDeliveryStatus: data.deliveryStatus ?? null,
+        });
+        marketplaceLog.acceptFailed(orderId, {
+          reason: 'order_already_advanced',
+          currentStatus: data.status ?? null,
+          currentDeliveryStatus: data.deliveryStatus ?? null,
+        });
+        return { ok: false, reason: 'order_already_advanced' };
+      }
       if (typeof data.driverId === 'string' && data.driverId.length > 0) {
         marketplaceLog.acceptFailed(orderId, {
           reason: 'already_assigned',

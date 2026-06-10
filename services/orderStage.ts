@@ -1,3 +1,4 @@
+import { isOrderCompleted } from '@/lib/orderCompletion';
 import {
   compareOrderStage,
   ORDER_STAGE_RANK,
@@ -118,7 +119,12 @@ export function sanitizeOrderPatchAgainstRegression(
     }
   }
 
-  if (currentStage === 'delivered') {
+  const patchCompletesOrder =
+    norm(safe.status) === 'completed' || norm(safe.deliveryStatus) === 'delivered';
+
+  // Timestamps can advance deriveOrderStage to `delivered` while status/deliveryStatus
+  // still lag (webhook retry, partial repair). Allow explicit terminal completion writes.
+  if (currentStage === 'delivered' && !(patchCompletesOrder && !isOrderCompleted(current))) {
     delete safe.status;
     delete safe.deliveryStatus;
     delete safe.paymentStatus;

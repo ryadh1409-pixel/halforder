@@ -79,6 +79,24 @@ describe('deriveOrderStage', () => {
     ).toBe('driver_assignment');
   });
 
+  it('allows deliver patch to repair status when timestamps already imply delivered', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'payment_confirmed',
+      deliveryStatus: 'driver_assigned',
+      deliveredAtMs: Date.now(),
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      status: 'completed',
+      deliveryStatus: 'delivered',
+      earningsRecorded: true,
+      marketplaceArchived: true,
+    });
+    expect(safe.status).toBe('completed');
+    expect(safe.deliveryStatus).toBe('delivered');
+  });
+
   it('blocks payment webhook patch from downgrading accepted order', () => {
     const current: OrderStageInput = {
       id: 'o1',

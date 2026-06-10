@@ -122,6 +122,7 @@ test("isWebhookOrderWriteBlockedForData logs [WEBHOOK GUARD] and blocks terminal
         orderId: "o1",
         currentStatus: "completed",
         currentDeliveryStatus: "delivered",
+        earningsRecorded: null,
       },
     ]);
   } finally {
@@ -160,14 +161,14 @@ test("isWebhookOrderWriteBlockedForData blocks only late-stage statuses", () => 
   );
 });
 
-test("isWebhookOrderWriteBlockedForData does not block earningsRecorded alone", () => {
+test("isWebhookOrderWriteBlockedForData blocks earningsRecorded even if status lags", () => {
   assert.equal(
     isWebhookOrderWriteBlockedForData("o4", {
       status: "payment_confirmed",
       deliveryStatus: "pending",
       earningsRecorded: true,
     }),
-    false,
+    true,
   );
 });
 

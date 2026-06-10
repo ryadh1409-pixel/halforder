@@ -211,7 +211,10 @@ export async function applyDriverMarketplaceFulfillment(
   const id = orderId.trim();
   if (!id) throw new Error('Order id is required');
 
-  const current = await loadFulfillmentView(id, seedCurrent);
+  const current = await loadFulfillmentView(
+    id,
+    action === 'deliver' ? null : seedCurrent,
+  );
 
   if (isTerminalMarketplaceOrder(current)) {
     if (action === 'deliver') {
