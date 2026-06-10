@@ -1,4 +1,5 @@
 import { applyStageLockToOrder, lockOrderStage } from '@/lib/orderStageLock';
+import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
 import {
   compareOrderStage,
   deriveOrderStage,
@@ -77,6 +78,127 @@ describe('deriveOrderStage', () => {
         deliveryStatus: 'ready_for_pickup',
       }),
     ).toBe('driver_assignment');
+  });
+
+  it('allows arrive_restaurant patch when kitchen status still payment_confirmed', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'payment_confirmed',
+      deliveryStatus: 'driver_assigned',
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      deliveryStatus: 'ready_for_pickup',
+      status: 'ready_for_pickup',
+      updatedBy: 'driverMarketplaceArrivedRestaurant',
+    });
+    expect(safe.deliveryStatus).toBe('ready_for_pickup');
+    expect(safe.status).toBe('ready_for_pickup');
+  });
+
+  it('does not downgrade lifecycle for driver fulfillment chain from payment_confirmed', () => {
+    const base: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'payment_confirmed',
+      deliveryStatus: 'driver_assigned',
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+    };
+    expect(
+      wouldDowngradeLifecycle(base, {
+        deliveryStatus: 'ready_for_pickup',
+        status: 'ready_for_pickup',
+      }),
+    ).toBe(false);
+    const afterArrive = { ...base, deliveryStatus: 'ready_for_pickup', status: 'ready_for_pickup' };
+    expect(
+      wouldDowngradeLifecycle(afterArrive, {
+        deliveryStatus: 'picked_up',
+        status: 'picked_up',
+      }),
+    ).toBe(false);
+    const afterPickup = { ...afterArrive, deliveryStatus: 'picked_up', status: 'picked_up' };
+    expect(
+      wouldDowngradeLifecycle(afterPickup, {
+        deliveryStatus: 'delivered',
+        status: 'completed',
+      }),
+    ).toBe(false);
+  });
+
+  it('allows pickup when deliveredAt timestamp regressed but fields are active', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'ready_for_pickup',
+      deliveryStatus: 'ready_for_pickup',
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+      deliveredAtMs: Date.now(),
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      deliveryStatus: 'picked_up',
+      status: 'picked_up',
+      updatedBy: 'driverMarketplacePickup',
+    });
+    expect(safe.deliveryStatus).toBe('picked_up');
+    expect(safe.status).toBe('picked_up');
+  });
+
+  it('blocks pending_driver kitchen status when courier is already driver_assigned', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'pending_driver',
+      deliveryStatus: 'driver_assigned',
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      status: 'pending_driver',
+      paymentStatus: 'paid',
+    });
+    expect(safe.status).toBeUndefined();
+  });
+
+  it('allows driver_assigned kitchen status on claim when courier becomes driver_assigned', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'pending_driver',
+      deliveryStatus: 'pending',
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+      deliveryStatus: 'driver_assigned',
+      status: 'driver_assigned',
+      updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+    });
+    expect(safe.status).toBe('driver_assigned');
+    expect(safe.deliveryStatus).toBe('driver_assigned');
+  });
+
+  it('allows arrive_restaurant when deliveredAt timestamp regressed but fields are active', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'payment_confirmed',
+      deliveryStatus: 'driver_assigned',
+      driverId: 'drv1',
+      assignedDriverId: 'drv1',
+      deliveredAtMs: Date.now(),
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      deliveryStatus: 'ready_for_pickup',
+      status: 'ready_for_pickup',
+      updatedBy: 'driverMarketplaceArrivedRestaurant',
+    });
+    expect(safe.deliveryStatus).toBe('ready_for_pickup');
+    expect(safe.status).toBe('ready_for_pickup');
   });
 
   it('allows deliver patch to repair status when timestamps already imply delivered', () => {

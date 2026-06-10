@@ -68,6 +68,50 @@ describe('isDriverActiveMarketplaceOrder', () => {
       ),
     ).toBe(false);
   });
+
+  it('excludes marketplaceArchived even when status fields lag', () => {
+    expect(
+      isDriverActiveMarketplaceOrder(
+        {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          deliveryStatus: 'driver_assigned',
+          status: 'payment_confirmed',
+          marketplaceArchived: true,
+        },
+        'drv1',
+      ),
+    ).toBe(false);
+  });
+
+  it('excludes earningsRecorded even when status fields lag', () => {
+    expect(
+      isDriverActiveMarketplaceOrder(
+        {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          deliveryStatus: 'driver_assigned',
+          status: 'payment_confirmed',
+          earningsRecorded: true,
+        },
+        'drv1',
+      ),
+    ).toBe(false);
+  });
+
+  it('excludes cancelled kitchen and courier statuses', () => {
+    expect(
+      isDriverActiveMarketplaceOrder(
+        {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          deliveryStatus: 'cancelled',
+          status: 'cancelled',
+        },
+        'drv1',
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('isDriverCompletedMarketplaceOrder', () => {

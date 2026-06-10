@@ -1,3 +1,69 @@
+import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
+import { isOrderCompleted } from '@/lib/orderCompletion';
+import {
+  MARKETPLACE_DELIVERY_STATUS,
+  normalizeMarketplaceDeliveryStatus,
+} from '@/lib/orderStatus';
+import { safeToMillis } from '@/utils/safeToMillis';
+
+export type DriverActiveListTerminalInput = {
+  status?: unknown;
+  deliveryStatus?: unknown;
+  marketplaceArchived?: unknown;
+  earningsRecorded?: unknown;
+  deliveredAt?: unknown;
+  completedAt?: unknown;
+  deliveredAtMs?: number | null;
+  expired?: unknown;
+};
+
+function norm(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+/**
+ * Single gate for every driver active-order feed (hub, active screen, merged queries).
+ * Uses persisted Firestore fields so logout/login cannot resurrect finished deliveries.
+ */
+export function isDriverActiveListTerminal(
+  order: DriverActiveListTerminalInput | null | undefined,
+): boolean {
+  if (!order) return false;
+  if (order.earningsRecorded === true) return true;
+  if (order.marketplaceArchived === true) return true;
+  if (order.expired === true) return true;
+
+  const kitchen = norm(order.status);
+  const courier = norm(order.deliveryStatus);
+  if (
+    kitchen === 'completed' ||
+    kitchen === 'delivered' ||
+    kitchen === 'cancelled' ||
+    kitchen === 'rejected' ||
+    kitchen === 'expired'
+  ) {
+    return true;
+  }
+  if (courier === 'delivered' || courier === 'completed' || courier === 'cancelled') {
+    return true;
+  }
+  if (isOrderCompleted(order)) return true;
+
+  const normalizedCourier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
+  if (normalizedCourier === MARKETPLACE_DELIVERY_STATUS.DELIVERED) return true;
+  if (normalizedCourier === MARKETPLACE_DELIVERY_STATUS.CANCELLED) return true;
+
+  const deliveredAtMs =
+    order.deliveredAtMs ??
+    (order.deliveredAt != null ? safeToMillis(order.deliveredAt) : null);
+  return isEffectivelyDelivered({
+    marketplaceCourierStatus: normalizedCourier,
+    firestoreDeliveryStatus: courier,
+    status: typeof order.status === 'string' ? order.status : '',
+    deliveredAtMs,
+  });
+}
+
 /** Log every order doc seen from a Firestore listener/query (debug stale reintroduction). */
 export function logQuerySource(
   orderId: string,
@@ -50,22 +116,11 @@ export function logDriverActiveFilter(
   });
 }
 
-function norm(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
 /** Raw Firestore terminal signals — filter before lifecycle mapping. */
-export function isRawDriverActiveTerminal(raw: {
-  deliveryStatus?: unknown;
-  status?: unknown;
-  deliveredAt?: unknown;
-  completedAt?: unknown;
-}): boolean {
-  const kitchen = norm(raw.status);
-  const courier = norm(raw.deliveryStatus);
-  if (kitchen === 'completed' || kitchen === 'delivered') return true;
-  if (courier === 'delivered' || courier === 'completed') return true;
-  return false;
+export function isRawDriverActiveTerminal(
+  raw: DriverActiveListTerminalInput,
+): boolean {
+  return isDriverActiveListTerminal(raw);
 }
 
 /** Warn when the same order id is returned by more than one driver query. */

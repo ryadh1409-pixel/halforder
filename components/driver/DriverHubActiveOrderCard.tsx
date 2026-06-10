@@ -72,14 +72,14 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
         );
         return;
       }
+      if (result === 'skipped_duplicate') {
+        showError('Could not save delivery status. Pull to refresh and try again.');
+        return;
+      }
       if (action.action === 'deliver') {
-        if (result === 'applied') {
-          markDriverHubOrderCompleted(order.id, 'hub_card_deliver', { driverOrder: order });
-          showSuccess(DRIVER_DELIVERY_COMPLETE_TOAST);
-          router.replace(DRIVER_ROUTES.hub as never);
-        } else if (result === 'skipped_duplicate') {
-          showError('Delivery could not be confirmed in Firestore. Pull to refresh and try again.');
-        }
+        markDriverHubOrderCompleted(order.id, 'hub_card_deliver', { driverOrder: order });
+        showSuccess(DRIVER_DELIVERY_COMPLETE_TOAST);
+        router.replace(DRIVER_ROUTES.hub as never);
         return;
       }
       showSuccess(

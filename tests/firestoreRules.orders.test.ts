@@ -1043,6 +1043,49 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows driver claim from pending_driver kitchen status with synced driver_assigned status', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), {
+          name: 'Driver One',
+          isOnline: true,
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_pending_driver'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          status: 'pending_driver',
+          deliveryStatus: 'pending',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          driverId: null,
+          assignedDriverId: null,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'claim_pending_driver'), {
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          driverName: 'Driver One',
+          driver: {
+            id: 'drv1',
+            name: 'Driver One',
+            phone: null,
+            vehicle: null,
+            avatar: null,
+          },
+          deliveryStatus: 'driver_assigned',
+          status: 'driver_assigned',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          estimatedDeliveryMinutes: 18,
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+        }),
+      );
+    });
+
     it('allows driver claim patch with drivers/{uid} account doc (no auth claim)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), {

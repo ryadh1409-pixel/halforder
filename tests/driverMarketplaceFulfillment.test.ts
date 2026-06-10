@@ -98,6 +98,15 @@ describe('driverMarketplaceFulfillment', () => {
   });
 
   it('writes ready_for_pickup on arrive_restaurant', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        driverId: 'drv1',
+        assignedDriverId: 'drv1',
+        deliveryStatus: 'driver_assigned',
+        status: 'payment_confirmed',
+      }),
+    });
     const result = await applyDriverMarketplaceFulfillment(
       'o1',
       'arrive_restaurant',
@@ -119,6 +128,15 @@ describe('driverMarketplaceFulfillment', () => {
   });
 
   it('writes picked_up on pickup', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        driverId: 'drv1',
+        assignedDriverId: 'drv1',
+        deliveryStatus: 'ready_for_pickup',
+        status: 'ready_for_pickup',
+      }),
+    });
     const result = await applyDriverMarketplaceFulfillment(
       'o1',
       'pickup',

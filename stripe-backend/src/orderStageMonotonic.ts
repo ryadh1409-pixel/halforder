@@ -129,6 +129,42 @@ const PRE_PAYMENT_STATUS_VALUES = new Set([
 
 const EARLY_COURIER_VALUES = new Set(["pending", ""]);
 
+const PRE_ASSIGNMENT_KITCHEN_STATUSES = new Set([
+  "awaiting_payment",
+  "pending_payment",
+  "payment_processing",
+  "payment_failed",
+  "pending",
+  "payment_confirmed",
+  "pending_driver",
+]);
+
+const ASSIGNED_OR_LATER_COURIER_VALUES = new Set([
+  "driver_assigned",
+  "ready_for_pickup",
+  "ready",
+  "waiting_driver",
+  "accepted_for_delivery",
+  "picked_up",
+  "on_the_way",
+  "near_customer",
+  "heading_to_restaurant",
+  "arrived_restaurant",
+  "delivered",
+  "completed",
+]);
+
+function patchRegressesAssignedCourierKitchen(
+  current: MonotonicOrderInput,
+  patch: Record<string, unknown>,
+): boolean {
+  if (patch.status === undefined) return false;
+  const courier = norm(current.deliveryStatus);
+  if (!ASSIGNED_OR_LATER_COURIER_VALUES.has(courier)) return false;
+  const nextKitchen = norm(patch.status);
+  return PRE_ASSIGNMENT_KITCHEN_STATUSES.has(nextKitchen);
+}
+
 export function sanitizeOrderPatchAgainstRegression(
   current: MonotonicOrderInput,
   patch: Record<string, unknown>,
@@ -183,6 +219,10 @@ export function sanitizeOrderPatchAgainstRegression(
       delete safe.driverName;
       delete safe.driverPhone;
     }
+  }
+
+  if (patchRegressesAssignedCourierKitchen(current, safe)) {
+    delete safe.status;
   }
 
   if (currentStage === "delivered") {

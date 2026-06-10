@@ -128,6 +128,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
         return;
       }
       if (result === 'skipped_duplicate') {
+        showError('Could not save delivery status. Pull to refresh and try again.');
         return;
       }
       if (action === 'arrive_restaurant') {

@@ -1591,6 +1591,7 @@ service cloud.firestore {
         'driverName',
         'driverPhone',
         'deliveryStatus',
+        'status',
         'driver',
         'acceptedAt',
         'updatedAt',
@@ -1599,6 +1600,26 @@ service cloud.firestore {
         'estimatedDeliveryTime',
         'updatedBy',
       ]);
+    }
+    /** Kitchen status may advance to driver_assigned on claim (legacy rows used pending_driver). */
+    function driverClaimKitchenStatusOk(before, after) {
+      let beforeStatus = before.get('status', '');
+      let afterStatus = after.get('status', '');
+      return afterStatus == beforeStatus
+        || (
+          afterStatus == 'driver_assigned'
+          && (
+            beforeStatus == ''
+            || beforeStatus == 'pending_driver'
+            || beforeStatus == 'payment_confirmed'
+            || beforeStatus == 'pending'
+            || beforeStatus == 'awaiting_payment'
+            || beforeStatus == 'accepted'
+            || beforeStatus == 'restaurant_accepted'
+            || beforeStatus == 'preparing'
+            || beforeStatus == 'ready_for_pickup'
+          )
+        );
     }
     /** Claim transition: courier pending → driver_assigned only. */
     function driverClaimDeliveryTransitionOk(beforeDs, afterDs) {
@@ -1653,7 +1674,7 @@ service cloud.firestore {
         && after.get('driverId', '') == request.auth.uid
         && after.get('assignedDriverId', '') == request.auth.uid
         && after.get('driverId', '') == after.get('assignedDriverId', '')
-        && after.get('status', '') == before.get('status', '')
+        && driverClaimKitchenStatusOk(before, after)
         && driverClaimAllowedKeys()
         && driverClaimDriverBlobOk(before, after)
         && driverClaimUpdatedByOk()

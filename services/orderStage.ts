@@ -1,4 +1,5 @@
 import { isOrderCompleted } from '@/lib/orderCompletion';
+import { lifecyclePriorityFromCourier } from '@/lib/orderLifecyclePriority';
 import {
   compareOrderStage,
   ORDER_STAGE_RANK,
@@ -60,6 +61,59 @@ const PRE_PAYMENT_STATUS_VALUES = new Set([
 
 const EARLY_COURIER_VALUES = new Set(['pending', '']);
 
+const PRE_ASSIGNMENT_KITCHEN_STATUSES = new Set([
+  'awaiting_payment',
+  'pending_payment',
+  'payment_processing',
+  'payment_failed',
+  'pending',
+  'payment_confirmed',
+  'pending_driver',
+]);
+
+const ASSIGNED_OR_LATER_COURIER_VALUES = new Set([
+  'driver_assigned',
+  'ready_for_pickup',
+  'ready',
+  'waiting_driver',
+  'accepted_for_delivery',
+  'picked_up',
+  'on_the_way',
+  'near_customer',
+  'heading_to_restaurant',
+  'arrived_restaurant',
+  'delivered',
+  'completed',
+]);
+
+function patchRegressesAssignedCourierKitchen(
+  current: OrderStageInput,
+  patch: Record<string, unknown>,
+): boolean {
+  if (patch.status === undefined) return false;
+  const courier = norm(current.deliveryStatus);
+  if (!ASSIGNED_OR_LATER_COURIER_VALUES.has(courier)) return false;
+  const nextKitchen = norm(patch.status);
+  return PRE_ASSIGNMENT_KITCHEN_STATUSES.has(nextKitchen);
+}
+
+function patchAdvancesCourier(
+  current: OrderStageInput,
+  patch: Record<string, unknown>,
+): boolean {
+  if (patch.deliveryStatus === undefined) return false;
+  const currentRaw = norm(current.deliveryStatus);
+  const nextRaw = norm(patch.deliveryStatus);
+  if (!nextRaw || nextRaw === currentRaw) return false;
+
+  const currentPriority = lifecyclePriorityFromCourier(current.deliveryStatus);
+  const nextPriority = lifecyclePriorityFromCourier(patch.deliveryStatus);
+  if (nextPriority > currentPriority) return true;
+
+  // Driver fulfillment steps can share lifecycle rank (driver_assigned → ready_for_pickup).
+  return nextPriority === currentPriority && !isOrderCompleted(current);
+}
+
 /**
  * Strip patch fields that would move the order backward in the lifecycle.
  * Payment webhooks, repairs, and stale listeners must use this before writing.
@@ -78,17 +132,21 @@ export function sanitizeOrderPatchAgainstRegression(
   }
 
   if (compareOrderStage(nextStage, currentStage) < 0) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[ORDER STAGE] blocked regression patch', {
-        orderId: current.id ?? null,
-        currentStage,
-        attemptedStage: nextStage,
-        patch: safe,
-      });
+    const allowForwardCourierRepair =
+      patchAdvancesCourier(current, safe) && !isOrderCompleted(current);
+    if (!allowForwardCourierRepair) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[ORDER STAGE] blocked regression patch', {
+          orderId: current.id ?? null,
+          currentStage,
+          attemptedStage: nextStage,
+          patch: safe,
+        });
+      }
+      delete safe.status;
+      delete safe.deliveryStatus;
+      delete safe.paymentStatus;
     }
-    delete safe.status;
-    delete safe.deliveryStatus;
-    delete safe.paymentStatus;
   }
 
   const currentRank = ORDER_STAGE_RANK[currentStage];
@@ -121,9 +179,22 @@ export function sanitizeOrderPatchAgainstRegression(
 
   const patchCompletesOrder =
     norm(safe.status) === 'completed' || norm(safe.deliveryStatus) === 'delivered';
+  const advancesCourier = patchAdvancesCourier(current, safe);
+
+  if (patchRegressesAssignedCourierKitchen(current, safe)) {
+    delete safe.status;
+  }
 
   // Timestamps can advance deriveOrderStage to `delivered` while status/deliveryStatus
-  // still lag (webhook retry, partial repair). Allow explicit terminal completion writes.
+  // still lag (webhook retry, partial repair). Allow explicit terminal completion writes
+  // and forward driver fulfillment steps on regressed field state.
+  if (
+    currentStage === 'delivered' &&
+    !isOrderCompleted(current) &&
+    (patchCompletesOrder || advancesCourier)
+  ) {
+    return safe;
+  }
   if (currentStage === 'delivered' && !(patchCompletesOrder && !isOrderCompleted(current))) {
     delete safe.status;
     delete safe.deliveryStatus;

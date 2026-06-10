@@ -15,9 +15,11 @@ import {
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import {
+  isDriverActiveListTerminal,
   logDuplicateQueryDocMatch,
   logQuerySource,
 } from '@/lib/driverActiveOrderFilter';
+import { driverCourierForwardRank } from '@/lib/driverCourierSnapshotMerge';
 import {
   DRIVER_PRESENCE_COLLECTION,
   driverPresenceDoc,
@@ -128,8 +130,11 @@ export type DriverOrder = {
   acceptedAtMs: number | null;
   createdAtMs: number | null;
   deliveredAtMs: number | null;
+  updatedAtMs: number | null;
   driverId: string | null;
   assignedDriverId: string | null;
+  marketplaceArchived: boolean;
+  earningsRecorded: boolean;
 };
 
 type LatLng = { lat: number; lng: number };
@@ -154,17 +159,22 @@ function distanceKm(a: LatLng | null, b: LatLng | null): number | null {
   return Number((2 * earthKm * Math.atan2(Math.sqrt(i), Math.sqrt(1 - i))).toFixed(1));
 }
 
+/** Keep aligned with `parseStatus` in orderService — never remap payment_confirmed. */
 function normalizeStatus(value: unknown): OrderStatus {
-  const s = typeof value === 'string' ? value : '';
-  if (s === 'payment_processing') return 'payment_processing';
-  if (s === 'payment_failed') return 'payment_failed';
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (s === 'pending_payment') return 'awaiting_payment';
+  if (s === 'confirmed') return 'payment_confirmed';
   if (
     s === 'awaiting_payment' ||
+    s === 'payment_processing' ||
+    s === 'payment_confirmed' ||
+    s === 'payment_failed' ||
     s === 'pending' ||
     s === 'pending_driver' ||
     s === 'driver_accepted' ||
     s === 'driver_assigned' ||
     s === 'arriving_restaurant' ||
+    s === 'picked_up_pending' ||
     s === 'accepted' ||
     s === 'restaurant_accepted' ||
     s === 'preparing' ||
@@ -180,7 +190,18 @@ function normalizeStatus(value: unknown): OrderStatus {
   ) {
     return s;
   }
-  return 'pending_driver';
+  return 'pending';
+}
+
+function pickFreshestDriverOrder(a: DriverOrder, b: DriverOrder): DriverOrder {
+  const rankA = driverCourierForwardRank(a.deliveryStatus);
+  const rankB = driverCourierForwardRank(b.deliveryStatus);
+  if (rankB > rankA) return b;
+  if (rankA > rankB) return a;
+  const msA = a.updatedAtMs ?? 0;
+  const msB = b.updatedAtMs ?? 0;
+  if (msA === 0 || msB === 0) return msB >= msA ? b : a;
+  return msB >= msA ? b : a;
 }
 
 function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }): DriverOrder {
@@ -204,6 +225,7 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     : [];
   warnDevIfUnparsableTimestamp(d.id, 'acceptedAt', data.acceptedAt);
   warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
+  warnDevIfUnparsableTimestamp(d.id, 'updatedAt', data.updatedAt);
   const restaurantLocation = parseLatLng(data.restaurantLocation);
   const dropoffLocation =
     parseLatLng(data.userLocation) ??
@@ -287,6 +309,7 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     acceptedAtMs: safeToMillis(data.acceptedAt),
     createdAtMs: safeToMillis(data.createdAt),
     deliveredAtMs: safeToMillis(data.deliveredAt),
+    updatedAtMs: safeToMillis(data.updatedAt),
     deliveryStatus: normalizeMarketplaceDeliveryStatus(data.deliveryStatus),
     expired: isMarketplaceOrderExpired({
       createdAt: data.createdAt,
@@ -320,6 +343,8 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
     assignedDriverId:
       typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
+    marketplaceArchived: data.marketplaceArchived === true,
+    earningsRecorded: data.earningsRecorded === true,
   };
 }
 
@@ -382,10 +407,14 @@ export function subscribeToDriverOrders(
     if (cancelled) return;
     try {
       const merged = new Map<string, DriverOrder>();
-      for (const row of [...byDriverId, ...byAssignedId]) merged.set(row.id, row);
+      for (const row of [...byDriverId, ...byAssignedId]) {
+        const prev = merged.get(row.id);
+        merged.set(row.id, prev ? pickFreshestDriverOrder(prev, row) : row);
+      }
       const rows = Array.from(merged.values())
         .filter((row) => {
-          const terminal = isTerminalMarketplaceOrder(row);
+          const terminal =
+            isTerminalMarketplaceOrder(row) || isDriverActiveListTerminal(row);
           if (terminal) {
             logQuerySource(
               row.id,
@@ -858,6 +887,7 @@ export async function claimMarketplaceDriverOrder(
     driverPhone: driver.phone ?? null,
     ...(vehicle ? { driverVehicle: vehicle } : {}),
     deliveryStatus: 'driver_assigned',
+    status: 'driver_assigned',
   };
 
   try {

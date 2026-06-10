@@ -159,19 +159,7 @@ function buildFulfillmentPatch(
   };
 }
 
-async function loadFulfillmentView(
-  orderId: string,
-  seed?: DriverMarketplaceFulfillmentView | null,
-): Promise<DriverMarketplaceFulfillmentView> {
-  if (
-    seed &&
-    (seed.deliveryStatus !== undefined ||
-      seed.status !== undefined ||
-      seed.driverId !== undefined ||
-      seed.assignedDriverId !== undefined)
-  ) {
-    return { id: orderId, ...seed };
-  }
+async function loadFulfillmentView(orderId: string): Promise<DriverMarketplaceFulfillmentView> {
   const snap = await getDoc(doc(db, 'orders', orderId));
   if (!snap.exists()) {
     throw new Error('Order not found');
@@ -206,15 +194,12 @@ function isLegalFulfillment(
 export async function applyDriverMarketplaceFulfillment(
   orderId: string,
   action: DriverMarketplaceFulfillmentAction,
-  seedCurrent?: DriverMarketplaceFulfillmentView | null,
+  _seedCurrent?: DriverMarketplaceFulfillmentView | null,
 ): Promise<'applied' | 'skipped_duplicate' | 'skipped_illegal'> {
   const id = orderId.trim();
   if (!id) throw new Error('Order id is required');
 
-  const current = await loadFulfillmentView(
-    id,
-    action === 'deliver' ? null : seedCurrent,
-  );
+  const current = await loadFulfillmentView(id);
 
   if (isTerminalMarketplaceOrder(current)) {
     if (action === 'deliver') {
