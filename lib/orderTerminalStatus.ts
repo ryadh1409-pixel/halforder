@@ -97,6 +97,8 @@ export type StatusWriteMeta = {
   firestorePath?: string;
 };
 
+import { logOrderLifecycleTransition } from '@/lib/orderLifecycleTransitionLog';
+
 /** Mandatory `[STATUS WRITE]` log before every lifecycle Firestore mutation (prod + dev). */
 export function logStatusWrite(
   orderId: string,
@@ -111,6 +113,12 @@ export function logStatusWrite(
   if (prev === next && prevCourier === nextCourier) return;
 
   const firestorePath = meta?.firestorePath ?? orderDocumentPath(orderId);
+  logOrderLifecycleTransition(orderId, prev, next, {
+    source: meta?.source ?? null,
+    firestorePath,
+    previousDeliveryStatus: prevCourier,
+    newDeliveryStatus: nextCourier,
+  });
   console.log('[STATUS WRITE]', {
     orderId,
     previousStatus: prev,
