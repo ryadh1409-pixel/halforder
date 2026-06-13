@@ -2,6 +2,7 @@ import {
   ADMIN_FOOD_CARD_SLOT_IDS,
   type AdminFoodCardSlotId,
 } from '../constants/adminFoodCards';
+import { mapAdminFoodShareDoc } from './adminFoodSharesService';
 import { auth, db } from './firebase';
 import {
   collection,
@@ -21,46 +22,31 @@ export type AdminFoodCardSlot = {
   image: string;
   price: number;
   sharingPrice: number;
+  deliveryShare: number;
   venueLocation: string;
   active: boolean;
   aiDescription: string;
   restaurantName: string;
 };
 
-function coerceSlot(
+function slotFromShare(
   docId: AdminFoodCardSlotId,
   raw?: Record<string, unknown>,
 ): AdminFoodCardSlot {
-  const idNum =
-    raw && typeof raw.id === 'number' ? raw.id : Number.parseInt(docId, 10) || 1;
-  const price =
-    typeof raw?.price === 'number' && raw.price > 0 ? raw.price : 0;
-  const splitFallback =
-    price > 0 ? Number((price / 2).toFixed(2)) : 0;
-  const sharing =
-    typeof raw?.sharingPrice === 'number' && raw.sharingPrice > 0
-      ? raw.sharingPrice
-      : typeof raw?.splitPrice === 'number' && raw.splitPrice > 0
-        ? raw.splitPrice
-        : splitFallback;
-  let venue = '';
-  const loc = raw?.location;
-  if (typeof loc === 'string' && loc.trim()) venue = loc.trim();
+  const share = mapAdminFoodShareDoc(docId, raw ?? {});
+  const idNum = Number.parseInt(docId, 10) || 1;
   return {
     docId,
     id: idNum,
-    title: typeof raw?.title === 'string' ? raw.title : '',
-    image: typeof raw?.image === 'string' ? raw.image : '',
-    price,
-    sharingPrice: sharing,
-    venueLocation: venue,
-    active: raw?.active === true,
-    aiDescription:
-      typeof raw?.aiDescription === 'string' ? raw.aiDescription : '',
-    restaurantName:
-      typeof raw?.restaurantName === 'string' && raw.restaurantName.trim()
-        ? raw.restaurantName.trim()
-        : 'HalfOrder',
+    title: share.foodName,
+    image: share.image,
+    price: share.originalPrice,
+    sharingPrice: share.sharedPrice,
+    deliveryShare: share.deliveryShare,
+    venueLocation: '',
+    active: share.active,
+    aiDescription: share.description,
+    restaurantName: share.restaurantName,
   };
 }
 
@@ -70,23 +56,20 @@ export function subscribeAdminFoodCardSlots(
 ): () => void {
   return onSnapshot(
     query(
-      collection(db, 'food_cards'),
+      collection(db, 'adminFoodShares'),
       where(documentId(), 'in', [...ADMIN_FOOD_CARD_SLOT_IDS]),
     ),
     (snap) => {
       const byId = new Map<string, Record<string, unknown>>();
-      snap.docs.forEach((d) => {
-        byId.set(d.id, d.data() as Record<string, unknown>);
-      });
-      const rows: AdminFoodCardSlot[] = ADMIN_FOOD_CARD_SLOT_IDS.map((sid) =>
-        coerceSlot(sid, byId.get(sid)),
+      snap.docs.forEach((d) => byId.set(d.id, d.data() as Record<string, unknown>));
+      onData(
+        ADMIN_FOOD_CARD_SLOT_IDS.map((sid) => slotFromShare(sid, byId.get(sid))),
       );
-      onData(rows);
     },
     (e) => {
       console.warn('[adminFoodCardSlots] snapshot error', e);
       onError?.(e instanceof Error ? e : new Error('Failed to load slots'));
-      onData(ADMIN_FOOD_CARD_SLOT_IDS.map((sid) => coerceSlot(sid)));
+      onData(ADMIN_FOOD_CARD_SLOT_IDS.map((sid) => slotFromShare(sid)));
     },
   );
 }
@@ -99,6 +82,7 @@ export async function saveAdminFoodCardSlot(
     image: string;
     price: number;
     sharingPrice: number;
+    deliveryShare: number;
     venueLocation?: string;
     active: boolean;
     aiDescription?: string;
@@ -107,47 +91,45 @@ export async function saveAdminFoodCardSlot(
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid) throw new Error('Sign in required');
-  const price = Number(input.price);
-  if (!Number.isFinite(price) || price <= 0) {
-    throw new Error('Valid price required');
+  const originalPrice = Number(input.price);
+  if (!Number.isFinite(originalPrice) || originalPrice <= 0) {
+    throw new Error('Valid original price required');
   }
-  const sharing = Number(input.sharingPrice);
-  if (!Number.isFinite(sharing) || sharing <= 0) {
-    throw new Error('Valid sharing price per person is required');
+  const sharedPrice = Number(input.sharingPrice);
+  if (!Number.isFinite(sharedPrice) || sharedPrice <= 0) {
+    throw new Error('Valid shared food price required');
   }
-  const title = input.title.trim();
-  if (!title) throw new Error('Title required');
+  const deliveryShare = Number(input.deliveryShare);
+  if (!Number.isFinite(deliveryShare) || deliveryShare < 0) {
+    throw new Error('Valid delivery share required');
+  }
+  const foodName = input.title.trim();
+  if (!foodName) throw new Error('Food name required');
   const image = input.image.trim();
   if (!image) throw new Error('Image required');
 
-  const aiTrim =
+  const description =
     typeof input.aiDescription === 'string' && input.aiDescription.trim()
       ? input.aiDescription.trim()
       : '';
 
-  const venue =
-    typeof input.venueLocation === 'string' ? input.venueLocation.trim() : '';
-  const shareFixed = Number(sharing.toFixed(2));
-
   await setDoc(
-    doc(db, 'food_cards', slotDocId),
+    doc(db, 'adminFoodShares', slotDocId),
     {
-      id: input.id,
-      title,
-      image,
-      price,
-      sharingPrice: shareFixed,
-      splitPrice: shareFixed,
-      location: venue,
-      active: input.active === true,
-      maxUsers: 2,
+      foodName,
       restaurantName:
         typeof input.restaurantName === 'string' &&
         input.restaurantName.trim()
           ? input.restaurantName.trim()
           : 'HalfOrder',
+      image,
+      originalPrice: Number(originalPrice.toFixed(2)),
+      sharedPrice: Number(sharedPrice.toFixed(2)),
+      deliveryShare: Number(deliveryShare.toFixed(2)),
+      description,
+      active: input.active === true,
       createdAt: serverTimestamp(),
-      ...(aiTrim ? { aiDescription: aiTrim } : {}),
+      updatedAt: serverTimestamp(),
     },
     { merge: true },
   );

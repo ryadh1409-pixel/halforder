@@ -143,16 +143,16 @@ function SwipeDeckInner({
         {loading ? (
           <>
             <View style={styles.loadingOrb} />
-            <Text style={styles.emptyTitle}>Finding meals nearby</Text>
+            <Text style={styles.emptyTitle}>Finding meal shares</Text>
             <Text style={styles.emptySub}>
-              Loading split-ready food cards around you.
+              Loading admin meal share cards.
             </Text>
           </>
         ) : (
           <>
-            <Text style={styles.emptyTitle}>No meals to swipe</Text>
+            <Text style={styles.emptyTitle}>No meal shares to swipe</Text>
             <Text style={styles.emptySub}>
-              Check back soon — new split orders drop all day in Toronto.
+              Ask an admin to activate cards in the dashboard.
             </Text>
           </>
         )}

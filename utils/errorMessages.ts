@@ -11,7 +11,8 @@ export type ReadableErrorContext =
   | 'push'
   | 'customer'
   | 'driver'
-  | 'restaurant';
+  | 'restaurant'
+  | 'foodShare';
 
 const DEFAULT_MESSAGE = 'Something went wrong. Please try again.';
 

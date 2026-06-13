@@ -36,6 +36,12 @@ export const USER_ROUTES = {
   /** Canonical marketplace order detail — root `app/order/[id].tsx` only. */
   order: (orderId: string): Href => customerOrderDetailHref(orderId),
   trackOrder: (orderId: string) => `/track-order/${encodeURIComponent(orderId)}` as const,
+  foodShareMatch: (matchId: string) =>
+    `/food-share-match/${encodeURIComponent(matchId)}` as const,
+  foodSharePay: (matchId: string) =>
+    `/food-share-pay/${encodeURIComponent(matchId)}` as const,
+  foodShareChat: (matchId: string) =>
+    `/food-share-chat/${encodeURIComponent(matchId)}` as const,
 } as const;
 
 /** Canonical customer tab shell hrefs. */

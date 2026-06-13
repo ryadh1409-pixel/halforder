@@ -324,3 +324,5 @@ export const createPaymentIntent = functions
   });
 
 export { stripeWebhook } from "./stripeWebhook.js";
+export { createFoodSharePaymentIntent } from "./createFoodSharePaymentIntent.js";
+export { refundFoodShareMatch } from "./refundFoodShareMatch.js";

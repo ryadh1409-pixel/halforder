@@ -1,7 +1,3 @@
-import {
-  CategoryChipsRow,
-  type HomeCategory,
-} from '@/components/home/CategoryChipsRow';
 import { FeaturedSection } from '@/components/home/FeaturedSection';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
@@ -9,7 +5,6 @@ import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
-import type { HomeRestaurant } from '@/types/homeRestaurant';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -21,22 +16,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-function filterByCategory(
-  list: HomeRestaurant[],
-  cat: HomeCategory,
-): HomeRestaurant[] {
-  if (cat === 'All') return list;
-  if (cat === 'Pickup') return list;
-  if (cat === 'Offers') return list.filter((r) => r.promoLabel != null);
-  const needle = cat.toLowerCase();
-  return list.filter(
-    (r) =>
-      r.cuisine?.toLowerCase().includes(needle) ||
-      r.name.toLowerCase().includes(needle) ||
-      (cat === 'Grocery' && r.cuisine?.toLowerCase().includes('grocery')),
-  );
-}
-
 /**
  * Uber Eats–style marketplace home — Firestore realtime restaurants, horizontal rails.
  */
@@ -44,27 +23,21 @@ export function UberEatsHomeScreen() {
   const router = useRouter();
   const { addressLine, refreshLocation, locationLoading } = useHomeMarketplaceLocation();
   const { restaurants, loading, error } = useHomeRestaurants();
-  const [category, setCategory] = useState<HomeCategory>('All');
   const [refreshing, setRefreshing] = useState(false);
 
-  const filtered = useMemo(
-    () => filterByCategory(restaurants, category),
-    [restaurants, category],
-  );
-
-  const featured = useMemo(() => filtered.slice(0, 8), [filtered]);
+  const featured = useMemo(() => restaurants.slice(0, 8), [restaurants]);
   const popular = useMemo(
     () =>
-      [...filtered]
+      [...restaurants]
         .filter((r) => r.reviewCount > 0 && r.rating != null)
         .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
         .slice(0, 10),
-    [filtered],
+    [restaurants],
   );
-  const mightLike = useMemo(() => filtered.slice(2, 12), [filtered]);
+  const mightLike = useMemo(() => restaurants.slice(2, 12), [restaurants]);
   const offers = useMemo(
-    () => filtered.filter((r) => r.promoLabel != null).slice(0, 10),
-    [filtered],
+    () => restaurants.filter((r) => r.promoLabel != null).slice(0, 10),
+    [restaurants],
   );
 
   const openRestaurant = useCallback(
@@ -103,7 +76,6 @@ export function UberEatsHomeScreen() {
         }
         contentContainerStyle={styles.content}
       >
-        <CategoryChipsRow active={category} onChange={setCategory} />
         <PromoBannerCarousel />
 
         {loading && restaurants.length === 0 ? <HomeFeedSkeleton /> : null}
@@ -138,12 +110,10 @@ export function UberEatsHomeScreen() {
               />
             ) : null}
 
-            {!loading && filtered.length === 0 ? (
+            {!loading && restaurants.length === 0 ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>No restaurants found</Text>
-                <Text style={styles.emptySub}>
-                  Try another category or check back later.
-                </Text>
+                <Text style={styles.emptySub}>Check back later for new spots near you.</Text>
               </View>
             ) : null}
 

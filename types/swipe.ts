@@ -1,28 +1,28 @@
-import type { SwipeFilterKey } from '@/constants/swipeDiscovery';
+import type { FoodShareCostBreakdown, FoodShareMatchLifecycle } from '@/types/foodShare';
 
 export type SwipeDirection = 'like' | 'pass';
 
 export type SwipeFoodCard = {
   id: string;
+  adminFoodShareId: string;
   title: string;
   restaurantName: string;
   restaurantId: string;
   type: 'pizza' | 'noodles' | 'burger' | 'salad' | 'dessert' | 'other';
+  originalPrice: number;
+  sharedPrice: number;
+  deliveryShare: number;
+  totalPerUser: number;
   price: number;
+  description: string;
   splitPriceLabel: string;
-  time: string;
   distance: string;
   peopleJoined: number;
   spotsLeft: number;
-  categories: SwipeFilterKey[];
-  createdBy: string;
-  userName: string;
-  userAvatar: string | null;
-  isOwner: boolean;
-  distanceLabel: string;
-  /** Recent joiner display names for social proof */
-  recentJoiners: string[];
   heroImageUri: string;
+  orderStatus: string | null;
+  deliveryStatus: string | null;
+  lifecycle: FoodShareMatchLifecycle;
 };
 
 export type SwipeDeckLoadingCard = {
@@ -49,11 +49,14 @@ export type FoodMatch = {
 
 export type SwipeMatchPreview = {
   matchId: string;
-  orderId: string;
+  adminFoodShareId: string;
+  matchChatId: string;
   foodTitle: string;
-  splitPrice: number;
-  sharedOrderId: string | null;
+  restaurantName: string;
   partnerUid: string;
+  partnerFirstName: string;
+  myFirstName: string;
+  costBreakdown: FoodShareCostBreakdown;
 };
 
 export type SharedOrderCartItem = {

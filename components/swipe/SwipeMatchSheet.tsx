@@ -14,18 +14,24 @@ import {
 type Props = {
   visible: boolean;
   foodTitle: string;
+  restaurantName: string;
+  partnerFirstName: string;
+  myFirstName: string;
   splitLabel: string;
   onChat: () => void;
-  onCheckout: () => void;
+  onMatchDetails: () => void;
   onDismiss: () => void;
 };
 
 function SwipeMatchSheetInner({
   visible,
   foodTitle,
+  restaurantName,
+  partnerFirstName,
+  myFirstName,
   splitLabel,
   onChat,
-  onCheckout,
+  onMatchDetails,
   onDismiss,
 }: Props) {
   return (
@@ -49,32 +55,37 @@ function SwipeMatchSheetInner({
           <View style={styles.flameRing}>
             <Ionicons name="flame" size={48} color="#FF6B35" />
           </View>
-          <Text style={styles.title}>It&apos;s a match 🍕</Text>
+          <Text style={styles.title}>It&apos;s a match</Text>
           <Text style={styles.food}>{foodTitle}</Text>
+          <Text style={styles.restaurant}>{restaurantName}</Text>
           <Text style={styles.split}>{splitLabel}</Text>
           <View style={styles.avatarRow}>
             <View style={[styles.avatar, styles.avatarWarm]}>
-              <Text style={styles.avatarTxt}>Y</Text>
+              <Text style={styles.avatarTxt}>
+                {myFirstName.slice(0, 1).toUpperCase()}
+              </Text>
             </View>
             <View style={[styles.avatar, styles.avatarGreen]}>
-              <Text style={styles.avatarTxt}>J</Text>
+              <Text style={styles.avatarTxt}>
+                {partnerFirstName.slice(0, 1).toUpperCase()}
+              </Text>
             </View>
           </View>
           <Text style={styles.sub}>
-            You and someone nearby both want this food. Start a shared room,
-            split the cost, and coordinate pickup together.
+            You and {partnerFirstName} are splitting one meal. Coordinate in
+            chat and track delivery together.
           </Text>
           <Pressable
             style={styles.primary}
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onCheckout();
+              onChat();
             }}
           >
-            <Text style={styles.primaryTxt}>Create Shared Order</Text>
+            <Text style={styles.primaryTxt}>Complete payment</Text>
           </Pressable>
-          <Pressable style={styles.secondary} onPress={onChat}>
-            <Text style={styles.secondaryTxt}>Start Chat</Text>
+          <Pressable style={styles.secondary} onPress={onMatchDetails}>
+            <Text style={styles.secondaryTxt}>View match details</Text>
           </Pressable>
           <Pressable onPress={onDismiss} hitSlop={12}>
             <Text style={styles.dismiss}>Keep swiping</Text>
@@ -119,7 +130,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: 'rgba(255,255,255,0.9)',
   },
-  split: { marginTop: 4, fontSize: 22, fontWeight: '900', color: '#7DFFB8' },
+  restaurant: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  split: { marginTop: 8, fontSize: 20, fontWeight: '900', color: '#7DFFB8' },
   avatarRow: {
     flexDirection: 'row',
     marginTop: 18,

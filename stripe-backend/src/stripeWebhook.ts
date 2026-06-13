@@ -29,6 +29,10 @@ import {
   isWebhookOrderWriteBlockedForData,
 } from "./webhookOrderWriteGuard.js";
 import {isOrderTerminalForServerWrite} from "./orderTerminalWriteGuard.js";
+import {
+  handleFoodShareChargeRefunded,
+  handleFoodSharePaymentIntentEvent,
+} from "./foodShareWebhookHandlers.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -337,6 +341,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
+      if (await handleFoodSharePaymentIntentEvent(event, pi)) {
+        return;
+      }
       const orderId = trimMetadata(pi.metadata?.orderId);
       logStripeDebug("payment_intent_succeeded", {
         paymentIntentId: pi.id,
@@ -470,6 +477,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case "payment_intent.payment_failed": {
       const pi = event.data.object as Stripe.PaymentIntent;
+      if (await handleFoodSharePaymentIntentEvent(event, pi)) {
+        return;
+      }
       const orderId = trimMetadata(pi.metadata?.orderId);
       logStripeDebug("payment_intent_payment_failed", {
         paymentIntentId: pi.id,
@@ -502,6 +512,19 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         outcome,
         orderId,
         paymentIntentId: pi.id,
+        stripeEventId: event.id,
+      });
+      return;
+    }
+
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      if (await handleFoodShareChargeRefunded(event, charge)) {
+        return;
+      }
+      logStripe({
+        level: "info",
+        msg: "charge_refunded_non_food_share",
         stripeEventId: event.id,
       });
       return;

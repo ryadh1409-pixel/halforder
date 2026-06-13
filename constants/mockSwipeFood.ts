@@ -1,7 +1,3 @@
-import type { SwipeFilterKey } from '@/constants/swipeDiscovery';
-
-export type SwipeMainTab = SwipeFilterKey | 'noodles';
-
 export type FoodOrderType =
   | 'pizza'
   | 'noodles'
@@ -40,20 +36,9 @@ export type MockFoodCard = {
   distance: string;
   peopleJoined: number;
   spotsLeft: number;
-  categories: SwipeMainTab[];
 };
 
-export const SWIPE_MAIN_TABS: { key: SwipeMainTab; label: string }[] = [
-  { key: 'for-you', label: 'For You' },
-  { key: 'pizza', label: 'Pizza' },
-  { key: 'burgers', label: 'Burgers' },
-  { key: 'vegetarian', label: 'Vegetarian' },
-  { key: 'cheap-eats', label: 'Cheap Eats' },
-  { key: 'desserts', label: 'Desserts' },
-  { key: 'late-night', label: 'Late Night' },
-];
-
-/** Exactly 10 items: 5 pizza, 5 noodles. */
+/** Mock deck when no live open orders are available. */
 export const mockOrders: MockFoodCard[] = [
   {
     id: '1',
@@ -64,7 +49,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.5 km',
     peopleJoined: 2,
     spotsLeft: 1,
-    categories: ['for-you', 'pizza'],
   },
   {
     id: '2',
@@ -75,7 +59,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.7 km',
     peopleJoined: 1,
     spotsLeft: 2,
-    categories: ['for-you', 'pizza'],
   },
   {
     id: '3',
@@ -86,7 +69,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '1 km',
     peopleJoined: 3,
     spotsLeft: 1,
-    categories: ['for-you', 'pizza', 'vegetarian', 'cheap-eats'],
   },
   {
     id: '4',
@@ -97,7 +79,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.8 km',
     peopleJoined: 2,
     spotsLeft: 2,
-    categories: ['for-you', 'pizza'],
   },
   {
     id: '5',
@@ -108,7 +89,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.6 km',
     peopleJoined: 1,
     spotsLeft: 1,
-    categories: ['for-you', 'pizza', 'cheap-eats'],
   },
   {
     id: '6',
@@ -119,7 +99,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.4 km',
     peopleJoined: 2,
     spotsLeft: 1,
-    categories: ['for-you', 'burgers', 'cheap-eats'],
   },
   {
     id: '7',
@@ -130,7 +109,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.9 km',
     peopleJoined: 1,
     spotsLeft: 2,
-    categories: ['for-you', 'burgers', 'late-night'],
   },
   {
     id: '8',
@@ -141,7 +119,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.5 km',
     peopleJoined: 3,
     spotsLeft: 1,
-    categories: ['for-you', 'late-night', 'cheap-eats'],
   },
   {
     id: '9',
@@ -152,7 +129,6 @@ export const mockOrders: MockFoodCard[] = [
     distance: '1.2 km',
     peopleJoined: 2,
     spotsLeft: 2,
-    categories: ['for-you', 'desserts'],
   },
   {
     id: '10',
@@ -163,20 +139,11 @@ export const mockOrders: MockFoodCard[] = [
     distance: '0.3 km',
     peopleJoined: 1,
     spotsLeft: 1,
-    categories: ['for-you', 'vegetarian', 'cheap-eats'],
   },
 ];
 
 /** @deprecated Use `mockOrders` */
 export const MOCK_FOOD_CARDS = mockOrders;
-
-export function filterCardsByTab(
-  cards: MockFoodCard[],
-  tab: SwipeMainTab,
-): MockFoodCard[] {
-  if (tab === 'for-you') return cards;
-  return cards.filter((c) => c.categories.includes(tab));
-}
 
 /** First minutes digit sequence in `time` (e.g. "20 min" → 20) for countdown UI. */
 export function parseMinutesFromTimeLabel(time: string): number {

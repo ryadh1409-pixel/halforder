@@ -5,6 +5,7 @@ import 'react-native-svg';
 
 import { AppLocationSync } from '@/components/AppLocationSync';
 import { BootstrapShell } from '@/components/BootstrapShell';
+import { SystemDialogHost } from '@/components/SystemDialogHost';
 import { HomeMarketplaceLocationProvider } from '@/contexts/HomeMarketplaceLocationContext';
 import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
@@ -139,6 +140,7 @@ export default function RootLayout() {
                 <CartProvider>
                   <BootstrapShell>
                     <Slot />
+                    <SystemDialogHost />
                     <StartupRedirectOrchestrator />
                     <RoleBoundaryGuard />
                     <RouteGroupMonitor />

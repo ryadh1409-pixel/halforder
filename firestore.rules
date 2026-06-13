@@ -632,6 +632,133 @@ service cloud.firestore {
         && request.resource.data.users[0] in orderSwipeAcceptList(request.resource.data.orderId)
         && request.resource.data.users[1] in orderSwipeAcceptList(request.resource.data.orderId);
     }
+    function adminFoodShareById(cardId) {
+      return get(/databases/$(database)/documents/adminFoodShares/$(cardId)).data;
+    }
+    function isAdminFoodShareSlotId(cardId) {
+      return cardId == '1' || cardId == '2' || cardId == '3' || cardId == '4' || cardId == '5'
+        || cardId == '6' || cardId == '7' || cardId == '8' || cardId == '9' || cardId == '10';
+    }
+    function isValidAdminFoodShareWrite() {
+      return request.resource.data.foodName is string
+        && request.resource.data.restaurantName is string
+        && request.resource.data.image is string
+        && request.resource.data.originalPrice is number
+        && request.resource.data.sharedPrice is number
+        && request.resource.data.deliveryShare is number
+        && request.resource.data.description is string
+        && request.resource.data.active is bool
+        && request.resource.data.createdAt != null;
+    }
+    function isValidMatchQueueWrite(cardId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && isAdminFoodShareSlotId(cardId)
+        && exists(/databases/$(database)/documents/adminFoodShares/$(cardId))
+        && adminFoodShareById(cardId).active == true
+        && request.resource.data.adminFoodShareId == cardId
+        && (
+          (
+            !exists(/databases/$(database)/documents/matchQueues/$(cardId))
+            && request.resource.data.waitingUserId == request.auth.uid
+          )
+          || (
+            exists(/databases/$(database)/documents/matchQueues/$(cardId))
+            && resource.data.get('waitingUserId', null) == null
+            && request.resource.data.waitingUserId == request.auth.uid
+          )
+          || (
+            exists(/databases/$(database)/documents/matchQueues/$(cardId))
+            && resource.data.waitingUserId == request.auth.uid
+            && request.resource.data.waitingUserId == request.auth.uid
+          )
+          || (
+            exists(/databases/$(database)/documents/matchQueues/$(cardId))
+            && resource.data.waitingUserId is string
+            && resource.data.waitingUserId != request.auth.uid
+            && request.resource.data.waitingUserId == null
+          )
+        );
+    }
+    function isValidMatchRequestCreate(requestId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.adminFoodShareId is string
+        && isAdminFoodShareSlotId(request.resource.data.adminFoodShareId)
+        && requestId == request.resource.data.adminFoodShareId + '_' + request.auth.uid
+        && exists(/databases/$(database)/documents/adminFoodShares/$(request.resource.data.adminFoodShareId))
+        && adminFoodShareById(request.resource.data.adminFoodShareId).active == true
+        && (request.resource.data.status == 'WAITING' || request.resource.data.status == 'MATCHED')
+        && request.resource.data.createdAt != null;
+    }
+    function isValidMatchRequestUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && (
+          (
+            resource.data.userId == request.auth.uid
+            && request.resource.data.userId == resource.data.userId
+          )
+          || (
+            resource.data.status == 'WAITING'
+            && request.resource.data.status == 'MATCHED'
+            && resource.data.userId != request.auth.uid
+          )
+        )
+        && request.resource.data.adminFoodShareId == resource.data.adminFoodShareId;
+    }
+    function isValidAdminFoodShareMatchCreate(matchDocId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && (request.resource.data.adminFoodShareId is string || request.resource.data.foodShareId is string)
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.resource.data.status == 'pending_payment'
+        && request.resource.data.lifecycle == 'WAITING_FOR_PAYMENT'
+        && request.resource.data.createdAt != null
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.users[0] < request.resource.data.users[1]
+        && (
+          matchDocId == request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', '')) + '_' + request.resource.data.users[0] + '_' + request.resource.data.users[1]
+        )
+        && exists(/databases/$(database)/documents/adminFoodShares/$(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', ''))))
+        && adminFoodShareById(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', ''))).active == true;
+    }
+    function isFoodShareMatchCancelUpdate() {
+      return (resource.data.keys().hasAny(['foodShareId']) || resource.data.keys().hasAny(['adminFoodShareId']))
+        && request.auth.uid in resource.data.users
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'lifecycle', 'cancelledBy', 'updatedAt'])
+        && request.resource.data.status == 'CANCELLED'
+        && request.resource.data.lifecycle == 'CANCELLED';
+    }
+    function isValidMatchChatCreate(chatId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size() == 2
+        && request.auth.uid in request.resource.data.participantIds
+        && request.resource.data.matchId == chatId
+        && (request.resource.data.adminFoodShareId is string || request.resource.data.foodShareId is string)
+        && request.resource.data.createdAt != null
+        && exists(/databases/$(database)/documents/matches/$(chatId))
+        && request.auth.uid in get(/databases/$(database)/documents/matches/$(chatId)).data.users;
+    }
+    function isValidMatchMessageCreate(chatId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.auth.uid in get(/databases/$(database)/documents/matchChats/$(chatId)).data.participantIds
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.createdAt != null
+        && (
+          (request.resource.data.senderId == request.auth.uid
+            && request.resource.data.senderFirstName is string)
+          || (request.resource.data.senderId == 'system'
+            && request.resource.data.senderFirstName is string)
+        );
+    }
     function isValidOrderCreate() {
       return isSignedIn()
         && canCreateOrderBySafetyLimits()
@@ -921,6 +1048,19 @@ service cloud.firestore {
         allow delete: if request.auth != null && request.auth.uid == userId;
         allow update: if false;
       }
+      match /inboxNotifications/{notificationId} {
+        allow read, update: if request.auth != null && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && !isCurrentUserRestricted()
+          && request.resource.data.recipientUid == userId
+          && request.resource.data.title is string
+          && request.resource.data.body is string
+          && request.resource.data.type is string
+          && request.resource.data.read == false
+          && request.resource.data.deepLink is string
+          && request.resource.data.createdAt != null;
+        allow delete: if false;
+      }
     }
     function isChatDocMember(chatId) {
       return isSignedIn()
@@ -1054,12 +1194,22 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /admin_notifications/{notificationId} {
-      allow create: if isAdmin()
+      allow create: if (
+        isAdmin()
         && request.resource.data.title is string
         && request.resource.data.message is string
         && request.resource.data.sentToCount is int
         && request.resource.data.sentToCount >= 0
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+      ) || (
+        isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.kind is string
+        && request.resource.data.sentToCount == 0
+        && request.resource.data.createdAt != null
+      );
       allow read: if isAdmin();
       allow update, delete: if false;
     }
@@ -1069,10 +1219,46 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if request.auth != null && (resource.data.blockerId == request.auth.uid || resource.data.blockedUserId == request.auth.uid);
     }
+    match /adminFoodShares/{cardId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.active == true);
+      allow list: if isSignedIn();
+      allow create, update, delete: if isAdmin() && isAdminFoodShareSlotId(cardId) && isValidAdminFoodShareWrite();
+    }
+    match /matchQueues/{cardId} {
+      allow read: if isSignedIn();
+      allow create, update: if isValidMatchQueueWrite(cardId);
+      allow delete: if false;
+    }
+    match /matchRequests/{requestId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidMatchRequestCreate(requestId);
+      allow update: if isValidMatchRequestUpdate();
+      allow delete: if false;
+    }
+    match /foodShares/{shareId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
     match /matches/{matchId} {
       allow read: if isSignedIn() && request.auth.uid in resource.data.users;
-      allow create: if isValidFoodMatchCreate(matchId);
-      allow update, delete: if false;
+      allow create: if isValidFoodMatchCreate(matchId) || isValidAdminFoodShareMatchCreate(matchId);
+      allow update: if isFoodShareMatchCancelUpdate();
+      allow delete: if false;
+    }
+    match /matchChats/{chatId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if isValidMatchChatCreate(chatId);
+      allow update: if isSignedIn()
+        && request.auth.uid in resource.data.participantIds
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['updatedAt']);
+      allow delete: if false;
+      match /matchMessages/{messageId} {
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/matchChats/$(chatId)).data.participantIds;
+        allow create: if isValidMatchMessageCreate(chatId);
+        allow update, delete: if false;
+      }
     }
     /** Internal Stripe webhook idempotency — Admin SDK only (clients denied). */
     match /stripe_processed_events/{stripeEventId} {

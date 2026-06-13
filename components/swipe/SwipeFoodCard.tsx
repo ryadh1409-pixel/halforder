@@ -1,3 +1,6 @@
+import {
+  formatShareCurrency,
+} from '@/lib/foodSharePricing';
 import type { SwipeFoodCard as SwipeFoodCardType } from '@/types/swipe';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,12 +12,10 @@ type Props = {
 };
 
 function SwipeFoodCardInner({ card }: Props) {
-  const activity =
-    card.recentJoiners.length > 0
-      ? `${card.recentJoiners[0]} joined recently`
-      : card.peopleJoined > 1
-        ? `${card.peopleJoined} people interested`
-        : 'Be the first to split this order';
+  const spotsLabel =
+    card.spotsLeft <= 0
+      ? 'Full'
+      : `${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} left`;
 
   return (
     <View style={styles.face}>
@@ -37,7 +38,7 @@ function SwipeFoodCardInner({ card }: Props) {
 
       <View style={styles.livePill}>
         <View style={styles.liveDot} />
-        <Text style={styles.liveTxt}>Live nearby</Text>
+        <Text style={styles.liveTxt}>Admin meal share</Text>
       </View>
 
       <View style={styles.body}>
@@ -47,42 +48,26 @@ function SwipeFoodCardInner({ card }: Props) {
         <Text style={styles.title} numberOfLines={2}>
           {card.title}
         </Text>
-        <Text style={styles.split}>{card.splitPriceLabel}</Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.meta}>Arrives in {card.time}</Text>
-          <Text style={styles.dot}> · </Text>
-          <Text style={styles.meta}>{card.distance}</Text>
-        </View>
+        {card.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {card.description}
+          </Text>
+        ) : null}
+        <Text style={styles.original}>
+          Full meal {formatShareCurrency(card.originalPrice)}
+        </Text>
+        <Text style={styles.split}>
+          You pay {formatShareCurrency(card.sharedPrice)} food +{' '}
+          {formatShareCurrency(card.deliveryShare)} delivery
+        </Text>
+        <Text style={styles.total}>
+          {formatShareCurrency(card.totalPerUser)} total
+        </Text>
 
         <View style={styles.social}>
-          <View style={styles.avatarStack}>
-            {[card.userAvatar, null, null].map((uri, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.avatar,
-                  { marginLeft: i === 0 ? 0 : -10, zIndex: 3 - i },
-                ]}
-              >
-                {uri ? (
-                  <Image source={{ uri }} style={styles.avatarImg} />
-                ) : (
-                  <View style={styles.avatarPh}>
-                    <Text style={styles.avatarPhTxt}>
-                      {(card.recentJoiners[i] ?? card.userName).slice(0, 1)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
           <View style={styles.socialCopy}>
-            <Text style={styles.activity}>{activity}</Text>
-            <Text style={styles.spots}>
-              {card.spotsLeft <= 0
-                ? 'Full'
-                : `${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} left`}
-            </Text>
+            <Text style={styles.activity}>Swipe right to join this share</Text>
+            <Text style={styles.spots}>{spotsLabel}</Text>
           </View>
         </View>
       </View>
@@ -145,15 +130,31 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     lineHeight: 32,
   },
-  split: {
+  description: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.65)',
+    lineHeight: 18,
+  },
+  original: {
     marginTop: 8,
-    fontSize: 20,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  split: {
+    marginTop: 4,
+    fontSize: 16,
+    fontWeight: '800',
     color: '#7DFFB8',
   },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  meta: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.82)' },
-  dot: { color: 'rgba(255,255,255,0.5)' },
+  total: {
+    marginTop: 4,
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
   social: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -163,24 +164,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.15)',
   },
-  avatarStack: { flexDirection: 'row', alignItems: 'center' },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#1a1a22',
-    overflow: 'hidden',
-    backgroundColor: '#333',
-  },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarPh: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#444',
-  },
-  avatarPhTxt: { color: '#FFF', fontWeight: '900', fontSize: 14 },
   socialCopy: { flex: 1, minWidth: 0 },
   activity: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
   spots: {

@@ -13,6 +13,7 @@ export type FoodSlotDraft = {
   image: string;
   price: string;
   sharingPrice: string;
+  deliveryShare: string;
   venueLocation: string;
   active: boolean;
   aiDescription: string;
@@ -127,7 +128,7 @@ export function FoodSlotEditModal({
               onChangeText={(t) => onChange({ price: t })}
               keyboardType="decimal-pad"
             />
-            <Text style={styles.fieldLabel}>Price per person (sharing)</Text>
+            <Text style={styles.fieldLabel}>Shared food price (per user)</Text>
             <AppTextInput
               style={styles.input}
               placeholder="0.00"
@@ -136,7 +137,16 @@ export function FoodSlotEditModal({
               onChangeText={(t) => onChange({ sharingPrice: t })}
               keyboardType="decimal-pad"
             />
-            <Text style={styles.fieldLabel}>Location</Text>
+            <Text style={styles.fieldLabel}>Delivery share (per user)</Text>
+            <AppTextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor={MUTED}
+              value={draft.deliveryShare}
+              onChangeText={(t) => onChange({ deliveryShare: t })}
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.fieldLabel}>Location (optional)</Text>
             <AppTextInput
               style={styles.input}
               placeholder="Venue location"

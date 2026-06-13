@@ -26,6 +26,10 @@ export function reportContentIdUser(reportedUserId: string): string {
   return `user:${reportedUserId}`;
 }
 
+export function reportContentIdFoodShareMatch(matchId: string): string {
+  return `foodShareMatch:${matchId}`;
+}
+
 export async function submitReport(params: {
   reporterId: string;
   reportedUserId: string;

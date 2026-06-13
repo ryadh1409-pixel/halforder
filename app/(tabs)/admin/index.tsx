@@ -74,6 +74,11 @@ export default function AdminScreen() {
     totalMatches: number;
     completedOrders: number;
     totalRevenue: number;
+    foodShareRevenue: number;
+    foodSharePaid: number;
+    foodShareRefunds: number;
+    foodShareFailed: number;
+    activeFoodShareMatches: number;
   } | null>(null);
 
   const isAdmin = isAdminUser(user, firestoreUserRole);
@@ -100,10 +105,13 @@ export default function AdminScreen() {
   const fetchMetrics = useCallback(async () => {
     try {
       adminLog('admin-home', 'fetchMetrics: users, orders, food_cards');
-      const [usersSnap, ordersSnap, cardsSnap] = await Promise.all([
+      const [usersSnap, ordersSnap, cardsSnap, paymentsSnap, matchesSnap] =
+        await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'orders')),
         getDocs(collection(db, 'food_cards')),
+        getDocs(collection(db, 'payments')),
+        getDocs(collection(db, 'matches')),
       ]);
 
       const totalUsers = usersSnap.size;
@@ -146,6 +154,35 @@ export default function AdminScreen() {
       const activeCards = countVisibleActiveFoodCardsInSnapshot(cardsSnap, now);
       const totalMatches = countFoodCardsWithStatus(cardsSnap, 'matched');
 
+      let foodShareRevenue = 0;
+      let foodSharePaid = 0;
+      let foodShareRefunds = 0;
+      let foodShareFailed = 0;
+      paymentsSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data?.type !== 'food_share') return;
+        const status = String(data.paymentStatus ?? '').toUpperCase();
+        const amountCents =
+          typeof data.amount === 'number' ? data.amount : 0;
+        if (status === 'PAID') {
+          foodSharePaid += 1;
+          foodShareRevenue += amountCents / 100;
+        } else if (status === 'REFUNDED') {
+          foodShareRefunds += 1;
+        } else if (status === 'FAILED') {
+          foodShareFailed += 1;
+        }
+      });
+
+      let activeFoodShareMatches = 0;
+      matchesSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const lifecycle = String(data?.lifecycle ?? '');
+        if (lifecycle === 'MATCHED' || lifecycle === 'PAYMENT_CONFIRMED') {
+          activeFoodShareMatches += 1;
+        }
+      });
+
       const nextMetrics = {
         totalUsers,
         totalOrders,
@@ -157,6 +194,11 @@ export default function AdminScreen() {
         totalMatches,
         completedOrders,
         totalRevenue: sumPrice,
+        foodShareRevenue,
+        foodSharePaid,
+        foodShareRefunds,
+        foodShareFailed,
+        activeFoodShareMatches,
       };
       adminLog('admin-home', 'metrics loaded', nextMetrics);
       setMetrics(nextMetrics);
@@ -305,6 +347,42 @@ export default function AdminScreen() {
                       value={`$${metrics.totalRevenue.toFixed(0)}`}
                       hint="All-time total"
                       onPress={() => router.push(adminRoutes.orders() as never)}
+                      style={{ width: statCellW }}
+                    />
+                  </View>
+
+                  <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                    Meal share payments
+                  </Text>
+                  <View style={styles.statsGrid}>
+                    <AdminStatCard
+                      label="Share revenue"
+                      value={`$${metrics.foodShareRevenue.toFixed(0)}`}
+                      hint="Paid food shares"
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Successful"
+                      value={String(metrics.foodSharePaid)}
+                      hint="PAID payments"
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Refunds"
+                      value={String(metrics.foodShareRefunds)}
+                      hint="REFUNDED"
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Failed"
+                      value={String(metrics.foodShareFailed)}
+                      hint="FAILED payments"
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Active matches"
+                      value={String(metrics.activeFoodShareMatches)}
+                      hint="Paid or confirming"
                       style={{ width: statCellW }}
                     />
                   </View>

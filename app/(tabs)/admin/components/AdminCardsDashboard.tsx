@@ -37,6 +37,7 @@ function emptyDraft(): FoodSlotDraft {
     image: '',
     price: '',
     sharingPrice: '',
+    deliveryShare: '',
     venueLocation: '',
     active: false,
     aiDescription: '',
@@ -73,6 +74,8 @@ export function AdminCardsDashboard() {
               price: r.price > 0 ? String(r.price) : '',
               sharingPrice:
                 r.sharingPrice > 0 ? String(r.sharingPrice) : '',
+              deliveryShare:
+                r.deliveryShare > 0 ? String(r.deliveryShare) : '',
               venueLocation: r.venueLocation,
               active: r.active,
               aiDescription: r.aiDescription,
@@ -110,6 +113,8 @@ export function AdminCardsDashboard() {
         price: r.price > 0 ? String(r.price) : '',
         sharingPrice:
           r.sharingPrice > 0 ? String(r.sharingPrice) : '',
+        deliveryShare:
+          r.deliveryShare > 0 ? String(r.deliveryShare) : '',
         venueLocation: r.venueLocation,
         active: r.active,
         aiDescription: r.aiDescription,
@@ -127,16 +132,21 @@ export function AdminCardsDashboard() {
       const docId = slot.docId;
       const priceNum = Number(d.price);
       const sharingNum = Number(d.sharingPrice);
+      const deliveryNum = Number(d.deliveryShare);
       if (!d.title.trim() || !d.image.trim()) {
         showError('Title and image are required to save.');
         return false;
       }
       if (!Number.isFinite(priceNum) || priceNum <= 0) {
-        showError('Enter a valid total price.');
+        showError('Enter a valid original price.');
         return false;
       }
       if (!Number.isFinite(sharingNum) || sharingNum <= 0) {
-        showError('Enter a valid price per person (sharing).');
+        showError('Enter a valid shared food price.');
+        return false;
+      }
+      if (!Number.isFinite(deliveryNum) || deliveryNum < 0) {
+        showError('Enter a valid delivery share.');
         return false;
       }
       setSavingId(docId);
@@ -147,6 +157,7 @@ export function AdminCardsDashboard() {
           image: d.image,
           price: priceNum,
           sharingPrice: sharingNum,
+          deliveryShare: deliveryNum,
           venueLocation: d.venueLocation,
           active: d.active,
           aiDescription: d.aiDescription,
