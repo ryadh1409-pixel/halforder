@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   },
   cardDim: { opacity: 0.72 },
   imageWrap: {
-    borderRadius: UE.radiusCard,
+    borderRadius: UE.radiusL,
     overflow: 'hidden',
     backgroundColor: UE.surface,
     aspectRatio: 1.35,

@@ -1,6 +1,5 @@
 import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
-import type { IoniconsProps } from '@expo/vector-icons/build/createIconSet';
 import * as Haptics from 'expo-haptics';
 import React, { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -24,7 +23,7 @@ function AddressRowInner({ icon, title, subtitle, subtitlePlaceholder, onPress }
       style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
     >
       <View style={styles.iconBubble}>
-        <Ionicons name={icon as IoniconsProps['name']} size={20} color={CK.text} />
+        <Ionicons name={icon} size={20} color={CK.text} />
       </View>
       <View style={styles.mid}>
         <Text style={styles.title} numberOfLines={2}>

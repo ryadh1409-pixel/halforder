@@ -5,7 +5,7 @@ export function DeliveryProgressBar({ progress }: { progress: number }) {
   const widthPct = `${Math.max(0, Math.min(1, progress)) * 100}%`;
   return (
     <View style={styles.track}>
-      <View style={[styles.fill, { width: widthPct }]} />
+      <View style={[styles.fill, { width: widthPct as `${number}%` }]} />
     </View>
   );
 }

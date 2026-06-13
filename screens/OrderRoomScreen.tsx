@@ -894,7 +894,7 @@ export default function OrderRoomScreen() {
     if (!num) return;
     const url = `https://wa.me/${num}`;
     if (Platform.OS === 'web') {
-      (window as unknown as { open: (u: string) => void }).open(url, '_blank');
+      (window as Window).open(url, '_blank');
     } else {
       Linking.openURL(url);
     }
@@ -960,7 +960,7 @@ export default function OrderRoomScreen() {
   const handleShareOrderWhatsApp = () => {
     if (Platform.OS === 'web') {
       const encoded = encodeURIComponent(orderShareMessage);
-      (window as unknown as { open: (u: string) => void }).open(
+      (window as Window).open(
         `https://wa.me/?text=${encoded}`,
         '_blank',
       );
@@ -1021,7 +1021,7 @@ export default function OrderRoomScreen() {
     void systemActionSheet({
       title: 'Share Invite',
       message: 'Pick where to share your invite',
-      options: [
+      actions: [
         { label: 'WhatsApp', onPress: handleInviteViaWhatsApp },
         { label: 'iMessage', onPress: handleShareOrderSMS },
         { label: 'Telegram', onPress: handleShareOrderTelegram },
@@ -1045,16 +1045,16 @@ export default function OrderRoomScreen() {
       try {
         user1Snap = await getDoc(doc(db, 'users', user1Id));
         if (user1Snap.exists()) {
-          const d = user1Snap.data();
+          const d = user1Snap.data() as Record<string, unknown>;
           const name =
-            typeof d?.displayName === 'string' ? d.displayName : null;
+            typeof d.displayName === 'string' ? d.displayName : null;
           if (name) user1Name = name;
         }
         user2Snap = await getDoc(doc(db, 'users', user2Id));
         if (user2Snap.exists()) {
-          const d = user2Snap.data();
+          const d = user2Snap.data() as Record<string, unknown>;
           const name =
-            typeof d?.displayName === 'string' ? d.displayName : null;
+            typeof d.displayName === 'string' ? d.displayName : null;
           if (name) user2Name = name;
         }
       } catch {
@@ -1090,8 +1090,14 @@ export default function OrderRoomScreen() {
       };
       await addDoc(collection(db, 'completedOrders'), completedData);
       const expiry = Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000);
-      const user1Data = user1Snap?.exists() ? user1Snap.data() : {};
-      const user2Data = user2Snap?.exists() ? user2Snap.data() : {};
+      const user1Data = (user1Snap?.exists() ? user1Snap.data() : {}) as Record<
+        string,
+        unknown
+      >;
+      const user2Data = (user2Snap?.exists() ? user2Snap.data() : {}) as Record<
+        string,
+        unknown
+      >;
       const grantCredits1 = user1Data?.firstOrderCompleted !== true;
       const grantCredits2 = user2Data?.firstOrderCompleted !== true;
       await setDoc(
@@ -1376,7 +1382,7 @@ export default function OrderRoomScreen() {
     });
     const url = openWhatsAppWithText(msg);
     if (Platform.OS === 'web') {
-      (window as unknown as { open: (u: string) => void }).open(
+      (window as Window).open(
         url,
         '_blank',
       );
@@ -1415,7 +1421,7 @@ export default function OrderRoomScreen() {
     const uid = auth.currentUser?.uid;
     if (!uid) {
       router.push(
-        `/(auth)/login?redirectTo=${encodeURIComponent(USER_ROUTES.order(orderId))}` as never,
+        `/(auth)/login?redirectTo=${encodeURIComponent(`/order/${orderId}`)}` as never,
       );
       return;
     }
@@ -2033,7 +2039,7 @@ export default function OrderRoomScreen() {
                       borderWidth: 1,
                       borderColor: c.border,
                       alignItems: 'center',
-                      backgroundColor: c.card,
+                      backgroundColor: c.surface,
                     }}
                   >
                     <Text style={{ color: c.text, fontWeight: '600' }}>
@@ -2127,7 +2133,7 @@ export default function OrderRoomScreen() {
               },
             ]}
           >
-            <Text style={{ color: c.successText, fontWeight: '700' }}>
+            <Text style={{ color: c.successTextDark, fontWeight: '700' }}>
               Invite sent 🚀
             </Text>
           </Animated.View>

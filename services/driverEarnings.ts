@@ -77,12 +77,14 @@ function driverEarningsQuery(
   field: 'driverId' | 'assignedDriverId',
   kind: EarningsQueryKind,
 ): Query {
-  const base = [collection(db, 'orders'), where(field, '==', uid)];
+  const ordersCol = collection(db, 'orders');
+  const uidFilter = where(field, '==', uid);
   if (kind === 'earningsRecorded') {
-    return query(...base, where('earningsRecorded', '==', true));
+    return query(ordersCol, uidFilter, where('earningsRecorded', '==', true));
   }
   return query(
-    ...base,
+    ordersCol,
+    uidFilter,
     where('deliveryType', '==', 'delivery'),
     where('status', 'in', [...DRIVER_COMPLETED_STATUSES]),
   );

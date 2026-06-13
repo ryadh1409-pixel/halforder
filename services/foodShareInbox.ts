@@ -95,6 +95,7 @@ function prefAllows(
   type: FoodShareNotificationType,
 ): boolean {
   if (type === 'chat_message') return prefs.chat;
+  if (type === 'chat_message_blocked' || type === 'chat_warning') return prefs.chat;
   if (
     type === 'order_placed' ||
     type === 'driver_assigned' ||

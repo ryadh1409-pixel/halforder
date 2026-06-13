@@ -8,5 +8,15 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "dist-legal", "functions", "admin-dashboard"]
+  "exclude": [
+    "node_modules",
+    "dist-legal",
+    "functions",
+    "admin-dashboard",
+    "stripe-backend",
+    "stripe",
+    "scripts",
+    "tests",
+    "src"
+  ]
 }

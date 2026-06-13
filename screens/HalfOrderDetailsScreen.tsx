@@ -586,7 +586,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
     const uid = auth.currentUser?.uid;
     if (!uid) {
       router.push(
-        `/(auth)/login?redirectTo=${encodeURIComponent(USER_ROUTES.order(order.id))}` as never,
+        `/(auth)/login?redirectTo=${encodeURIComponent(`/order/${order.id}`)}` as never,
       );
       return;
     }

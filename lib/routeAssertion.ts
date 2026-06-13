@@ -20,6 +20,7 @@ export type AssertRoleRouteGroupParams = {
   segments: string[];
   authReady: boolean;
   roleResolved: boolean;
+  requireRedirectSettled?: boolean;
 };
 
 /**

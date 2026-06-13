@@ -44,7 +44,6 @@ function AvatarFace({
           style={[
             styles.avatar,
             styles.avatarEmpty,
-            Platform.OS === 'ios' ? styles.avatarEmptyIos : null,
           ]}
         >
           <MaterialIcons name="person-add-alt-1" size={28} color="rgba(148,163,184,0.9)" />

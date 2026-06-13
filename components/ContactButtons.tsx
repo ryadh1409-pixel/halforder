@@ -26,7 +26,7 @@ export default function ContactButtons({
     if (!num) return;
     const url = `https://wa.me/${num}?text=${encodeURIComponent(WHATSAPP_MATCH_DEFAULT_MESSAGE)}`;
     if (Platform.OS === 'web') {
-      (window as unknown as { open: (u: string) => void }).open(url, '_blank');
+      (window as Window).open(url, '_blank');
     } else {
       Linking.openURL(url);
     }

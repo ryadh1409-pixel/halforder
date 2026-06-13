@@ -91,6 +91,7 @@ export default function FoodShareChatScreen() {
   }, [id, router]);
 
   useEffect(() => {
+    if (!id) {
       setLoading(false);
       setError('Missing match.');
       return undefined;

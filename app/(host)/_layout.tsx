@@ -33,7 +33,7 @@ export default function HostLayout() {
 
   return (
     <Tabs
-      id="host"
+      {...({ id: 'host' } as object)}
       initialRouteName="dashboard"
       screenOptions={{
         headerShown: false,

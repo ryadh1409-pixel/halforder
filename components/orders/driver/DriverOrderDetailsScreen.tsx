@@ -54,7 +54,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     (order.deliveryStatus === 'accepted' ||
       order.deliveryStatus === 'preparing' ||
       order.deliveryStatus === 'ready_for_pickup' ||
-      order.deliveryStatus === 'waiting_driver');
+      order.deliveryStatus === ('waiting_driver' as typeof order.deliveryStatus));
 
   useEffect(() => {
     if (!assignedToMe || !user?.uid || Platform.OS === 'web') return undefined;

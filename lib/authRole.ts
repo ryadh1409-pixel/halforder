@@ -9,6 +9,7 @@ export { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 export type SignupIntent = 'user' | 'restaurant' | 'driver';
 
 export type AuthRoleRoute =
+  | '/'
   | '/(tabs)'
   | '/(host)'
   | '/(driver)'

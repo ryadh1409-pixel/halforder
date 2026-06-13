@@ -17,6 +17,7 @@ import {
 } from './aiOrderBuilder';
 
 export { initialAiSessionState };
+export type { AiSessionState };
 
 export type ChatIntent = 'food' | 'confirm' | 'reject' | 'hungry' | 'unknown';
 

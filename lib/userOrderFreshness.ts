@@ -5,7 +5,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 export type FreshOrderInput = {
   id?: string;
   createdAtMs?: number | null;
-  createdAt?: { toMillis?: () => number; _seconds?: number } | null;
+  createdAt?: unknown;
   updatedAtMs?: number | null;
   updatedAt?: unknown;
 };
@@ -18,8 +18,12 @@ export function getOrderTimestamp(order: FreshOrderInput): number {
   }
 
   if (order.createdAt != null) {
+    const createdAt = order.createdAt as {
+      toMillis?: () => number;
+      _seconds?: number;
+    };
     try {
-      const direct = order.createdAt.toMillis?.();
+      const direct = createdAt.toMillis?.();
       if (typeof direct === 'number' && Number.isFinite(direct) && direct > 0) {
         return direct;
       }
@@ -27,7 +31,7 @@ export function getOrderTimestamp(order: FreshOrderInput): number {
       // fall through
     }
 
-    const seconds = order.createdAt._seconds;
+    const seconds = createdAt._seconds;
     if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
       return seconds * 1000;
     }

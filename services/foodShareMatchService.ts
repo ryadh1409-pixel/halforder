@@ -283,7 +283,6 @@ export async function joinAdminFoodShare(
   const partnerFirstName =
     uid === u0 ? nameB : uid === u1 ? nameA : txResult.partnerFirstName;
 
-  const myFirstName = uid === u0 ? nameA : nameB;
   void notifyPairingAwaitingPayment({
     recipientUid: partnerUid,
     partnerFirstName: myFirstName,

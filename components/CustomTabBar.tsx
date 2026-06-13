@@ -189,7 +189,7 @@ function CustomTabBar(props: CustomTabBarProps) {
   );
 
   if (!props?.state?.routes?.length) return null;
-  if (role === 'driver') return null;
+  if (role === 'driver' || !role) return null;
 
   const { state } = props;
   const tabIndex = typeof state.index === 'number' ? state.index : 0;

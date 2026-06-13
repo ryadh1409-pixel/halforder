@@ -188,7 +188,7 @@ export async function deleteStorageObjectAtPath(path: string): Promise<void> {
   } catch (error) {
     devLog('old image delete skipped', {
       path: trimmed,
-      reason: getReadableErrorMessage(error, 'delete'),
+      reason: getReadableErrorMessage(error, 'upload'),
     });
   }
 }

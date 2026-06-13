@@ -1,6 +1,6 @@
 import { useBootstrap } from '@/contexts/BootstrapContext';
 import { useStableRouteContext } from '@/hooks/useStableRouteContext';
-import { logAuthRoleDetected, logAuthRoleRouted } from '@/lib/authRole';
+import { logAuthRoleDetected, logAuthRoleRouted, type AuthRoleRoute } from '@/lib/authRole';
 import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { isOnAuthRoute, isRegisteredAuthUser } from '@/lib/authSession';
 import { roleDefaultPath } from '@/lib/routing/routePaths';
@@ -247,7 +247,7 @@ export function StartupRedirectOrchestrator() {
     markRedirectStart();
     markRedirectCompleted(decision.targetRoute, sessionKey);
     logAuthRoleDetected(normalized, user.uid);
-    logAuthRoleRouted(normalized, targetRoute, user.uid);
+    logAuthRoleRouted(normalized, targetRoute as AuthRoleRoute, user.uid);
     replaceAtRoot(decision.targetRoute, decision.reason, {
       role: normalized,
       segments: segmentList,

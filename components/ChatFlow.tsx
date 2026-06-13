@@ -46,6 +46,7 @@ import { AppTextInput } from './AppTextInput';
 const c = theme.colors;
 
 const INACTIVITY_MS = 5000;
+const GROUP_WAIT_MS = 120_000;
 
 const PIZZA_TYPES = [
   { id: 'pepperoni', label: 'Pepperoni' },
@@ -759,7 +760,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
           </View>
         ) : null}
 
-        {step === 'pizzaType' && step !== 'need_location' ? (
+        {step === 'pizzaType' ? (
           <View style={styles.chipWrap}>
             {PIZZA_TYPES.map((t) => (
               <TouchableOpacity

@@ -1,4 +1,16 @@
-import { FoodCard } from '../../../../components/FoodCard';
+import { FoodCard as SwipeFoodCard } from '../../../../components/FoodCard';
+
+type AdminFoodCardProps = {
+  imageUri: string;
+  title: string;
+  priceLabel: string;
+  active: boolean;
+  onPress: () => void;
+  onActiveChange: (v: boolean) => void;
+  activeDisabled?: boolean;
+};
+
+const FoodCard = SwipeFoodCard as unknown as React.ComponentType<AdminFoodCardProps>;
 import {
   FoodSlotEditModal,
   type FoodSlotDraft,
@@ -295,12 +307,12 @@ export function AdminCardsDashboard() {
           return (
             <View style={{ width: cellW }}>
               <FoodCard
-                imageUri={img || null}
+                imageUri={img ?? ''}
                 title={title}
                 priceLabel={priceLabel}
                 active={d.active}
                 onPress={() => setEditingSlot(slot)}
-                onActiveChange={(v) => onToggleActive(slot, v)}
+                onActiveChange={(v: boolean) => onToggleActive(slot, v)}
                 activeDisabled={savingId === docId}
               />
             </View>

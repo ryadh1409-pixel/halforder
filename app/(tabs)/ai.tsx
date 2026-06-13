@@ -187,7 +187,7 @@ export default function ChatScreen() {
   const [step, setStep] = useState<'chat' | 'pizzaType'>('chat');
   const [showSplit, setShowSplit] = useState(false);
   const flatListRef = useRef<FlatList<Message> | null>(null);
-  const inputRef = useRef<AppTextInput | null>(null);
+  const inputRef = useRef<React.ElementRef<typeof AppTextInput> | null>(null);
   const assistantInFlightRef = useRef(false);
   const lastAssistantSendAtRef = useRef(0);
 

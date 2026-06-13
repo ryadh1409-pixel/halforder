@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 
-import { logAuthRoleRouted, normalizeRoleForRouting } from '@/lib/authRole';
+import { logAuthRoleRouted, normalizeRoleForRouting, type AuthRoleRoute } from '@/lib/authRole';
 import { roleDefaultPath } from '@/lib/routing/routePaths';
 import type { UserRole } from '@/services/userService';
 
@@ -8,7 +8,7 @@ import type { UserRole } from '@/services/userService';
 export function navigateForRole(role: UserRole | null | undefined): void {
   const normalized = normalizeRoleForRouting(role);
   const route = roleDefaultPath(normalized);
-  logAuthRoleRouted(normalized, route);
+  logAuthRoleRouted(normalized, route as AuthRoleRoute);
   if (__DEV__) {
     console.log('[nav] navigateForRole →', route, { role: normalized });
   }

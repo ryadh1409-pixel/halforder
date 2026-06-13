@@ -250,7 +250,10 @@ export async function fetchActiveJoinableOrdersForContext(
   try {
     const q = joinDirectoryOrdersQuery(scanLimit);
     snap = await getDocs(q);
-    logFirestoreSnapshotResult(snap, 'chatAssistantOrders.fetchActiveJoinableOrdersForContext');
+    logFirestoreSnapshotResult(
+      snap as import('firebase/firestore').QuerySnapshot<import('firebase/firestore').DocumentData>,
+      'chatAssistantOrders.fetchActiveJoinableOrdersForContext',
+    );
   } catch (e) {
     const code =
       e && typeof e === 'object' && 'code' in e ? String((e as { code?: string }).code) : '';

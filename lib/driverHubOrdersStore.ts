@@ -170,6 +170,7 @@ function driverOrderFromActiveDelivery(row: ActiveDelivery): DriverOrder {
     assignedDriverId: row.assignedDriverId,
     marketplaceArchived: true,
     earningsRecorded: true,
+    updatedAtMs: row.deliveredAtMs ?? Date.now(),
   };
 }
 

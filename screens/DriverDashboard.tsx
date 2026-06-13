@@ -99,7 +99,7 @@ export default function DriverDashboardScreen() {
               <Text style={styles.meta}>
                 Items: {order.items.map((item) => `${item.qty}x ${item.name}`).join(', ') || 'No items'}
               </Text>
-              <Text style={styles.meta}>Total: ${order.total.toFixed(2)}</Text>
+              <Text style={styles.meta}>Total: ${order.payout.toFixed(2)}</Text>
               <Text style={styles.status}>Status: {order.status}</Text>
               <Text style={styles.meta}>
                 Customer: {order.customerName ?? 'Customer'}

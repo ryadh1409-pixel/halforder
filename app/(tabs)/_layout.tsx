@@ -14,7 +14,12 @@ const HIDDEN_TAB = { href: null } as const;
 export default function TabLayout() {
   const tabsAccess = useCustomerTabsAccess();
   const { canMountTabs, role, blockReason, customerWorkspace, firestoreRole } = tabsAccess;
-  const customerTabs = useMemo(() => ({ allow: ['user', 'admin'] as const }), []);
+  const customerTabs = useMemo(
+    (): { allow: import('@/lib/tabsRoleVisibility').TabsShellRole[] } => ({
+      allow: ['user', 'admin'],
+    }),
+    [],
+  );
 
   console.log('[CustomerTabsLayout]', {
     customerWorkspaceStatus: canMountTabs ? 'ready' : 'blocked',
@@ -30,7 +35,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      id="main"
+      {...({ id: 'main' } as object)}
       screenOptions={{
         headerShown: false,
         lazy: true,

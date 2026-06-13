@@ -47,7 +47,7 @@ export default function ShareOrderButton({
   const handleWhatsApp = () => {
     const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
     if (Platform.OS === 'web') {
-      (window as unknown as { open: (u: string) => void }).open(url, '_blank');
+      (window as Window).open(url, '_blank');
     } else {
       Linking.openURL(url).catch(() =>
         showError('Could not open WhatsApp.'),
@@ -58,7 +58,7 @@ export default function ShareOrderButton({
   const handleiMessage = () => {
     if (Platform.OS === 'web') {
       const url = `sms:?body=${encodeURIComponent(message)}`;
-      (window as unknown as { open: (u: string) => void }).open(url, '_self');
+      (window as Window).open(url, '_self');
     } else {
       Share.share({ message, title: 'Split this order' }).catch(() => {
         Linking.openURL(`sms:?body=${encodeURIComponent(message)}`).catch(() =>

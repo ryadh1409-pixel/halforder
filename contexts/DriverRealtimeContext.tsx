@@ -33,6 +33,7 @@ const EMPTY_STATS: DriverDeliveryStats = {
   averageEarning: 0,
   rating: 5.0,
   breakdown: [],
+  platformFees: 0,
 };
 
 function statsEqual(a: DriverDeliveryStats, b: DriverDeliveryStats): boolean {

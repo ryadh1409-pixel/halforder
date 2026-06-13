@@ -128,7 +128,7 @@ export function computeAdminAiNotificationInsights(
     }
   }
 
-  const { peakHourLocal } = peakLocalHourFromTimestamps(lastActiveSamples);
+  const { peakHour: peakHourLocal } = peakLocalHourFromTimestamps(lastActiveSamples);
   const peakHourLabel = formatHour12(peakHourLocal);
   const currentHour = new Date(nowMs).getHours();
   const isPeakHourNow = currentHour === peakHourLocal;

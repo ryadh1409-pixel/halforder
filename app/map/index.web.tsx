@@ -58,7 +58,7 @@ export default function MapScreenWeb() {
                 key={order.id}
                 style={styles.card}
                 onPress={() =>
-                  router.push(USER_ROUTES.order(order.id) as const)
+                  router.push(USER_ROUTES.order(order.id) as never)
                 }
               >
                 <Text style={styles.cardTitle}>{order.restaurantName}</Text>
@@ -77,7 +77,7 @@ export default function MapScreenWeb() {
       )}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push('/(tabs)/index')}
+        onPress={() => router.push('/(tabs)/index' as never)}
       >
         <Text style={styles.fabText}>Go to Swipe</Text>
       </TouchableOpacity>

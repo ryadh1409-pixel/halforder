@@ -44,6 +44,7 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<RestaurantOrder | null>(null);
   const [saving, setSaving] = useState<RestaurantKitchenAction | null>(null);
+  const [rejecting, setRejecting] = useState(false);
   const [kitchenOverlay, setKitchenOverlay] = useState<Partial<RestaurantOrder>>({});
   const [customerName, setCustomerName] = useState<string | null>(null);
   const displayOrder = useMemo(() => {
@@ -162,8 +163,8 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
   }
 
   async function onReject() {
-    if (!order?.id || saving) return;
-    setSaving(true);
+    if (!order?.id || saving || rejecting) return;
+    setRejecting(true);
     try {
       await rejectOrder(order.id);
       showSuccess('Order rejected');
@@ -174,7 +175,7 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
         fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
       });
     } finally {
-      setSaving(false);
+      setRejecting(false);
     }
   }
 

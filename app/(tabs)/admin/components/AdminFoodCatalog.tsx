@@ -1,7 +1,18 @@
 /**
  * Home menu templates: 2-column grid + section FAB + edit modal.
  */
-import { FoodCard } from '../../../../components/FoodCard';
+import { FoodCard as SwipeFoodCard } from '../../../../components/FoodCard';
+
+type AdminFoodCardProps = {
+  imageUri: string;
+  title: string;
+  priceLabel: string;
+  active: boolean;
+  onPress: () => void;
+  onActiveChange: (v: boolean) => void;
+};
+
+const FoodCard = SwipeFoodCard as unknown as React.ComponentType<AdminFoodCardProps>;
 import { FoodEditModal } from '../../../../components/FoodEditModal';
 import { systemConfirm } from '../../../../components/SystemDialogHost';
 import { adminColors as COLORS } from '../../../../constants/adminTheme';
@@ -336,12 +347,12 @@ export function AdminFoodCatalogList() {
       renderItem={({ item }) => (
         <View style={{ width: cellW }}>
           <FoodCard
-            imageUri={item.imageUrl || null}
+            imageUri={item.imageUrl ?? ''}
             title={item.name}
             priceLabel={`$${item.price.toFixed(2)}`}
             active={item.active}
             onPress={() => openEdit(item)}
-            onActiveChange={(v) => toggleTemplateActive(item, v)}
+            onActiveChange={(v: boolean) => toggleTemplateActive(item, v)}
           />
         </View>
       )}

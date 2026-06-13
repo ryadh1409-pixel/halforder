@@ -31,7 +31,7 @@ function DriverTabsNavigator() {
 
   return (
     <Tabs
-      id={DRIVER_TABS_ID}
+      {...({ id: DRIVER_TABS_ID } as object)}
       tabBar={renderDriverTabBar}
       detachInactiveScreens
       screenOptions={DRIVER_TAB_SCREEN_OPTIONS}

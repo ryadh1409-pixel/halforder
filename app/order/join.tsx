@@ -221,7 +221,7 @@ export default function JoinOrderScreen() {
   const headerJoinableCount = useMemo(() => joinable.length, [joinable]);
 
   const handleGoSwipe = () => {
-    router.push('/(tabs)/index');
+    router.push('/(tabs)/index' as never);
   };
 
   const handleJoin = async (item: JoinableOrder) => {
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: theme.spacing.touchMin,
-    ...shadows.button,
+    ...shadows.card,
   },
   createButtonText: {
     color: theme.colors.textOnPrimary,

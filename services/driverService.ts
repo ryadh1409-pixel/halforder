@@ -989,7 +989,11 @@ export async function claimMarketplaceDriverOrder(
     status: 'driver_assigned',
   };
 
-  let lastReadBeforeClaim: Record<string, unknown> | null = null;
+  let lastReadBeforeClaim: {
+    assignedDriverId?: unknown;
+    status?: unknown;
+    deliveryStatus?: unknown;
+  } | null = null;
   try {
     return await runTransaction(db, async (tx) => {
       const snap = await tx.get(orderRef);
@@ -1127,12 +1131,17 @@ export async function claimMarketplaceDriverOrder(
       'code' in error &&
       (error as { code?: string }).code === 'permission-denied';
     if (permissionDenied) {
+      const deniedRead = lastReadBeforeClaim as {
+        assignedDriverId?: unknown;
+        status?: unknown;
+        deliveryStatus?: unknown;
+      } | null;
       console.error('[DRIVER CLAIM WRITE DENIED]', {
         uid: auth.currentUser?.uid ?? null,
         orderId,
-        assignedDriverId: lastReadBeforeClaim?.assignedDriverId ?? null,
-        status: lastReadBeforeClaim?.status ?? null,
-        deliveryStatus: lastReadBeforeClaim?.deliveryStatus ?? null,
+        assignedDriverId: deniedRead?.assignedDriverId ?? null,
+        status: deniedRead?.status ?? null,
+        deliveryStatus: deniedRead?.deliveryStatus ?? null,
         ruleSafePayload,
         message: error instanceof Error ? error.message : String(error),
         firestorePath: `orders/${orderId}`,

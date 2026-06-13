@@ -6,6 +6,7 @@ const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? 
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
+  name: config.name ?? 'HalfOrder',
   ios: {
     ...config.ios,
     config: {
@@ -26,4 +27,4 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config.extra,
     googleMapsApiKey,
   },
-});
+}) as ExpoConfig;

@@ -82,7 +82,7 @@ export default function NearbyOrdersScreen() {
       return;
     }
     if (order.participants.includes(uid)) {
-      router.push(USER_ROUTES.order(order.id) as const);
+      router.push(USER_ROUTES.order(order.id) as never);
       return;
     }
     if (order.participants.length >= order.maxParticipants) {
@@ -125,7 +125,7 @@ export default function NearbyOrdersScreen() {
       });
       // Analytics: user joined an order
       await trackOrderJoined(uid, order.id);
-      router.push(USER_ROUTES.order(order.id) as const);
+      router.push(USER_ROUTES.order(order.id) as never);
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {
