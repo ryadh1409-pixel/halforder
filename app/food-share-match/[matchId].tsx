@@ -12,15 +12,16 @@ import {
 import { formatShareCurrency } from '@/lib/foodSharePricing';
 import { FOOD_SHARE_ERRORS, FOOD_SHARE_SUCCESS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
-import { systemActionSheet } from '@/components/SystemDialogHost';
+import { FoodShareReportModal } from '@/components/foodShare/FoodShareReportModal';
 import {
   blockFoodShareUser,
   cancelFoodShareMatch,
+  canCancelFoodShareMatch,
   mapMatchDoc,
   reportFoodShareUser,
 } from '@/services/foodShareMatchService';
 import { auth, db } from '@/services/firebase';
-import { UGC_REPORT_REASONS } from '@/services/reports';
+import { useBlock } from '@/hooks/useBlock';
 import { theme } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -52,6 +53,7 @@ export default function FoodShareMatchScreen() {
   const [match, setMatch] = useState<ReturnType<typeof mapMatchDoc> | null>(
     null,
   );
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -87,15 +89,29 @@ export default function FoodShareMatchScreen() {
     return match.userA;
   }, [match, myUid]);
 
+  const { isHiddenFromMe } = useBlock();
+
   const lifecycleIdx = foodShareLifecycleIndex(match?.lifecycle);
   useFoodShareMatchLifecycleAlerts(match);
 
-  const myPaymentStatus = match.userPayments[myUid]?.paymentStatus;
+  useEffect(() => {
+    if (match?.status === 'CANCELLED' || match?.lifecycle === 'CANCELLED') {
+      setError('This match was cancelled.');
+    }
+  }, [match?.lifecycle, match?.status]);
+
+  const myPaymentStatus = match?.userPayments[myUid]?.paymentStatus;
   const needsPayment =
-    match.lifecycle === 'WAITING_FOR_PAYMENT' ||
-    match.lifecycle === 'PAYMENT_CONFIRMED' ||
-    match.status === 'pending_payment';
-  const canChat = match.lifecycle === 'MATCHED' || match.status === 'MATCHED';
+    match?.lifecycle === 'WAITING_FOR_PAYMENT' ||
+    match?.lifecycle === 'PAYMENT_CONFIRMED' ||
+    match?.status === 'pending_payment';
+  const canChat =
+    (match?.lifecycle === 'MATCHED' || match?.status === 'MATCHED') &&
+    !isHiddenFromMe(partner?.uid ?? '');
+  const allowCancel =
+    !!match &&
+    match.status !== 'CANCELLED' &&
+    canCancelFoodShareMatch(match.lifecycle, match.orderStatus);
 
   const handlePay = () => {
     if (!id) return;
@@ -108,7 +124,7 @@ export default function FoodShareMatchScreen() {
   };
 
   const handleCancel = () => {
-    if (!match) return;
+    if (!match || !allowCancel) return;
     void (async () => {
       const ok = await confirmCancelMatch(match.foodName);
       if (!ok || !partner) return;
@@ -117,13 +133,18 @@ export default function FoodShareMatchScreen() {
           match.userA.uid === myUid
             ? match.userA.firstName
             : match.userB.firstName;
-        await cancelFoodShareMatch(id, {
+        const result = await cancelFoodShareMatch({
+          matchId: id,
           partnerUid: partner.uid,
           cancelledByFirstName: myFirstName,
           foodName: match.foodName,
           adminFoodShareId: match.adminFoodShareId,
         });
-        showSuccess('Match cancelled');
+        showSuccess(
+          result.refundAttempted
+            ? 'Match cancelled. Refund is processing.'
+            : 'Match cancelled',
+        );
         router.back();
       } catch (e) {
         showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
@@ -133,37 +154,26 @@ export default function FoodShareMatchScreen() {
 
   const handleReport = () => {
     if (!partner) return;
-    void systemActionSheet({
-      title: 'Report user',
-      message: `Why are you reporting ${partner.firstName}?`,
-      actions: UGC_REPORT_REASONS.map((reason) => ({
-        label: reason.label,
-        destructive: reason.id === 'abuse',
-        onPress: () => {
-          void (async () => {
-            try {
-              await reportFoodShareUser({
-                reportedUid: partner.uid,
-                matchId: id,
-                reason: reason.id,
-              });
-              showSuccess(FOOD_SHARE_SUCCESS.reportSubmitted);
-            } catch (e) {
-              showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.reportFailed));
-            }
-          })();
-        },
-      })),
-    });
+    setReportOpen(true);
   };
 
   const handleBlock = () => {
-    if (!partner) return;
+    if (!partner || !match) return;
     void (async () => {
       const ok = await confirmBlockUser(partner.firstName);
       if (!ok) return;
       try {
-        await blockFoodShareUser(partner.uid);
+        const myFirstName =
+          match.userA.uid === myUid
+            ? match.userA.firstName
+            : match.userB.firstName;
+        await blockFoodShareUser({
+          blockedUid: partner.uid,
+          matchId: id,
+          blockerFirstName: myFirstName,
+          foodName: match.foodName,
+          adminFoodShareId: match.adminFoodShareId,
+        });
         showSuccess(FOOD_SHARE_SUCCESS.userBlocked);
         router.back();
       } catch (e) {
@@ -267,8 +277,14 @@ export default function FoodShareMatchScreen() {
                 : `Pay ${formatShareCurrency(breakdown.totalPerUser)}`}
           </Text>
         </Pressable>
-        <Pressable style={styles.actionSecondary} onPress={handleCancel}>
-          <Text style={styles.actionSecondaryTxt}>Cancel match</Text>
+        <Pressable
+          style={[styles.actionSecondary, !allowCancel && styles.actionDisabled]}
+          onPress={handleCancel}
+          disabled={!allowCancel}
+        >
+          <Text style={styles.actionSecondaryTxt}>
+            {allowCancel ? 'Cancel match' : 'Cannot cancel after order placed'}
+          </Text>
         </Pressable>
         <Pressable style={styles.actionSecondary} onPress={handleReport}>
           <Text style={styles.actionSecondaryTxt}>Report user</Text>
@@ -276,6 +292,22 @@ export default function FoodShareMatchScreen() {
         <Pressable style={styles.actionDanger} onPress={handleBlock}>
           <Text style={styles.actionDangerTxt}>Block user</Text>
         </Pressable>
+
+        <FoodShareReportModal
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          reportedFirstName={partner?.firstName}
+          onSubmit={async ({ reason, description }) => {
+            if (!partner) return;
+            await reportFoodShareUser({
+              reportedUid: partner.uid,
+              matchId: id,
+              reason,
+              description,
+            });
+            showSuccess(FOOD_SHARE_SUCCESS.reportSubmitted);
+          }}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -441,6 +473,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   actionSecondaryTxt: { color: '#FFF', fontWeight: '800' },
+  actionDisabled: { opacity: 0.45 },
   actionDanger: { marginTop: 10, paddingVertical: 14, alignItems: 'center' },
   actionDangerTxt: { color: '#FB7185', fontWeight: '800' },
   primaryBtn: {

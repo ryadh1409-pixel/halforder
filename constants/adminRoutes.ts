@@ -17,4 +17,5 @@ export const adminRoutes = {
   /** Broadcast push to all / targeted users (Expo push). */
   sendNotification: '/(tabs)/admin/broadcast',
   aiInsights: '/(tabs)/admin/ai-insights',
+  chatModeration: '/(tabs)/admin/chat-moderation',
 } as const;

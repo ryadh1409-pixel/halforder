@@ -699,6 +699,14 @@ service cloud.firestore {
           (
             resource.data.userId == request.auth.uid
             && request.resource.data.userId == resource.data.userId
+            && (
+              request.resource.data.status == resource.data.status
+              || (
+                resource.data.status == 'WAITING'
+                && request.resource.data.status == 'CANCELLED'
+                && request.resource.data.cancelReason == 'CANCELLED_BY_USER'
+              )
+            )
           )
           || (
             resource.data.status == 'WAITING'
@@ -707,6 +715,20 @@ service cloud.firestore {
           )
         )
         && request.resource.data.adminFoodShareId == resource.data.adminFoodShareId;
+    }
+    function canCancelFoodShareMatchLifecycle() {
+      return !(resource.data.lifecycle in ['ORDER_PLACED', 'DRIVER_ASSIGNED', 'PICKED_UP', 'DELIVERED', 'COMPLETED'])
+        && !(resource.data.orderStatus is string && resource.data.orderStatus.size() > 0);
+    }
+    function isFoodShareMatchCancelUpdate() {
+      return (resource.data.keys().hasAny(['foodShareId']) || resource.data.keys().hasAny(['adminFoodShareId']))
+        && request.auth.uid in resource.data.users
+        && !isCurrentUserRestricted()
+        && canCancelFoodShareMatchLifecycle()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'lifecycle', 'cancelledBy', 'cancelReason', 'cancelledAt', 'updatedAt'])
+        && request.resource.data.status == 'CANCELLED'
+        && request.resource.data.lifecycle == 'CANCELLED'
+        && request.resource.data.cancelReason in ['CANCELLED_BY_USER', 'CANCELLED_BY_ADMIN'];
     }
     function isValidAdminFoodShareMatchCreate(matchDocId) {
       return isSignedIn()
@@ -724,13 +746,6 @@ service cloud.firestore {
         )
         && exists(/databases/$(database)/documents/adminFoodShares/$(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', ''))))
         && adminFoodShareById(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', ''))).active == true;
-    }
-    function isFoodShareMatchCancelUpdate() {
-      return (resource.data.keys().hasAny(['foodShareId']) || resource.data.keys().hasAny(['adminFoodShareId']))
-        && request.auth.uid in resource.data.users
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'lifecycle', 'cancelledBy', 'updatedAt'])
-        && request.resource.data.status == 'CANCELLED'
-        && request.resource.data.lifecycle == 'CANCELLED';
     }
     function isValidMatchChatCreate(chatId) {
       return isSignedIn()
@@ -890,10 +905,8 @@ service cloud.firestore {
           )
         );
     }
-    match /reports/{reportId} {
-      allow create: if isSignedIn()
-        && !isCurrentUserRestricted()
-        && request.auth.uid == request.resource.data.reporterId
+    function isValidUgcReportCreate() {
+      return request.auth.uid == request.resource.data.reporterId
         && request.resource.data.reportedUserId is string
         && request.resource.data.reportedUserId.size() > 0
         && request.resource.data.reportedUserId != request.auth.uid
@@ -903,8 +916,55 @@ service cloud.firestore {
         && (request.resource.data.reason == 'spam' || request.resource.data.reason == 'abuse' || request.resource.data.reason == 'inappropriate')
         && request.resource.data.createdAt == request.time
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasOnly(['userId', 'reporterId', 'reportedUserId', 'contentId', 'reason', 'createdAt']);
+        && request.resource.data.get('source', 'ugc') == 'ugc'
+        && request.resource.data.get('status', 'open') == 'open';
+    }
+    function isValidFoodShareReportCreate() {
+      return request.auth.uid == request.resource.data.reporterId
+        && request.resource.data.reportedUserId is string
+        && request.resource.data.reportedUserId.size() > 0
+        && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.matchId is string
+        && request.resource.data.matchId.size() > 0
+        && request.resource.data.contentId is string
+        && request.resource.data.contentId.matches('foodShareMatch:.*')
+        && request.resource.data.reason is string
+        && (
+          request.resource.data.reason == 'spam'
+          || request.resource.data.reason == 'harassment'
+          || request.resource.data.reason == 'hate_speech'
+          || request.resource.data.reason == 'threats'
+          || request.resource.data.reason == 'fake_account'
+          || request.resource.data.reason == 'inappropriate_messages'
+          || request.resource.data.reason == 'fraud'
+          || request.resource.data.reason == 'no_show'
+          || request.resource.data.reason == 'other'
+        )
+        && request.resource.data.source == 'food_share'
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.userId == request.auth.uid;
+    }
+    function isValidReportCreate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && (isValidUgcReportCreate() || isValidFoodShareReportCreate());
+    }
+    function isValidModerationAuditCreate() {
+      return isSignedIn()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.action is string
+        && request.resource.data.source == 'food_share'
+        && request.resource.data.createdAt == request.time;
+    }
+    match /reports/{reportId} {
+      allow create: if isValidReportCreate();
       allow read, update, delete: if isAdmin();
+    }
+    match /moderationAuditLog/{eventId} {
+      allow create: if isValidModerationAuditCreate() || isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
     match /support_chats/{userId} {
       allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
@@ -1031,6 +1091,20 @@ service cloud.firestore {
           && request.auth.uid == userId
           && request.resource.data.blockedUserId == resource.data.blockedUserId
           && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+      match /chatMutes/{matchChatId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.matchChatId == matchChatId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+      match /hiddenChats/{matchChatId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.matchChatId == matchChatId;
         allow delete: if request.auth != null && request.auth.uid == userId;
       }
       match /referralInbox/{orderId} {
@@ -1256,9 +1330,12 @@ service cloud.firestore {
       match /matchMessages/{messageId} {
         allow read: if isSignedIn()
           && request.auth.uid in get(/databases/$(database)/documents/matchChats/$(chatId)).data.participantIds;
-        allow create: if isValidMatchMessageCreate(chatId);
-        allow update, delete: if false;
+        allow create, update, delete: if false;
       }
+    }
+    match /chatModerationEvents/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
     /** Internal Stripe webhook idempotency — Admin SDK only (clients denied). */
     match /stripe_processed_events/{stripeEventId} {

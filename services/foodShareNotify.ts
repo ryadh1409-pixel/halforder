@@ -89,11 +89,16 @@ export async function notifyMatchCancelled(input: {
   cancelledByFirstName: string;
   foodName: string;
   matchId: string;
+  cancelReason?: 'CANCELLED_BY_PARTNER' | 'CANCELLED_BY_USER' | 'CANCELLED_BY_ADMIN';
 }): Promise<void> {
+  const title =
+    input.cancelReason === 'CANCELLED_BY_PARTNER'
+      ? 'Partner cancelled'
+      : 'Match cancelled';
   await createInboxNotification({
     recipientUid: input.recipientUid,
     type: 'match_cancelled',
-    title: 'Match cancelled',
+    title,
     body: `${input.cancelledByFirstName} cancelled the match for ${input.foodName}.`,
     deepLink: deepLinkForMatch(input.matchId),
     matchId: input.matchId,
@@ -101,26 +106,49 @@ export async function notifyMatchCancelled(input: {
   });
 }
 
-export async function notifyReportSubmittedAdmin(input: {
-  matchId: string;
+export async function notifyReportSubmitted(input: {
   reporterUid: string;
-  reportedUid: string;
+  matchId: string;
 }): Promise<void> {
-  await notifyAdminFoodShareEvent({
-    title: 'User reported in meal share',
-    message: `Report filed for match ${input.matchId}.`,
-    kind: 'user_reported',
-    matchId: input.matchId,
-  });
   await createInboxNotification({
     recipientUid: input.reporterUid,
     type: 'report_submitted',
     title: FOOD_SHARE_SUCCESS.reportSubmitted,
-    body: 'Thanks for helping keep HalfOrder safe.',
+    body: 'Thanks for helping keep HalfOrder safe. Our team will review your report.',
     deepLink: deepLinkForMatch(input.matchId),
     matchId: input.matchId,
     pushType: FOOD_SHARE_PUSH.REPORT_SUBMITTED,
     skipPush: true,
+  });
+}
+
+export async function notifyPartnerBlocked(input: {
+  recipientUid: string;
+  blockerFirstName: string;
+  matchId?: string;
+}): Promise<void> {
+  await createInboxNotification({
+    recipientUid: input.recipientUid,
+    type: 'user_blocked',
+    title: 'Match ended',
+    body: `${input.blockerFirstName} ended this match. You will not be paired together again.`,
+    deepLink: input.matchId ? deepLinkForMatch(input.matchId) : '/(tabs)/swipe',
+    matchId: input.matchId ?? null,
+    pushType: FOOD_SHARE_PUSH.USER_BLOCKED,
+  });
+}
+
+export async function notifyReportSubmittedAdmin(input: {
+  matchId: string;
+  reporterUid: string;
+  reportedUid: string;
+  reportId?: string;
+}): Promise<void> {
+  await notifyAdminFoodShareEvent({
+    title: 'User reported in meal share',
+    message: `Report ${input.reportId ?? ''} filed for match ${input.matchId}.`,
+    kind: 'user_reported',
+    matchId: input.matchId,
   });
 }
 

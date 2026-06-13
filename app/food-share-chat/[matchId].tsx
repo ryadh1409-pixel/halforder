@@ -1,9 +1,29 @@
 import { USER_ROUTES } from '@/lib/navigationPaths';
-import { confirmLeaveChat } from '@/hooks/useFoodShareUx';
+import {
+  confirmBlockUser,
+  confirmCancelMatch,
+  confirmLeaveChat,
+} from '@/hooks/useFoodShareUx';
 import { hapticNewMessage } from '@/lib/foodShareHaptics';
-import { FOOD_SHARE_ERRORS, foodShareErrorMessage } from '@/lib/foodShareUx';
+import { FOOD_SHARE_ERRORS, FOOD_SHARE_SUCCESS, foodShareErrorMessage } from '@/lib/foodShareUx';
+import { FoodShareReportModal } from '@/components/foodShare/FoodShareReportModal';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
-import { mapMatchDoc } from '@/services/foodShareMatchService';
+import { useBlock } from '@/hooks/useBlock';
+import {
+  hasAcceptedCommunityGuidelines,
+  hideFoodShareConversation,
+  muteFoodShareChat,
+} from '@/services/chatModeration';
+import {
+  reportFoodShareChat,
+  type ChatReportScope,
+} from '@/services/foodShareChatSafety';
+import {
+  blockFoodShareUser,
+  cancelFoodShareMatch,
+  canCancelFoodShareMatch,
+  mapMatchDoc,
+} from '@/services/foodShareMatchService';
 import { notifyChatMessage } from '@/services/foodShareNotify';
 import {
   sendMatchChatMessage,
@@ -27,14 +47,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { showError } from '@/utils/toast';
+import { systemActionSheet } from '@/components/SystemDialogHost';
+import { showError, showSuccess } from '@/utils/toast';
 
 export default function FoodShareChatScreen() {
   const router = useRouter();
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const id = typeof matchId === 'string' ? matchId : '';
   const myUid = auth.currentUser?.uid ?? '';
+  const { isHiddenFromMe } = useBlock();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +67,30 @@ export default function FoodShareChatScreen() {
   const [myFirstName, setMyFirstName] = useState('You');
   const [matchChatId, setMatchChatId] = useState(id);
   const [partnerUid, setPartnerUid] = useState('');
+  const [matchLifecycle, setMatchLifecycle] = useState('');
+  const [adminFoodShareId, setAdminFoodShareId] = useState('');
+  const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [reportScope, setReportScope] = useState<ChatReportScope>('conversation');
+  const [reportMessageId, setReportMessageId] = useState<string | null>(null);
+  const [reportPreview, setReportPreview] = useState('');
+  const [moderationBanner, setModerationBanner] = useState<string | null>(null);
   const listRef = useRef<FlatList<MatchChatMessage>>(null);
   const lastMessageCountRef = useRef(0);
 
+  const [reportOpen, setReportOpen] = useState(false);
+
   useEffect(() => {
-    if (!id) {
+    void (async () => {
+      const ok = await hasAcceptedCommunityGuidelines();
+      if (!ok) {
+        router.replace(
+          `/community-guidelines?redirect=${encodeURIComponent(`/food-share-chat/${id}`)}` as never,
+        );
+      }
+    })();
+  }, [id, router]);
+
+  useEffect(() => {
       setLoading(false);
       setError('Missing match.');
       return undefined;
@@ -66,6 +106,12 @@ export default function FoodShareChatScreen() {
       const match = mapMatchDoc(snap.id, snap.data() as Record<string, unknown>);
       setFoodTitle(match.foodName);
       setMatchChatId(match.matchChatId || id);
+      setMatchLifecycle(match.lifecycle);
+      setAdminFoodShareId(match.adminFoodShareId);
+      setOrderStatus(match.orderStatus);
+      if (match.status === 'CANCELLED' || match.lifecycle === 'CANCELLED') {
+        setError('This match was cancelled.');
+      }
       if (myUid === match.userA.uid) {
         setPartnerFirstName(match.userB.firstName);
         setMyFirstName(match.userA.firstName);
@@ -82,8 +128,14 @@ export default function FoodShareChatScreen() {
     return unsubMatch;
   }, [id, myUid]);
 
+  const blocked = isHiddenFromMe(partnerUid);
+  const chatClosed =
+    blocked ||
+    matchLifecycle === 'CANCELLED' ||
+    error === 'This match was cancelled.';
+
   useEffect(() => {
-    if (!matchChatId) return undefined;
+    if (!matchChatId || chatClosed) return undefined;
     return subscribeMatchMessages(matchChatId, (next) => {
       const prevCount = lastMessageCountRef.current;
       if (prevCount > 0 && next.length > prevCount) {
@@ -95,17 +147,35 @@ export default function FoodShareChatScreen() {
       lastMessageCountRef.current = next.length;
       setMessages(next);
     });
-  }, [matchChatId, myUid]);
+  }, [matchChatId, myUid, chatClosed]);
 
   const sortedMessages = useMemo(() => messages, [messages]);
 
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || !matchChatId || sending) return;
+    if (!text || !matchChatId || sending || chatClosed) return;
     setSending(true);
     setDraft('');
     try {
-      await sendMatchChatMessage(matchChatId, text, myFirstName);
+      const result = await sendMatchChatMessage(
+        matchChatId,
+        text,
+        myFirstName,
+        partnerUid,
+      );
+      if (!result.ok) {
+        setDraft(text);
+        setModerationBanner(result.message);
+        if (result.code === 'GUIDELINES_REQUIRED') {
+          router.replace(
+            `/community-guidelines?redirect=${encodeURIComponent(`/food-share-chat/${id}`)}` as never,
+          );
+          return;
+        }
+        showError(result.message);
+        return;
+      }
+      setModerationBanner(null);
       if (partnerUid) {
         void notifyChatMessage({
           recipientUid: partnerUid,
@@ -123,6 +193,109 @@ export default function FoodShareChatScreen() {
     }
   };
 
+  const openSafetyMenu = () => {
+    void systemActionSheet({
+      title: 'Safety',
+      message: `Actions for ${partnerFirstName}`,
+      actions: [
+        {
+          label: 'Mute notifications',
+          onPress: () => {
+            void (async () => {
+              try {
+                await muteFoodShareChat(matchChatId);
+                showSuccess('Chat muted.');
+              } catch (e) {
+                showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.connectionLost));
+              }
+            })();
+          },
+        },
+        {
+          label: 'Report conversation',
+          onPress: () => {
+            setReportScope('conversation');
+            setReportMessageId(null);
+            setReportPreview('');
+            setReportOpen(true);
+          },
+        },
+        {
+          label: 'Delete conversation',
+          destructive: true,
+          onPress: () => {
+            void (async () => {
+              try {
+                await hideFoodShareConversation(matchChatId);
+                showSuccess('Conversation hidden.');
+                router.back();
+              } catch (e) {
+                showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.connectionLost));
+              }
+            })();
+          },
+        },
+        {
+          label: 'Report user',
+          onPress: () => {
+            setReportScope('conversation');
+            setReportOpen(true);
+          },
+        },
+        {
+          label: 'Block user',
+          destructive: true,
+          onPress: () => {
+            void (async () => {
+              const ok = await confirmBlockUser(partnerFirstName);
+              if (!ok) return;
+              try {
+                await blockFoodShareUser({
+                  blockedUid: partnerUid,
+                  matchId: id,
+                  blockerFirstName: myFirstName,
+                  foodName: foodTitle,
+                  adminFoodShareId,
+                });
+                showSuccess(FOOD_SHARE_SUCCESS.userBlocked);
+                router.back();
+              } catch (e) {
+                showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.blockFailed));
+              }
+            })();
+          },
+        },
+        ...(canCancelFoodShareMatch(matchLifecycle, orderStatus)
+          ? [
+              {
+                label: 'Cancel match',
+                destructive: true,
+                onPress: () => {
+                  void (async () => {
+                    const ok = await confirmCancelMatch(foodTitle);
+                    if (!ok) return;
+                    try {
+                      await cancelFoodShareMatch({
+                        matchId: id,
+                        partnerUid,
+                        cancelledByFirstName: myFirstName,
+                        foodName: foodTitle,
+                        adminFoodShareId,
+                      });
+                      showSuccess('Match cancelled');
+                      router.back();
+                    } catch (e) {
+                      showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
+                    }
+                  })();
+                },
+              },
+            ]
+          : []),
+      ],
+    });
+  };
+
   if (loading) {
     return (
       <View style={[styles.root, styles.center]}>
@@ -133,7 +306,7 @@ export default function FoodShareChatScreen() {
     );
   }
 
-  if (error) {
+  if (error && error !== 'This match was cancelled.') {
     return (
       <SafeAreaView style={styles.root} edges={['top']}>
         <SwipeCinematicBackground />
@@ -169,6 +342,9 @@ export default function FoodShareChatScreen() {
             {foodTitle}
           </Text>
         </View>
+        <Pressable style={styles.iconBtn} onPress={openSafetyMenu}>
+          <Ionicons name="shield-outline" size={20} color="#FFF" />
+        </Pressable>
         <Pressable
           style={styles.iconBtn}
           onPress={() => router.push(USER_ROUTES.foodShareMatch(id) as never)}
@@ -176,6 +352,26 @@ export default function FoodShareChatScreen() {
           <Ionicons name="information-circle-outline" size={22} color="#FFF" />
         </Pressable>
       </View>
+
+      {moderationBanner ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedTitle}>Message not sent</Text>
+          <Text style={styles.closedBody}>{moderationBanner}</Text>
+        </View>
+      ) : null}
+
+      {chatClosed ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedTitle}>
+            {blocked ? 'Chat closed' : 'Match ended'}
+          </Text>
+          <Text style={styles.closedBody}>
+            {blocked
+              ? `You can no longer message ${partnerFirstName}.`
+              : 'This match is no longer active.'}
+          </Text>
+        </View>
+      ) : null}
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -194,6 +390,15 @@ export default function FoodShareChatScreen() {
             const mine = item.senderId === myUid;
             const system = item.senderId === 'system';
             return (
+              <Pressable
+                onLongPress={() => {
+                  if (system || mine) return;
+                  setReportScope('message');
+                  setReportMessageId(item.id);
+                  setReportPreview(item.text);
+                  setReportOpen(true);
+                }}
+              >
               <View
                 style={[
                   styles.bubbleWrap,
@@ -221,6 +426,7 @@ export default function FoodShareChatScreen() {
                   </Text>
                 </View>
               </View>
+              </Pressable>
             );
           }}
           ListEmptyComponent={
@@ -232,23 +438,49 @@ export default function FoodShareChatScreen() {
 
         <View style={styles.composer}>
           <TextInput
-            style={styles.input}
-            placeholder={`Message ${partnerFirstName}…`}
+            style={[styles.input, chatClosed && styles.inputDisabled]}
+            placeholder={
+              chatClosed
+                ? 'Messaging disabled'
+                : `Message ${partnerFirstName}…`
+            }
             placeholderTextColor="rgba(255,255,255,0.4)"
             value={draft}
             onChangeText={setDraft}
             multiline
             maxLength={500}
+            editable={!chatClosed && !sending}
           />
           <Pressable
-            style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled]}
-            disabled={!draft.trim() || sending}
+            style={[
+              styles.sendBtn,
+              ((!draft.trim() || sending) || chatClosed) && styles.sendBtnDisabled,
+            ]}
+            disabled={!draft.trim() || sending || chatClosed}
             onPress={() => void handleSend()}
           >
             <Ionicons name="send" size={18} color="#0A0A0A" />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <FoodShareReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        reportedFirstName={partnerFirstName}
+        onSubmit={async ({ reason, description }) => {
+          await reportFoodShareChat({
+            reportedUid: partnerUid,
+            matchId: id,
+            scope: reportScope,
+            messageId: reportMessageId ?? undefined,
+            messagePreview: reportPreview || undefined,
+            reason,
+            description,
+          });
+          showSuccess(FOOD_SHARE_SUCCESS.reportSubmitted);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -278,6 +510,17 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, minWidth: 0 },
   headerTitle: { color: '#FFF', fontWeight: '900', fontSize: 17 },
   headerSub: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600' },
+  closedBanner: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(251,113,133,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(251,113,133,0.25)',
+  },
+  closedTitle: { color: '#FB7185', fontWeight: '800', fontSize: 15 },
+  closedBody: { color: 'rgba(255,255,255,0.7)', marginTop: 4, fontSize: 13 },
   listContent: { padding: 16, paddingBottom: 8, flexGrow: 1 },
   bubbleWrap: { marginBottom: 10, maxWidth: '82%' },
   bubbleWrapMine: { alignSelf: 'flex-end' },
@@ -337,6 +580,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  inputDisabled: { opacity: 0.5 },
   sendBtn: {
     width: 44,
     height: 44,

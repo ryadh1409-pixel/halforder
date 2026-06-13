@@ -1,16 +1,21 @@
-import { auth, db } from '@/services/firebase';
+import { isUserBlocked } from '@/services/block';
+import {
+  COMMUNITY_GUIDELINES_MESSAGE,
+  sendModeratedMatchChatMessage,
+} from '@/services/chatModeration';
 import type { MatchChatMessage } from '@/types/foodShare';
 import { safeToMillis } from '@/utils/safeToMillis';
+import { auth, db } from '@/services/firebase';
 import {
-  addDoc,
   collection,
   limit,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
+
+export { COMMUNITY_GUIDELINES_MESSAGE };
 
 export function subscribeMatchMessages(
   matchChatId: string,
@@ -43,19 +48,36 @@ export function subscribeMatchMessages(
   );
 }
 
+export type SendMatchMessageResult =
+  | { ok: true }
+  | { ok: false; message: string; code?: string; warningLevel?: number };
+
 export async function sendMatchChatMessage(
   matchChatId: string,
   text: string,
   senderFirstName: string,
-): Promise<void> {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error('Sign in required');
-  const trimmed = text.trim();
-  if (!trimmed) return;
-  await addDoc(collection(db, 'matchChats', matchChatId, 'matchMessages'), {
-    senderId: uid,
-    senderFirstName: senderFirstName.split(/\s+/)[0] ?? senderFirstName,
-    text: trimmed,
-    createdAt: serverTimestamp(),
+  partnerUid?: string,
+): Promise<SendMatchMessageResult> {
+  if (partnerUid) {
+    const uid = auth.currentUser?.uid;
+    if (uid && (await isUserBlocked(uid, partnerUid))) {
+      return { ok: false, message: 'You cannot message this user.', code: 'BLOCKED' };
+    }
+  }
+
+  const result = await sendModeratedMatchChatMessage({
+    matchChatId,
+    text,
+    senderFirstName,
   });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.message,
+      code: result.code,
+      warningLevel: result.warningLevel,
+    };
+  }
+  return { ok: true };
 }

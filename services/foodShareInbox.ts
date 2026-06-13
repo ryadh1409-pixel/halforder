@@ -114,7 +114,9 @@ function prefAllows(
     type === 'payment_failed' ||
     type === 'partner_paid' ||
     type === 'refund_processed' ||
-    type === 'match_activated'
+    type === 'match_activated' ||
+    type === 'user_blocked' ||
+    type === 'report_submitted'
   ) {
     return prefs.match;
   }

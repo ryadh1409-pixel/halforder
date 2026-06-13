@@ -26,6 +26,9 @@ type Row = {
   preview: string | null;
   createdAt: string;
   adminResolution: string | null;
+  status: string | null;
+  source: string | null;
+  matchId: string | null;
 };
 
 export default function AdminReportsListScreen() {
@@ -48,6 +51,14 @@ export default function AdminReportsListScreen() {
           const data = d.data() as Record<string, unknown>;
           const full = reportDetailText(data);
           const preview = full ? full.slice(0, 120) : null;
+          const contentId =
+            typeof data.contentId === 'string' ? data.contentId : '';
+          const matchId =
+            typeof data.matchId === 'string'
+              ? data.matchId
+              : contentId.startsWith('foodShareMatch:')
+                ? contentId.slice('foodShareMatch:'.length)
+                : null;
           return {
             id: d.id,
             reportedUserId:
@@ -63,6 +74,9 @@ export default function AdminReportsListScreen() {
               typeof data.adminResolution === 'string'
                 ? data.adminResolution
                 : null,
+            status: typeof data.status === 'string' ? data.status : null,
+            source: typeof data.source === 'string' ? data.source : null,
+            matchId,
           };
         });
         setRows(list);
@@ -96,13 +110,23 @@ export default function AdminReportsListScreen() {
             <TouchableOpacity
               style={[
                 styles.card,
-                item.adminResolution ? styles.cardDone : null,
+                item.adminResolution || (item.status && item.status !== 'open')
+                  ? styles.cardDone
+                  : null,
               ]}
               activeOpacity={0.88}
               onPress={() => router.push(adminRoutes.report(item.id) as never)}
             >
               <Text style={styles.time}>{item.createdAt}</Text>
               <Text style={styles.reason}>{item.reason ?? 'Report'}</Text>
+              {item.source === 'food_share' ? (
+                <Text style={styles.badgeFood}>Meal share</Text>
+              ) : null}
+              {item.matchId ? (
+                <Text style={styles.line} numberOfLines={1}>
+                  Match: {item.matchId}
+                </Text>
+              ) : null}
               {item.reportedUserId ? (
                 <Text style={styles.line} numberOfLines={1}>
                   Reported: {item.reportedUserId}
@@ -147,5 +171,13 @@ const styles = StyleSheet.create({
     color: COLORS.successText,
   },
   cta: { marginTop: 10, fontWeight: '700', color: COLORS.primary },
+  badgeFood: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+  },
   muted: { textAlign: 'center', color: COLORS.textMuted, marginTop: 24 },
 });

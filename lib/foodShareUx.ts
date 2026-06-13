@@ -46,7 +46,8 @@ export type FoodShareNotificationType =
   | 'picked_up'
   | 'delivered'
   | 'match_cancelled'
-  | 'report_submitted'
+  | 'chat_message_blocked'
+  | 'chat_warning'
   | 'order_completed';
 
 export type FoodShareLifecycleAlertKey =

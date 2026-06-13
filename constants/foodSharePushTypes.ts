@@ -15,6 +15,8 @@ export const FOOD_SHARE_PUSH = {
   PICKED_UP: 'food_share_picked_up',
   DELIVERED: 'food_share_delivered',
   MATCH_CANCELLED: 'food_share_match_cancelled',
+  USER_BLOCKED: 'food_share_user_blocked',
+  CHAT_BLOCKED: 'food_share_chat_blocked',
   REPORT_SUBMITTED: 'food_share_report_submitted',
 } as const;
 

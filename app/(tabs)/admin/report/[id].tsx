@@ -8,8 +8,6 @@ import { db } from '../../../../services/firebase';
 import {
   doc,
   onSnapshot,
-  serverTimestamp,
-  updateDoc,
 } from 'firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -25,6 +23,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { systemConfirm } from '../../../../components/SystemDialogHost';
+import { USER_ROUTES } from '@/lib/navigationPaths';
+import { resolveFoodShareReport } from '@/services/adminModeration';
 import { getUserFriendlyError } from '../../../../utils/errorHandler';
 import { showError, showSuccess } from '../../../../utils/toast';
 
@@ -62,14 +62,26 @@ export default function AdminReportDetailScreen() {
     return () => u();
   }, [reportId]);
 
+  const contentIdRaw =
+    report && typeof report.contentId === 'string' ? report.contentId.trim() : null;
   const reportedUserId =
     report && typeof report.reportedUserId === 'string'
       ? report.reportedUserId
       : null;
+  const matchId =
+    report && typeof report.matchId === 'string'
+      ? report.matchId
+      : contentIdRaw?.startsWith('foodShareMatch:')
+        ? contentIdRaw.slice('foodShareMatch:'.length)
+        : null;
+  const reportStatus =
+    report && typeof report.status === 'string' ? report.status : null;
   const resolved =
     report && typeof report.adminResolution === 'string'
       ? report.adminResolution
-      : null;
+      : reportStatus && reportStatus !== 'open'
+        ? reportStatus
+        : null;
 
   useEffect(() => {
     if (!reportedUserId) {
@@ -88,52 +100,30 @@ export default function AdminReportDetailScreen() {
     return () => u();
   }, [reportedUserId]);
 
-  const markIgnored = () => {
+  const markIgnored = () => resolveReport('dismissed', 'Dismiss report');
+  const warnUser = () => resolveReport('warned', 'Warn user');
+  const suspendUser = () => resolveReport('suspended', 'Suspend user');
+  const banUser = () => resolveReport('banned', 'Ban user');
+
+  const resolveReport = (status: 'dismissed' | 'warned' | 'suspended' | 'banned', title: string) => {
     if (!reportId) return;
     void (async () => {
       const ok = await systemConfirm({
-        title: 'Ignore report',
-        message: 'Close without action?',
-        confirmLabel: 'Ignore',
-        destructive: true,
+        title,
+        message: `Apply "${status}" to this report?`,
+        confirmLabel: title,
+        destructive: status === 'banned' || status === 'suspended',
       });
       if (!ok) return;
       setActing(true);
       try {
-        adminLog('report-detail', 'ignore report', { reportId });
-        await updateDoc(doc(db, 'reports', reportId), {
-          adminResolution: 'ignored',
-          adminResolvedAt: serverTimestamp(),
+        await resolveFoodShareReport({
+          reportId,
+          status,
+          reportedUserId,
+          matchId,
         });
-      } catch (e) {
-        showError(getUserFriendlyError(e));
-      } finally {
-        setActing(false);
-      }
-    })();
-  };
-
-  const banUser = () => {
-    if (!reportId || !reportedUserId) return;
-    void (async () => {
-      const ok = await systemConfirm({
-        title: 'Ban user',
-        message: `Ban ${reportedUserId.slice(0, 10)}… and resolve this report?`,
-        confirmLabel: 'Ban',
-        destructive: true,
-      });
-      if (!ok) return;
-      setActing(true);
-      try {
-        adminLog('report-detail', 'ban user from report', { reportedUserId });
-        await updateDoc(doc(db, 'users', reportedUserId), {
-          banned: true,
-        });
-        await updateDoc(doc(db, 'reports', reportId), {
-          adminResolution: 'banned_reported_user',
-          adminResolvedAt: serverTimestamp(),
-        });
-        showSuccess('User banned.');
+        showSuccess(`Report ${status}.`);
       } catch (e) {
         showError(getUserFriendlyError(e));
       } finally {
@@ -170,8 +160,6 @@ export default function AdminReportDetailScreen() {
   }
 
   const detail = report ? reportDetailText(report as Record<string, unknown>) : null;
-  const contentIdRaw =
-    report && typeof report.contentId === 'string' ? report.contentId.trim() : null;
   const legacyOrderId =
     report && typeof report.orderId === 'string' ? report.orderId.trim() : null;
   const orderForLink =
@@ -218,6 +206,18 @@ export default function AdminReportDetailScreen() {
               <Text style={[styles.v, styles.mono]}>{contentIdRaw}</Text>
             </>
           ) : null}
+          {matchId ? (
+            <>
+              <Text style={styles.k}>Meal share match</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  router.push(USER_ROUTES.foodShareMatch(matchId) as never)
+                }
+              >
+                <Text style={[styles.v, styles.link]}>{matchId}</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
           {orderForLink ? (
             <>
               <Text style={styles.k}>Order</Text>
@@ -256,16 +256,32 @@ export default function AdminReportDetailScreen() {
               disabled={acting}
               onPress={markIgnored}
             >
-              <Text style={styles.ignoreT}>Ignore report</Text>
+              <Text style={styles.ignoreT}>Dismiss</Text>
             </TouchableOpacity>
             {reportedUserId ? (
-              <TouchableOpacity
-                style={[styles.btn, styles.ban]}
-                disabled={acting}
-                onPress={banUser}
-              >
-                <Text style={styles.banT}>Ban reported user</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.btn, styles.warn]}
+                  disabled={acting}
+                  onPress={warnUser}
+                >
+                  <Text style={styles.warnT}>Warn user</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.suspend]}
+                  disabled={acting}
+                  onPress={suspendUser}
+                >
+                  <Text style={styles.suspendT}>Suspend user</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.ban]}
+                  disabled={acting}
+                  onPress={banUser}
+                >
+                  <Text style={styles.banT}>Ban user</Text>
+                </TouchableOpacity>
+              </>
             ) : null}
           </View>
         ) : null}
@@ -296,6 +312,10 @@ const styles = StyleSheet.create({
   btn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   ignore: { backgroundColor: COLORS.border },
   ignoreT: { fontWeight: '800', color: COLORS.text },
+  warn: { backgroundColor: '#FEF3C7' },
+  warnT: { fontWeight: '800', color: '#92400E' },
+  suspend: { backgroundColor: '#FFEDD5' },
+  suspendT: { fontWeight: '800', color: '#C2410C' },
   ban: { backgroundColor: COLORS.dangerBg },
   banT: { fontWeight: '800', color: COLORS.error },
 });

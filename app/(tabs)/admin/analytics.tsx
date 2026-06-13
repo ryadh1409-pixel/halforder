@@ -145,6 +145,15 @@ export default function AdminAnalyticsScreen() {
                 <Text style={styles.value}>{data.reports}</Text>
                 <Text style={styles.cta}>Moderation →</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.88}
+                onPress={() => router.push(adminRoutes.chatModeration as never)}
+              >
+                <Text style={styles.label}>Flagged chat messages</Text>
+                <Text style={styles.value}>Live</Text>
+                <Text style={styles.cta}>Chat moderation →</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
         </ScrollView>

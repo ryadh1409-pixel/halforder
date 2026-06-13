@@ -2,21 +2,12 @@ import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
 import { FOOD_SHARE_ERRORS } from '@/lib/foodShareUx';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import {
-  notifyAdminMatchCancelled,
   notifyAdminMatchCreated,
-  notifyMatchCancelled,
   notifyPairingAwaitingPayment,
-  notifyReportSubmittedAdmin,
   notifyShareJoinedWaiting,
 } from '@/services/foodShareNotify';
-import { refundFoodShareMatchPayments } from '@/services/foodSharePayment';
+import { hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
-import { blockUser } from '@/services/block';
-import {
-  reportContentIdFoodShareMatch,
-  submitReport,
-  type ReportReason,
-} from '@/services/reports';
 import type {
   FoodShareCostBreakdown,
   FoodShareMatchDoc,
@@ -102,6 +93,18 @@ export async function joinAdminFoodShare(
   const queueRef = doc(db, 'matchQueues', adminFoodShareId);
   const requestRef = doc(db, 'matchRequests', `${adminFoodShareId}_${uid}`);
   const myFirstName = await resolveFirstName(uid);
+
+  const queuePreview = await getDoc(queueRef);
+  const waitingPreview =
+    queuePreview.exists() &&
+    typeof queuePreview.data()?.waitingUserId === 'string'
+      ? (queuePreview.data()?.waitingUserId as string)
+      : null;
+  if (waitingPreview && waitingPreview !== uid) {
+    if (await hasBlockBetween(uid, waitingPreview)) {
+      return { ok: false, error: 'You cannot match with this user.' };
+    }
+  }
 
   let txResult: QueueTxResult;
   try {
@@ -410,65 +413,13 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
   };
 }
 
-export async function cancelFoodShareMatch(
-  matchId: string,
-  context?: {
-    partnerUid?: string;
-    cancelledByFirstName?: string;
-    foodName?: string;
-    adminFoodShareId?: string;
-  },
-): Promise<void> {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error(FOOD_SHARE_ERRORS.signInRequired);
-  await updateDoc(doc(db, 'matches', matchId), {
-    status: 'CANCELLED',
-    lifecycle: 'CANCELLED',
-    cancelledBy: uid,
-    updatedAt: serverTimestamp(),
-  });
-  try {
-    await refundFoodShareMatchPayments(matchId);
-  } catch {
-    // Refund is best-effort; webhook will reconcile payment docs.
-  }
-  if (context?.partnerUid) {
-    void notifyMatchCancelled({
-      recipientUid: context.partnerUid,
-      cancelledByFirstName: context.cancelledByFirstName ?? 'Your partner',
-      foodName: context.foodName ?? 'your meal share',
-      matchId,
-    });
-  }
-  void notifyAdminMatchCancelled({
-    matchId,
-    adminFoodShareId: context?.adminFoodShareId,
-  });
-}
-
-export async function reportFoodShareUser(input: {
-  reportedUid: string;
-  matchId: string;
-  reason: ReportReason;
-}): Promise<void> {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error('Sign in required');
-  await submitReport({
-    reporterId: uid,
-    reportedUserId: input.reportedUid,
-    contentId: reportContentIdFoodShareMatch(input.matchId),
-    reason: input.reason,
-  });
-  void notifyReportSubmittedAdmin({
-    matchId: input.matchId,
-    reporterUid: uid,
-    reportedUid: input.reportedUid,
-  });
-}
-
-export async function blockFoodShareUser(blockedUid: string): Promise<void> {
-  await blockUser(blockedUid);
-}
+export {
+  blockFoodShareUser,
+  cancelFoodShareMatch,
+  cancelWaitingFoodShare,
+  canCancelFoodShareMatch,
+  reportFoodShareUser,
+} from '@/services/foodShareSafety';
 
 /** @deprecated Use joinAdminFoodShare */
 export const joinFoodShare = joinAdminFoodShare;
