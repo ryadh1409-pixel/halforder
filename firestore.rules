@@ -1391,6 +1391,8 @@ service cloud.firestore {
         && before.get('userId', '') == after.get('userId', '')
         && before.get('customerId', '') == after.get('customerId', '')
         && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('venueId', before.get('restaurantId', ''))
+            == after.get('venueId', after.get('restaurantId', ''))
         && before.get('totalPrice', 0) == after.get('totalPrice', 0)
         && before.get('items', []) == after.get('items', [])
         && (
