@@ -9,6 +9,7 @@ import {
   logDeliveryCompletionAfter,
   logDeliveryCompletionBefore,
 } from '@/lib/marketplaceDeliveryCompletion';
+import { isLegalDriverFulfillmentAction } from '@/lib/orderLifecycleTransitions';
 import { markDriverHubOrderCompleted } from '@/lib/driverHubOrdersStore';
 import { isTerminalMarketplaceOrder, logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
@@ -46,29 +47,9 @@ function isAssignedToDriver(order: DriverMarketplaceFulfillmentView, driverUid: 
   return driverId === uid || assigned === uid;
 }
 
-/** Courier statuses where the restaurant has released the order for driver pickup. */
-function isReadyForDriverPickup(courier: MarketplaceDeliveryStatus, raw: string): boolean {
-  if (courier === MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP) return true;
-  return raw === 'ready' || raw === 'waiting_driver' || raw === 'accepted_for_delivery';
-}
-
-/** True when assigned driver has finished this marketplace delivery. */
-export function isDriverMarketplaceDeliveryComplete(
-  order: DriverMarketplaceFulfillmentView | null | undefined,
-  driverUid: string | null | undefined,
-): boolean {
-  if (!order || !driverUid?.trim() || !isAssignedToDriver(order, driverUid)) {
-    return false;
-  }
-  return (
-    normalizeMarketplaceDeliveryStatus(order.deliveryStatus) ===
-    MARKETPLACE_DELIVERY_STATUS.DELIVERED
-  );
-}
-
 /**
  * UberEats-style primary action for assigned marketplace deliveries.
- * driver_assigned → ready_for_pickup → picked_up → delivered
+ * driver_assigned → ready_for_pickup (optional) → picked_up → delivered
  */
 export function getDriverMarketplaceFulfillmentButton(
   order: DriverMarketplaceFulfillmentView | null | undefined,
@@ -77,19 +58,27 @@ export function getDriverMarketplaceFulfillmentButton(
   if (!order || !driverUid?.trim() || !isAssignedToDriver(order, driverUid)) {
     return null;
   }
-  const raw = normCourier(order.deliveryStatus);
   const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
 
   if (courier === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
     return null;
   }
-  if (courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED) {
-    return { label: 'Arrived at Restaurant', action: 'arrive_restaurant' };
-  }
-  if (isReadyForDriverPickup(courier, raw)) {
+  if (
+    courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED &&
+    isLegalDriverFulfillmentAction(courier, 'pickup')
+  ) {
     return { label: 'Confirm Pickup', action: 'pickup' };
   }
-  if (courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP) {
+  if (
+    courier === MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP &&
+    isLegalDriverFulfillmentAction(courier, 'pickup')
+  ) {
+    return { label: 'Confirm Pickup', action: 'pickup' };
+  }
+  if (
+    courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP &&
+    isLegalDriverFulfillmentAction(courier, 'deliver')
+  ) {
     return { label: 'Complete Delivery', action: 'deliver' };
   }
   return null;
@@ -170,15 +159,7 @@ function isLegalFulfillment(
   current: DriverMarketplaceFulfillmentView,
   action: DriverMarketplaceFulfillmentAction,
 ): boolean {
-  const raw = normCourier(current.deliveryStatus);
-  const courier = normalizeMarketplaceDeliveryStatus(current.deliveryStatus);
-  if (action === 'arrive_restaurant') {
-    return courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED;
-  }
-  if (action === 'pickup') {
-    return isReadyForDriverPickup(courier, raw);
-  }
-  return courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP;
+  return isLegalDriverFulfillmentAction(current.deliveryStatus, action);
 }
 
 export async function applyDriverMarketplaceFulfillment(
@@ -261,4 +242,18 @@ export async function applyDriverMarketplaceFulfillment(
     }
   }
   return wrote ? 'applied' : 'skipped_duplicate';
+}
+
+/** True when assigned driver has finished this marketplace delivery. */
+export function isDriverMarketplaceDeliveryComplete(
+  order: DriverMarketplaceFulfillmentView | null | undefined,
+  driverUid: string | null | undefined,
+): boolean {
+  if (!order || !driverUid?.trim() || !isAssignedToDriver(order, driverUid)) {
+    return false;
+  }
+  return (
+    normalizeMarketplaceDeliveryStatus(order.deliveryStatus) ===
+    MARKETPLACE_DELIVERY_STATUS.DELIVERED
+  );
 }

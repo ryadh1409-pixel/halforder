@@ -24,6 +24,10 @@ import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
 import { DriverDeliveryHistorySection } from '@/components/driver/DriverDeliveryHistory';
 import { filterDriverActiveMarketplaceOrders, pickPrimaryDriverHubActiveOrder } from '@/lib/driverHubActiveOrders';
 import {
+  excludeActiveOrderIdsFromAvailable,
+  filterDriverAvailableMarketplaceOrders,
+} from '@/lib/driverAvailableOrdersFilter';
+import {
   pruneHubActiveOrdersState,
   subscribeDriverHubActiveOrderRemove,
   subscribeDriverHubCompletedBump,
@@ -174,23 +178,14 @@ export default function DriverHubScreen() {
 
   const applyAvailableOrders = useCallback(
     (orders: DriverOrder[]) => {
-      const unique = Array.from(
-        new Map(
-          orders
-            .filter((o) => {
-              if (o.driverId) return false;
-              if (uid && o.assignedDriverId === uid) return false;
-              return true;
-            })
-            .map((o) => [o.id, o]),
-        ).values(),
-      );
-    const sig = ordersListSignature(unique);
-    if (sig === availableSigRef.current) return;
-    availableSigRef.current = sig;
+      const filtered = filterDriverAvailableMarketplaceOrders(orders, 'hub.applyAvailableOrders');
+      const unique = Array.from(new Map(filtered.map((o) => [o.id, o])).values());
+      const sig = ordersListSignature(unique);
+      if (sig === availableSigRef.current) return;
+      availableSigRef.current = sig;
       setAvailableOrders(unique);
     },
-    [uid],
+    [],
   );
 
   const applyActiveOrders = useCallback(
@@ -328,6 +323,11 @@ export default function DriverHubScreen() {
     [activeOrders, uid],
   );
 
+  const hubAvailableOrders = useMemo(
+    () => excludeActiveOrderIdsFromAvailable(availableOrders, activeOrders),
+    [availableOrders, activeOrders],
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
@@ -406,7 +406,7 @@ export default function DriverHubScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Available orders</Text>
-          <Text style={styles.sectionCount}>{availableOrders.length}</Text>
+          <Text style={styles.sectionCount}>{hubAvailableOrders.length}</Text>
         </View>
 
         {!isOnline ? (
@@ -414,13 +414,13 @@ export default function DriverHubScreen() {
             <Text style={styles.stateTitle}>You are offline</Text>
             <Text style={styles.stateSub}>Turn on the switch above to start receiving delivery offers.</Text>
           </View>
-        ) : availableOrders.length === 0 ? (
+        ) : hubAvailableOrders.length === 0 ? (
           <View style={styles.stateCard}>
             <Text style={styles.stateTitle}>No delivery requests nearby yet.</Text>
             <Text style={styles.stateSub}>New deliveries appear in realtime.</Text>
           </View>
         ) : (
-          availableOrders.map((order) => {
+          hubAvailableOrders.map((order) => {
             const isExpired = false;
             const restaurantAddress = order.restaurantAddress ?? 'Address unavailable';
             const customerAddress =

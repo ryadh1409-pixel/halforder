@@ -38,7 +38,7 @@ describe('driverMarketplaceFulfillment', () => {
     jest.clearAllMocks();
   });
 
-  it('shows Arrived at Restaurant when driver_assigned', () => {
+  it('shows Confirm Pickup when driver_assigned', () => {
     expect(
       getDriverMarketplaceFulfillmentButton(
         {
@@ -48,7 +48,7 @@ describe('driverMarketplaceFulfillment', () => {
         },
         'drv1',
       ),
-    ).toEqual({ label: 'Arrived at Restaurant', action: 'arrive_restaurant' });
+    ).toEqual({ label: 'Confirm Pickup', action: 'pickup' });
   });
 
   it('shows Confirm Pickup when ready_for_pickup', () => {
@@ -127,7 +127,34 @@ describe('driverMarketplaceFulfillment', () => {
     );
   });
 
-  it('writes picked_up on pickup', async () => {
+  it('writes picked_up on pickup from driver_assigned', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        driverId: 'drv1',
+        assignedDriverId: 'drv1',
+        deliveryStatus: 'driver_assigned',
+        status: 'driver_assigned',
+      }),
+    });
+    const result = await applyDriverMarketplaceFulfillment(
+      'o1',
+      'pickup',
+      {
+        id: 'o1',
+        driverId: 'drv1',
+        deliveryStatus: 'driver_assigned',
+      },
+    );
+    expect(result).toBe('applied');
+    expect(protectedUpdateOrder).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ deliveryStatus: 'picked_up', status: 'picked_up' }),
+      expect.any(Object),
+    );
+  });
+
+  it('writes picked_up on pickup from ready_for_pickup', async () => {
     mockGetDoc.mockResolvedValueOnce({
       exists: () => true,
       data: () => ({

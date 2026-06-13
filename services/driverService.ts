@@ -16,6 +16,12 @@ import {
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import {
+  excludeAssignedOrderIdsFromAvailable,
+  filterDriverAvailableMarketplaceOrders,
+  isDriverMarketplacePoolDocAvailable,
+  markDriverMarketplaceOrderClaimed,
+} from '@/lib/driverAvailableOrdersFilter';
+import {
   isDriverActiveListTerminal,
   logDuplicateQueryDocMatch,
   logQuerySource,
@@ -195,14 +201,27 @@ function normalizeStatus(value: unknown): OrderStatus {
   return 'pending';
 }
 
+function dedupeDriverOrdersById(orders: DriverOrder[]): DriverOrder[] {
+  const byId = new Map<string, DriverOrder>();
+  for (const row of orders) {
+    const prev = byId.get(row.id);
+    byId.set(row.id, prev ? pickFreshestDriverOrder(prev, row) : row);
+  }
+  return Array.from(byId.values());
+}
+
 function pickFreshestDriverOrder(a: DriverOrder, b: DriverOrder): DriverOrder {
+  const msA = a.updatedAtMs ?? 0;
+  const msB = b.updatedAtMs ?? 0;
+  if (msA === 0 && msB > 0) return b;
+  if (msB === 0 && msA > 0) return a;
+  if (msA > 0 && msB > 0 && msB !== msA) {
+    return msB > msA ? b : a;
+  }
   const rankA = driverCourierForwardRank(a.deliveryStatus);
   const rankB = driverCourierForwardRank(b.deliveryStatus);
   if (rankB > rankA) return b;
   if (rankA > rankB) return a;
-  const msA = a.updatedAtMs ?? 0;
-  const msB = b.updatedAtMs ?? 0;
-  if (msA === 0 || msB === 0) return msB >= msA ? b : a;
   return msB >= msA ? b : a;
 }
 
@@ -408,12 +427,19 @@ export function subscribeToDriverOrders(
   const emitMerged = () => {
     if (cancelled) return;
     try {
-      const merged = new Map<string, DriverOrder>();
-      for (const row of [...byDriverId, ...byAssignedId]) {
-        const prev = merged.get(row.id);
-        merged.set(row.id, prev ? pickFreshestDriverOrder(prev, row) : row);
+      querySourcesByOrderId.clear();
+      for (const row of byDriverId) {
+        const sources = querySourcesByOrderId.get(row.id) ?? new Set<string>();
+        sources.add('subscribeToDriverOrders.driverId');
+        querySourcesByOrderId.set(row.id, sources);
       }
-      const rows = Array.from(merged.values())
+      for (const row of byAssignedId) {
+        const sources = querySourcesByOrderId.get(row.id) ?? new Set<string>();
+        sources.add('subscribeToDriverOrders.assignedDriverId');
+        querySourcesByOrderId.set(row.id, sources);
+      }
+      const merged = dedupeDriverOrdersById([...byDriverId, ...byAssignedId]);
+      const rows = merged
         .filter((row) => {
           const terminal =
             isTerminalMarketplaceOrder(row) || isDriverActiveListTerminal(row);
@@ -668,12 +694,30 @@ export function subscribeDriverDeliveryStats(
 
 /**
  * Paid delivery queue: awaiting driver (`pending_driver`), unassigned, delivery only.
+ * Excludes orders already assigned to this driver via live `orders` listeners.
  */
 export function subscribeAvailableOrders(
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
-  let unsub: Unsubscribe | null = null;
+  const unsubs: Unsubscribe[] = [];
   let cancelled = false;
+  let poolCache: DriverOrder[] = [];
+  let assignedByDriverId = new Set<string>();
+  let assignedByAssignedDriverId = new Set<string>();
+
+  const emitAvailable = () => {
+    if (cancelled) return;
+    const assignedIds = new Set([...assignedByDriverId, ...assignedByAssignedDriverId]);
+    const filtered = excludeAssignedOrderIdsFromAvailable(
+      filterDriverAvailableMarketplaceOrders(poolCache, 'subscribeAvailableOrders'),
+      assignedIds,
+    );
+    marketplaceLog.listenerUpdate(filtered.length, {
+      listener: 'subscribeAvailableOrders',
+      assignedExcludeCount: assignedIds.size,
+    });
+    onData(filtered);
+  };
 
   runListenerBootstrap('subscribeAvailableOrders', async () => {
     const authUid = auth.currentUser?.uid?.trim() ?? '';
@@ -691,41 +735,94 @@ export function subscribeAvailableOrders(
       filters: poolFilters,
     });
 
+    const assignedFilters = {
+      driverId: authUid,
+      assignedDriverId: authUid,
+      deliveryType: 'delivery',
+    };
+    await logDriverQueryStart({
+      listener: 'subscribeAvailableOrders.assignedExclude',
+      collection: 'orders',
+      filters: assignedFilters,
+    });
+
     if (cancelled) return;
 
     try {
-      unsub = onSnapshot(
-        query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
-        (snap) => {
-          if (cancelled) return;
-          try {
-            const rows = snap.docs
-              .map((docSnap) => mapDriverOrder(docSnap))
-              .filter((order) => {
-                const raw = snap.docs.find((d) => d.id === order.id)?.data() ?? {};
-                if (isTerminalMarketplaceOrder({ id: order.id, ...raw })) return false;
-                return !isDriverPoolRowStale(raw.createdAt, order.createdAtMs);
-              });
-            marketplaceLog.listenerUpdate(rows.length, {
-              listener: 'subscribeAvailableOrders',
-              rawCount: snap.size,
-            });
-            onData(rows);
-          } catch (err) {
-            logDriverQueryError('subscribeAvailableOrders', err);
-            onData([]);
-          }
-        },
-        (error) => {
-          logDriverQueryError('subscribeAvailableOrders', error);
-          if (isFirestorePermissionDenied(error)) {
-            onData([]);
-            return;
-          }
-          safeListenerError('subscribeAvailableOrders driver_marketplace_pool', () => onData([]))(
-            error,
-          );
-        },
+      unsubs.push(
+        onSnapshot(
+          query(
+            collection(db, 'orders'),
+            where('driverId', '==', authUid),
+            where('deliveryType', '==', 'delivery'),
+          ),
+          (snap) => {
+            if (cancelled) return;
+            assignedByDriverId = new Set(snap.docs.map((d) => d.id));
+            emitAvailable();
+          },
+          (error) => {
+            logDriverQueryError('subscribeAvailableOrders.assignedExclude.driverId', error);
+            assignedByDriverId = new Set();
+            emitAvailable();
+          },
+        ),
+      );
+
+      unsubs.push(
+        onSnapshot(
+          query(
+            collection(db, 'orders'),
+            where('assignedDriverId', '==', authUid),
+            where('deliveryType', '==', 'delivery'),
+          ),
+          (snap) => {
+            if (cancelled) return;
+            assignedByAssignedDriverId = new Set(snap.docs.map((d) => d.id));
+            emitAvailable();
+          },
+          (error) => {
+            logDriverQueryError('subscribeAvailableOrders.assignedExclude.assignedDriverId', error);
+            assignedByAssignedDriverId = new Set();
+            emitAvailable();
+          },
+        ),
+      );
+
+      unsubs.push(
+        onSnapshot(
+          query(collection(db, 'driver_marketplace_pool'), orderBy('createdAt', 'desc'), limit(20)),
+          (snap) => {
+            if (cancelled) return;
+            try {
+              poolCache = snap.docs
+                .filter((docSnap) => {
+                  const raw = docSnap.data();
+                  if (!isDriverMarketplacePoolDocAvailable(docSnap.id, raw)) return false;
+                  if (isTerminalMarketplaceOrder({ id: docSnap.id, ...raw })) return false;
+                  return !isDriverPoolRowStale(raw.createdAt, safeToMillis(raw.createdAt));
+                })
+                .map((docSnap) => mapDriverOrder(docSnap));
+              emitAvailable();
+            } catch (err) {
+              logDriverQueryError('subscribeAvailableOrders', err);
+              poolCache = [];
+              onData([]);
+            }
+          },
+          (error) => {
+            logDriverQueryError('subscribeAvailableOrders', error);
+            if (isFirestorePermissionDenied(error)) {
+              poolCache = [];
+              onData([]);
+              return;
+            }
+            safeListenerError('subscribeAvailableOrders driver_marketplace_pool', () => {
+              poolCache = [];
+              onData([]);
+            })(error);
+          },
+        ),
       );
     } catch (error) {
       logDriverQueryError('subscribeAvailableOrders.setup', error);
@@ -735,7 +832,7 @@ export function subscribeAvailableOrders(
 
   return () => {
     cancelled = true;
-    unsub?.();
+    for (const unsub of unsubs) unsub();
   };
 }
 
@@ -864,12 +961,12 @@ export async function markPickedUp(orderId: string): Promise<void> {
  * Driver claims a paid matching-queue order (`pending_driver`) or a restaurant-released dispatch order (`ready_for_pickup` + `waiting_driver`).
  * Updates embedded `driver` snapshot for customer/restaurant UIs.
  */
+/** Block claim only when kitchen status has reached post-pickup or terminal states. */
 const CLAIM_BLOCK_STATUSES = new Set([
-  'completed',
-  'delivered',
   'picked_up',
-  'ready_for_pickup',
-  'driver_assigned',
+  'delivered',
+  'completed',
+  'cancelled',
 ]);
 
 function normOrderStatusField(value: unknown): string {
@@ -911,11 +1008,7 @@ export async function claimMarketplaceDriverOrder(
         return { ok: false, reason: 'order_terminal' };
       }
       const currentStatus = normOrderStatusField(data.status);
-      const currentDeliveryStatus = normOrderStatusField(data.deliveryStatus);
-      if (
-        CLAIM_BLOCK_STATUSES.has(currentStatus) ||
-        CLAIM_BLOCK_STATUSES.has(currentDeliveryStatus)
-      ) {
+      if (CLAIM_BLOCK_STATUSES.has(currentStatus)) {
         console.warn('[claimMarketplaceDriverOrder] BLOCKED - order already advanced/terminal', {
           orderId,
           currentStatus: data.status ?? null,
@@ -1015,6 +1108,7 @@ export async function claimMarketplaceDriverOrder(
           tx.update(orderRef, safePatch);
         }
         marketplaceLog.acceptSuccess(orderId, { normalizedDelivery, ruleSafePayload });
+        markDriverMarketplaceOrderClaimed(orderId);
         return { ok: true };
       }
 
@@ -1106,7 +1200,13 @@ export async function updateOrderStatus(
     status,
     updatedAt: serverTimestamp(),
   };
-  if (status === 'picked_up') updates.pickedUpAt = serverTimestamp();
+  if (status === 'picked_up') {
+    updates.pickedUpAt = serverTimestamp();
+    updates.deliveryStatus = 'picked_up';
+  }
+  if (status === 'driver_accepted' || status === 'on_the_way') {
+    updates.deliveryStatus = status === 'on_the_way' ? 'on_the_way' : 'driver_assigned';
+  }
   await protectedUpdateOrder(orderId, updates, {
     fileName: 'driverService.ts',
     functionName: 'updateOrderStatus',

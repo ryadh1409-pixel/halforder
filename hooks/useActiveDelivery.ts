@@ -1,6 +1,7 @@
 import { logQuerySource } from '@/lib/driverActiveOrderFilter';
-import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
 import {
+  DRIVER_SNAPSHOT_SOURCE_PRIORITY,
+  isEffectivelyDelivered,
   reconcileActiveDeliverySnapshot,
   type DriverOrderSnapshotSource,
 } from '@/lib/driverCourierSnapshotMerge';
@@ -16,14 +17,43 @@ import {
 } from '@/services/delivery';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 
+type DocListenerState = {
+  hasServerSnapshot: boolean;
+  fromCache: boolean;
+};
+
+function shouldIgnoreLowerPrioritySnapshot(
+  source: DriverOrderSnapshotSource,
+  docListener: DocListenerState,
+): boolean {
+  if (source === 'active_delivery') return false;
+  if (!docListener.hasServerSnapshot) return false;
+  const sourcePriority = DRIVER_SNAPSHOT_SOURCE_PRIORITY[source] ?? 0;
+  const docPriority = DRIVER_SNAPSHOT_SOURCE_PRIORITY.active_delivery;
+  if (sourcePriority < docPriority) {
+    console.log('[ACTIVE DELIVERY] skipping duplicate subscription snapshot — doc listener is authoritative', {
+      source,
+      sourcePriority,
+      docPriority,
+      docFromCache: docListener.fromCache,
+    });
+    return true;
+  }
+  return false;
+}
+
 function applySnapshot(
   setOrder: Dispatch<SetStateAction<ActiveDelivery | null>>,
   source: DriverOrderSnapshotSource,
   row: ActiveDelivery | null,
+  docListener: DocListenerState,
   meta?: { fromCache?: boolean; hasPendingWrites?: boolean },
 ): void {
   if (!row) {
     setOrder(null);
+    return;
+  }
+  if (shouldIgnoreLowerPrioritySnapshot(source, docListener)) {
     return;
   }
   if (isDriverHubOrderForceCompleted(row.id) || isEffectivelyDelivered(row)) {
@@ -47,8 +77,8 @@ function applySnapshot(
 }
 
 /**
- * Live order for `/(driver)/active/[id]` — merges doc listener + driver active list
- * so stale cache/query snapshots never regress courier status.
+ * Live order for `/(driver)/active/[id]`.
+ * `subscribeActiveDelivery` (doc listener) is authoritative; driver list is bootstrap-only.
  */
 export function useActiveDelivery(
   orderId: string | null | undefined,
@@ -60,9 +90,14 @@ export function useActiveDelivery(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const sourcesLoggedRef = useRef<Set<DriverOrderSnapshotSource>>(new Set());
+  const docListenerRef = useRef<DocListenerState>({
+    hasServerSnapshot: false,
+    fromCache: true,
+  });
 
   useEffect(() => {
     sourcesLoggedRef.current.clear();
+    docListenerRef.current = { hasServerSnapshot: false, fromCache: true };
     if (!enabled || !orderId) {
       setOrder(null);
       setLoading(false);
@@ -75,11 +110,19 @@ export function useActiveDelivery(
     const unsubDoc = subscribeActiveDelivery(
       orderId,
       (row, meta) => {
+        if (row && meta && !meta.fromCache) {
+          docListenerRef.current = { hasServerSnapshot: true, fromCache: false };
+        } else if (row && meta) {
+          docListenerRef.current = {
+            hasServerSnapshot: docListenerRef.current.hasServerSnapshot,
+            fromCache: meta.fromCache,
+          };
+        }
         if (row && __DEV__ && !sourcesLoggedRef.current.has('active_delivery')) {
           sourcesLoggedRef.current.add('active_delivery');
           console.log('[ACTIVE DELIVERY] subscribed', orderId);
         }
-        applySnapshot(setOrder, 'active_delivery', row, meta);
+        applySnapshot(setOrder, 'active_delivery', row, docListenerRef.current, meta);
         setLoading(false);
         setError(null);
       },
@@ -101,7 +144,7 @@ export function useActiveDelivery(
           assignedDriverId: match.assignedDriverId,
           entersActiveList: true,
         });
-        applySnapshot(setOrder, 'driver_orders', match);
+        applySnapshot(setOrder, 'driver_orders', match, docListenerRef.current);
       }
       setLoading(false);
       setError(null);

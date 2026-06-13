@@ -163,6 +163,52 @@ export function logRestaurantAction(
 
 export type ApplyRestaurantKitchenResult = 'applied' | 'skipped_duplicate' | 'skipped_illegal';
 
+async function writeRestaurantKitchenPatch(
+  id: string,
+  action: RestaurantKitchenAction,
+  current: OrderStageInput,
+  patch: Record<string, unknown>,
+  authUid: string | null,
+  orderRestaurantId: string | null,
+): Promise<ApplyRestaurantKitchenResult> {
+  try {
+    await applyProtectedOrderPatch(id, patch);
+    clearOrderListenerCommitCache(id);
+    return 'applied';
+  } catch (error) {
+    clearOrderListenerCommitCache(id);
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+    if (code === 'permission-denied') {
+      console.error('[RESTAURANT FIRESTORE WRITE DENIED]', {
+        uid: authUid,
+        orderId: id,
+        orderRestaurantId,
+        action,
+        before: {
+          status: current.status ?? null,
+          deliveryStatus: current.deliveryStatus ?? null,
+        },
+        after: {
+          status: patch.status ?? null,
+          deliveryStatus: patch.deliveryStatus ?? null,
+          updatedBy: patch.updatedBy ?? null,
+        },
+        patchKeys: Object.keys(patch),
+        firestorePath: `orders/${id}`,
+        ruleHints: [
+          'restaurantKitchenPatchFastOk (first on orders/{id} update)',
+          'updatedBy must be in onlyAllowedRestaurantFieldsChanged',
+          'isRestaurantVendorActor: users.restaurantId or restaurants.ownerId or rid==auth.uid',
+        ],
+      });
+    }
+    throw error;
+  }
+}
+
 /**
  * Idempotent restaurant kitchen transition — protected writes only.
  * Call {@link lockOrderStage} + optimistic patch before awaiting when possible.
@@ -218,6 +264,7 @@ export async function applyRestaurantKitchenAction(
       : typeof currentRecord.venueId === 'string'
         ? currentRecord.venueId
         : null;
+
   console.log('[RESTAURANT FIRESTORE WRITE]', {
     uid: authUid,
     orderId: id,
@@ -237,42 +284,8 @@ export async function applyRestaurantKitchenAction(
     patchKeys: Object.keys(patch),
     firestorePath: `orders/${id}`,
   });
-  try {
-    await applyProtectedOrderPatch(id, patch);
-    clearOrderListenerCommitCache(id);
-    return 'applied';
-  } catch (error) {
-    clearOrderListenerCommitCache(id);
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: string }).code)
-        : '';
-    if (code === 'permission-denied') {
-      console.error('[RESTAURANT FIRESTORE WRITE DENIED]', {
-        uid: authUid,
-        orderId: id,
-        orderRestaurantId,
-        action,
-        before: {
-          status: current.status ?? null,
-          deliveryStatus: current.deliveryStatus ?? null,
-        },
-        after: {
-          status: patch.status ?? null,
-          deliveryStatus: patch.deliveryStatus ?? null,
-          updatedBy: patch.updatedBy ?? null,
-        },
-        patchKeys: Object.keys(patch),
-        firestorePath: `orders/${id}`,
-        ruleHints: [
-          'restaurantKitchenPatchFastOk (first on orders/{id} update)',
-          'updatedBy must be in onlyAllowedRestaurantFieldsChanged',
-          'isRestaurantVendorActor: users.restaurantId or restaurants.ownerId or rid==auth.uid',
-        ],
-      });
-    }
-    throw error;
-  }
+
+  return writeRestaurantKitchenPatch(id, action, current, patch, authUid, orderRestaurantId);
 }
 
 /** Apply optimistic lock + optional hook patch immediately on tap. */

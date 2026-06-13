@@ -21,6 +21,7 @@ import {
 import { traceLegacyOrderWrite } from '@/lib/legacyOrderWriteTrace';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import { wouldDowngradeLifecycle } from '@/lib/orderLifecyclePriority';
+import { syncMarketplaceLifecyclePatch } from '@/lib/marketplaceLifecycleSync';
 import { logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import { traceOrderLifecycleWrite, traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
 import {
@@ -132,10 +133,11 @@ export function prepareProtectedOrderPatch(
   }
 
   const safe = sanitizeOrderPatchAgainstRegression(currentInput, withMeta);
+  const synced = syncMarketplaceLifecyclePatch(safe, currentInput);
   if (
-    wouldDowngradeLifecycle(currentInput, safe) ||
-    (safe.status !== undefined &&
-      wouldDowngradeLifecycle(currentInput, { status: safe.status }))
+    wouldDowngradeLifecycle(currentInput, synced) ||
+    (synced.status !== undefined &&
+      wouldDowngradeLifecycle(currentInput, { status: synced.status }))
   ) {
     console.warn('[ORDER DOWNGRADE BLOCKED]', {
       orderId: trimmed,
@@ -145,7 +147,7 @@ export function prepareProtectedOrderPatch(
     return {};
   }
 
-  return safe;
+  return synced;
 }
 
 function tracePreparedPatch(
@@ -233,6 +235,22 @@ export async function protectedUpdateOrder(
   }
 
   try {
+    console.log(
+      '[REAL FIRESTORE WRITE]',
+      JSON.stringify(
+        {
+          documentPath,
+          currentDocument: current,
+          safePatch,
+          mergedDocument: {
+            ...current,
+            ...safePatch,
+          },
+        },
+        null,
+        2,
+      ),
+    );
     await updateDoc(ref, safePatch as UpdateData<Record<string, unknown>>);
     return true;
   } catch (error) {

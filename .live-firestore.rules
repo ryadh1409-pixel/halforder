@@ -1,0 +1,2549 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    /** `users/{uid}.role` — checked after email/uid allowlist (no get when already admin). */
+    function roleIsAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
+    }
+    function isAdminEmailToken() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && (
+          request.auth.token.email.lower() == 'ryadh1409@gmail.com'
+          || request.auth.token.email.lower() == 'admin@ourfood.com'
+          || request.auth.token.email.lower() == 'support@halforder.app'
+        );
+    }
+    function isAdminUidAllowlist() {
+      return isSignedIn()
+        && (
+          request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
+          || request.auth.uid == 'Gjj6x4OU4OQmsnplollo9PLLpxt2'
+        );
+    }
+    function isAdmin() {
+      return isAdminEmailToken()
+        || isAdminUidAllowlist()
+        || roleIsAdmin();
+    }
+    function userStripeOnboardingCompleteNotForged() {
+      return !(request.resource.data.get('stripeOnboardingComplete', false) == true
+        && resource.data.get('stripeOnboardingComplete', false) != true);
+    }
+    function userProfileExists() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    /** Avoid rule failure when `users/{uid}` is not provisioned yet (auth without Firestore profile). */
+    function isCurrentUserRestricted() {
+      return isSignedIn()
+        && userProfileExists()
+        && (
+          currentUserData().get('banned', false) == true
+          || currentUserData().get('restricted', false) == true
+        );
+    }
+    function isNewUserForOrderLimits() {
+      return userProfileExists()
+        && currentUserData().get('totalOrdersCompleted', 0) is int
+        && currentUserData().get('totalOrdersCompleted', 0) <= 3;
+    }
+    function canCreateOrderBySafetyLimits() {
+      return !isCurrentUserRestricted()
+        && (
+          !userProfileExists()
+          || !isNewUserForOrderLimits()
+          || currentUserData().get('activeOrderCount', 0) < 1
+        );
+    }
+    /** Owner uid must match auth (baseline for all customer order creates). */
+    function ordersCreateOwnerMatchesAuth() {
+      return request.auth != null
+        && request.resource.data.userId is string
+        && request.resource.data.userId == request.auth.uid;
+    }
+    /** Customer read: owner, assigned restaurant uid, or assigned driver uid. */
+    function ordersReadByParticipant() {
+      return request.auth != null
+        && (
+          resource.data.userId == request.auth.uid
+          || isRestaurantVendorActor(resource.data)
+          || resource.data.driverId == request.auth.uid
+          || resource.data.get('assignedDriverId', '') == request.auth.uid
+        );
+    }
+    /** Role from Auth custom claims (query-safe; set by refreshUserRoleClaims). */
+    function authTokenRoleIsDriver() {
+      return isSignedIn()
+        && (
+          request.auth.token.role == 'driver'
+          || request.auth.token.get('role', '') == 'driver'
+        );
+    }
+    /** Driver account doc (query-safe membership check for pool collection). */
+    function hasDriverAccountDoc() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
+    }
+    function authTokenRoleIsRestaurant() {
+      return isSignedIn()
+        && (
+          request.auth.token.role == 'restaurant'
+          || request.auth.token.role == 'host'
+          || request.auth.token.get('role', '') == 'restaurant'
+          || request.auth.token.get('role', '') == 'host'
+        );
+    }
+    /**
+     * Unassigned marketplace delivery pool — must mirror subscribeDriverQueue filters exactly.
+     * Uses Auth custom claim role=driver only (no get/exists) so collection listeners work.
+     */
+  /** Canonical + legacy courier statuses visible on driver marketplace. */
+    function marketplacePoolDeliveryStatusOk(ds) {
+      return ds == 'pending'
+        || ds == 'accepted'
+        || ds == 'preparing'
+        || ds == 'ready_for_pickup'
+        || ds == 'waiting_driver'
+        || ds == 'ready'
+        || ds == 'accepted_for_delivery'
+        || ds == 'pending_driver';
+    }
+    function marketplaceOrderPaidOk(d) {
+      let ps = d.get('paymentStatus', '');
+      let psLower = ps is string ? ps.lower() : '';
+      return psLower == 'paid' || psLower == 'succeeded' || psLower == 'complete';
+    }
+    function marketplaceOrderNotTerminalForClaim(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return status != 'cancelled'
+        && status != 'rejected'
+        && ds != 'cancelled'
+        && ds != 'delivered';
+    }
+    function driverMarketplacePoolReadable() {
+      return authTokenRoleIsDriver()
+        && resource.data.deliveryType == 'delivery'
+        && marketplaceOrderPaidOk(resource.data)
+        && resource.data.get('expired', false) != true
+        && resource.data.get('marketplaceArchived', false) != true
+        && marketplacePoolDeliveryStatusOk(resource.data.get('deliveryStatus', ''))
+        && resource.data.driverId == null
+        && resource.data.assignedDriverId == null;
+    }
+    /** Single-doc read on unassigned pool orders (accept flow / getDoc). */
+    function driverPoolOrderSingleRead() {
+      return hasDriverAccountDoc()
+        && resource.data.deliveryType == 'delivery'
+        && marketplaceOrderPaidOk(resource.data)
+        && marketplacePoolDeliveryStatusOk(resource.data.get('deliveryStatus', ''))
+        && resource.data.driverId == null
+        && resource.data.assignedDriverId == null;
+    }
+    /** Driver earnings / delivered-stats list — mirrors subscribeDriverEarnings filters. */
+    function driverEarningsOrderListReadable() {
+      return hasDriverAccountDoc()
+        && resource.data.get('deliveryType', 'delivery') == 'delivery'
+        && (
+          resource.data.driverId == request.auth.uid
+          || resource.data.get('assignedDriverId', '') == request.auth.uid
+        )
+        && (
+          resource.data.get('earningsRecorded', false) == true
+          || resource.data.status == 'delivered'
+          || resource.data.status == 'completed'
+          || resource.data.get('deliveryStatus', '') == 'delivered'
+        );
+    }
+    /** @deprecated Use driverEarningsOrderListReadable */
+    function driverDeliveredStatsListReadable() {
+      return driverEarningsOrderListReadable();
+    }
+    /** Driver active/assigned orders by driverId — mirrors subscribeToDriverOrders. */
+    function driverOrdersByDriverIdListReadable() {
+      return hasDriverAccountDoc()
+        && resource.data.driverId == request.auth.uid
+        && resource.data.deliveryType == 'delivery';
+    }
+    /** Driver active/assigned orders by assignedDriverId. */
+    function driverOrdersByAssignedDriverIdListReadable() {
+      return hasDriverAccountDoc()
+        && resource.data.get('assignedDriverId', '') == request.auth.uid
+        && resource.data.deliveryType == 'delivery';
+    }
+    function requestUserRoleRaw() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')
+        : '';
+    }
+    /**
+     * Marketplace checkout (`restaurant-menu` cart → `orders/`).
+     * Not subject to HalfOrder `activeOrderCount` limits (unpaid checkout may retry).
+     */
+    function requestUserIsCustomer() {
+      return requestUserRoleRaw() == 'user'
+        || requestUserRoleRaw() == 'customer';
+    }
+    /**
+     * Marketplace checkout: owner uid must match auth.
+     * Allows customer + restaurant/host (e.g. owner testing checkout); blocks drivers only.
+     */
+    function requestUserRoleAllowsMarketplaceCheckout() {
+      let r = requestUserRoleRaw();
+      return r != 'driver'
+        && (
+          r == 'user'
+          || r == 'customer'
+          || r == ''
+          || r == 'restaurant'
+          || r == 'host'
+          || r == 'admin'
+        );
+    }
+    function requestUserIsRestaurant() {
+      return requestUserRoleRaw() == 'restaurant'
+        || requestUserRoleRaw() == 'host';
+    }
+    function requestUserIsDriver() {
+      return requestUserRoleRaw() == 'driver';
+    }
+    function isValidMarketplaceOrderCreate() {
+      return ordersCreateOwnerMatchesAuth()
+        && requestUserRoleAllowsMarketplaceCheckout()
+        && !isCurrentUserRestricted()
+        && request.resource.data.restaurantId is string
+        && request.resource.data.restaurantId.size() > 0
+        && request.resource.data.venueId is string
+        && request.resource.data.venueId.size() > 0
+        && request.resource.data.status == 'awaiting_payment'
+        && request.resource.data.paymentStatus == 'unpaid'
+        && (
+          request.resource.data.deliveryType == 'delivery'
+          || request.resource.data.deliveryType == 'pickup'
+        )
+        && (
+          request.resource.data.deliveryType != 'delivery'
+          || (
+            request.resource.data.deliveryEligible == true
+            && request.resource.data.deliveryDistanceKm is number
+            && request.resource.data.deliveryDistanceKm >= 0
+            && request.resource.data.deliveryDistanceKm <= request.resource.data.maxDeliveryDistanceKmAtCheckout
+            && request.resource.data.maxDeliveryDistanceKmAtCheckout is number
+            && request.resource.data.maxDeliveryDistanceKmAtCheckout > 0
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(['createdAt'])
+          || request.resource.data.createdAt == request.time
+        )
+        && (
+          !request.resource.data.keys().hasAny(['customerId'])
+          || request.resource.data.customerId == request.auth.uid
+        );
+    }
+    /** Customer owns a marketplace order (read / limited update). */
+    function isMarketplaceOrderCustomer(d) {
+      return isSignedIn()
+        && d.userId is string
+        && d.userId == request.auth.uid;
+    }
+    function isMarketplaceOrderOwner(d) {
+      return isSignedIn()
+        && d.userId is string
+        && d.userId == request.auth.uid;
+    }
+    function listAllStrings(lst) {
+      return lst is list
+        && lst.size() <= 20
+        && (lst.size() < 1 || lst[0] is string)
+        && (lst.size() < 2 || lst[1] is string)
+        && (lst.size() < 3 || lst[2] is string)
+        && (lst.size() < 4 || lst[3] is string)
+        && (lst.size() < 5 || lst[4] is string)
+        && (lst.size() < 6 || lst[5] is string)
+        && (lst.size() < 7 || lst[6] is string)
+        && (lst.size() < 8 || lst[7] is string)
+        && (lst.size() < 9 || lst[8] is string)
+        && (lst.size() < 10 || lst[9] is string)
+        && (lst.size() < 11 || lst[10] is string)
+        && (lst.size() < 12 || lst[11] is string)
+        && (lst.size() < 13 || lst[12] is string)
+        && (lst.size() < 14 || lst[13] is string)
+        && (lst.size() < 15 || lst[14] is string)
+        && (lst.size() < 16 || lst[15] is string)
+        && (lst.size() < 17 || lst[16] is string)
+        && (lst.size() < 18 || lst[17] is string)
+        && (lst.size() < 19 || lst[18] is string)
+        && (lst.size() < 20 || lst[19] is string);
+    }
+    function participantsAllStrings(participants) {
+      return listAllStrings(participants);
+    }
+    function usersAllStrings(users) {
+      return listAllStrings(users);
+    }
+    function participantEntryMatchesUid(parts, uid, i) {
+      return parts.size() > i
+        && (
+          (parts[i] is string && parts[i] == uid)
+          || (
+            parts[i] is map
+            && parts[i].keys().hasAll(['userId', 'name'])
+            && parts[i].userId == uid
+          )
+        );
+    }
+    function participantListContainsUid(parts, uid) {
+      return participantEntryMatchesUid(parts, uid, 0)
+        || participantEntryMatchesUid(parts, uid, 1)
+        || participantEntryMatchesUid(parts, uid, 2)
+        || participantEntryMatchesUid(parts, uid, 3)
+        || participantEntryMatchesUid(parts, uid, 4)
+        || participantEntryMatchesUid(parts, uid, 5)
+        || participantEntryMatchesUid(parts, uid, 6)
+        || participantEntryMatchesUid(parts, uid, 7)
+        || participantEntryMatchesUid(parts, uid, 8)
+        || participantEntryMatchesUid(parts, uid, 9)
+        || participantEntryMatchesUid(parts, uid, 10)
+        || participantEntryMatchesUid(parts, uid, 11)
+        || participantEntryMatchesUid(parts, uid, 12)
+        || participantEntryMatchesUid(parts, uid, 13)
+        || participantEntryMatchesUid(parts, uid, 14)
+        || participantEntryMatchesUid(parts, uid, 15)
+        || participantEntryMatchesUid(parts, uid, 16)
+        || participantEntryMatchesUid(parts, uid, 17)
+        || participantEntryMatchesUid(parts, uid, 18)
+        || participantEntryMatchesUid(parts, uid, 19);
+    }
+    function isOrderMember(orderData) {
+      return isSignedIn()
+        && (
+          request.auth.uid in orderData.get('users', [])
+          || participantListContainsUid(orderData.get('participants', []), request.auth.uid)
+        );
+    }
+    function validOrderHostDoc(h) {
+      return h is map
+        && h.keys().hasAll(['userId', 'name'])
+        && h.userId is string
+        && h.name is string
+        && h.userId.size() > 0;
+    }
+    function validParticipantDoc(p) {
+      return p is map
+        && p.keys().hasAll(['userId', 'name'])
+        && p.userId is string
+        && p.name is string
+        && p.userId.size() > 0;
+    }
+    function allParticipantDocsValid(parts) {
+      return parts is list
+        && parts.size() <= 20
+        && (parts.size() < 1 || validParticipantDoc(parts[0]))
+        && (parts.size() < 2 || validParticipantDoc(parts[1]))
+        && (parts.size() < 3 || validParticipantDoc(parts[2]))
+        && (parts.size() < 4 || validParticipantDoc(parts[3]))
+        && (parts.size() < 5 || validParticipantDoc(parts[4]))
+        && (parts.size() < 6 || validParticipantDoc(parts[5]))
+        && (parts.size() < 7 || validParticipantDoc(parts[6]))
+        && (parts.size() < 8 || validParticipantDoc(parts[7]))
+        && (parts.size() < 9 || validParticipantDoc(parts[8]))
+        && (parts.size() < 10 || validParticipantDoc(parts[9]))
+        && (parts.size() < 11 || validParticipantDoc(parts[10]))
+        && (parts.size() < 12 || validParticipantDoc(parts[11]))
+        && (parts.size() < 13 || validParticipantDoc(parts[12]))
+        && (parts.size() < 14 || validParticipantDoc(parts[13]))
+        && (parts.size() < 15 || validParticipantDoc(parts[14]))
+        && (parts.size() < 16 || validParticipantDoc(parts[15]))
+        && (parts.size() < 17 || validParticipantDoc(parts[16]))
+        && (parts.size() < 18 || validParticipantDoc(parts[17]))
+        && (parts.size() < 19 || validParticipantDoc(parts[18]))
+        && (parts.size() < 20 || validParticipantDoc(parts[19]));
+    }
+    function countParticipantUserId(parts, uid) {
+      return (parts.size() > 0 && parts[0] is map && parts[0].userId == uid ? 1 : 0)
+        + (parts.size() > 1 && parts[1] is map && parts[1].userId == uid ? 1 : 0)
+        + (parts.size() > 2 && parts[2] is map && parts[2].userId == uid ? 1 : 0)
+        + (parts.size() > 3 && parts[3] is map && parts[3].userId == uid ? 1 : 0)
+        + (parts.size() > 4 && parts[4] is map && parts[4].userId == uid ? 1 : 0)
+        + (parts.size() > 5 && parts[5] is map && parts[5].userId == uid ? 1 : 0)
+        + (parts.size() > 6 && parts[6] is map && parts[6].userId == uid ? 1 : 0)
+        + (parts.size() > 7 && parts[7] is map && parts[7].userId == uid ? 1 : 0)
+        + (parts.size() > 8 && parts[8] is map && parts[8].userId == uid ? 1 : 0)
+        + (parts.size() > 9 && parts[9] is map && parts[9].userId == uid ? 1 : 0)
+        + (parts.size() > 10 && parts[10] is map && parts[10].userId == uid ? 1 : 0)
+        + (parts.size() > 11 && parts[11] is map && parts[11].userId == uid ? 1 : 0)
+        + (parts.size() > 12 && parts[12] is map && parts[12].userId == uid ? 1 : 0)
+        + (parts.size() > 13 && parts[13] is map && parts[13].userId == uid ? 1 : 0)
+        + (parts.size() > 14 && parts[14] is map && parts[14].userId == uid ? 1 : 0)
+        + (parts.size() > 15 && parts[15] is map && parts[15].userId == uid ? 1 : 0)
+        + (parts.size() > 16 && parts[16] is map && parts[16].userId == uid ? 1 : 0)
+        + (parts.size() > 17 && parts[17] is map && parts[17].userId == uid ? 1 : 0)
+        + (parts.size() > 18 && parts[18] is map && parts[18].userId == uid ? 1 : 0)
+        + (parts.size() > 19 && parts[19] is map && parts[19].userId == uid ? 1 : 0);
+    }
+    function isValidHalfOrderCreate() {
+      return isSignedIn()
+        && canCreateOrderBySafetyLimits()
+        && !isCurrentUserRestricted()
+        && request.resource.data.cardId is string
+        && request.resource.data.cardId.size() > 0
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 1
+        && usersAllStrings(request.resource.data.users)
+        && request.auth.uid == request.resource.data.users[0]
+        && request.resource.data.host is map
+        && validOrderHostDoc(request.resource.data.host)
+        && request.resource.data.host.userId == request.auth.uid
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 1
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants[0] == request.auth.uid
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
+        && (
+          request.resource.data.status == 'waiting'
+          || request.resource.data.status == 'active'
+        )
+        && (
+          !request.resource.data.keys().hasAny(['matchWaitDeadlineAt'])
+          || request.resource.data.matchWaitDeadlineAt is int
+        )
+        && request.resource.data.maxUsers is int
+        && request.resource.data.maxUsers >= 2
+        && request.resource.data.maxUsers <= 20
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.createdAt != null;
+    }
+    function isHalfOrderParticipantIncrementalJoin() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.get('users', []).size() > 0
+        && request.resource.data.users is list
+        && usersAllStrings(request.resource.data.users)
+        && request.resource.data.participants is list
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants.size() == request.resource.data.users.size()
+        && request.resource.data.users.size() == resource.data.get('users', []).size() + 1
+        && request.resource.data.participants.size() == resource.data.get('participants', []).size() + 1
+        && request.auth.uid in request.resource.data.users
+        && !(request.auth.uid in resource.data.get('users', []))
+        && participantListContainsUid(request.resource.data.participants, request.auth.uid)
+        && !participantListContainsUid(resource.data.get('participants', []), request.auth.uid)
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
+        && request.resource.data.users.size() <= resource.data.get('maxUsers', 2)
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '') == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && (!resource.data.keys().hasAny(['host']) || request.resource.data.host == resource.data.host)
+        && (
+          (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['users', 'participants', 'joinedAtMap'])
+            && request.resource.data.status == resource.data.status
+          )
+          || (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['users', 'participants', 'joinedAtMap', 'status'])
+            && request.resource.data.status == 'matched'
+            && (resource.data.status == 'waiting' || resource.data.status == 'active')
+          )
+        );
+    }
+    function isHalfOrderParticipantBootstrapJoin() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.get('participants', []).size() == 0
+        && resource.data.get('users', []).size() == 1
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && usersAllStrings(request.resource.data.users)
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && participantsAllStrings(request.resource.data.participants)
+        && request.auth.uid in request.resource.data.users
+        && !(request.auth.uid in resource.data.get('users', []))
+        && request.resource.data.participants[0] == resource.data.users[0]
+        && request.resource.data.participants[1] == request.auth.uid
+        && validOrderHostDoc(request.resource.data.host)
+        && request.resource.data.host.userId == resource.data.users[0]
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '') == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && (
+          (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['users', 'participants', 'host', 'joinedAtMap'])
+            && request.resource.data.status == resource.data.status
+          )
+          || (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['users', 'participants', 'host', 'joinedAtMap', 'status'])
+            && request.resource.data.status == 'matched'
+            && (resource.data.status == 'waiting' || resource.data.status == 'active')
+          )
+        );
+    }
+    function isHalfOrderCancelUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.cardId.size() > 0
+        && (resource.data.status == 'waiting' || resource.data.status == 'matched' || resource.data.status == 'active')
+        && request.resource.data.status == 'cancelled'
+        && request.auth.uid in resource.data.get('users', [])
+        && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '') == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && request.resource.data.participants == resource.data.participants
+        && (!resource.data.keys().hasAny(['host']) || request.resource.data.host == resource.data.host)
+        && request.resource.data.cancelledAt != null
+        && (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'cancelledBy', 'cancelledAt'])
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'cancelledBy', 'cancelledAt', 'cancelReason'])
+        )
+        && (!request.resource.data.keys().hasAny(['cancelReason']) || request.resource.data.cancelReason is string);
+    }
+    function isHalfOrderMarkActiveUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.cardId.size() > 0
+        && resource.data.status == 'matched'
+        && request.resource.data.status == 'active'
+        && request.auth.uid in resource.data.get('users', [])
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '') == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && (!resource.data.keys().hasAny(['host']) || request.resource.data.host == resource.data.host)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status']);
+    }
+    function isHalfOrderCompleteUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.cardId.size() > 0
+        && (resource.data.status == 'matched' || resource.data.status == 'active')
+        && request.resource.data.status == 'completed'
+        && request.auth.uid in resource.data.get('users', [])
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '') == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && (!resource.data.keys().hasAny(['host']) || request.resource.data.host == resource.data.host)
+        && request.resource.data.completedAt != null
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'completedAt']);
+    }
+    function isOrderMemberByOrderId(orderId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/orders/$(orderId))
+        && request.auth.uid in get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []);
+    }
+    function isOrderPairJoinNotifiedUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.cardId is string
+        && resource.data.cardId.size() > 0
+        && resource.data.get('users', []).size() == 2
+        && request.auth.uid in resource.data.get('users', [])
+        && resource.data.get('notified', false) != true
+        && request.resource.data.notified == true
+        && (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['notified', 'notifiedAt'])
+          || (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['notified', 'notifiedAt', 'notificationSent'])
+            && request.resource.data.notificationSent == true
+          )
+        )
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.cardId == resource.data.cardId
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.get('hostId', '') == resource.data.get('hostId', '')
+        && request.resource.data.maxUsers == resource.data.maxUsers
+        && request.resource.data.participants == resource.data.participants
+        && (!resource.data.keys().hasAny(['host']) || request.resource.data.host == resource.data.host);
+    }
+    function orderLinkTargetsCard(orderId, cardId) {
+      return exists(/databases/$(database)/documents/orders/$(orderId))
+        && get(/databases/$(database)/documents/orders/$(orderId)).data.cardId == cardId;
+    }
+    function requesterInOrderUsers(orderId) {
+      return request.auth.uid in get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []);
+    }
+    function isValidFoodCardOrderIdLink(cardId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['orderId'])
+        && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && (!resource.data.keys().hasAny(['orderId']) || resource.data.orderId == null)
+        && orderLinkTargetsCard(request.resource.data.orderId, cardId)
+        && requesterInOrderUsers(request.resource.data.orderId);
+    }
+    function isSwipeAcceptUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['usersAccepted'])
+        && request.resource.data.usersAccepted is list
+        && resource.data.status is string
+        && joinGrowthDiscoveryStatusOk(resource.data.status)
+        && request.auth.uid in request.resource.data.usersAccepted
+        && !(request.auth.uid in resource.data.get('usersAccepted', []))
+        && request.resource.data.usersAccepted.size() == resource.data.get('usersAccepted', []).size() + 1
+        && request.resource.data.usersAccepted.size() <= resource.data.get('maxPeople', 2);
+    }
+    function orderSwipeAcceptList(orderId) {
+      return get(/databases/$(database)/documents/orders/$(orderId)).data.get('usersAccepted', []);
+    }
+    function isValidFoodMatchCreate(matchDocId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.orderId is string
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.resource.data.status == 'matched'
+        && request.resource.data.createdAt != null
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.users[0] < request.resource.data.users[1]
+        && matchDocId == request.resource.data.orderId + '_' + request.resource.data.users[0] + '_' + request.resource.data.users[1]
+        && orderSwipeAcceptList(request.resource.data.orderId).size() >= 2
+        && request.resource.data.users[0] in orderSwipeAcceptList(request.resource.data.orderId)
+        && request.resource.data.users[1] in orderSwipeAcceptList(request.resource.data.orderId);
+    }
+    function isValidOrderCreate() {
+      return isSignedIn()
+        && canCreateOrderBySafetyLimits()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.maxPeople is number
+        && request.resource.data.maxPeople >= 2
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 1
+        && participantsAllStrings(request.resource.data.participants)
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
+        && request.resource.data.usersAccepted is list
+        && request.resource.data.usersAccepted.size() == 0
+        && request.resource.data.foodName is string
+        && request.resource.data.image is string
+        && request.resource.data.pricePerPerson is number
+        && request.resource.data.totalPrice is number
+        && request.resource.data.createdAt != null;
+    }
+    function orderCreatorUidFromDoc(data) {
+      return data.get('createdBy', data.get('userId', data.get('hostId', '')));
+    }
+    function isParticipantsJoinUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['participants', 'joinedAtMap', 'startedAt', 'expiresAt'])
+        && request.resource.data.participants is list
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants.size() == resource.data.get('participants', []).size() + 1
+        && request.auth.uid in request.resource.data.participants
+        && !(request.auth.uid in resource.data.get('participants', []))
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
+        && request.resource.data.participants.size() <= resource.data.get('maxPeople', 2)
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['startedAt', 'expiresAt'])
+          || (request.resource.data.startedAt is timestamp && request.resource.data.expiresAt is timestamp)
+        );
+    }
+    function isParticipantsJoinWithExtrasUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['participants', 'joinedAtMap', 'status', 'user2Id', 'user2Name', 'startedAt', 'expiresAt'])
+        && request.resource.data.participants is list
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants.size() == resource.data.get('participants', []).size() + 1
+        && request.auth.uid in request.resource.data.participants
+        && !(request.auth.uid in resource.data.get('participants', []))
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp
+        && request.resource.data.participants.size() <= resource.data.get('maxPeople', 2)
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['startedAt', 'expiresAt'])
+          || (request.resource.data.startedAt is timestamp && request.resource.data.expiresAt is timestamp)
+        );
+    }
+    function isJoinedAtMapBackfillUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['joinedAtMap'])
+        && request.resource.data.participants == resource.data.participants
+        && request.auth.uid in resource.data.get('participants', [])
+        && request.resource.data.joinedAtMap is map
+        && request.resource.data.joinedAtMap[request.auth.uid] is timestamp;
+    }
+    function isParticipantsLeaveUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && orderCreatorUidFromDoc(resource.data) != request.auth.uid
+        && (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['participants', 'joinedAtMap'])
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly(['participants', 'joinedAtMap', 'status'])
+        )
+        && request.resource.data.participants is list
+        && participantsAllStrings(request.resource.data.participants)
+        && request.resource.data.participants.size() == resource.data.get('participants', []).size() - 1
+        && !(request.auth.uid in request.resource.data.participants)
+        && request.auth.uid in resource.data.get('participants', []);
+    }
+    function isOrderTypingUpdate() {
+      return isSignedIn()
+        && request.auth.uid in resource.data.get('participants', [])
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['typing']);
+    }
+    function isCreatorOnlyNonJoinUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && resource.data.createdBy == request.auth.uid
+        && !request.resource.data.diff(resource.data).changedKeys().hasAny(['participants', 'joinedAtMap', 'usersAccepted', 'typing'])
+        && (resource.data.status != 'completed' || request.resource.data.status == resource.data.status)
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['status'])
+          || request.resource.data.status != 'cancelled'
+          || (currentUserData().cancellationCount24h is number && currentUserData().cancellationCount24h < 3)
+        );
+    }
+    function isMarkOrderExpiredUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status'])
+        && resource.data.status in ['open', 'matched', 'full']
+        && request.resource.data.status == 'expired'
+        && request.auth.uid in resource.data.get('participants', []);
+    }
+    function foodCardOpenStatus(s) {
+      return s == 'active';
+    }
+    function isValidFoodCardJoinUpdate() {
+      return isSignedIn()
+        && (
+          (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['user1', 'user2', 'status', 'createdAt'])
+            && foodCardOpenStatus(resource.data.status)
+            && (
+              (
+                resource.data.user1 == null
+                && request.resource.data.user1.uid == request.auth.uid
+                && foodCardOpenStatus(request.resource.data.status)
+              )
+              || (
+                resource.data.user1.uid is string
+                && resource.data.user1.uid != request.auth.uid
+                && resource.data.user2 == null
+                && request.resource.data.user2.uid == request.auth.uid
+                && request.resource.data.status == 'matched'
+              )
+            )
+          )
+        );
+    }
+    match /reports/{reportId} {
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.auth.uid == request.resource.data.reporterId
+        && request.resource.data.reportedUserId is string
+        && request.resource.data.reportedUserId.size() > 0
+        && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.contentId is string
+        && request.resource.data.contentId.size() > 0
+        && request.resource.data.reason is string
+        && (request.resource.data.reason == 'spam' || request.resource.data.reason == 'abuse' || request.resource.data.reason == 'inappropriate')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['userId', 'reporterId', 'reportedUserId', 'contentId', 'reason', 'createdAt']);
+      allow read, update, delete: if isAdmin();
+    }
+    match /support_chats/{userId} {
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /support_chats/{userId}/messages/{messageId} {
+      allow read, write: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+    }
+    match /ratings/{ratingId} {
+      allow create: if request.auth != null
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.orderId is string
+        && request.resource.data.toUserId is string
+        && request.resource.data.comment is string
+        && request.resource.data.createdAt != null
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+      allow read: if request.auth != null;
+      allow update, delete: if false;
+    }
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null
+        && !isCurrentUserRestricted()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userName is string
+        && request.resource.data.message is string
+        && (request.resource.data.sentiment == 'positive' || request.resource.data.sentiment == 'negative' || request.resource.data.sentiment == 'neutral')
+        && request.resource.data.source == 'assistant_chat'
+        && request.resource.data.createdAt == request.time
+        && (!request.resource.data.keys().hasAny(['userEmail']) || request.resource.data.userEmail is string);
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /invites/{inviteId} {
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.keys().hasAll(['email', 'orderId', 'inviterName', 'inviterId', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 3
+        && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && request.resource.data.inviterName is string
+        && request.resource.data.inviterId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+        && (
+          request.auth.uid in get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.get('users', [])
+          || request.auth.uid in get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.get('participants', [])
+          || participantListContainsUid(get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.get('participants', []), request.auth.uid)
+        );
+      allow read: if isAdmin() || (isSignedIn() && resource.data.inviterId == request.auth.uid);
+      allow update, delete: if false;
+    }
+    match /referrals/{orderId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && !exists(/databases/$(database)/documents/referrals/$(orderId))
+        && request.resource.data.keys().hasAll(['inviterId', 'invitedUserId', 'orderId', 'createdAt'])
+        && request.resource.data.orderId == orderId
+        && request.resource.data.invitedUserId == request.auth.uid
+        && request.resource.data.inviterId is string
+        && request.resource.data.inviterId != request.auth.uid
+        && request.resource.data.inviterId != request.resource.data.invitedUserId
+        && request.resource.data.createdAt == request.time
+        && request.auth.uid in get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', [])
+        && request.resource.data.inviterId in get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', [])
+        && get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []).size() >= 2;
+      allow update, delete: if isAdmin();
+    }
+    function usersRoleSelfAssignOk() {
+      let before = resource.data.get('role', 'user');
+      let after = request.resource.data.get('role', 'user');
+      return (before == 'user' || before == 'customer' || before == '')
+        && (after == 'restaurant' || after == 'driver');
+    }
+    match /users/{userId} {
+      allow get: if isAdmin()
+        || (request.auth != null
+            && request.auth.uid == userId);
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        || (request.auth != null && request.auth.uid == userId && request.resource.data.get('stripeOnboardingComplete', false) == false);
+      allow update: if isAdmin()
+        || (request.auth != null && request.auth.uid == userId && userStripeOnboardingCompleteNotForged())
+        || (
+          request.auth != null
+          && request.auth.uid == userId
+          && userStripeOnboardingCompleteNotForged()
+          && (
+            request.resource.data.role == resource.data.role
+            || usersRoleSelfAssignOk()
+          )
+        );
+      allow delete: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      match /splitPoke/{fromId} {
+        allow create: if request.auth != null && request.auth.uid == fromId && fromId != userId && request.resource.data.fromUid == fromId;
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow update: if false;
+      }
+      match /messages/{messageId} {
+        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      }
+      match /pushToken/{docId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+      match /fcmToken/{docId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+      match /blockedUsers/{blockedId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && blockedId is string
+          && blockedId.size() > 8
+          && blockedId != userId
+          && request.resource.data.blockedUserId == blockedId
+          && request.resource.data.keys().hasOnly(['blockedUserId', 'createdAt'])
+          && request.resource.data.createdAt == request.time;
+        allow update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.blockedUserId == resource.data.blockedUserId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+      match /referralInbox/{orderId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && !isCurrentUserRestricted()
+          && request.auth.uid == request.resource.data.fromUid
+          && request.auth.uid != userId
+          && request.resource.data.credits == 2
+          && request.resource.data.orderId == orderId
+          && request.resource.data.createdAt == request.time
+          && exists(/databases/$(database)/documents/referrals/$(orderId))
+          && get(/databases/$(database)/documents/referrals/$(orderId)).data.invitedUserId == request.auth.uid
+          && get(/databases/$(database)/documents/referrals/$(orderId)).data.inviterId == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow update: if false;
+      }
+    }
+    function isChatDocMember(chatId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && (
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', [])
+          || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.get('users', [])
+        );
+    }
+    function isChatUsersAppendUpdate(chatId) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.orderId == chatId
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['users'])
+        && request.resource.data.users is list
+        && usersAllStrings(request.resource.data.users)
+        && resource.data.get('users', []).size() > 0
+        && request.resource.data.users.size() == resource.data.get('users', []).size() + 1
+        && request.auth.uid in request.resource.data.users
+        && !(request.auth.uid in resource.data.get('users', []));
+    }
+    function isChatLastMessagePatch(chatId) {
+      return isSignedIn()
+        && isChatDocMember(chatId)
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastMessage', 'lastMessageAt']);
+    }
+    function isChatReadsUpdate(chatId) {
+      return isSignedIn()
+        && isChatDocMember(chatId)
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.reads is map
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['reads'])
+        && (
+          !resource.data.keys().hasAny(['reads'])
+          || (resource.data.reads is map && request.resource.data.reads.keys().hasAll(resource.data.reads.keys()))
+        );
+    }
+    match /chats/{chatId} {
+      allow read: if isAdmin()
+        || isChatDocMember(chatId)
+        || (isSignedIn() && chatId.matches('venue-.*'));
+      allow create: if isAdmin()
+        || (isSignedIn() && chatId.matches('venue-.*'))
+        || (
+          isSignedIn()
+          && !isCurrentUserRestricted()
+          && request.resource.data.orderId == chatId
+          && request.resource.data.users is list
+          && request.resource.data.users.size() >= 1
+          && usersAllStrings(request.resource.data.users)
+          && request.auth.uid in request.resource.data.users
+          && request.resource.data.createdAt != null
+        );
+      allow update: if isAdmin()
+        || isChatUsersAppendUpdate(chatId)
+        || isChatLastMessagePatch(chatId)
+        || isChatReadsUpdate(chatId)
+        || (isSignedIn() && chatId.matches('venue-.*'));
+      allow delete: if isAdmin();
+      match /messages/{messageId} {
+        allow read: if isAdmin()
+          || isChatDocMember(chatId)
+          || (isSignedIn() && chatId.matches('venue-.*'));
+        allow create: if isAdmin()
+          || (isSignedIn() && chatId.matches('venue-.*'))
+          || (
+            isSignedIn()
+            && request.resource.data.text is string
+            && request.resource.data.createdAt != null
+            && (
+              request.resource.data.senderId == 'system'
+              || request.resource.data.sender == 'ai'
+              || (request.resource.data.senderId == request.auth.uid && isChatDocMember(chatId))
+            )
+          );
+        allow update, delete: if isAdmin();
+      }
+    }
+    match /messages/{messageId} {
+      allow read: if isAdmin()
+        || (request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants);
+      allow create: if isAdmin()
+        || (
+          request.auth != null
+          && request.resource.data.senderId == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants
+        );
+      allow update, delete: if isAdmin();
+    }
+    match /calls/{callId} {
+      allow create: if request.auth != null && request.resource.data.callerId == request.auth.uid;
+      allow read, update: if request.auth != null && (resource.data.callerId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow delete: if false;
+    }
+    match /complaints/{complaintId} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+    match /admins/{adminId} {
+      allow read, write: if false;
+    }
+    match /notifications/{notificationId} {
+      allow create: if isSignedIn() && !isCurrentUserRestricted();
+      allow read: if isAdmin()
+        || (
+          isSignedIn()
+          && (
+            request.auth.uid in resource.data.get('sentTo', [])
+            || resource.data.get('userId', '') == request.auth.uid
+          )
+        );
+      allow update, delete: if false;
+    }
+    match /notification_logs/{logId} {
+      allow create, read: if request.auth != null;
+      allow update, delete: if false;
+    }
+    match /user_activity/{activityId} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+    match /broadcasts/{broadcastId} {
+      allow create, read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /admin_notifications/{notificationId} {
+      allow create: if isAdmin()
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.sentToCount is int
+        && request.resource.data.sentToCount >= 0
+        && request.resource.data.createdAt == request.time;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /blocks/{blockId} {
+      allow create: if request.auth != null && request.resource.data.blockerId == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.blockerId == request.auth.uid || resource.data.blockedUserId == request.auth.uid);
+      allow update: if false;
+      allow delete: if request.auth != null && (resource.data.blockerId == request.auth.uid || resource.data.blockedUserId == request.auth.uid);
+    }
+    match /matches/{matchId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.users;
+      allow create: if isValidFoodMatchCreate(matchId);
+      allow update, delete: if false;
+    }
+    /** Internal Stripe webhook idempotency — Admin SDK only (clients denied). */
+    match /stripe_processed_events/{stripeEventId} {
+      allow read, write: if false;
+    }
+    /** Primary customer/creator uid across marketplace + legacy group-order schemas. */
+    function primaryUidFromOrder(d) {
+      return d.get('userId', '') is string && d.get('userId', '').size() > 0
+        ? d.get('userId', '')
+        : d.get('customerUid', '') is string && d.get('customerUid', '').size() > 0
+          ? d.get('customerUid', '')
+        : d.get('customerId', '') is string && d.get('customerId', '').size() > 0
+          ? d.get('customerId', '')
+          : d.get('createdBy', '') is string && d.get('createdBy', '').size() > 0
+            ? d.get('createdBy', '')
+          : d.get('creatorId', '') is string && d.get('creatorId', '').size() > 0
+            ? d.get('creatorId', '')
+            : d.get('hostId', '') is string && d.get('hostId', '').size() > 0
+              ? d.get('hostId', '')
+            : d.users is list && d.users.size() > 0 && d.users[0] is string
+              ? d.users[0]
+              : '';
+    }
+    function driverAssignedToMarketplaceOrder(d) {
+      return (d.driverId is string && d.driverId == request.auth.uid)
+        || (
+          d.get('assignedDriverId', '') is string
+          && d.get('assignedDriverId', '') == request.auth.uid
+        );
+    }
+    function noDriverAssignedYet(d) {
+      return !(d.get('driverId', '') is string && d.get('driverId', '').size() > 0)
+        && !(d.get('assignedDriverId', '') is string && d.get('assignedDriverId', '').size() > 0);
+    }
+    /** Unassigned for claim: assignedDriverId and driverId null, absent, or empty. */
+    function orderUnassignedForDriverClaim(d) {
+      return noDriverAssignedYet(d);
+    }
+    /** Courier statuses a driver may claim from (unassigned marketplace delivery). */
+    function driverMarketplaceClaimBeforeStatusOk(ds) {
+      return marketplacePoolDeliveryStatusOk(ds);
+    }
+    /** Courier statuses while actively delivering (post-claim patches). */
+    function driverMarketplaceActiveDeliveryStatusOk(ds) {
+      return ds == 'driver_assigned'
+        || ds == 'picked_up'
+        || ds == 'on_the_way'
+        || ds == 'delivered'
+        || ds == 'heading_to_restaurant'
+        || ds == 'arrived_restaurant'
+        || ds == 'near_customer'
+        || ds == 'driver_accepted';
+    }
+    function isDriver() {
+      return authTokenRoleIsDriver()
+        || hasDriverAccountDoc()
+        || (
+          isSignedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver'
+        );
+    }
+    /** Unassigned marketplace delivery orders (single-doc reads / updates). */
+    function driverPoolOrderReadable(d) {
+      return isDriver()
+        && noDriverAssignedYet(d)
+        && d.deliveryType == 'delivery'
+        && marketplaceOrderPaidOk(d)
+        && d.get('expired', false) != true
+        && d.get('marketplaceArchived', false) != true
+        && marketplacePoolDeliveryStatusOk(d.get('deliveryStatus', ''))
+        && marketplaceOrderNotTerminalForClaim(d);
+    }
+    function driverPoolOrderClaimable(d) {
+      return driverPoolOrderReadable(d)
+        && marketplacePoolDeliveryStatusOk(d.get('deliveryStatus', ''));
+    }
+    /** Active delivery order already assigned to current driver. */
+    function driverAssignedDeliveryReadable(d) {
+      return isDriver()
+        && d.get('deliveryType', '') == 'delivery'
+        && driverAssignedToMarketplaceOrder(d);
+    }
+    function canAccessMarketplaceDeliveryOrder(d) {
+      return isAdmin()
+        || (
+          primaryUidFromOrder(d) is string
+          && primaryUidFromOrder(d) == request.auth.uid
+        )
+        || isRestaurantVendorActor(d)
+        || driverAssignedDeliveryReadable(d)
+        || isOrderMember(d)
+        || driverPoolOrderReadable(d);
+    }
+    /** Order chat: customer, assigned driver, or restaurant — no driver-role doc required. */
+    function orderChatParticipantOk(d) {
+      return isAdmin()
+        || (
+          primaryUidFromOrder(d) is string
+          && primaryUidFromOrder(d).size() > 0
+          && primaryUidFromOrder(d) == request.auth.uid
+        )
+        || driverAssignedToMarketplaceOrder(d)
+        || isRestaurantVendorActor(d);
+    }
+    function isMarketplaceDeliveryOrderDoc(d) {
+      return d.get('deliveryType', '') == 'delivery';
+    }
+    /** Assigned marketplace driver writes when deliveryType is delivery, absent, or driver-owned. */
+    function driverMarketplaceDeliveryTypeOk(d) {
+      let dt = d.get('deliveryType', '');
+      return dt == 'delivery'
+        || dt == ''
+        || driverAssignedToMarketplaceOrder(d);
+    }
+    function marketplaceOrderPatchKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function orderRestaurantId(d) {
+      return d.get('restaurantId', d.get('venueId', ''));
+    }
+    /**
+     * Restaurant vendor may own orders when `restaurantId` is their uid, matches
+     * `users/{uid}.restaurantId`, or `restaurants/{restaurantId}.ownerId`.
+     */
+    function isRestaurantVendorActor(d) {
+      let rid = orderRestaurantId(d);
+      return rid is string
+        && rid.size() > 0
+        && (
+          rid == request.auth.uid
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid))
+                .data.get('restaurantId', '') == rid
+          )
+          || (
+            exists(/databases/$(database)/documents/restaurants/$(rid))
+            && get(/databases/$(database)/documents/restaurants/$(rid))
+                .data.get('ownerId', '') == request.auth.uid
+          )
+        );
+    }
+    /**
+     * Restaurant marketplace owner — may accept kitchen orders for their venue.
+     */
+    function isRestaurantOwner() {
+      return isAuthenticated()
+        && isRestaurantVendorActor(resource.data)
+        && orderRestaurantId(request.resource.data) == orderRestaurantId(resource.data);
+    }
+    /** Whitelist for restaurant dashboard writes (archive + kitchen status). */
+    function onlyAllowedRestaurantFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'archivedByRestaurant',
+        'archivedAt',
+        'hiddenForRestaurant',
+        'hiddenAt',
+        'restoredAt',
+        'updatedAt',
+        'updatedBy',
+        'status',
+        'deliveryStatus',
+        'acceptedAt',
+        'preparedAt',
+        'readyAt',
+        'estimatedDeliveryTime',
+        'estimatedPrepTime',
+        'estimatedDeliveryMinutes',
+        'notes',
+        'rejectionReason',
+        'driverId',
+      ]);
+    }
+    function restaurantUpdatedByOk() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['updatedBy'])
+        || (
+          request.resource.data.updatedBy is string
+          && request.resource.data.updatedBy.size() > 0
+          && request.resource.data.updatedBy.size() <= 160
+        );
+    }
+    /**
+     * Forward-only restaurant kitchen transitions (applyRestaurantKitchenAction).
+     * payment_confirmed -> accepted -> preparing -> ready_for_pickup
+     */
+    function restaurantKitchenLifecycleTransitionOk(before, after) {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      let touchesLifecycle = keys.hasAny(['status']) || keys.hasAny(['deliveryStatus']);
+      let bStatus = before.get('status', '');
+      let bDs = before.get('deliveryStatus', '');
+      let aStatus = after.get('status', '');
+      let aDs = after.get('deliveryStatus', '');
+      return !touchesLifecycle
+        || (aStatus == bStatus && aDs == bDs)
+        || (
+          aStatus == 'accepted'
+          && aDs == 'accepted'
+          && (
+            bStatus == 'payment_confirmed'
+            || bStatus == 'pending'
+            || bStatus == 'pending_driver'
+            || bStatus == 'awaiting_payment'
+          )
+          && marketplaceOrderPaidOk(before)
+          && (
+            bDs == 'pending'
+            || bDs == ''
+            || marketplacePoolDeliveryStatusOk(bDs)
+          )
+        )
+        || (
+          aStatus == 'preparing'
+          && aDs == 'preparing'
+          && (
+            bStatus == 'accepted'
+            || bStatus == 'restaurant_accepted'
+          )
+          && (
+            bDs == 'accepted'
+            || bDs == 'preparing'
+            || bDs == ''
+          )
+        )
+        || (
+          aStatus == 'ready_for_pickup'
+          && aDs == 'ready_for_pickup'
+          && bStatus == 'preparing'
+          && (
+            bDs == 'preparing'
+            || bDs == 'accepted'
+            || bDs == 'ready_for_pickup'
+          )
+        );
+    }
+    /** Payment, identity, totals, and Stripe fields must never change on restaurant patches. */
+    function restaurantProtectedFieldsUnchanged() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('customerName', '') == after.get('customerName', '')
+        && before.get('customerPhone', '') == after.get('customerPhone', '')
+        && before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && before.get('stripePaymentIntentId', '') == after.get('stripePaymentIntentId', '')
+        && before.get('paymentIntentId', '') == after.get('paymentIntentId', '')
+        && before.get('checkoutSessionId', '') == after.get('checkoutSessionId', '')
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('subtotal', 0) == after.get('subtotal', 0)
+        && before.get('tax', 0) == after.get('tax', 0)
+        && before.get('deliveryFee', 0) == after.get('deliveryFee', 0)
+        && before.get('fees', 0) == after.get('fees', 0)
+        && before.get('taxes', 0) == after.get('taxes', 0)
+        && before.get('items', []) == after.get('items', [])
+        && before.get('assignedDriverId', '') == after.get('assignedDriverId', '')
+        && before.get('driverName', '') == after.get('driverName', '')
+        && before.get('driverPhone', '') == after.get('driverPhone', '')
+        && before.get('driverVehicle', '') == after.get('driverVehicle', '');
+    }
+    function optionalOrderTimestampOk(field) {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny([field])
+        || request.resource.data[field] == request.time
+        || (
+          keys.hasAny([field])
+          && resource.data.get(field, null) != null
+          && request.resource.data.get(field, null) == null
+        );
+    }
+    function restaurantVisibilityFieldTypesOk() {
+      return request.resource.data.get('hiddenForRestaurant', false) is bool
+        && request.resource.data.get('archivedByRestaurant', false) is bool
+        && optionalOrderTimestampOk('archivedAt')
+        && optionalOrderTimestampOk('hiddenAt')
+        && optionalOrderTimestampOk('restoredAt')
+        && optionalOrderTimestampOk('acceptedAt')
+        && optionalOrderTimestampOk('preparedAt')
+        && optionalOrderTimestampOk('readyAt')
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          || request.resource.data.status is string
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveryStatus'])
+          || request.resource.data.deliveryStatus is string
+        );
+    }
+  /** Restaurant may clear `driverId` when marking ready; cannot assign a driver (drivers claim separately). */
+    function restaurantDriverIdPatchOk() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['driverId'])
+        || resource.data.get('driverId', '') == request.resource.data.get('driverId', '')
+        || (
+          restaurantMustNotAssignDriver(resource.data, request.resource.data)
+          && !(request.resource.data.get('driverId', '') is string
+            && request.resource.data.get('driverId', '').size() > 0)
+        );
+    }
+    /**
+     * Restaurant dashboard: archive / hide / restore / kitchen status.
+     * Isolated from customer & driver patches; safe for writeBatch (per-doc evaluation).
+     */
+    /**
+     * Lightweight restaurant kitchen fast path — minimal expressions for accept/preparing/ready.
+     * Evaluated before driver/HalfOrder branches to stay under the 1000-expr budget.
+     */
+    function restaurantKitchenPatchFastOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isRestaurantOwner()
+        && before.get('deliveryType', '') == 'delivery'
+        && marketplaceOrderPaidOk(before)
+        && restaurantKitchenLifecycleTransitionOk(before, after)
+        && onlyAllowedRestaurantFieldsChanged()
+        && restaurantUpdatedByOk()
+        && restaurantDriverIdPatchOk()
+        && before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('venueId', before.get('restaurantId', ''))
+            == after.get('venueId', after.get('restaurantId', ''))
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('items', []) == after.get('items', [])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        );
+    }
+    function restaurantDashboardPatchOk() {
+      return isRestaurantOwner()
+        && onlyAllowedRestaurantFieldsChanged()
+        && restaurantProtectedFieldsUnchanged()
+        && restaurantVisibilityFieldTypesOk()
+        && restaurantDriverIdPatchOk()
+        && restaurantUpdatedByOk()
+        && restaurantKitchenLifecycleTransitionOk(resource.data, request.resource.data)
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        );
+    }
+    /** Terminal marketplace orders — no further lifecycle patches. */
+    function marketplaceOrderIsTerminalForModify(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return status == 'cancelled'
+        || status == 'rejected'
+        || status == 'delivered'
+        || status == 'expired'
+        || status == 'completed'
+        || ds == 'cancelled'
+        || ds == 'delivered';
+    }
+    function marketplaceOrderHasDriverAssigned(d) {
+      return (d.get('driverId', '') is string && d.get('driverId', '').size() > 0)
+        || (
+          d.get('assignedDriverId', '') is string
+          && d.get('assignedDriverId', '').size() > 0
+        );
+    }
+    function marketplaceOrderCancelBlockedStage(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return status == 'ready'
+        || status == 'ready_for_pickup'
+        || ds == 'ready'
+        || ds == 'ready_for_pickup'
+        || status == 'picked_up'
+        || status == 'on_the_way'
+        || status == 'arrived_customer'
+        || ds == 'picked_up'
+        || ds == 'on_the_way';
+    }
+    /**
+     * Restaurant cancel: awaiting_restaurant, accepted, preparing only.
+     * Blocks ready_for_pickup, driver-assigned, picked up, delivered.
+     */
+    function marketplaceOrderRestaurantCancelStageOk(d) {
+      let status = d.get('status', '');
+      let ds = d.get('deliveryStatus', '');
+      return !marketplaceOrderIsTerminalForModify(d)
+        && !marketplaceOrderHasDriverAssigned(d)
+        && !marketplaceOrderCancelBlockedStage(d)
+        && (
+          status == 'payment_confirmed'
+          || status == 'pending'
+          || status == 'pending_driver'
+          || status == 'accepted'
+          || status == 'restaurant_accepted'
+          || status == 'preparing'
+          || ds == 'accepted'
+          || ds == 'preparing'
+          || (status == 'awaiting_payment' && marketplaceOrderPaidOk(d))
+        );
+    }
+    /**
+     * Customer-owned kitchen statuses cancellable before driver pickup.
+     * Includes paid awaiting_restaurant (payment_confirmed, pending_driver).
+     */
+    function marketplaceOrderCustomerCancellableStatusOk(status) {
+      return status in [
+        'awaiting_payment',
+        'payment_processing',
+        'payment_confirmed',
+        'pending',
+        'pending_driver',
+        'accepted',
+        'preparing',
+        'restaurant_accepted'
+      ];
+    }
+    /**
+     * Customer cancel: own order, not yet picked up or driver-assigned.
+     */
+    function marketplaceOrderCustomerCancelStageOk(d) {
+      let status = d.get('status', '');
+      return !marketplaceOrderIsTerminalForModify(d)
+        && !marketplaceOrderHasDriverAssigned(d)
+        && !marketplaceOrderCancelBlockedStage(d)
+        && (
+          request.auth.uid == d.get('customerId', '')
+          || primaryUidFromOrder(d) == request.auth.uid
+        )
+        && marketplaceOrderCustomerCancellableStatusOk(status);
+    }
+    /** Drivers may not cancel marketplace restaurant lifecycle (claim/active patches only). */
+    function orderCancelActorIsDriverOnly(before) {
+      return isDriver()
+        && driverAssignedToMarketplaceOrder(before)
+        && primaryUidFromOrder(before) != request.auth.uid
+        && !isRestaurantVendorActor(before);
+    }
+    /**
+     * Role-aware cancel eligibility (restaurant vendor or order customer).
+     * Uses restaurantId, customer uid, and driver assignment — not broad allow update.
+     */
+    function canCancelOrder(before) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && !marketplaceOrderIsTerminalForModify(before)
+        && !orderCancelActorIsDriverOnly(before)
+        && (
+          (
+            isRestaurantVendorActor(before)
+            && marketplaceOrderRestaurantCancelStageOk(before)
+          )
+          || (
+            primaryUidFromOrder(before) == request.auth.uid
+            && marketplaceOrderCustomerCancelStageOk(before)
+          )
+        );
+    }
+    function marketplaceOrderCancelImmutableOk(before, after) {
+      return before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && orderRestaurantId(before) == orderRestaurantId(after)
+        && before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('items', []) == after.get('items', [])
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('driverId', '') == after.get('driverId', '')
+        && before.get('assignedDriverId', '') == after.get('assignedDriverId', '');
+    }
+    /**
+     * FAST PATH: customer cancels own order (unpaid + paid pre-driver statuses).
+     * Evaluated before driver claim/active branches to stay under the 1000-expr budget.
+     */
+    function marketplaceOrderCustomerCancelFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return (
+        request.auth.uid == before.get('customerId', '')
+        || primaryUidFromOrder(before) == request.auth.uid
+      )
+        && after.status == 'cancelled'
+        && marketplaceOrderCustomerCancellableStatusOk(before.get('status', ''))
+        && !marketplaceOrderHasDriverAssigned(before)
+        && !marketplaceOrderCancelBlockedStage(before)
+        && after.deliveryStatus == 'cancelled'
+        && after.get('cancelledBy', '') == request.auth.uid
+        && marketplaceOrderCancelImmutableOk(before, after)
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'deliveryStatus',
+            'cancelledAt',
+            'cancelledBy',
+            'updatedAt',
+            'updatedBy'
+          ]);
+    }
+    /** Marketplace cancel patch — restaurant dashboard + customer profile. */
+    function marketplaceOrderCancelPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return canCancelOrder(before)
+        && after.status == 'cancelled'
+        && after.deliveryStatus == 'cancelled'
+        && after.get('cancelledBy', '') == request.auth.uid
+        && marketplaceOrderCancelImmutableOk(before, after)
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'deliveryStatus',
+            'cancelledAt',
+            'cancelledBy',
+            'updatedAt',
+            'updatedBy'
+          ]);
+    }
+    /** Customer uid for marketplace payment patches (customerUid alias + legacy owner fields). */
+    function orderCustomerUid(d) {
+      return primaryUidFromOrder(d);
+    }
+    function marketplaceCustomerPaymentInitBeforeStatusOk(s) {
+      return s == 'awaiting_payment'
+        || s == 'pending'
+        || s == 'pending_payment';
+    }
+    function marketplaceCustomerPaymentInitBeforePaymentOk(ps) {
+      return ps == 'unpaid' || ps == '';
+    }
+    function customerCheckoutImmutableFieldsOk(before, after) {
+      return before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('customerUid', '') == after.get('customerUid', '')
+        && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('venueId', '') == after.get('venueId', '')
+        && before.get('items', []) == after.get('items', [])
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('deliveryType', '') == after.get('deliveryType', '');
+    }
+    /** Web Checkout: awaiting_payment|pending → payment_processing + checkoutSessionId only. */
+    function marketplaceCustomerPaymentInitPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return orderCustomerUid(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','paymentStatus','checkoutSessionId','updatedAt'
+        ])
+        && marketplaceCustomerPaymentInitBeforeStatusOk(before.status)
+        && marketplaceCustomerPaymentInitBeforePaymentOk(before.get('paymentStatus', 'unpaid'))
+        && after.status == 'payment_processing'
+        && after.paymentStatus == 'processing'
+        && after.checkoutSessionId is string
+        && after.checkoutSessionId.size() > 0
+        && customerCheckoutImmutableFieldsOk(before, after);
+    }
+    /** Native PaymentSheet: payment_processing + Stripe intent ids. */
+    function marketplaceCustomerPaymentInitWithIntentPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return orderCustomerUid(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','paymentStatus','paymentIntentId','stripePaymentIntentId','updatedAt'
+        ])
+        && marketplaceCustomerPaymentInitBeforeStatusOk(before.status)
+        && marketplaceCustomerPaymentInitBeforePaymentOk(before.get('paymentStatus', 'unpaid'))
+        && after.status == 'payment_processing'
+        && after.paymentStatus == 'processing'
+        && after.paymentIntentId is string
+        && after.paymentIntentId.size() > 0
+        && after.stripePaymentIntentId == after.paymentIntentId
+        && customerCheckoutImmutableFieldsOk(before, after);
+    }
+    /** Client / webhook paid transition after successful charge. */
+    function marketplaceCustomerCheckoutPaidPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return orderCustomerUid(before) == request.auth.uid
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','paymentStatus','paymentIntentId','checkoutSessionId','stripePaymentIntentId',
+          'updatedAt','paidAt','paymentFailedAt','estimatedDeliveryTime','deliveryStatus'
+        ])
+        && marketplaceCustomerPaymentInitBeforeStatusOk(before.status)
+        && marketplaceCustomerPaymentInitBeforePaymentOk(before.get('paymentStatus', 'unpaid'))
+        && after.paymentStatus == 'paid'
+        && after.deliveryStatus == 'pending'
+        && after.status == before.status;
+    }
+    function marketplaceCustomerCheckoutPatchOk() {
+      return marketplaceCustomerPaymentInitPatchOk()
+        || marketplaceCustomerPaymentInitWithIntentPatchOk()
+        || marketplaceCustomerCheckoutPaidPatchOk();
+    }
+    function restaurantMustNotAssignDriver(before, after) {
+      return !(
+        (!(before.driverId is string && before.driverId.size() > 0))
+        && after.driverId is string
+        && after.driverId.size() > 0
+      );
+    }
+    function marketplaceRestaurantPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isRestaurantVendorActor(before)
+        && restaurantMustNotAssignDriver(before, after)
+        && restaurantKitchenLifecycleTransitionOk(before, after)
+        && restaurantUpdatedByOk()
+        && marketplaceOrderPatchKeys().hasOnly([
+          'status','acceptedAt','preparedAt','readyAt','estimatedDeliveryTime','estimatedPrepTime',
+          'estimatedDeliveryMinutes','deliveryStatus','updatedAt','updatedBy','driverId','assignedDriverId',
+          'driverName','driverPhone','driverVehicle','driver','notes','rejectionReason'
+        ]);
+    }
+    /** Driver claim/active writes — token role, drivers/{uid}, or users/{uid}.role == driver. */
+    function isAuthenticatedDriverForOrderWrite() {
+      return isDriver();
+    }
+    function driverClaimAllowedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'driverId',
+        'assignedDriverId',
+        'driverName',
+        'driverPhone',
+        'driverVehicle',
+        'deliveryStatus',
+        'status',
+        'driver',
+        'acceptedAt',
+        'updatedAt',
+        'deliveryPin',
+        'estimatedDeliveryMinutes',
+        'estimatedDeliveryTime',
+        'updatedBy',
+      ]);
+    }
+    /** Kitchen status may advance to driver_assigned on claim (legacy rows used pending_driver). */
+    function driverClaimKitchenStatusOk(before, after) {
+      let beforeStatus = before.get('status', '');
+      let afterStatus = after.get('status', '');
+      return afterStatus == beforeStatus
+        || (
+          afterStatus == 'driver_assigned'
+          && (
+            beforeStatus == ''
+            || beforeStatus == 'pending_driver'
+            || beforeStatus == 'payment_confirmed'
+            || beforeStatus == 'pending'
+            || beforeStatus == 'awaiting_payment'
+            || beforeStatus == 'accepted'
+            || beforeStatus == 'restaurant_accepted'
+            || beforeStatus == 'preparing'
+            || beforeStatus == 'ready_for_pickup'
+          )
+        );
+    }
+    /**
+     * Claim transition: any unassigned pool courier status → driver_assigned.
+     * Must mirror marketplacePoolDeliveryStatusOk + client isDriverMarketplaceClaimable.
+     */
+    function driverClaimDeliveryTransitionOk(beforeDs, afterDs) {
+      return afterDs == 'driver_assigned'
+        && marketplacePoolDeliveryStatusOk(beforeDs)
+        && beforeDs != 'driver_assigned';
+    }
+    function driverClaimDriverBlobOk(before, after) {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['driver'])
+        || (
+          after.get('driver', {}) is map
+          && after.get('driver', {}).get('id', '') == request.auth.uid
+          && after.get('driver', {}).get('name', '') is string
+          && after.get('driver', {}).get('name', '').size() > 0
+          && after.get('driver', {}).get('name', '').size() <= 120
+        );
+    }
+    function driverClaimUpdatedByOk() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['updatedBy'])
+        || (
+          request.resource.data.updatedBy is string
+          && request.resource.data.updatedBy.size() > 0
+          && request.resource.data.updatedBy.size() <= 160
+        );
+    }
+    function driverClaimImmutableFieldsOk(before, after) {
+      return before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('total', 0) == after.get('total', 0)
+        && before.get('items', []) == after.get('items', []);
+    }
+    /**
+     * Patch guards for driver claim/accept (claimMarketplaceDriverOrder).
+     * Auth checked separately so role=driver fast paths avoid extra get() calls.
+     */
+    function driverMarketplaceClaimPatchOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let beforeDs = before.get('deliveryStatus', '');
+      let afterDs = after.get('deliveryStatus', '');
+      return before.get('deliveryType', '') == 'delivery'
+        && marketplaceOrderPaidOk(before)
+        && before.get('marketplaceArchived', false) != true
+        && before.get('expired', false) != true
+        && marketplaceOrderNotTerminalForClaim(before)
+        && orderUnassignedForDriverClaim(before)
+        && driverClaimDeliveryTransitionOk(beforeDs, afterDs)
+        && after.get('driverId', '') == request.auth.uid
+        && after.get('assignedDriverId', '') == request.auth.uid
+        && after.get('driverId', '') == after.get('assignedDriverId', '')
+        && driverClaimKitchenStatusOk(before, after)
+        && driverClaimAllowedKeys()
+        && driverClaimDriverBlobOk(before, after)
+        && driverClaimUpdatedByOk()
+        && driverClaimImmutableFieldsOk(before, after);
+    }
+    /** Any supported driver identity source (token role, drivers/{uid}, users/{uid}.role). */
+    function isMarketplaceDriverActor() {
+      return authTokenRoleIsDriver()
+        || hasDriverAccountDoc()
+        || (
+          isSignedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'driver'
+        );
+    }
+    /**
+     * Driver claim/accept on unassigned paid marketplace delivery (claimMarketplaceDriverOrder).
+     * Single evaluator — keeps orders/{id} update under the 1000-expr budget.
+     */
+    function marketplaceDriverUnassignedClaimOk() {
+      return isMarketplaceDriverActor()
+        && driverMarketplaceClaimPatchOk();
+    }
+    /** @deprecated alias — use marketplaceDriverUnassignedClaimOk */
+    function isValidDriverClaim() {
+      return marketplaceDriverUnassignedClaimOk();
+    }
+    function driverActivePatchAllowedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'driverId',
+        'assignedDriverId',
+        'driverName',
+        'driverPhone',
+        'driver',
+        'deliveryStatus',
+        'acceptedAt',
+        'pickedUpAt',
+        'deliveredAt',
+        'completedAt',
+        'marketplaceArchived',
+        'updatedAt',
+        'deliveryPin',
+        'estimatedDeliveryMinutes',
+        'estimatedDeliveryTime',
+        'updatedBy',
+        'status',
+        'driverLocation',
+        'driverPayout',
+        'platformFee',
+        'customerTotal',
+        'earningsRecorded',
+      ]);
+    }
+    function driverReadyForPickupBeforeStatus(ds) {
+      return ds == 'driver_assigned'
+        || ds == 'ready_for_pickup'
+        || ds == 'ready'
+        || ds == 'waiting_driver'
+        || ds == 'accepted_for_delivery';
+    }
+    function driverMarketplaceArriveRestaurantTransitionOk(before, after) {
+      let beforeDs = before.get('deliveryStatus', '');
+      return driverAssignedToMarketplaceOrder(before)
+        && beforeDs == 'driver_assigned'
+        && after.get('deliveryStatus', '') == 'ready_for_pickup'
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverClaimImmutableFieldsOk(before, after);
+    }
+    function driverMarketplacePickupTransitionOk(before, after) {
+      let beforeDs = before.get('deliveryStatus', '');
+      return driverAssignedToMarketplaceOrder(before)
+        && driverReadyForPickupBeforeStatus(beforeDs)
+        && after.get('deliveryStatus', '') == 'picked_up'
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverClaimImmutableFieldsOk(before, after);
+    }
+    function driverMarketplaceDeliverBeforeStatusOk(ds) {
+      return ds == 'picked_up'
+        || ds == 'on_the_way'
+        || ds == 'near_customer';
+    }
+    function driverMarketplaceDeliverTransitionOk(before, after) {
+      return driverAssignedToMarketplaceOrder(before)
+        && driverMarketplaceDeliverBeforeStatusOk(before.get('deliveryStatus', ''))
+        && after.get('deliveryStatus', '') == 'delivered'
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && (after.get('status', '') == 'completed' || after.get('status', '') == before.get('status', ''))
+        && driverClaimImmutableFieldsOk(before, after);
+    }
+    /**
+     * Ultra-light pickup fast path — driver_assigned → picked_up on fat production orders.
+     * No items/customer/restaurant/totals equality checks (avoids 1000-expr budget exhaustion).
+     */
+    function driverMarketplacePickupFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && (
+          before.get('driverId', '') == request.auth.uid
+          || before.get('assignedDriverId', '') == request.auth.uid
+        )
+        && before.get('deliveryStatus', '') == 'driver_assigned'
+        && after.get('deliveryStatus', '') == 'picked_up'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deliveryStatus',
+          'status',
+          'pickedUpAt',
+          'updatedAt',
+          'updatedBy',
+        ]);
+    }
+    /**
+     * Ultra-light deliver fast path — picked_up → delivered on fat production orders.
+     * No deep immutable-field comparisons on nested maps.
+     */
+    function driverMarketplaceDeliveredFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && (
+          before.get('driverId', '') == request.auth.uid
+          || before.get('assignedDriverId', '') == request.auth.uid
+        )
+        && before.get('deliveryStatus', '') == 'picked_up'
+        && after.get('deliveryStatus', '') == 'delivered'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deliveryStatus',
+          'status',
+          'deliveredAt',
+          'completedAt',
+          'marketplaceArchived',
+          'earningsRecorded',
+          'customerTotal',
+          'driverPayout',
+          'platformFee',
+          'updatedAt',
+          'updatedBy',
+        ]);
+    }
+    /**
+     * Lightweight driver fulfillment fast path — arrive / pickup / deliver.
+     * Evaluated before heavy HalfOrder branches to stay under the 1000-expr budget.
+     */
+    function driverMarketplaceFulfillmentPatchKeysOk() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'deliveryStatus',
+        'status',
+        'pickedUpAt',
+        'deliveredAt',
+        'completedAt',
+        'marketplaceArchived',
+        'updatedAt',
+        'updatedBy',
+        'driverPayout',
+        'platformFee',
+        'customerTotal',
+        'earningsRecorded',
+      ]);
+    }
+    function driverMarketplaceFulfillmentFastOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && driverAssignedToMarketplaceOrder(before)
+        && (
+          before.get('deliveryType', 'delivery') == 'delivery'
+          || driverAssignedToMarketplaceOrder(before)
+        )
+        && !noDriverAssignedYet(before)
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverMarketplaceFulfillmentPatchKeysOk()
+        && driverClaimUpdatedByOk()
+        && (
+          driverMarketplaceArriveRestaurantTransitionOk(before, after)
+          || driverMarketplacePickupTransitionOk(before, after)
+          || driverMarketplaceDeliverTransitionOk(before, after)
+        );
+    }
+    /** Assigned-driver live GPS on orders/{id}.driverLocation (canonical + legacy fields). */
+    function driverLocationOptionalNumber(m, key) {
+      return !m.keys().hasAny([key])
+        || m.get(key, null) == null
+        || m.get(key, null) is number;
+    }
+    function driverLocationCoordsOk(loc) {
+      return loc is map
+        && (
+          (loc.get('lat', null) is number && loc.get('lng', null) is number)
+          || (
+            loc.get('latitude', null) is number
+            && loc.get('longitude', null) is number
+          )
+        );
+    }
+    function driverLocationMapOk(loc) {
+      return loc is map
+        && loc.keys().hasOnly([
+          'lat',
+          'lng',
+          'latitude',
+          'longitude',
+          'heading',
+          'speed',
+          'timestamp',
+          'updatedAt',
+        ])
+        && driverLocationCoordsOk(loc)
+        && driverLocationOptionalNumber(loc, 'heading')
+        && driverLocationOptionalNumber(loc, 'speed');
+    }
+    function driverLocationOnlyPatchOk() {
+      let after = request.resource.data;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'driverLocation',
+        'updatedAt',
+      ])
+        && driverLocationMapOk(after.get('driverLocation', {}));
+    }
+    /**
+     * Lightweight GPS-only path — evaluated before heavy HalfOrder/marketplace branches.
+     * Assigned driver (driverId or assignedDriverId), or unassigned delivery preview.
+     */
+    function isValidDriverLocationOnlyPatch() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && driverLocationOnlyPatchOk()
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && (
+          (
+            (
+              before.get('driverId', '') == request.auth.uid
+              || before.get('assignedDriverId', '') == request.auth.uid
+            )
+            && before.get('deliveryType', '') == 'delivery'
+          )
+          || (
+            isDriver()
+            && before.get('deliveryType', '') == 'delivery'
+            && noDriverAssignedYet(before)
+          )
+        );
+    }
+    function isValidDriverActivePatch() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return (
+        isAuthenticatedDriverForOrderWrite()
+        || (
+          isSignedIn()
+          && !isCurrentUserRestricted()
+          && driverAssignedToMarketplaceOrder(before)
+        )
+      )
+        && driverMarketplaceDeliveryTypeOk(before)
+        && driverAssignedToMarketplaceOrder(before)
+        && !noDriverAssignedYet(before)
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverActivePatchAllowedKeys()
+        && driverClaimUpdatedByOk()
+        && (
+          driverMarketplaceArriveRestaurantTransitionOk(before, after)
+          || driverMarketplacePickupTransitionOk(before, after)
+          || driverMarketplaceDeliverTransitionOk(before, after)
+          || driverLocationOnlyPatchOk()
+        );
+    }
+    function marketplaceDriverPatchOk() {
+      return isValidDriverClaim() || isValidDriverActivePatch();
+    }
+    function marketplaceOrderActorPatchOk() {
+      return marketplaceRestaurantPatchOk()
+        || marketplaceDriverPatchOk();
+    }
+
+    /**
+     * AI / assistant join discovery: readable subset of non-delivery `orders` docs.
+     * Keep aligned with `JOIN_DISCOVERY_ORDER_STATUSES` in `constants/joinDiscovery.ts`.
+     * Marketplace `deliveryType == delivery` stays on `canAccessMarketplaceDeliveryOrder` only.
+     */
+    function joinGrowthDiscoveryStatusOk(s) {
+      return s == 'open'
+        || s == 'active'
+        || s == 'waiting'
+        || s == 'matched'
+        || s == 'pending'
+        || s == 'full';
+    }
+    function isHalfOrderJoinDiscovery(d) {
+      let users = d.get('users', []);
+      let maxU = d.get('maxUsers', 2);
+      return d.keys().hasAny(['cardId'])
+        && d.cardId is string
+        && d.cardId.size() > 0
+        && users is list
+        && usersAllStrings(users)
+        && maxU is int
+        && maxU >= 2
+        && maxU <= 20
+        && users.size() >= 1
+        && users.size() < maxU
+        && !(request.auth.uid in users)
+        && d.status is string
+        && joinGrowthDiscoveryStatusOk(d.status);
+    }
+    function isClassicSwipeJoinDiscovery(d) {
+      let participants = d.get('participants', []);
+      let maxP = d.get('maxPeople', 2);
+      return (
+          !d.keys().hasAny(['cardId'])
+          || !(d.cardId is string)
+          || d.cardId.size() == 0
+        )
+        && maxP is int
+        && maxP >= 2
+        && maxP <= 50
+        && participants is list
+        && participantsAllStrings(participants)
+        && participants.size() >= 1
+        && participants.size() < maxP
+        && !(request.auth.uid in participants)
+        && (
+          !d.keys().hasAny(['usersAccepted'])
+          || (
+            d.usersAccepted is list
+            && !(request.auth.uid in d.usersAccepted)
+          )
+        )
+        && d.status is string
+        && joinGrowthDiscoveryStatusOk(d.status);
+    }
+    function joinDiscoveryReadable(d) {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && !isMarketplaceDeliveryOrderDoc(d)
+        && (isHalfOrderJoinDiscovery(d) || isClassicSwipeJoinDiscovery(d));
+    }
+
+    /**
+     * Join-directory projection for AI / smart match queries (no phones, street addresses, or payment).
+     * Only HTTPS restaurant/brand image URLs may appear (`syncPublicMatchableOrder` truncates and filters).
+     * Writes: Admin SDK / Cloud Functions only (`syncPublicMatchableOrder`).
+     * Any signed-in user may list/read (must stay above catch-all `/{document=**}` by path specificity).
+     */
+    match /public_matchable_orders/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    /** Per-user swipe gestures (like/pass) for food discovery analytics + matching. */
+    match /swipes/{swipeId} {
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.keys().hasOnly([
+          'userId', 'orderId', 'foodId', 'restaurantId',
+          'direction', 'liked', 'timestamp', 'createdAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && request.resource.data.foodId is string
+        && request.resource.data.restaurantId is string
+        && request.resource.data.direction is string
+        && (
+          request.resource.data.direction == 'like'
+          || request.resource.data.direction == 'pass'
+        )
+        && request.resource.data.liked is bool
+        && request.resource.data.timestamp == request.time
+        && request.resource.data.createdAt == request.time;
+      allow read: if isSignedIn()
+        && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    /** Shared checkout rooms after a match (server/client create when pairing completes). */
+    match /sharedOrders/{sharedOrderId} {
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.keys().hasOnly([
+          'orderId', 'matchId', 'participantIds', 'foodTitle',
+          'restaurantName', 'heroImageUri', 'splitPrice',
+          'cartSubtotal', 'cartItems', 'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size() >= 2
+        && request.resource.data.participantIds.size() <= 8
+        && request.auth.uid in request.resource.data.participantIds
+        && request.resource.data.foodTitle is string
+        && request.resource.data.foodTitle.size() > 0
+        && request.resource.data.splitPrice is number
+        && request.resource.data.splitPrice >= 0
+        && request.resource.data.cartSubtotal is number
+        && request.resource.data.cartSubtotal >= 0
+        && request.resource.data.cartItems is list
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow read: if isSignedIn()
+        && (
+          isAdmin()
+          || request.auth.uid in resource.data.get('participantIds', [])
+        );
+      allow update: if isAdmin()
+        || (
+          isSignedIn()
+          && !isCurrentUserRestricted()
+          && request.auth.uid in resource.data.get('participantIds', [])
+          && request.resource.data.participantIds == resource.data.participantIds
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'cartItems', 'cartSubtotal', 'checkoutStartedBy', 'updatedAt'
+          ])
+          && request.resource.data.updatedAt == request.time
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin();
+      allow list: if isAdmin();
+      // Published baseline: owner / restaurant / driver may read their orders.
+      allow read: if ordersReadByParticipant();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // List queries do not use allow read when allow list is present (Firestore rules v2).
+      allow list: if ordersReadByParticipant();
+      // Driver marketplace pool list on orders (legacy); mirrors waiting_driver pool filters.
+      allow read: if driverMarketplacePoolReadable();
+      allow list: if driverMarketplacePoolReadable();
+      // Driver list queries (query-safe via drivers/{auth.uid} membership; no custom claim).
+      allow list: if driverEarningsOrderListReadable();
+      allow list: if driverDeliveredStatsListReadable();
+      allow list: if driverOrdersByDriverIdListReadable();
+      allow list: if driverOrdersByAssignedDriverIdListReadable();
+      // Fallback when custom claim is present (refreshUserRoleClaims).
+      allow list: if isSignedIn() && authTokenRoleIsDriver();
+      allow list: if isSignedIn()
+        && !isCurrentUserRestricted();
+      // Driver getDoc on a single unassigned pool order (accept / preview).
+      allow read: if driverPoolOrderSingleRead();
+      // Marketplace checkout: auth uid must match payload userId + field guards.
+      allow create: if isValidMarketplaceOrderCreate();
+      // HalfOrder / legacy order creates (separate schema; no userId required).
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && canCreateOrderBySafetyLimits()
+        && (
+          isValidHalfOrderCreate()
+          || isValidOrderCreate()
+          || (
+            request.resource.data.creatorId == request.auth.uid
+            && request.resource.data.participants is list
+          )
+          || (
+            request.resource.data.users is list
+            && request.auth.uid in request.resource.data.users
+          )
+        );
+      // Extended read (admin, driver pool, HalfOrder discovery, members).
+      allow read: if isSignedIn()
+        && (isAdmin() || !isCurrentUserRestricted())
+        && (
+          canAccessMarketplaceDeliveryOrder(resource.data)
+        );
+      allow update: if isSignedIn()
+        && (
+          // ULTRA-LIGHT: driver pickup (driver_assigned → picked_up) — evaluated first.
+          driverMarketplacePickupFastPathOk()
+          // ULTRA-LIGHT: driver deliver (picked_up → delivered).
+          || driverMarketplaceDeliveredFastPathOk()
+          || isAdmin()
+          // FAST PATH: restaurant kitchen accept / preparing / ready (before driver/HalfOrder evaluators).
+          || (
+            !isCurrentUserRestricted()
+            && restaurantKitchenPatchFastOk()
+          )
+          // FAST PATH: customer profile cancel — minimal expressions.
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceOrderCustomerCancelFastPathOk()
+          )
+          // FAST PATH: driver claim — role=driver / drivers/{uid} / users role on unassigned order.
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceDriverUnassignedClaimOk()
+          )
+          || (
+            !isCurrentUserRestricted()
+            && driverMarketplaceFulfillmentFastOk()
+          )
+          || (
+            !isCurrentUserRestricted()
+            && isValidDriverLocationOnlyPatch()
+          )
+          || (
+            !isCurrentUserRestricted()
+            && isValidDriverActivePatch()
+          )
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceOrderCancelPatchOk()
+          )
+          || restaurantDashboardPatchOk()
+          || isSwipeAcceptUpdate()
+          || isParticipantsJoinUpdate()
+          || isParticipantsJoinWithExtrasUpdate()
+          || isHalfOrderParticipantIncrementalJoin()
+          || isHalfOrderParticipantBootstrapJoin()
+          || isJoinedAtMapBackfillUpdate()
+          || isParticipantsLeaveUpdate()
+          || isOrderTypingUpdate()
+          || isCreatorOnlyNonJoinUpdate()
+          || isMarkOrderExpiredUpdate()
+          || isHalfOrderCancelUpdate()
+          || isHalfOrderMarkActiveUpdate()
+          || isHalfOrderCompleteUpdate()
+          || (
+            !isCurrentUserRestricted()
+            && canAccessMarketplaceDeliveryOrder(resource.data)
+            && (
+              !isMarketplaceDeliveryOrderDoc(resource.data)
+              || marketplaceOrderActorPatchOk()
+            )
+          )
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceCustomerCheckoutPatchOk()
+          )
+        );
+      allow delete: if isAdmin()
+        || (
+          isSignedIn()
+          && primaryUidFromOrder(resource.data) == request.auth.uid
+        );
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && (
+            isAdmin()
+            || (
+              !isCurrentUserRestricted()
+              && orderChatParticipantOk(
+                get(/databases/$(database)/documents/orders/$(orderId)).data
+              )
+            )
+          );
+        allow create: if isSignedIn()
+          && !isCurrentUserRestricted()
+          && (
+            isAdmin()
+            || orderChatParticipantOk(
+              get(/databases/$(database)/documents/orders/$(orderId)).data
+            )
+          )
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 600
+          && request.resource.data.createdAt == request.time
+          && (
+            !request.resource.data.keys().hasAny(['chatType'])
+            || (
+              request.resource.data.chatType == 'customer_driver'
+              || request.resource.data.chatType == 'restaurant_driver'
+              || request.resource.data.chatType == 'support'
+            )
+          )
+          && (
+            !request.resource.data.keys().hasAny(['senderRole'])
+            || (
+              request.resource.data.senderRole is string
+              && request.resource.data.senderRole.size() > 0
+              && request.resource.data.senderRole.size() <= 24
+            )
+          );
+        allow update, delete: if false;
+      }
+    }
+    match /food_cards/{cardId} {
+      allow read, list: if isAdmin();
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isValidFoodCardOrderIdLink(cardId) || isValidFoodCardJoinUpdate();
+    }
+    match /foodTemplates/{templateId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+    match /groups/{groupId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.members is list
+        && request.resource.data.members.size() == 1
+        && request.resource.data.members[0] == request.auth.uid
+        && request.resource.data.foodType is string
+        && request.resource.data.maxSize == 4
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.anchorLocation is map;
+      allow update: if request.auth != null
+        && (
+          (resource.data.members is list && request.auth.uid in resource.data.members)
+          || (
+            resource.data.members is list
+            && request.resource.data.members is list
+            && request.resource.data.members.size() == resource.data.members.size() + 1
+            && request.auth.uid in request.resource.data.members
+            && resource.data.members.size() < 4
+          )
+        );
+      allow delete: if request.auth != null && resource.data.members is list && request.auth.uid in resource.data.members;
+    }
+    match /carts/{cartId} {
+      allow read, write: if request.auth != null;
+    }
+    function paymentDocOwnerUid(d) {
+      return d.get('userId', d.get('uid', d.get('customerId', '')));
+    }
+    function paymentDocOwnerMatchesAuth(d) {
+      return isSignedIn()
+        && paymentDocOwnerUid(d) is string
+        && paymentDocOwnerUid(d).size() > 0
+        && paymentDocOwnerUid(d) == request.auth.uid;
+    }
+    match /payments/{paymentId} {
+      allow create: if isSignedIn()
+        && paymentDocOwnerMatchesAuth(request.resource.data);
+      allow read: if isAdmin()
+        || paymentDocOwnerMatchesAuth(resource.data);
+      allow update: if isAdmin()
+        || (
+          paymentDocOwnerMatchesAuth(resource.data)
+          && paymentDocOwnerUid(request.resource.data) == paymentDocOwnerUid(resource.data)
+        );
+      allow delete: if isAdmin()
+        || paymentDocOwnerMatchesAuth(resource.data);
+    }
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin()
+        || (
+          request.auth != null
+          && request.auth.uid == restaurantId
+          && requestUserIsRestaurant()
+        );
+      match /orders/{orderId} {
+        allow read, write: if isAdmin()
+          || (
+            request.auth != null
+            && request.auth.uid == restaurantId
+            && requestUserIsRestaurant()
+          );
+      }
+      match /{sub=**} {
+        allow read: if true;
+        allow write: if isAdmin()
+          || (
+            request.auth != null
+            && request.auth.uid == restaurantId
+            && requestUserIsRestaurant()
+          );
+      }
+    }
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin()
+        || (request.auth != null && request.resource.data.restaurantId is string && request.resource.data.restaurantId == request.auth.uid)
+        || (request.auth != null && resource.data.restaurantId is string && resource.data.restaurantId == request.auth.uid);
+    }
+    /**
+     * Denormalized unassigned delivery queue for drivers (synced by Cloud Function).
+     * List queries use exists(drivers/{auth.uid}) only — no custom claims required.
+     */
+    match /driver_marketplace_pool/{orderId} {
+      allow read, list: if isAdmin() || hasDriverAccountDoc();
+      allow write: if false;
+    }
+    match /drivers/{driverId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && request.auth.uid == driverId)
+        || (
+          authTokenRoleIsRestaurant()
+          && resource.data.isOnline == true
+        );
+      // Driver self-service profile + liveLocation / presence (syncDriverLiveLocation batch).
+      allow create, update, delete: if isSignedIn()
+        && request.auth.uid == driverId;
+    }
+    match /app_sessions/{sessionId} {
+      allow read, write: if request.auth != null;
+    }
+    match /notification_opens/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /live_locations/{orderId} {
+      function liveLocOrderData() {
+        return get(/databases/$(database)/documents/orders/$(orderId)).data;
+      }
+      function liveLocationDocKeysOk() {
+        return request.resource.data.keys().hasOnly([
+          'orderId',
+          'driverId',
+          'lat',
+          'lng',
+          'latitude',
+          'longitude',
+          'heading',
+          'speed',
+          'timestamp',
+          'updatedAt',
+        ]);
+      }
+      function liveLocationCoordsOk() {
+        return request.resource.data.lat is number
+          && request.resource.data.lng is number
+          && request.resource.data.latitude is number
+          && request.resource.data.longitude is number;
+      }
+      allow read: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && canAccessMarketplaceDeliveryOrder(liveLocOrderData());
+      allow create, update: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && isDriver()
+        && liveLocOrderData().get('deliveryType', '') == 'delivery'
+        && driverAssignedToMarketplaceOrder(liveLocOrderData())
+        && request.resource.data.orderId == orderId
+        && request.resource.data.driverId == request.auth.uid
+        && liveLocationCoordsOk()
+        && liveLocationDocKeysOk()
+        && driverLocationOptionalNumber(request.resource.data, 'heading')
+        && driverLocationOptionalNumber(request.resource.data, 'speed');
+      allow delete: if false;
+    }
+    /**
+     * Optional driver dispatch queue documents (HalfOrder / OurFood).
+     * Drivers and admins only; aligns with client delivery-layer expectations.
+     */
+    match /deliveryQueue/{docId} {
+      allow read, write: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && (isAdmin() || requestUserIsDriver());
+    }
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
+// force redeploy Thu May 28 03:06:57 EDT 2026
+// redeploy Fri May 29 05:41:35 EDT 2026

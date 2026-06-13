@@ -7,6 +7,12 @@ import {
 } from '@/lib/driverCourierSnapshotMerge';
 import type { ActiveDelivery } from '@/services/delivery';
 
+const T1 = 1_700_000_000_000;
+const T2 = 1_700_000_001_000;
+const T3 = 1_700_000_002_000;
+const T4 = 1_700_000_003_000;
+const T5 = 1_700_000_004_000;
+
 function stubActive(partial: Partial<ActiveDelivery> & { id: string }): ActiveDelivery {
   return {
     customerId: null,
@@ -64,30 +70,58 @@ describe('driverCourierForwardRank', () => {
 });
 
 describe('shouldAcceptDriverCourierSnapshot', () => {
-  it('rejects courier regression even with newer updatedAt', () => {
+  it('accepts Firestore when local updatedAt is null', () => {
     const current = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'ready_for_pickup',
-      updatedAtMs: 1000,
+      updatedAtMs: null,
     });
     const incoming = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'driver_assigned',
-      updatedAtMs: 2000,
+      updatedAtMs: T2,
+    });
+    expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
+  });
+
+  it('accepts driver_assigned when Firestore updatedAt is newer than stale ready_for_pickup', () => {
+    const current = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'ready_for_pickup',
+      updatedAtMs: T1,
+    });
+    const incoming = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'driver_assigned',
+      updatedAtMs: T2,
+    });
+    expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
+  });
+
+  it('keeps newer local optimistic ready_for_pickup over older driver_assigned', () => {
+    const current = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'ready_for_pickup',
+      updatedAtMs: T2,
+    });
+    const incoming = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'driver_assigned',
+      updatedAtMs: T1,
     });
     expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(false);
   });
 
-  it('accepts forward courier step', () => {
+  it('accepts forward courier step when timestamps tie', () => {
     const current = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'driver_assigned',
-      updatedAtMs: 2000,
+      updatedAtMs: T2,
     });
     const incoming = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'ready_for_pickup',
-      updatedAtMs: 1000,
+      updatedAtMs: T2,
     });
     expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
   });
@@ -96,28 +130,89 @@ describe('shouldAcceptDriverCourierSnapshot', () => {
     const current = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'ready_for_pickup',
-      updatedAtMs: 2000,
+      updatedAtMs: T2,
     });
     const incoming = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'ready_for_pickup',
-      updatedAtMs: 1000,
+      updatedAtMs: T1,
     });
     expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(false);
   });
-});
 
-describe('reconcileActiveDeliverySnapshot', () => {
-  it('returns null when snapshot regresses courier', () => {
+  it('accepts ready_for_pickup -> driver_assigned when Firestore updatedAt is newer', () => {
     const current = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'ready_for_pickup',
-      updatedAtMs: 100,
+      updatedAtMs: T2,
     });
     const incoming = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'driver_assigned',
-      updatedAtMs: 50,
+      updatedAtMs: T3,
+    });
+    expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
+    expect(
+      reconcileActiveDeliverySnapshot(current, incoming, 'driver_orders')?.marketplaceCourierStatus,
+    ).toBe('driver_assigned');
+  });
+
+  it('accepts driver_assigned -> ready_for_pickup -> picked_up -> delivered when timestamps advance', () => {
+    const steps: Array<{
+      from: ActiveDelivery['marketplaceCourierStatus'];
+      to: ActiveDelivery['marketplaceCourierStatus'];
+      fromMs: number;
+      toMs: number;
+    }> = [
+      { from: 'driver_assigned', to: 'ready_for_pickup', fromMs: T1, toMs: T2 },
+      { from: 'ready_for_pickup', to: 'picked_up', fromMs: T2, toMs: T3 },
+      { from: 'picked_up', to: 'delivered', fromMs: T3, toMs: T4 },
+    ];
+
+    for (const step of steps) {
+      const current = stubActive({
+        id: 'o1',
+        marketplaceCourierStatus: step.from,
+        updatedAtMs: step.fromMs,
+      });
+      const incoming = stubActive({
+        id: 'o1',
+        marketplaceCourierStatus: step.to,
+        updatedAtMs: step.toMs,
+      });
+      expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
+    }
+  });
+});
+
+describe('reconcileActiveDeliverySnapshot', () => {
+  it('applies driver_assigned when local ready_for_pickup has null updatedAt', () => {
+    const current = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'ready_for_pickup',
+      updatedAtMs: null,
+    });
+    const incoming = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'driver_assigned',
+      updatedAtMs: T2,
+    });
+    expect(
+      reconcileActiveDeliverySnapshot(current, incoming, 'active_delivery')
+        ?.marketplaceCourierStatus,
+    ).toBe('driver_assigned');
+  });
+
+  it('returns null when snapshot is older at the same courier rank', () => {
+    const current = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'ready_for_pickup',
+      updatedAtMs: T2,
+    });
+    const incoming = stubActive({
+      id: 'o1',
+      marketplaceCourierStatus: 'ready_for_pickup',
+      updatedAtMs: T1,
     });
     expect(
       reconcileActiveDeliverySnapshot(current, incoming, 'active_delivery'),
@@ -126,9 +221,15 @@ describe('reconcileActiveDeliverySnapshot', () => {
 });
 
 describe('pickFreshestActiveDelivery', () => {
-  it('prefers ready_for_pickup over driver_assigned', () => {
-    const a = stubActive({ id: 'o1', marketplaceCourierStatus: 'driver_assigned', updatedAtMs: 500 });
-    const b = stubActive({ id: 'o1', marketplaceCourierStatus: 'ready_for_pickup', updatedAtMs: 400 });
+  it('prefers newer timestamp over higher courier rank', () => {
+    const a = stubActive({ id: 'o1', marketplaceCourierStatus: 'ready_for_pickup', updatedAtMs: T1 });
+    const b = stubActive({ id: 'o1', marketplaceCourierStatus: 'driver_assigned', updatedAtMs: T2 });
+    expect(pickFreshestActiveDelivery([a, b])?.marketplaceCourierStatus).toBe('driver_assigned');
+  });
+
+  it('prefers ready_for_pickup when its timestamp is newer', () => {
+    const a = stubActive({ id: 'o1', marketplaceCourierStatus: 'driver_assigned', updatedAtMs: T1 });
+    const b = stubActive({ id: 'o1', marketplaceCourierStatus: 'ready_for_pickup', updatedAtMs: T2 });
     expect(pickFreshestActiveDelivery([a, b])?.marketplaceCourierStatus).toBe('ready_for_pickup');
   });
 });
@@ -149,12 +250,12 @@ describe('delivered snapshot merge', () => {
     const current = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'picked_up',
-      updatedAtMs: 5000,
+      updatedAtMs: T5,
     });
     const incoming = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'delivered',
-      updatedAtMs: 1000,
+      updatedAtMs: T1,
     });
     expect(shouldAcceptDriverCourierSnapshot(current, incoming)).toBe(true);
     expect(
@@ -166,15 +267,15 @@ describe('delivered snapshot merge', () => {
     const current = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'picked_up',
-      updatedAtMs: 9000,
+      updatedAtMs: T5,
     });
     const incoming = stubActive({
       id: 'o1',
       marketplaceCourierStatus: 'picked_up',
       firestoreDeliveryStatus: 'picked_up',
       status: 'completed',
-      deliveredAtMs: 8000,
-      updatedAtMs: 1000,
+      deliveredAtMs: T4,
+      updatedAtMs: T1,
     });
     expect(
       reconcileActiveDeliverySnapshot(current, incoming, 'active_delivery')?.marketplaceCourierStatus,

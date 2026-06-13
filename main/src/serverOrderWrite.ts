@@ -1,4 +1,5 @@
 import {guardPatchForDriverFulfillment} from "./driverFulfillmentGuard.js";
+import {syncMarketplaceLifecyclePatch} from "./marketplaceLifecycleSync.js";
 import {hasFulfillmentProgressMarkers} from "./orderFulfillmentSignals.js";
 import {wouldDowngradeLifecycle} from "./orderLifecyclePriority.js";
 import {
@@ -55,7 +56,10 @@ export function prepareServerOrderPatch(
     return sanitizeOrderPatchAgainstRegression(current, stripped);
   }
 
-  const safe = sanitizeOrderPatchAgainstRegression(current, withMeta);
+  const safe = syncMarketplaceLifecyclePatch(
+    sanitizeOrderPatchAgainstRegression(current, withMeta),
+    current,
+  );
   if (
     safe.status === "payment_confirmed" &&
     (safe.deliveryStatus === "pending" || safe.deliveryStatus === "") &&

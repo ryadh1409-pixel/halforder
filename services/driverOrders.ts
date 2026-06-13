@@ -7,6 +7,7 @@ import {
   MARKETPLACE_DELIVERY_STATUS,
   normalizeMarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import { isDriverMarketplaceOrderAvailableForClaim } from '@/lib/driverAvailableOrdersFilter';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { db } from './firebase';
 import {
@@ -59,9 +60,13 @@ export function subscribeDriverAvailableOrders(
 }
 
 export function isActiveMarketplacePoolDoc(data: Record<string, unknown>): boolean {
-  if (typeof data.driverId === 'string' && data.driverId.length > 0) return false;
-  if (typeof data.assignedDriverId === 'string' && data.assignedDriverId.length > 0) {
-    return false;
-  }
-  return isDriverMarketplaceVisible(normalizeMarketplaceDeliveryStatus(data.deliveryStatus));
+  return (
+    isDriverMarketplaceOrderAvailableForClaim({
+      driverId: typeof data.driverId === 'string' ? data.driverId : null,
+      assignedDriverId:
+        typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
+      status: data.status,
+      deliveryStatus: data.deliveryStatus,
+    }) && isDriverMarketplaceVisible(normalizeMarketplaceDeliveryStatus(data.deliveryStatus))
+  );
 }

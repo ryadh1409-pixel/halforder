@@ -1421,8 +1421,66 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           driverName: 'Driver One',
           driver: { id: 'drv1', name: 'Driver One', phone: null, vehicle: null, avatar: null },
           deliveryStatus: 'driver_assigned',
+          status: 'driver_assigned',
           acceptedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          deliveryPin: '5678',
+          estimatedDeliveryMinutes: 18,
+          estimatedDeliveryTime: 18,
+          updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
+        }),
+      );
+    });
+
+    it('allows full client claim patch on production snapshot (ready_for_pickup)', async () => {
+      let fullOrder: Record<string, unknown>;
+      try {
+        const revive = (value: unknown): unknown => {
+          if (value && typeof value === 'object' && '_seconds' in (value as object)) {
+            const v = value as { _seconds: number; _nanoseconds?: number };
+            return new Timestamp(v._seconds, v._nanoseconds ?? 0);
+          }
+          if (Array.isArray(value)) return value.map(revive);
+          if (value && typeof value === 'object') {
+            return Object.fromEntries(
+              Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, revive(v)]),
+            );
+          }
+          return value;
+        };
+        fullOrder = revive(
+          JSON.parse(readFileSync('scripts/.order-9PT5-snapshot.json', 'utf8')),
+        ) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+      const driverUid = '9XN334yG4hOglrOYfsehHPDM5zP2';
+      const readyOrder = {
+        ...fullOrder,
+        status: 'ready_for_pickup',
+        deliveryStatus: 'ready_for_pickup',
+        driverId: null,
+        assignedDriverId: null,
+      };
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', driverUid), { name: 'Tkal' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'claim_prod_ready'), readyOrder);
+      });
+      const db = te().authenticatedContext(driverUid, { role: 'driver' }).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'claim_prod_ready'), {
+          driverId: driverUid,
+          assignedDriverId: driverUid,
+          driverName: 'Tkal',
+          driverPhone: null,
+          driver: { id: driverUid, name: 'Tkal', phone: null, vehicle: null, avatar: null },
+          deliveryStatus: 'driver_assigned',
+          status: 'driver_assigned',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          deliveryPin: '8165',
+          estimatedDeliveryMinutes: 18,
+          estimatedDeliveryTime: 18,
           updatedBy: 'driverService.ts#claimMarketplaceDriverOrder',
         }),
       );
@@ -1722,28 +1780,178 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       await assertFails(batch.commit());
     });
 
-    it('denies driver pickup before ready_for_pickup', async () => {
+    it('allows driver pickup from driver_assigned', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
         await setDoc(doc(ctx.firestore(), 'orders', 'pickup_early'), {
           userId: 'cust1',
           restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
           paymentStatus: 'paid',
           deliveryType: 'delivery',
           driverId: 'drv1',
           assignedDriverId: 'drv1',
+          status: 'driver_assigned',
           deliveryStatus: 'driver_assigned',
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'pickup_early'), {
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          pickedUpAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverMarketplacePickup',
+        }),
+      );
+    });
+
+    it('allows driver pickup from driver_assigned without deliveryType when assigned', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'pickup_no_dtype'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'paid',
+          driverId: 'drv1',
+          assignedDriverId: 'drv1',
+          status: 'driver_assigned',
+          deliveryStatus: 'driver_assigned',
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv1').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'pickup_no_dtype'), {
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          pickedUpAt: serverTimestamp(),
+          updatedBy: 'driverMarketplacePickup',
+        }),
+      );
+    });
+
+    it('denies driver pickup before assignment', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'pickup_unassigned'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          paymentStatus: 'paid',
+          deliveryType: 'delivery',
+          status: 'ready_for_pickup',
+          deliveryStatus: 'waiting_driver',
+          totalPrice: 15,
+          items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
       });
       const db = te().authenticatedContext('drv1').firestore();
       await assertFails(
-        updateDoc(doc(db, 'orders', 'pickup_early'), {
+        updateDoc(doc(db, 'orders', 'pickup_unassigned'), {
           deliveryStatus: 'picked_up',
+          status: 'picked_up',
           pickedUpAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           updatedBy: 'driverMarketplacePickup',
+        }),
+      );
+    });
+
+    function reviveFixtureTimestamps(value: unknown): unknown {
+      if (value && typeof value === 'object' && '_seconds' in (value as object)) {
+        const v = value as { _seconds: number; _nanoseconds?: number };
+        return new Timestamp(v._seconds, v._nanoseconds ?? 0);
+      }
+      if (Array.isArray(value)) return value.map(reviveFixtureTimestamps);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(
+          Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+            k,
+            reviveFixtureTimestamps(v),
+          ]),
+        );
+      }
+      return value;
+    }
+
+    it('allows driver pickup on full production snapshot (63+ fields, driver_assigned)', async () => {
+      let fullOrder: Record<string, unknown>;
+      try {
+        fullOrder = reviveFixtureTimestamps(
+          JSON.parse(readFileSync('scripts/.order-9PT5-snapshot.json', 'utf8')),
+        ) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', '9XN334yG4hOglrOYfsehHPDM5zP2'), {
+          name: 'Tkal',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', '9PT5ur6jRTwpFHZ9nRze'), fullOrder);
+      });
+      const db = te()
+        .authenticatedContext('9XN334yG4hOglrOYfsehHPDM5zP2', { role: 'driver' })
+        .firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', '9PT5ur6jRTwpFHZ9nRze'), {
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          pickedUpAt: serverTimestamp(),
+          updatedBy: 'driverMarketplacePickup',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('allows driver deliver on full production snapshot (picked_up → delivered)', async () => {
+      let fullOrder: Record<string, unknown>;
+      try {
+        fullOrder = reviveFixtureTimestamps(
+          JSON.parse(readFileSync('scripts/.order-9PT5-snapshot.json', 'utf8')),
+        ) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+      const pickedUpOrder = {
+        ...fullOrder,
+        status: 'picked_up',
+        deliveryStatus: 'picked_up',
+        pickedUpAt: Timestamp.now(),
+      };
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', '9XN334yG4hOglrOYfsehHPDM5zP2'), {
+          name: 'Tkal',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', '9PT5_deliver'), pickedUpOrder);
+      });
+      const db = te()
+        .authenticatedContext('9XN334yG4hOglrOYfsehHPDM5zP2', { role: 'driver' })
+        .firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', '9PT5_deliver'), {
+          deliveryStatus: 'delivered',
+          status: 'completed',
+          deliveredAt: serverTimestamp(),
+          completedAt: serverTimestamp(),
+          marketplaceArchived: true,
+          earningsRecorded: true,
+          customerTotal: 14.3849,
+          driverPayout: 3.5,
+          platformFee: 1.2,
+          updatedAt: serverTimestamp(),
+          updatedBy: 'driverMarketplaceDelivered',
         }),
       );
     });

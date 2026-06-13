@@ -126,6 +126,22 @@ describe('claimMarketplaceDriverOrder patch vs firestore.rules', () => {
     });
   });
 
+  it('payment_confirmed kitchen + ready_for_pickup courier before claim (split state)', () => {
+    assertClaimPatchWithinRules('payment_confirmed_ready_courier', {
+      id: 'order1',
+      userId: 'cust1',
+      customerId: 'cust1',
+      restaurantId: 'rest_abc',
+      paymentStatus: 'paid',
+      deliveryType: 'delivery',
+      status: 'payment_confirmed',
+      deliveryStatus: 'ready_for_pickup',
+      totalPrice: 15,
+      total: 15,
+      items: [{ id: 'item1', name: 'Burger', price: 12, qty: 1 }],
+    });
+  });
+
   it('includes driverVehicle when provided', () => {
     assertClaimPatchWithinRules(
       'with_vehicle',

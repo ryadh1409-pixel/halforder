@@ -4,6 +4,10 @@ import {
   normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import {
+  evaluateSnapshotMergeDecision,
+  logSnapshotMergeDecision,
+} from '@/lib/orderSnapshotMergeDecision';
 
 /** Sources that may feed the driver active-delivery screen. */
 export type DriverOrderSnapshotSource =
@@ -11,6 +15,14 @@ export type DriverOrderSnapshotSource =
   | 'driver_orders'
   | 'cached_order'
   | 'marketplace_order';
+
+/** Authoritative Firestore doc listener outranks list/cache subscriptions. */
+export const DRIVER_SNAPSHOT_SOURCE_PRIORITY: Record<DriverOrderSnapshotSource, number> = {
+  active_delivery: 100,
+  driver_orders: 40,
+  marketplace_order: 30,
+  cached_order: 10,
+};
 
 /** Driver marketplace courier steps — only forward along this chain. */
 const DRIVER_COURIER_FORWARD_RANK: Partial<Record<MarketplaceDeliveryStatus, number>> = {
@@ -117,12 +129,12 @@ function logDeliveredSnapshot(
 
 /**
  * Whether `incoming` may replace `current` for driver active-delivery UI.
- * Courier never regresses along driver_assigned → ready_for_pickup → picked_up → delivered.
- * When rank is equal, prefer the snapshot with the newer `updatedAt`.
+ * Timestamp rules win; courier rank is only a tiebreaker when timestamps are equal/missing.
  */
 export function shouldAcceptDriverCourierSnapshot(
   current: ActiveDelivery,
   incoming: ActiveDelivery,
+  source: DriverOrderSnapshotSource = 'active_delivery',
 ): boolean {
   if (current.id !== incoming.id) return true;
 
@@ -135,16 +147,43 @@ export function shouldAcceptDriverCourierSnapshot(
   if (incomingDelivered && !currentDelivered) return true;
   if (incomingDelivered && currentDelivered) return true;
 
-  const curRank = driverCourierForwardRank(current.marketplaceCourierStatus);
-  const incRank = driverCourierForwardRank(incomingCourier);
+  const decision = evaluateSnapshotMergeDecision(
+    {
+      deliveryStatus: current.marketplaceCourierStatus,
+      updatedAtMs: current.updatedAtMs,
+      label: 'local',
+    },
+    {
+      deliveryStatus: incoming.marketplaceCourierStatus,
+      updatedAtMs: incoming.updatedAtMs,
+      label: 'remote',
+    },
+  );
 
-  if (incRank > curRank) return true;
-  if (incRank < curRank) return false;
+  logSnapshotMergeDecision(
+    'driver_courier',
+    incoming.id,
+    {
+      deliveryStatus: current.marketplaceCourierStatus,
+      updatedAtMs: current.updatedAtMs,
+      label: 'local',
+    },
+    {
+      deliveryStatus: incoming.marketplaceCourierStatus,
+      updatedAtMs: incoming.updatedAtMs,
+      label: 'remote',
+    },
+    decision,
+    {
+      source,
+      keptDeliveryStatus: decision.accept ? incoming.marketplaceCourierStatus : current.marketplaceCourierStatus,
+      rejectedDeliveryStatus: decision.accept ? current.marketplaceCourierStatus : incoming.marketplaceCourierStatus,
+      keptUpdatedAt: decision.accept ? incoming.updatedAtMs ?? null : current.updatedAtMs ?? null,
+      rejectedUpdatedAt: decision.accept ? current.updatedAtMs ?? null : incoming.updatedAtMs ?? null,
+    },
+  );
 
-  const curMs = resolveUpdatedAtMs(current);
-  const incMs = resolveUpdatedAtMs(incoming);
-  if (curMs === 0 || incMs === 0) return true;
-  return incMs >= curMs;
+  return decision.accept;
 }
 
 /**
@@ -175,7 +214,7 @@ export function reconcileActiveDeliverySnapshot(
     logDeliveredSnapshot('received', source, resolved, meta);
   }
 
-  if (shouldAcceptDriverCourierSnapshot(current, resolved)) {
+  if (shouldAcceptDriverCourierSnapshot(current, resolved, source)) {
     if (isEffectivelyDelivered(resolved)) {
       logDeliveredSnapshot('applied', source, resolved, meta);
     }
@@ -213,11 +252,11 @@ export function pickFreshestActiveDelivery(rows: ActiveDelivery[]): ActiveDelive
   let best = withResolvedMarketplaceCourier(rows[0]);
   for (let i = 1; i < rows.length; i += 1) {
     const candidate = withResolvedMarketplaceCourier(rows[i]);
-    if (shouldAcceptDriverCourierSnapshot(best, candidate)) {
+    if (shouldAcceptDriverCourierSnapshot(best, candidate, 'active_delivery')) {
       best = candidate;
       continue;
     }
-    if (shouldAcceptDriverCourierSnapshot(candidate, best)) {
+    if (shouldAcceptDriverCourierSnapshot(candidate, best, 'active_delivery')) {
       best = candidate;
     }
   }

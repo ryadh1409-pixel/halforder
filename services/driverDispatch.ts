@@ -14,6 +14,7 @@ import {
 } from '@/lib/orderStatus';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { isOrderTerminalForAssignment } from '@/lib/terminalOrderAssignment';
+import { filterDriverAvailableMarketplaceOrders } from '@/lib/driverAvailableOrdersFilter';
 import { tracedTransactionUpdateOrder } from '@/services/orderFirestoreWrite';
 import { isDriverPoolRowStale } from '@/lib/marketplacePoolAge';
 import {
@@ -174,7 +175,10 @@ export function subscribeAvailableOrders(
       onData([]);
       return;
     }
-    const available = ordersCache.filter((order) => !order.driverId);
+    const available = filterDriverAvailableMarketplaceOrders(
+      ordersCache,
+      'driverDispatch.subscribeAvailableOrders',
+    );
     onData(available);
   };
 

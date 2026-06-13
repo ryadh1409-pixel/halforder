@@ -1,4 +1,4 @@
-Jun 10, 2026 4:22:26 A.M. com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+Jun 13, 2026 5:00:34 A.M. com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
 INFO: Started WebSocket server on ws://127.0.0.1:9150
 
 API endpoint: http://127.0.0.1:8080
@@ -16,27 +16,23 @@ If you are running a Firestore in Datastore Mode project, run:
 Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
 Dev App Server is now running.
 
-Jun 10, 2026 4:22:28 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Jun 13, 2026 5:00:35 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Jun 10, 2026 4:22:28 A.M. io.grpc.netty.TcpMetrics loadEpollInfo
+Jun 13, 2026 5:00:36 A.M. io.grpc.netty.TcpMetrics loadEpollInfo
 INFO: Epoll available during static init of TcpMetrics:false
-Jun 10, 2026 4:22:28 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Jun 13, 2026 5:00:36 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:30 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:31 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Jun 13, 2026 5:00:38 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:31 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Jun 13, 2026 5:00:38 A.M. io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:31 A.M. com.google.firebase.rules.runtime.impl.CompositeListener tryInvoke
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Jun 13, 2026 5:00:38 A.M. com.google.firebase.rules.runtime.impl.CompositeListener tryInvoke
 WARNING: [CONTEXT ratelimit_period="1 MINUTES" ]
 java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0
 	at com.google.common.collect.RegularImmutableList.get(RegularImmutableList.java:81)
@@ -95,59 +91,13 @@ java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:31 A.M. com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Jun 13, 2026 5:00:38 A.M. com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594
 com.google.cloud.datastore.core.exception.DatastoreException: 
-Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -173,7 +123,7 @@ Unable to evaluate the expression as the maximum of 1000 expressions to evaluate
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
-Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error:  line [2070], column [11]. Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached.
+Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error:  line [2013], column [34]. Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached.
 	at com.google.firebase.rules.runtime.impl.DefaultEvaluator$TransformEvaluationException.apply(DefaultEvaluator.java:275)
 	at com.google.firebase.rules.runtime.impl.DefaultEvaluator$TransformEvaluationException.apply(DefaultEvaluator.java:261)
 	at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.doFallback(AbstractCatchingFuture.java:207)
@@ -206,17 +156,13 @@ Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error: 
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:321)
 	... 22 more
 
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:31 A.M. com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Jun 13, 2026 5:00:38 A.M. com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594
 com.google.cloud.datastore.core.exception.DatastoreException: 
-Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -242,7 +188,7 @@ Unable to evaluate the expression as the maximum of 1000 expressions to evaluate
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
-Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error:  line [2070], column [11]. Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached.
+Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error:  line [2013], column [34]. Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached.
 	at com.google.firebase.rules.runtime.impl.DefaultEvaluator$TransformEvaluationException.apply(DefaultEvaluator.java:275)
 	at com.google.firebase.rules.runtime.impl.DefaultEvaluator$TransformEvaluationException.apply(DefaultEvaluator.java:261)
 	at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.doFallback(AbstractCatchingFuture.java:207)
@@ -275,17 +221,17 @@ Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error: 
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:321)
 	... 22 more
 
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID demo-test, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Jun 10, 2026 4:22:31 A.M. com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID eval-driver-claim, but the emulator is configured for halforfer. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Jun 13, 2026 5:00:38 A.M. com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594
 com.google.cloud.datastore.core.exception.DatastoreException: 
-Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2068, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2335
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2313, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L2594
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -311,7 +257,7 @@ Unable to evaluate the expression as the maximum of 1000 expressions to evaluate
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
-Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error:  line [1325], column [14]. Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached.
+Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error:  line [2013], column [34]. Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached.
 	at com.google.firebase.rules.runtime.impl.DefaultEvaluator$TransformEvaluationException.apply(DefaultEvaluator.java:275)
 	at com.google.firebase.rules.runtime.impl.DefaultEvaluator$TransformEvaluationException.apply(DefaultEvaluator.java:261)
 	at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.doFallback(AbstractCatchingFuture.java:207)
@@ -344,23 +290,3 @@ Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error: 
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:321)
 	... 22 more
 
-Jun 10, 2026 4:22:31 A.M. io.netty.channel.DefaultChannelPipeline onUnhandledInboundException
-WARNING: An exceptionCaught() event was fired, and it reached at the tail of the pipeline. It usually means the last handler in the pipeline did not handle the exception.
-java.net.SocketException: Connection reset
-	at java.base/sun.nio.ch.SocketChannelImpl.throwConnectionReset(SocketChannelImpl.java:401)
-	at java.base/sun.nio.ch.SocketChannelImpl.read(SocketChannelImpl.java:434)
-	at io.netty.buffer.PooledByteBuf.setBytes(PooledByteBuf.java:255)
-	at io.netty.buffer.AbstractByteBuf.writeBytes(AbstractByteBuf.java:1132)
-	at io.netty.channel.socket.nio.NioSocketChannel.doReadBytes(NioSocketChannel.java:356)
-	at io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.read(AbstractNioByteChannel.java:156)
-	at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:796)
-	at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732)
-	at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658)
-	at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562)
-	at io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998)
-	at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)
-	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
-	at java.base/java.lang.Thread.run(Thread.java:1583)
-
-*** shutting down gRPC server since JVM is shutting down
-*** server shut down

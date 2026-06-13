@@ -1,0 +1,141 @@
+{
+  "userId": "mIV6OpL6OHPeBN9EXLyamuEBTGA3",
+  "customerId": "mIV6OpL6OHPeBN9EXLyamuEBTGA3",
+  "restaurantId": "anI1ll3hT8clTNoeAT8iimL9Oj83",
+  "venueId": "anI1ll3hT8clTNoeAT8iimL9Oj83",
+  "items": [
+    {
+      "id": "Bx4mwZ6P5szgnGMsgBHt",
+      "name": "ottawa food",
+      "price": 10,
+      "qty": 1,
+      "image": "https://firebasestorage.googleapis.com/v0/b/halforfer.firebasestorage.app/o/restaurants%2FanI1ll3hT8clTNoeAT8iimL9Oj83%2Fmenu%2FBx4mwZ6P5szgnGMsgBHt.jpg?alt=media&token=8553d37e-70af-492e-9e49-fc51c5fcda54&v=1780477069859"
+    }
+  ],
+  "customerName": null,
+  "customerPhone": null,
+  "subtotal": 14.3849,
+  "tax": 0,
+  "deliveryFee": 0.99,
+  "deliveryDistanceKm": 0,
+  "deliveryEligible": true,
+  "deliveryTier": "near",
+  "maxDeliveryDistanceKmAtCheckout": 15,
+  "totalPrice": 14.3849,
+  "total": 14.3849,
+  "deliveryType": "delivery",
+  "estimatedPrepTime": 35,
+  "checkoutSessionId": null,
+  "groupId": "grp_1781337167564_sv0zrl",
+  "estimatedDeliveryTime": 35,
+  "driverPhone": null,
+  "driverVehicle": null,
+  "deliveryLocation": {
+    "lat": 45.4215,
+    "lng": -75.6972,
+    "address": "71 WINGOVER PRIVATE, Ottawa, ON K0A 1L0, Canada"
+  },
+  "deliveryAddress": "71 WINGOVER PRIVATE, Ottawa, ON K0A 1L0, Canada",
+  "restaurant": {
+    "id": "anI1ll3hT8clTNoeAT8iimL9Oj83",
+    "name": "Thmori",
+    "image": null,
+    "address": "111 Albert St, Ottawa, ON, K1P 1A5",
+    "latitude": 45.4215,
+    "longitude": -75.6972
+  },
+  "customer": {
+    "id": "mIV6OpL6OHPeBN9EXLyamuEBTGA3",
+    "name": "Thomas",
+    "avatar": null,
+    "address": "71 WINGOVER PRIVATE, Ottawa, ON K0A 1L0, Canada"
+  },
+  "userLocation": {
+    "lat": 45.4215,
+    "lng": -75.6972
+  },
+  "restaurantLocation": {
+    "lat": 45.4215,
+    "lng": -75.6972
+  },
+  "notes": null,
+  "pickedUpAt": null,
+  "deliveredAt": null,
+  "estimatedArrival": null,
+  "fees": 0,
+  "taxes": 0,
+  "etaMinutes": 35,
+  "hiddenForRestaurant": false,
+  "archivedByRestaurant": false,
+  "archivedAt": null,
+  "hiddenAt": null,
+  "restoredAt": null,
+  "createdAt": {
+    "_seconds": 1781337167,
+    "_nanoseconds": 774000000
+  },
+  "customerLocation": {
+    "latitude": 45.4215,
+    "longitude": -75.6972,
+    "timestamp": {
+      "_seconds": 1781337167,
+      "_nanoseconds": 774000000
+    }
+  },
+  "paymentIntentId": "pi_3ThmN32ZSSumemw50Kir0wos",
+  "stripeWebhookLastEventId": "evt_3ThmN32ZSSumemw50zeWoCqg",
+  "paidAt": {
+    "_seconds": 1781337187,
+    "_nanoseconds": 289000000
+  },
+  "paymentStatus": "paid",
+  "stripePaymentIntentId": "pi_3ThmN32ZSSumemw50Kir0wos",
+  "stripeWebhookLastEventType": "payment_intent.succeeded",
+  "readyAt": {
+    "_seconds": 1781337239,
+    "_nanoseconds": 528000000
+  },
+  "preparedAt": {
+    "_seconds": 1781337239,
+    "_nanoseconds": 528000000
+  },
+  "deliveryPin": "6472",
+  "updatedBy": "driverService.ts#claimMarketplaceDriverOrder",
+  "driver": {
+    "id": "9XN334yG4hOglrOYfsehHPDM5zP2",
+    "name": "Tkal",
+    "phone": null,
+    "vehicle": null,
+    "avatar": null
+  },
+  "driverId": "9XN334yG4hOglrOYfsehHPDM5zP2",
+  "assignedDriverId": "9XN334yG4hOglrOYfsehHPDM5zP2",
+  "driverName": "Tkal",
+  "estimatedDeliveryMinutes": 18,
+  "deliveryStatus": "driver_assigned",
+  "status": "driver_assigned",
+  "acceptedAt": {
+    "_seconds": 1781337487,
+    "_nanoseconds": 111000000
+  },
+  "updatedAt": {
+    "_seconds": 1781337487,
+    "_nanoseconds": 111000000
+  },
+  "driverLocation": {
+    "latitude": 45.4215,
+    "longitude": -75.6972,
+    "heading": -1,
+    "speed": -1,
+    "lat": 45.4215,
+    "lng": -75.6972,
+    "timestamp": {
+      "_seconds": 1781337574,
+      "_nanoseconds": 815000000
+    },
+    "updatedAt": {
+      "_seconds": 1781337574,
+      "_nanoseconds": 815000000
+    }
+  }
+}

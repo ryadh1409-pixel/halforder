@@ -1,4 +1,8 @@
-import { applyStageLockToOrder, getLockedOrderStage } from '@/lib/orderStageLock';
+import {
+  applyStageLockToOrder,
+  clearOrderStageLock,
+  getLockedOrderStage,
+} from '@/lib/orderStageLock';
 import { restaurantOrderSnapshotFingerprint } from '@/lib/restaurantOrderListDedup';
 import {
   compareOrderStage,
@@ -82,16 +86,19 @@ export function reconcileOrderSnapshotStage<T extends OrderStageInput>(
   let withId = applyStageLockToOrder({ ...snapshot, id });
   const incomingStage = deriveOrderStage(withId);
   const lockedStage = getLockedOrderStage(id);
+  const incomingMs = resolveUpdatedAtMs(withId);
+  const previousHigh = highestStageByOrderId.get(id);
+
   if (
     lockedStage &&
     !hasPendingWrites &&
     compareOrderStage(incomingStage, lockedStage) < 0
   ) {
-    return null;
+    if (incomingMs === 0) {
+      return null;
+    }
+    clearOrderStageLock(id);
   }
-
-  const incomingMs = resolveUpdatedAtMs(withId);
-  const previousHigh = highestStageByOrderId.get(id);
 
   if (
     previousHigh &&
@@ -109,6 +116,10 @@ export function reconcileOrderSnapshotStage<T extends OrderStageInput>(
   }
 
   if (previousHigh && compareOrderStage(incomingStage, previousHigh.stage) < 0) {
+    if (incomingMs > 0 && (previousHigh.updatedAtMs === 0 || incomingMs >= previousHigh.updatedAtMs)) {
+      highestStageByOrderId.set(id, cacheFromOrder(withId, incomingStage));
+      return withId;
+    }
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn('[ORDER STAGE] ignoring stale snapshot regression', {
         orderId: id,
