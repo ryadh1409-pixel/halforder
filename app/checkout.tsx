@@ -9,6 +9,7 @@ import { getRestaurantOrderById } from '@/services/orderService';
 import { isOwnerHost } from '@/services/roles';
 import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripe';
+import { getUserFriendlyError, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -121,14 +122,14 @@ export default function CheckoutScreen() {
       console.warn('[checkout]', e);
       if (e instanceof Error && e.message === 'Please sign in to complete payment') {
         await auth.signOut();
-        showError(e.message);
+        showError(getUserFriendlyError(e));
         router.replace('/(auth)/login');
         return;
       }
       setStripeBlockedRestaurantId(null);
       setPhase('error');
       setMessage('Could not start payment. You can try again.');
-      showError('Payment could not start.');
+      showUserError(e, { context: 'payment' });
     }
   }, [orderIdTrimmed, user, role, authLoading, router]);
 

@@ -10,6 +10,8 @@ import { isNativePaymentsAndMapsSupported } from '@/constants/runtimeEnvironment
 import { httpsCallable } from 'firebase/functions';
 import React from 'react';
 import { auth, functions } from '@/services/firebase';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
+import { logError } from '@/utils/errorLogger';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
 
@@ -80,7 +82,8 @@ export async function initializePaymentSheet(
     returnURL: 'halforder://stripe-redirect',
   });
   if (initResult.error) {
-    throw new Error(`initPaymentSheet failed: ${initResult.error.message}`);
+    logError(initResult.error);
+    throw new Error(getUserFriendlyError(initResult.error, { context: 'payment' }));
   }
 
   const paymentIntentId = parsePaymentIntentId(clientSecret);
@@ -109,7 +112,7 @@ export async function openPaymentSheet(
     }
     return {
       status: 'failed',
-      message: presentResult.error.message || 'Payment failed.',
+      message: getUserFriendlyError(presentResult.error, { context: 'payment' }),
       ...init,
     };
   }

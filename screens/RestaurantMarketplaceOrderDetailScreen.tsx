@@ -12,9 +12,11 @@ import {
 } from '@/lib/restaurantKitchenActions';
 import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { applyStageLockToOrder, clearOrderStageLock } from '@/lib/orderStageLock';
+import { useRestaurantOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import { db } from '@/services/firebase';
 import { rejectOrder, subscribeOrderById, type RestaurantOrder } from '@/services/orderService';
 import { getRestaurantOrderPresentation, logOrderStage } from '@/services/orderStage';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -48,6 +50,9 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
     if (!order) return null;
     return applyStageLockToOrder({ ...order, ...kitchenOverlay });
   }, [order, kitchenOverlay]);
+
+  useRestaurantOrderLifecycleAlert(displayOrder);
+
   const presentation = useMemo(
     () => getRestaurantOrderPresentation(displayOrder),
     [displayOrder],
@@ -146,7 +151,11 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
     } catch {
       setKitchenOverlay({});
       clearOrderStageLock(order.id);
-      showError('Could not update order');
+      showUserError(new Error('order_update_failed'), {
+        role: 'restaurant',
+        context: 'restaurant',
+        fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
+      });
     } finally {
       setSaving(null);
     }
@@ -159,7 +168,11 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
       await rejectOrder(order.id);
       showSuccess('Order rejected');
     } catch {
-      showError('Could not reject order');
+      showUserError(new Error('order_reject_failed'), {
+        role: 'restaurant',
+        context: 'restaurant',
+        fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
+      });
     } finally {
       setSaving(false);
     }

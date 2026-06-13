@@ -53,7 +53,7 @@ import {
   type ReportReason,
 } from '../../services/reports';
 import { moderateUserContent } from '../../utils/contentModeration';
-import { getUserFriendlyError } from '../../utils/errorHandler';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { logError } from '../../utils/errorLogger';
 import { showError, showNotice, showSuccess } from '../../utils/toast';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -582,7 +582,7 @@ export default function ProfileScreen() {
       imageUri = await pickImageFromLibrary({ quality: 0.7 });
     } catch (e) {
       if (e instanceof ImagePickerPermissionError) {
-        showError(e.message);
+        showError(getUserFriendlyError(e));
         return;
       }
       if (e instanceof Error && e.message === 'PICKER_LAUNCH_FAILED') {

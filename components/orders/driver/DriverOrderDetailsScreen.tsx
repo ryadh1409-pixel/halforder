@@ -13,6 +13,7 @@ import {
 } from '@/services/driverService';
 import { useAuth } from '@/services/AuthContext';
 import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import * as Linking from 'expo-linking';
 import { orderRoomHref } from '@/services/orderChat';
@@ -117,8 +118,12 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
       }
       showSuccess('Order accepted');
       showNotice('Head to the restaurant', 'Pickup instructions are below.');
-    } catch {
-      showError('Could not accept order');
+    } catch (error) {
+      showUserError(error, {
+        role: 'driver',
+        context: 'driver',
+        fallback: ROLE_ORDER_UPDATE_ERROR.driver,
+      });
     } finally {
       setBusy(false);
     }
@@ -150,7 +155,11 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
         return;
       }
       if (result === 'skipped_duplicate') {
-        showError('Could not save delivery status. Pull to refresh and try again.');
+        showUserError(new Error('delivery_status_duplicate'), {
+          role: 'driver',
+          context: 'driver',
+          fallback: ROLE_ORDER_UPDATE_ERROR.driver,
+        });
         return;
       }
       showSuccess(
@@ -164,8 +173,12 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
         showNotice('Great job', 'Delivery completed.');
         setDeliverPin('');
       }
-    } catch {
-      showError('Could not update status');
+    } catch (error) {
+      showUserError(error, {
+        role: 'driver',
+        context: 'driver',
+        fallback: ROLE_ORDER_UPDATE_ERROR.driver,
+      });
     } finally {
       setBusy(false);
     }

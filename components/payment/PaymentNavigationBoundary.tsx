@@ -21,10 +21,10 @@ type State = {
 export class PaymentNavigationBoundary extends React.Component<Props, State> {
   state: State = { hasError: false, message: '' };
 
-  static getDerivedStateFromError(error: unknown): State {
+  static getDerivedStateFromError(_error: unknown): State {
     return {
       hasError: true,
-      message: error instanceof Error ? error.message : 'Something went wrong',
+      message: 'Something went wrong. Please try again.',
     };
   }
 
@@ -48,7 +48,7 @@ export class PaymentNavigationBoundary extends React.Component<Props, State> {
         <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
           <View style={styles.center}>
             <Text style={styles.title}>Couldn&apos;t load this screen</Text>
-            <Text style={styles.sub}>{this.state.message}</Text>
+            <Text style={styles.sub}>Something went wrong. Please try again.</Text>
             {this.props.onRetry ? (
               <Pressable style={styles.btn} onPress={this.handleRetry}>
                 <Text style={styles.btnText}>Try again</Text>

@@ -8,7 +8,10 @@ export type ReadableErrorContext =
   | 'upload'
   | 'payment'
   | 'order'
-  | 'push';
+  | 'push'
+  | 'customer'
+  | 'driver'
+  | 'restaurant';
 
 const DEFAULT_MESSAGE = 'Something went wrong. Please try again.';
 
@@ -76,20 +79,23 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
 
   switch (normalized) {
     case 'auth/invalid-credential':
-    case 'auth/wrong-password':
     case 'auth/invalid-login-credentials':
-      return 'Incorrect email or password';
+      return 'Unable to sign in. Please check your details.';
+
+    case 'auth/wrong-password':
+      return 'Incorrect email or password.';
 
     case 'auth/user-not-found':
       return context === 'passwordReset'
         ? 'No account found for that email.'
-        : 'Account not found';
+        : 'Account not found.';
 
     case 'auth/email-already-in-use':
       return 'This email is already registered';
 
     case 'auth/network-request-failed':
-      return 'Check your internet connection';
+    case 'network-request-failed':
+      return 'Connection problem. Check your internet and try again.';
 
     case 'auth/too-many-requests':
     case 'auth/quota-exceeded':
@@ -133,11 +139,18 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
 
     case 'permission-denied':
     case 'firestore/permission-denied':
-      return context === 'order'
-        ? 'Unable to place order right now'
-        : "You don't have permission to do this";
+      if (context === 'customer' || context === 'order') {
+        return 'We are having trouble updating your order. Please refresh and try again.';
+      }
+      if (context === 'driver') {
+        return 'Unable to update delivery status. Please try again.';
+      }
+      if (context === 'restaurant') {
+        return 'Unable to update order status. Please try again.';
+      }
+      return "We couldn't complete your request. Please try again.";
     case 'storage/unauthorized':
-      return "You don't have permission to do this";
+      return "We couldn't complete your request. Please try again.";
 
     case 'unavailable':
     case 'firestore/unavailable':
@@ -186,8 +199,8 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
     case 'storage/unknown':
     case 'storage/invalid-checksum':
       return context === 'upload'
-        ? 'Upload failed. Please try again.'
-        : DEFAULT_MESSAGE;
+        ? 'Unable to upload the file. Please try again.'
+        : 'Unable to upload the file. Please try again.';
 
     case 'functions/unauthenticated':
       return 'Please sign in again.';
@@ -212,12 +225,19 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
 
     default:
       if (normalized.includes('network') || normalized.includes('offline')) {
-        return 'Check your internet connection';
+        return 'Connection problem. Check your internet and try again.';
       }
       if (normalized.includes('permission')) {
-        return context === 'order'
-          ? 'Unable to place order right now'
-          : "You don't have permission to do this";
+        if (context === 'customer' || context === 'order') {
+          return 'We are having trouble updating your order. Please refresh and try again.';
+        }
+        if (context === 'driver') {
+          return 'Unable to update delivery status. Please try again.';
+        }
+        if (context === 'restaurant') {
+          return 'Unable to update order status. Please try again.';
+        }
+        return "We couldn't complete your request. Please try again.";
       }
       if (normalized.includes('auth/')) {
         return DEFAULT_MESSAGE;

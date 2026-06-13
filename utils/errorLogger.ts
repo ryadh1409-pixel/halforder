@@ -1,22 +1,21 @@
 /**
- * Developer logging only. Never shows alerts, popups, or in-app UI.
+ * Developer logging only — never shown in UI. Always logs in production for support.
  */
 export function logError(error: unknown): void {
-  if (!__DEV__) return;
-
   if (error && typeof error === 'object') {
-    const rec = error as { code?: string; message?: string };
+    const rec = error as { code?: string; message?: string; stack?: string };
     if (rec.code || rec.message) {
       console.error('[error]', {
         code: rec.code,
         message: rec.message,
+        stack: rec.stack,
       });
       return;
     }
   }
 
   if (error instanceof Error) {
-    console.error('[error]', error.message);
+    console.error('[error]', error.message, error.stack);
     return;
   }
 

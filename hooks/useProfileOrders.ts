@@ -6,6 +6,7 @@ import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
 import { isProfileOrderCancelled } from '@/constants/profileOrders';
 import { DAY_MS, getOrderTimestamp } from '@/lib/userOrderFreshness';
 import { db } from '@/services/firebase';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { safeToMillis } from '@/utils/safeToMillis';
 import {
   collection,
@@ -258,13 +259,16 @@ export function useProfileOrders(uid: string | null) {
       clearRetryTimer();
     } catch (e) {
       const err = e as FirestoreError;
-      const msg = err?.message ?? (e instanceof Error ? e.message : 'Could not load orders.');
       const isIndexBuild =
         err?.code === 'failed-precondition' &&
-        /requires an index|index is currently building/i.test(msg);
+        /requires an index|index is currently building/i.test(
+          err?.message ?? (e instanceof Error ? e.message : ''),
+        );
       setIndexBuilding(isIndexBuild);
       setErrorMessage(
-        isIndexBuild ? "We're optimizing your order history. This usually takes a few minutes." : msg,
+        isIndexBuild
+          ? "We're optimizing your order history. This usually takes a few minutes."
+          : getUserFriendlyError(e, { role: 'customer', context: 'order' }),
       );
       if (isIndexBuild) {
         scheduleRetry(true);
@@ -334,15 +338,14 @@ export function useProfileOrders(uid: string | null) {
         },
         (e) => {
           setLoading(false);
-          const msg = e.message || 'Could not load orders.';
           const isIndexBuild =
             e.code === 'failed-precondition' &&
-            /requires an index|index is currently building/i.test(msg);
+            /requires an index|index is currently building/i.test(e.message ?? '');
           setIndexBuilding(isIndexBuild);
           setErrorMessage(
             isIndexBuild
               ? "We're optimizing your order history. This usually takes a few minutes."
-              : msg,
+              : getUserFriendlyError(e, { role: 'customer', context: 'order' }),
           );
           if (isIndexBuild) {
             scheduleRetry(true);

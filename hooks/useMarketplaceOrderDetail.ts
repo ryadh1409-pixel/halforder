@@ -4,6 +4,7 @@ import {
   subscribeCustomerOrderById,
   type RestaurantOrder,
 } from '@/services/orderService';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -76,7 +77,7 @@ export function useMarketplaceOrderDetail(
       {
         onListenError: (err) => {
           console.warn(`[${logTag}] listener error`, { orderId, err });
-          setMapError(err.message);
+          setMapError(getUserFriendlyError(err, { role: 'customer', context: 'order' }));
           setOrder(null);
         },
       },

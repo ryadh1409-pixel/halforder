@@ -22,6 +22,10 @@ import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
 import { DriverDeliveryHistorySection } from '@/components/driver/DriverDeliveryHistory';
+import {
+  useDriverActiveOrdersLifecycleAlerts,
+  useDriverAvailableOrderAlerts,
+} from '@/hooks/useOrderLifecycleAlerts';
 import { filterDriverActiveMarketplaceOrders, pickPrimaryDriverHubActiveOrder } from '@/lib/driverHubActiveOrders';
 import {
   excludeActiveOrderIdsFromAvailable,
@@ -40,6 +44,7 @@ import {
 } from '../../services/driverService';
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '../../utils/toast';
 
 function formatOrderPlacedAt(createdAtMs: number | null | undefined): string {
@@ -310,7 +315,11 @@ export default function DriverHubScreen() {
         showSuccess('Order accepted — active delivery is on your Hub');
       } catch (e) {
         console.error('[driver] accept order failed', e);
-        showError('Failed to accept order');
+        showUserError(e, {
+          role: 'driver',
+          context: 'driver',
+          fallback: ROLE_ORDER_UPDATE_ERROR.driver,
+        });
       } finally {
         setAcceptingId(null);
       }
@@ -327,6 +336,14 @@ export default function DriverHubScreen() {
     () => excludeActiveOrderIdsFromAvailable(availableOrders, activeOrders),
     [availableOrders, activeOrders],
   );
+
+  const hubActiveLifecycleOrders = useMemo(
+    () => filterDriverActiveMarketplaceOrders(activeOrders, uid),
+    [activeOrders, uid],
+  );
+
+  useDriverAvailableOrderAlerts(hubAvailableOrders);
+  useDriverActiveOrdersLifecycleAlerts(hubActiveLifecycleOrders);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>

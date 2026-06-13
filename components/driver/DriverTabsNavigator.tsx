@@ -40,6 +40,7 @@ function DriverTabsNavigator() {
       <Tabs.Screen name="dispatch" options={TAB_HIDDEN} />
       <Tabs.Screen name="earnings" options={TAB_EARNINGS} />
       <Tabs.Screen name="driver-profile" options={TAB_DRIVER_PROFILE} />
+      <Tabs.Screen name="account-settings" options={TAB_HIDDEN} />
       <Tabs.Screen name="dashboard" options={TAB_HIDDEN} />
       <Tabs.Screen name="active" options={TAB_HIDDEN} />
       <Tabs.Screen name="active/[id]" options={TAB_HIDDEN} />

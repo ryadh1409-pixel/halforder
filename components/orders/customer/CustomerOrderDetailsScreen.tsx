@@ -34,11 +34,17 @@ import {
   formatOrderStatus,
   formatRestaurantName,
 } from '@/utils/orderFormatters';
+import {
+  ROLE_ORDER_UPDATE_ERROR,
+  getUserFriendlyError,
+  showUserError,
+} from '@/services/errors';
 import { showError, showNotice } from '@/utils/toast';
+import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -165,26 +171,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     logCustomerTrackingUi(order.id, order, 'CustomerOrderDetailsScreen');
   }, [order, order.deliveryStatus, order.id, order.status]);
 
-  const lastStatusRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!order.status && !order.deliveryStatus) return;
-    const terminalKey = delivered ? 'delivered' : `${order.status}|${order.deliveryStatus}`;
-    const prev = lastStatusRef.current;
-    if (prev === terminalKey) return;
-    if (order.status === 'restaurant_accepted') {
-      showNotice('Order update', 'Restaurant accepted your order.');
-    }
-    if (order.status === 'on_the_way') {
-      showNotice('Order update', 'Your driver is on the way.');
-    }
-    if (order.status === 'arrived_customer') {
-      showNotice('Order update', 'Your driver is near your location.');
-    }
-    if (delivered) {
-      showNotice('Order update', 'Your order was delivered.');
-    }
-    lastStatusRef.current = terminalKey;
-  }, [delivered, order.deliveryStatus, order.status]);
+  useCustomerOrderLifecycleAlert(order);
 
   const timelineIndex = useMemo(() => customerMarketplaceTimelineIndex(order), [order]);
   const timelineProgress = useMemo(() => {
@@ -318,7 +305,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
       if (cancelErr === 'restaurant_accepted') {
         showRestaurantAcceptedCancelAlert();
       } else {
-        showError('Could not cancel order');
+        showUserError(e, {
+          role: 'customer',
+          context: 'customer',
+          fallback: ROLE_ORDER_UPDATE_ERROR.customer,
+        });
       }
     } finally {
       setCancelling(false);

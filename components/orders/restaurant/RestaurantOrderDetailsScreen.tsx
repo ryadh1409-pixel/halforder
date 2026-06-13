@@ -11,6 +11,7 @@ import { orderRoomHref } from '@/services/orderChat';
 import { rejectOrder, type RestaurantOrder } from '@/services/orderService';
 import { getRestaurantOrderPresentation } from '@/services/orderStage';
 import { formatAddress, formatOrderStatus, formatRestaurantName } from '@/utils/orderFormatters';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -80,10 +81,14 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
         return;
       }
       showSuccess(label);
-    } catch {
+    } catch (error) {
       setKitchenOverlay({});
       clearOrderStageLock(order.id);
-      showError('Could not update order');
+      showUserError(error, {
+        role: 'restaurant',
+        context: 'restaurant',
+        fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
+      });
     } finally {
       setBusy(false);
     }
@@ -185,9 +190,13 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
                     clearOrderStageLock(order.id);
                     setKitchenOverlay({});
                     showSuccess('Order rejected');
-                  } catch {
-                    showError('Could not update order');
-                  } finally {
+    } catch {
+      showUserError(new Error('order_update_failed'), {
+        role: 'restaurant',
+        context: 'restaurant',
+        fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
+      });
+    } finally {
                     setBusy(false);
                   }
                 })()

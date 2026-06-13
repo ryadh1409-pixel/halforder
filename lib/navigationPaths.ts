@@ -8,6 +8,7 @@ export const DRIVER_ROUTES = {
   earnings: '/(driver)/earnings',
   /** Driver profile tab — unique path (not `(tabs)/profile`). */
   profile: '/(driver)/driver-profile',
+  accountSettings: '/(driver)/account-settings',
   /** @deprecated Use {@link DRIVER_ROUTES.profile} */
   driverProfile: '/(driver)/driver-profile',
   active: '/(driver)/active',

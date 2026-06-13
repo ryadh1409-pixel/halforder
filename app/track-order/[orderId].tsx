@@ -21,6 +21,7 @@ import {
   subscribeCustomerOrderById,
   type RestaurantOrder,
 } from '@/services/orderService';
+import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -107,6 +108,8 @@ function TrackOrderScreen() {
     );
     return () => unsubscribe();
   }, [orderId]);
+
+  useCustomerOrderLifecycleAlert(order ?? null);
 
   const trackingUi = useMemo(
     () => (order ? resolveCustomerTrackingUi(order) : null),

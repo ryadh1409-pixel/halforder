@@ -1,4 +1,10 @@
 import {
+  formatRestaurantPhoneDisplay,
+  resolveRestaurantDisplayName,
+  resolveRestaurantLogoUrl,
+  resolveRestaurantProfilePhone,
+} from '@/lib/restaurantDashboardProfile';
+import {
   RestaurantOrdersPanel,
   type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
@@ -7,7 +13,7 @@ import {
   saveRestaurantVenueMain,
 } from '@/services/hostRestaurant';
 import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 import {
   isRestaurantIsOpenMatching,
   logVenueStatusError,
@@ -21,7 +27,7 @@ import {
   pickMenuImageFromLibrary,
   uploadRestaurantLogo,
 } from '@/services/menuImageService';
-import { getUserFriendlyError } from '@/utils/errorHandler';
+import { showUserError } from '@/services/errors';
 import { requireRole } from '@/utils/requireRole';
 import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
 import { showError, showSuccess } from '@/utils/toast';
@@ -36,16 +42,20 @@ import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 type RestaurantState = {
   id: string;
+  ownerId: string;
   name: string;
-  logo: string | null;
+  logoUrl: string | null;
   location: string;
   isOpen: boolean;
   timezone: string | null;
+  phoneNumber: string | null;
+  phone: string | null;
 };
 
 const PRIMARY = '#16a34a';
 const PAGE = '#f8fafc';
 const CARD = '#ffffff';
+const AVATAR_SIZE = 90;
 
 /** Restaurant dashboard — sole host screen for live marketplace orders. */
 export default function HostDashboardScreen() {
@@ -57,11 +67,13 @@ export default function HostDashboardScreen() {
   const [restaurant, setRestaurant] = useState<RestaurantState | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState(true);
   const [nameDraft, setNameDraft] = useState('');
+  const [phoneDraft, setPhoneDraft] = useState('');
   const [locationDraft, setLocationDraft] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [locating, setLocating] = useState(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [userDocData, setUserDocData] = useState<Record<string, unknown> | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
 
   const [dashboardMetrics, setDashboardMetrics] = useState<RestaurantDashboardMetrics>({
@@ -88,6 +100,7 @@ export default function HostDashboardScreen() {
         if (!snap.exists()) {
           setRestaurant(null);
           setNameDraft('');
+          setPhoneDraft('');
           setLocationDraft('');
           setRestaurantLoading(false);
           return;
@@ -106,10 +119,22 @@ export default function HostDashboardScreen() {
 
         const row: RestaurantState = {
           id: uid,
-          name: typeof data.name === 'string' ? data.name : '',
-          logo: typeof data.logo === 'string' ? data.logo : null,
+          ownerId:
+            typeof data.ownerId === 'string' && data.ownerId.trim()
+              ? data.ownerId.trim()
+              : uid,
+          name: resolveRestaurantDisplayName(data),
+          logoUrl: resolveRestaurantLogoUrl(data),
           location: typeof data.location === 'string' ? data.location : '',
           isOpen: resolvedIsOpen,
+          phoneNumber:
+            typeof data.phoneNumber === 'string' && data.phoneNumber.trim()
+              ? data.phoneNumber.trim()
+              : null,
+          phone:
+            typeof data.phone === 'string' && data.phone.trim()
+              ? data.phone.trim()
+              : null,
           timezone:
             typeof data.timezone === 'string' && data.timezone.trim()
               ? data.timezone.trim()
@@ -119,6 +144,7 @@ export default function HostDashboardScreen() {
         };
         setRestaurant(row);
         setNameDraft(row.name);
+        setPhoneDraft(row.phoneNumber ?? row.phone ?? '');
         setLocationDraft(row.location);
         setRestaurantLoading(false);
       },
@@ -145,14 +171,20 @@ export default function HostDashboardScreen() {
       (snap) => {
         if (!snap.exists()) {
           setStripeAccountId(null);
+          setUserDocData(null);
           return;
         }
-        const v = snap.data()?.stripeAccountId;
+        const data = snap.data() as Record<string, unknown>;
+        setUserDocData(data);
+        const v = data.stripeAccountId;
         setStripeAccountId(
           typeof v === 'string' && v.startsWith('acct_') ? v : null,
         );
       },
-      () => setStripeAccountId(null),
+      () => {
+        setStripeAccountId(null);
+        setUserDocData(null);
+      },
     );
     return () => unsub();
   }, [uid]);
@@ -183,22 +215,35 @@ export default function HostDashboardScreen() {
     }
     setSavingProfile(true);
     try {
+      const phoneTrimmed = phoneDraft.trim();
       await saveRestaurantVenueMain({
         uid,
         name,
+        phoneNumber: phoneTrimmed || null,
         location: locationDraft.trim(),
-        logo:
-          typeof restaurant?.logo === 'string' && restaurant.logo.trim()
-            ? restaurant.logo.trim()
+        logoUrl:
+          typeof restaurant?.logoUrl === 'string' && restaurant.logoUrl.trim()
+            ? restaurant.logoUrl.trim()
             : null,
       });
-      showSuccess('Profile saved.');
+      showSuccess('Restaurant profile saved');
     } catch (e) {
-      showError(getUserFriendlyError(e));
+      showUserError(e, { role: 'restaurant', context: 'restaurant' });
     } finally {
       setSavingProfile(false);
     }
-  }, [uid, nameDraft, locationDraft, restaurant?.logo]);
+  }, [uid, nameDraft, phoneDraft, locationDraft, restaurant?.logoUrl]);
+
+  const profilePhoneDisplay = useMemo(() => {
+    const authPhoneNumber = auth.currentUser?.phoneNumber ?? user?.phoneNumber ?? null;
+    const resolvedPhone = resolveRestaurantProfilePhone({
+      restaurantData: restaurant
+        ? { phoneNumber: restaurant.phoneNumber, phone: restaurant.phone }
+        : null,
+      authPhoneNumber,
+    });
+    return formatRestaurantPhoneDisplay(resolvedPhone);
+  }, [restaurant, user?.phoneNumber]);
 
   const onPickLogo = async () => {
     if (!uid) return;
@@ -210,10 +255,10 @@ export default function HostDashboardScreen() {
         restaurantId: uid,
         localUri: picked.localUri,
       });
-      await mergeHostRestaurantProfile(uid, { logo: url });
+      await mergeHostRestaurantProfile(uid, { logo: url, logoUrl: url });
       showSuccess('Logo updated.');
     } catch (e) {
-      showError(getUserFriendlyError(e));
+      showUserError(e, { role: 'restaurant', context: 'upload' });
     } finally {
       setUploadingLogo(false);
     }
@@ -248,7 +293,7 @@ export default function HostDashboardScreen() {
       });
       showSuccess('Location updated from device.');
     } catch (e) {
-      showError(getUserFriendlyError(e));
+      showUserError(e, { role: 'restaurant', context: 'default' });
     } finally {
       setLocating(false);
     }
@@ -266,7 +311,7 @@ export default function HostDashboardScreen() {
         router.replace(POST_LOGOUT_ROUTE as never);
       });
     } catch (e) {
-      showError(getUserFriendlyError(e));
+      showUserError(e, { context: 'default' });
     } finally {
       setLoggingOut(false);
     }
@@ -286,7 +331,7 @@ export default function HostDashboardScreen() {
     } catch (e) {
       pendingIsOpenRef.current = null;
       setRestaurant((prev) => (prev ? { ...prev, isOpen: previous } : prev));
-      showError(getUserFriendlyError(e));
+      showUserError(e, { role: 'restaurant', context: 'restaurant' });
     } finally {
       setToggleBusy(false);
     }
@@ -328,45 +373,31 @@ export default function HostDashboardScreen() {
     );
   }
 
+  if (!restaurantLoading && restaurant) {
+    const authPhoneNumber = auth.currentUser?.phoneNumber ?? user?.phoneNumber ?? null;
+    console.log('[RESTAURANT PROFILE DEBUG]', {
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
+      restaurantPhoneNumber: restaurant.phoneNumber,
+      restaurantPhone: restaurant.phone,
+      ownerId: restaurant.ownerId,
+      authUid: auth.currentUser?.uid ?? user?.uid ?? null,
+      authPhoneNumber,
+      displayPhone: phoneDraft.trim() || profilePhoneDisplay,
+    });
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <View style={styles.topBar}>
-          <View style={styles.headerMain}>
-            <Text style={styles.screenTitle}>Restaurant Dashboard</Text>
-            <View style={styles.onlineRow}>
-              <Text style={styles.onlineLabel}>{isVenueOpen ? 'Online' : 'Offline'}</Text>
-              <Switch
-                value={isVenueOpen}
-                disabled={toggleBusy || restaurantLoading}
-                onValueChange={(v) => void onToggleOpen(v)}
-                trackColor={{
-                  false: '#cbd5e1',
-                  true: 'rgba(22,163,74,0.35)',
-                }}
-                thumbColor={isVenueOpen ? PRIMARY : '#f1f5f9'}
-              />
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => void handleExit()}
-            disabled={loggingOut || toggleBusy}
-            hitSlop={12}
-            accessibilityLabel="Sign out"
-          >
-            {loggingOut ? (
-              <ActivityIndicator size="small" color={PRIMARY} />
-            ) : (
-              <Text style={styles.topLink}>Exit</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
+          style={styles.flex}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -379,6 +410,80 @@ export default function HostDashboardScreen() {
             />
           }
         >
+          <View style={styles.topBar}>
+            <View style={styles.headerMain}>
+              <Text style={styles.screenTitle}>Restaurant Dashboard</Text>
+              <View style={styles.onlineRow}>
+                <Text style={styles.onlineLabel}>{isVenueOpen ? 'Online' : 'Offline'}</Text>
+                <Switch
+                  value={isVenueOpen}
+                  disabled={toggleBusy || restaurantLoading}
+                  onValueChange={(v) => void onToggleOpen(v)}
+                  trackColor={{
+                    false: '#cbd5e1',
+                    true: 'rgba(22,163,74,0.35)',
+                  }}
+                  thumbColor={isVenueOpen ? PRIMARY : '#f1f5f9'}
+                />
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => void handleExit()}
+              disabled={loggingOut || toggleBusy}
+              hitSlop={12}
+              accessibilityLabel="Sign out"
+            >
+              {loggingOut ? (
+                <ActivityIndicator size="small" color={PRIMARY} />
+              ) : (
+                <Text style={styles.topLink}>Exit</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={styles.profileHeader}>
+            <Pressable
+              style={styles.profileAvatarButton}
+              onPress={() => void onPickLogo()}
+              disabled={uploadingLogo}
+              accessibilityRole="button"
+              accessibilityLabel="Change restaurant logo"
+            >
+              {uploadingLogo ? (
+                <View style={styles.profileAvatarPlaceholder}>
+                  <ActivityIndicator color={PRIMARY} />
+                </View>
+              ) : restaurant?.logoUrl ? (
+                <Image source={{ uri: restaurant.logoUrl }} style={styles.profileAvatarImage} />
+              ) : (
+                <View style={styles.profileAvatarPlaceholder}>
+                  <Ionicons name="storefront-outline" size={40} color="#94a3b8" />
+                </View>
+              )}
+            </Pressable>
+
+            <View style={styles.profileFields}>
+              <Text style={styles.profileFieldLabel}>Restaurant Name</Text>
+              <AppTextInput
+                style={styles.profileInput}
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                placeholder="Restaurant"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="words"
+              />
+
+              <Text style={styles.profileFieldLabel}>Phone Number</Text>
+              <AppTextInput
+                style={styles.profileInput}
+                value={phoneDraft}
+                onChangeText={setPhoneDraft}
+                placeholder="+1 (613) 123-4567"
+                placeholderTextColor="#94a3b8"
+                keyboardType="phone-pad"
+              />
+            </View>
+          </View>
+
           <View style={styles.statsRow}>
             <View style={styles.statTile}>
               <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
@@ -398,32 +503,6 @@ export default function HostDashboardScreen() {
               <ActivityIndicator color={PRIMARY} />
             ) : (
               <>
-                <TouchableOpacity
-                  style={styles.logoWrap}
-                  onPress={onPickLogo}
-                  disabled={uploadingLogo}
-                >
-                  {restaurant?.logo ? (
-                    <Image source={{ uri: restaurant.logo }} style={styles.logo} />
-                  ) : (
-                    <View style={[styles.logo, styles.logoPh]}>
-                      <Ionicons name="image-outline" size={36} color="#94a3b8" />
-                    </View>
-                  )}
-                  <Text style={styles.logoHint}>
-                    {uploadingLogo ? 'Uploading…' : 'Tap to upload logo'}
-                  </Text>
-                </TouchableOpacity>
-
-                <Text style={styles.inputLabel}>Restaurant / truck name</Text>
-                <AppTextInput
-                  style={styles.input}
-                  value={nameDraft}
-                  onChangeText={setNameDraft}
-                  placeholder="Your public name"
-                  placeholderTextColor="#94a3b8"
-                />
-
                 <Text style={styles.inputLabel}>Location</Text>
                 <AppTextInput
                   style={[styles.input, styles.inputMulti]}
@@ -446,8 +525,8 @@ export default function HostDashboardScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={saveProfileFields}
+                  style={[styles.primaryBtn, styles.saveVenueBtn]}
+                  onPress={() => void saveProfileFields()}
                   disabled={savingProfile}
                 >
                   {savingProfile ? (
@@ -518,6 +597,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
+    marginHorizontal: -16,
+    marginBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e2e8f0',
     backgroundColor: CARD,
@@ -537,7 +618,56 @@ const styles = StyleSheet.create({
   },
   onlineLabel: { fontSize: 14, fontWeight: '700', color: '#334155' },
   topLink: { fontSize: 15, fontWeight: '700', color: PRIMARY, marginTop: 2 },
-  scroll: { padding: 16, paddingBottom: 120 },
+  scroll: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 120, flexGrow: 1 },
+  profileHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+  },
+  profileFields: {
+    width: '100%',
+    gap: 12,
+    marginTop: 20,
+  },
+  profileFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  profileInput: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    color: '#0f172a',
+    backgroundColor: '#fafafa',
+    textAlign: 'center',
+  },
+  profileAvatarButton: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(22,163,74,0.55)',
+    backgroundColor: '#e2e8f0',
+  },
+  profileAvatarImage: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  profileAvatarPlaceholder: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e2e8f0',
+  },
   statsRow: {
     flexDirection: 'row',
     gap: 10,
@@ -628,6 +758,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  saveVenueBtn: {
+    marginTop: 4,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   stripeConnectBtn: {

@@ -29,8 +29,10 @@ import {
 } from '@/lib/restaurantKitchenActions';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
+import { useRestaurantOrdersLifecycleAlerts } from '@/hooks/useOrderLifecycleAlerts';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { deriveOrderStage, getRestaurantOrderPresentation } from '@/services/orderStage';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 export type RestaurantDashboardMetrics = {
@@ -100,6 +102,8 @@ export function RestaurantOrdersPanel({
     enableAutoCleanup: false,
   });
 
+  useRestaurantOrdersLifecycleAlerts(allOrders);
+
   const freshOrders = useMemo(
     () => (filter === 'archived' ? orders : orders.filter((order) => isOrderFresh(order))),
     [filter, orders],
@@ -159,7 +163,11 @@ export function RestaurantOrdersPanel({
       } catch {
         clearKitchenOptimistic(order.id);
         clearOrderStageLock(order.id);
-        showError('Unable to update order.');
+        showUserError(new Error('order_update_failed'), {
+          role: 'restaurant',
+          context: 'restaurant',
+          fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
+        });
       } finally {
         setActionInFlight(null);
       }
@@ -180,7 +188,11 @@ export function RestaurantOrdersPanel({
         clearKitchenOptimistic(orderId);
         showSuccess('Order rejected');
       } catch {
-        showError('Could not reject order.');
+        showUserError(new Error('order_reject_failed'), {
+          role: 'restaurant',
+          context: 'restaurant',
+          fallback: ROLE_ORDER_UPDATE_ERROR.restaurant,
+        });
       } finally {
         setRejectOrderId(null);
       }

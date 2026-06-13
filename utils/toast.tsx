@@ -8,6 +8,10 @@ import {
   type ReadableErrorContext,
 } from './errorMessages';
 import { logError } from './errorLogger';
+import {
+  getUserFriendlyError,
+  type UserFriendlyErrorOptions,
+} from '@/services/errors/userFriendlyErrors';
 import { platformElevation } from './platformElevation';
 
 let lastFriendlyError: { message: string; at: number } | null = null;
@@ -89,13 +93,16 @@ export function showError(message: string): void {
   });
 }
 
-/** Log in dev only, map to friendly copy, dedupe rapid repeats. */
+/** Log full error, map to friendly copy, dedupe rapid repeats. */
 export function showFriendlyError(
   error: unknown,
-  context: ReadableErrorContext = 'default',
+  context: ReadableErrorContext | UserFriendlyErrorOptions = 'default',
 ): void {
   logError(error);
-  const message = getReadableErrorMessage(error, context);
+  const message =
+    typeof context === 'string'
+      ? getUserFriendlyError(error, { context })
+      : getUserFriendlyError(error, context);
   const now = Date.now();
   if (
     lastFriendlyError &&

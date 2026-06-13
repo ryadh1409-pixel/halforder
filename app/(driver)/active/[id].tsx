@@ -12,10 +12,12 @@ import {
   isActiveDeliveryComplete,
 } from '@/lib/driverDeliveryCompletion';
 import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
+import { useDriverActiveOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
 import { orderRoomHref } from '@/services/orderChat';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { setDriverActiveRouteOrderId } from '@/lib/driverHubOrdersStore';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -51,6 +53,8 @@ export default function DriverActiveDeliveryDetailsScreen() {
   const { order, loading } = useActiveDelivery(id, user?.uid, { enabled: listenersEnabled });
   const [busy, setBusy] = useState(false);
   const mapRef = useRef<unknown>(null);
+
+  useDriverActiveOrderLifecycleAlert(order);
 
   const isDeliveryComplete = useMemo(() => isActiveDeliveryComplete(order), [order]);
 
@@ -128,7 +132,11 @@ export default function DriverActiveDeliveryDetailsScreen() {
         return;
       }
       if (result === 'skipped_duplicate') {
-        showError('Could not save delivery status. Pull to refresh and try again.');
+        showUserError(new Error('delivery_status_duplicate'), {
+          role: 'driver',
+          context: 'driver',
+          fallback: ROLE_ORDER_UPDATE_ERROR.driver,
+        });
         return;
       }
       if (action === 'arrive_restaurant') {
@@ -142,8 +150,12 @@ export default function DriverActiveDeliveryDetailsScreen() {
           reason: 'active_screen_exit',
         });
       }
-    } catch {
-      showError('Could not update delivery');
+    } catch (error) {
+      showUserError(error, {
+        role: 'driver',
+        context: 'driver',
+        fallback: ROLE_ORDER_UPDATE_ERROR.driver,
+      });
     } finally {
       setBusy(false);
     }

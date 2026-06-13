@@ -36,7 +36,7 @@ import {
 import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { systemActionSheet } from '../../components/SystemDialogHost';
-import { getUserFriendlyError } from '../../utils/errorHandler';
+import { getUserFriendlyError, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '../../utils/toast';
 
 const REGISTER_INPUTS = 5;
@@ -100,11 +100,11 @@ export default function RegisterScreen() {
       }
     } catch (e) {
       if (e instanceof ImagePickerPermissionError) {
-        Alert.alert('Photo access needed', e.message);
+        showUserError(e, { useAlert: true, alertTitle: 'Photo access needed' });
       } else if (e instanceof Error && e.message === 'PICKER_LAUNCH_FAILED') {
         Alert.alert('Error', 'Could not open photo library.');
       } else {
-        Alert.alert('Error', 'Could not open photo library.');
+        showUserError(e, { useAlert: true, alertTitle: 'Error' });
       }
     } finally {
       setPickingPhoto(false);
@@ -120,11 +120,11 @@ export default function RegisterScreen() {
       }
     } catch (e) {
       if (e instanceof ImagePickerPermissionError) {
-        Alert.alert('Camera access needed', e.message);
+        showUserError(e, { useAlert: true, alertTitle: 'Camera access needed' });
       } else if (e instanceof Error && e.message === 'CAMERA_LAUNCH_FAILED') {
         Alert.alert('Error', 'Could not open the camera.');
       } else {
-        Alert.alert('Error', 'Could not open the camera.');
+        showUserError(e, { useAlert: true, alertTitle: 'Error' });
       }
     } finally {
       setPickingPhoto(false);

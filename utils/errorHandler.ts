@@ -1,16 +1,24 @@
 /**
- * @deprecated Prefer `utils/errorMessages` — kept for existing imports.
+ * @deprecated Prefer `services/errors/userFriendlyErrors` — kept for existing imports.
  */
 import { extractErrorCode } from './errorMessages';
 
 export {
   extractErrorCode,
   getReadableErrorMessage,
-  getReadableErrorMessage as getUserFriendlyError,
   getReadableErrorMessageOr,
   type ReadableErrorContext,
   type ReadableErrorContext as FriendlyErrorContext,
 } from './errorMessages';
+
+export {
+  getUserFriendlyError,
+  ROLE_ORDER_UPDATE_ERROR,
+  type UserFriendlyErrorOptions,
+  type UserRole,
+} from '@/services/errors/userFriendlyErrors';
+
+export { showUserError } from '@/services/errors/showUserError';
 
 /**
  * True when the server rejected the current session (deleted user, revoked token, etc.).
@@ -30,3 +38,6 @@ export function isFirebaseAuthUserInvalidated(error: unknown): boolean {
       return false;
   }
 }
+
+/** @deprecated Use `getUserFriendlyError` from `services/errors/userFriendlyErrors`. */
+export { getReadableErrorMessage as getUserFriendlyErrorLegacy } from './errorMessages';

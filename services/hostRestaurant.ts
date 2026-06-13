@@ -16,19 +16,31 @@ import {
 export async function saveRestaurantVenueMain(input: {
   uid: string;
   name: string;
+  phoneNumber: string | null;
   location: string;
-  logo: string | null;
+  logoUrl: string | null;
 }): Promise<void> {
   const uid = input.uid.trim();
   if (!uid) throw new Error('Invalid owner id');
   const ref = doc(db, 'restaurants', uid);
   const firestorePath = `restaurants/${uid}`;
   const snap = await getDoc(ref);
+  const phone =
+    typeof input.phoneNumber === 'string' && input.phoneNumber.trim()
+      ? input.phoneNumber.trim()
+      : null;
+  const logoUrl =
+    typeof input.logoUrl === 'string' && input.logoUrl.trim()
+      ? input.logoUrl.trim()
+      : null;
   const payload = {
     id: uid,
     name: input.name.trim(),
+    phoneNumber: phone,
+    phone,
     location: input.location.trim(),
-    logo: input.logo,
+    logo: logoUrl,
+    logoUrl,
     ownerId: uid,
     stripeAccountId:
       typeof snap.data()?.stripeAccountId === 'string'
@@ -58,6 +70,9 @@ export async function saveRestaurantVenueMain(input: {
 export type HostRestaurantPatch = {
   name?: string;
   logo?: string | null;
+  logoUrl?: string | null;
+  phoneNumber?: string | null;
+  phone?: string | null;
   location?: string;
   /** Optional coordinates from device location picker */
   locationLat?: number | null;
@@ -85,6 +100,9 @@ export async function mergeHostRestaurantProfile(
 
   if (patch.name !== undefined) cleaned.name = String(patch.name).trim();
   if (patch.logo !== undefined) cleaned.logo = patch.logo;
+  if (patch.logoUrl !== undefined) cleaned.logoUrl = patch.logoUrl;
+  if (patch.phoneNumber !== undefined) cleaned.phoneNumber = patch.phoneNumber;
+  if (patch.phone !== undefined) cleaned.phone = patch.phone;
   if (patch.location !== undefined) cleaned.location = String(patch.location).trim();
   if (patch.locationLat !== undefined) cleaned.locationLat = patch.locationLat;
   if (patch.locationLng !== undefined) cleaned.locationLng = patch.locationLng;
