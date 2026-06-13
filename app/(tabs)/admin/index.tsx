@@ -15,11 +15,12 @@ import { adminColors as COLORS } from '../../../constants/adminTheme';
 import { useAuth } from '../../../services/AuthContext';
 import { db } from '../../../services/firebase';
 import {
-  countFoodCardsWithStatus,
-  countVisibleActiveFoodCardsInSnapshot,
-} from '../../../services/foodCards';
+  countActiveAdminFoodSharesInSnapshot,
+} from '@/services/adminFoodSharesService';
 import { useRouter } from 'expo-router';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
+import { ADMIN_FOOD_CARD_SLOT_IDS } from '../../../constants/adminFoodCards';
+import { countFoodCardsWithStatus } from '../../../services/foodCards';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -105,11 +106,17 @@ export default function AdminScreen() {
   const fetchMetrics = useCallback(async () => {
     try {
       adminLog('admin-home', 'fetchMetrics: users, orders, food_cards');
-      const [usersSnap, ordersSnap, cardsSnap, paymentsSnap, matchesSnap] =
+      const [usersSnap, ordersSnap, cardsSnap, adminSharesSnap, paymentsSnap, matchesSnap] =
         await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'orders')),
         getDocs(collection(db, 'food_cards')),
+        getDocs(
+          query(
+            collection(db, 'adminFoodShares'),
+            where(documentId(), 'in', [...ADMIN_FOOD_CARD_SLOT_IDS]),
+          ),
+        ),
         getDocs(collection(db, 'payments')),
         getDocs(collection(db, 'matches')),
       ]);
@@ -151,7 +158,7 @@ export default function AdminScreen() {
         if (data?.status === 'completed') completedOrders += 1;
       });
 
-      const activeCards = countVisibleActiveFoodCardsInSnapshot(cardsSnap, now);
+      const activeCards = countActiveAdminFoodSharesInSnapshot(adminSharesSnap);
       const totalMatches = countFoodCardsWithStatus(cardsSnap, 'matched');
 
       let foodShareRevenue = 0;

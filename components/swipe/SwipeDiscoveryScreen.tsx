@@ -62,7 +62,9 @@ export function SwipeDiscoveryScreen() {
 
   useEffect(() => {
     const unsub = subscribeActiveAdminFoodShares((shares) => {
-      setCards(adminFoodSharesToSwipeCards(shares));
+      const result = adminFoodSharesToSwipeCards(shares);
+      console.log('[SWIPE QUERY RESULT]', { shares, swipeCards: result });
+      setCards(result);
       setLoadingDeck(false);
     });
     return unsub;

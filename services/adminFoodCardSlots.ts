@@ -62,9 +62,10 @@ export function subscribeAdminFoodCardSlots(
     (snap) => {
       const byId = new Map<string, Record<string, unknown>>();
       snap.docs.forEach((d) => byId.set(d.id, d.data() as Record<string, unknown>));
-      onData(
-        ADMIN_FOOD_CARD_SLOT_IDS.map((sid) => slotFromShare(sid, byId.get(sid))),
+      const rows = ADMIN_FOOD_CARD_SLOT_IDS.map((sid) =>
+        slotFromShare(sid, byId.get(sid)),
       );
+      onData(rows);
     },
     (e) => {
       console.warn('[adminFoodCardSlots] snapshot error', e);

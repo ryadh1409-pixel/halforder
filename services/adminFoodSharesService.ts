@@ -5,7 +5,7 @@ import {
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
 import { getHeroImageUrlForType, mockOrders } from '@/constants/mockSwipeFood';
 import type { FoodOrderType } from '@/constants/mockSwipeFood';
-import { auth, db } from '@/services/firebase';
+import { db } from '@/services/firebase';
 import type { AdminFoodShareDoc } from '@/types/foodShare';
 import type { SwipeFoodCard } from '@/types/swipe';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -41,6 +41,10 @@ function inferFoodType(name: string): FoodOrderType {
   return 'other';
 }
 
+function normBool(value: unknown): boolean {
+  return value === true || value === 1 || value === 'true';
+}
+
 export function mapAdminFoodShareDoc(
   id: string,
   data: Record<string, unknown>,
@@ -57,7 +61,7 @@ export function mapAdminFoodShareDoc(
     ),
     deliveryShare: normNum(data.deliveryShare, normNum(data.deliveryCost, 0)),
     description: normStr(data.description, normStr(data.aiDescription)),
-    active: data.active === true,
+    active: normBool(data.active),
     createdAtMs: safeToMillis(data.createdAt),
   };
 }
@@ -103,12 +107,30 @@ function sortSlotIds(rows: AdminFoodShareDoc[]): AdminFoodShareDoc[] {
   });
 }
 
-/** Live admin swipe deck — only `active` cards from `adminFoodShares`. */
+/** Count `active` rows from an `adminFoodShares` slot snapshot. */
+export function countActiveAdminFoodSharesInSnapshot(
+  snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> },
+): number {
+  let n = 0;
+  for (const d of snap.docs) {
+    const mapped = mapAdminFoodShareDoc(d.id, d.data() as Record<string, unknown>);
+    if (mapped.active) n += 1;
+  }
+  return n;
+}
+
+/** Live swipe deck — `adminFoodShares` where `active == true` (rules-safe for role `user`). */
 export function subscribeActiveAdminFoodShares(
   onData: (shares: AdminFoodShareDoc[]) => void,
 ): Unsubscribe {
+  const collectionPath = 'adminFoodShares';
+  const queryDescription =
+    "collection('adminFoodShares').where('active', '==', true).limit(10)";
+  console.log('[SWIPE COLLECTION]', collectionPath);
+  console.log('[SWIPE QUERY]', queryDescription);
+
   const q = query(
-    collection(db, 'adminFoodShares'),
+    collection(db, collectionPath),
     where('active', '==', true),
     limit(DECK_LIMIT),
   );
@@ -120,10 +142,25 @@ export function subscribeActiveAdminFoodShares(
         snap.docs.map((d) =>
           mapAdminFoodShareDoc(d.id, d.data() as Record<string, unknown>),
         ),
-      ).slice(0, DECK_LIMIT);
+      );
+      console.log('[SWIPE QUERY RESULT]', {
+        collectionPath,
+        queryDescription,
+        docCount: snap.docs.length,
+        activeIds: rows.map((r) => r.id),
+        rows,
+      });
       onData(rows);
     },
-    () => onData([]),
+    (err) => {
+      console.error('[SWIPE QUERY RESULT] listener error', {
+        collectionPath,
+        queryDescription,
+        code: (err as { code?: string }).code,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      onData([]);
+    },
   );
 }
 

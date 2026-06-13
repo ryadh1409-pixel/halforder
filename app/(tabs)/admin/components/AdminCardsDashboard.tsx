@@ -75,6 +75,9 @@ export function AdminCardsDashboard() {
 
   useEffect(() => {
     const unsub = subscribeAdminFoodCardSlots((rows) => {
+      const activeCards = rows.filter((r) => r.active);
+      console.log('[ADMIN CARDS]', rows);
+      console.log('[ACTIVE ADMIN CARDS]', activeCards);
       setRemote(rows);
       setDrafts((prev) => {
         const next = { ...prev };
