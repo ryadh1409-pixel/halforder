@@ -1181,6 +1181,13 @@ service cloud.firestore {
     function isMarketplaceDeliveryOrderDoc(d) {
       return d.get('deliveryType', '') == 'delivery';
     }
+    /** Assigned marketplace driver writes when deliveryType is delivery, absent, or driver-owned. */
+    function driverMarketplaceDeliveryTypeOk(d) {
+      let dt = d.get('deliveryType', '');
+      return dt == 'delivery'
+        || dt == ''
+        || driverAssignedToMarketplaceOrder(d);
+    }
     function marketplaceOrderPatchKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -1765,6 +1772,7 @@ service cloud.firestore {
     /**
      * Patch guards for driver claim/accept (claimMarketplaceDriverOrder).
      * Auth checked separately so role=driver fast paths avoid extra get() calls.
+     * driverClaimImmutableFieldsOk() is last — items[] equality is expensive on large orders.
      */
     function driverMarketplaceClaimPatchOk() {
       let before = resource.data;
@@ -1836,7 +1844,8 @@ service cloud.firestore {
       ]);
     }
     function driverReadyForPickupBeforeStatus(ds) {
-      return ds == 'ready_for_pickup'
+      return ds == 'driver_assigned'
+        || ds == 'ready_for_pickup'
         || ds == 'ready'
         || ds == 'waiting_driver'
         || ds == 'accepted_for_delivery';
@@ -1872,6 +1881,132 @@ service cloud.firestore {
         && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
         && (after.get('status', '') == 'completed' || after.get('status', '') == before.get('status', ''))
         && driverClaimImmutableFieldsOk(before, after);
+    }
+    /**
+     * Ultra-light driver claim — pool courier → driver_assigned on fat production orders.
+     * No items/totals immutable checks (avoids 1000-expr budget exhaustion).
+     */
+    function driverMarketplaceClaimFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let beforeDs = before.get('deliveryStatus', '');
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return isSignedIn()
+        && isMarketplaceDriverActor()
+        && before.get('deliveryType', 'delivery') == 'delivery'
+        && marketplaceOrderPaidOk(before)
+        && before.get('marketplaceArchived', false) != true
+        && before.get('expired', false) != true
+        && orderUnassignedForDriverClaim(before)
+        && marketplacePoolDeliveryStatusOk(beforeDs)
+        && beforeDs != 'driver_assigned'
+        && after.get('deliveryStatus', '') == 'driver_assigned'
+        && after.get('driverId', '') == request.auth.uid
+        && after.get('assignedDriverId', '') == request.auth.uid
+        && after.get('driverId', '') == after.get('assignedDriverId', '')
+        && driverClaimAllowedKeys()
+        && driverClaimUpdatedByOk()
+        && driverClaimKitchenStatusOk(before, after)
+        && (
+          !keys.hasAny(['driver'])
+          || (
+            after.get('driver', {}) is map
+            && after.get('driver', {}).get('id', '') == request.auth.uid
+            && after.get('driver', {}).get('name', '') is string
+            && after.get('driver', {}).get('name', '').size() > 0
+          )
+        );
+    }
+    /**
+     * Ultra-light pickup fast path — driver_assigned → picked_up on fat production orders.
+     * No items/customer/restaurant/totals equality checks (avoids 1000-expr budget exhaustion).
+     */
+    function driverMarketplacePickupFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && (
+          before.get('driverId', '') == request.auth.uid
+          || before.get('assignedDriverId', '') == request.auth.uid
+        )
+        && before.get('deliveryStatus', '') == 'driver_assigned'
+        && after.get('deliveryStatus', '') == 'picked_up'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deliveryStatus',
+          'status',
+          'pickedUpAt',
+          'updatedAt',
+          'updatedBy',
+        ]);
+    }
+    /**
+     * Ultra-light deliver fast path — picked_up → delivered on fat production orders.
+     * No deep immutable-field comparisons on nested maps.
+     */
+    function driverMarketplaceDeliveredFastPathOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && (
+          before.get('driverId', '') == request.auth.uid
+          || before.get('assignedDriverId', '') == request.auth.uid
+        )
+        && before.get('deliveryStatus', '') == 'picked_up'
+        && after.get('deliveryStatus', '') == 'delivered'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deliveryStatus',
+          'status',
+          'deliveredAt',
+          'completedAt',
+          'marketplaceArchived',
+          'earningsRecorded',
+          'customerTotal',
+          'driverPayout',
+          'platformFee',
+          'updatedAt',
+          'updatedBy',
+        ]);
+    }
+    /**
+     * Lightweight driver fulfillment fast path — arrive / pickup / deliver.
+     * Evaluated before heavy HalfOrder branches to stay under the 1000-expr budget.
+     */
+    function driverMarketplaceFulfillmentPatchKeysOk() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'deliveryStatus',
+        'status',
+        'pickedUpAt',
+        'deliveredAt',
+        'completedAt',
+        'marketplaceArchived',
+        'updatedAt',
+        'updatedBy',
+        'driverPayout',
+        'platformFee',
+        'customerTotal',
+        'earningsRecorded',
+      ]);
+    }
+    function driverMarketplaceFulfillmentFastOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && driverAssignedToMarketplaceOrder(before)
+        && (
+          before.get('deliveryType', 'delivery') == 'delivery'
+          || driverAssignedToMarketplaceOrder(before)
+        )
+        && !noDriverAssignedYet(before)
+        && after.get('driverId', '') == before.get('driverId', '')
+        && after.get('assignedDriverId', '') == before.get('assignedDriverId', '')
+        && driverMarketplaceFulfillmentPatchKeysOk()
+        && driverClaimUpdatedByOk()
+        && (
+          driverMarketplaceArriveRestaurantTransitionOk(before, after)
+          || driverMarketplacePickupTransitionOk(before, after)
+          || driverMarketplaceDeliverTransitionOk(before, after)
+        );
     }
     /** Assigned-driver live GPS on orders/{id}.driverLocation (canonical + legacy fields). */
     function driverLocationOptionalNumber(m, key) {
@@ -1951,7 +2086,7 @@ service cloud.firestore {
           && driverAssignedToMarketplaceOrder(before)
         )
       )
-        && before.get('deliveryType', '') == 'delivery'
+        && driverMarketplaceDeliveryTypeOk(before)
         && driverAssignedToMarketplaceOrder(before)
         && !noDriverAssignedYet(before)
         && after.get('driverId', '') == before.get('driverId', '')
@@ -2165,7 +2300,18 @@ service cloud.firestore {
         );
       allow update: if isSignedIn()
         && (
-          isAdmin()
+          // ULTRA-LIGHT: driver pickup (driver_assigned → picked_up) — evaluated first.
+          driverMarketplacePickupFastPathOk()
+          // ULTRA-LIGHT: driver deliver (picked_up → delivered).
+          || driverMarketplaceDeliveredFastPathOk()
+          // ULTRA-LIGHT: driver claim (pool courier → driver_assigned) — before restaurant/HalfOrder.
+          || driverMarketplaceClaimFastPathOk()
+          // Full claim fallback (immutable fields last inside driverMarketplaceClaimPatchOk).
+          || (
+            !isCurrentUserRestricted()
+            && marketplaceDriverUnassignedClaimOk()
+          )
+          || isAdmin()
           // FAST PATH: restaurant kitchen accept / preparing / ready (before driver/HalfOrder evaluators).
           || (
             !isCurrentUserRestricted()
@@ -2176,10 +2322,9 @@ service cloud.firestore {
             !isCurrentUserRestricted()
             && marketplaceOrderCustomerCancelFastPathOk()
           )
-          // FAST PATH: driver claim — role=driver / drivers/{uid} / users role on unassigned order.
           || (
             !isCurrentUserRestricted()
-            && marketplaceDriverUnassignedClaimOk()
+            && driverMarketplaceFulfillmentFastOk()
           )
           || (
             !isCurrentUserRestricted()
@@ -2187,7 +2332,6 @@ service cloud.firestore {
           )
           || (
             !isCurrentUserRestricted()
-            && resource.data.get('deliveryType', '') == 'delivery'
             && isValidDriverActivePatch()
           )
           || (
