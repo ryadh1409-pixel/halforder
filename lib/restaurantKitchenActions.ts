@@ -1,4 +1,5 @@
 import { lockOrderStage, type StageLockOptions } from '@/lib/orderStageLock';
+import { clearOrderListenerCommitCache } from '@/lib/orderListenerCommit';
 import { applyProtectedOrderPatch } from '@/services/orderService';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import {
@@ -7,7 +8,7 @@ import {
   type OrderStageInput,
 } from '@/services/orderStage';
 import { doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 
 export type RestaurantKitchenAction = 'accept' | 'preparing' | 'ready' | 'picked_up';
 
@@ -209,15 +210,35 @@ export async function applyRestaurantKitchenAction(
   }
 
   logRestaurantAction(id, action, current, patch);
-  console.log('[RESTAURANT FIRESTORE WRITE] applying kitchen patch', {
+  const authUid = auth.currentUser?.uid ?? null;
+  const currentRecord = current as Record<string, unknown>;
+  const orderRestaurantId =
+    typeof currentRecord.restaurantId === 'string'
+      ? currentRecord.restaurantId
+      : typeof currentRecord.venueId === 'string'
+        ? currentRecord.venueId
+        : null;
+  console.log('[RESTAURANT FIRESTORE WRITE]', {
+    uid: authUid,
     orderId: id,
+    orderRestaurantId,
     action,
-    seedStatus: current.status ?? null,
-    seedDeliveryStatus: current.deliveryStatus ?? null,
-    patchStatus: patch.status ?? null,
-    patchDeliveryStatus: patch.deliveryStatus ?? null,
+    ruleAssumption: 'restaurantDashboardPatchOk: isRestaurantVendorActor + updatedBy whitelist',
+    before: {
+      status: current.status ?? null,
+      deliveryStatus: current.deliveryStatus ?? null,
+      derivedStage: deriveOrderStage(current),
+    },
+    after: {
+      status: patch.status ?? null,
+      deliveryStatus: patch.deliveryStatus ?? null,
+      updatedBy: patch.updatedBy ?? null,
+    },
+    patchKeys: Object.keys(patch),
+    firestorePath: `orders/${id}`,
   });
   await applyProtectedOrderPatch(id, patch);
+  clearOrderListenerCommitCache(id);
   return 'applied';
 }
 

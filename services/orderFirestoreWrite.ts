@@ -204,15 +204,23 @@ export async function protectedUpdateOrder(
   }
 
   const documentPath = `orders/${trimmed}`;
+  const isRestaurantKitchenWrite =
+    typeof safePatch.updatedBy === 'string' &&
+    (safePatch.updatedBy.startsWith('restaurant') ||
+      safePatch.updatedBy === 'restaurantAccept' ||
+      safePatch.updatedBy === 'restaurantPreparing' ||
+      safePatch.updatedBy === 'restaurantReady');
   console.log('[FIRESTORE ORDER WRITE]', {
     documentPath,
     uid: auth.currentUser?.uid ?? null,
     orderId: trimmed,
+    orderRestaurantId: (current as Record<string, unknown>).restaurantId ?? (current as Record<string, unknown>).venueId ?? null,
     assignedDriverId: current.assignedDriverId ?? null,
     status: current.status ?? null,
     deliveryStatus: current.deliveryStatus ?? null,
     payload: safePatch,
     source: sourceLabel(source),
+    writeKind: isRestaurantKitchenWrite ? 'restaurant_kitchen' : 'lifecycle',
   });
 
   if (safePatch.status !== undefined || safePatch.deliveryStatus !== undefined) {
@@ -237,11 +245,17 @@ export async function protectedUpdateOrder(
         documentPath,
         uid: auth.currentUser?.uid ?? null,
         orderId: trimmed,
+        orderRestaurantId: (current as Record<string, unknown>).restaurantId ?? (current as Record<string, unknown>).venueId ?? null,
         assignedDriverId: current.assignedDriverId ?? null,
         status: current.status ?? null,
         deliveryStatus: current.deliveryStatus ?? null,
         payload: safePatch,
         source: sourceLabel(source),
+        ruleHints: [
+          'restaurant: restaurantDashboardPatchOk (updatedBy must be in whitelist)',
+          'restaurant: isRestaurantVendorActor (users.restaurantId or restaurants.ownerId)',
+          'driver: marketplaceDriverUnassignedClaimOk',
+        ],
       });
     }
     throw error;

@@ -1200,8 +1200,11 @@ service cloud.firestore {
         && rid.size() > 0
         && (
           rid == request.auth.uid
-          || get(/databases/$(database)/documents/users/$(request.auth.uid))
-              .data.get('restaurantId', '') == rid
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid))
+                .data.get('restaurantId', '') == rid
+          )
           || (
             exists(/databases/$(database)/documents/restaurants/$(rid))
             && get(/databases/$(database)/documents/restaurants/$(rid))
@@ -1226,6 +1229,7 @@ service cloud.firestore {
         'hiddenAt',
         'restoredAt',
         'updatedAt',
+        'updatedBy',
         'status',
         'deliveryStatus',
         'acceptedAt',
@@ -1238,6 +1242,68 @@ service cloud.firestore {
         'rejectionReason',
         'driverId',
       ]);
+    }
+    function restaurantUpdatedByOk() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      return !keys.hasAny(['updatedBy'])
+        || (
+          request.resource.data.updatedBy is string
+          && request.resource.data.updatedBy.size() > 0
+          && request.resource.data.updatedBy.size() <= 160
+        );
+    }
+    /**
+     * Forward-only restaurant kitchen transitions (applyRestaurantKitchenAction).
+     * payment_confirmed -> accepted -> preparing -> ready_for_pickup
+     */
+    function restaurantKitchenLifecycleTransitionOk(before, after) {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      let touchesLifecycle = keys.hasAny(['status']) || keys.hasAny(['deliveryStatus']);
+      let bStatus = before.get('status', '');
+      let bDs = before.get('deliveryStatus', '');
+      let aStatus = after.get('status', '');
+      let aDs = after.get('deliveryStatus', '');
+      return !touchesLifecycle
+        || (aStatus == bStatus && aDs == bDs)
+        || (
+          aStatus == 'accepted'
+          && aDs == 'accepted'
+          && (
+            bStatus == 'payment_confirmed'
+            || bStatus == 'pending'
+            || bStatus == 'pending_driver'
+            || bStatus == 'awaiting_payment'
+          )
+          && marketplaceOrderPaidOk(before)
+          && (
+            bDs == 'pending'
+            || bDs == ''
+            || marketplacePoolDeliveryStatusOk(bDs)
+          )
+        )
+        || (
+          aStatus == 'preparing'
+          && aDs == 'preparing'
+          && (
+            bStatus == 'accepted'
+            || bStatus == 'restaurant_accepted'
+          )
+          && (
+            bDs == 'accepted'
+            || bDs == 'preparing'
+            || bDs == ''
+          )
+        )
+        || (
+          aStatus == 'ready_for_pickup'
+          && aDs == 'ready_for_pickup'
+          && bStatus == 'preparing'
+          && (
+            bDs == 'preparing'
+            || bDs == 'accepted'
+            || bDs == 'ready_for_pickup'
+          )
+        );
     }
     /** Payment, identity, totals, and Stripe fields must never change on restaurant patches. */
     function restaurantProtectedFieldsUnchanged() {
@@ -1307,12 +1373,39 @@ service cloud.firestore {
      * Restaurant dashboard: archive / hide / restore / kitchen status.
      * Isolated from customer & driver patches; safe for writeBatch (per-doc evaluation).
      */
+    /**
+     * Lightweight restaurant kitchen fast path — minimal expressions for accept/preparing/ready.
+     * Evaluated before driver/HalfOrder branches to stay under the 1000-expr budget.
+     */
+    function restaurantKitchenPatchFastOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isRestaurantOwner()
+        && before.get('deliveryType', '') == 'delivery'
+        && marketplaceOrderPaidOk(before)
+        && restaurantKitchenLifecycleTransitionOk(before, after)
+        && onlyAllowedRestaurantFieldsChanged()
+        && restaurantUpdatedByOk()
+        && restaurantDriverIdPatchOk()
+        && before.get('paymentStatus', '') == after.get('paymentStatus', '')
+        && before.get('userId', '') == after.get('userId', '')
+        && before.get('customerId', '') == after.get('customerId', '')
+        && before.get('restaurantId', '') == after.get('restaurantId', '')
+        && before.get('totalPrice', 0) == after.get('totalPrice', 0)
+        && before.get('items', []) == after.get('items', [])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        );
+    }
     function restaurantDashboardPatchOk() {
       return isRestaurantOwner()
         && onlyAllowedRestaurantFieldsChanged()
         && restaurantProtectedFieldsUnchanged()
         && restaurantVisibilityFieldTypesOk()
         && restaurantDriverIdPatchOk()
+        && restaurantUpdatedByOk()
+        && restaurantKitchenLifecycleTransitionOk(resource.data, request.resource.data)
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
           || request.resource.data.updatedAt == request.time
@@ -1576,11 +1669,14 @@ service cloud.firestore {
     }
     function marketplaceRestaurantPatchOk() {
       let before = resource.data;
+      let after = request.resource.data;
       return isRestaurantVendorActor(before)
-        && restaurantMustNotAssignDriver(before, request.resource.data)
+        && restaurantMustNotAssignDriver(before, after)
+        && restaurantKitchenLifecycleTransitionOk(before, after)
+        && restaurantUpdatedByOk()
         && marketplaceOrderPatchKeys().hasOnly([
           'status','acceptedAt','preparedAt','readyAt','estimatedDeliveryTime','estimatedPrepTime',
-          'estimatedDeliveryMinutes','deliveryStatus','updatedAt','driverId','assignedDriverId',
+          'estimatedDeliveryMinutes','deliveryStatus','updatedAt','updatedBy','driverId','assignedDriverId',
           'driverName','driverPhone','driverVehicle','driver','notes','rejectionReason'
         ]);
     }
@@ -2068,6 +2164,11 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && (
           isAdmin()
+          // FAST PATH: restaurant kitchen accept / preparing / ready (before driver/HalfOrder evaluators).
+          || (
+            !isCurrentUserRestricted()
+            && restaurantKitchenPatchFastOk()
+          )
           // FAST PATH: customer profile cancel — minimal expressions.
           || (
             !isCurrentUserRestricted()

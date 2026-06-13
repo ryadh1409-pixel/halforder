@@ -463,8 +463,152 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           status: 'accepted',
           deliveryStatus: 'accepted',
           acceptedAt: serverTimestamp(),
-          estimatedDeliveryTime: 28,
+          estimatedDeliveryTime: 35,
           updatedAt: serverTimestamp(),
+          updatedBy: 'restaurantAccept',
+        }),
+      );
+    });
+
+    it('allows restaurant owner preparing transition with updatedBy', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'restaurants', 'rest_abc'), {
+          ownerId: 'rest_owner',
+          name: 'Test Kitchen',
+        });
+        await setDoc(doc(ctx.firestore(), 'users', 'rest_owner'), {
+          restaurantId: 'rest_abc',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_preparing'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'accepted',
+          deliveryStatus: 'accepted',
+          paymentStatus: 'paid',
+          acceptedAt: Timestamp.now(),
+          totalPrice: 24,
+          items: [{ id: 'i1', name: 'Burger', price: 24, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const dbRest = te().authenticatedContext('rest_owner').firestore();
+      await assertSucceeds(
+        updateDoc(doc(dbRest, 'orders', 'mkt_preparing'), {
+          status: 'preparing',
+          deliveryStatus: 'preparing',
+          preparedAt: serverTimestamp(),
+          estimatedDeliveryTime: 35,
+          updatedAt: serverTimestamp(),
+          updatedBy: 'restaurantPreparing',
+        }),
+      );
+    });
+
+    it('allows restaurant owner ready_for_pickup transition with updatedBy', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'restaurants', 'rest_abc'), {
+          ownerId: 'rest_owner',
+          name: 'Test Kitchen',
+        });
+        await setDoc(doc(ctx.firestore(), 'users', 'rest_owner'), {
+          restaurantId: 'rest_abc',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_ready'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'preparing',
+          deliveryStatus: 'preparing',
+          paymentStatus: 'paid',
+          acceptedAt: Timestamp.now(),
+          preparedAt: Timestamp.now(),
+          totalPrice: 24,
+          items: [{ id: 'i1', name: 'Burger', price: 24, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const dbRest = te().authenticatedContext('rest_owner').firestore();
+      await assertSucceeds(
+        updateDoc(doc(dbRest, 'orders', 'mkt_ready'), {
+          status: 'ready_for_pickup',
+          deliveryStatus: 'ready_for_pickup',
+          preparedAt: serverTimestamp(),
+          readyAt: serverTimestamp(),
+          estimatedDeliveryTime: 35,
+          updatedAt: serverTimestamp(),
+          updatedBy: 'restaurantReady',
+        }),
+      );
+    });
+
+    it('allows restaurant owner via restaurants.ownerId without users doc', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'restaurants', 'rest_only'), {
+          ownerId: 'owner_uid',
+          name: 'Owner Only Rest',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_owner_only'), {
+          userId: 'cust1',
+          customerId: 'cust1',
+          restaurantId: 'rest_only',
+          venueId: 'rest_only',
+          deliveryType: 'delivery',
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
+          paymentStatus: 'paid',
+          totalPrice: 24,
+          items: [{ id: 'i1', name: 'Burger', price: 24, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const dbRest = te().authenticatedContext('owner_uid').firestore();
+      await assertSucceeds(
+        updateDoc(doc(dbRest, 'orders', 'mkt_owner_only'), {
+          status: 'accepted',
+          deliveryStatus: 'accepted',
+          acceptedAt: serverTimestamp(),
+          estimatedDeliveryTime: 35,
+          updatedAt: serverTimestamp(),
+          updatedBy: 'restaurantAccept',
+        }),
+      );
+    });
+
+    it('denies backward restaurant transition accepted -> payment_confirmed', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'restaurants', 'rest_abc'), {
+          ownerId: 'rest_owner',
+        });
+        await setDoc(doc(ctx.firestore(), 'users', 'rest_owner'), {
+          restaurantId: 'rest_abc',
+        });
+        await setDoc(doc(ctx.firestore(), 'orders', 'mkt_regress'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          venueId: 'rest_abc',
+          deliveryType: 'delivery',
+          status: 'accepted',
+          deliveryStatus: 'accepted',
+          paymentStatus: 'paid',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const dbRest = te().authenticatedContext('rest_owner').firestore();
+      await assertFails(
+        updateDoc(doc(dbRest, 'orders', 'mkt_regress'), {
+          status: 'payment_confirmed',
+          deliveryStatus: 'pending',
+          updatedAt: serverTimestamp(),
+          updatedBy: 'restaurantAccept',
         }),
       );
     });
