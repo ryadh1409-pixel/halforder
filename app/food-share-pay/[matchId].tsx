@@ -7,7 +7,7 @@ import {
 } from '@/lib/foodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import { mapMatchDoc } from '@/services/foodShareMatchService';
-import { payFoodShareMatch } from '@/services/foodSharePayment';
+import { payFoodShareMatch, confirmFoodSharePaymentAfterRedirect } from '@/services/foodSharePayment';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { theme } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -38,7 +39,15 @@ export default function FoodSharePayScreen() {
     paid?: string;
     canceled?: string;
   }>();
-  const id = typeof matchId === 'string' ? matchId.trim() : '';
+  const id = (() => {
+    const raw = typeof matchId === 'string' ? matchId : '';
+    if (!raw) return '';
+    try {
+      return decodeURIComponent(raw.trim());
+    } catch {
+      return raw.trim();
+    }
+  })();
   const myUid = auth.currentUser?.uid ?? '';
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -52,7 +61,12 @@ export default function FoodSharePayScreen() {
       setError('Missing match.');
       return undefined;
     }
-    console.log('[PAYMENT START]', { screen: 'food-share-pay', matchId: id });
+    console.log('[PAYMENT START]', {
+      screen: 'food-share-pay',
+      matchId: id,
+      rawMatchId: matchId,
+      routerParams: { matchId, paid, canceled },
+    });
     const ref = doc(db, 'matches', id);
     const unsub = onSnapshot(
       ref,
@@ -81,7 +95,11 @@ export default function FoodSharePayScreen() {
           return;
         }
         const myPaid = mapped.userPayments[myUid]?.paymentStatus === 'PAID';
-        if (myPaid && mapped.lifecycle === 'PAYMENT_CONFIRMED') {
+        if (
+          myPaid &&
+          (mapped.lifecycle === 'PAYMENT_CONFIRMED' ||
+            mapped.lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION')
+        ) {
           setPhase('confirming');
           return;
         }
@@ -112,11 +130,20 @@ export default function FoodSharePayScreen() {
 
   const runPayment = useCallback(async () => {
     if (!id) return;
+    console.log('[STRIPE STEP] pay_button_pressed', {
+      matchId: id,
+      rawMatchId: matchId,
+      uid: auth.currentUser?.uid ?? null,
+    });
     setPhase('paying');
     try {
+      console.log('[STRIPE STEP] loading_match', id);
       await ensureAuthReady();
       if (!auth.currentUser || auth.currentUser.isAnonymous) {
-        showError(FOOD_SHARE_ERRORS.signInRequired);
+        setPhase('ready');
+        const message = FOOD_SHARE_ERRORS.signInRequired;
+        showError(message);
+        Alert.alert('Payment Error', message);
         router.replace('/(auth)/login');
         return;
       }
@@ -131,7 +158,9 @@ export default function FoodSharePayScreen() {
       }
       if (result.status === 'failed') {
         setPhase('ready');
-        showError(result.message || FOOD_SHARE_ERRORS.paymentFailed);
+        const message = result.message || FOOD_SHARE_ERRORS.paymentFailed;
+        showError(message);
+        Alert.alert('Payment Error', message);
         return;
       }
       if (result.status === 'redirected') {
@@ -143,7 +172,10 @@ export default function FoodSharePayScreen() {
       showSuccess(FOOD_SHARE_SUCCESS.paymentSubmitted);
     } catch (e) {
       setPhase('ready');
-      showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.paymentFailed));
+      const message = foodShareErrorMessage(e, FOOD_SHARE_ERRORS.paymentFailed);
+      console.error('[STRIPE ERROR]', e);
+      showError(message);
+      Alert.alert('Payment Error', message);
     }
   }, [id, router]);
 
@@ -151,13 +183,24 @@ export default function FoodSharePayScreen() {
     if (paid === '1' && !started.current && phase === 'ready') {
       started.current = true;
       setPhase('confirming');
-      showSuccess(FOOD_SHARE_SUCCESS.paymentSubmitted);
+      void (async () => {
+        try {
+          await confirmFoodSharePaymentAfterRedirect({ matchId: id });
+          showSuccess(FOOD_SHARE_SUCCESS.paymentSubmitted);
+        } catch (e) {
+          console.error('[STRIPE ERROR]', e);
+          const message = foodShareErrorMessage(e, FOOD_SHARE_ERRORS.paymentFailed);
+          showError(message);
+          Alert.alert('Payment Error', message);
+          setPhase('ready');
+        }
+      })();
     }
     if (canceled === '1' && !started.current) {
       started.current = true;
       showError(FOOD_SHARE_ERRORS.paymentCanceled);
     }
-  }, [paid, canceled, phase]);
+  }, [paid, canceled, phase, id]);
 
   if (phase === 'loading' || !match) {
     return (

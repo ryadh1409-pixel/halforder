@@ -169,6 +169,14 @@ export async function handleFoodSharePaymentIntentEvent(
   const metadata = (pi.metadata ?? {}) as Record<string, string>;
   if (!isFoodSharePaymentMetadata(metadata)) return false;
 
+  console.log("[WEBHOOK RECEIVED]", {
+    eventId: event.id,
+    eventType: event.type,
+    matchId: metadata.matchId,
+    userId: metadata.userId,
+    paymentIntentId: pi.id,
+  });
+
   const matchId = metadata.matchId?.trim() ?? "";
   const userId = metadata.userId?.trim() ?? "";
   if (!matchId || !userId) return false;

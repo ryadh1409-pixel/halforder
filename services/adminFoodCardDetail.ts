@@ -365,7 +365,11 @@ function buildDetail(input: {
       if (lc === 'MATCHED' || lc === 'ORDER_PLACED' || lc === 'DRIVER_ASSIGNED') {
         return 'Active';
       }
-      if (lc === 'WAITING_FOR_PAYMENT' || lc === 'PAYMENT_CONFIRMED') {
+      if (
+        lc === 'WAITING_FOR_PAYMENT' ||
+        lc === 'WAITING_FOR_PAYMENT_CONFIRMATION' ||
+        lc === 'PAYMENT_CONFIRMED'
+      ) {
         return 'Pending payment';
       }
       if (lc === 'CANCELLED') return 'Cancelled';
@@ -376,7 +380,11 @@ function buildDetail(input: {
       if (waitingUsers.length > 0) return 'Waiting for partner';
       if (!latestMatch) return '—';
       const lc = String(latestMatch.lifecycle ?? '').toUpperCase();
-      if (lc === 'WAITING_FOR_PAYMENT' || lc === 'PAYMENT_CONFIRMED') {
+      if (
+        lc === 'WAITING_FOR_PAYMENT' ||
+        lc === 'WAITING_FOR_PAYMENT_CONFIRMATION' ||
+        lc === 'PAYMENT_CONFIRMED'
+      ) {
         return 'Awaiting payment';
       }
       if (lc === 'MATCHED') return 'Active chat';

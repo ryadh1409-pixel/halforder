@@ -103,6 +103,7 @@ export default function FoodShareMatchScreen() {
   const myPaymentStatus = match?.userPayments[myUid]?.paymentStatus;
   const needsPayment =
     match?.lifecycle === 'WAITING_FOR_PAYMENT' ||
+    match?.lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION' ||
     match?.lifecycle === 'PAYMENT_CONFIRMED' ||
     match?.status === 'pending_payment';
   const canChat =

@@ -4,8 +4,16 @@ import {
   type InitPaymentSheetResult,
   type PresentPaymentSheetResult,
 } from '@stripe/stripe-react-native';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '@/services/firebase';
+import { auth } from '@/services/firebase';
+import {
+  invokeFoodSharePaymentConfirm,
+  invokeFoodSharePaymentIntent,
+} from '@/services/foodSharePaymentCallable';
+import {
+  assertPaymentDocsReady,
+  parseCallableError,
+  readPaymentDocsForMatch,
+} from '@/services/foodSharePaymentDocReads';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { logError } from '@/utils/errorLogger';
 
@@ -20,7 +28,7 @@ function assertNonAnonymousPaymentUser(): void {
 }
 
 export type FoodSharePaymentSheetResult =
-  | { status: 'success' }
+  | { status: 'success'; paymentIntentId: string }
   | { status: 'canceled' }
   | { status: 'redirected'; checkoutUrl: string }
   | { status: 'failed'; message: string };
@@ -29,8 +37,18 @@ type FoodShareIntentResponse = {
   clientSecret?: string;
   customerId?: string;
   ephemeralKey?: string;
+  paymentIntentId?: string;
   amountCents?: number;
 };
+
+function parsePaymentIntentId(
+  clientSecret: string,
+  paymentIntentId?: string,
+): string {
+  if (paymentIntentId?.trim()) return paymentIntentId.trim();
+  const idx = clientSecret.indexOf('_secret_');
+  return idx > 0 ? clientSecret.slice(0, idx) : clientSecret;
+}
 
 export async function payFoodShareMatch(params: {
   matchId: string;
@@ -39,12 +57,45 @@ export async function payFoodShareMatch(params: {
   const matchId = params.matchId.trim();
   if (!matchId) throw new Error('Missing match id');
 
+  console.log('[STRIPE STEP] pay_button_pressed', { matchId });
   assertNonAnonymousPaymentUser();
   await auth.currentUser?.getIdToken(true);
 
-  const fn = httpsCallable(functions, 'createFoodSharePaymentIntent');
-  const result = await fn({ matchId, platform: 'native' });
-  const data = (result.data ?? {}) as FoodShareIntentResponse;
+  console.log('[STRIPE STEP] loading_match', matchId);
+  const preflight = await readPaymentDocsForMatch(matchId);
+  try {
+    assertPaymentDocsReady(preflight);
+  } catch (error) {
+    console.error('[PAYMENT MISSING DOC]', preflight.matchPath, {
+      preflight,
+      error,
+    });
+    throw error;
+  }
+
+  console.log('[STRIPE STEP] creating_payment_intent');
+
+  let data: FoodShareIntentResponse;
+  try {
+    data = (await invokeFoodSharePaymentIntent({
+      matchId,
+      platform: 'native',
+    })) as FoodShareIntentResponse;
+  } catch (error) {
+    const parsed = parseCallableError(error);
+    console.error('[STRIPE ERROR]', {
+      step: 'invokeFoodSharePaymentIntent',
+      code: parsed.code,
+      message: parsed.message,
+      details: parsed.details,
+      matchId,
+      matchPath: preflight.matchPath,
+      matchExistsClient: preflight.matchExists,
+    });
+    throw error;
+  }
+
+  console.log('[STRIPE STEP] payment_intent_response', data);
 
   const clientSecret =
     typeof data.clientSecret === 'string' ? data.clientSecret.trim() : '';
@@ -52,8 +103,18 @@ export async function payFoodShareMatch(params: {
     typeof data.customerId === 'string' ? data.customerId.trim() : '';
   const ephemeralKey =
     typeof data.ephemeralKey === 'string' ? data.ephemeralKey.trim() : '';
-  if (!clientSecret) throw new Error('clientSecret missing');
+  if (!clientSecret) {
+    console.error('[STRIPE ERROR]', 'clientSecret missing from response', data);
+    throw new Error('clientSecret missing');
+  }
+  console.log('[STRIPE STEP] client_secret_received');
 
+  const paymentIntentId = parsePaymentIntentId(
+    clientSecret,
+    data.paymentIntentId,
+  );
+
+  console.log('[STRIPE STEP] init_payment_sheet');
   const initResult: InitPaymentSheetResult = await initPaymentSheet({
     paymentIntentClientSecret: clientSecret,
     ...(customerId && ephemeralKey
@@ -63,12 +124,16 @@ export async function payFoodShareMatch(params: {
     returnURL: 'halforder://stripe-redirect',
   });
   if (initResult.error) {
+    console.error('[STRIPE ERROR]', initResult.error);
     logError(initResult.error);
     throw new Error(getUserFriendlyError(initResult.error, { context: 'payment' }));
   }
 
+  console.log('[STRIPE STEP] present_payment_sheet');
+  console.log('[PAYMENT SHEET OPENED]', { matchId, paymentIntentId });
   const presentResult: PresentPaymentSheetResult = await presentPaymentSheet();
   if (presentResult.error) {
+    console.error('[STRIPE ERROR]', presentResult.error);
     if (presentResult.error.code === 'Canceled') {
       return { status: 'canceled' };
     }
@@ -78,12 +143,33 @@ export async function payFoodShareMatch(params: {
     };
   }
 
-  return { status: 'success' };
+  console.log('[STRIPE STEP] payment_success', { matchId, paymentIntentId });
+  console.log('[PAYMENT COMPLETED]', { matchId, paymentIntentId });
+
+  try {
+    await invokeFoodSharePaymentConfirm({ matchId, paymentIntentId });
+  } catch (error) {
+    console.error('[STRIPE ERROR]', 'confirmFoodSharePayment failed', error);
+  }
+
+  return { status: 'success', paymentIntentId };
+}
+
+export async function confirmFoodSharePaymentAfterRedirect(params: {
+  matchId: string;
+  paymentIntentId?: string;
+}): Promise<void> {
+  await invokeFoodSharePaymentConfirm({
+    matchId: params.matchId,
+    ...(params.paymentIntentId ? { paymentIntentId: params.paymentIntentId } : {}),
+  });
 }
 
 export async function refundFoodShareMatchPayments(matchId: string): Promise<void> {
   const id = matchId.trim();
   if (!id) throw new Error('Missing match id');
+  const { httpsCallable } = await import('firebase/functions');
+  const { functions } = await import('@/services/firebase');
   const fn = httpsCallable(functions, 'refundFoodShareMatch');
   await fn({ matchId: id });
 }

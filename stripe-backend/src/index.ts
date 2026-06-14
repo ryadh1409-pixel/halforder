@@ -10,6 +10,11 @@ import * as functions from "firebase-functions/v1";
 import type { CallableContext } from "firebase-functions/v1/https";
 import {defineSecret} from "firebase-functions/params";
 import Stripe from "stripe";
+import {
+  handleFoodSharePaymentCallable,
+  isFoodShareConfirmPayload,
+  isFoodSharePaymentPayload,
+} from "./foodSharePaymentIntentCore.js";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -82,6 +87,13 @@ export const createPaymentIntent = functions
       data !== null && typeof data === "object"
         ? (data as Record<string, unknown>)
         : {};
+
+    if (isFoodShareConfirmPayload(payload) || isFoodSharePaymentPayload(payload)) {
+      const stripe = new Stripe(stripeSecret.value(), {
+        apiVersion: "2023-10-16" as unknown as Stripe.LatestApiVersion,
+      });
+      return handleFoodSharePaymentCallable(data, context, stripe);
+    }
 
     const amountRaw = payload.amount;
     const amount =
@@ -325,6 +337,7 @@ export const createPaymentIntent = functions
 
 export { stripeWebhook } from "./stripeWebhook.js";
 export { createFoodSharePaymentIntent } from "./createFoodSharePaymentIntent.js";
+export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
 export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
 export { cancelFoodShareMatch } from "./cancelFoodShareMatch.js";
 export {

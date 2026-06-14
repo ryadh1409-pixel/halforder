@@ -2,7 +2,7 @@ import * as functions from "firebase-functions/v1";
 import type {CallableContext} from "firebase-functions/v1/https";
 import {defineSecret} from "firebase-functions/params";
 import Stripe from "stripe";
-import {handleFoodSharePaymentCallable} from "./foodSharePaymentIntentCore.js";
+import {confirmFoodSharePaymentCore} from "./confirmFoodSharePaymentCore.js";
 
 const stripeSecret = defineSecret("STRIPE_SECRET_KEY");
 
@@ -17,13 +17,20 @@ function getStripe(): Stripe {
   return stripeSingleton;
 }
 
-/**
- * Creates a PaymentIntent for a food-share match participant.
- * Amount is computed server-side from `adminFoodShares` — never from client.
- */
-export const createFoodSharePaymentIntent = functions
+export const confirmFoodSharePayment = functions
   .runWith({secrets: ["STRIPE_SECRET_KEY"]})
   .region("us-central1")
   .https.onCall(async (data: unknown, context: CallableContext) => {
-    return handleFoodSharePaymentCallable(data, context, getStripe());
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Login required");
+    }
+    const payload =
+      data !== null && typeof data === "object"
+        ? (data as Record<string, unknown>)
+        : {};
+    return confirmFoodSharePaymentCore({
+      payload,
+      uid: context.auth.uid,
+      stripe: getStripe(),
+    });
   });

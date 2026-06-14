@@ -107,7 +107,11 @@ export function resolveHubStatus(input: {
   const anyPaid = payments.some((p) => p.paymentStatus === 'PAID');
   const allPaid = payments.length >= 2 && payments.every((p) => p.paymentStatus === 'PAID');
 
-  if (lc === 'WAITING_FOR_PAYMENT' || lc === 'PAYMENT_CONFIRMED') {
+  if (
+    lc === 'WAITING_FOR_PAYMENT' ||
+    lc === 'WAITING_FOR_PAYMENT_CONFIRMATION' ||
+    lc === 'PAYMENT_CONFIRMED'
+  ) {
     if (!anyPaid) return 'match_found';
     if (!myPaid || !allPaid) return 'awaiting_payment';
     return 'active_chat';
