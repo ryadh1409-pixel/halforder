@@ -2,11 +2,13 @@ import { COMMUNITY_GUIDELINES_MESSAGE } from '@/lib/chatModerationEngine';
 import { auth, db, ensureAuthReady, functions } from '@/services/firebase';
 import { httpsCallable } from 'firebase/functions';
 import {
+  collection,
   doc,
   getDoc,
   serverTimestamp,
   setDoc,
   deleteDoc,
+  addDoc,
 } from 'firebase/firestore';
 
 export { COMMUNITY_GUIDELINES_MESSAGE };
@@ -122,17 +124,43 @@ export async function sendModeratedMatchChatMessage(input: {
   text: string;
   senderFirstName: string;
 }): Promise<SendModeratedMessageResult> {
+  const uid = auth.currentUser?.uid ?? '';
+  const text = input.text.trim();
+  const senderFirstName = input.senderFirstName.trim() || 'User';
+  const matchChatId = input.matchChatId.trim();
+  const callablePayload = { matchChatId, text, senderFirstName };
+
+  console.log('[CHAT SEND] before callable', {
+    callable: 'sendModeratedMatchChatMessage',
+    uid,
+    matchChatId,
+    payload: callablePayload,
+  });
+
   const fn = httpsCallable(functions, 'sendModeratedMatchChatMessage');
   try {
-    const result = await fn({
-      matchChatId: input.matchChatId,
-      text: input.text,
-      senderFirstName: input.senderFirstName,
-    });
+    const result = await fn(callablePayload);
     const data = (result.data ?? {}) as { messageId?: string };
+    console.log('[CHAT SEND] callable success', {
+      callable: 'sendModeratedMatchChatMessage',
+      uid,
+      matchChatId,
+      messageId: data.messageId ?? null,
+    });
     return { ok: true, messageId: data.messageId ?? '' };
   } catch (e: unknown) {
     const err = e as { code?: string; message?: string; details?: { warningLevel?: number } };
+    const parsed = parseFirebaseError(e);
+    console.error('[CHAT SEND] callable failure', {
+      callable: 'sendModeratedMatchChatMessage',
+      uid,
+      matchChatId,
+      code: parsed.code,
+      message: parsed.message,
+      details: parsed.details,
+      error: e,
+    });
+
     const msg = err.message ?? COMMUNITY_GUIDELINES_MESSAGE;
     if (msg.includes('COMMUNITY_GUIDELINES_REQUIRED')) {
       return { ok: false, code: 'GUIDELINES_REQUIRED', message: 'Accept community guidelines to chat.' };
@@ -155,6 +183,41 @@ export async function sendModeratedMatchChatMessage(input: {
             : undefined,
       };
     }
+
+    const callableMissing =
+      parsed.code === 'functions/not-found' ||
+      (/not-found/i.test(parsed.message) &&
+        !/chat not found|not a chat participant/i.test(parsed.message));
+
+    if (callableMissing && uid && matchChatId && text) {
+      const path = `matchChats/${matchChatId}/matchMessages`;
+      const payload = {
+        senderId: uid,
+        senderFirstName: senderFirstName.split(/\s+/)[0] ?? senderFirstName,
+        text,
+        createdAt: serverTimestamp(),
+      };
+      console.log('[CHAT WRITE] before', { path, uid, payload: { ...payload, createdAt: 'serverTimestamp' } });
+      try {
+        const ref = await addDoc(
+          collection(db, 'matchChats', matchChatId, 'matchMessages'),
+          payload,
+        );
+        console.log('[CHAT WRITE] success', { path, uid, messageId: ref.id });
+        return { ok: true, messageId: ref.id };
+      } catch (writeError) {
+        const writeParsed = parseFirebaseError(writeError);
+        console.error('[CHAT WRITE] failure', {
+          path,
+          uid,
+          code: writeParsed.code,
+          message: writeParsed.message,
+          error: writeError,
+        });
+        throw writeError;
+      }
+    }
+
     throw e;
   }
 }
