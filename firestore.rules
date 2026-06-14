@@ -639,6 +639,10 @@ service cloud.firestore {
       return cardId == '1' || cardId == '2' || cardId == '3' || cardId == '4' || cardId == '5'
         || cardId == '6' || cardId == '7' || cardId == '8' || cardId == '9' || cardId == '10';
     }
+    /** Swipe: where('active', '==', true). Admin dashboard: all slots including inactive. */
+    function canReadAdminFoodShareCard() {
+      return isSignedIn() && (isAdmin() || resource.data.active == true);
+    }
     function isValidAdminFoodShareWrite() {
       return request.resource.data.foodName is string
         && request.resource.data.restaurantName is string
@@ -1294,17 +1298,8 @@ service cloud.firestore {
       allow delete: if request.auth != null && (resource.data.blockerId == request.auth.uid || resource.data.blockedUserId == request.auth.uid);
     }
     match /adminFoodShares/{cardId} {
-      /**
-       * Swipe deck query (role `user`):
-       *   collection('adminFoodShares').where('active', '==', true).limit(10)
-       * Admin dashboard may list all slot ids `1`–`10` (including inactive).
-       *
-       * Use direct `resource.data.active == true` (not `.get()`) so Firestore can
-       * prove the active filter matches this rule. Split read lines so admins
-       * bypass the active constraint without weakening the public catalog rule.
-       */
-      allow read: if isSignedIn() && resource.data.active == true;
-      allow read: if isAdmin();
+      allow get: if canReadAdminFoodShareCard();
+      allow list: if canReadAdminFoodShareCard();
       allow create, update, delete: if isAdmin() && isAdminFoodShareSlotId(cardId) && isValidAdminFoodShareWrite();
     }
     match /matchQueues/{cardId} {
@@ -1324,7 +1319,9 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /matches/{matchId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.users;
+      allow read: if isAdmin()
+        || (isSignedIn() && request.auth.uid in resource.data.users);
+      allow list: if isAdmin();
       allow create: if isValidFoodMatchCreate(matchId) || isValidAdminFoodShareMatchCreate(matchId);
       allow update: if isFoodShareMatchCancelUpdate();
       allow delete: if false;

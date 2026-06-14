@@ -2,6 +2,8 @@
 export const adminRoutes = {
   home: '/(tabs)/admin',
   foodTemplates: '/(tabs)/admin/food-templates',
+  foodCard: (id: string) =>
+    `/(tabs)/admin/food-card/${encodeURIComponent(id)}`,
   dashboard: '/(tabs)/admin/dashboard',
   analytics: '/(tabs)/admin/analytics',
   users: '/(tabs)/admin/users',

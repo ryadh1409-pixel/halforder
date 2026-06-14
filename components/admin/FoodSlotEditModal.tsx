@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { AppTextInput } from '../AppTextInput';
 
 const BG = '#f8fafc';
@@ -88,7 +89,12 @@ export function FoodSlotEditModal({
 
             <TouchableOpacity
               style={styles.uploadBtn}
-              onPress={onPickImage}
+              onPress={() => {
+                console.log('[IMAGE PICK] upload button pressed', {
+                  currentImage: draft.image,
+                });
+                onPickImage();
+              }}
               disabled={uploading}
             >
               {uploading ? (
@@ -100,8 +106,18 @@ export function FoodSlotEditModal({
               )}
             </TouchableOpacity>
             {draft.image ? (
-              <Image source={{ uri: draft.image }} style={styles.preview} />
-            ) : null}
+              <ExpoImage
+                source={{ uri: draft.image }}
+                style={styles.preview}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.previewPlaceholder}>
+                <Text style={styles.previewPlaceholderText}>
+                  No image selected
+                </Text>
+              </View>
+            )}
 
             <Text style={styles.fieldLabel}>Title</Text>
             <AppTextInput
@@ -178,9 +194,13 @@ export function FoodSlotEditModal({
                 <Text style={styles.ghostBtnText}>Reset</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.saveBtn, saving && styles.btnDisabled]}
-                disabled={saving}
-                onPress={onSave}
+                style={[styles.saveBtn, (saving || uploading) && styles.btnDisabled]}
+                disabled={saving || uploading}
+                onPress={() => {
+                  console.log('[SAVE] pressed');
+                  console.log('[SAVE] formData', draft);
+                  onSave();
+                }}
               >
                 {saving ? (
                   <ActivityIndicator color={CARD} />
@@ -235,6 +255,23 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 14,
     backgroundColor: '#e2e8f0',
+  },
+  previewPlaceholder: {
+    width: '100%',
+    height: 160,
+    borderRadius: 16,
+    marginBottom: 14,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.08)',
+    borderStyle: 'dashed',
+  },
+  previewPlaceholderText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: CARD,

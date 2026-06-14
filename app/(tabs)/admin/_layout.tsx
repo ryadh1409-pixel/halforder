@@ -23,6 +23,7 @@ export default function AdminLayout() {
         options={{ title: 'Food catalog' }}
       />
       <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+      <Stack.Screen name="food-card/[id]" options={{ title: 'Food card' }} />
       <Stack.Screen name="users" options={{ title: 'Users' }} />
       <Stack.Screen name="user/[id]" options={{ title: 'User' }} />
       <Stack.Screen name="orders" options={{ title: 'Orders' }} />

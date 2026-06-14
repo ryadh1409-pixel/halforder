@@ -8,6 +8,7 @@ import {
   collection,
   doc,
   documentId,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -29,6 +30,20 @@ export type AdminFoodCardSlot = {
   restaurantName: string;
 };
 
+const COLLECTION = 'adminFoodShares';
+
+function readVenueLocation(raw?: Record<string, unknown>): string {
+  if (!raw) return '';
+  const pickup =
+    typeof raw.pickupAddress === 'string' ? raw.pickupAddress.trim() : '';
+  if (pickup) return pickup;
+  const venue =
+    typeof raw.venueLocation === 'string' ? raw.venueLocation.trim() : '';
+  if (venue) return venue;
+  if (typeof raw.location === 'string') return raw.location.trim();
+  return '';
+}
+
 function slotFromShare(
   docId: AdminFoodCardSlotId,
   raw?: Record<string, unknown>,
@@ -43,7 +58,7 @@ function slotFromShare(
     price: share.originalPrice,
     sharingPrice: share.sharedPrice,
     deliveryShare: share.deliveryShare,
-    venueLocation: '',
+    venueLocation: readVenueLocation(raw),
     active: share.active,
     aiDescription: share.description,
     restaurantName: share.restaurantName,
@@ -56,7 +71,7 @@ export function subscribeAdminFoodCardSlots(
 ): () => void {
   return onSnapshot(
     query(
-      collection(db, 'adminFoodShares'),
+      collection(db, COLLECTION),
       where(documentId(), 'in', [...ADMIN_FOOD_CARD_SLOT_IDS]),
     ),
     (snap) => {
@@ -92,6 +107,7 @@ export async function saveAdminFoodCardSlot(
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid) throw new Error('Sign in required');
+
   const originalPrice = Number(input.price);
   if (!Number.isFinite(originalPrice) || originalPrice <= 0) {
     throw new Error('Valid original price required');
@@ -114,24 +130,54 @@ export async function saveAdminFoodCardSlot(
       ? input.aiDescription.trim()
       : '';
 
-  await setDoc(
-    doc(db, 'adminFoodShares', slotDocId),
-    {
-      foodName,
-      restaurantName:
-        typeof input.restaurantName === 'string' &&
-        input.restaurantName.trim()
-          ? input.restaurantName.trim()
-          : 'HalfOrder',
-      image,
-      originalPrice: Number(originalPrice.toFixed(2)),
-      sharedPrice: Number(sharedPrice.toFixed(2)),
-      deliveryShare: Number(deliveryShare.toFixed(2)),
-      description,
-      active: input.active === true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  const venueLocation =
+    typeof input.venueLocation === 'string' ? input.venueLocation.trim() : '';
+
+  const docRef = doc(db, COLLECTION, slotDocId);
+  const existing = await getDoc(docRef);
+  const isCreate = !existing.exists();
+
+  console.log('[SAVE] collection', COLLECTION);
+  console.log('[SAVE] document id', slotDocId);
+  console.log('[SAVE] document exists', existing.exists());
+
+  const payload: Record<string, unknown> = {
+    foodName,
+    restaurantName:
+      typeof input.restaurantName === 'string' && input.restaurantName.trim()
+        ? input.restaurantName.trim()
+        : 'HalfOrder',
+    image,
+    originalPrice: Number(originalPrice.toFixed(2)),
+    sharedPrice: Number(sharedPrice.toFixed(2)),
+    deliveryShare: Number(deliveryShare.toFixed(2)),
+    description,
+    active: input.active === true,
+    updatedAt: serverTimestamp(),
+    ...(venueLocation
+      ? {
+          venueLocation,
+          pickupAddress: venueLocation,
+          location: venueLocation,
+        }
+      : {}),
+  };
+
+  if (isCreate) {
+    payload.createdAt = serverTimestamp();
+  }
+
+  console.log('[SAVE] payload', {
+    ...payload,
+    updatedAt: '[serverTimestamp]',
+    createdAt: isCreate ? '[serverTimestamp]' : '[preserved]',
+  });
+
+  try {
+    await setDoc(docRef, payload, { merge: true });
+    console.log('[SAVE] Firestore write succeeded', { collection: COLLECTION, id: slotDocId });
+  } catch (error) {
+    console.error('[SAVE ERROR]', error);
+    throw error;
+  }
 }

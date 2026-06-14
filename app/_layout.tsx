@@ -20,7 +20,9 @@ import React from 'react';
 import { LogBox, Platform, StyleSheet, View } from 'react-native';
 LogBox.ignoreLogs(['FirebaseError: Missing or insufficient permissions']);
 
+import Toast from 'react-native-toast-message';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
+import { toastConfig } from '@/utils/toast';
 import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { AuthProvider } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
@@ -141,6 +143,7 @@ export default function RootLayout() {
                   <BootstrapShell>
                     <Slot />
                     <SystemDialogHost />
+                    <Toast config={toastConfig} />
                     <StartupRedirectOrchestrator />
                     <RoleBoundaryGuard />
                     <RouteGroupMonitor />
