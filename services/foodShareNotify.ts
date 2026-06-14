@@ -183,6 +183,7 @@ export async function notifyAdminMatchCancelled(input: {
 export async function notifyLifecycleUpdate(input: {
   recipientUid: string;
   matchId: string;
+  orderId?: string | null;
   title: string;
   body: string;
   type:
@@ -194,12 +195,20 @@ export async function notifyLifecycleUpdate(input: {
     | 'order_completed';
   pushType: string;
 }): Promise<void> {
+  const orderId = input.orderId?.trim() || null;
+  const deepLink =
+    orderId &&
+    ['driver_assigned', 'driver_arrived', 'picked_up', 'delivered', 'order_placed', 'order_completed'].includes(
+      input.type,
+    )
+      ? `/track-order/${encodeURIComponent(orderId)}`
+      : deepLinkForMatch(input.matchId);
   await createInboxNotification({
     recipientUid: input.recipientUid,
     type: input.type,
     title: input.title,
     body: input.body,
-    deepLink: deepLinkForMatch(input.matchId),
+    deepLink,
     matchId: input.matchId,
     pushType: input.pushType,
   });

@@ -110,6 +110,9 @@ export const linking = {
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',
       'food-share/[adminFoodShareId]': 'food-share/:adminFoodShareId',
+      'food-share-hub/waiting/[adminFoodShareId]':
+        'food-share-hub/waiting/:adminFoodShareId',
+      'food-share-hub/match/[matchId]': 'food-share-hub/match/:matchId',
       'join/[orderId]': 'join/:orderId',
       'join/index': 'join',
       'chat/[id]': 'chat/:id',

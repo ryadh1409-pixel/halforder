@@ -1,7 +1,7 @@
-import { UberEatsBrowseScreen } from '@/components/home/UberEatsBrowseScreen';
+import { OrdersHubScreen } from '@/screens/OrdersHubScreen';
 import React from 'react';
 
-/** Search tab — restaurant & cuisine discovery (Uber Eats Search). */
-export default function SearchTab() {
-  return <UberEatsBrowseScreen />;
+/** Customer Orders Hub — food shares + marketplace orders (tab label: Orders). */
+export default function OrdersTab() {
+  return <OrdersHubScreen />;
 }

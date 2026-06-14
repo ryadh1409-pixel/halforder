@@ -4,8 +4,10 @@ import {
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
+import { foodShareLifecycleLabel } from '@/lib/foodShareLifecycle';
 import { parseFoodCardLocationFields } from '@/services/foodCards';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
+import { mapMatchDoc } from '@/services/foodShareMatchService';
 import type { FoodShareInviteStats } from '@/services/foodShareInvite';
 import { subscribeFoodShareInviteStats } from '@/services/foodShareInvite';
 import { db } from '@/services/firebase';
@@ -77,6 +79,8 @@ export type AdminFoodCardDetail = {
   /** Users currently waiting for a partner on this card. */
   waitingUsers: AdminFoodCardWaitingUser[];
   inviteStats: FoodShareInviteStats;
+  chatStatusLabel: string;
+  hubStatusLabel: string;
 };
 
 type UserProfileSlice = {
@@ -355,6 +359,31 @@ function buildDetail(input: {
     notifyUserIds: [...notifyIds],
     waitingUsers,
     inviteStats: input.inviteStats,
+    chatStatusLabel: (() => {
+      if (!latestMatch) return '—';
+      const lc = String(latestMatch.lifecycle ?? '').toUpperCase();
+      if (lc === 'MATCHED' || lc === 'ORDER_PLACED' || lc === 'DRIVER_ASSIGNED') {
+        return 'Active';
+      }
+      if (lc === 'WAITING_FOR_PAYMENT' || lc === 'PAYMENT_CONFIRMED') {
+        return 'Pending payment';
+      }
+      if (lc === 'CANCELLED') return 'Cancelled';
+      if (lc === 'COMPLETED' || lc === 'DELIVERED') return 'Archived';
+      return '—';
+    })(),
+    hubStatusLabel: (() => {
+      if (waitingUsers.length > 0) return 'Waiting for partner';
+      if (!latestMatch) return '—';
+      const lc = String(latestMatch.lifecycle ?? '').toUpperCase();
+      if (lc === 'WAITING_FOR_PAYMENT' || lc === 'PAYMENT_CONFIRMED') {
+        return 'Awaiting payment';
+      }
+      if (lc === 'MATCHED') return 'Active chat';
+      if (lc === 'COMPLETED' || lc === 'DELIVERED') return 'Completed';
+      if (lc === 'CANCELLED') return 'Cancelled';
+      return foodShareLifecycleLabel(lc);
+    })(),
   };
 }
 

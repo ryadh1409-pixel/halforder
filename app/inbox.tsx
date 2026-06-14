@@ -1,4 +1,5 @@
 import { auth } from '@/services/firebase';
+import { resolveFoodShareNotificationRoute } from '@/lib/foodShareNotificationRoutes';
 import {
   markInboxNotificationRead,
   subscribeInboxNotifications,
@@ -82,7 +83,13 @@ export default function InboxScreen() {
         // Still navigate if mark-read fails.
       }
     }
-    router.push(item.deepLink as never);
+    const href = resolveFoodShareNotificationRoute({
+      type: item.type,
+      deepLink: item.deepLink,
+      matchId: item.matchId,
+      adminFoodShareId: item.adminFoodShareId,
+    });
+    router.push(href as never);
   };
 
   return (

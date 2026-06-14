@@ -40,6 +40,11 @@ export const USER_ROUTES = {
     `/food-share-match/${encodeURIComponent(matchId)}` as const,
   foodShare: (adminFoodShareId: string) =>
     `/food-share/${encodeURIComponent(adminFoodShareId)}` as const,
+  foodShareHubWaiting: (adminFoodShareId: string) =>
+    `/food-share-hub/waiting/${encodeURIComponent(adminFoodShareId)}` as const,
+  foodShareHubMatch: (matchId: string) =>
+    `/food-share-hub/match/${encodeURIComponent(matchId)}` as const,
+  ordersHub: '/(tabs)/search' as const,
   foodSharePay: (matchId: string) =>
     `/food-share-pay/${encodeURIComponent(matchId)}` as const,
   foodShareWaiting: (adminFoodShareId: string) =>
@@ -56,6 +61,8 @@ export const TABS_ROUTES = {
   swipe: '/(tabs)/swipe',
   explore: '/(tabs)/explore',
   search: '/(tabs)/search',
+  /** Customer Orders Hub (tab label: Orders). */
+  orders: '/(tabs)/search',
   driverEntry: '/(tabs)/driver',
   ai: '/(tabs)/ai',
 } as const;

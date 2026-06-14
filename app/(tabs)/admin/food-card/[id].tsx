@@ -547,6 +547,8 @@ export default function AdminFoodCardDetailScreen() {
         </Section>
 
         <Section title="Match">
+          <Row label="Hub status" value={detail.hubStatusLabel} />
+          <Row label="Chat status" value={detail.chatStatusLabel} />
           <Row label="Matched user name" value={detail.matchedUserName ?? '—'} />
           <Row
             label="Matched user ID"

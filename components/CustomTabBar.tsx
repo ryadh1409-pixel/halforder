@@ -33,7 +33,7 @@ function hrefForTabRoute(routeName: string): Href {
     case 'explore':
       return TABS_ROUTES.explore as Href;
     case 'search':
-      return TABS_ROUTES.search as Href;
+      return TABS_ROUTES.orders as Href;
     case 'cart':
       return TABS_ROUTES.cart as Href;
     case 'profile':
@@ -70,7 +70,7 @@ function iconGlyph(
     case 'explore':
       return pick('grid', 'grid-outline');
     case 'search':
-      return pick('search', 'search-outline');
+      return pick('receipt', 'receipt-outline');
     case 'cart':
       return pick('bag', 'bag-outline');
     case 'profile':
@@ -97,7 +97,7 @@ function tabLabel(routeName: string): string {
     case 'explore':
       return 'Browse';
     case 'search':
-      return 'Search';
+      return 'Orders';
     case 'cart':
       return 'Cart';
     case 'profile':

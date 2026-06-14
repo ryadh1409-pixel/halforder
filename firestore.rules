@@ -1346,7 +1346,12 @@ service cloud.firestore {
     }
     match /matchRequests/{requestId} {
       allow get, read: if canReadMatchRequestDoc(requestId);
-      allow list: if isAdmin() || request.auth.token.get('role', '') == 'admin';
+      allow list: if isAdmin()
+        || request.auth.token.get('role', '') == 'admin'
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+        );
       allow create: if isSignedIn()
         && (
           isValidMatchRequestOwnCreate(requestId)
@@ -1416,7 +1421,11 @@ service cloud.firestore {
     match /matches/{matchId} {
       allow read: if isAdmin()
         || (isSignedIn() && request.auth.uid in resource.data.users);
-      allow list: if isAdmin();
+      allow list: if isAdmin()
+        || (
+          isSignedIn()
+          && request.auth.uid in resource.data.users
+        );
       allow create: if isValidFoodMatchCreate(matchId) || isValidAdminFoodShareMatchCreate(matchId);
       allow update: if isFoodShareMatchCancelUpdate();
       allow delete: if false;
