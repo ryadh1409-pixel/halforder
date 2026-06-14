@@ -181,17 +181,36 @@ export const acceptCommunityGuidelines = functions
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Login required");
     }
-    await admin
-      .firestore()
-      .doc(`users/${context.auth.uid}`)
-      .set(
-        {
-          chatSafety: {
-            guidelinesAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-            guidelinesVersion: "2026-04",
-          },
-        },
-        {merge: true},
+    const uid = context.auth.uid;
+    const path = `users/${uid}`;
+    const payload = {
+      chatSafety: {
+        guidelinesAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        guidelinesVersion: "2026-04",
+      },
+    };
+    console.log("[GUIDELINES WRITE] before", {
+      path,
+      uid,
+      payload: {chatSafety: {guidelinesVersion: "2026-04"}},
+      via: "server_firestore",
+    });
+    try {
+      await admin.firestore().doc(path).set(payload, {merge: true});
+      console.log("[GUIDELINES WRITE] success", {path, uid, via: "server_firestore"});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[GUIDELINES WRITE] failure", {
+        path,
+        uid,
+        via: "server_firestore",
+        message,
+        error,
+      });
+      throw new functions.https.HttpsError(
+        "internal",
+        `Could not save acceptance: ${message}`,
       );
+    }
     return {ok: true};
   });

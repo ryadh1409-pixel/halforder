@@ -1,5 +1,5 @@
 import { COMMUNITY_GUIDELINES_MESSAGE } from '@/lib/chatModerationEngine';
-import { auth, db, functions } from '@/services/firebase';
+import { auth, db, ensureAuthReady, functions } from '@/services/firebase';
 import { httpsCallable } from 'firebase/functions';
 import {
   doc,
@@ -10,6 +10,53 @@ import {
 } from 'firebase/firestore';
 
 export { COMMUNITY_GUIDELINES_MESSAGE };
+
+const GUIDELINES_VERSION = '2026-04';
+
+function parseFirebaseError(error: unknown): {
+  code: string;
+  message: string;
+  details: unknown;
+} {
+  const err = error as { code?: string; message?: string; details?: unknown };
+  return {
+    code: typeof err?.code === 'string' ? err.code : 'unknown',
+    message: typeof err?.message === 'string' ? err.message : String(error),
+    details: err?.details ?? null,
+  };
+}
+
+async function writeGuidelinesAcceptanceClient(uid: string): Promise<void> {
+  const path = `users/${uid}`;
+  const payload = {
+    chatSafety: {
+      guidelinesAcceptedAt: serverTimestamp(),
+      guidelinesVersion: GUIDELINES_VERSION,
+    },
+  };
+  console.log('[GUIDELINES WRITE] before', {
+    path,
+    payload: { chatSafety: { guidelinesVersion: GUIDELINES_VERSION } },
+    uid,
+    via: 'client_firestore',
+  });
+  try {
+    await setDoc(doc(db, 'users', uid), payload, { merge: true });
+    console.log('[GUIDELINES WRITE] success', { path, uid, via: 'client_firestore' });
+  } catch (error) {
+    const parsed = parseFirebaseError(error);
+    console.error('[GUIDELINES WRITE] failure', {
+      path,
+      uid,
+      via: 'client_firestore',
+      code: parsed.code,
+      message: parsed.message,
+      details: parsed.details,
+      error,
+    });
+    throw error;
+  }
+}
 
 export type SendModeratedMessageResult =
   | { ok: true; messageId: string }
@@ -24,8 +71,50 @@ export async function hasAcceptedCommunityGuidelines(): Promise<boolean> {
 }
 
 export async function acceptCommunityGuidelines(): Promise<void> {
-  const fn = httpsCallable(functions, 'acceptCommunityGuidelines');
-  await fn({});
+  await ensureAuthReady();
+  const uid = auth.currentUser?.uid ?? '';
+  if (!uid) throw new Error('Sign in required');
+
+  const callablePayload = {};
+  console.log('[GUIDELINES ACCEPT] before callable', {
+    callable: 'acceptCommunityGuidelines',
+    uid,
+    payload: callablePayload,
+  });
+
+  try {
+    const fn = httpsCallable(functions, 'acceptCommunityGuidelines');
+    const result = await fn(callablePayload);
+    console.log('[GUIDELINES ACCEPT] callable success', {
+      callable: 'acceptCommunityGuidelines',
+      uid,
+      data: result.data,
+    });
+    return;
+  } catch (callableError) {
+    const parsed = parseFirebaseError(callableError);
+    console.error('[GUIDELINES ACCEPT] callable failure', {
+      callable: 'acceptCommunityGuidelines',
+      uid,
+      code: parsed.code,
+      message: parsed.message,
+      details: parsed.details,
+      error: callableError,
+    });
+
+    const callableMissing =
+      parsed.code === 'functions/not-found' ||
+      /not-found/i.test(parsed.message);
+
+    if (!callableMissing) {
+      throw callableError;
+    }
+
+    console.log('[GUIDELINES ACCEPT] callable missing — trying client Firestore write', {
+      uid,
+    });
+    await writeGuidelinesAcceptanceClient(uid);
+  }
 }
 
 export async function sendModeratedMatchChatMessage(input: {

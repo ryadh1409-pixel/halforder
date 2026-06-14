@@ -39,6 +39,13 @@ export default function CommunityGuidelinesScreen() {
           router.back();
         }
       } catch (e) {
+        const err = e as { code?: string; message?: string };
+        console.error('[GUIDELINES ACCEPT] screen failure', {
+          code: err?.code ?? 'unknown',
+          message: err?.message ?? String(e),
+          error: e,
+          redirect,
+        });
         showError('Could not save acceptance. Try again.');
       } finally {
         setBusy(false);
