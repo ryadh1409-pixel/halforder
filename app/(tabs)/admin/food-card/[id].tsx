@@ -490,6 +490,45 @@ export default function AdminFoodCardDetailScreen() {
           />
         </Section>
 
+        <Section title="Invite analytics">
+          <Row label="Invites sent" value={String(detail.inviteStats.sent)} />
+          <Row label="Invites opened" value={String(detail.inviteStats.opened)} />
+          <Row
+            label="Invite conversions"
+            value={String(detail.inviteStats.converted)}
+          />
+          <Row
+            label="Conversion rate"
+            value={
+              detail.inviteStats.sent > 0
+                ? `${detail.inviteStats.conversionRate}%`
+                : '—'
+            }
+          />
+        </Section>
+
+        <Section title="Waiting users">
+          {detail.waitingUsers.length === 0 ? (
+            <Row label="Status" value="No users waiting" />
+          ) : (
+            detail.waitingUsers.map((user) => (
+              <View key={user.userId} style={styles.waitingUserBlock}>
+                <Row label="Name" value={user.userFirstName} />
+                <Row
+                  label="User ID"
+                  value={user.userId}
+                  mono
+                  onPress={() =>
+                    router.push(adminRoutes.user(user.userId) as never)
+                  }
+                />
+                <Row label="Joined" value={user.joinedAtLabel} />
+                <Row label="Status" value={user.status} />
+              </View>
+            ))
+          )}
+        </Section>
+
         <Section title="User">
           <Row label="Creator user name" value={detail.creatorName ?? '—'} />
           <Row
@@ -695,6 +734,12 @@ const styles = StyleSheet.create({
   statusTextActive: { color: COLORS.successText },
   statusTextInactive: { color: COLORS.textMuted },
   card: { ...adminCardShell, marginBottom: 14, padding: theme.spacing.md },
+  waitingUserBlock: {
+    paddingVertical: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',

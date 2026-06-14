@@ -122,6 +122,12 @@ function activateMatchIfFullyPaid(
     text: `Payment confirmed! You're matched to split ${foodName}. Say hi and coordinate delivery!`,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  console.log("[CHAT CREATED]", {
+    matchChatId,
+    matchId,
+    adminFoodShareId,
+    trigger: "both_users_paid",
+  });
 }
 
 export async function withFoodShareEventIdempotency(

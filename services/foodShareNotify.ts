@@ -3,6 +3,7 @@ import { FOOD_SHARE_SUCCESS } from '@/lib/foodShareUx';
 import {
   createInboxNotification,
   deepLinkForFoodSharePay,
+  deepLinkForFoodShareWaiting,
   deepLinkForMatch,
   deepLinkForMatchChat,
   notifyAdminFoodShareEvent,
@@ -18,7 +19,7 @@ export async function notifyShareJoinedWaiting(input: {
     type: 'share_joined',
     title: 'Waiting for a partner',
     body: `You joined ${input.foodName}. We'll notify you when someone matches.`,
-    deepLink: '/(tabs)/swipe',
+    deepLink: deepLinkForFoodShareWaiting(input.adminFoodShareId),
     adminFoodShareId: input.adminFoodShareId,
     pushType: FOOD_SHARE_PUSH.SHARE_JOINED,
     skipPush: true,

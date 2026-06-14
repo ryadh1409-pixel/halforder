@@ -52,6 +52,7 @@ export default function FoodSharePayScreen() {
       setError('Missing match.');
       return undefined;
     }
+    console.log('[PAYMENT START]', { screen: 'food-share-pay', matchId: id });
     const ref = doc(db, 'matches', id);
     const unsub = onSnapshot(
       ref,
@@ -66,6 +67,11 @@ export default function FoodSharePayScreen() {
         setMatch(mapped);
         setError(null);
         if (mapped.lifecycle === 'MATCHED' || mapped.status === 'MATCHED') {
+          console.log('[MATCH FLOW STEP]', {
+            step: 'payment_complete_open_chat',
+            matchId: id,
+            matchChatId: mapped.matchChatId ?? id,
+          });
           router.replace(USER_ROUTES.foodShareChat(id) as never);
           return;
         }

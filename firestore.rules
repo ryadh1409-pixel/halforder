@@ -684,21 +684,52 @@ service cloud.firestore {
           )
         );
     }
-    function isValidMatchRequestCreate(requestId) {
+    /** Own create — ownership + slot id; share active/exists validated client-side in transaction. */
+    function isValidMatchRequestOwnCreate(requestId) {
       return isSignedIn()
-        && !isCurrentUserRestricted()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.adminFoodShareId is string
         && isAdminFoodShareSlotId(request.resource.data.adminFoodShareId)
-        && requestId == request.resource.data.adminFoodShareId + '_' + request.auth.uid
-        && exists(/databases/$(database)/documents/adminFoodShares/$(request.resource.data.adminFoodShareId))
-        && adminFoodShareById(request.resource.data.adminFoodShareId).active == true
-        && (request.resource.data.status == 'WAITING' || request.resource.data.status == 'MATCHED')
-        && request.resource.data.createdAt != null;
+        && requestId == request.resource.data.adminFoodShareId + '_' + request.auth.uid;
+    }
+    function isValidMatchRequestCreate(requestId) {
+      return isValidMatchRequestOwnCreate(requestId);
+    }
+    function expectedAdminFoodShareMatchId(shareId, uidA, uidB) {
+      return shareId + '_' + (uidA < uidB ? uidA + '_' + uidB : uidB + '_' + uidA);
+    }
+    /** Second swiper may `set(merge)` partner's request when queue matched but partner doc was never created. */
+    function isValidMatchRequestPartnerMatchCreate(requestId) {
+      let partnerUid = request.resource.data.userId;
+      let matcherUid = request.auth.uid;
+      let shareId = request.resource.data.adminFoodShareId;
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && partnerUid is string
+        && matcherUid != partnerUid
+        && shareId is string
+        && isAdminFoodShareSlotId(shareId)
+        && requestId == shareId + '_' + partnerUid
+        && request.resource.data.status == 'MATCHED'
+        && request.resource.data.matchId is string
+        && request.resource.data.matchId.size() > 0
+        && request.resource.data.matchId == expectedAdminFoodShareMatchId(shareId, partnerUid, matcherUid)
+        && exists(/databases/$(database)/documents/adminFoodShares/$(shareId))
+        && adminFoodShareById(shareId).active == true;
+    }
+    function canReadMatchRequestDoc(requestId) {
+      return isSignedIn()
+        && (
+          !exists(/databases/$(database)/documents/matchRequests/$(requestId))
+          || resource.data.userId == request.auth.uid
+          || isAdmin()
+          || request.auth.token.get('role', '') == 'admin'
+        );
     }
     function isValidMatchRequestUpdate() {
       return isSignedIn()
         && !isCurrentUserRestricted()
+        && request.resource.data.adminFoodShareId == resource.data.adminFoodShareId
         && (
           (
             resource.data.userId == request.auth.uid
@@ -710,15 +741,21 @@ service cloud.firestore {
                 && request.resource.data.status == 'CANCELLED'
                 && request.resource.data.cancelReason == 'CANCELLED_BY_USER'
               )
+              || (
+                resource.data.status == 'CANCELLED'
+                && request.resource.data.status in ['WAITING', 'MATCHED']
+              )
             )
           )
           || (
-            resource.data.status == 'WAITING'
+            resource.data.userId != request.auth.uid
+            && request.resource.data.userId == resource.data.userId
+            && resource.data.status == 'WAITING'
             && request.resource.data.status == 'MATCHED'
-            && resource.data.userId != request.auth.uid
+            && request.resource.data.matchId is string
+            && request.resource.data.matchId.size() > 0
           )
-        )
-        && request.resource.data.adminFoodShareId == resource.data.adminFoodShareId;
+        );
     }
     function canCancelFoodShareMatchLifecycle() {
       return !(resource.data.lifecycle in ['ORDER_PLACED', 'DRIVER_ASSIGNED', 'PICKED_UP', 'DELIVERED', 'COMPLETED'])
@@ -1308,10 +1345,68 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /matchRequests/{requestId} {
-      allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isValidMatchRequestCreate(requestId);
+      allow get, read: if canReadMatchRequestDoc(requestId);
+      allow list: if isAdmin() || request.auth.token.get('role', '') == 'admin';
+      allow create: if isSignedIn()
+        && (
+          isValidMatchRequestOwnCreate(requestId)
+          || isValidMatchRequestPartnerMatchCreate(requestId)
+        );
       allow update: if isValidMatchRequestUpdate();
+      allow delete: if false;
+    }
+    function isValidFoodShareInviteCreate() {
+      return request.resource.data.keys().hasAll(['senderUid', 'adminFoodShareId', 'inviteLink', 'channel', 'createdAt'])
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.adminFoodShareId is string
+        && request.resource.data.adminFoodShareId.size() > 0
+        && request.resource.data.inviteLink is string
+        && request.resource.data.inviteLink.size() > 0
+        && request.resource.data.channel is string
+        && (request.resource.data.channel == 'whatsapp' || request.resource.data.channel == 'share_sheet')
+        && request.resource.data.createdAt == request.time
+        && (!request.resource.data.keys().hasAny(['openedAt']) || request.resource.data.openedAt == null)
+        && (!request.resource.data.keys().hasAny(['openedByUid']) || request.resource.data.openedByUid == null)
+        && (!request.resource.data.keys().hasAny(['convertedAt']) || request.resource.data.convertedAt == null)
+        && (!request.resource.data.keys().hasAny(['convertedMatchId']) || request.resource.data.convertedMatchId == null);
+    }
+    function isValidFoodShareInviteSenderPatch() {
+      return resource.data.senderUid == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['inviteLink', 'channel'])
+        && request.resource.data.senderUid == resource.data.senderUid
+        && request.resource.data.adminFoodShareId == resource.data.adminFoodShareId
+        && request.resource.data.inviteLink is string
+        && request.resource.data.inviteLink.size() > 0
+        && (request.resource.data.channel == 'whatsapp' || request.resource.data.channel == 'share_sheet');
+    }
+    function isValidFoodShareInviteOpen() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['openedAt', 'openedByUid'])
+        && request.resource.data.openedByUid == request.auth.uid
+        && request.resource.data.openedByUid is string
+        && resource.data.openedAt == null
+        && (!resource.data.keys().hasAny(['openedByUid']) || resource.data.openedByUid == null);
+    }
+    function isValidFoodShareInviteConvert() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['convertedAt', 'convertedMatchId'])
+        && request.resource.data.convertedMatchId is string
+        && request.resource.data.convertedMatchId.size() > 0
+        && resource.data.convertedAt == null
+        && (resource.data.senderUid == request.auth.uid || resource.data.openedByUid == request.auth.uid);
+    }
+    match /foodShareInvites/{inviteId} {
+      allow get: if isAdmin()
+        || (isSignedIn() && resource.data.senderUid == request.auth.uid)
+        || (isSignedIn() && resource.data.openedByUid == request.auth.uid);
+      allow list: if isAdmin();
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && isValidFoodShareInviteCreate();
+      allow update: if isSignedIn()
+        && (
+          isValidFoodShareInviteSenderPatch()
+          || isValidFoodShareInviteOpen()
+          || isValidFoodShareInviteConvert()
+        );
       allow delete: if false;
     }
     match /foodShares/{shareId} {

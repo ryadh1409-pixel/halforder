@@ -6,7 +6,8 @@ import {
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { parseFoodCardLocationFields } from '@/services/foodCards';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
-import { mapMatchDoc } from '@/services/foodShareMatchService';
+import type { FoodShareInviteStats } from '@/services/foodShareInvite';
+import { subscribeFoodShareInviteStats } from '@/services/foodShareInvite';
 import { db } from '@/services/firebase';
 import type { FoodShareMatchDoc, MatchRequestDoc } from '@/types/foodShare';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -22,6 +23,13 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
+
+export type AdminFoodCardWaitingUser = {
+  userId: string;
+  userFirstName: string;
+  joinedAtLabel: string;
+  status: MatchRequestDoc['status'];
+};
 
 export type AdminFoodCardDetail = {
   cardId: AdminFoodCardSlotId;
@@ -66,6 +74,9 @@ export type AdminFoodCardDetail = {
   expirationDateLabel: string;
   /** UIDs to target for card-related notifications. */
   notifyUserIds: string[];
+  /** Users currently waiting for a partner on this card. */
+  waitingUsers: AdminFoodCardWaitingUser[];
+  inviteStats: FoodShareInviteStats;
 };
 
 type UserProfileSlice = {
@@ -145,6 +156,7 @@ function buildDetail(input: {
   queueRaw: Record<string, unknown> | null;
   requests: MatchRequestDoc[];
   matches: FoodShareMatchDoc[];
+  inviteStats: FoodShareInviteStats;
   ownerProfile: Record<string, unknown> | null;
   matchedProfile: Record<string, unknown> | null;
   driverProfile: Record<string, unknown> | null;
@@ -273,6 +285,15 @@ function buildDetail(input: {
     });
   }
 
+  const waitingUsers: AdminFoodCardWaitingUser[] = input.requests
+    .filter((r) => r.status === 'WAITING')
+    .map((r) => ({
+      userId: r.userId,
+      userFirstName: r.userFirstName,
+      joinedAtLabel: r.createdAtMs ? formatFirestoreTime(r.createdAtMs) : '—',
+      status: r.status,
+    }));
+
   return {
     cardId: input.cardId,
     active: share.active,
@@ -332,6 +353,8 @@ function buildDetail(input: {
       'expirationAt',
     ),
     notifyUserIds: [...notifyIds],
+    waitingUsers,
+    inviteStats: input.inviteStats,
   };
 }
 
@@ -350,6 +373,12 @@ export function subscribeAdminFoodCardDetail(
   let queueRaw: Record<string, unknown> | null = null;
   let requests: MatchRequestDoc[] = [];
   let matches: FoodShareMatchDoc[] = [];
+  let inviteStats: FoodShareInviteStats = {
+    sent: 0,
+    opened: 0,
+    converted: 0,
+    conversionRate: 0,
+  };
   let ownerProfile: Record<string, unknown> | null = null;
   let matchedProfile: Record<string, unknown> | null = null;
   let driverProfile: Record<string, unknown> | null = null;
@@ -368,6 +397,7 @@ export function subscribeAdminFoodCardDetail(
         queueRaw,
         requests,
         matches,
+        inviteStats,
         ownerProfile,
         matchedProfile,
         driverProfile,
@@ -541,6 +571,17 @@ export function subscribeAdminFoodCardDetail(
         emit();
       },
     ),
+    subscribeFoodShareInviteStats(
+      slotId,
+      (stats) => {
+        inviteStats = stats;
+        emit();
+      },
+      () => {
+        inviteStats = { sent: 0, opened: 0, converted: 0, conversionRate: 0 };
+        emit();
+      },
+    ),
   ];
 
   return () => {
@@ -550,6 +591,40 @@ export function subscribeAdminFoodCardDetail(
     driverUnsub?.();
     orderUnsub?.();
   };
+}
+
+export type AdminFoodCardWaitingQueue = {
+  adminFoodShareId: string;
+  waitingUserId: string | null;
+  waitingUserFirstName: string | null;
+};
+
+/** Live waiting-user snapshot per food card slot (from `matchQueues`). */
+export function subscribeAdminFoodCardWaitingQueues(
+  onData: (rows: Record<string, AdminFoodCardWaitingQueue>) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const state: Record<string, AdminFoodCardWaitingQueue> = {};
+
+  const emit = () => onData({ ...state });
+
+  const unsubs = ADMIN_FOOD_CARD_SLOT_IDS.map((slotId) =>
+    onSnapshot(
+      doc(db, 'matchQueues', slotId),
+      (snap) => {
+        const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+        state[slotId] = {
+          adminFoodShareId: slotId,
+          waitingUserId: normStr(data?.waitingUserId),
+          waitingUserFirstName: normStr(data?.waitingUserFirstName),
+        };
+        emit();
+      },
+      (e) => onError?.(e instanceof Error ? e : new Error(String(e))),
+    ),
+  );
+
+  return () => unsubs.forEach((u) => u());
 }
 
 export async function setAdminFoodCardActive(

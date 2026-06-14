@@ -22,6 +22,7 @@ export type AdminFoodCardTileProps = {
   configured: boolean;
   onPress: () => void;
   busy?: boolean;
+  waitingUserName?: string | null;
 };
 
 export function AdminFoodCardTile({
@@ -35,6 +36,7 @@ export function AdminFoodCardTile({
   configured,
   onPress,
   busy,
+  waitingUserName,
 }: AdminFoodCardTileProps) {
   const displayTitle = title.trim() || `Slot ${cardId}`;
   const hasImage = imageUri.trim().length > 0;
@@ -101,6 +103,14 @@ export function AdminFoodCardTile({
         <Text style={styles.price}>{priceLabel}</Text>
         {sharingPriceLabel ? (
           <Text style={styles.sharePrice}>{sharingPriceLabel}</Text>
+        ) : null}
+        {waitingUserName ? (
+          <View style={styles.waitingBadge}>
+            <Ionicons name="time-outline" size={12} color="#B45309" />
+            <Text style={styles.waitingBadgeText} numberOfLines={1}>
+              Waiting: {waitingUserName}
+            </Text>
+          </View>
         ) : null}
         <View style={styles.footer}>
           <Text style={styles.cta}>View details</Text>
@@ -188,6 +198,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  waitingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignSelf: 'flex-start',
+  },
+  waitingBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+    maxWidth: 140,
   },
   footer: {
     flexDirection: 'row',

@@ -6,6 +6,14 @@ import {
 } from '../../../../constants/adminFoodCards';
 import { auth } from '../../../../services/firebase';
 import {
+  subscribeAdminFoodCardWaitingQueues,
+  type AdminFoodCardWaitingQueue,
+} from '../../../../services/adminFoodCardDetail';
+import {
+  subscribeAllFoodShareInviteStats,
+  type FoodShareInviteStats,
+} from '../../../../services/foodShareInvite';
+import {
   subscribeAdminFoodCardSlots,
   type AdminFoodCardSlot,
 } from '../../../../services/adminFoodCardSlots';
@@ -30,12 +38,31 @@ export function AdminCardsDashboard() {
   const cellW = (winW - horizontalPad * 2 - COL_GAP) / 2;
 
   const [remote, setRemote] = useState<AdminFoodCardSlot[] | null>(null);
+  const [waitingQueues, setWaitingQueues] = useState<
+    Record<string, AdminFoodCardWaitingQueue>
+  >({});
+  const [inviteStats, setInviteStats] = useState<FoodShareInviteStats>({
+    sent: 0,
+    opened: 0,
+    converted: 0,
+    conversionRate: 0,
+  });
 
   useEffect(() => {
     const unsub = subscribeAdminFoodCardSlots((rows) => {
       console.log('[ADMIN CARDS]', rows);
       setRemote(rows);
     });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeAdminFoodCardWaitingQueues(setWaitingQueues);
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeAllFoodShareInviteStats(setInviteStats);
     return unsub;
   }, []);
 
@@ -67,6 +94,29 @@ export function AdminCardsDashboard() {
       <Text style={styles.headSub}>
         Tap any card to open full details, edit, or delete.
       </Text>
+      <View style={styles.statsCard}>
+        <Text style={styles.statsTitle}>Food share invites</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{inviteStats.sent}</Text>
+            <Text style={styles.statLabel}>Sent</Text>
+          </View>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{inviteStats.opened}</Text>
+            <Text style={styles.statLabel}>Opened</Text>
+          </View>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{inviteStats.converted}</Text>
+            <Text style={styles.statLabel}>Converted</Text>
+          </View>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>
+              {inviteStats.sent > 0 ? `${inviteStats.conversionRate}%` : '—'}
+            </Text>
+            <Text style={styles.statLabel}>Rate</Text>
+          </View>
+        </View>
+      </View>
       <FlatList
         data={remote}
         keyExtractor={(item) => item.docId}
@@ -84,6 +134,8 @@ export function AdminCardsDashboard() {
             slot.sharingPrice > 0
               ? `Share $${slot.sharingPrice.toFixed(2)}`
               : undefined;
+          const waiting = waitingQueues[slot.docId];
+          const waitingUserName = waiting?.waitingUserFirstName ?? null;
           return (
             <View style={{ width: cellW }}>
               <AdminFoodCardTile
@@ -95,6 +147,7 @@ export function AdminCardsDashboard() {
                 sharingPriceLabel={sharingPriceLabel}
                 active={slot.active}
                 configured={configured}
+                waitingUserName={waitingUserName}
                 onPress={() => openDetail(slot.docId)}
               />
             </View>
@@ -124,6 +177,37 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginBottom: 14,
     lineHeight: 18,
+  },
+  statsCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    marginBottom: 14,
+  },
+  statsTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 10,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  statCell: { flex: 1, alignItems: 'center' },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   footerId: {
     fontSize: 11,

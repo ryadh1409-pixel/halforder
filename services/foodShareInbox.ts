@@ -269,6 +269,17 @@ export function deepLinkForFoodSharePay(matchId: string): string {
   return USER_ROUTES.foodSharePay(matchId);
 }
 
+export function deepLinkForFoodShareWaiting(adminFoodShareId: string): string {
+  return USER_ROUTES.foodShareWaiting(adminFoodShareId);
+}
+
+export function deepLinkForFoodShare(adminFoodShareId: string, inviteId?: string): string {
+  const base = USER_ROUTES.foodShare(adminFoodShareId);
+  return inviteId?.trim()
+    ? `${base}?invite=${encodeURIComponent(inviteId.trim())}`
+    : base;
+}
+
 export function deepLinkForMatchChat(matchId: string): string {
   return USER_ROUTES.foodShareChat(matchId);
 }

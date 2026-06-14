@@ -109,6 +109,7 @@ export const linking = {
       'track-order/[orderId]': 'track-order/:orderId',
       'match/[orderId]': 'match/:orderId',
       'food-match/[matchId]': 'food-match/:matchId',
+      'food-share/[adminFoodShareId]': 'food-share/:adminFoodShareId',
       'join/[orderId]': 'join/:orderId',
       'join/index': 'join',
       'chat/[id]': 'chat/:id',

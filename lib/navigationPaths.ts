@@ -38,8 +38,12 @@ export const USER_ROUTES = {
   trackOrder: (orderId: string) => `/track-order/${encodeURIComponent(orderId)}` as const,
   foodShareMatch: (matchId: string) =>
     `/food-share-match/${encodeURIComponent(matchId)}` as const,
+  foodShare: (adminFoodShareId: string) =>
+    `/food-share/${encodeURIComponent(adminFoodShareId)}` as const,
   foodSharePay: (matchId: string) =>
     `/food-share-pay/${encodeURIComponent(matchId)}` as const,
+  foodShareWaiting: (adminFoodShareId: string) =>
+    `/food-share-waiting/${encodeURIComponent(adminFoodShareId)}` as const,
   foodShareChat: (matchId: string) =>
     `/food-share-chat/${encodeURIComponent(matchId)}` as const,
 } as const;

@@ -21,7 +21,7 @@ import { joinAdminFoodShare } from '@/services/foodShareMatchService';
 import { auth } from '@/services/firebase';
 import { recordSwipe } from '@/services/swipeService';
 import { useSwipeStore } from '@/store/swipeStore';
-import { showError, showNotice, showSuccess } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -106,7 +106,19 @@ export function SwipeDiscoveryScreen() {
       const result = await joinAdminFoodShare(current.adminFoodShareId);
       if (!result.ok) throw new Error(result.error);
 
+      console.log('[MATCH FLOW STEP]', {
+        step: 'joinAdminFoodShare_result',
+        matched: result.matched,
+        adminFoodShareId: result.adminFoodShareId,
+        matchId: result.matched ? result.matchId : null,
+      });
+
       if (result.matched) {
+        console.log('[MATCH FOUND]', {
+          matchId: result.matchId,
+          partnerUid: result.partnerUid,
+          adminFoodShareId: result.adminFoodShareId,
+        });
         const myFirstName = await resolveMyFirstName();
         setLastMatch({
           matchId: result.matchId,
@@ -121,16 +133,21 @@ export function SwipeDiscoveryScreen() {
         });
         hapticMatchFound();
         showSuccess(FOOD_SHARE_SUCCESS.matchFound);
+        console.log('[PAYMENT START]', {
+          route: USER_ROUTES.foodSharePay(result.matchId),
+          matchId: result.matchId,
+        });
         router.push(USER_ROUTES.foodSharePay(result.matchId) as never);
         advanceDeck();
       } else {
+        console.log('[MATCH FLOW STEP]', {
+          step: 'navigate_to_waiting_screen',
+          adminFoodShareId: result.adminFoodShareId,
+        });
         hapticShareJoined();
         showSuccess(FOOD_SHARE_SUCCESS.shareJoined);
-        showNotice(
-          'Waiting for a partner',
-          'We will notify you when someone joins this meal share.',
-        );
         advanceDeck();
+        router.push(USER_ROUTES.foodShareWaiting(result.adminFoodShareId) as never);
       }
     } catch (e) {
       showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.unableToJoin));

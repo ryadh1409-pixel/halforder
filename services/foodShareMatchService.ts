@@ -6,6 +6,7 @@ import {
   notifyPairingAwaitingPayment,
   notifyShareJoinedWaiting,
 } from '@/services/foodShareNotify';
+import { markFoodShareInviteConverted } from '@/services/foodShareInvite';
 import { hasBlockBetween } from '@/services/blocks';
 import { auth, db } from '@/services/firebase';
 import type {
@@ -15,6 +16,8 @@ import type {
   FoodSharePaymentStatus,
   FoodShareUserPaymentState,
 } from '@/types/foodShare';
+import { USER_ROUTES } from '@/lib/navigationPaths';
+import { consumePendingFoodShareInviteId } from '@/lib/foodShareInvitePending';
 import { getReadableErrorMessage } from '@/utils/errorMessages';
 import {
   doc,
@@ -93,6 +96,10 @@ export async function joinAdminFoodShare(
   const queueRef = doc(db, 'matchQueues', adminFoodShareId);
   const requestRef = doc(db, 'matchRequests', `${adminFoodShareId}_${uid}`);
   const myFirstName = await resolveFirstName(uid);
+  const requestPath = `matchRequests/${adminFoodShareId}_${uid}`;
+
+  console.log('[MATCH REQUEST PATH]', requestPath);
+  console.log('[MATCH REQUEST UID]', uid);
 
   const queuePreview = await getDoc(queueRef);
   const waitingPreview =
@@ -119,6 +126,14 @@ export async function joinAdminFoodShare(
       }
 
       const existingReq = await tx.get(requestRef);
+      console.log('[MATCH REQUEST READ]', {
+        path: requestPath,
+        exists: existingReq.exists(),
+        userId: existingReq.exists()
+          ? (existingReq.data()?.userId as string | undefined)
+          : null,
+        authUid: uid,
+      });
       if (existingReq.exists()) {
         const status = existingReq.data()?.status;
         if (status === 'MATCHED') {
@@ -161,6 +176,12 @@ export async function joinAdminFoodShare(
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        console.log('[MATCH REQUEST CREATE]', {
+          path: requestPath,
+          userId: uid,
+          status: 'WAITING',
+          authUid: uid,
+        });
         return { kind: 'waiting' as const };
       }
 
@@ -173,6 +194,8 @@ export async function joinAdminFoodShare(
         'matchRequests',
         `${adminFoodShareId}_${waitingUserId}`,
       );
+      const partnerPath = `matchRequests/${adminFoodShareId}_${waitingUserId}`;
+      console.log('[MATCH REQUEST PATH]', partnerPath);
       const [u0, u1] = sortedPair(waitingUserId, uid);
       const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
 
@@ -193,6 +216,13 @@ export async function joinAdminFoodShare(
         },
         { merge: true },
       );
+      console.log('[MATCH REQUEST CREATE]', {
+        path: requestPath,
+        userId: uid,
+        status: 'MATCHED',
+        authUid: uid,
+        matchId,
+      });
       tx.set(requestRef, {
         adminFoodShareId,
         userId: uid,
@@ -214,6 +244,12 @@ export async function joinAdminFoodShare(
   }
 
   if (txResult.kind === 'waiting') {
+    console.log('[MATCH FLOW STEP]', {
+      step: 'waiting_for_partner',
+      adminFoodShareId,
+      userId: uid,
+      nextTrigger: 'second_user_likes_same_adminFoodShareId',
+    });
     const shareSnap = await getDoc(shareRef);
     const foodName =
       shareSnap.exists() &&
@@ -224,6 +260,21 @@ export async function joinAdminFoodShare(
       userId: uid,
       foodName,
       adminFoodShareId,
+    }).then(() => {
+      console.log('[MATCH FLOW STEP]', {
+        step: 'waiting_inbox_notification_sent',
+        adminFoodShareId,
+        userId: uid,
+        deepLink: USER_ROUTES.foodShareWaiting(adminFoodShareId),
+      });
+    });
+    console.log('[MATCH FLOW STEP]', {
+      step: 'waiting_complete',
+      matched: false,
+      payment: false,
+      chat: false,
+      order: false,
+      redirect: 'food-share-waiting',
     });
     return { ok: true, matched: false, adminFoodShareId };
   }
@@ -278,6 +329,27 @@ export async function joinAdminFoodShare(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    console.log('[MATCH FOUND]', {
+      matchId,
+      adminFoodShareId,
+      users: [u0, u1],
+      lifecycle: 'WAITING_FOR_PAYMENT',
+      matchChatId,
+      chatCreated: false,
+      orderCreated: false,
+    });
+    console.log('[MATCH FLOW STEP]', {
+      step: 'match_doc_created_awaiting_payment',
+      matchId,
+      nextStep: 'navigate_to_payment_screen',
+    });
+  } else {
+    console.log('[MATCH FOUND]', {
+      matchId,
+      adminFoodShareId,
+      existing: true,
+      lifecycle: existingMatch.data()?.lifecycle ?? null,
+    });
   }
 
   const partnerFirstName =
@@ -301,6 +373,14 @@ export async function joinAdminFoodShare(
     matchId,
     adminFoodShareId,
     foodName: share.foodName,
+  });
+
+  void markFoodShareInviteConverted({
+    inviteId: consumePendingFoodShareInviteId(),
+    adminFoodShareId,
+    matchId,
+    userA: u0,
+    userB: u1,
   });
 
   return {
