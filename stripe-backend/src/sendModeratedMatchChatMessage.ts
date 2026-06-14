@@ -171,6 +171,22 @@ export const sendModeratedMatchChatMessage = functions
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+    if (partnerUid) {
+      const preview =
+        verdict.text.length > 80
+          ? `${verdict.text.slice(0, 77)}…`
+          : verdict.text;
+      await writeFoodShareInbox({
+        recipientUid: partnerUid,
+        type: "chat_message",
+        title: `New message from ${senderFirstName.split(/\s+/)[0] ?? senderFirstName}`,
+        body: preview,
+        deepLink: `/food-share-chat/${matchId}`,
+        matchId,
+        pushType: "food_share_chat_message",
+      });
+    }
+
     return {ok: true, messageId: msgRef.id};
   });
 

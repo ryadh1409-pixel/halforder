@@ -21,14 +21,25 @@ export function subscribeMatchMessages(
   matchChatId: string,
   onData: (messages: MatchChatMessage[]) => void,
 ): Unsubscribe {
+  const uid = auth.currentUser?.uid ?? null;
+  const path = `matchChats/${matchChatId}/matchMessages`;
   const q = query(
     collection(db, 'matchChats', matchChatId, 'matchMessages'),
     orderBy('createdAt', 'asc'),
     limit(200),
   );
+
+  console.log('[CHAT LISTENER] attach', { path, uid, chatId: matchChatId });
+
   return onSnapshot(
     q,
     (snap) => {
+      console.log('[CHAT LISTENER] snapshot', {
+        path,
+        uid,
+        chatId: matchChatId,
+        count: snap.docs.length,
+      });
       const rows: MatchChatMessage[] = snap.docs.map((d) => {
         const data = d.data() as Record<string, unknown>;
         return {
@@ -44,7 +55,17 @@ export function subscribeMatchMessages(
       });
       onData(rows);
     },
-    () => onData([]),
+    (error) => {
+      console.error('[CHAT LISTENER] permission/error', {
+        path,
+        uid,
+        chatId: matchChatId,
+        code: error.code,
+        message: error.message,
+        error,
+      });
+      onData([]);
+    },
   );
 }
 

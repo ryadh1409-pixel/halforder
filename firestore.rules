@@ -800,10 +800,24 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/matches/$(chatId))
         && request.auth.uid in get(/databases/$(database)/documents/matches/$(chatId)).data.users;
     }
+    /** Meal-share chat participant — matchChats.participantIds with matches.users fallback. */
+    function isMatchChatParticipant(chatId) {
+      return isSignedIn()
+        && (
+          (
+            exists(/databases/$(database)/documents/matchChats/$(chatId))
+            && request.auth.uid in get(/databases/$(database)/documents/matchChats/$(chatId)).data.get('participantIds', [])
+          )
+          || (
+            exists(/databases/$(database)/documents/matches/$(chatId))
+            && request.auth.uid in get(/databases/$(database)/documents/matches/$(chatId)).data.get('users', [])
+          )
+        );
+    }
     function isValidMatchMessageCreate(chatId) {
       return isSignedIn()
         && !isCurrentUserRestricted()
-        && request.auth.uid in get(/databases/$(database)/documents/matchChats/$(chatId)).data.participantIds
+        && isMatchChatParticipant(chatId)
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 500
@@ -1431,15 +1445,14 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /matchChats/{chatId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+      allow read: if isMatchChatParticipant(chatId);
       allow create: if isValidMatchChatCreate(chatId);
       allow update: if isSignedIn()
-        && request.auth.uid in resource.data.participantIds
+        && request.auth.uid in resource.data.get('participantIds', [])
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['updatedAt']);
       allow delete: if false;
       match /matchMessages/{messageId} {
-        allow read: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/matchChats/$(chatId)).data.participantIds;
+        allow read: if isMatchChatParticipant(chatId);
         allow create: if isValidMatchMessageCreate(chatId);
         allow update, delete: if false;
       }

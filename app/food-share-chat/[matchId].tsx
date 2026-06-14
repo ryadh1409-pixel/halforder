@@ -24,7 +24,6 @@ import {
   canCancelFoodShareMatch,
   mapMatchDoc,
 } from '@/services/foodShareMatchService';
-import { notifyChatMessage } from '@/services/foodShareNotify';
 import {
   sendMatchChatMessage,
   subscribeMatchMessages,
@@ -97,8 +96,22 @@ export default function FoodShareChatScreen() {
       return undefined;
     }
 
+    const matchPath = `matches/${id}`;
+    console.log('[CHAT LISTENER] attach', {
+      path: matchPath,
+      uid: myUid || null,
+      chatId: id,
+    });
     const matchRef = doc(db, 'matches', id);
-    const unsubMatch = onSnapshot(matchRef, (snap) => {
+    const unsubMatch = onSnapshot(
+      matchRef,
+      (snap) => {
+        console.log('[CHAT LISTENER] snapshot', {
+          path: matchPath,
+          uid: myUid || null,
+          chatId: id,
+          exists: snap.exists(),
+        });
       if (!snap.exists()) {
         setError('Match not found.');
         setLoading(false);
@@ -123,6 +136,18 @@ export default function FoodShareChatScreen() {
         setPartnerUid(match.userA.uid);
       }
       setError(null);
+      setLoading(false);
+    },
+    (error) => {
+      console.error('[CHAT LISTENER] permission/error', {
+        path: matchPath,
+        uid: myUid || null,
+        chatId: id,
+        code: error.code,
+        message: error.message,
+        error,
+      });
+      setError(foodShareErrorMessage(error, FOOD_SHARE_ERRORS.connectionLost));
       setLoading(false);
     });
 
@@ -177,14 +202,6 @@ export default function FoodShareChatScreen() {
         return;
       }
       setModerationBanner(null);
-      if (partnerUid) {
-        void notifyChatMessage({
-          recipientUid: partnerUid,
-          senderFirstName: myFirstName,
-          preview: text,
-          matchId: id,
-        });
-      }
       listRef.current?.scrollToEnd({ animated: true });
     } catch (e) {
       setDraft(text);

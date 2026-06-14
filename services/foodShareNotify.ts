@@ -74,15 +74,27 @@ export async function notifyChatMessage(input: {
 }): Promise<void> {
   const body =
     input.preview.length > 80 ? `${input.preview.slice(0, 77)}…` : input.preview;
-  await createInboxNotification({
-    recipientUid: input.recipientUid,
-    type: 'chat_message',
-    title: `New message from ${input.senderFirstName}`,
-    body,
-    deepLink: deepLinkForMatchChat(input.matchId),
-    matchId: input.matchId,
-    pushType: FOOD_SHARE_PUSH.CHAT_MESSAGE,
-  });
+  try {
+    await createInboxNotification({
+      recipientUid: input.recipientUid,
+      type: 'chat_message',
+      title: `New message from ${input.senderFirstName}`,
+      body,
+      deepLink: deepLinkForMatchChat(input.matchId),
+      matchId: input.matchId,
+      pushType: FOOD_SHARE_PUSH.CHAT_MESSAGE,
+      skipPush: true,
+    });
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    console.error('[CHAT NOTIFY] failure', {
+      recipientUid: input.recipientUid,
+      matchId: input.matchId,
+      code: err?.code ?? 'unknown',
+      message: err?.message ?? String(error),
+      error,
+    });
+  }
 }
 
 export async function notifyMatchCancelled(input: {

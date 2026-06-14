@@ -139,7 +139,8 @@ export async function createInboxNotification(input: {
   const recipientUid = input.recipientUid.trim();
   if (!recipientUid) return null;
 
-  const ref = await addDoc(inboxCol(recipientUid), {
+  const inboxPath = `users/${recipientUid}/inboxNotifications`;
+  const payload = {
     recipientUid,
     type: input.type,
     title: input.title,
@@ -149,9 +150,38 @@ export async function createInboxNotification(input: {
     matchId: input.matchId ?? null,
     adminFoodShareId: input.adminFoodShareId ?? null,
     createdAt: serverTimestamp(),
+  };
+  const callerUid = auth.currentUser?.uid ?? null;
+
+  console.log('[INBOX WRITE] before', {
+    path: inboxPath,
+    uid: callerUid,
+    recipientUid,
+    payload: { ...payload, createdAt: 'serverTimestamp' },
   });
 
-  if (!input.skipPush) {
+  let ref;
+  try {
+    ref = await addDoc(inboxCol(recipientUid), payload);
+    console.log('[INBOX WRITE] success', {
+      path: inboxPath,
+      uid: callerUid,
+      notificationId: ref.id,
+    });
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    console.error('[INBOX WRITE] failure', {
+      path: inboxPath,
+      uid: callerUid,
+      code: err?.code ?? 'unknown',
+      message: err?.message ?? String(error),
+      error,
+    });
+    throw error;
+  }
+
+  const canReadRecipientProfile = callerUid != null && callerUid === recipientUid;
+  if (!input.skipPush && canReadRecipientProfile) {
     const prefs = await getFoodShareNotificationPrefs(recipientUid);
     if (prefAllows(prefs, input.type)) {
       const token = await getExpoPushTokenForUser(recipientUid);
@@ -171,6 +201,11 @@ export async function createInboxNotification(input: {
         },
       );
     }
+  } else if (!input.skipPush && !canReadRecipientProfile) {
+    console.log('[INBOX WRITE] skip push — cannot read another user profile from client', {
+      callerUid,
+      recipientUid,
+    });
   }
 
   return ref.id;
