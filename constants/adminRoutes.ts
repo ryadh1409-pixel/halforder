@@ -20,4 +20,11 @@ export const adminRoutes = {
   sendNotification: '/(tabs)/admin/broadcast',
   aiInsights: '/(tabs)/admin/ai-insights',
   chatModeration: '/(tabs)/admin/chat-moderation',
+  payments: '/(tabs)/admin/payments',
+  payment: (id: string) =>
+    `/(tabs)/admin/payments/${encodeURIComponent(id)}`,
+  revenue: '/(tabs)/admin/revenue',
+  payouts: '/(tabs)/admin/payouts',
+  transactions: '/(tabs)/admin/transactions',
+  stripeDiagnostics: '/(tabs)/admin/stripe-diagnostics',
 } as const;

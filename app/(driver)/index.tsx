@@ -45,7 +45,17 @@ import {
 import { logListenerSubscribe, logListenerUnsubscribe } from '../../utils/driverListenerLog';
 import { marketplaceLog } from '@/lib/marketplaceLogger';
 import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
-import { showError, showSuccess } from '../../utils/toast';
+import {
+  foodShareDropoffAddress,
+  foodShareDropoffCoords,
+  foodShareDropoffLabel,
+  foodShareDropoffPhone,
+  foodSharePickupAddress,
+  foodSharePickupCoords,
+  foodSharePickupLabel,
+  foodSharePickupPhone,
+  isFoodShareDriverOrder,
+} from '@/lib/foodShareDriverOrderDisplay';
 
 function formatOrderPlacedAt(createdAtMs: number | null | undefined): string {
   return createdAtMs ? new Date(createdAtMs).toLocaleTimeString() : 'Now';
@@ -439,9 +449,30 @@ export default function DriverHubScreen() {
         ) : (
           hubAvailableOrders.map((order) => {
             const isExpired = false;
-            const restaurantAddress = order.restaurantAddress ?? 'Address unavailable';
-            const customerAddress =
-              order.deliveryAddress ?? (order as DriverOrder & { address?: string | null }).address ?? 'Address unavailable';
+            const foodShare = isFoodShareDriverOrder(order);
+            const pickupCoords = foodSharePickupCoords(order);
+            const dropoffCoords = foodShareDropoffCoords(order);
+            const restaurantAddress = foodShare
+              ? order.restaurantAddress ?? 'Address unavailable'
+              : order.restaurantAddress ?? 'Address unavailable';
+            const pickupAddress = foodShare
+              ? foodSharePickupAddress(order)
+              : restaurantAddress;
+            const customerAddress = foodShare
+              ? foodShareDropoffAddress(order)
+              : order.deliveryAddress ??
+                (order as DriverOrder & { address?: string | null }).address ??
+                'Address unavailable';
+            const pickupPhone = foodShare
+              ? foodSharePickupPhone(order)
+              : order.restaurantPhone || '';
+            const customerPhone = foodShare
+              ? foodShareDropoffPhone(order)
+              : order.customerPhone || '';
+            const pickupLabel = foodShare ? foodSharePickupLabel(order) : order.restaurantName || 'Restaurant';
+            const customerLabel = foodShare
+              ? foodShareDropoffLabel(order)
+              : order.customerName || 'Customer';
             return (
               <View key={order.id} style={styles.orderCard}>
                 <View style={styles.orderTop}>
@@ -469,29 +500,75 @@ export default function DriverHubScreen() {
                 </View>
 
                 <View style={styles.detailBlock}>
-                  <Text style={styles.detailTitle}>Restaurant</Text>
+                  <Text style={styles.detailTitle}>
+                    {foodShare ? 'Restaurant (venue)' : 'Restaurant'}
+                  </Text>
                   <Text style={styles.detailValue}>{restaurantAddress}</Text>
-                  <Text style={styles.detailValue}>{order.restaurantPhone || 'Phone unavailable'}</Text>
-                  <Pressable
-                    style={styles.callBtn}
-                    onPress={() => makeCall(order.restaurantPhone || '', order.restaurantName || 'Restaurant')}
-                  >
-                    <Text style={styles.callBtnText}>Call Restaurant</Text>
-                  </Pressable>
+                  {foodShare ? (
+                    <Text style={styles.detailValue}>
+                      Meal: {order.restaurantName || 'Restaurant'}
+                    </Text>
+                  ) : (
+                    <Text style={styles.detailValue}>
+                      {pickupPhone || 'Phone unavailable'}
+                    </Text>
+                  )}
+                  {!foodShare ? (
+                    <Pressable
+                      style={styles.callBtn}
+                      onPress={() => makeCall(pickupPhone, pickupLabel)}
+                    >
+                      <Text style={styles.callBtnText}>Call Restaurant</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
 
                 <View style={styles.detailBlock}>
-                  <Text style={styles.detailTitle}>Customer</Text>
-                  <Text style={styles.detailValue}>{order.customerName || 'Customer'}</Text>
-                  <Text style={styles.detailValue}>{order.customerPhone || 'Phone unavailable'}</Text>
-                  <Text style={styles.detailValue}>{customerAddress}</Text>
+                  <Text style={styles.detailTitle}>
+                    {foodShare ? 'Pickup contact' : 'Customer'}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {foodShare ? pickupLabel : customerLabel}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {foodShare
+                      ? pickupPhone || 'Phone unavailable'
+                      : customerPhone || 'Phone unavailable'}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {foodShare ? pickupAddress : customerAddress}
+                  </Text>
                   <Pressable
                     style={styles.callBtn}
-                    onPress={() => makeCall(order.customerPhone || '', order.customerName || 'Customer')}
+                    onPress={() =>
+                      makeCall(
+                        foodShare ? pickupPhone : customerPhone,
+                        foodShare ? pickupLabel : customerLabel,
+                      )
+                    }
                   >
-                    <Text style={styles.callBtnText}>Call Customer</Text>
+                    <Text style={styles.callBtnText}>
+                      {foodShare ? 'Call Pickup Contact' : 'Call Customer'}
+                    </Text>
                   </Pressable>
                 </View>
+
+                {foodShare ? (
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailTitle}>Drop-off</Text>
+                    <Text style={styles.detailValue}>{customerLabel}</Text>
+                    <Text style={styles.detailValue}>
+                      {customerPhone || 'Phone unavailable'}
+                    </Text>
+                    <Text style={styles.detailValue}>{customerAddress}</Text>
+                    <Pressable
+                      style={styles.callBtn}
+                      onPress={() => makeCall(customerPhone, customerLabel)}
+                    >
+                      <Text style={styles.callBtnText}>Call Drop-off Contact</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
 
                 <View style={styles.detailBlock}>
                   <Text style={styles.detailTitle}>Order Details</Text>
@@ -510,7 +587,13 @@ export default function DriverHubScreen() {
                 <View style={styles.mapActions}>
                   <Pressable
                     style={styles.mapBtn}
-                    onPress={() => openMapsWithPicker(restaurantAddress, order.restaurantLat, order.restaurantLng)}
+                    onPress={() =>
+                      openMapsWithPicker(
+                        pickupAddress,
+                        pickupCoords.lat,
+                        pickupCoords.lng,
+                      )
+                    }
                   >
                     <Text style={styles.mapBtnText}>Pickup Map</Text>
                   </Pressable>
@@ -519,8 +602,8 @@ export default function DriverHubScreen() {
                     onPress={() =>
                       openMapsWithPicker(
                         customerAddress,
-                        order.deliveryLat ?? order.customerLocation?.lat ?? null,
-                        order.deliveryLng ?? order.customerLocation?.lng ?? null,
+                        dropoffCoords.lat,
+                        dropoffCoords.lng,
                       )
                     }
                   >

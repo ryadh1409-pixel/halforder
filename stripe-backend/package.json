@@ -10,7 +10,7 @@
     "deploy": "firebase deploy --only functions",
     "deploy:webhook": "npm run build && cd .. && firebase deploy --only functions:functions:stripeWebhook",
     "logs:webhook": "cd .. && firebase functions:log --only stripeWebhook",
-    "test": "npm run build && node --test test/webhook-logic.test.cjs"
+    "test": "npm run build && node --test test/webhook-logic.test.cjs test/foodShareDispatchOrder.test.cjs"
   },
   "engines": {
     "node": "20"

@@ -80,7 +80,11 @@ export default function FoodSharePayScreen() {
         const mapped = mapMatchDoc(snap.id, snap.data() as Record<string, unknown>);
         setMatch(mapped);
         setError(null);
-        if (mapped.lifecycle === 'MATCHED' || mapped.status === 'MATCHED') {
+        if (
+          mapped.lifecycle === 'MATCHED' ||
+          mapped.lifecycle === 'ORDER_PLACED' ||
+          mapped.status === 'MATCHED'
+        ) {
           console.log('[MATCH FLOW STEP]', {
             step: 'payment_complete_open_chat',
             matchId: id,

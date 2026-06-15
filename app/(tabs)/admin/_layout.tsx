@@ -40,6 +40,12 @@ export default function AdminLayout() {
       <Stack.Screen name="broadcast" options={{ title: 'Send notification' }} />
       <Stack.Screen name="ai-insights" options={{ title: 'AI Insights' }} />
       <Stack.Screen name="chat-moderation" options={{ title: 'Chat moderation' }} />
+      <Stack.Screen name="payments/index" options={{ title: 'Payments' }} />
+      <Stack.Screen name="payments/[paymentId]" options={{ title: 'Payment' }} />
+      <Stack.Screen name="revenue/index" options={{ title: 'Revenue' }} />
+      <Stack.Screen name="payouts" options={{ title: 'Payouts' }} />
+      <Stack.Screen name="transactions" options={{ title: 'Transactions' }} />
+      <Stack.Screen name="stripe-diagnostics" options={{ title: 'Stripe setup' }} />
       <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}

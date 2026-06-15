@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
 import type Stripe from "stripe";
 import {foodSharePaymentDocId} from "./foodSharePaymentLogic.js";
+import {backfillFoodShareDispatchOrderIfNeeded} from "./foodShareDispatchOrder.js";
 import {handleFoodSharePaymentIntentEvent} from "./foodShareWebhookHandlers.js";
 
 async function readDocOrLogMissing(
@@ -124,12 +125,26 @@ export async function confirmFoodSharePaymentCore(input: {
     source: "client_confirm",
   });
 
-  const handled = await handleFoodSharePaymentIntentEvent(syntheticEvent, pi);
+  const handled = await handleFoodSharePaymentIntentEvent(syntheticEvent, pi, stripe);
   if (!handled) {
     throw new functions.https.HttpsError(
       "internal",
       "Could not apply food share payment.",
     );
+  }
+
+  let dispatchResult: Awaited<
+    ReturnType<typeof backfillFoodShareDispatchOrderIfNeeded>
+  > = null;
+  try {
+    dispatchResult = await backfillFoodShareDispatchOrderIfNeeded(matchId);
+  } catch (error) {
+    console.error("[FOOD SHARE ORDER ERROR]", {
+      matchId,
+      phase: "confirm_backfill",
+      message: error instanceof Error ? error.message : String(error),
+      error,
+    });
   }
 
   const updated = await db.doc(matchPath).get();
@@ -142,5 +157,8 @@ export async function confirmFoodSharePaymentCore(input: {
     ok: true,
     lifecycle,
     paymentIntentId: pi.id,
+    orderId: dispatchResult?.orderId ?? updated.data()?.orderId ?? null,
+    orderCreated: dispatchResult?.created ?? false,
+    poolExists: dispatchResult?.poolExists ?? false,
   };
 }

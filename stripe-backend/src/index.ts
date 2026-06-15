@@ -89,10 +89,7 @@ export const createPaymentIntent = functions
         : {};
 
     if (isFoodShareConfirmPayload(payload) || isFoodSharePaymentPayload(payload)) {
-      const stripe = new Stripe(stripeSecret.value(), {
-        apiVersion: "2023-10-16" as unknown as Stripe.LatestApiVersion,
-      });
-      return handleFoodSharePaymentCallable(data, context, stripe);
+      return handleFoodSharePaymentCallable(data, context, getStripe());
     }
 
     const amountRaw = payload.amount;
@@ -160,16 +157,11 @@ export const createPaymentIntent = functions
       );
     }
     const restaurantData = restaurantSnap.data() ?? {};
-    if (
-      typeof restaurantData.stripeAccountId !== "string" ||
-      !restaurantData.stripeAccountId.trim()
-    ) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Restaurant Stripe account not set up",
-      );
-    }
-    const restaurantStripeAccountId = restaurantData.stripeAccountId.trim();
+    const restaurantStripeAccountId =
+      typeof restaurantData.stripeAccountId === "string" &&
+      restaurantData.stripeAccountId.trim()
+        ? restaurantData.stripeAccountId.trim()
+        : null;
 
     const orderUserId =
       typeof orderData.userId === "string" && orderData.userId.trim()
@@ -202,9 +194,7 @@ export const createPaymentIntent = functions
     };
 
     try {
-      const stripe = new Stripe(stripeSecret.value(), {
-        apiVersion: "2023-10-16" as unknown as Stripe.LatestApiVersion,
-      });
+      const stripe = getStripe();
 
       if (platform === "web") {
         const totalPriceRaw = orderData.totalPrice ?? orderData.total;
@@ -243,17 +233,18 @@ export const createPaymentIntent = functions
             restaurantId,
             driverId: driverIdRaw,
             uid,
+            treasury: "halforder_platform",
+            restaurantStripeAccountId: restaurantStripeAccountId ?? "",
           },
           payment_intent_data: {
-            transfer_data: {
-              destination: restaurantStripeAccountId,
-            },
             metadata: {
               orderId,
               userId: uid,
               restaurantId,
               driverId: driverIdRaw,
               uid,
+              treasury: "halforder_platform",
+              restaurantStripeAccountId: restaurantStripeAccountId ?? "",
             },
           },
         });
@@ -289,15 +280,14 @@ export const createPaymentIntent = functions
         automatic_payment_methods: {
           enabled: true,
         },
-        transfer_data: {
-          destination: restaurantStripeAccountId,
-        },
         metadata: {
           orderId,
           userId: uid,
           restaurantId,
           driverId: driverIdRaw,
           uid,
+          treasury: "halforder_platform",
+          restaurantStripeAccountId: restaurantStripeAccountId ?? "",
         },
       });
       console.log(
@@ -337,6 +327,7 @@ export const createPaymentIntent = functions
 
 export { stripeWebhook } from "./stripeWebhook.js";
 export { createFoodSharePaymentIntent } from "./createFoodSharePaymentIntent.js";
+export { ensureFoodShareDispatchOrder } from "./ensureFoodShareDispatchOrder.js";
 export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
 export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
 export { cancelFoodShareMatch } from "./cancelFoodShareMatch.js";
@@ -344,3 +335,8 @@ export {
   sendModeratedMatchChatMessage,
   acceptCommunityGuidelines,
 } from "./sendModeratedMatchChatMessage.js";
+export {getAdminStripePayouts} from "./adminStripePayouts.js";
+export {
+  getStripeTreasurySummary,
+  getStripeAccountDiagnostics,
+} from "./adminStripeTreasury.js";

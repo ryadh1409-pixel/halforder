@@ -18,6 +18,7 @@ import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import {
   excludeAssignedOrderIdsFromAvailable,
   filterDriverAvailableMarketplaceOrders,
+  getDriverHubRejectReason,
   isDriverMarketplacePoolDocAvailable,
   markDriverMarketplaceOrderClaimed,
 } from '@/lib/driverAvailableOrdersFilter';
@@ -143,6 +144,18 @@ export type DriverOrder = {
   assignedDriverId: string | null;
   marketplaceArchived: boolean;
   earningsRecorded: boolean;
+  isFoodShare?: boolean;
+  matchId?: string | null;
+  pickupName?: string | null;
+  pickupPhone?: string | null;
+  pickupAddress?: string | null;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  dropoffName?: string | null;
+  dropoffPhone?: string | null;
+  dropoffAddress?: string | null;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
 };
 
 type LatLng = { lat: number; lng: number };
@@ -225,8 +238,17 @@ function pickFreshestDriverOrder(a: DriverOrder, b: DriverOrder): DriverOrder {
   return msB >= msA ? b : a;
 }
 
+function readCoord(data: Record<string, unknown>, key: string): number | null {
+  const value = data[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }): DriverOrder {
   const data = d.data();
+  const isFoodShare =
+    data.orderSource === 'food_share' ||
+    data.type === 'food_share' ||
+    typeof data.matchId === 'string';
   const items = Array.isArray(data.items)
     ? data.items
         .map((item) => {
@@ -237,7 +259,9 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
               qty:
                 typeof (item as { qty?: unknown }).qty === 'number'
                   ? Number((item as { qty: unknown }).qty)
-                  : 1,
+                  : typeof (item as { quantity?: unknown }).quantity === 'number'
+                    ? Number((item as { quantity: unknown }).quantity)
+                    : 1,
             };
           }
           return null;
@@ -248,14 +272,56 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
   warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
   warnDevIfUnparsableTimestamp(d.id, 'updatedAt', data.updatedAt);
   const restaurantLocation = parseLatLng(data.restaurantLocation);
-  const dropoffLocation =
+  const pickupLocation = parseLatLng(data.pickupLocation);
+  const dropoffLocationRaw =
+    parseLatLng(data.dropoffLocation) ??
     parseLatLng(data.userLocation) ??
     parseLatLng(
       data.deliveryLocation && typeof data.deliveryLocation === 'object'
         ? data.deliveryLocation
         : null,
     );
+  const pickupLat =
+    readCoord(data, 'pickupLat') ?? pickupLocation?.lat ?? restaurantLocation?.lat ?? null;
+  const pickupLng =
+    readCoord(data, 'pickupLng') ?? pickupLocation?.lng ?? restaurantLocation?.lng ?? null;
+  const dropoffLat = readCoord(data, 'dropoffLat') ?? dropoffLocationRaw?.lat ?? null;
+  const dropoffLng = readCoord(data, 'dropoffLng') ?? dropoffLocationRaw?.lng ?? null;
+  const dropoffLocation =
+    dropoffLat != null && dropoffLng != null
+      ? { lat: dropoffLat, lng: dropoffLng }
+      : dropoffLocationRaw;
   const driverLocation = parseLatLng(data.driverLocation);
+  const pickupCoords =
+    pickupLat != null && pickupLng != null ? { lat: pickupLat, lng: pickupLng } : null;
+  const routeDistanceKm = isFoodShare
+    ? distanceKm(pickupCoords, dropoffLocation)
+    : distanceKm(driverLocation ?? restaurantLocation, dropoffLocation);
+
+  if (isFoodShare) {
+    console.log('[DRIVER MAP DATA]', {
+      orderId: d.id,
+      matchId: typeof data.matchId === 'string' ? data.matchId : null,
+      pickupLat,
+      pickupLng,
+      pickupAddress:
+        typeof data.pickupAddress === 'string'
+          ? data.pickupAddress
+          : typeof data.restaurantAddress === 'string'
+            ? data.restaurantAddress
+            : null,
+      dropoffLat,
+      dropoffLng,
+      dropoffAddress:
+        typeof data.dropoffAddress === 'string'
+          ? data.dropoffAddress
+          : typeof data.deliveryAddress === 'string'
+            ? data.deliveryAddress
+            : null,
+      distanceKm: routeDistanceKm,
+    });
+  }
+
   return {
     id: d.id,
     groupId: typeof data.groupId === 'string' ? data.groupId : null,
@@ -317,14 +383,14 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
             typeof (data.deliveryLocation as { address?: unknown }).address === 'string'
           ? String((data.deliveryLocation as { address: unknown }).address)
           : null,
-    deliveryLat: dropoffLocation?.lat ?? null,
-    deliveryLng: dropoffLocation?.lng ?? null,
+    deliveryLat: dropoffLat,
+    deliveryLng: dropoffLng,
     itemsSummary: items.map((item) => `${item.qty}x ${item.name}`).join(', '),
     createdAt: data.createdAt ?? null,
     notes: typeof data.notes === 'string' ? data.notes : null,
     restaurantLocation,
-    restaurantLat: restaurantLocation?.lat ?? null,
-    restaurantLng: restaurantLocation?.lng ?? null,
+    restaurantLat: pickupLat ?? restaurantLocation?.lat ?? null,
+    restaurantLng: pickupLng ?? restaurantLocation?.lng ?? null,
     customerLocation: dropoffLocation,
     driverLocation,
     acceptedAtMs: safeToMillis(data.acceptedAt),
@@ -360,12 +426,41 @@ function mapDriverOrder(d: { id: string; data: () => Record<string, unknown> }):
       if (mins > 0 && mins < 180) return mins;
       return 35;
     })(),
-    distanceKm: distanceKm(driverLocation ?? restaurantLocation, dropoffLocation),
+    distanceKm: routeDistanceKm,
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
     assignedDriverId:
       typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
     marketplaceArchived: data.marketplaceArchived === true,
     earningsRecorded: data.earningsRecorded === true,
+    isFoodShare,
+    matchId: typeof data.matchId === 'string' ? data.matchId : null,
+    pickupName: typeof data.pickupName === 'string' ? data.pickupName : null,
+    pickupPhone: typeof data.pickupPhone === 'string' ? data.pickupPhone : null,
+    pickupAddress: typeof data.pickupAddress === 'string' ? data.pickupAddress : null,
+    pickupLat,
+    pickupLng,
+    dropoffName:
+      typeof data.dropoffName === 'string'
+        ? data.dropoffName
+        : typeof data.customerName === 'string'
+          ? data.customerName
+          : null,
+    dropoffPhone:
+      typeof data.dropoffPhone === 'string'
+        ? data.dropoffPhone
+        : typeof data.customerPhone === 'string'
+          ? data.customerPhone
+          : typeof data.customerPhoneNumber === 'string'
+            ? data.customerPhoneNumber
+            : null,
+    dropoffAddress:
+      typeof data.dropoffAddress === 'string'
+        ? data.dropoffAddress
+        : typeof data.deliveryAddress === 'string'
+          ? data.deliveryAddress
+          : null,
+    dropoffLat,
+    dropoffLng,
   };
 }
 
@@ -796,13 +891,51 @@ export function subscribeAvailableOrders(
             if (cancelled) return;
             try {
               poolCache = snap.docs
-                .filter((docSnap) => {
+                .map((docSnap) => {
                   const raw = docSnap.data();
-                  if (!isDriverMarketplacePoolDocAvailable(docSnap.id, raw)) return false;
-                  if (isTerminalMarketplaceOrder({ id: docSnap.id, ...raw })) return false;
-                  return !isDriverPoolRowStale(raw.createdAt, safeToMillis(raw.createdAt));
+                  const orderId = docSnap.id;
+                  const isFoodShare =
+                    raw.orderSource === 'food_share' ||
+                    raw.type === 'food_share' ||
+                    typeof raw.matchId === 'string';
+                  if (isFoodShare) {
+                    console.log('[DRIVER HUB MATCH FOUND]', {
+                      orderId,
+                      matchId: raw.matchId ?? null,
+                      path: `driver_marketplace_pool/${orderId}`,
+                      status: raw.status ?? null,
+                      deliveryStatus: raw.deliveryStatus ?? null,
+                      paymentStatus: raw.paymentStatus ?? null,
+                    });
+                  }
+                  const poolAvailable = isDriverMarketplacePoolDocAvailable(orderId, raw);
+                  const terminal = isTerminalMarketplaceOrder({ id: orderId, ...raw });
+                  const stale = isDriverPoolRowStale(raw.createdAt, safeToMillis(raw.createdAt));
+                  if (!poolAvailable || terminal || stale) {
+                    console.log('[DRIVER HUB FILTER REJECTED]', {
+                      orderId,
+                      matchId: raw.matchId ?? null,
+                      reason: getDriverHubRejectReason(
+                        {
+                          id: orderId,
+                          driverId: raw.driverId,
+                          assignedDriverId: raw.assignedDriverId,
+                          status: raw.status,
+                          deliveryStatus: raw.deliveryStatus,
+                        },
+                        { stale, terminal },
+                      ),
+                      poolAvailable,
+                      terminal,
+                      stale,
+                      status: raw.status ?? null,
+                      deliveryStatus: raw.deliveryStatus ?? null,
+                    });
+                    return null;
+                  }
+                  return mapDriverOrder(docSnap);
                 })
-                .map((docSnap) => mapDriverOrder(docSnap));
+                .filter((row): row is DriverOrder => row != null);
               emitAvailable();
             } catch (err) {
               logDriverQueryError('subscribeAvailableOrders', err);

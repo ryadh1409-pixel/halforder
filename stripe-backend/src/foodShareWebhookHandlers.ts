@@ -14,6 +14,16 @@ import {
   isFoodSharePaymentMetadata,
   type FoodSharePaymentStatus,
 } from "./foodSharePaymentLogic.js";
+import {
+  backfillFoodShareDispatchOrderIfNeeded,
+  createFoodShareDispatchOrderInTxn,
+  isPaidStatus,
+} from "./foodShareDispatchOrder.js";
+import {
+  upsertFoodSharePaymentTransaction,
+  updatePaymentTransactionStatus,
+  resolvePaymentCardDetails,
+} from "./paymentTransactions.js";
 
 const PROCESSED_EVENTS = "stripe_processed_events";
 
@@ -44,11 +54,11 @@ function firstNameFromMatch(
   return "Your partner";
 }
 
-function activateMatchIfFullyPaid(
+async function activateMatchIfFullyPaid(
   tx: Transaction,
   matchSnap: DocumentSnapshot,
   userPayments: Record<string, {paymentStatus?: string}>,
-): void {
+): Promise<void> {
   if (!matchSnap.exists) return;
   const match = matchSnap.data() ?? {};
   const users = Array.isArray(match.users)
@@ -57,10 +67,10 @@ function activateMatchIfFullyPaid(
   if (users.length !== 2) return;
 
   const allPaid = users.every(
-    (u) => userPayments[u]?.paymentStatus === "PAID",
+    (u) => isPaidStatus(userPayments[u]?.paymentStatus),
   );
   const anyPaid = users.some(
-    (u) => userPayments[u]?.paymentStatus === "PAID",
+    (u) => isPaidStatus(userPayments[u]?.paymentStatus),
   );
 
   if (!allPaid) {
@@ -89,17 +99,36 @@ function activateMatchIfFullyPaid(
   const matchChatId =
     typeof match.matchChatId === "string" ? match.matchChatId : matchId;
 
+  const {orderId, created: orderCreated} = await createFoodShareDispatchOrderInTxn(
+    tx,
+    matchId,
+    match,
+    users,
+  );
+
   tx.set(
     matchSnap.ref,
     {
       status: "matched",
-      lifecycle: "MATCHED",
+      lifecycle: "ORDER_PLACED",
       paymentStatus: "paid",
+      orderId,
+      orderStatus: "order_placed",
+      deliveryStatus: "pending",
       activatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     {merge: true},
   );
+
+  console.log("[FOOD SHARE ORDER_PLACED]", {
+    matchId,
+    orderId,
+    orderCreated,
+    lifecycle: "ORDER_PLACED",
+    matchPath: `matches/${matchId}`,
+    orderPath: `orders/${orderId}`,
+  });
 
   const chatRef = admin.firestore().doc(`matchChats/${matchChatId}`);
   tx.set(
@@ -133,7 +162,10 @@ function activateMatchIfFullyPaid(
 export async function withFoodShareEventIdempotency(
   event: Stripe.Event,
   matchId: string,
-  apply: (tx: Transaction, matchSnap: DocumentSnapshot) => void,
+  apply: (
+    tx: Transaction,
+    matchSnap: DocumentSnapshot,
+  ) => void | Promise<void>,
 ): Promise<"duplicate" | "applied"> {
   const db = admin.firestore();
   const evRef = db.collection(PROCESSED_EVENTS).doc(`fs_${event.id}`);
@@ -156,7 +188,7 @@ export async function withFoodShareEventIdempotency(
       matchId,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    apply(tx, matchSnap);
+    await apply(tx, matchSnap);
   });
 
   return duplicate ? "duplicate" : "applied";
@@ -165,6 +197,7 @@ export async function withFoodShareEventIdempotency(
 export async function handleFoodSharePaymentIntentEvent(
   event: Stripe.Event,
   pi: Stripe.PaymentIntent,
+  stripe?: Stripe,
 ): Promise<boolean> {
   const metadata = (pi.metadata ?? {}) as Record<string, string>;
   if (!isFoodSharePaymentMetadata(metadata)) return false;
@@ -186,10 +219,29 @@ export async function handleFoodSharePaymentIntentEvent(
   const db = admin.firestore();
   let activated = false;
 
+  let paymentMethodPatch: Record<string, unknown> = {};
+  if (stripe && paymentStatus === "PAID") {
+    try {
+      const card = await resolvePaymentCardDetails(stripe, pi);
+      paymentMethodPatch = {
+        paymentMethodBrand: card.brand,
+        paymentMethodLast4: card.last4,
+        paymentMethodLabel: card.label,
+      };
+    } catch (err) {
+      console.error("[PAYMENT CARD DETAILS ERROR]", {
+        matchId,
+        userId,
+        paymentIntentId: pi.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const outcome = await withFoodShareEventIdempotency(
     event,
     matchId,
-    (tx, matchSnap) => {
+    async (tx, matchSnap) => {
       const match = matchSnap.data() ?? {};
       const prior = (match.userPayments ?? {}) as Record<
         string,
@@ -214,6 +266,7 @@ export async function handleFoodSharePaymentIntentEvent(
           paymentStatus,
           amount: pi.amount,
           currency: pi.currency,
+          ...paymentMethodPatch,
           paidAt:
             paymentStatus === "PAID"
               ? admin.firestore.FieldValue.serverTimestamp()
@@ -240,13 +293,15 @@ export async function handleFoodSharePaymentIntentEvent(
 
       if (paymentStatus === "PAID") {
         const beforeLifecycle = String(match.lifecycle ?? "");
-        activateMatchIfFullyPaid(tx, matchSnap, userPayments);
+        await activateMatchIfFullyPaid(tx, matchSnap, userPayments);
         const allPaid = (Array.isArray(match.users) ? match.users : []).every(
           (u: unknown) =>
-            typeof u === "string" &&
-            userPayments[u]?.paymentStatus === "PAID",
+            typeof u === "string" && isPaidStatus(userPayments[u]?.paymentStatus),
         );
-        activated = allPaid && beforeLifecycle !== "MATCHED";
+        activated =
+          allPaid &&
+          beforeLifecycle !== "MATCHED" &&
+          beforeLifecycle !== "ORDER_PLACED";
       } else if (paymentStatus === "FAILED") {
         tx.set(
           matchSnap.ref,
@@ -271,10 +326,11 @@ export async function handleFoodSharePaymentIntentEvent(
       const partnerUid = partnerUidFor(users, userId);
       if (partnerUid) {
         const payerName = firstNameFromMatch(match, userId);
-        const partnerPaid =
+        const partnerPaid = isPaidStatus(
           (match.userPayments as Record<string, {paymentStatus?: string}> | undefined)?.[
             partnerUid
-          ]?.paymentStatus === "PAID";
+          ]?.paymentStatus,
+        );
         if (!partnerPaid) {
           await notifyFoodSharePartnerPaid({
             recipientUid: partnerUid,
@@ -303,6 +359,41 @@ export async function handleFoodSharePaymentIntentEvent(
       }
     } else if (paymentStatus === "FAILED") {
       await notifyFoodSharePaymentFailed({userId, matchId, foodName});
+    }
+  }
+
+  if (paymentStatus === "PAID") {
+    await backfillFoodShareDispatchOrderIfNeeded(matchId);
+  }
+
+  if (stripe) {
+    try {
+      if (paymentStatus === "PAID") {
+        await upsertFoodSharePaymentTransaction({
+          stripe,
+          pi,
+          matchId,
+          userId,
+          status: "paid",
+          eventType: event.type,
+        });
+      } else if (paymentStatus === "FAILED") {
+        await upsertFoodSharePaymentTransaction({
+          stripe,
+          pi,
+          matchId,
+          userId,
+          status: "failed",
+          eventType: event.type,
+        });
+      }
+    } catch (err) {
+      console.error("[PAYMENT TRANSACTION ERROR]", {
+        matchId,
+        userId,
+        paymentIntentId: pi.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -368,6 +459,24 @@ export async function handleFoodShareChargeRefunded(
         ? (matchSnap.data()?.foodName as string)
         : "your meal share";
     await notifyFoodShareRefundProcessed({userId, matchId, foodName});
+    const paymentIntentId =
+      typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? "";
+    if (paymentIntentId) {
+      try {
+        await updatePaymentTransactionStatus({
+          paymentIntentId,
+          status: "refunded",
+          eventType: event.type,
+        });
+      } catch (err) {
+        console.error("[PAYMENT TRANSACTION REFUND ERROR]", {
+          paymentIntentId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
   }
 
   return true;

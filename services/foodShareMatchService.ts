@@ -428,7 +428,9 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
   const status =
     rawStatus === 'cancelled'
       ? 'CANCELLED'
-      : rawStatus === 'matched' || data.lifecycle === 'MATCHED'
+      : rawStatus === 'matched' ||
+          data.lifecycle === 'MATCHED' ||
+          data.lifecycle === 'ORDER_PLACED'
         ? 'MATCHED'
         : 'pending_payment';
 

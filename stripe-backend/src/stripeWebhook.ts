@@ -33,6 +33,11 @@ import {
   handleFoodShareChargeRefunded,
   handleFoodSharePaymentIntentEvent,
 } from "./foodShareWebhookHandlers.js";
+import {
+  upsertMarketplacePaymentTransaction,
+  updatePaymentTransactionStatus,
+} from "./paymentTransactions.js";
+import {upsertStripePayoutRecord} from "./stripePayoutRecords.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -341,7 +346,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
-      if (await handleFoodSharePaymentIntentEvent(event, pi)) {
+      if (await handleFoodSharePaymentIntentEvent(event, pi, getStripe())) {
         return;
       }
       const orderId = trimMetadata(pi.metadata?.orderId);
@@ -381,6 +386,25 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         paymentIntentId: pi.id,
         stripeEventId: event.id,
       });
+      if (outcome === "applied") {
+        try {
+          await upsertMarketplacePaymentTransaction({
+            stripe: getStripe(),
+            pi,
+            orderId,
+            status: "paid",
+            eventType: event.type,
+          });
+        } catch (err) {
+          logStripe({
+            level: "error",
+            msg: "payment_transaction_write_failed",
+            orderId,
+            paymentIntentId: pi.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       return;
     }
 
@@ -477,7 +501,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case "payment_intent.payment_failed": {
       const pi = event.data.object as Stripe.PaymentIntent;
-      if (await handleFoodSharePaymentIntentEvent(event, pi)) {
+      if (await handleFoodSharePaymentIntentEvent(event, pi, getStripe())) {
         return;
       }
       const orderId = trimMetadata(pi.metadata?.orderId);
@@ -514,6 +538,57 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         paymentIntentId: pi.id,
         stripeEventId: event.id,
       });
+      if (outcome === "applied") {
+        try {
+          await upsertMarketplacePaymentTransaction({
+            stripe: getStripe(),
+            pi,
+            orderId,
+            status: "failed",
+            eventType: event.type,
+          });
+        } catch (err) {
+          logStripe({
+            level: "error",
+            msg: "payment_transaction_failed_write",
+            orderId,
+            paymentIntentId: pi.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      return;
+    }
+
+    case "charge.dispute.created":
+    case "charge.dispute.funds_withdrawn": {
+      const dispute = event.data.object as Stripe.Dispute;
+      const chargeId =
+        typeof dispute.charge === "string"
+          ? dispute.charge
+          : dispute.charge?.id ?? "";
+      if (!chargeId) return;
+      try {
+        const charge = await getStripe().charges.retrieve(chargeId);
+        const paymentIntentId =
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id ?? "";
+        if (paymentIntentId) {
+          await updatePaymentTransactionStatus({
+            paymentIntentId,
+            status: "disputed",
+            eventType: event.type,
+          });
+        }
+      } catch (err) {
+        logStripe({
+          level: "error",
+          msg: "payment_transaction_dispute_update_failed",
+          chargeId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
       return;
     }
 
@@ -522,11 +597,63 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       if (await handleFoodShareChargeRefunded(event, charge)) {
         return;
       }
+      const paymentIntentId =
+        typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : charge.payment_intent?.id ?? "";
+      if (paymentIntentId) {
+        try {
+          await updatePaymentTransactionStatus({
+            paymentIntentId,
+            status: "refunded",
+            eventType: event.type,
+          });
+        } catch (err) {
+          logStripe({
+            level: "error",
+            msg: "payment_transaction_marketplace_refund_failed",
+            paymentIntentId,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       logStripe({
         level: "info",
         msg: "charge_refunded_non_food_share",
         stripeEventId: event.id,
       });
+      return;
+    }
+
+    case "payout.paid":
+    case "payout.failed": {
+      const payout = event.data.object as Stripe.Payout;
+      try {
+        const expanded =
+          typeof payout.destination === "string"
+            ? await getStripe().payouts.retrieve(payout.id, {
+                expand: ["destination"],
+              })
+            : payout;
+        await upsertStripePayoutRecord({
+          payout: expanded,
+          eventType: event.type,
+        });
+        logStripe({
+          level: "info",
+          msg: "stripe_payout_record_upserted",
+          payoutId: payout.id,
+          status: payout.status,
+          eventType: event.type,
+        });
+      } catch (err) {
+        logStripe({
+          level: "error",
+          msg: "stripe_payout_record_failed",
+          payoutId: payout.id,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
       return;
     }
 

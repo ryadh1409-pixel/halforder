@@ -107,7 +107,9 @@ export default function FoodShareMatchScreen() {
     match?.lifecycle === 'PAYMENT_CONFIRMED' ||
     match?.status === 'pending_payment';
   const canChat =
-    (match?.lifecycle === 'MATCHED' || match?.status === 'MATCHED') &&
+    (match?.lifecycle === 'MATCHED' ||
+      match?.lifecycle === 'ORDER_PLACED' ||
+      match?.status === 'MATCHED') &&
     !isHiddenFromMe(partner?.uid ?? '');
   const allowCancel =
     !!match &&

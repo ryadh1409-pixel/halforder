@@ -1,8 +1,3 @@
-import {
-  AdminFoodCatalogFab,
-  AdminFoodCatalogList,
-  AdminFoodCatalogProvider,
-} from './components/AdminFoodCatalog';
 import { AdminCardsDashboard } from './components/AdminCardsDashboard';
 import { ActionCard } from '../../../components/ActionCard';
 import { AdminStatCard } from '../../../components/AdminStatCard';
@@ -17,6 +12,11 @@ import { db } from '../../../services/firebase';
 import {
   countActiveAdminFoodSharesInSnapshot,
 } from '@/services/adminFoodSharesService';
+import {
+  fetchAdminPaymentTransactions,
+  summarizeAdminPayments,
+} from '@/services/adminPaymentCenter';
+import type { AdminPaymentSummary } from '@/types/adminPaymentTransaction';
 import { useRouter } from 'expo-router';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { ADMIN_FOOD_CARD_SLOT_IDS } from '../../../constants/adminFoodCards';
@@ -80,6 +80,8 @@ export default function AdminScreen() {
     foodShareRefunds: number;
     foodShareFailed: number;
     activeFoodShareMatches: number;
+    paymentSummary: AdminPaymentSummary | null;
+    recentPaymentCount: number;
   } | null>(null);
 
   const isAdmin = isAdminUser(user, firestoreUserRole);
@@ -106,7 +108,7 @@ export default function AdminScreen() {
   const fetchMetrics = useCallback(async () => {
     try {
       adminLog('admin-home', 'fetchMetrics: users, orders, food_cards');
-      const [usersSnap, ordersSnap, cardsSnap, adminSharesSnap, paymentsSnap, matchesSnap] =
+      const [usersSnap, ordersSnap, cardsSnap, adminSharesSnap, paymentsSnap, matchesSnap, paymentTxRows] =
         await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'orders')),
@@ -119,6 +121,7 @@ export default function AdminScreen() {
         ),
         getDocs(collection(db, 'payments')),
         getDocs(collection(db, 'matches')),
+        fetchAdminPaymentTransactions(),
       ]);
 
       const totalUsers = usersSnap.size;
@@ -190,6 +193,8 @@ export default function AdminScreen() {
         }
       });
 
+      const paymentSummary = summarizeAdminPayments(paymentTxRows);
+
       const nextMetrics = {
         totalUsers,
         totalOrders,
@@ -200,12 +205,14 @@ export default function AdminScreen() {
         activeCards,
         totalMatches,
         completedOrders,
-        totalRevenue: sumPrice,
-        foodShareRevenue,
-        foodSharePaid,
-        foodShareRefunds,
-        foodShareFailed,
+        totalRevenue: paymentSummary.grossRevenue || sumPrice,
+        foodShareRevenue: paymentSummary.foodShareRevenue || foodShareRevenue,
+        foodSharePaid: paymentSummary.successfulCount || foodSharePaid,
+        foodShareRefunds: paymentSummary.refundedCount || foodShareRefunds,
+        foodShareFailed: paymentSummary.failedCount || foodShareFailed,
         activeFoodShareMatches,
+        paymentSummary,
+        recentPaymentCount: paymentTxRows.length,
       };
       adminLog('admin-home', 'metrics loaded', nextMetrics);
       setMetrics(nextMetrics);
@@ -297,8 +304,7 @@ export default function AdminScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <AdminFoodCatalogProvider enabled={isAdmin}>
-          <View style={styles.mainCol}>
+        <View style={styles.mainCol}>
             <AdminHeader title="Admin Panel" />
             <ScrollView
               style={styles.scrollView}
@@ -352,8 +358,56 @@ export default function AdminScreen() {
                     <AdminStatCard
                       label="Revenue"
                       value={`$${metrics.totalRevenue.toFixed(0)}`}
-                      hint="All-time total"
-                      onPress={() => router.push(adminRoutes.orders() as never)}
+                      hint="Stripe treasury"
+                      onPress={() => router.push(adminRoutes.payments as never)}
+                      style={{ width: statCellW }}
+                    />
+                  </View>
+
+                  <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                    Finance · Stripe Payments Center
+                  </Text>
+                  <View style={styles.statsGrid}>
+                    <AdminStatCard
+                      label="Revenue Today"
+                      value={`$${(metrics.paymentSummary?.revenueToday ?? 0).toFixed(0)}`}
+                      hint="Paid today"
+                      onPress={() => router.push(adminRoutes.payments as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Revenue This Week"
+                      value={`$${(metrics.paymentSummary?.revenueThisWeek ?? 0).toFixed(0)}`}
+                      hint="Last 7 days"
+                      onPress={() => router.push(adminRoutes.revenue as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Revenue This Month"
+                      value={`$${(metrics.paymentSummary?.revenueThisMonth ?? 0).toFixed(0)}`}
+                      hint="Calendar month"
+                      onPress={() => router.push(adminRoutes.revenue as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Successful Payments"
+                      value={String(metrics.paymentSummary?.successfulCount ?? metrics.foodSharePaid)}
+                      hint="Paid charges"
+                      onPress={() => router.push(adminRoutes.payments as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Pending"
+                      value={String(metrics.paymentSummary?.pendingCount ?? 0)}
+                      hint="Awaiting completion"
+                      onPress={() => router.push(adminRoutes.payments as never)}
+                      style={{ width: statCellW }}
+                    />
+                    <AdminStatCard
+                      label="Refunds"
+                      value={String(metrics.paymentSummary?.refundedCount ?? metrics.foodShareRefunds)}
+                      hint="Refunded charges"
+                      onPress={() => router.push(adminRoutes.payments as never)}
                       style={{ width: statCellW }}
                     />
                   </View>
@@ -422,6 +476,21 @@ export default function AdminScreen() {
                     router.push(adminRoutes.sendNotification as never)
                   }
                 />
+                <ActionCard
+                  icon="card-outline"
+                  label="Payments"
+                  onPress={() => router.push(adminRoutes.payments as never)}
+                />
+                <ActionCard
+                  icon="bar-chart-outline"
+                  label="Revenue"
+                  onPress={() => router.push(adminRoutes.revenue as never)}
+                />
+                <ActionCard
+                  icon="shield-checkmark-outline"
+                  label="Stripe setup"
+                  onPress={() => router.push(adminRoutes.stripeDiagnostics as never)}
+                />
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
@@ -429,18 +498,6 @@ export default function AdminScreen() {
               </Text>
               <View style={styles.panel}>
                 <AdminCardsDashboard />
-              </View>
-
-              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
-                Home menu catalog
-              </Text>
-              <Text style={styles.panelHint}>
-                Up to 10 templates on the Home tab. Tap a card to edit; use +
-                below to add.
-              </Text>
-              <View style={styles.catalogSection}>
-                <AdminFoodCatalogList />
-                <AdminFoodCatalogFab />
               </View>
 
               <View style={styles.devLinks}>
@@ -474,7 +531,6 @@ export default function AdminScreen() {
               </View>
             </ScrollView>
           </View>
-        </AdminFoodCatalogProvider>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -518,28 +574,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panel: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.06)',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  panelHint: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#64748b',
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  catalogSection: {
-    position: 'relative',
-    minHeight: 120,
-    paddingBottom: 72,
     backgroundColor: '#ffffff',
     borderRadius: 18,
     padding: 16,

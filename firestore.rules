@@ -2859,6 +2859,18 @@ service cloud.firestore {
       allow delete: if isAdmin()
         || paymentDocOwnerMatchesAuth(resource.data);
     }
+    match /paymentTransactions/{paymentId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+    match /paymentAuditLogs/{logId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+    match /stripePayoutRecords/{payoutId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
     match /restaurants/{restaurantId} {
       allow read: if true;
       allow create, update, delete: if isAdmin()

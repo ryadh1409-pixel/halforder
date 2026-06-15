@@ -54,6 +54,34 @@ export async function invokeFoodSharePaymentIntent(
   return data;
 }
 
+/** Ensures orders/{matchId} + driver pool row after both users paid. */
+export async function invokeFoodShareDispatchEnsure(
+  matchId: string,
+): Promise<unknown> {
+  const id = matchId.trim();
+  if (!id) return null;
+  try {
+    const fn = httpsCallable(functions, 'ensureFoodShareDispatchOrder');
+    const result = await fn({ matchId: id });
+    console.log('[FOOD SHARE DRIVER POOL]', {
+      matchId: id,
+      client: true,
+      data: result.data,
+    });
+    return result.data;
+  } catch (error) {
+    const parsed = parseCallableError(error);
+    console.error('[FOOD SHARE ORDER ERROR]', {
+      matchId: id,
+      callable: 'ensureFoodShareDispatchOrder',
+      code: parsed.code,
+      message: parsed.message,
+      error,
+    });
+    return null;
+  }
+}
+
 /** Deployed alias: `createPaymentIntent` confirm payload, then `confirmFoodSharePayment`. */
 export async function invokeFoodSharePaymentConfirm(
   payload: CallablePayload,
@@ -67,5 +95,10 @@ export async function invokeFoodSharePaymentConfirm(
     ['createPaymentIntent', 'confirmFoodSharePayment'],
     confirmPayload,
   );
+  const matchId =
+    typeof payload.matchId === 'string' ? payload.matchId.trim() : '';
+  if (matchId) {
+    await invokeFoodShareDispatchEnsure(matchId);
+  }
   return data;
 }

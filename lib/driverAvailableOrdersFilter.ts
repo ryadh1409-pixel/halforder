@@ -48,6 +48,29 @@ function isAssignedLifecycleStatus(status: string, deliveryStatus: string): bool
  * Driver marketplace pool rows must be unassigned and pre-fulfillment.
  * Checks raw Firestore fields — pool docs may omit assignment until sync deletes them.
  */
+/** Human-readable rejection reason for Driver Hub pool filtering. */
+export function getDriverHubRejectReason(
+  order: DriverAvailableOrderInput & { id?: string },
+  extra?: { stale?: boolean; terminal?: boolean; assignedExcluded?: boolean },
+): string | null {
+  if (!order) return 'missing_order';
+  const id = typeof order.id === 'string' ? order.id.trim() : '';
+  if (id && isDriverMarketplaceOrderLocallyClaimed(id)) return 'locally_claimed';
+  if (hasNonEmptyDriverField(order.driverId)) return 'driver_id_set';
+  if (hasNonEmptyDriverField(order.assignedDriverId)) return 'assigned_driver_id_set';
+  const status = norm(order.status);
+  const deliveryStatus = norm(order.deliveryStatus);
+  if (status === 'driver_assigned' || deliveryStatus === 'driver_assigned') {
+    return 'driver_assigned_status';
+  }
+  if (status === 'picked_up' || deliveryStatus === 'picked_up') return 'picked_up_status';
+  if (status === 'delivered' || deliveryStatus === 'delivered') return 'delivered_status';
+  if (extra?.stale) return 'pool_row_stale';
+  if (extra?.terminal) return 'terminal_marketplace_order';
+  if (extra?.assignedExcluded) return 'assigned_to_driver_listener';
+  return null;
+}
+
 export function isDriverMarketplaceOrderAvailableForClaim(
   order: DriverAvailableOrderInput | null | undefined,
 ): boolean {
@@ -78,6 +101,17 @@ export function filterDriverAvailableMarketplaceOrders<
         entersActiveList: false,
       });
       if (!kept) {
+        const reason = getDriverHubRejectReason(order);
+        console.log('[DRIVER HUB FILTER REJECTED]', {
+          orderId: id,
+          reason: reason ?? 'unknown',
+          status: order.status ?? null,
+          deliveryStatus: order.deliveryStatus ?? null,
+          driverId: order.driverId ?? null,
+          assignedDriverId: order.assignedDriverId ?? null,
+          locallyClaimed: isDriverMarketplaceOrderLocallyClaimed(id),
+          queryName,
+        });
         console.log('[AVAILABLE FILTER]', {
           orderId: id,
           status: order.status ?? null,

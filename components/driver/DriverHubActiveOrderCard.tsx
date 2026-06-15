@@ -7,7 +7,11 @@ import {
 } from '@/lib/driverMarketplaceFulfillment';
 import { DRIVER_DELIVERY_COMPLETE_TOAST } from '@/lib/driverDeliveryCompletion';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
-import type { DriverOrder } from '@/services/driverService';
+import {
+  foodShareDropoffAddress,
+  foodSharePickupAddress,
+  isFoodShareDriverOrder,
+} from '@/lib/foodShareDriverOrderDisplay';
 import { showError, showSuccess } from '@/utils/toast';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
@@ -37,6 +41,7 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
     driverUid,
   );
   if (!isActive) return null;
+  const foodShare = isFoodShareDriverOrder(order);
   const statusLabel = driverHubActiveStatusLabel(order.deliveryStatus);
   const action = getDriverMarketplaceFulfillmentButton(
     {
@@ -110,12 +115,21 @@ export function DriverHubActiveOrderCard({ order, driverUid }: Props) {
           <Text style={styles.statusText}>{statusLabel}</Text>
         </View>
         <Text style={styles.restaurant}>{order.restaurantName}</Text>
-        <Text style={styles.meta}>Customer: {order.customerName ?? 'Customer'}</Text>
         <Text style={styles.meta}>
-          Pickup: {order.restaurantAddress ?? 'Restaurant address unavailable'}
+          {foodShare ? 'Pickup' : 'Customer'}:{' '}
+          {foodShare ? order.pickupName ?? 'Pickup contact' : order.customerName ?? 'Customer'}
         </Text>
         <Text style={styles.meta}>
-          Drop-off: {order.deliveryAddress ?? 'Address unavailable'}
+          Pickup:{' '}
+          {foodShare
+            ? foodSharePickupAddress(order)
+            : order.restaurantAddress ?? 'Restaurant address unavailable'}
+        </Text>
+        <Text style={styles.meta}>
+          Drop-off:{' '}
+          {foodShare
+            ? foodShareDropoffAddress(order)
+            : order.deliveryAddress ?? 'Address unavailable'}
         </Text>
         <Text style={styles.openDetail}>Open delivery details →</Text>
       </Pressable>
