@@ -54,24 +54,14 @@ export default function TabLayout() {
           href: tabHrefForRole(role, TABS_ROUTES.swipe, customerTabs),
         }}
       />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.explore, customerTabs),
-        }}
-      />
+      <Tabs.Screen name="explore" options={HIDDEN_TAB} />
       <Tabs.Screen
         name="search"
         options={{
           href: tabHrefForRole(role, TABS_ROUTES.search, customerTabs),
         }}
       />
-      <Tabs.Screen
-        name="cart"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.cart, customerTabs),
-        }}
-      />
+      <Tabs.Screen name="cart" options={HIDDEN_TAB} />
       <Tabs.Screen name="ai" options={HIDDEN_TAB} />
       <Tabs.Screen name="orders" options={HIDDEN_TAB} />
       <Tabs.Screen name="home" options={HIDDEN_TAB} />

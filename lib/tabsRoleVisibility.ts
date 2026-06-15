@@ -27,9 +27,7 @@ export function tabHrefForRole(
 export const CUSTOMER_TAB_NAMES = [
   'index',
   'swipe',
-  'explore',
   'search',
-  'cart',
   'profile',
 ] as const;
 

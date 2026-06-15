@@ -12,7 +12,7 @@ if (!matchId) {
 }
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({projectId: "halforfer"});
 }
 
 const db = admin.firestore();

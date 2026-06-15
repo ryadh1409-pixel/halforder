@@ -31,14 +31,20 @@ test("buildFoodShareDispatchOrderPayload matches driver pool requirements", () =
     },
     usersById: {
       user_a: {
-        address: "10 Oak Ave",
+        deliveryLocation: {
+          address: "10 Oak Ave",
+          lat: 45.1,
+          lng: -75.1,
+        },
         phone: "+1 555 111 1111",
-        location: {lat: 45.1, lng: -75.1},
       },
       user_b: {
-        address: "20 Pine Rd",
+        homeLocation: {
+          formattedAddress: "20 Pine Rd",
+          latitude: 45.2,
+          longitude: -75.2,
+        },
         phone: "+1 555 222 2222",
-        location: {lat: 45.2, lng: -75.2},
       },
     },
     pickupUserId: "user_a",
@@ -66,7 +72,7 @@ test("buildFoodShareDispatchOrderPayload matches driver pool requirements", () =
   assert.equal(payload.pickupUserId, "user_a");
   assert.equal(payload.pickupName, "Alex");
   assert.equal(payload.pickupPhone, "+1 555 111 1111");
-  assert.equal(payload.pickupAddress, "10 Oak Ave");
+  assert.equal(payload.pickupAddress, "123 Main St");
   assert.equal(payload.pickupLat, 45.1);
   assert.equal(payload.pickupLng, -75.1);
   assert.equal(payload.dropoffUserId, "user_b");
@@ -75,13 +81,17 @@ test("buildFoodShareDispatchOrderPayload matches driver pool requirements", () =
   assert.equal(payload.dropoffAddress, "20 Pine Rd");
   assert.equal(payload.dropoffLat, 45.2);
   assert.equal(payload.dropoffLng, -75.2);
+  assert.equal(payload.deliveryAddress, "20 Pine Rd");
+  assert.equal(payload.address, "20 Pine Rd");
+  assert.equal(payload.lat, 45.2);
+  assert.equal(payload.lng, -75.2);
   assert.equal(payload.customerPhone, "+1 555 222 2222");
   assert.deepEqual(payload.items, [
     {
       name: "Burger Duo",
       title: "Burger Duo",
-      quantity: 1,
-      qty: 1,
+      quantity: 2,
+      qty: 2,
       image: "https://example.com/burger.jpg",
       price: 12,
     },

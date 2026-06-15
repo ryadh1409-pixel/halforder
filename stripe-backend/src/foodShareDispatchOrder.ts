@@ -99,22 +99,35 @@ function readNonEmptyString(...values: unknown[]): string {
   return "";
 }
 
+function parseLocationField(
+  raw: unknown,
+): { address: string; latLng: LatLng | null } {
+  if (!raw) return {address: "", latLng: null};
+  if (typeof raw === "string") {
+    const address = raw.trim();
+    return address ? {address, latLng: null} : {address: "", latLng: null};
+  }
+  if (typeof raw !== "object") return {address: "", latLng: null};
+  const loc = raw as Record<string, unknown>;
+  const address = readNonEmptyString(loc.formattedAddress, loc.address);
+  const latLng = parseLatLng(loc);
+  return {address, latLng};
+}
+
 export function parseUserSavedLocation(
   user: Record<string, unknown> | null | undefined,
 ): { address: string; latLng: LatLng | null } {
   if (!user) return {address: "", latLng: null};
 
-  const location =
-    user.location && typeof user.location === "object"
-      ? (user.location as Record<string, unknown>)
-      : null;
-  const address = readNonEmptyString(
-    location?.formattedAddress,
-    location?.address,
-    user.formattedAddress,
-    user.address,
-  );
-  const latLng = location ? parseLatLng(location) : parseLatLng(user);
+  for (const field of ["deliveryLocation", "homeLocation", "location"] as const) {
+    const parsed = parseLocationField(user[field]);
+    if (parsed.address || parsed.latLng) {
+      return parsed;
+    }
+  }
+
+  const address = readNonEmptyString(user.formattedAddress, user.address);
+  const latLng = parseLatLng(user);
   return {address, latLng};
 }
 
@@ -159,8 +172,8 @@ export function resolveShareVenueAddress(
     return {restaurantAddress: "", restaurantLocation: null};
   }
   const restaurantAddress = readNonEmptyString(
-    share.pickupAddress,
     share.venueLocation,
+    share.pickupAddress,
     typeof share.location === "string" ? share.location : "",
   );
   const geo =
@@ -318,11 +331,12 @@ export function buildFoodShareDispatchOrderPayload(
   );
 
   const pickupAddress =
-    pickup.address ||
     catalog.restaurantAddress ||
-    `Pickup with ${pickup.name}`;
+    pickup.address ||
+    `Pickup at ${catalog.restaurantName}`;
   const dropoffAddress =
-    dropoff.address || `Drop-off for ${dropoff.name} — confirm in chat`;
+    dropoff.address || `Delivery for ${dropoff.name} — confirm in chat`;
+  const customerDeliveryLocation = buildLocationRecord(dropoff);
 
   console.log("[FOOD SHARE PICKUP DATA]", {
     matchId,
@@ -363,8 +377,8 @@ export function buildFoodShareDispatchOrderPayload(
       {
         name: catalog.foodName,
         title: catalog.foodName,
-        quantity: 1,
-        qty: 1,
+        quantity: 2,
+        qty: 2,
         image: catalog.foodImageUrl,
         price: sharedPrice,
       },
@@ -398,8 +412,11 @@ export function buildFoodShareDispatchOrderPayload(
     customerPhone: dropoff.phone || null,
     customerPhoneNumber: dropoff.phone || null,
     deliveryAddress: dropoffAddress,
-    deliveryLocation: dropoffLocation,
-    userLocation: dropoffLocation,
+    address: dropoffAddress,
+    lat: dropoff.lat,
+    lng: dropoff.lng,
+    deliveryLocation: customerDeliveryLocation ?? dropoffLocation,
+    userLocation: customerDeliveryLocation ?? dropoffLocation,
     restaurantAddress: catalog.restaurantAddress,
     restaurantLocation: catalog.restaurantLocation,
     restaurantPhone: restaurantPhone || null,
@@ -544,8 +561,23 @@ export async function repairFoodShareOrderDetailsIfNeeded(
     );
 
     const patch: Record<string, unknown> = {};
+    const corruptDriverStatus =
+      !readNonEmptyString(existing.driverId, existing.assignedDriverId) &&
+      (String(existing.status ?? "").toLowerCase() === "driver_assigned" ||
+        String(existing.deliveryStatus ?? "").toLowerCase() === "driver_assigned");
+    if (corruptDriverStatus) {
+      patch.status = "payment_confirmed";
+      patch.deliveryStatus = "pending";
+      patch.driverId = null;
+      patch.assignedDriverId = null;
+      repaired = true;
+    }
+
     const copyKeys = [
       "deliveryAddress",
+      "address",
+      "lat",
+      "lng",
       "deliveryLocation",
       "userLocation",
       "restaurantAddress",
