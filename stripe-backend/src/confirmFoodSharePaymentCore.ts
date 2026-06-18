@@ -1,9 +1,49 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
+import * as logger from "firebase-functions/logger";
 import type Stripe from "stripe";
 import {foodSharePaymentDocId} from "./foodSharePaymentLogic.js";
 import {backfillFoodShareDispatchOrderIfNeeded} from "./foodShareDispatchOrder.js";
 import {handleFoodSharePaymentIntentEvent} from "./foodShareWebhookHandlers.js";
+
+function paymentDebugState(input: {
+  matchId: string | null;
+  match?: Record<string, unknown> | null;
+  paymentStatus?: unknown;
+  reason: string;
+  extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const {matchId, match, paymentStatus, reason, extra} = input;
+  const users = Array.isArray(match?.users)
+    ? match.users.filter((x): x is string => typeof x === "string")
+    : [];
+  const payments = (match?.userPayments ?? {}) as Record<
+    string,
+    {paymentStatus?: string}
+  >;
+  const adminFoodShareId =
+    typeof match?.adminFoodShareId === "string"
+      ? match.adminFoodShareId
+      : typeof match?.foodShareId === "string"
+        ? match.foodShareId
+        : null;
+  return {
+    matchId,
+    lifecycle: match?.lifecycle ?? null,
+    paymentStatus: paymentStatus ?? match?.paymentStatus ?? null,
+    paidUsers: users.filter((u) =>
+      String(payments[u]?.paymentStatus ?? "").trim().toUpperCase() === "PAID",
+    ),
+    users,
+    adminFoodShareId,
+    restaurantId:
+      typeof match?.restaurantId === "string" ? match.restaurantId : adminFoodShareId,
+    stripeAccountId:
+      typeof match?.stripeAccountId === "string" ? match.stripeAccountId : null,
+    reason,
+    ...(extra ?? {}),
+  };
+}
 
 async function readDocOrLogMissing(
   db: admin.firestore.Firestore,
@@ -35,6 +75,11 @@ export async function confirmFoodSharePaymentCore(input: {
       : "";
 
   if (!matchId) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId: null,
+      reason: "confirm_missing_match_id",
+      extra: {uid},
+    }));
     throw new functions.https.HttpsError(
       "invalid-argument",
       "matchId is required.",
@@ -50,6 +95,12 @@ export async function confirmFoodSharePaymentCore(input: {
       uid,
       reason: "match_not_found_before_confirm",
     });
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match: null,
+      reason: "match_not_found_before_confirm_throw",
+      extra: {uid, matchPath},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Match not found.",
@@ -61,6 +112,12 @@ export async function confirmFoodSharePaymentCore(input: {
     ? match.users.filter((x): x is string => typeof x === "string")
     : [];
   if (!users.includes(uid)) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      reason: "confirm_user_not_in_match",
+      extra: {uid},
+    }));
     throw new functions.https.HttpsError(
       "permission-denied",
       "You are not part of this match.",
@@ -77,6 +134,12 @@ export async function confirmFoodSharePaymentCore(input: {
         : "";
   }
   if (!paymentIntentId) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      reason: "confirm_missing_payment_intent_id",
+      extra: {uid},
+    }));
     throw new functions.https.HttpsError(
       "invalid-argument",
       "paymentIntentId is required.",
@@ -94,18 +157,39 @@ export async function confirmFoodSharePaymentCore(input: {
   const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
   const metadata = (pi.metadata ?? {}) as Record<string, string>;
   if (metadata.matchId?.trim() !== matchId) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      paymentStatus: pi.status,
+      reason: "confirm_payment_match_mismatch",
+      extra: {uid, paymentIntentId: pi.id, metadata},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Payment does not match this share.",
     );
   }
   if (metadata.userId?.trim() !== uid) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      paymentStatus: pi.status,
+      reason: "confirm_payment_user_mismatch",
+      extra: {uid, paymentIntentId: pi.id, metadata},
+    }));
     throw new functions.https.HttpsError(
       "permission-denied",
       "Payment belongs to another user.",
     );
   }
   if (pi.status !== "succeeded") {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      paymentStatus: pi.status,
+      reason: "confirm_payment_not_succeeded",
+      extra: {uid, paymentIntentId: pi.id},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       `Payment not completed yet (status: ${pi.status}).`,
@@ -127,6 +211,14 @@ export async function confirmFoodSharePaymentCore(input: {
 
   const handled = await handleFoodSharePaymentIntentEvent(syntheticEvent, pi, stripe);
   if (!handled) {
+    const latestMatchSnap = await db.doc(matchPath).get();
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match: latestMatchSnap.data() ?? match,
+      paymentStatus: pi.status,
+      reason: "confirm_food_share_event_not_handled",
+      extra: {uid, paymentIntentId: pi.id},
+    }));
     throw new functions.https.HttpsError(
       "internal",
       "Could not apply food share payment.",

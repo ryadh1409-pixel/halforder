@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import type {DocumentSnapshot, Transaction} from "firebase-admin/firestore";
 import type Stripe from "stripe";
 import {
@@ -26,6 +27,43 @@ import {
 } from "./paymentTransactions.js";
 
 const PROCESSED_EVENTS = "stripe_processed_events";
+
+function paymentDebugState(input: {
+  matchId: string | null;
+  match?: Record<string, unknown> | null;
+  paymentStatus?: unknown;
+  reason: string;
+  extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const {matchId, match, paymentStatus, reason, extra} = input;
+  const users = Array.isArray(match?.users)
+    ? match.users.filter((x): x is string => typeof x === "string")
+    : [];
+  const payments = (match?.userPayments ?? {}) as Record<
+    string,
+    {paymentStatus?: string}
+  >;
+  const adminFoodShareId =
+    typeof match?.adminFoodShareId === "string"
+      ? match.adminFoodShareId
+      : typeof match?.foodShareId === "string"
+        ? match.foodShareId
+        : null;
+  return {
+    matchId,
+    lifecycle: match?.lifecycle ?? null,
+    paymentStatus: paymentStatus ?? match?.paymentStatus ?? null,
+    paidUsers: users.filter((u) => isPaidStatus(payments[u]?.paymentStatus)),
+    users,
+    adminFoodShareId,
+    restaurantId:
+      typeof match?.restaurantId === "string" ? match.restaurantId : adminFoodShareId,
+    stripeAccountId:
+      typeof match?.stripeAccountId === "string" ? match.stripeAccountId : null,
+    reason,
+    ...(extra ?? {}),
+  };
+}
 
 function paymentStatusFromEvent(eventType: string): FoodSharePaymentStatus {
   if (eventType === "payment_intent.succeeded") return "PAID";
@@ -58,6 +96,7 @@ async function activateMatchIfFullyPaid(
   tx: Transaction,
   matchSnap: DocumentSnapshot,
   userPayments: Record<string, {paymentStatus?: string}>,
+  precreatedOrder?: {orderId: string; created: boolean},
 ): Promise<void> {
   if (!matchSnap.exists) return;
   const match = matchSnap.data() ?? {};
@@ -99,12 +138,27 @@ async function activateMatchIfFullyPaid(
   const matchChatId =
     typeof match.matchChatId === "string" ? match.matchChatId : matchId;
 
-  const {orderId, created: orderCreated} = await createFoodShareDispatchOrderInTxn(
-    tx,
+  logger.error("PAYMENT_STATE", paymentDebugState({
     matchId,
     match,
-    users,
-  );
+    paymentStatus: "PAID",
+    reason: "activate_match_fully_paid",
+    extra: {
+      paidUsers: users.filter((u) => isPaidStatus(userPayments[u]?.paymentStatus)),
+      userPayments,
+      match,
+      precreatedOrder: precreatedOrder ?? null,
+    },
+  }));
+
+  const {orderId, created: orderCreated} =
+    precreatedOrder ??
+    await createFoodShareDispatchOrderInTxn(
+      tx,
+      matchId,
+      match,
+      users,
+    );
 
   tx.set(
     matchSnap.ref,
@@ -181,6 +235,7 @@ export async function withFoodShareEventIdempotency(
       duplicate = true;
       return;
     }
+    await apply(tx, matchSnap);
     tx.set(evRef, {
       stripeEventId: event.id,
       type: event.type,
@@ -188,7 +243,6 @@ export async function withFoodShareEventIdempotency(
       matchId,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await apply(tx, matchSnap);
   });
 
   return duplicate ? "duplicate" : "applied";
@@ -247,6 +301,9 @@ export async function handleFoodSharePaymentIntentEvent(
         string,
         {paymentStatus?: string; stripePaymentIntentId?: string; amount?: number}
       >;
+      const users = Array.isArray(match.users)
+        ? match.users.filter((x): x is string => typeof x === "string")
+        : [];
       const userPayments = {
         ...prior,
         [userId]: {
@@ -255,6 +312,35 @@ export async function handleFoodSharePaymentIntentEvent(
           amount: pi.amount,
         },
       };
+      const allPaid =
+        users.length === 2 &&
+        users.every((u) => isPaidStatus(userPayments[u]?.paymentStatus));
+      const paidUsers = users.filter((u) =>
+        isPaidStatus(userPayments[u]?.paymentStatus),
+      );
+      let precreatedOrder: {orderId: string; created: boolean} | undefined;
+
+      if (paymentStatus === "PAID" && allPaid) {
+        logger.error("PAYMENT_STATE", paymentDebugState({
+          matchId,
+          match,
+          paymentStatus,
+          reason: "before_fully_paid_dispatch_create",
+          extra: {
+            paidUsers,
+            userPayments,
+            match,
+            paymentIntentId: pi.id,
+            userId,
+          },
+        }));
+        precreatedOrder = await createFoodShareDispatchOrderInTxn(
+          tx,
+          matchId,
+          match,
+          users,
+        );
+      }
 
       tx.set(
         db.doc(`payments/${paymentId}`),
@@ -293,10 +379,11 @@ export async function handleFoodSharePaymentIntentEvent(
 
       if (paymentStatus === "PAID") {
         const beforeLifecycle = String(match.lifecycle ?? "");
-        await activateMatchIfFullyPaid(tx, matchSnap, userPayments);
-        const allPaid = (Array.isArray(match.users) ? match.users : []).every(
-          (u: unknown) =>
-            typeof u === "string" && isPaidStatus(userPayments[u]?.paymentStatus),
+        await activateMatchIfFullyPaid(
+          tx,
+          matchSnap,
+          userPayments,
+          precreatedOrder,
         );
         activated =
           allPaid &&

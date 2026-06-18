@@ -1,12 +1,58 @@
 import * as admin from "firebase-admin";
 import type {CallableContext} from "firebase-functions/v1/https";
 import * as functions from "firebase-functions/v1";
+import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
 import {
   foodSharePaymentDocId,
   quoteFoodSharePayment,
 } from "./foodSharePaymentLogic.js";
 import {confirmFoodSharePaymentCore} from "./confirmFoodSharePaymentCore.js";
+
+function paymentDebugState(input: {
+  matchId: string | null;
+  match?: Record<string, unknown> | null;
+  share?: Record<string, unknown> | null;
+  paymentStatus?: unknown;
+  reason: string;
+  extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const {matchId, match, share, paymentStatus, reason, extra} = input;
+  const users = Array.isArray(match?.users)
+    ? match.users.filter((x): x is string => typeof x === "string")
+    : [];
+  const payments = (match?.userPayments ?? {}) as Record<
+    string,
+    {paymentStatus?: string}
+  >;
+  const adminFoodShareId =
+    typeof match?.adminFoodShareId === "string"
+      ? match.adminFoodShareId
+      : typeof match?.foodShareId === "string"
+        ? match.foodShareId
+        : null;
+  return {
+    matchId,
+    lifecycle: match?.lifecycle ?? null,
+    paymentStatus: paymentStatus ?? match?.paymentStatus ?? null,
+    paidUsers: users.filter((u) =>
+      String(payments[u]?.paymentStatus ?? "").trim().toUpperCase() === "PAID",
+    ),
+    users,
+    adminFoodShareId,
+    restaurantId:
+      typeof match?.restaurantId === "string" ? match.restaurantId : adminFoodShareId,
+    stripeAccountId:
+      typeof share?.stripeAccountId === "string" ?
+        share.stripeAccountId :
+        typeof match?.stripeAccountId === "string" ?
+          match.stripeAccountId :
+          null,
+    stripePayoutsEnabled: share?.stripePayoutsEnabled ?? null,
+    reason,
+    ...(extra ?? {}),
+  };
+}
 
 export type FoodSharePaymentIntentResult =
   | {
@@ -80,6 +126,12 @@ export async function runCreateFoodSharePaymentIntent(input: {
       uid,
       reason: "match_not_found_before_payment_intent",
     });
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match: null,
+      reason: "payment_intent_match_not_found_throw",
+      extra: {uid},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Match not found.",
@@ -110,6 +162,12 @@ export async function runCreateFoodSharePaymentIntent(input: {
     lifecycle !== "WAITING_FOR_PAYMENT_CONFIRMATION" &&
     lifecycle !== "PAYMENT_CONFIRMED"
   ) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      reason: "payment_intent_lifecycle_not_awaiting_payment",
+      extra: {uid},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "This match is not awaiting payment.",
@@ -128,6 +186,12 @@ export async function runCreateFoodSharePaymentIntent(input: {
       reason: "match_missing_food_share_reference",
       match,
     });
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      reason: "payment_intent_missing_food_share_reference",
+      extra: {uid},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Match missing food share reference.",
@@ -142,6 +206,12 @@ export async function runCreateFoodSharePaymentIntent(input: {
       adminFoodShareId,
       match,
     });
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      reason: "payment_intent_food_share_not_found",
+      extra: {uid, adminFoodShareId},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Food share not found.",
@@ -154,6 +224,13 @@ export async function runCreateFoodSharePaymentIntent(input: {
       active: shareSnap.data()?.active ?? null,
       share: shareSnap.data() ?? null,
     });
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      share: shareSnap.data() ?? null,
+      reason: "payment_intent_food_share_not_active",
+      extra: {uid, adminFoodShareId},
+    }));
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Food share is not active.",
@@ -244,6 +321,13 @@ export async function runCreateFoodSharePaymentIntent(input: {
     const checkoutUrl =
       typeof session.url === "string" ? session.url.trim() : "";
     if (!checkoutUrl) {
+      logger.error("PAYMENT_STATE", paymentDebugState({
+        matchId,
+        match,
+        share,
+        reason: "payment_intent_checkout_url_missing",
+        extra: {uid, adminFoodShareId, sessionId: session.id},
+      }));
       throw new functions.https.HttpsError(
         "internal",
         "Stripe Checkout session URL missing",
@@ -307,6 +391,13 @@ export async function runCreateFoodSharePaymentIntent(input: {
   );
 
   if (!paymentIntent.client_secret) {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      share,
+      reason: "payment_intent_client_secret_missing",
+      extra: {uid, adminFoodShareId, paymentIntentId: paymentIntent.id},
+    }));
     throw new functions.https.HttpsError(
       "internal",
       "Missing payment intent client secret.",
@@ -387,11 +478,19 @@ export async function handleFoodSharePaymentCallable(
   }
 
   if (isFoodShareConfirmPayload(payload)) {
-    return confirmFoodSharePaymentCore({
-      payload,
-      uid,
-      stripe,
-    });
+    try {
+      return await confirmFoodSharePaymentCore({
+        payload,
+        uid,
+        stripe,
+      });
+    } catch (error) {
+      logger.error("FOOD_SHARE_CONFIRM_FATAL", {
+        error: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
   }
 
   const matchId =

@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import type {
   DocumentSnapshot,
   Transaction,
@@ -38,6 +39,43 @@ export function resolveFoodShareOrderId(
   const existing =
     typeof match.orderId === "string" ? match.orderId.trim() : "";
   return existing || matchId;
+}
+
+function paymentDebugState(input: {
+  matchId: string | null;
+  match?: Record<string, unknown> | null;
+  paymentStatus?: unknown;
+  reason: string;
+  extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const {matchId, match, paymentStatus, reason, extra} = input;
+  const users = Array.isArray(match?.users)
+    ? match.users.filter((x): x is string => typeof x === "string")
+    : [];
+  const payments = (match?.userPayments ?? {}) as Record<
+    string,
+    {paymentStatus?: string}
+  >;
+  const adminFoodShareId =
+    typeof match?.adminFoodShareId === "string"
+      ? match.adminFoodShareId
+      : typeof match?.foodShareId === "string"
+        ? match.foodShareId
+        : null;
+  return {
+    matchId,
+    lifecycle: match?.lifecycle ?? null,
+    paymentStatus: paymentStatus ?? match?.paymentStatus ?? null,
+    paidUsers: users.filter((u) => isPaidStatus(payments[u]?.paymentStatus)),
+    users,
+    adminFoodShareId,
+    restaurantId:
+      typeof match?.restaurantId === "string" ? match.restaurantId : adminFoodShareId,
+    stripeAccountId:
+      typeof match?.stripeAccountId === "string" ? match.stripeAccountId : null,
+    reason,
+    ...(extra ?? {}),
+  };
 }
 
 export function resolveFoodSharePricing(
@@ -766,18 +804,47 @@ export async function backfillFoodShareDispatchOrderIfNeeded(
         matchId,
         reason: "match_not_found",
       });
+      logger.error("PAYMENT_STATE", paymentDebugState({
+        matchId,
+        match: null,
+        reason: "dispatch_validation_match_not_found",
+        extra: {
+          paidUsers: [],
+          match: null,
+        },
+      }));
       return null;
     }
 
     const match = matchSnap.data() ?? {};
     const users = matchUsersFullyPaid(match);
     if (users.length !== 2) {
+      const allUsers = Array.isArray(match.users)
+        ? match.users.filter((x): x is string => typeof x === "string")
+        : [];
+      const payments = (match.userPayments ?? {}) as Record<
+        string,
+        {paymentStatus?: string}
+      >;
+      const paidUsers = allUsers.filter((u) =>
+        isPaidStatus(payments[u]?.paymentStatus),
+      );
       console.log("[FOOD SHARE ORDER ERROR]", {
         matchId,
         reason: "not_fully_paid",
         lifecycle: match.lifecycle ?? null,
         userPayments: match.userPayments ?? null,
       });
+      logger.error("PAYMENT_STATE", paymentDebugState({
+        matchId,
+        match,
+        reason: "dispatch_validation_not_fully_paid",
+        extra: {
+          paidUsers,
+          userPayments: match.userPayments ?? null,
+          match,
+        },
+      }));
       return null;
     }
 
@@ -822,7 +889,28 @@ export async function backfillFoodShareDispatchOrderIfNeeded(
       if (!freshMatchSnap.exists) return;
       const freshMatch = freshMatchSnap.data() ?? {};
       const freshUsers = matchUsersFullyPaid(freshMatch);
-      if (freshUsers.length !== 2) return;
+      if (freshUsers.length !== 2) {
+        const allUsers = Array.isArray(freshMatch.users)
+          ? freshMatch.users.filter((x): x is string => typeof x === "string")
+          : [];
+        const payments = (freshMatch.userPayments ?? {}) as Record<
+          string,
+          {paymentStatus?: string}
+        >;
+        logger.error("PAYMENT_STATE", paymentDebugState({
+          matchId,
+          match: freshMatch,
+          reason: "dispatch_transaction_validation_not_fully_paid",
+          extra: {
+            paidUsers: allUsers.filter((u) =>
+              isPaidStatus(payments[u]?.paymentStatus),
+            ),
+            userPayments: freshMatch.userPayments ?? null,
+            match: freshMatch,
+          },
+        }));
+        return;
+      }
 
       const result = await createFoodShareDispatchOrderInTxn(
         tx,

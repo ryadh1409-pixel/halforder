@@ -6,6 +6,12 @@ import {
 } from '@/services/foodSharePaymentDocReads';
 
 type CallablePayload = Record<string, unknown>;
+type ConfirmFoodSharePaymentResponse = {
+  orderId?: unknown;
+  orderCreated?: unknown;
+  poolExists?: unknown;
+  lifecycle?: unknown;
+};
 
 async function callFirstAvailable(
   names: string[],
@@ -97,7 +103,22 @@ export async function invokeFoodSharePaymentConfirm(
   );
   const matchId =
     typeof payload.matchId === 'string' ? payload.matchId.trim() : '';
-  if (matchId) {
+  const confirmResult =
+    data !== null && typeof data === 'object'
+      ? (data as ConfirmFoodSharePaymentResponse)
+      : {};
+  const lifecycle =
+    typeof confirmResult.lifecycle === 'string'
+      ? confirmResult.lifecycle.trim().toUpperCase()
+      : '';
+  const hasOrderId =
+    typeof confirmResult.orderId === 'string' && confirmResult.orderId.trim().length > 0;
+  const fullyPaid =
+    hasOrderId ||
+    confirmResult.orderCreated === true ||
+    confirmResult.poolExists === true ||
+    lifecycle === 'ORDER_PLACED';
+  if (matchId && fullyPaid) {
     await invokeFoodShareDispatchEnsure(matchId);
   }
   return data;
