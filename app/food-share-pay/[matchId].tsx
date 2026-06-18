@@ -1,4 +1,5 @@
-import { USER_ROUTES } from '@/lib/navigationPaths';
+import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
+import { confirmCancelMatch } from '@/hooks/useFoodShareUx';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
 import {
   FOOD_SHARE_ERRORS,
@@ -6,7 +7,7 @@ import {
   foodShareErrorMessage,
 } from '@/lib/foodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
-import { mapMatchDoc } from '@/services/foodShareMatchService';
+import { cancelFoodShareMatch, mapMatchDoc } from '@/services/foodShareMatchService';
 import { payFoodShareMatch, confirmFoodSharePaymentAfterRedirect } from '@/services/foodSharePayment';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { theme } from '@/constants/theme';
@@ -51,6 +52,7 @@ export default function FoodSharePayScreen() {
   const myUid = auth.currentUser?.uid ?? '';
 
   const [phase, setPhase] = useState<Phase>('loading');
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<ReturnType<typeof mapMatchDoc> | null>(null);
   const started = useRef(false);
@@ -131,9 +133,19 @@ export default function FoodSharePayScreen() {
   const partnerPaid = partner
     ? match?.userPayments[partner.uid]?.paymentStatus === 'PAID'
     : false;
+  const anyPaymentCompleted = match
+    ? Object.values(match.userPayments).some((payment) => payment.paymentStatus === 'PAID')
+    : false;
+  const canShowCancel =
+    !!match &&
+    (
+      match.lifecycle === 'WAITING_FOR_PARTNER' ||
+      match.lifecycle === 'WAITING_FOR_PAYMENT' ||
+      match.lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION'
+    );
 
   const runPayment = useCallback(async () => {
-    if (!id) return;
+    if (!id || cancelling) return;
     console.log('[STRIPE STEP] pay_button_pressed', {
       matchId: id,
       rawMatchId: matchId,
@@ -181,7 +193,34 @@ export default function FoodSharePayScreen() {
       showError(message);
       Alert.alert('Payment Error', message);
     }
-  }, [id, router]);
+  }, [cancelling, id, router]);
+
+  const handleCancelShare = useCallback(async () => {
+    if (!id || !match || cancelling) return;
+    if (match.lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION' && anyPaymentCompleted) {
+      showError('Payment already submitted and cannot be cancelled from the app.');
+      return;
+    }
+    const ok = await confirmCancelMatch(match.foodName);
+    if (!ok) return;
+    setCancelling(true);
+    try {
+      await cancelFoodShareMatch({
+        matchId: id,
+        partnerUid: partner?.uid,
+        cancelledByFirstName:
+          match.userA.uid === myUid ? match.userA.firstName : match.userB.firstName,
+        foodName: match.foodName,
+        adminFoodShareId: match.adminFoodShareId,
+      });
+      showSuccess('Share cancelled');
+      router.replace(TABS_ROUTES.swipe as never);
+    } catch (e) {
+      showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
+    } finally {
+      setCancelling(false);
+    }
+  }, [anyPaymentCompleted, cancelling, id, match, myUid, partner?.uid, router]);
 
   useEffect(() => {
     if (paid === '1' && !started.current && phase === 'ready') {
@@ -285,7 +324,7 @@ export default function FoodSharePayScreen() {
         ) : (
           <Pressable
             style={[styles.payBtn, phase === 'paying' && styles.payBtnDisabled]}
-            disabled={phase === 'paying'}
+            disabled={phase === 'paying' || cancelling}
             onPress={() => void runPayment()}
           >
             {phase === 'paying' ? (
@@ -300,6 +339,20 @@ export default function FoodSharePayScreen() {
             )}
           </Pressable>
         )}
+
+        {canShowCancel ? (
+          <Pressable
+            style={[styles.cancelLink, cancelling && styles.payBtnDisabled]}
+            disabled={cancelling || phase === 'paying'}
+            onPress={() => void handleCancelShare()}
+          >
+            {cancelling ? (
+              <ActivityIndicator color="#F87171" />
+            ) : (
+              <Text style={styles.cancelLinkTxt}>Cancel & Go Back</Text>
+            )}
+          </Pressable>
+        ) : null}
 
         <Text style={styles.secureNote}>
           Amounts are calculated securely on our servers. {Platform.OS === 'web' ? 'You will be redirected to Stripe Checkout.' : 'Payments are processed by Stripe.'}
@@ -411,6 +464,13 @@ const styles = StyleSheet.create({
   },
   payBtnDisabled: { opacity: 0.7 },
   payBtnTxt: { color: '#0A0A0A', fontWeight: '900', fontSize: 16 },
+  cancelLink: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  cancelLinkTxt: { color: '#F87171', fontWeight: '900', fontSize: 15 },
   confirmBox: {
     alignItems: 'center',
     gap: 10,

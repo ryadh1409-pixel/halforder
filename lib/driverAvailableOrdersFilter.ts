@@ -6,6 +6,8 @@ export type DriverAvailableOrderInput = {
   assignedDriverId?: string | null;
   status?: unknown;
   deliveryStatus?: unknown;
+  lifecycle?: unknown;
+  matchLifecycle?: unknown;
 };
 
 /** Optimistic exclusion until Firestore pool + assigned listeners catch up. */
@@ -60,6 +62,11 @@ export function getDriverHubRejectReason(
   if (hasNonEmptyDriverField(order.assignedDriverId)) return 'assigned_driver_id_set';
   const status = norm(order.status);
   const deliveryStatus = norm(order.deliveryStatus);
+  const lifecycle = norm(order.lifecycle);
+  const matchLifecycle = norm(order.matchLifecycle);
+  if (lifecycle === 'cancelled' || matchLifecycle === 'cancelled') {
+    return 'cancelled_match_lifecycle';
+  }
   if (status === 'driver_assigned' || deliveryStatus === 'driver_assigned') {
     return 'driver_assigned_status';
   }
@@ -82,6 +89,9 @@ export function isDriverMarketplaceOrderAvailableForClaim(
 
   const status = norm(order.status);
   const deliveryStatus = norm(order.deliveryStatus);
+  const lifecycle = norm(order.lifecycle);
+  const matchLifecycle = norm(order.matchLifecycle);
+  if (lifecycle === 'cancelled' || matchLifecycle === 'cancelled') return false;
   if (isAssignedLifecycleStatus(status, deliveryStatus)) return false;
 
   return true;
@@ -157,5 +167,7 @@ export function isDriverMarketplacePoolDocAvailable(
       typeof raw.assignedDriverId === 'string' ? raw.assignedDriverId : null,
     status: raw.status,
     deliveryStatus: raw.deliveryStatus,
+    lifecycle: raw.lifecycle,
+    matchLifecycle: raw.matchLifecycle,
   });
 }

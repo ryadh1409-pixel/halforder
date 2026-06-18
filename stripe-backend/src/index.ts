@@ -332,6 +332,10 @@ export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
 export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
 export { cancelFoodShareMatch } from "./cancelFoodShareMatch.js";
 export {
+  syncFoodShareMatchLifecycleFromOrder,
+  syncFoodShareMatchLifecycleFromOrderUpdated,
+} from "./foodShareOrderLifecycleMirror.js";
+export {
   sendModeratedMatchChatMessage,
   acceptCommunityGuidelines,
 } from "./sendModeratedMatchChatMessage.js";

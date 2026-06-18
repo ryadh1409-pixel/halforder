@@ -3,13 +3,45 @@ import * as functions from "firebase-functions/v1";
 import type {CallableContext} from "firebase-functions/v1/https";
 import {refundFoodSharePaymentsForMatch} from "./foodShareWebhookHandlers.js";
 
-const ORDER_LIFECYCLES = new Set([
-  "ORDER_PLACED",
+const DRIVER_ACTIVE_LIFECYCLES = new Set([
   "DRIVER_ASSIGNED",
   "PICKED_UP",
   "DELIVERED",
   "COMPLETED",
 ]);
+
+function hasAssignedDriver(data: Record<string, unknown>): boolean {
+  const driverId =
+    typeof data.driverId === "string" ? data.driverId.trim() : "";
+  const assignedDriverId =
+    typeof data.assignedDriverId === "string" ?
+      data.assignedDriverId.trim() :
+      "";
+  const deliveryStatus =
+    typeof data.deliveryStatus === "string" ?
+      data.deliveryStatus.trim().toLowerCase() :
+      "";
+  return Boolean(
+    driverId ||
+      assignedDriverId ||
+      deliveryStatus === "driver_assigned" ||
+      deliveryStatus === "picked_up" ||
+      deliveryStatus === "delivered",
+  );
+}
+
+function hasSubmittedPayment(
+  userPayments: unknown,
+): boolean {
+  const payments =
+    userPayments && typeof userPayments === "object"
+      ? (userPayments as Record<string, {paymentStatus?: unknown}>)
+      : {};
+  return Object.values(payments).some(
+    (payment) =>
+      String(payment?.paymentStatus ?? "").trim().toUpperCase() === "PAID",
+  );
+}
 
 async function writeServerAudit(input: {
   action: string;
@@ -68,6 +100,7 @@ async function cancelWaitingShare(
       requestRef,
       {
         status: "CANCELLED",
+        lifecycle: "CANCELLED",
         cancelReason: "CANCELLED_BY_USER",
         cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -127,14 +160,48 @@ async function cancelActiveMatch(
   if (lifecycle === "CANCELLED" || match.status === "CANCELLED") {
     return {ok: true, refundAttempted: false};
   }
-  const orderStatus = match.orderStatus;
   if (
-    ORDER_LIFECYCLES.has(lifecycle) ||
-    (typeof orderStatus === "string" && orderStatus.trim() !== "")
+    lifecycle === "WAITING_FOR_PAYMENT_CONFIRMATION" &&
+    hasSubmittedPayment(match.userPayments)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Payment already submitted and cannot be cancelled from the app.",
+    );
+  }
+  const orderStatus = match.orderStatus;
+  const canCancelWithOrderStatus =
+    lifecycle === "PAYMENT_CONFIRMED" || lifecycle === "ORDER_PLACED";
+  if (
+    DRIVER_ACTIVE_LIFECYCLES.has(lifecycle) ||
+    (typeof orderStatus === "string" &&
+      orderStatus.trim() !== "" &&
+      !canCancelWithOrderStatus)
   ) {
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Cannot cancel after order placement.",
+    );
+  }
+
+  const orderId =
+    typeof match.orderId === "string" && match.orderId.trim()
+      ? match.orderId.trim()
+      : lifecycle === "ORDER_PLACED"
+        ? matchId
+        : "";
+  const orderRef = orderId ? db.doc(`orders/${orderId}`) : null;
+  const orderSnap = orderRef ? await orderRef.get() : null;
+  if (
+    (lifecycle === "ORDER_PLACED" || orderSnap?.exists) &&
+    hasAssignedDriver({
+      ...match,
+      ...(orderSnap?.exists ? orderSnap.data() ?? {} : {}),
+    })
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Cannot cancel after a driver has been assigned.",
     );
   }
 
@@ -166,6 +233,7 @@ async function cancelActiveMatch(
         await reqRef.set(
           {
             status: "CANCELLED",
+            lifecycle: "CANCELLED",
             cancelReason:
               userId === uid ? cancelReason : "CANCELLED_BY_PARTNER",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -178,6 +246,36 @@ async function cancelActiveMatch(
       {
         waitingUserId: null,
         waitingUserFirstName: null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+  }
+
+  if (orderRef && orderSnap?.exists) {
+    await orderRef.set(
+      {
+        status: "cancelled",
+        deliveryStatus: "cancelled",
+        lifecycle: "CANCELLED",
+        marketplaceArchived: true,
+        cancelledBy: uid,
+        cancelReason,
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+    await db.doc(`driver_marketplace_pool/${orderId}`).set(
+      {
+        status: "cancelled",
+        deliveryStatus: "cancelled",
+        lifecycle: "CANCELLED",
+        archived: true,
+        marketplaceArchived: true,
+        cancelledBy: uid,
+        cancelReason,
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       {merge: true},

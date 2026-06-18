@@ -20,6 +20,7 @@ import { theme } from '@/constants/theme';
 import type { MatchRequestStatus } from '@/types/foodShare';
 import { safeToMillis } from '@/utils/safeToMillis';
 import { showError, showSuccess } from '@/utils/toast';
+import { useSwipeStore } from '@/store/swipeStore';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -53,6 +54,7 @@ export default function FoodShareWaitingScreen() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [joinedAtLabel, setJoinedAtLabel] = useState('—');
   const [shareRaw, setShareRaw] = useState<Record<string, unknown> | null>(null);
+  const removeSwipeCard = useSwipeStore((s) => s.removeCard);
   const navigatedRef = useRef(false);
 
   useEffect(() => {
@@ -186,6 +188,7 @@ export default function FoodShareWaitingScreen() {
     setCancelling(true);
     try {
       await cancelWaitingFoodShare(shareId);
+      removeSwipeCard(shareId);
       showSuccess('Request cancelled');
       router.replace(TABS_ROUTES.swipe as never);
     } catch (e) {
@@ -193,7 +196,7 @@ export default function FoodShareWaitingScreen() {
     } finally {
       setCancelling(false);
     }
-  }, [cancelling, router, share, shareId]);
+  }, [cancelling, removeSwipeCard, router, share, shareId]);
 
   if (phase === 'loading' || (phase === 'matched' && !error)) {
     return (
@@ -312,7 +315,7 @@ export default function FoodShareWaitingScreen() {
           {cancelling ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.outlineBtnText}>Cancel request</Text>
+            <Text style={styles.outlineBtnText}>Cancel Share</Text>
           )}
         </Pressable>
 

@@ -9,6 +9,8 @@ import { safeToMillis } from '@/utils/safeToMillis';
 export type DriverActiveListTerminalInput = {
   status?: unknown;
   deliveryStatus?: unknown;
+  lifecycle?: unknown;
+  matchLifecycle?: unknown;
   marketplaceArchived?: unknown;
   earningsRecorded?: unknown;
   deliveredAt?: unknown;
@@ -35,6 +37,9 @@ export function isDriverActiveListTerminal(
 
   const kitchen = norm(order.status);
   const courier = norm(order.deliveryStatus);
+  const lifecycle = norm(order.lifecycle);
+  const matchLifecycle = norm(order.matchLifecycle);
+  if (lifecycle === 'cancelled' || matchLifecycle === 'cancelled') return true;
   if (
     kitchen === 'completed' ||
     kitchen === 'delivered' ||

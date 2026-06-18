@@ -26,7 +26,6 @@ export function canCancelFoodShareMatch(lifecycle: string, orderStatus: string |
   const lc = lifecycle.toUpperCase();
   if (lc === 'CANCELLED') return false;
   if (
-    lc === 'ORDER_PLACED' ||
     lc === 'DRIVER_ASSIGNED' ||
     lc === 'PICKED_UP' ||
     lc === 'DELIVERED' ||
@@ -34,8 +33,23 @@ export function canCancelFoodShareMatch(lifecycle: string, orderStatus: string |
   ) {
     return false;
   }
-  if (orderStatus && orderStatus.trim()) return false;
+  if (
+    orderStatus &&
+    orderStatus.trim() &&
+    lc !== 'PAYMENT_CONFIRMED' &&
+    lc !== 'ORDER_PLACED'
+  ) {
+    return false;
+  }
   return true;
+}
+
+export function hasSubmittedFoodSharePayment(
+  userPayments: Record<string, { paymentStatus?: string }> | undefined,
+): boolean {
+  return Object.values(userPayments ?? {}).some(
+    (payment) => String(payment.paymentStatus ?? '').trim().toUpperCase() === 'PAID',
+  );
 }
 
 export async function cancelWaitingFoodShare(
@@ -62,14 +76,23 @@ export async function cancelFoodShareMatch(input: {
   const matchSnap = await getDoc(doc(db, 'matches', input.matchId));
   if (matchSnap.exists()) {
     const data = matchSnap.data() ?? {};
+    const lifecycle = String(data.lifecycle ?? '');
+    if (
+      lifecycle.toUpperCase() === 'WAITING_FOR_PAYMENT_CONFIRMATION' &&
+      hasSubmittedFoodSharePayment(
+        data.userPayments as Record<string, { paymentStatus?: string }> | undefined,
+      )
+    ) {
+      throw new Error('Payment already submitted and cannot be cancelled from the app.');
+    }
     if (
       !canCancelFoodShareMatch(
-        String(data.lifecycle ?? ''),
+        lifecycle,
         typeof data.orderStatus === 'string' ? data.orderStatus : null,
       )
     ) {
       throw new Error(
-        'This match cannot be cancelled after the order has been placed.',
+        'This match cannot be cancelled after a driver has been assigned.',
       );
     }
   }

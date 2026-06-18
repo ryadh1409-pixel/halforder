@@ -15,6 +15,7 @@ import {
 import { showError, showSuccess } from '@/utils/toast';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
+import type { DriverOrder } from '@/services/driverService';
 import {
   ActivityIndicator,
   Pressable,

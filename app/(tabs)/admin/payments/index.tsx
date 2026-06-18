@@ -283,7 +283,11 @@ const styles = StyleSheet.create({
   },
   exportBtnText: { color: COLORS.onPrimary, fontWeight: '700', fontSize: 13 },
   search: {
-    ...adminCardShell,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 18,
+    padding: 16,
     marginBottom: 14,
     color: COLORS.text,
     fontSize: 15,

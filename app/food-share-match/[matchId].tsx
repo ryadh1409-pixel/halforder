@@ -54,6 +54,7 @@ export default function FoodShareMatchScreen() {
     null,
   );
   const [reportOpen, setReportOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -114,7 +115,15 @@ export default function FoodShareMatchScreen() {
   const allowCancel =
     !!match &&
     match.status !== 'CANCELLED' &&
+    (
+      match.lifecycle === 'WAITING_FOR_PARTNER' ||
+      match.lifecycle === 'WAITING_FOR_PAYMENT' ||
+      match.lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION'
+    ) &&
     canCancelFoodShareMatch(match.lifecycle, match.orderStatus);
+  const anyPaymentCompleted = match
+    ? Object.values(match.userPayments).some((payment) => payment.paymentStatus === 'PAID')
+    : false;
 
   const handlePay = () => {
     if (!id) return;
@@ -127,10 +136,15 @@ export default function FoodShareMatchScreen() {
   };
 
   const handleCancel = () => {
-    if (!match || !allowCancel) return;
+    if (!match || !allowCancel || cancelling) return;
+    if (match.lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION' && anyPaymentCompleted) {
+      showError('Payment already submitted and cannot be cancelled from the app.');
+      return;
+    }
     void (async () => {
       const ok = await confirmCancelMatch(match.foodName);
       if (!ok || !partner) return;
+      setCancelling(true);
       try {
         const myFirstName =
           match.userA.uid === myUid
@@ -148,9 +162,11 @@ export default function FoodShareMatchScreen() {
             ? 'Match cancelled. Refund is processing.'
             : 'Match cancelled',
         );
-        router.back();
+        router.replace('/(tabs)/swipe' as never);
       } catch (e) {
         showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
+      } finally {
+        setCancelling(false);
       }
     })();
   };
@@ -281,12 +297,16 @@ export default function FoodShareMatchScreen() {
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.actionSecondary, !allowCancel && styles.actionDisabled]}
+          style={[styles.actionDangerOutline, (!allowCancel || cancelling) && styles.actionDisabled]}
           onPress={handleCancel}
-          disabled={!allowCancel}
+          disabled={!allowCancel || cancelling}
         >
-          <Text style={styles.actionSecondaryTxt}>
-            {allowCancel ? 'Cancel match' : 'Cannot cancel after order placed'}
+          <Text style={styles.actionDangerOutlineTxt}>
+            {cancelling
+              ? 'Cancelling…'
+              : allowCancel
+                ? 'Cancel Share'
+                : 'Cannot cancel after order placed'}
           </Text>
         </Pressable>
         <Pressable style={styles.actionSecondary} onPress={handleReport}>
@@ -477,6 +497,16 @@ const styles = StyleSheet.create({
   },
   actionSecondaryTxt: { color: '#FFF', fontWeight: '800' },
   actionDisabled: { opacity: 0.45 },
+  actionDangerOutline: {
+    marginTop: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#F87171',
+    backgroundColor: 'rgba(248,113,113,0.08)',
+  },
+  actionDangerOutlineTxt: { color: '#F87171', fontWeight: '900' },
   actionDanger: { marginTop: 10, paddingVertical: 14, alignItems: 'center' },
   actionDangerTxt: { color: '#FB7185', fontWeight: '800' },
   primaryBtn: {

@@ -7,6 +7,10 @@ const {
   resolveFoodSharePricing,
   resolvePickupDropoffUserIds,
 } = require("../lib/foodShareDispatchOrder.js");
+const {
+  buildFoodShareMatchLifecyclePatch,
+  lifecycleFromFoodShareOrder,
+} = require("../lib/foodShareOrderLifecycleMirror.js");
 
 test("buildFoodShareDispatchOrderPayload matches driver pool requirements", () => {
   const match = {
@@ -114,4 +118,86 @@ test("resolveFoodSharePricing prefers adminFoodShares fields", () => {
   );
   assert.equal(pricing.sharedPrice, 9.5);
   assert.equal(pricing.deliveryShare, 2.5);
+});
+
+test("lifecycleFromFoodShareOrder maps driver fulfillment statuses", () => {
+  assert.equal(
+    lifecycleFromFoodShareOrder({status: "driver_assigned"}),
+    "DRIVER_ASSIGNED",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({deliveryStatus: "driver_assigned"}),
+    "DRIVER_ASSIGNED",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({deliveryStatus: "picked_up"}),
+    "PICKED_UP",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({deliveryStatus: "delivered"}),
+    "DELIVERED",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({status: "delivered"}),
+    "DELIVERED",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({status: "cancelled"}),
+    "CANCELLED",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({deliveryStatus: "cancelled"}),
+    "CANCELLED",
+  );
+  assert.equal(
+    lifecycleFromFoodShareOrder({status: "completed"}),
+    "COMPLETED",
+  );
+});
+
+test("buildFoodShareMatchLifecyclePatch mirrors order fields without downgrades", () => {
+  const assignedPatch = buildFoodShareMatchLifecyclePatch(
+    {
+      matchId: "match_abc",
+      status: "driver_assigned",
+      deliveryStatus: "driver_assigned",
+      driverId: "drv1",
+      assignedDriverId: "drv1",
+    },
+    {lifecycle: "ORDER_PLACED", deliveryStatus: "pending"},
+  );
+  assert.equal(assignedPatch.lifecycle, "DRIVER_ASSIGNED");
+  assert.equal(assignedPatch.driverId, "drv1");
+  assert.equal(assignedPatch.assignedDriverId, "drv1");
+  assert.equal(assignedPatch.orderStatus, "driver_assigned");
+  assert.equal(assignedPatch.deliveryStatus, "driver_assigned");
+
+  const noDowngradePatch = buildFoodShareMatchLifecyclePatch(
+    {status: "driver_assigned", deliveryStatus: "driver_assigned"},
+    {lifecycle: "COMPLETED"},
+  );
+  assert.equal(noDowngradePatch, null);
+
+  const deliveredPatch = buildFoodShareMatchLifecyclePatch(
+    {deliveryStatus: "delivered"},
+    {lifecycle: "PICKED_UP"},
+  );
+  assert.equal(deliveredPatch.lifecycle, "DELIVERED");
+  assert.equal(deliveredPatch.deliveryStatus, "delivered");
+
+  const completedPatch = buildFoodShareMatchLifecyclePatch(
+    {status: "completed", deliveryStatus: "delivered"},
+    {lifecycle: "DELIVERED"},
+  );
+  assert.equal(completedPatch.lifecycle, "COMPLETED");
+  assert.equal(completedPatch.deliveryStatus, "delivered");
+  assert.ok(completedPatch.completedAt);
+
+  const cancelledPatch = buildFoodShareMatchLifecyclePatch(
+    {status: "cancelled", deliveryStatus: "cancelled"},
+    {lifecycle: "DRIVER_ASSIGNED"},
+  );
+  assert.equal(cancelledPatch.lifecycle, "CANCELLED");
+  assert.equal(cancelledPatch.deliveryStatus, "cancelled");
+  assert.ok(cancelledPatch.cancelledAt);
 });

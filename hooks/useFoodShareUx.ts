@@ -62,21 +62,21 @@ export async function confirmJoinShare(foodName: string): Promise<boolean> {
   });
 }
 
-export async function confirmCancelWaitingShare(foodName: string): Promise<boolean> {
+export async function confirmCancelWaitingShare(_foodName: string): Promise<boolean> {
   return systemConfirm({
-    title: 'Cancel request?',
-    message: `Leave the wait list for ${foodName}? You can join again from Swipe.`,
-    confirmLabel: 'Cancel request',
+    title: 'Cancel share?',
+    message: 'Are you sure you want to cancel this food share?',
+    confirmLabel: 'Cancel Share',
     cancelLabel: 'Keep waiting',
     destructive: true,
   });
 }
 
-export async function confirmCancelMatch(foodName: string): Promise<boolean> {
+export async function confirmCancelMatch(_foodName: string): Promise<boolean> {
   return systemConfirm({
-    title: 'Cancel match?',
-    message: `This ends your meal share for ${foodName}.`,
-    confirmLabel: 'Cancel match',
+    title: 'Cancel share?',
+    message: 'Are you sure you want to cancel this food share?',
+    confirmLabel: 'Cancel Share',
     cancelLabel: 'Keep match',
     destructive: true,
   });

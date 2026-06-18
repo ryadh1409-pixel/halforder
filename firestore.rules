@@ -758,13 +758,27 @@ service cloud.firestore {
         );
     }
     function canCancelFoodShareMatchLifecycle() {
-      return !(resource.data.lifecycle in ['ORDER_PLACED', 'DRIVER_ASSIGNED', 'PICKED_UP', 'DELIVERED', 'COMPLETED'])
-        && !(resource.data.orderStatus is string && resource.data.orderStatus.size() > 0);
+      return !(resource.data.lifecycle in ['CANCELLED', 'DRIVER_ASSIGNED', 'PICKED_UP', 'DELIVERED', 'COMPLETED'])
+        && !(resource.data.orderStatus is string
+          && resource.data.orderStatus.size() > 0
+          && !(resource.data.lifecycle in ['PAYMENT_CONFIRMED', 'ORDER_PLACED']));
+    }
+    function isCancelledFoodShareMatchLocked() {
+      return resource.data.status == 'CANCELLED'
+        || resource.data.lifecycle == 'CANCELLED';
+    }
+    function isCancelledFoodShareForbiddenTransition() {
+      return isCancelledFoodShareMatchLocked()
+        && (
+          request.resource.data.status in ['MATCHED', 'matched']
+          || request.resource.data.lifecycle in ['MATCHED', 'PAYMENT_CONFIRMED', 'DRIVER_ASSIGNED', 'DELIVERING', 'COMPLETED']
+        );
     }
     function isFoodShareMatchCancelUpdate() {
       return (resource.data.keys().hasAny(['foodShareId']) || resource.data.keys().hasAny(['adminFoodShareId']))
         && request.auth.uid in resource.data.users
         && !isCurrentUserRestricted()
+        && !isCancelledFoodShareForbiddenTransition()
         && canCancelFoodShareMatchLifecycle()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'lifecycle', 'cancelledBy', 'cancelReason', 'cancelledAt', 'updatedAt'])
         && request.resource.data.status == 'CANCELLED'

@@ -108,6 +108,18 @@ export async function confirmFoodSharePaymentCore(input: {
   }
 
   const match = matchSnap.data() ?? {};
+  if (match.status === "CANCELLED" || match.lifecycle === "CANCELLED") {
+    logger.error("PAYMENT_STATE", paymentDebugState({
+      matchId,
+      match,
+      reason: "confirm_match_cancelled",
+      extra: {uid},
+    }));
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "This food share was cancelled.",
+    );
+  }
   const users = Array.isArray(match.users)
     ? match.users.filter((x): x is string => typeof x === "string")
     : [];

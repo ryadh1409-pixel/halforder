@@ -297,6 +297,15 @@ export async function handleFoodSharePaymentIntentEvent(
     matchId,
     async (tx, matchSnap) => {
       const match = matchSnap.data() ?? {};
+      if (match.status === "CANCELLED" || match.lifecycle === "CANCELLED") {
+        console.warn("[FOOD SHARE PAYMENT IGNORED]", {
+          matchId,
+          userId,
+          paymentIntentId: pi.id,
+          reason: "match_cancelled",
+        });
+        return;
+      }
       const prior = (match.userPayments ?? {}) as Record<
         string,
         {paymentStatus?: string; stripePaymentIntentId?: string; amount?: number}

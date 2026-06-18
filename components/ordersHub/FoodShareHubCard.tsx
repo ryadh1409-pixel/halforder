@@ -8,7 +8,10 @@ import { formatShareCurrency } from '@/lib/foodSharePricing';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { confirmCancelWaitingShare } from '@/hooks/useFoodShareUx';
-import { cancelWaitingFoodShare } from '@/services/foodShareMatchService';
+import {
+  cancelFoodShareMatch,
+  cancelWaitingFoodShare,
+} from '@/services/foodShareMatchService';
 import { FOOD_SHARE_ERRORS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { theme } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +20,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -101,6 +105,48 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
     }
   }, [item.adminFoodShareId, item.foodName]);
 
+  const handleCancelMatch = useCallback(() => {
+    if (!item.matchId || cancelling) return;
+    const lifecycle = String(item.lifecycle ?? '').toUpperCase();
+    const refundWarning =
+      lifecycle === 'PAYMENT_CONFIRMED' || lifecycle === 'ORDER_PLACED'
+        ? '\n\nThis share is already active. Refund policy applies before cancelling.'
+        : '';
+
+    Alert.alert(
+      'Cancel Share',
+      `Are you sure you want to cancel this food share?${refundWarning}`,
+      [
+        { text: 'Keep Share', style: 'cancel' },
+        {
+          text: 'Cancel Share',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setCancelling(true);
+              try {
+                const result = await cancelFoodShareMatch({
+                  matchId: item.matchId!,
+                  foodName: item.foodName,
+                  adminFoodShareId: item.adminFoodShareId,
+                });
+                showSuccess(
+                  result.refundAttempted
+                    ? 'Share cancelled. Refund is processing.'
+                    : 'Share cancelled',
+                );
+              } catch (e) {
+                showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
+              } finally {
+                setCancelling(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [cancelling, item.adminFoodShareId, item.foodName, item.lifecycle, item.matchId]);
+
   const renderActions = (status: FoodShareHubStatus) => {
     switch (status) {
       case 'waiting_partner':
@@ -120,7 +166,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
                 variant="compact"
               />
             ) : null}
-            <ActionBtn label="Cancel Request" danger busy={cancelling} onPress={() => void handleCancel()} />
+            <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={() => void handleCancel()} />
           </View>
         );
       case 'match_found':
@@ -130,6 +176,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
               <>
                 <ActionBtn label="Pay Now" primary onPress={() => router.push(USER_ROUTES.foodSharePay(item.matchId!) as never)} />
                 <ActionBtn label="View Match" onPress={() => router.push(USER_ROUTES.foodShareHubMatch(item.matchId!) as never)} />
+                <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
               </>
             ) : null}
           </View>
@@ -138,12 +185,14 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
         return item.matchId ? (
           <View style={styles.actions}>
             <ActionBtn label="Continue Payment" primary onPress={() => router.push(USER_ROUTES.foodSharePay(item.matchId!) as never)} />
+            <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
           </View>
         ) : null;
       case 'active_chat':
         return item.matchId ? (
           <View style={styles.actions}>
             <ActionBtn label="Open Chat" primary onPress={() => router.push(USER_ROUTES.foodShareChat(item.matchId!) as never)} />
+            <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
           </View>
         ) : null;
       case 'completed':

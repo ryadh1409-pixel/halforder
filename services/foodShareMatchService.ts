@@ -172,6 +172,7 @@ export async function joinAdminFoodShare(
           userId: uid,
           userFirstName: myFirstName,
           status: 'WAITING',
+          lifecycle: 'WAITING_FOR_PARTNER',
           matchId: null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -211,6 +212,7 @@ export async function joinAdminFoodShare(
           userId: waitingUserId,
           userFirstName: waitingFirstName,
           status: 'MATCHED',
+          lifecycle: 'WAITING_FOR_PAYMENT',
           matchId,
           updatedAt: serverTimestamp(),
         },
@@ -228,6 +230,7 @@ export async function joinAdminFoodShare(
         userId: uid,
         userFirstName: myFirstName,
         status: 'MATCHED',
+        lifecycle: 'WAITING_FOR_PAYMENT',
         matchId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -499,6 +502,7 @@ export {
   cancelFoodShareMatch,
   cancelWaitingFoodShare,
   canCancelFoodShareMatch,
+  hasSubmittedFoodSharePayment,
   reportFoodShareUser,
 } from '@/services/foodShareSafety';
 

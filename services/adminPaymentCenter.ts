@@ -11,6 +11,8 @@ import type {
 import { safeToMillis } from '@/utils/safeToMillis';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 
+export type { AdminPaymentDateFilter } from '@/types/adminPaymentTransaction';
+
 function normStatus(value: unknown): PaymentTransactionStatus {
   const s = String(value ?? '').trim().toLowerCase();
   if (s === 'paid' || s === 'succeeded') return 'paid';

@@ -1,4 +1,5 @@
 import { FoodShareInviteButton } from '@/components/foodShare/FoodShareInviteButton';
+import { confirmCancelWaitingShare } from '@/hooks/useFoodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import {
   FOOD_SHARE_ERRORS,
@@ -14,6 +15,7 @@ import {
 import { setPendingFoodShareInviteId } from '@/lib/foodShareInvitePending';
 import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
+import { cancelWaitingFoodShare } from '@/services/foodShareMatchService';
 import { recordFoodShareInviteOpened } from '@/services/foodShareInvite';
 import { joinAdminFoodShare } from '@/services/foodShareMatchService';
 import { auth, db } from '@/services/firebase';
@@ -33,6 +35,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showError, showSuccess } from '@/utils/toast';
+import { useSwipeStore } from '@/store/swipeStore';
 
 const c = theme.colors;
 
@@ -48,6 +51,8 @@ export default function FoodShareDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const removeSwipeCard = useSwipeStore((s) => s.removeCard);
   const [error, setError] = useState<string | null>(null);
   const [shareRaw, setShareRaw] = useState<Record<string, unknown> | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -100,8 +105,6 @@ export default function FoodShareDetailScreen() {
         if (typeof matchId === 'string' && matchId.trim()) {
           router.replace(USER_ROUTES.foodSharePay(matchId.trim()) as never);
         }
-      } else if (status === 'WAITING') {
-        router.replace(USER_ROUTES.foodShareWaiting(shareId) as never);
       }
     });
     return unsub;
@@ -139,7 +142,7 @@ export default function FoodShareDetailScreen() {
   }, [shareRaw]);
 
   const handleJoin = useCallback(async () => {
-    if (!shareId || joining) return;
+    if (!shareId || joining || cancelling) return;
     if (!myUid) {
       router.push(
         `/(auth)/login?redirectTo=${encodeURIComponent(USER_ROUTES.foodShare(shareId))}` as never,
@@ -162,7 +165,25 @@ export default function FoodShareDetailScreen() {
     } finally {
       setJoining(false);
     }
-  }, [joining, myUid, router, shareId]);
+  }, [cancelling, joining, myUid, router, shareId]);
+
+  const handleCancelShare = useCallback(async () => {
+    if (!shareId || !share || cancelling) return;
+    const ok = await confirmCancelWaitingShare(share.foodName);
+    if (!ok) return;
+    setCancelling(true);
+    try {
+      await cancelWaitingFoodShare(shareId);
+      removeSwipeCard(shareId);
+      setIsWaiting(false);
+      showSuccess('Share cancelled');
+      router.replace(TABS_ROUTES.swipe as never);
+    } catch (e) {
+      showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
+    } finally {
+      setCancelling(false);
+    }
+  }, [cancelling, removeSwipeCard, router, share, shareId]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -259,7 +280,7 @@ export default function FoodShareDetailScreen() {
         <Pressable
           style={[styles.primaryBtn, joining && styles.btnDisabled]}
           onPress={() => void handleJoin()}
-          disabled={joining}
+          disabled={joining || cancelling}
         >
           {joining ? (
             <ActivityIndicator color="#FFF" />
@@ -269,6 +290,20 @@ export default function FoodShareDetailScreen() {
             </Text>
           )}
         </Pressable>
+
+        {isWaiting ? (
+          <Pressable
+            style={[styles.cancelBtn, cancelling && styles.btnDisabled]}
+            onPress={() => void handleCancelShare()}
+            disabled={cancelling || joining}
+          >
+            {cancelling ? (
+              <ActivityIndicator color="#F87171" />
+            ) : (
+              <Text style={styles.cancelBtnText}>Cancel Share</Text>
+            )}
+          </Pressable>
+        ) : null}
 
         {!isWaiting ? (
           <Text style={styles.infoNote}>
@@ -387,5 +422,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: 10,
+    backgroundColor: 'rgba(248,113,113,0.08)',
+  },
+  cancelBtnText: { color: '#F87171', fontSize: 16, fontWeight: '800' },
   btnDisabled: { opacity: 0.6 },
 });
