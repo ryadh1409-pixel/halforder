@@ -24,7 +24,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { systemConfirm } from '../../../../components/SystemDialogHost';
 import { USER_ROUTES } from '@/lib/navigationPaths';
-import { resolveFoodShareReport } from '@/services/adminModeration';
+import {
+  deleteReportedMessage,
+  resolveFoodShareReport,
+} from '@/services/adminModeration';
 import { getUserFriendlyError } from '../../../../utils/errorHandler';
 import { showError, showSuccess } from '../../../../utils/toast';
 
@@ -82,6 +85,20 @@ export default function AdminReportDetailScreen() {
       : reportStatus && reportStatus !== 'open'
         ? reportStatus
         : null;
+  const reportedMessageId =
+    report && typeof report.messageId === 'string'
+      ? report.messageId
+      : contentIdRaw?.startsWith('chat:')
+        ? contentIdRaw.split(':message:')[1] ?? null
+        : null;
+  const reportedChatId =
+    report && typeof report.matchChatId === 'string'
+      ? report.matchChatId
+      : report && typeof report.chatId === 'string'
+        ? report.chatId
+        : contentIdRaw?.startsWith('chat:')
+          ? contentIdRaw.slice('chat:'.length).split(':message:')[0]
+          : null;
 
   useEffect(() => {
     if (!reportedUserId) {
@@ -104,6 +121,32 @@ export default function AdminReportDetailScreen() {
   const warnUser = () => resolveReport('warned', 'Warn user');
   const suspendUser = () => resolveReport('suspended', 'Suspend user');
   const banUser = () => resolveReport('banned', 'Ban user');
+
+  const deleteMessage = () => {
+    if (!reportId || !reportedChatId || !reportedMessageId) return;
+    void (async () => {
+      const ok = await systemConfirm({
+        title: 'Delete message',
+        message: 'Remove this reported chat message from the conversation?',
+        confirmLabel: 'Delete message',
+        destructive: true,
+      });
+      if (!ok) return;
+      setActing(true);
+      try {
+        await deleteReportedMessage({
+          reportId,
+          matchChatId: reportedChatId,
+          messageId: reportedMessageId,
+        });
+        showSuccess('Message removed.');
+      } catch (e) {
+        showError(getUserFriendlyError(e));
+      } finally {
+        setActing(false);
+      }
+    })();
+  };
 
   const resolveReport = (status: 'dismissed' | 'warned' | 'suspended' | 'banned', title: string) => {
     if (!reportId) return;
@@ -206,6 +249,12 @@ export default function AdminReportDetailScreen() {
               <Text style={[styles.v, styles.mono]}>{contentIdRaw}</Text>
             </>
           ) : null}
+          {reportedMessageId ? (
+            <>
+              <Text style={styles.k}>Message ID</Text>
+              <Text style={[styles.v, styles.mono]}>{reportedMessageId}</Text>
+            </>
+          ) : null}
           {matchId ? (
             <>
               <Text style={styles.k}>Meal share match</Text>
@@ -260,6 +309,15 @@ export default function AdminReportDetailScreen() {
             </TouchableOpacity>
             {reportedUserId ? (
               <>
+                {reportedChatId && reportedMessageId ? (
+                  <TouchableOpacity
+                    style={[styles.btn, styles.ban]}
+                    disabled={acting}
+                    onPress={deleteMessage}
+                  >
+                    <Text style={styles.banT}>Delete message</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   style={[styles.btn, styles.warn]}
                   disabled={acting}

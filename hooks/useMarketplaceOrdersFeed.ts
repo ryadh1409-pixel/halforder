@@ -1,5 +1,5 @@
 import type { MarketplaceOrdersFeedRow } from '@/components/orders/MarketplaceOrderCard';
-import { getOrderListSection } from '@/constants/orderStatus';
+import { getOrderListSection, type OrderListSection } from '@/constants/orderStatus';
 import { db } from '@/services/firebase';
 import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -13,6 +13,40 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
+
+function sectionFromOrder(data: Record<string, unknown>): OrderListSection {
+  const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
+  const deliveryStatus =
+    typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
+  if (status === 'cancelled' || status === 'expired' || deliveryStatus === 'cancelled') {
+    return 'cancelled';
+  }
+  if (
+    status === 'completed' ||
+    status === 'delivered' ||
+    deliveryStatus === 'delivered'
+  ) {
+    return 'completed';
+  }
+  return getOrderListSection(status);
+}
+
+function terminalTimeMs(data: Record<string, unknown>): number | null {
+  return (
+    safeToMillis(data.completedAt) ??
+    safeToMillis(data.deliveredAt) ??
+    safeToMillis(data.updatedAt) ??
+    safeToMillis(data.createdAt)
+  );
+}
+
+function shouldShowMobileOrder(data: Record<string, unknown>): boolean {
+  if (sectionFromOrder(data) !== 'completed') return true;
+  const ms = terminalTimeMs(data);
+  return ms == null || Date.now() - ms <= COMPLETED_HISTORY_MS;
+}
 
 function createdLabel(ms: number | null): string {
   if (ms == null) return '—';
@@ -42,7 +76,7 @@ function mapDocToFeedRow(
   const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
   const paymentStatus =
     typeof data.paymentStatus === 'string' ? data.paymentStatus : 'unpaid';
-  const section = getOrderListSection(status);
+  const section = sectionFromOrder(data);
   const participants: string[] = Array.isArray(data.participants)
     ? data.participants.filter((x): x is string => typeof x === 'string')
     : [];
@@ -165,7 +199,9 @@ export function useMarketplaceOrdersFeed(uid: string | null): {
       if (!heard.every(Boolean)) return;
       const map = new Map<string, QueryDocumentSnapshot>();
       buckets.flat().forEach((docSnap) => map.set(docSnap.id, docSnap));
-      const merged = [...map.values()].sort((a, b) => {
+      const merged = [...map.values()].filter((docSnap) =>
+        shouldShowMobileOrder(docSnap.data() as Record<string, unknown>),
+      ).sort((a, b) => {
         const ma = safeToMillis(a.data()?.createdAt) ?? 0;
         const mb = safeToMillis(b.data()?.createdAt) ?? 0;
         return mb - ma;

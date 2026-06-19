@@ -4,7 +4,9 @@ import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
 import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
+import { useFoodShareUnreadCount } from '@/hooks/useFoodShareInbox';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
+import { auth } from '@/services/firebase';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -23,6 +25,7 @@ export function UberEatsHomeScreen() {
   const router = useRouter();
   const { addressLine, refreshLocation, locationLoading } = useHomeMarketplaceLocation();
   const { restaurants, loading, error } = useHomeRestaurants();
+  const unreadNotifications = useFoodShareUnreadCount(auth.currentUser?.uid);
   const [refreshing, setRefreshing] = useState(false);
 
   const featured = useMemo(() => restaurants.slice(0, 8), [restaurants]);
@@ -61,9 +64,8 @@ export function UberEatsHomeScreen() {
       <HomeHeader
         addressLine={addressLine}
         onAddressPress={onAddressPress}
-        onNotificationsPress={() =>
-          router.push('/(tabs)/profile' as never)
-        }
+        onNotificationsPress={() => router.push('/inbox' as never)}
+        unreadNotifications={unreadNotifications}
       />
       <ScrollView
         showsVerticalScrollIndicator={false}

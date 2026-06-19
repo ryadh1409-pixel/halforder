@@ -1,4 +1,6 @@
 import { USER_ROUTES } from '@/lib/navigationPaths';
+import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
+import { orderRoomHref } from '@/services/orderChat';
 import {
   confirmBlockUser,
   confirmCancelMatch,
@@ -108,10 +110,13 @@ export default function FoodShareMatchScreen() {
     match?.lifecycle === 'PAYMENT_CONFIRMED' ||
     match?.status === 'pending_payment';
   const canChat =
-    (match?.lifecycle === 'MATCHED' ||
-      match?.lifecycle === 'ORDER_PLACED' ||
-      match?.status === 'MATCHED') &&
+    !!match &&
+    match.status !== 'CANCELLED' &&
+    match.lifecycle !== 'CANCELLED' &&
     !isHiddenFromMe(partner?.uid ?? '');
+  const assignedDriverId = match?.driverId || match?.assignedDriverId || '';
+  const driverChatOrderId = match?.orderId || id;
+  const canDriverChat = !!assignedDriverId && !!driverChatOrderId;
   const allowCancel =
     !!match &&
     match.status !== 'CANCELLED' &&
@@ -133,6 +138,11 @@ export default function FoodShareMatchScreen() {
   const handleChat = () => {
     if (!id) return;
     router.push(USER_ROUTES.foodShareChat(id) as never);
+  };
+
+  const handleDriverChat = () => {
+    if (!driverChatOrderId || !canDriverChat) return;
+    router.push(orderRoomHref(driverChatOrderId, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never);
   };
 
   const handleCancel = () => {
@@ -290,12 +300,18 @@ export default function FoodShareMatchScreen() {
           />
           <Text style={styles.actionPrimaryTxt}>
             {canChat
-              ? `Chat with ${partner?.firstName ?? 'partner'}`
+              ? `Partner Chat · ${partner?.firstName ?? 'partner'}`
               : myPaymentStatus === 'PAID'
                 ? 'Waiting for partner payment'
                 : `Pay ${formatShareCurrency(breakdown.totalPerUser)}`}
           </Text>
         </Pressable>
+        {canDriverChat ? (
+          <Pressable style={styles.actionSecondary} onPress={handleDriverChat}>
+            <Ionicons name="car-outline" size={18} color="#FFF" />
+            <Text style={styles.actionSecondaryTxt}>Driver Chat</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={[styles.actionDangerOutline, (!allowCancel || cancelling) && styles.actionDisabled]}
           onPress={handleCancel}
@@ -490,7 +506,10 @@ const styles = StyleSheet.create({
   actionSecondary: {
     marginTop: 10,
     paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',

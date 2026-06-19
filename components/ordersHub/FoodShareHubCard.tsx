@@ -6,6 +6,8 @@ import {
 } from '@/lib/ordersHubStatus';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
 import { USER_ROUTES } from '@/lib/navigationPaths';
+import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
+import { orderRoomHref } from '@/services/orderChat';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { confirmCancelWaitingShare } from '@/hooks/useFoodShareUx';
 import {
@@ -80,6 +82,9 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
   const router = useRouter();
   const meta = HUB_STATUS_META[item.status];
   const [cancelling, setCancelling] = useState(false);
+  const assignedDriverId = item.match?.driverId || item.match?.assignedDriverId || '';
+  const canOpenDriverChat = !!assignedDriverId && !!(item.orderId || item.matchId);
+  const driverChatOrderId = item.orderId || item.matchId || '';
 
   const openDetails = useCallback(() => {
     if (item.kind === 'waiting') {
@@ -175,6 +180,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
             {item.matchId ? (
               <>
                 <ActionBtn label="Pay Now" primary onPress={() => router.push(USER_ROUTES.foodSharePay(item.matchId!) as never)} />
+                <ActionBtn label="Partner Chat" onPress={() => router.push(USER_ROUTES.foodShareChat(item.matchId!) as never)} />
                 <ActionBtn label="View Match" onPress={() => router.push(USER_ROUTES.foodShareHubMatch(item.matchId!) as never)} />
                 <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
               </>
@@ -185,13 +191,20 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
         return item.matchId ? (
           <View style={styles.actions}>
             <ActionBtn label="Continue Payment" primary onPress={() => router.push(USER_ROUTES.foodSharePay(item.matchId!) as never)} />
+            <ActionBtn label="Partner Chat" onPress={() => router.push(USER_ROUTES.foodShareChat(item.matchId!) as never)} />
             <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
           </View>
         ) : null;
       case 'active_chat':
         return item.matchId ? (
           <View style={styles.actions}>
-            <ActionBtn label="Open Chat" primary onPress={() => router.push(USER_ROUTES.foodShareChat(item.matchId!) as never)} />
+            <ActionBtn label="Partner Chat" primary onPress={() => router.push(USER_ROUTES.foodShareChat(item.matchId!) as never)} />
+            {canOpenDriverChat ? (
+              <ActionBtn
+                label="Driver Chat"
+                onPress={() => router.push(orderRoomHref(driverChatOrderId, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)}
+              />
+            ) : null}
             <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
           </View>
         ) : null;

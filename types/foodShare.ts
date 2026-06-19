@@ -71,6 +71,9 @@ export type FoodShareMatchDoc = {
   lifecycle: FoodShareMatchLifecycle;
   orderStatus: string | null;
   deliveryStatus: string | null;
+  orderId?: string | null;
+  driverId?: string | null;
+  assignedDriverId?: string | null;
   costBreakdown: FoodShareCostBreakdown;
   userPayments: Record<string, FoodShareUserPaymentState>;
   matchChatId: string;
@@ -80,7 +83,11 @@ export type FoodShareMatchDoc = {
 export type MatchChatMessage = {
   id: string;
   senderId: string;
+  senderUid: string;
   senderFirstName: string;
   text: string;
   createdAtMs: number | null;
+  sentAtMs: number | null;
+  deliveredAtMs: number | null;
+  readAtMs: number | null;
 };

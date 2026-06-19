@@ -56,10 +56,12 @@ export function MarketplaceOrderCard({
   row,
   disabled,
   onPress,
+  onReport,
 }: {
   row: MarketplaceOrdersFeedRow;
   disabled?: boolean;
   onPress: () => void;
+  onReport?: () => void;
 }) {
   const payLabel =
     row.paymentStatus === 'paid'
@@ -153,7 +155,26 @@ export function MarketplaceOrderCard({
         <DeliveryProgressBar progress={Math.min(1, Math.max(0.06, row.listProgress))} />
       </View>
 
-      <Text style={styles.openCue}>View details</Text>
+      <View style={styles.footerRow}>
+        {onReport ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Report order"
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation();
+              onReport();
+            }}
+            style={styles.reportBtn}
+          >
+            <MaterialIcons name="flag" size={14} color="#FCA5A5" />
+            <Text style={styles.reportText}>Report</Text>
+          </Pressable>
+        ) : (
+          <View />
+        )}
+        <Text style={styles.openCue}>View details</Text>
+      </View>
     </Pressable>
   );
 }
@@ -262,11 +283,33 @@ const styles = StyleSheet.create({
   totalLabel: { color: 'rgba(148,163,184,0.95)', fontWeight: '700', fontSize: 13 },
   totalVal: { color: '#F8FAFC', fontWeight: '900', fontSize: 18 },
   progressWrap: { marginTop: 14 },
-  openCue: {
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
     marginTop: 10,
+  },
+  openCue: {
     alignSelf: 'flex-end',
     color: 'rgba(52,211,153,0.85)',
     fontWeight: '800',
     fontSize: 13,
+  },
+  reportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(248,113,113,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.22)',
+  },
+  reportText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

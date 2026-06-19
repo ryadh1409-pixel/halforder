@@ -9,12 +9,14 @@ type Props = {
   addressLine: string;
   onAddressPress?: () => void;
   onNotificationsPress?: () => void;
+  unreadNotifications?: number;
 };
 
 function HomeHeaderInner({
   addressLine,
   onAddressPress,
   onNotificationsPress,
+  unreadNotifications = 0,
 }: Props) {
   const top = useSafeAreaInsets().top;
 
@@ -52,6 +54,13 @@ function HomeHeaderInner({
         style={styles.bell}
       >
         <Ionicons name="notifications-outline" size={24} color={UE.text} />
+        {unreadNotifications > 0 ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {unreadNotifications > 9 ? '9+' : String(unreadNotifications)}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -94,5 +103,22 @@ const styles = StyleSheet.create({
     backgroundColor: UE.surface,
     borderWidth: 1,
     borderColor: UE.borderLight,
+  },
+  badge: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#FF6B35',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '900',
   },
 });

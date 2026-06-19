@@ -31,10 +31,12 @@ export function coerceReportReason(raw: string | undefined): ReportReason {
     r.includes('harass') ||
     r.includes('inappropriate behavior')
   ) {
-    return 'abuse';
+    return 'harassment';
   }
-  if (r.includes('inappropriate')) return 'inappropriate';
-  return 'inappropriate';
+  if (r.includes('offensive') || r.includes('inappropriate')) {
+    return 'offensive_language';
+  }
+  return 'other';
 }
 
 function buildContentId(payload: ReportPayload): string {

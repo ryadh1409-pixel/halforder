@@ -4,9 +4,7 @@ import type {DocumentSnapshot, Transaction} from "firebase-admin/firestore";
 import type Stripe from "stripe";
 import {
   notifyFoodShareMatchActivated,
-  notifyFoodSharePartnerPaid,
   notifyFoodSharePaymentFailed,
-  notifyFoodSharePaymentSucceeded,
   notifyFoodShareRefundProcessed,
 } from "./foodShareServerNotify.js";
 
@@ -70,11 +68,6 @@ function paymentStatusFromEvent(eventType: string): FoodSharePaymentStatus {
   if (eventType === "payment_intent.payment_failed") return "FAILED";
   if (eventType === "charge.refunded") return "REFUNDED";
   return "PENDING";
-}
-
-function partnerUidFor(users: string[], payerUid: string): string | null {
-  const other = users.find((u) => u !== payerUid);
-  return other ?? null;
 }
 
 function firstNameFromMatch(
@@ -201,9 +194,14 @@ async function activateMatchIfFullyPaid(
   );
   tx.set(chatRef.collection("matchMessages").doc("welcome"), {
     senderId: "system",
+    senderUid: "system",
+    senderRole: "system",
     senderFirstName: "HalfOrder",
     text: `Payment confirmed! You're matched to split ${foodName}. Say hi and coordinate delivery!`,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    deliveredAt: null,
+    readAt: null,
   });
   console.log("[CHAT CREATED]", {
     matchChatId,
@@ -418,24 +416,6 @@ export async function handleFoodSharePaymentIntentEvent(
       : [];
 
     if (paymentStatus === "PAID") {
-      await notifyFoodSharePaymentSucceeded({userId, matchId, foodName});
-      const partnerUid = partnerUidFor(users, userId);
-      if (partnerUid) {
-        const payerName = firstNameFromMatch(match, userId);
-        const partnerPaid = isPaidStatus(
-          (match.userPayments as Record<string, {paymentStatus?: string}> | undefined)?.[
-            partnerUid
-          ]?.paymentStatus,
-        );
-        if (!partnerPaid) {
-          await notifyFoodSharePartnerPaid({
-            recipientUid: partnerUid,
-            partnerFirstName: payerName,
-            foodName,
-            matchId,
-          });
-        }
-      }
       if (activated && users.length === 2) {
         const [u0, u1] = users;
         await Promise.all([

@@ -477,6 +477,11 @@ export default function AdminScreen() {
                   }
                 />
                 <ActionCard
+                  icon="notifications-circle-outline"
+                  label="Admin alerts"
+                  onPress={() => router.push(adminRoutes.notifications as never)}
+                />
+                <ActionCard
                   icon="card-outline"
                   label="Payments"
                   onPress={() => router.push(adminRoutes.payments as never)}

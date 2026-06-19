@@ -282,7 +282,9 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   const payChip = paymentBadge(order.paymentStatus);
 
   const driverChatEnabled =
-    typeof order.driverId === 'string' && order.driverId.length > 0 && order.paymentStatus === 'paid';
+    ((typeof order.driverId === 'string' && order.driverId.length > 0) ||
+      (typeof order.assignedDriverId === 'string' && order.assignedDriverId.length > 0)) &&
+    order.paymentStatus === 'paid';
 
   const cancelAllowed = customerCanCancelMarketplaceOrder({
     status: order.status,

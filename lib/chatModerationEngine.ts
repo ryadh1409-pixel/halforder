@@ -109,6 +109,10 @@ const SPAM_PHRASES = [
 
 const LINK_FRAGMENTS = ['http://', 'https://', 'www.', '.tk/', '.ru/'] as const;
 
+const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:com|net|org|io|co|ca|app|dev|info|biz)(?:\/\S*)?/i;
+const PHONE_RE = /(?:\+?\d[\s().-]*){10,}/;
+
 /** Luhn-validated credit card patterns (13–19 digits with optional separators). */
 const CREDIT_CARD_RE =
   /\b(?:\d[ -]*?){13,19}\b/;
@@ -156,6 +160,8 @@ function detectPii(text: string): ModerationCategory | null {
   const lower = normalize(text);
   const pwd = includesAny(lower, PASSWORD_SHARE);
   if (pwd) return 'pii';
+  if (EMAIL_RE.test(text)) return 'pii';
+  if (PHONE_RE.test(text)) return 'pii';
   if (SSN_RE.test(text)) return 'pii';
   const cardMatch = text.match(CREDIT_CARD_RE);
   if (cardMatch) {
@@ -233,6 +239,7 @@ export function moderateChatText(input: ModerateChatInput): ModerationVerdict {
   for (const frag of LINK_FRAGMENTS) {
     if (lower.includes(frag)) return reject('spam', `link:${frag}`);
   }
+  if (URL_RE.test(text)) return reject('spam', 'url');
 
   const pii = detectPii(text);
   if (pii) return reject('pii', 'sensitive_data');
@@ -241,6 +248,10 @@ export function moderateChatText(input: ModerateChatInput): ModerationVerdict {
   if (spamShape) return reject('spam', spamShape);
 
   return { allowed: true, text };
+}
+
+export function validateChatMessage(input: ModerateChatInput): ModerationVerdict {
+  return moderateChatText(input);
 }
 
 export function mapOpenAiCategories(

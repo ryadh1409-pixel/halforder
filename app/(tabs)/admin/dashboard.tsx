@@ -1,7 +1,7 @@
 import { useAuth } from '../../../services/AuthContext';
 import { db } from '../../../services/firebase';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -36,6 +36,10 @@ type Stats = {
   totalUsers: number;
   totalOrders: number;
   activeOrders: number;
+  pendingPayments: number;
+  activeDeliveries: number;
+  completedOrders: number;
+  reportedUsers: number;
   complaints: number;
   ordersToday: number;
   reports: number;
@@ -60,99 +64,119 @@ export default function AdminDashboardScreen() {
       return;
     }
 
-    let cancelled = false;
-
-    async function fetchStats() {
-      try {
-        adminLog('dashboard', 'getDocs users, orders, complaints, reports');
-        const labels = ['users', 'orders', 'complaints', 'reports'] as const;
-        const settled = await Promise.allSettled([
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'orders')),
-          getDocs(collection(db, 'complaints')),
-          getDocs(collection(db, 'reports')),
-        ]);
-
-        if (cancelled) return;
-
-        const fetchErrors = settled
-          .map((r, i) =>
-            r.status === 'rejected'
-              ? `${labels[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`
-              : null,
-          )
-          .filter((x): x is string => x != null);
-        if (fetchErrors.length > 0) {
-          adminError('dashboard', 'partial fetch failures', fetchErrors.join('; '));
-          setError(fetchErrors.join('; '));
-        } else {
-          setError(null);
-        }
-
-        const usersSnap = settled[0].status === 'fulfilled' ? settled[0].value : null;
-        const ordersSnap = settled[1].status === 'fulfilled' ? settled[1].value : null;
-        const complaintsSnap =
-          settled[2].status === 'fulfilled' ? settled[2].value : null;
-        const reportsSnap = settled[3].status === 'fulfilled' ? settled[3].value : null;
-
-        const totalUsers = usersSnap?.size ?? 0;
-        const totalOrders = ordersSnap?.size ?? 0;
-        const complaints = complaintsSnap?.size ?? 0;
-        const reports = reportsSnap?.size ?? 0;
-
-        const todayStart = startOfTodayMs();
-        const todayEnd = endOfTodayMs();
-
-        let activeOrders = 0;
-        let ordersToday = 0;
-
-        (ordersSnap?.docs ?? []).forEach((doc) => {
-          const data = doc.data();
-          const status = data?.status;
-          if (
-            typeof status === 'string' &&
-            [
-              'open',
-              'active',
-              'matched',
-              'full',
-              'locked',
-              'ready_to_pay',
-            ].includes(status)
-          ) {
-            activeOrders += 1;
-          }
-
-          const created = data?.createdAt?.toMillis?.() ?? data?.createdAt ?? 0;
-          const ms = typeof created === 'number' ? created : Number(created);
-          if (ms >= todayStart && ms <= todayEnd) ordersToday += 1;
-        });
-
-        const payload = {
-          totalUsers,
-          totalOrders,
-          activeOrders,
-          complaints,
-          ordersToday,
-          reports,
-        };
-        adminLog('dashboard', 'stats loaded', payload);
-        setStats(payload);
-      } catch (e) {
-        adminError('dashboard', 'fetchStats failed', e);
-        if (!cancelled) {
-          setError(getReadableErrorMessageOr(e, 'Failed to load stats'));
-          setStats(null);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchStats();
-    return () => {
-      cancelled = true;
+    const state = {
+      users: 0,
+      complaints: 0,
+      reports: [] as Record<string, unknown>[],
+      orders: [] as Record<string, unknown>[],
     };
+
+    const publish = () => {
+      const todayStart = startOfTodayMs();
+      const todayEnd = endOfTodayMs();
+      const reportedUserIds = new Set<string>();
+      let activeOrders = 0;
+      let pendingPayments = 0;
+      let activeDeliveries = 0;
+      let completedOrders = 0;
+      let ordersToday = 0;
+
+      state.orders.forEach((data) => {
+        const status = typeof data.status === 'string' ? data.status : '';
+        const deliveryStatus =
+          typeof data.deliveryStatus === 'string' ? data.deliveryStatus : '';
+        if (
+          ['open', 'active', 'matched', 'full', 'locked', 'ready_to_pay'].includes(status)
+        ) {
+          activeOrders += 1;
+        }
+        if (
+          ['pending_payment', 'ready_to_pay', 'payment_pending'].includes(status) ||
+          data.paymentStatus === 'unpaid' ||
+          data.paymentStatus === 'processing'
+        ) {
+          pendingPayments += 1;
+        }
+        if (
+          ['driver_assigned', 'picked_up', 'delivering'].includes(status) ||
+          ['driver_assigned', 'picked_up', 'delivering'].includes(deliveryStatus)
+        ) {
+          activeDeliveries += 1;
+        }
+        if (status === 'completed' || deliveryStatus === 'delivered') {
+          completedOrders += 1;
+        }
+
+        const rawCreated = data.createdAt;
+        const created =
+          rawCreated && typeof rawCreated === 'object' && 'toMillis' in rawCreated
+            ? (rawCreated as { toMillis: () => number }).toMillis()
+            : rawCreated ?? 0;
+        const ms = typeof created === 'number' ? created : Number(created);
+        if (ms >= todayStart && ms <= todayEnd) ordersToday += 1;
+      });
+
+      state.reports.forEach((data) => {
+        const reportedUid = data.reportedUid ?? data.reportedUserId;
+        if (typeof reportedUid === 'string' && reportedUid.length > 0) {
+          reportedUserIds.add(reportedUid);
+        }
+      });
+
+      const payload = {
+        totalUsers: state.users,
+        totalOrders: state.orders.length,
+        activeOrders,
+        pendingPayments,
+        activeDeliveries,
+        completedOrders,
+        reportedUsers: reportedUserIds.size,
+        complaints: state.complaints,
+        ordersToday,
+        reports: state.reports.length,
+      };
+      adminLog('dashboard', 'live stats updated', payload);
+      setStats(payload);
+      setError(null);
+      setLoading(false);
+    };
+
+    const unsubs = [
+      onSnapshot(collection(db, 'users'), (snap) => {
+        state.users = snap.size;
+        publish();
+      }, (err) => {
+        adminError('dashboard', 'users listener failed', err);
+        setError(getReadableErrorMessageOr(err, 'Failed to load users'));
+        setLoading(false);
+      }),
+      onSnapshot(collection(db, 'orders'), (snap) => {
+        state.orders = snap.docs.map((doc) => doc.data());
+        publish();
+      }, (err) => {
+        adminError('dashboard', 'orders listener failed', err);
+        setError(getReadableErrorMessageOr(err, 'Failed to load orders'));
+        setLoading(false);
+      }),
+      onSnapshot(collection(db, 'complaints'), (snap) => {
+        state.complaints = snap.size;
+        publish();
+      }, (err) => {
+        adminError('dashboard', 'complaints listener failed', err);
+        setError(getReadableErrorMessageOr(err, 'Failed to load complaints'));
+        setLoading(false);
+      }),
+      onSnapshot(collection(db, 'reports'), (snap) => {
+        state.reports = snap.docs.map((doc) => doc.data());
+        publish();
+      }, (err) => {
+        adminError('dashboard', 'reports listener failed', err);
+        setError(getReadableErrorMessageOr(err, 'Failed to load reports'));
+        setLoading(false);
+      }),
+    ];
+
+    return () => unsubs.forEach((unsubscribe) => unsubscribe());
   }, [user, firestoreUserRole]);
 
   if (!user) {
@@ -253,9 +277,39 @@ export default function AdminDashboardScreen() {
               <Text style={styles.cardLabel}>Reports & moderation</Text>
               <Text style={styles.cardValue}>{stats.reports}</Text>
               <Text style={styles.cardSub}>
-                Complaint tickets: {stats.complaints}
+                Reported users: {stats.reportedUsers}
               </Text>
               <Text style={styles.cardCta}>Open reports →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push(adminRoutes.orders({ filter: 'pending' }) as never)}
+            >
+              <Text style={styles.cardLabel}>Pending payments</Text>
+              <Text style={styles.cardValue}>{stats.pendingPayments}</Text>
+              <Text style={styles.cardSub}>Live payment queue</Text>
+              <Text style={styles.cardCta}>Open orders →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push(adminRoutes.orders({ filter: 'active' }) as never)}
+            >
+              <Text style={styles.cardLabel}>Active deliveries</Text>
+              <Text style={styles.cardValue}>{stats.activeDeliveries}</Text>
+              <Text style={styles.cardSub}>Driver assigned or in transit</Text>
+              <Text style={styles.cardCta}>Filtered view →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => router.push(adminRoutes.orders({ filter: 'completed' }) as never)}
+            >
+              <Text style={styles.cardLabel}>Completed orders</Text>
+              <Text style={styles.cardValue}>{stats.completedOrders}</Text>
+              <Text style={styles.cardSub}>Delivered or completed</Text>
+              <Text style={styles.cardCta}>Completed view →</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.card}

@@ -18,6 +18,7 @@ export const adminRoutes = {
   complaints: '/(tabs)/admin/complaints',
   /** Broadcast push to all / targeted users (Expo push). */
   sendNotification: '/(tabs)/admin/broadcast',
+  notifications: '/(tabs)/admin/notifications',
   aiInsights: '/(tabs)/admin/ai-insights',
   chatModeration: '/(tabs)/admin/chat-moderation',
   payments: '/(tabs)/admin/payments',

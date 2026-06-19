@@ -7,12 +7,14 @@ import { useAuth } from '@/services/AuthContext';
 import { subscribeFoodShareHub } from '@/services/ordersHub';
 import { useMarketplaceOrdersFeed } from '@/hooks/useMarketplaceOrdersFeed';
 import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
+import { reportContentIdOrder, submitReport } from '@/services/reports';
 import { theme } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -49,6 +51,32 @@ export function OrdersHubScreen() {
   const [hubLoading, setHubLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { rows: orderRows, loading: ordersLoading } = useMarketplaceOrdersFeed(uid);
+
+  const reportOrder = (row: (typeof orderRows)[number]) => {
+    if (!uid || !row.driver.id) {
+      Alert.alert('Report order', 'Open order details to contact support about this order.');
+      return;
+    }
+    Alert.alert('Report order', 'Report this order for moderator review?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Report',
+        style: 'destructive',
+        onPress: () => {
+          void submitReport({
+            reporterId: uid,
+            reportedUserId: row.driver.id!,
+            contentId: reportContentIdOrder(row.id),
+            reason: 'other',
+            description: 'Order reported from Orders Hub.',
+          }).then(
+            () => Alert.alert('Report submitted', 'Our moderation team will review this order.'),
+            () => Alert.alert('Report failed', 'Could not submit report. Please try again.'),
+          );
+        },
+      },
+    ]);
+  };
 
   useEffect(() => {
     if (!uid) {
@@ -167,6 +195,7 @@ export function OrdersHubScreen() {
               key={row.id}
               row={row}
               onPress={() => router.push(customerOrderDetailHref(row.id) as never)}
+              onReport={() => reportOrder(row)}
             />
           ))
         )}

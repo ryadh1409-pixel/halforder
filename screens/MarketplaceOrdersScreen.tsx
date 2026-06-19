@@ -2,7 +2,7 @@ import {
   MarketplaceOrderCard,
   type MarketplaceOrdersFeedRow,
 } from '@/components/orders/MarketplaceOrderCard';
-import { getOrderListSection } from '@/constants/orderStatus';
+import { getOrderListSection, type OrderListSection } from '@/constants/orderStatus';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
@@ -10,6 +10,7 @@ import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { safeToMillis } from '@/utils/safeToMillis';
 import { orderDetailHref } from '@/lib/orderRoutes';
 import { normalizeRoleForRouting } from '@/lib/authRole';
+import { reportContentIdOrder, submitReport } from '@/services/reports';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
@@ -27,6 +28,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -38,6 +40,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const TAB_SPINNER = '#34D399';
+const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
+type OrderHistoryFilter = 'active' | 'completed' | 'cancelled';
 
 const PROGRESS_KEYS = [
   'awaiting_payment',
@@ -58,6 +62,38 @@ function listProgressFromStatus(status: string): number {
   const i = PROGRESS_KEYS.indexOf(s as (typeof PROGRESS_KEYS)[number]);
   if (i >= 0) return (i + 1) / PROGRESS_KEYS.length;
   return 0.18;
+}
+
+function sectionFromOrder(data: Record<string, unknown>): OrderListSection {
+  const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
+  const deliveryStatus =
+    typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
+  if (status === 'cancelled' || status === 'expired' || deliveryStatus === 'cancelled') {
+    return 'cancelled';
+  }
+  if (
+    status === 'completed' ||
+    status === 'delivered' ||
+    deliveryStatus === 'delivered'
+  ) {
+    return 'completed';
+  }
+  return getOrderListSection(status);
+}
+
+function terminalTimeMs(data: Record<string, unknown>): number | null {
+  return (
+    safeToMillis(data.completedAt) ??
+    safeToMillis(data.deliveredAt) ??
+    safeToMillis(data.updatedAt) ??
+    safeToMillis(data.createdAt)
+  );
+}
+
+function shouldShowMobileOrder(data: Record<string, unknown>): boolean {
+  if (sectionFromOrder(data) !== 'completed') return true;
+  const ms = terminalTimeMs(data);
+  return ms == null || Date.now() - ms <= COMPLETED_HISTORY_MS;
 }
 
 function driverSummaryFromDoc(data: Record<string, unknown>): string | null {
@@ -118,7 +154,7 @@ function mapDocToFeedRow(
 
   const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
   const paymentStatus = typeof data.paymentStatus === 'string' ? data.paymentStatus : 'unpaid';
-  const section = getOrderListSection(status);
+  const section = sectionFromOrder(data);
 
   const participants: string[] = Array.isArray(data.participants)
     ? data.participants.filter((x): x is string => typeof x === 'string')
@@ -293,6 +329,7 @@ export default function MarketplaceOrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [listenerKey, setListenerKey] = useState(0);
+  const [filter, setFilter] = useState<OrderHistoryFilter>('active');
   const restaurantImagesRef = useRef<Record<string, string | null>>({});
   const restaurantMetaRef = useRef<
     Record<string, { name: string | null; address: string | null; image: string | null }>
@@ -401,7 +438,9 @@ export default function MarketplaceOrdersScreen() {
       [...listPart, ...listUsers, ...listUid, ...listCust].forEach((docSnap) =>
         map.set(docSnap.id, docSnap),
       );
-      const merged = [...map.values()].sort((a, b) => {
+      const merged = [...map.values()].filter((docSnap) =>
+        shouldShowMobileOrder(docSnap.data() as Record<string, unknown>),
+      ).sort((a, b) => {
         const ma = safeToMillis(a.data()?.createdAt) ?? 0;
         const mb = safeToMillis(b.data()?.createdAt) ?? 0;
         return mb - ma;
@@ -489,12 +528,43 @@ export default function MarketplaceOrdersScreen() {
   const activeRows = useMemo(() => rows.filter((r) => r.section === 'active'), [rows]);
   const completedRows = useMemo(() => rows.filter((r) => r.section === 'completed'), [rows]);
   const cancelledRows = useMemo(() => rows.filter((r) => r.section === 'cancelled'), [rows]);
+  const visibleRows =
+    filter === 'active' ? activeRows : filter === 'completed' ? completedRows : cancelledRows;
 
   const handleOpen = useCallback(
     (orderId: string) => {
       router.push(orderDetailHref(routingRole, orderId) as never);
     },
     [router, routingRole],
+  );
+
+  const reportOrder = useCallback(
+    (row: MarketplaceOrdersFeedRow) => {
+      if (!user?.uid || !row.driver.id) {
+        Alert.alert('Report order', 'Open order details to contact support about this order.');
+        return;
+      }
+      Alert.alert('Report order', 'Report this order for moderator review?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: () => {
+            void submitReport({
+              reporterId: user.uid,
+              reportedUserId: row.driver.id!,
+              contentId: reportContentIdOrder(row.id),
+              reason: 'other',
+              description: 'Order reported from order history.',
+            }).then(
+              () => Alert.alert('Report submitted', 'Our moderation team will review this order.'),
+              () => Alert.alert('Report failed', 'Could not submit report. Please try again.'),
+            );
+          },
+        },
+      ]);
+    },
+    [user?.uid],
   );
 
   const handleSignIn = () => {
@@ -587,31 +657,35 @@ export default function MarketplaceOrdersScreen() {
             </View>
           ) : (
             <>
-              <Text style={styles.sectionTitle}>Active</Text>
-              {activeRows.length ? (
-                activeRows.map((row) => (
-                  <MarketplaceOrderCard key={row.id} row={row} onPress={() => handleOpen(row.id)} />
+              <View style={styles.filterRow}>
+                {(['active', 'completed', 'cancelled'] as const).map((next) => (
+                  <Pressable
+                    key={next}
+                    style={[styles.filterChip, filter === next && styles.filterChipActive]}
+                    onPress={() => setFilter(next)}
+                  >
+                    <Text style={[styles.filterText, filter === next && styles.filterTextActive]}>
+                      {next === 'active' ? 'Active' : next === 'completed' ? 'Completed' : 'Cancelled'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.sectionTitle}>
+                {filter === 'active' ? 'Active' : filter === 'completed' ? 'Completed' : 'Cancelled'}
+              </Text>
+              {visibleRows.length ? (
+                visibleRows.map((row) => (
+                  <MarketplaceOrderCard
+                    key={row.id}
+                    row={row}
+                    onPress={() => handleOpen(row.id)}
+                    onReport={() => reportOrder(row)}
+                  />
                 ))
               ) : (
-                <Text style={styles.emptySection}>No active orders</Text>
-              )}
-
-              <Text style={styles.sectionTitleMuted}>Completed</Text>
-              {completedRows.length ? (
-                completedRows.map((row) => (
-                  <MarketplaceOrderCard key={row.id} row={row} onPress={() => handleOpen(row.id)} />
-                ))
-              ) : (
-                <Text style={styles.emptySectionMuted}>No completed orders</Text>
-              )}
-
-              <Text style={styles.sectionTitleMuted}>Cancelled</Text>
-              {cancelledRows.length ? (
-                cancelledRows.map((row) => (
-                  <MarketplaceOrderCard key={row.id} row={row} onPress={() => handleOpen(row.id)} />
-                ))
-              ) : (
-                <Text style={styles.emptySectionMuted}>No cancelled orders</Text>
+                <Text style={styles.emptySection}>
+                  No {filter} orders
+                </Text>
               )}
             </>
           )}
@@ -640,6 +714,29 @@ const styles = StyleSheet.create({
   flexCenter: { justifyContent: 'center', alignItems: 'center' },
   loadingCaption: { marginTop: 14, color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
   listContent: { paddingHorizontal: 18, paddingBottom: 40 },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(52,211,153,0.18)',
+    borderColor: 'rgba(52,211,153,0.45)',
+  },
+  filterText: {
+    color: 'rgba(255,255,255,0.58)',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  filterTextActive: { color: '#BBF7D0' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
   sectionTitleMuted: {
     fontSize: 18,

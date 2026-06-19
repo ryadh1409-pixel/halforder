@@ -42,8 +42,8 @@ type UserProfileState = {
 
 const REPORT_REASON_OPTIONS: { label: string; value: ReportReason }[] = [
   { label: 'Spam', value: 'spam' },
-  { label: 'Abuse', value: 'abuse' },
-  { label: 'Inappropriate content', value: 'inappropriate' },
+  { label: 'Harassment', value: 'harassment' },
+  { label: 'Offensive Language', value: 'offensive_language' },
 ];
 
 function toPercent(rate: number): number {

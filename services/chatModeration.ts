@@ -1,4 +1,7 @@
-import { COMMUNITY_GUIDELINES_MESSAGE } from '@/lib/chatModerationEngine';
+import {
+  COMMUNITY_GUIDELINES_MESSAGE,
+  validateChatMessage,
+} from '@/lib/chatModerationEngine';
 import { auth, db, ensureAuthReady, functions } from '@/services/firebase';
 import { httpsCallable } from 'firebase/functions';
 import {
@@ -128,6 +131,14 @@ export async function sendModeratedMatchChatMessage(input: {
   const text = input.text.trim();
   const senderFirstName = input.senderFirstName.trim() || 'User';
   const matchChatId = input.matchChatId.trim();
+  const localVerdict = validateChatMessage({ text, maxLength: 500 });
+  if (!localVerdict.allowed) {
+    return {
+      ok: false,
+      code: 'BLOCKED',
+      message: COMMUNITY_GUIDELINES_MESSAGE,
+    };
+  }
   const callablePayload = { matchChatId, text, senderFirstName };
 
   console.log('[CHAT SEND] before callable', {
@@ -193,9 +204,14 @@ export async function sendModeratedMatchChatMessage(input: {
       const path = `matchChats/${matchChatId}/matchMessages`;
       const payload = {
         senderId: uid,
+        senderUid: uid,
+        senderRole: 'customer',
         senderFirstName: senderFirstName.split(/\s+/)[0] ?? senderFirstName,
         text,
         createdAt: serverTimestamp(),
+        sentAt: serverTimestamp(),
+        deliveredAt: null,
+        readAt: null,
       };
       console.log('[CHAT WRITE] before', { path, uid, payload: { ...payload, createdAt: 'serverTimestamp' } });
       try {

@@ -2,7 +2,9 @@ import { FeaturedSection } from '@/components/home/FeaturedSection';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
+import { useFoodShareUnreadCount } from '@/hooks/useFoodShareInbox';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
+import { auth } from '@/services/firebase';
 import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import {
@@ -26,6 +28,7 @@ export default function ExploreTab() {
   const router = useRouter();
   const { addressLine } = useHomeMarketplaceLocation();
   const { restaurants, loading } = useHomeRestaurants();
+  const unreadNotifications = useFoodShareUnreadCount(auth.currentUser?.uid);
 
   const openRestaurant = useCallback(
     (id: string) => {
@@ -42,7 +45,8 @@ export default function ExploreTab() {
       <HomeHeader
         addressLine={addressLine}
         onAddressPress={() => router.push('/(tabs)/profile' as never)}
-        onNotificationsPress={() => router.push('/(tabs)/profile' as never)}
+        onNotificationsPress={() => router.push('/inbox' as never)}
+        unreadNotifications={unreadNotifications}
       />
       <ScrollView
         showsVerticalScrollIndicator={false}

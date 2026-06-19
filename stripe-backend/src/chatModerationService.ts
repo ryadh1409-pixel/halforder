@@ -65,7 +65,8 @@ export async function logModerationEvent(input: {
   internalReason: string;
   blocked: boolean;
 }): Promise<string> {
-  const ref = await admin.firestore().collection("chatModerationEvents").add({
+  const db = admin.firestore();
+  const ref = await db.collection("chatModerationEvents").add({
     userId: input.userId,
     matchChatId: input.matchChatId,
     matchId: input.matchId,
@@ -76,7 +77,19 @@ export async function logModerationEvent(input: {
     flagged: true,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await admin.firestore().collection("moderationAuditLog").add({
+  await db.doc(`flaggedMessages/${ref.id}`).set({
+    reporterUid: input.userId,
+    senderUid: input.userId,
+    matchChatId: input.matchChatId,
+    matchId: input.matchId,
+    messageTextPreview: input.textPreview.slice(0, 500),
+    category: input.category,
+    internalReason: input.internalReason,
+    status: "open",
+    blocked: input.blocked,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await db.collection("moderationAuditLog").add({
     action: "chat_message_blocked",
     actorUid: input.userId,
     matchId: input.matchId,

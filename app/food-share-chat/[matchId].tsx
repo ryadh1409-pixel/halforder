@@ -32,7 +32,7 @@ import { auth, db } from '@/services/firebase';
 import type { MatchChatMessage } from '@/types/foodShare';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -48,6 +48,34 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { systemActionSheet } from '@/components/SystemDialogHost';
 import { showError, showSuccess } from '@/utils/toast';
+import { safeToMillis } from '@/utils/safeToMillis';
+
+const CHAT_READ_ONLY_AFTER_MS = 24 * 60 * 60 * 1000;
+
+function formatChatTime(ms: number | null): string {
+  if (!ms) return '';
+  try {
+    return new Date(ms).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+type MessageStatus = 'sent' | 'delivered' | 'read';
+
+function foodShareMessageStatus(item: MatchChatMessage): MessageStatus {
+  if (item.readAtMs != null) return 'read';
+  if (item.deliveredAtMs != null) return 'delivered';
+  return 'sent';
+}
+
+function messageStatusLabel(status: MessageStatus): string {
+  if (status === 'sent') return '✓';
+  return '✓✓';
+}
 
 export default function FoodShareChatScreen() {
   const router = useRouter();
@@ -69,6 +97,7 @@ export default function FoodShareChatScreen() {
   const [matchLifecycle, setMatchLifecycle] = useState('');
   const [adminFoodShareId, setAdminFoodShareId] = useState('');
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [completedAtMs, setCompletedAtMs] = useState<number | null>(null);
   const [reportScope, setReportScope] = useState<ChatReportScope>('conversation');
   const [reportMessageId, setReportMessageId] = useState<string | null>(null);
   const [reportPreview, setReportPreview] = useState('');
@@ -123,6 +152,12 @@ export default function FoodShareChatScreen() {
       setMatchLifecycle(match.lifecycle);
       setAdminFoodShareId(match.adminFoodShareId);
       setOrderStatus(match.orderStatus);
+      const raw = snap.data() as Record<string, unknown>;
+      setCompletedAtMs(
+        safeToMillis(raw.completedAt) ??
+          safeToMillis(raw.deliveredAt) ??
+          safeToMillis(raw.updatedAt),
+      );
       if (match.status === 'CANCELLED' || match.lifecycle === 'CANCELLED') {
         setError('This match was cancelled.');
       }
@@ -159,6 +194,10 @@ export default function FoodShareChatScreen() {
     blocked ||
     matchLifecycle === 'CANCELLED' ||
     error === 'This match was cancelled.';
+  const chatReadOnly =
+    (matchLifecycle === 'COMPLETED' || matchLifecycle === 'DELIVERED') &&
+    completedAtMs != null &&
+    Date.now() - completedAtMs >= CHAT_READ_ONLY_AFTER_MS;
 
   useEffect(() => {
     if (!matchChatId || chatClosed) return undefined;
@@ -175,11 +214,36 @@ export default function FoodShareChatScreen() {
     });
   }, [matchChatId, myUid, chatClosed]);
 
+  useEffect(() => {
+    if (!matchChatId || chatClosed || !myUid) return;
+    const incoming = messages.filter(
+      (item) =>
+        item.senderId &&
+        item.senderId !== myUid &&
+        item.senderId !== 'system' &&
+        item.readAtMs == null,
+    );
+    if (incoming.length === 0) return;
+
+    const batch = writeBatch(db);
+    const now = Date.now();
+    incoming.forEach((item) => {
+      const patch =
+        item.deliveredAtMs == null
+          ? { deliveredAt: now, readAt: now }
+          : { readAt: now };
+      batch.update(doc(db, 'matchChats', matchChatId, 'matchMessages', item.id), patch);
+    });
+    batch.commit().catch(() => {
+      /* offline / rules */
+    });
+  }, [matchChatId, chatClosed, messages, myUid]);
+
   const sortedMessages = useMemo(() => messages, [messages]);
 
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || !matchChatId || sending || chatClosed) return;
+    if (!text || !matchChatId || sending || chatClosed || chatReadOnly) return;
     setSending(true);
     setDraft('');
     try {
@@ -390,6 +454,12 @@ export default function FoodShareChatScreen() {
           </Text>
         </View>
       ) : null}
+      {chatReadOnly ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedTitle}>Chat is read-only</Text>
+          <Text style={styles.closedBody}>Chats close 24 hours after order completion.</Text>
+        </View>
+      ) : null}
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -407,6 +477,8 @@ export default function FoodShareChatScreen() {
           renderItem={({ item }) => {
             const mine = item.senderId === myUid;
             const system = item.senderId === 'system';
+            const timeLabel = system ? '' : formatChatTime(item.createdAtMs);
+            const messageStatus = mine ? foodShareMessageStatus(item) : null;
             return (
               <Pressable
                 onLongPress={() => {
@@ -442,6 +514,29 @@ export default function FoodShareChatScreen() {
                   >
                     {item.text}
                   </Text>
+                  {!system ? (
+                    <View
+                      style={[
+                        styles.bubbleMetaRow,
+                        mine ? styles.bubbleMetaRowMine : styles.bubbleMetaRowTheirs,
+                      ]}
+                    >
+                      {timeLabel ? (
+                        <Text style={styles.timestamp}>{timeLabel}</Text>
+                      ) : null}
+                      {messageStatus ? (
+                        <Text
+                          style={[
+                            styles.statusLabel,
+                            messageStatus === 'read' && styles.statusLabelRead,
+                          ]}
+                          accessibilityLabel={`Message ${messageStatus}`}
+                        >
+                          {messageStatusLabel(messageStatus)}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </View>
               </View>
               </Pressable>
@@ -458,7 +553,9 @@ export default function FoodShareChatScreen() {
           <TextInput
             style={[styles.input, chatClosed && styles.inputDisabled]}
             placeholder={
-              chatClosed
+              chatReadOnly
+                ? 'Chat is read-only'
+                : chatClosed
                 ? 'Messaging disabled'
                 : `Message ${partnerFirstName}…`
             }
@@ -467,14 +564,15 @@ export default function FoodShareChatScreen() {
             onChangeText={setDraft}
             multiline
             maxLength={500}
-            editable={!chatClosed && !sending}
+            editable={!chatClosed && !chatReadOnly && !sending}
+            textAlign="left"
           />
           <Pressable
             style={[
               styles.sendBtn,
-              ((!draft.trim() || sending) || chatClosed) && styles.sendBtnDisabled,
+              ((!draft.trim() || sending) || chatClosed || chatReadOnly) && styles.sendBtnDisabled,
             ]}
-            disabled={!draft.trim() || sending || chatClosed}
+            disabled={!draft.trim() || sending || chatClosed || chatReadOnly}
             onPress={() => void handleSend()}
           >
             <Ionicons name="send" size={18} color="#0A0A0A" />
@@ -504,7 +602,7 @@ export default function FoodShareChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#06080C' },
+  root: { flex: 1, backgroundColor: '#06080C', direction: 'ltr' },
   flex: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
@@ -539,10 +637,10 @@ const styles = StyleSheet.create({
   },
   closedTitle: { color: '#FB7185', fontWeight: '800', fontSize: 15 },
   closedBody: { color: 'rgba(255,255,255,0.7)', marginTop: 4, fontSize: 13 },
-  listContent: { padding: 16, paddingBottom: 8, flexGrow: 1 },
-  bubbleWrap: { marginBottom: 10, maxWidth: '82%' },
-  bubbleWrapMine: { alignSelf: 'flex-end' },
-  bubbleWrapTheirs: { alignSelf: 'flex-start' },
+  listContent: { padding: 16, paddingBottom: 8, flexGrow: 1, direction: 'ltr' },
+  bubbleWrap: { marginBottom: 10, maxWidth: '82%', direction: 'ltr' },
+  bubbleWrapMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
+  bubbleWrapTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
   bubbleWrapSystem: { alignSelf: 'center', maxWidth: '92%' },
   senderName: {
     color: 'rgba(255,255,255,0.55)',
@@ -550,11 +648,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 4,
     marginLeft: 4,
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    direction: 'ltr',
   },
   bubbleMine: { backgroundColor: '#7DFFB8' },
   bubbleTheirs: {
@@ -567,9 +668,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,107,53,0.25)',
   },
-  bubbleText: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  bubbleText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
   bubbleTextMine: { color: '#0A0A0A' },
   bubbleTextTheirs: { color: '#FFF' },
+  timestamp: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  bubbleMetaRow: {
+    flexDirection: 'row',
+    direction: 'ltr',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  bubbleMetaRowMine: { alignSelf: 'flex-end', justifyContent: 'flex-end' },
+  bubbleMetaRowTheirs: { alignSelf: 'flex-start', justifyContent: 'flex-start' },
+  statusLabel: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  statusLabelRead: { color: '#38BDF8' },
   emptyChat: {
     textAlign: 'center',
     color: 'rgba(255,255,255,0.5)',
@@ -579,6 +709,7 @@ const styles = StyleSheet.create({
   },
   composer: {
     flexDirection: 'row',
+    direction: 'ltr',
     alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: 12,
@@ -597,6 +728,8 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 15,
     fontWeight: '600',
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   inputDisabled: { opacity: 0.5 },
   sendBtn: {

@@ -99,6 +99,11 @@ export default function AdminOrdersScreen() {
     if (effective === 'completed') {
       return rows.filter((r) => r.status === 'completed');
     }
+    if (effective === 'pending') {
+      return rows.filter((r) =>
+        ['pending_payment', 'ready_to_pay', 'payment_pending'].includes(r.status),
+      );
+    }
     return rows;
   }, [rows, effective]);
 
@@ -119,6 +124,7 @@ export default function AdminOrdersScreen() {
             ['all', 'All'],
             ['today', 'Today'],
             ['active', 'Active'],
+            ['pending', 'Pending'],
             ['completed', 'Done'],
           ] as const
         ).map(([key, label]) => (

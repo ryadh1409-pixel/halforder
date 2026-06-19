@@ -54,3 +54,38 @@ export async function resolveFoodShareReport(input: {
     metadata: { status: input.status, note: input.note ?? null },
   });
 }
+
+export async function deleteReportedMessage(input: {
+  reportId: string;
+  chatId?: string | null;
+  matchChatId?: string | null;
+  messageId?: string | null;
+  note?: string;
+}): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Sign in required');
+  const chatId = input.matchChatId?.trim() || input.chatId?.trim() || '';
+  const messageId = input.messageId?.trim() || '';
+  if (!chatId || !messageId) throw new Error('Missing message reference.');
+
+  const messageRef = doc(db, 'matchChats', chatId, 'matchMessages', messageId);
+  await updateDoc(messageRef, {
+    text: '[Message removed by moderation]',
+    moderationStatus: 'removed',
+    removedBy: uid,
+    removedAt: serverTimestamp(),
+    removedReason: input.note?.trim() || 'Admin moderation action',
+  });
+
+  await updateDoc(doc(db, 'reports', input.reportId), {
+    messageDeleted: true,
+    messageDeletedAt: serverTimestamp(),
+    messageDeletedBy: uid,
+  });
+
+  await writeModerationAudit({
+    action: 'admin_delete_message',
+    reportId: input.reportId,
+    metadata: { chatId, messageId, note: input.note ?? null },
+  });
+}

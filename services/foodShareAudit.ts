@@ -16,7 +16,8 @@ export type ModerationAuditAction =
   | 'admin_dismiss'
   | 'admin_warn'
   | 'admin_suspend'
-  | 'admin_ban';
+  | 'admin_ban'
+  | 'admin_delete_message';
 
 export async function writeModerationAudit(input: {
   action: ModerationAuditAction;

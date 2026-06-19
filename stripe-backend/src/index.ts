@@ -336,6 +336,9 @@ export {
   syncFoodShareMatchLifecycleFromOrderUpdated,
 } from "./foodShareOrderLifecycleMirror.js";
 export {
+  notifyFoodSharePaymentStatusPaid,
+} from "./foodSharePaymentNotifications.js";
+export {
   sendModeratedMatchChatMessage,
   acceptCommunityGuidelines,
 } from "./sendModeratedMatchChatMessage.js";

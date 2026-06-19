@@ -10,6 +10,7 @@ import {
   orderBy,
   query,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -25,6 +26,7 @@ import { useHiddenUserIds } from '../../hooks/useHiddenUserIds';
 import { blockUser } from '../../services/blockService';
 import { auth, db } from '../../services/firebase';
 import { markHalfOrderChatActive } from '../../services/halfOrderLifecycle';
+import { safeToMillis } from '../../utils/safeToMillis';
 
 /** Firestore message doc shape varies; listener spreads `doc.data()`. */
 type ChatMessage = { id: string } & Record<string, unknown>;
@@ -50,10 +52,39 @@ function formatMessageTime(createdAt: unknown): string {
   }
 }
 
+type MessageStatus = 'sent' | 'delivered' | 'read';
+
+function messageStatusLabel(status: MessageStatus): string {
+  switch (status) {
+    case 'read':
+      return '✓✓';
+    case 'delivered':
+      return '✓✓';
+    default:
+      return '✓';
+  }
+}
+
+function statusForMessage(
+  item: ChatMessage,
+  peerUid: string | null,
+  chatReads: Record<string, number>,
+): MessageStatus {
+  const readAtMs = safeToMillis(item.readAt);
+  if (readAtMs != null) return 'read';
+  const sentAtMs = safeToMillis(item.sentAt) ?? safeToMillis(item.createdAt);
+  if (peerUid && sentAtMs != null && (chatReads[peerUid] ?? 0) >= sentAtMs) {
+    return 'read';
+  }
+  if (safeToMillis(item.deliveredAt) != null) return 'delivered';
+  return 'sent';
+}
+
 export default function ChatByIdScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = paramToId(params.id);
+  const myUid = auth.currentUser?.uid ?? '';
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -198,6 +229,29 @@ export default function ChatByIdScreen() {
   }, [id, chatExists, hasSyncedMessages, messages.length]);
 
   useEffect(() => {
+    if (!id || chatExists !== true || !hasSyncedMessages || !myUid) return;
+    const incoming = messages.filter((item) => {
+      const senderId = String(item.senderId ?? '');
+      const isSystem = senderId === 'system' || item['system'] === true;
+      const isAi = item['sender'] === 'ai';
+      return !isSystem && !isAi && senderId && senderId !== myUid && item.readAt == null;
+    });
+    if (incoming.length === 0) return;
+
+    const batch = writeBatch(db);
+    const now = Date.now();
+    incoming.forEach((item) => {
+      batch.update(firestoreDoc(db, 'chats', id, 'messages', item.id), {
+        deliveredAt: item.deliveredAt ?? now,
+        readAt: now,
+      });
+    });
+    batch.commit().catch(() => {
+      /* offline / rules */
+    });
+  }, [id, chatExists, hasSyncedMessages, messages, myUid]);
+
+  useEffect(() => {
     if (!id || chatExists !== true || !hasSyncedMessages || messages.length > 0 || bootstrapAttemptedRef.current) {
       return;
     }
@@ -248,7 +302,6 @@ export default function ChatByIdScreen() {
     scrollToEnd();
   }, [messages.length, scrollToEnd]);
 
-  const myUid = auth.currentUser?.uid ?? '';
   const blockedBetween = Boolean(peerUid && hiddenUserIds.has(peerUid));
 
   const visibleMessages = useMemo(() => {
@@ -302,6 +355,9 @@ export default function ChatByIdScreen() {
           auth.currentUser?.email?.split('@')[0] ||
           'User',
         createdAt: Date.now(),
+        sentAt: Date.now(),
+        deliveredAt: null,
+        readAt: null,
       });
       await updateDoc(firestoreDoc(db, 'chats', id), {
         lastMessage: safeText,
@@ -409,20 +465,14 @@ export default function ChatByIdScreen() {
               const senderId = String(item.senderId ?? '');
               const isSystem = senderId === 'system' || item['system'] === true;
               const isAi = item['sender'] === 'ai';
-              const mine = !isSystem && senderId === auth.currentUser?.uid;
+              const mine = !isSystem && senderId === myUid;
               const label = String(item.userName ?? item.sender ?? 'User');
               const body = String(item.text ?? '');
               const createdAt = item.createdAt;
               const timeLabel = formatMessageTime(createdAt);
-              const ts =
-                typeof createdAt === 'number' && Number.isFinite(createdAt)
-                  ? createdAt
-                  : 0;
-              const showSeen =
-                mine &&
-                !!peerUid &&
-                ts > 0 &&
-                (chatReads[peerUid] ?? 0) >= ts;
+              const messageStatus = mine
+                ? statusForMessage(item, peerUid, chatReads)
+                : null;
               const showMessageMenu =
                 !isSystem &&
                 !isAi &&
@@ -448,12 +498,25 @@ export default function ChatByIdScreen() {
                     ) : null}
                     <Text style={styles.msg}>{body}</Text>
                     {!isSystem ? (
-                      <View style={styles.metaRow}>
+                      <View
+                        style={[
+                          styles.metaRow,
+                          mine ? styles.metaRowMine : styles.metaRowTheirs,
+                        ]}
+                      >
                         {timeLabel ? (
                           <Text style={styles.msgTime}>{timeLabel}</Text>
                         ) : null}
-                        {showSeen ? (
-                          <Text style={styles.seenLabel}>Seen</Text>
+                        {messageStatus ? (
+                          <Text
+                            style={[
+                              styles.statusLabel,
+                              messageStatus === 'read' && styles.statusLabelRead,
+                            ]}
+                            accessibilityLabel={`Message ${messageStatus}`}
+                          >
+                            {messageStatusLabel(messageStatus)}
+                          </Text>
                         ) : null}
                       </View>
                     ) : null}
@@ -497,6 +560,7 @@ export default function ChatByIdScreen() {
             style={styles.input}
             onSubmitEditing={onSend}
             editable={!sending && !blockedBetween}
+              textAlign="left"
           />
           <TouchableOpacity
             style={[styles.sendBtn, !canSend && styles.disabled]}
@@ -525,11 +589,12 @@ export default function ChatByIdScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0D10' },
+  container: { flex: 1, backgroundColor: '#0B0D10', direction: 'ltr' },
   header: {
     height: 56,
     paddingHorizontal: 14,
     flexDirection: 'row',
+    direction: 'ltr',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomColor: '#1F2937',
@@ -539,6 +604,7 @@ const styles = StyleSheet.create({
   title: { color: '#F8FAFC', fontWeight: '700', fontSize: 17 },
   bubbleRow: {
     flexDirection: 'row',
+    direction: 'ltr',
     alignItems: 'flex-start',
     marginBottom: 10,
     gap: 4,
@@ -570,23 +636,51 @@ const styles = StyleSheet.create({
   },
   bannerText: { color: '#E5E7EB', fontSize: 13, lineHeight: 18 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 12, paddingBottom: 20 },
-  bubble: { maxWidth: '76%', borderRadius: 14, padding: 10 },
+  listContent: { padding: 12, paddingBottom: 20, direction: 'ltr' },
+  bubble: { maxWidth: '76%', borderRadius: 14, padding: 10, direction: 'ltr' },
   mine: { alignSelf: 'flex-end', backgroundColor: '#10241D' },
   theirs: { alignSelf: 'flex-start', backgroundColor: '#141922' },
-  name: { color: '#6EE7B7', fontSize: 12, fontWeight: '700', marginBottom: 4 },
-  msg: { color: '#F3F4F6', fontSize: 14 },
+  name: {
+    color: '#6EE7B7',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  msg: {
+    color: '#F3F4F6',
+    fontSize: 14,
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
   metaRow: {
     flexDirection: 'row',
+    direction: 'ltr',
     alignItems: 'center',
     gap: 8,
     marginTop: 6,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
-  msgTime: { color: '#6B7280', fontSize: 11 },
-  seenLabel: { color: '#34D399', fontSize: 11, fontWeight: '600' },
+  metaRowMine: { alignSelf: 'flex-end', justifyContent: 'flex-end' },
+  metaRowTheirs: { alignSelf: 'flex-start', justifyContent: 'flex-start' },
+  msgTime: {
+    color: '#6B7280',
+    fontSize: 11,
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  statusLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  statusLabelRead: { color: '#38BDF8' },
   inputRow: {
     flexDirection: 'row',
+    direction: 'ltr',
     gap: 8,
     padding: 10,
     borderTopWidth: 1,
@@ -601,6 +695,8 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     paddingHorizontal: 12,
     backgroundColor: '#141922',
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   sendBtn: {
     minHeight: 44,

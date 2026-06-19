@@ -44,13 +44,27 @@ export function subscribeMatchMessages(
         const data = d.data() as Record<string, unknown>;
         return {
           id: d.id,
-          senderId: typeof data.senderId === 'string' ? data.senderId : '',
+          senderId:
+            typeof data.senderId === 'string'
+              ? data.senderId
+              : typeof data.senderUid === 'string'
+                ? data.senderUid
+                : '',
+          senderUid:
+            typeof data.senderUid === 'string'
+              ? data.senderUid
+              : typeof data.senderId === 'string'
+                ? data.senderId
+                : '',
           senderFirstName:
             typeof data.senderFirstName === 'string'
               ? data.senderFirstName
               : 'User',
           text: typeof data.text === 'string' ? data.text : '',
           createdAtMs: safeToMillis(data.createdAt),
+          sentAtMs: safeToMillis(data.sentAt),
+          deliveredAtMs: safeToMillis(data.deliveredAt),
+          readAtMs: safeToMillis(data.readAt),
         };
       });
       onData(rows);

@@ -56,35 +56,60 @@ export async function writeFoodShareInbox(input: {
   title: string;
   body: string;
   deepLink: string;
+  orderId?: string;
   matchId?: string;
   adminFoodShareId?: string;
   pushType?: string;
   skipPush?: boolean;
+  notificationId?: string;
 }): Promise<void> {
   const uid = input.recipientUid.trim();
   if (!uid) return;
 
-  const ref = await admin
-    .firestore()
-    .collection(`users/${uid}/inboxNotifications`)
-    .add({
-      recipientUid: uid,
-      type: input.type,
-      title: input.title,
-      body: input.body,
-      read: false,
-      deepLink: input.deepLink,
-      matchId: input.matchId ?? null,
-      adminFoodShareId: input.adminFoodShareId ?? null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+  const db = admin.firestore();
+  const inboxRef = input.notificationId ?
+    db.doc(`users/${uid}/inboxNotifications/${input.notificationId}`) :
+    db.collection(`users/${uid}/inboxNotifications`).doc();
+  const notificationId = input.notificationId ?? inboxRef.id;
+  const payload = {
+    recipientUid: uid,
+    userId: uid,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    read: false,
+    deepLink: input.deepLink,
+    orderId: input.orderId ?? input.matchId ?? null,
+    matchId: input.matchId ?? null,
+    adminFoodShareId: input.adminFoodShareId ?? null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await Promise.all([
+    inboxRef.set(payload, {merge: true}),
+    db.doc(`notifications/${notificationId}`).set(
+      {
+        userId: uid,
+        orderId: input.orderId ?? input.matchId ?? null,
+        title: input.title,
+        body: input.body,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        type: input.type,
+        deepLink: input.deepLink,
+        matchId: input.matchId ?? null,
+        adminFoodShareId: input.adminFoodShareId ?? null,
+      },
+      {merge: true},
+    ),
+  ]);
 
   if (!input.skipPush) {
     const token = await getExpoPushToken(uid);
     if (token) {
       await sendExpoPush(token, input.title, input.body, {
         type: input.pushType ?? "food_share",
-        notificationId: ref.id,
+        notificationId,
         deepLink: input.deepLink,
         ...(input.matchId ? {matchId: input.matchId} : {}),
       });
@@ -96,15 +121,18 @@ export async function notifyFoodSharePaymentSucceeded(input: {
   userId: string;
   matchId: string;
   foodName: string;
+  notificationId?: string;
 }): Promise<void> {
   await writeFoodShareInbox({
     recipientUid: input.userId,
     type: "payment_success",
-    title: "Payment confirmed",
-    body: `Your payment for ${input.foodName} was successful.`,
+    title: "Payment successful",
+    body: "The payment was successful. Proceed to the pickup location.",
     deepLink: `/food-share-pay/${input.matchId}`,
+    orderId: input.matchId,
     matchId: input.matchId,
     pushType: "food_share_payment_success",
+    notificationId: input.notificationId,
   });
 }
 
@@ -129,15 +157,18 @@ export async function notifyFoodSharePartnerPaid(input: {
   partnerFirstName: string;
   foodName: string;
   matchId: string;
+  notificationId?: string;
 }): Promise<void> {
   await writeFoodShareInbox({
     recipientUid: input.recipientUid,
     type: "partner_paid",
-    title: "Your partner paid",
-    body: `${input.partnerFirstName} paid for ${input.foodName}. Complete your payment to activate the match.`,
+    title: "Payment needed",
+    body: "The other participant has completed payment. Please complete your payment to continue.",
     deepLink: `/food-share-pay/${input.matchId}`,
+    orderId: input.matchId,
     matchId: input.matchId,
     pushType: "food_share_partner_paid",
+    notificationId: input.notificationId,
   });
 }
 

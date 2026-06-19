@@ -165,8 +165,10 @@ function TrackOrderScreen() {
 
   const driverChatEnabled =
     !!order &&
-    typeof order.driverId === 'string' &&
-    order.driverId.length > 0 &&
+    (
+      (typeof order.driverId === 'string' && order.driverId.length > 0) ||
+      (typeof order.assignedDriverId === 'string' && order.assignedDriverId.length > 0)
+    ) &&
     order.paymentStatus === 'paid';
 
   const onClose = useCallback(() => {

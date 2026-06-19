@@ -332,13 +332,35 @@ export async function joinAdminFoodShare(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    await setDoc(doc(db, 'matchChats', matchChatId), {
+      matchId,
+      adminFoodShareId,
+      foodShareId: adminFoodShareId,
+      participantIds: [u0, u1],
+      foodName: share.foodName,
+      restaurantName: share.restaurantName,
+      conversationType: 'partner',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await setDoc(doc(db, 'matchChats', matchChatId, 'matchMessages', 'welcome'), {
+      senderId: 'system',
+      senderUid: 'system',
+      senderRole: 'system',
+      senderFirstName: 'HalfOrder',
+      text: `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
+      createdAt: serverTimestamp(),
+      sentAt: serverTimestamp(),
+      deliveredAt: null,
+      readAt: null,
+    }, { merge: false }).catch(() => undefined);
     console.log('[MATCH FOUND]', {
       matchId,
       adminFoodShareId,
       users: [u0, u1],
       lifecycle: 'WAITING_FOR_PAYMENT',
       matchChatId,
-      chatCreated: false,
+      chatCreated: true,
       orderCreated: false,
     });
     console.log('[MATCH FLOW STEP]', {
@@ -347,6 +369,28 @@ export async function joinAdminFoodShare(
       nextStep: 'navigate_to_payment_screen',
     });
   } else {
+    await setDoc(doc(db, 'matchChats', matchChatId), {
+      matchId,
+      adminFoodShareId,
+      foodShareId: adminFoodShareId,
+      participantIds: [u0, u1],
+      foodName: share.foodName,
+      restaurantName: share.restaurantName,
+      conversationType: 'partner',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await setDoc(doc(db, 'matchChats', matchChatId, 'matchMessages', 'welcome'), {
+      senderId: 'system',
+      senderUid: 'system',
+      senderRole: 'system',
+      senderFirstName: 'HalfOrder',
+      text: `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
+      createdAt: serverTimestamp(),
+      sentAt: serverTimestamp(),
+      deliveredAt: null,
+      readAt: null,
+    }, { merge: false }).catch(() => undefined);
     console.log('[MATCH FOUND]', {
       matchId,
       adminFoodShareId,
@@ -468,6 +512,10 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
       typeof data.orderStatus === 'string' ? data.orderStatus : null,
     deliveryStatus:
       typeof data.deliveryStatus === 'string' ? data.deliveryStatus : null,
+    orderId: typeof data.orderId === 'string' ? data.orderId : id,
+    driverId: typeof data.driverId === 'string' ? data.driverId : null,
+    assignedDriverId:
+      typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
     costBreakdown: {
       originalPrice:
         typeof breakdown.originalPrice === 'number'

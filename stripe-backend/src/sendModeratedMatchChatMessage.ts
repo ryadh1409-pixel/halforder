@@ -165,10 +165,15 @@ export const sendModeratedMatchChatMessage = functions
       .collection(`matchChats/${matchChatId}/matchMessages`)
       .add({
         senderId: uid,
+        senderUid: uid,
+        senderRole: "customer",
         senderFirstName: senderFirstName.split(/\s+/)[0] ?? senderFirstName,
         text: verdict.text,
         moderationStatus: "approved",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        deliveredAt: null,
+        readAt: null,
       });
 
     if (partnerUid) {
@@ -179,7 +184,7 @@ export const sendModeratedMatchChatMessage = functions
       await writeFoodShareInbox({
         recipientUid: partnerUid,
         type: "chat_message",
-        title: `New message from ${senderFirstName.split(/\s+/)[0] ?? senderFirstName}`,
+        title: "New message received",
         body: preview,
         deepLink: `/food-share-chat/${matchId}`,
         matchId,
