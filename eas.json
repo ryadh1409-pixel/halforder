@@ -24,7 +24,10 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51TRZ1LJvTJtrqs6njFhqpXXPyeW7Y5cgV1502eolYXivuOo6a2SFaTlJPYbRf5uHR9kd4KfjWnns2SA9vX9n12wu00p8CkESIX"
+      }
     }
   },
   "submit": {

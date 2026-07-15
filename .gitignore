@@ -5,6 +5,7 @@ node_modules
 
 # Expo
 .expo
+.expo-web-check
 dist/
 dist-legal/
 web-build/

@@ -1,9 +1,13 @@
 import * as functions from "firebase-functions/v1";
 import type {CallableContext} from "firebase-functions/v1/https";
+import {defineSecret} from "firebase-functions/params";
 import {refundFoodSharePaymentsForMatch} from "./foodShareWebhookHandlers.js";
+
+defineSecret("STRIPE_SECRET_KEY");
 
 /** Refund all paid food-share payments when a match is cancelled pre-order. */
 export const refundFoodShareMatch = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
   .region("us-central1")
   .https.onCall(async (data: unknown, context: CallableContext) => {
     if (!context.auth) {

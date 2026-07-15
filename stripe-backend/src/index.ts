@@ -36,6 +36,7 @@ function getStripe(): Stripe {
 }
 
 export const startRestaurantStripeConnect = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
   .region("us-central1")
   .https.onCall(async (_data: unknown, _context: CallableContext) => {
     try {
@@ -188,9 +189,12 @@ export const createPaymentIntent = functions
         (typeof process.env.EXPO_PUBLIC_APP_URL === "string"
           ? process.env.EXPO_PUBLIC_APP_URL.trim()
           : "") ||
-        (typeof process.env.APP_URL === "string" ? process.env.APP_URL.trim() : "");
+        (typeof process.env.APP_URL === "string" ? process.env.APP_URL.trim() : "") ||
+        (typeof process.env.APP_BASE_URL === "string"
+          ? process.env.APP_BASE_URL.trim()
+          : "");
       if (fromEnv) return fromEnv.replace(/\/$/, "");
-      return "http://localhost:8081";
+      return "https://halforder.app";
     };
 
     try {

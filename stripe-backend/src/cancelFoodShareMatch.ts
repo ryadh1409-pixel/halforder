@@ -1,7 +1,10 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
 import type {CallableContext} from "firebase-functions/v1/https";
+import {defineSecret} from "firebase-functions/params";
 import {refundFoodSharePaymentsForMatch} from "./foodShareWebhookHandlers.js";
+
+defineSecret("STRIPE_SECRET_KEY");
 
 const DRIVER_ACTIVE_LIFECYCLES = new Set([
   "DRIVER_ASSIGNED",
@@ -313,6 +316,7 @@ async function cancelActiveMatch(
 
 /** Cancel a waiting share or an active food-share match (with refund pre-order). */
 export const cancelFoodShareMatch = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
   .region("us-central1")
   .https.onCall(async (data: unknown, context: CallableContext) => {
     if (!context.auth) {
