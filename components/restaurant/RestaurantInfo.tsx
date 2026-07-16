@@ -1,5 +1,7 @@
+import { PromotionBadge } from '@/components/PromotionBadge';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import { RESTAURANT_INFO_OVERLAP } from '@/constants/restaurantLayout';
+import { isAdminPromotionBadgeLabel } from '@/lib/promotionBadge';
 import {
   formatRatingCompact,
   type RatingDisplay,
@@ -32,6 +34,8 @@ export function RestaurantInfo({
   statusSubtext,
   promoLabel,
 }: Props) {
+  const adminPromo = isAdminPromotionBadgeLabel(promoLabel);
+
   return (
     <View style={styles.card}>
       <View style={styles.rowTop}>
@@ -60,9 +64,13 @@ export function RestaurantInfo({
           </View>
           {promoLabel ? (
             <View style={styles.badgeRow}>
-              <View style={styles.badgePromo}>
-                <Text style={styles.badgePromoText}>{promoLabel}</Text>
-              </View>
+              {adminPromo ? (
+                <PromotionBadge value={promoLabel} />
+              ) : (
+                <View style={styles.badgePromo}>
+                  <Text style={styles.badgePromoText}>{promoLabel}</Text>
+                </View>
+              )}
             </View>
           ) : null}
         </View>

@@ -14,6 +14,7 @@ import {
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { adminLog } from '@/lib/admin/adminDebug';
+import { parsePromotionBadge } from '@/lib/promotionBadge';
 import {
   deleteAdminFoodCardSlot,
   setAdminFoodCardActive,
@@ -58,6 +59,7 @@ function emptyDraft(): FoodSlotDraft {
     active: false,
     aiDescription: '',
     restaurantName: 'HalfOrder',
+    promotionBadge: 'none',
   };
 }
 
@@ -141,6 +143,7 @@ export default function AdminFoodCardDetailScreen() {
       active: detail.active,
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
+      promotionBadge: detail.promotionBadge,
     };
   }, [detail]);
 
@@ -178,6 +181,7 @@ export default function AdminFoodCardDetailScreen() {
       active: detail.active,
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
+      promotionBadge: detail.promotionBadge,
     });
     setEditOpen(true);
   }, [detail]);
@@ -256,6 +260,7 @@ export default function AdminFoodCardDetailScreen() {
         active: draft.active,
         aiDescription: draft.aiDescription,
         restaurantName: draft.restaurantName,
+        promotionBadge: parsePromotionBadge(draft.promotionBadge),
       });
       console.log('[SAVE] completed successfully');
       setEditOpen(false);
@@ -480,6 +485,7 @@ export default function AdminFoodCardDetailScreen() {
           <Row label="Restaurant name" value={detail.restaurantName} />
           <Row label="Original price" value={money(detail.originalPrice)} />
           <Row label="Sharing price" value={money(detail.sharedPrice)} />
+          <Row label="Promotion badge" value={detail.promotionBadgeLabel} />
           <Row label="Pickup or delivery" value={detail.pickupOrDeliveryLabel} />
           <Row label="Delivery fee" value={detail.deliveryFeeLabel} />
           <Row label="Date" value={detail.dateLabel} />

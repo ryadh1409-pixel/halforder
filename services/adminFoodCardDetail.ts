@@ -5,6 +5,10 @@ import {
 } from '@/constants/adminFoodCards';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { foodShareLifecycleLabel } from '@/lib/foodShareLifecycle';
+import {
+  promotionBadgeLabel,
+  type PromotionBadgeValue,
+} from '@/lib/promotionBadge';
 import { parseFoodCardLocationFields } from '@/services/foodCards';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import { mapMatchDoc } from '@/services/foodShareMatchService';
@@ -44,6 +48,9 @@ export type AdminFoodCardDetail = {
   description: string;
   originalPrice: number;
   sharedPrice: number;
+  /** Admin promotion badge stored on the food card. */
+  promotionBadge: PromotionBadgeValue;
+  promotionBadgeLabel: string;
   portionsLabel: string;
   pickupAddress: string;
   city: string;
@@ -311,6 +318,8 @@ function buildDetail(input: {
     description: share.description || '—',
     originalPrice: share.originalPrice,
     sharedPrice: share.sharedPrice,
+    promotionBadge: share.promotionBadge,
+    promotionBadgeLabel: promotionBadgeLabel(share.promotionBadge) ?? 'None',
     portionsLabel: portions != null ? String(portions) : '—',
     pickupAddress: pickupAddress || '—',
     city,

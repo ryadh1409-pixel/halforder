@@ -7,6 +7,7 @@
  * Optional future: `restaurants/{restaurantId}/categories/{id}` for explicit sort order / visibility.
  */
 
+import type { PromotionBadgeValue } from '@/lib/promotionBadge';
 import type { FoodItem } from '@/services/foodService';
 
 /** Minimal restaurant document fields the premium screen cares about (see useRestaurantProfile). */
@@ -36,6 +37,8 @@ export type MenuItemUxTags = {
   recommended?: boolean;
   /** Promo label overrides enrichment (e.g. "Buy 1, get 1") */
   promotion?: string | null;
+  /** Admin promotion badge enum (none | most_ordered | great_price) */
+  promotionBadge?: PromotionBadgeValue;
 };
 
 export type RestaurantMenuItem = FoodItem & MenuItemUxTags;

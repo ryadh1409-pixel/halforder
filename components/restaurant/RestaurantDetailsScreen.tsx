@@ -2,7 +2,6 @@ import { MenuHorizontalCarousel } from '@/components/menu/MenuHorizontalCarousel
 import { MenuItemRowCard } from '@/components/menu/MenuItemRowCard';
 import { FloatingCartBar } from '@/components/cart/FloatingCartBar';
 import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
-import { CategoryTabs } from '@/components/restaurant/CategoryTabs';
 import {
   DeliveryOptions,
   type DeliveryMode,
@@ -33,9 +32,7 @@ import { useAuth } from '@/services/AuthContext';
 import { useCart } from '@/services/CartContext';
 import {
   cartFingerprint,
-  defaultCategoriesFromItems,
   enrichMenuItem,
-  itemsForCategory,
   type DisplayMenuItem,
 } from '@/utils/menuDisplayEnrich';
 import {
@@ -50,7 +47,7 @@ import { showError } from '@/utils/toast';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -105,7 +102,6 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
   const { items: cart, addToCart } = useCart();
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('delivery');
-  const [activeCat, setActiveCat] = useState('Popular');
   const [refreshing, setRefreshing] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<DisplayMenuItem | null>(
@@ -233,19 +229,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     [resolvedProfile.reviewCount],
   );
 
-  const categories = useMemo(() => defaultCategoriesFromItems(items), [items]);
   const sectionBuckets = useRestaurantMenuSections(displayItems);
-
-  useEffect(() => {
-    if (categories.length > 0 && !categories.includes(activeCat)) {
-      setActiveCat(categories[0]!);
-    }
-  }, [categories, activeCat]);
-
-  const categoryItems = useMemo(
-    () => itemsForCategory(displayItems, activeCat),
-    [displayItems, activeCat],
-  );
 
   const cartQty = useMemo(
     () => cartForRestaurant.reduce((s, c) => s + c.qty, 0),
@@ -489,19 +473,9 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
           />
         </View>
 
-        <CategoryTabs
-          categories={categories}
-          active={activeCat}
-          onSelect={setActiveCat}
-        />
-
         <View>
           <View style={styles.menuHeaderRow}>
-            <Text style={styles.menuHeaderTitle}>{activeCat}</Text>
-            <Text style={styles.menuHeaderSub}>
-              {categoryItems.length}{' '}
-              {categoryItems.length === 1 ? 'item' : 'items'}
-            </Text>
+            <Text style={styles.menuHeaderTitle}>Menu</Text>
           </View>
 
           <View style={styles.menuBlock}>
@@ -520,7 +494,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                 </Text>
               </View>
             ) : (
-              categoryItems.map((it) => (
+              displayItems.map((it) => (
                 <MenuItemRowCard
                   key={it.id}
                   item={it}
@@ -575,7 +549,6 @@ const styles = StyleSheet.create({
     color: RP.text,
     letterSpacing: -0.4,
   },
-  menuHeaderSub: { fontSize: 13, fontWeight: '700', color: RP.textMuted },
   menuBlock: { paddingTop: 0, minHeight: 200 },
   err: {
     paddingHorizontal: 16,

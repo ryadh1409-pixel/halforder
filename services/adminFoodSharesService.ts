@@ -3,6 +3,7 @@ import {
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
+import { parsePromotionBadge } from '@/lib/promotionBadge';
 import { getHeroImageUrlForType, mockOrders } from '@/constants/mockSwipeFood';
 import type { FoodOrderType } from '@/constants/mockSwipeFood';
 import { db } from '@/services/firebase';
@@ -63,6 +64,7 @@ export function mapAdminFoodShareDoc(
     description: normStr(data.description, normStr(data.aiDescription)),
     active: normBool(data.active),
     createdAtMs: safeToMillis(data.createdAt),
+    promotionBadge: parsePromotionBadge(data.promotionBadge),
   };
 }
 
@@ -95,6 +97,7 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     orderStatus: null,
     deliveryStatus: null,
     lifecycle: 'WAITING_FOR_PARTNER',
+    promotionBadge: share.promotionBadge,
   };
 }
 

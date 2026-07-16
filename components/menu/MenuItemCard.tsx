@@ -1,3 +1,4 @@
+import { PromotionBadge } from '@/components/PromotionBadge';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
 import { Image } from 'expo-image';
@@ -21,6 +22,8 @@ export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+  const hasAdminBadge =
+    item.promotionBadge != null && item.promotionBadge !== 'none';
 
   return (
     <AnimatedPressable
@@ -49,7 +52,9 @@ export function MenuItemCard({ item, qty, onPress, onAdd }: Props) {
             <Text style={styles.imagePhTxt}>🍽</Text>
           </View>
         )}
-        {item.offerLabel ? (
+        {hasAdminBadge ? (
+          <PromotionBadge value={item.promotionBadge} style={styles.promoBadge} />
+        ) : item.offerLabel ? (
           <View style={styles.offerBadge}>
             <Text style={styles.offerBadgeTxt}>{item.offerLabel}</Text>
           </View>
@@ -113,6 +118,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   offerBadgeTxt: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  promoBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 2,
+  },
   plusBtn: {
     position: 'absolute',
     bottom: 8,

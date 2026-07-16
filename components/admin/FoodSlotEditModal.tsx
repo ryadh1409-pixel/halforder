@@ -1,7 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { AppTextInput } from '../AppTextInput';
+import {
+  PROMOTION_BADGE_OPTIONS,
+  type PromotionBadgeValue,
+} from '@/lib/promotionBadge';
 
 const BG = '#FFFFFF';
 const CARD = '#ffffff';
@@ -19,6 +23,7 @@ export type FoodSlotDraft = {
   active: boolean;
   aiDescription: string;
   restaurantName: string;
+  promotionBadge: PromotionBadgeValue;
 };
 
 export type FoodSlotEditModalProps = {
@@ -85,6 +90,42 @@ export function FoodSlotEditModal({
                 }}
                 thumbColor={draft.active ? PRIMARY : '#f1f5f9'}
               />
+            </View>
+
+            <Text style={styles.fieldLabel}>Promotion Badge</Text>
+            <View style={styles.promoGroup}>
+              {PROMOTION_BADGE_OPTIONS.map((opt) => {
+                const selected = draft.promotionBadge === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    onPress={() => onChange({ promotionBadge: opt.value })}
+                    style={[
+                      styles.promoOption,
+                      selected && styles.promoOptionSelected,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        selected && styles.radioOuterSelected,
+                      ]}
+                    >
+                      {selected ? <View style={styles.radioInner} /> : null}
+                    </View>
+                    <Text
+                      style={[
+                        styles.promoOptionText,
+                        selected && styles.promoOptionTextSelected,
+                      ]}
+                    >
+                      {opt.radioLabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <TouchableOpacity
@@ -292,6 +333,51 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   switchLabel: { color: TEXT, fontWeight: '600' },
+  promoGroup: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  promoOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.1)',
+    backgroundColor: CARD,
+  },
+  promoOptionSelected: {
+    borderColor: 'rgba(22, 163, 74, 0.45)',
+    backgroundColor: 'rgba(22, 163, 74, 0.06)',
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(15, 23, 42, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterSelected: {
+    borderColor: PRIMARY,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: PRIMARY,
+  },
+  promoOptionText: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  promoOptionTextSelected: {
+    fontWeight: '700',
+  },
   secondaryBtn: {
     paddingVertical: 12,
     borderRadius: 14,

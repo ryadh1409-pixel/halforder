@@ -1,4 +1,6 @@
 import { UE } from '@/constants/uberEatsTheme';
+import { PromotionBadge } from '@/components/PromotionBadge';
+import { isAdminPromotionBadgeLabel } from '@/lib/promotionBadge';
 import type { HomeRestaurant } from '@/types/homeRestaurant';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -37,6 +39,8 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
   const distanceLabel = restaurant.distanceKmLabel;
   const deliveryUnavailable =
     restaurant.isOpen && restaurant.deliverable === false;
+  const promo = restaurant.promoLabel;
+  const adminPromo = isAdminPromotionBadgeLabel(promo);
 
   return (
     <AnimatedPressable
@@ -70,10 +74,14 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
           colors={['transparent', 'rgba(0,0,0,0.55)']}
           style={styles.imageGradient}
         />
-        {restaurant.promoLabel ? (
-          <View style={styles.promoBadge}>
-            <Text style={styles.promoTxt}>{restaurant.promoLabel}</Text>
-          </View>
+        {promo ? (
+          adminPromo ? (
+            <PromotionBadge value={promo} style={styles.promoBadge} />
+          ) : (
+            <View style={styles.promoBadgeLegacy}>
+              <Text style={styles.promoTxt}>{promo}</Text>
+            </View>
+          )
         ) : null}
         <Pressable
           accessibilityRole="button"
@@ -174,6 +182,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
+    zIndex: 2,
+  },
+  promoBadgeLegacy: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 2,
     backgroundColor: UE.promo,
     paddingHorizontal: 8,
     paddingVertical: 4,

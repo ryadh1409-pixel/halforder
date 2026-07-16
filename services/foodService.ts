@@ -1,4 +1,5 @@
 import { db } from './firebase';
+import { parsePromotionBadge, type PromotionBadgeValue } from '@/lib/promotionBadge';
 import {
   addDoc,
   collection,
@@ -26,6 +27,8 @@ export type FoodItem = {
   popular: boolean;
   recommended: boolean;
   promotion: string | null;
+  /** Admin promotion badge: none | most_ordered | great_price */
+  promotionBadge: PromotionBadgeValue;
   /** Parsed from Firestore `updatedAt` for image cache busting. */
   updatedAtMs: number | null;
 };
@@ -98,6 +101,7 @@ export function getFoodItems(
                 typeof data.promotion === 'string' && data.promotion.trim()
                   ? data.promotion.trim()
                   : null,
+              promotionBadge: parsePromotionBadge(data.promotionBadge),
               updatedAtMs,
             };
           }),
@@ -127,6 +131,7 @@ export async function updateFoodItem(
       | 'popular'
       | 'recommended'
       | 'promotion'
+      | 'promotionBadge'
     >
   >,
 ): Promise<void> {

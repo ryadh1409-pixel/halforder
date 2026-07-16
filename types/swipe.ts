@@ -1,4 +1,5 @@
 import type { FoodShareCostBreakdown, FoodShareMatchLifecycle } from '@/types/foodShare';
+import type { PromotionBadgeValue } from '@/lib/promotionBadge';
 
 export type SwipeDirection = 'like' | 'pass';
 
@@ -23,6 +24,7 @@ export type SwipeFoodCard = {
   orderStatus: string | null;
   deliveryStatus: string | null;
   lifecycle: FoodShareMatchLifecycle;
+  promotionBadge?: PromotionBadgeValue;
 };
 
 export type SwipeDeckLoadingCard = {

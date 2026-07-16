@@ -47,6 +47,10 @@ export default function AdminLayout() {
       <Stack.Screen name="transactions" options={{ title: 'Transactions' }} />
       <Stack.Screen name="stripe-diagnostics" options={{ title: 'Stripe setup' }} />
       <Stack.Screen
+        name="promotion-badges"
+        options={{ title: 'Promotion Badges' }}
+      />
+      <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}
       />

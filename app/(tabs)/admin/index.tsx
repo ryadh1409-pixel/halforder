@@ -496,12 +496,35 @@ export default function AdminScreen() {
                   label="Stripe setup"
                   onPress={() => router.push(adminRoutes.stripeDiagnostics as never)}
                 />
+                <ActionCard
+                  icon="pricetag-outline"
+                  label="Promo badges"
+                  onPress={() => router.push(adminRoutes.promotionBadges as never)}
+                />
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
                 Food management
               </Text>
               <View style={styles.panel}>
+                <TouchableOpacity
+                  style={styles.promoBadgesEntry}
+                  onPress={() =>
+                    router.push(adminRoutes.promotionBadges as never)
+                  }
+                  activeOpacity={0.88}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.promoBadgesTitle}>Promotion Badges</Text>
+                    <Text style={styles.promoBadgesSub}>
+                      Choose Most Ordered or Great Price for each restaurant /
+                      food card
+                    </Text>
+                  </View>
+                  <Text style={styles.promoBadgesCta}>Open</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.panel, styles.sectionSpacer]}>
                 <AdminCardsDashboard />
               </View>
 
@@ -589,6 +612,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+  },
+  promoBadgesEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  promoBadgesTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  promoBadgesSub: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#7D8493',
+    lineHeight: 18,
+  },
+  promoBadgesCta: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: PRIMARY,
   },
   devLinks: {
     flexDirection: 'row',

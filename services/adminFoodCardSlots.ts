@@ -2,6 +2,7 @@ import {
   ADMIN_FOOD_CARD_SLOT_IDS,
   type AdminFoodCardSlotId,
 } from '../constants/adminFoodCards';
+import type { PromotionBadgeValue } from '@/lib/promotionBadge';
 import { mapAdminFoodShareDoc } from './adminFoodSharesService';
 import { auth, db } from './firebase';
 import {
@@ -28,6 +29,7 @@ export type AdminFoodCardSlot = {
   active: boolean;
   aiDescription: string;
   restaurantName: string;
+  promotionBadge: PromotionBadgeValue;
 };
 
 const COLLECTION = 'adminFoodShares';
@@ -62,6 +64,7 @@ function slotFromShare(
     active: share.active,
     aiDescription: share.description,
     restaurantName: share.restaurantName,
+    promotionBadge: share.promotionBadge,
   };
 }
 
@@ -103,6 +106,7 @@ export async function saveAdminFoodCardSlot(
     active: boolean;
     aiDescription?: string;
     restaurantName?: string;
+    promotionBadge?: PromotionBadgeValue;
   },
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
@@ -141,6 +145,12 @@ export async function saveAdminFoodCardSlot(
   console.log('[SAVE] document id', slotDocId);
   console.log('[SAVE] document exists', existing.exists());
 
+  const promotionBadge: PromotionBadgeValue =
+    input.promotionBadge === 'most_ordered' ||
+    input.promotionBadge === 'great_price'
+      ? input.promotionBadge
+      : 'none';
+
   const payload: Record<string, unknown> = {
     foodName,
     restaurantName:
@@ -153,6 +163,7 @@ export async function saveAdminFoodCardSlot(
     deliveryShare: Number(deliveryShare.toFixed(2)),
     description,
     active: input.active === true,
+    promotionBadge,
     updatedAt: serverTimestamp(),
     ...(venueLocation
       ? {

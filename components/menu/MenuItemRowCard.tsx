@@ -1,3 +1,4 @@
+import { PromotionBadge } from '@/components/PromotionBadge';
 import { UE } from '@/constants/uberEatsTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
 import { Image } from 'expo-image';
@@ -27,6 +28,8 @@ function MenuItemRowCardInner({ item, qty, onPress, onAdd }: Props) {
   const anim = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+  const hasAdminBadge =
+    item.promotionBadge != null && item.promotionBadge !== 'none';
 
   return (
     <AnimatedPressable
@@ -50,13 +53,18 @@ function MenuItemRowCardInner({ item, qty, onPress, onAdd }: Props) {
         <Text style={styles.desc} numberOfLines={3}>
           {item.shortIngredients}
         </Text>
-        {item.offerLabel ? (
+        {hasAdminBadge || item.offerLabel ? (
           <View style={styles.tagRow}>
-            <View style={[styles.tag, styles.tagPromo]}>
-              <Text style={[styles.tagTxt, styles.tagPromoTxt]}>
-                {item.offerLabel}
-              </Text>
-            </View>
+            {hasAdminBadge ? (
+              <PromotionBadge value={item.promotionBadge} />
+            ) : null}
+            {item.offerLabel ? (
+              <View style={[styles.tag, styles.tagPromo]}>
+                <Text style={[styles.tagTxt, styles.tagPromoTxt]}>
+                  {item.offerLabel}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
         <View style={styles.priceRow}>

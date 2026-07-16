@@ -71,6 +71,29 @@ describe('restaurantStoreMetrics (Ontario)', () => {
     expect(tags).toContain('Free delivery');
     expect(tags).toContain('Buy 1 Get 1');
     expect(tags).toContain('Popular nearby');
+    expect(tags).not.toContain('New on HalfOrder');
+  });
+
+  it('prefers admin promotionBadge over other tags', () => {
+    const tags = resolvePromoTags({
+      data: { promotionBadge: 'most_ordered', promoLabel: 'Buy 1 Get 1' },
+      menuPromotions: [],
+      reviewCount: 0,
+      deliveryFeeAmount: 0,
+      isPopularNearby: true,
+    });
+    expect(tags[0]).toBe('🔥 Most Ordered');
+    expect(tags).not.toContain('New on HalfOrder');
+  });
+
+  it('never auto-adds New on HalfOrder for zero reviews', () => {
+    const tags = resolvePromoTags({
+      data: {},
+      menuPromotions: [],
+      reviewCount: 0,
+      deliveryFeeAmount: null,
+    });
+    expect(tags).not.toContain('New on HalfOrder');
   });
 
   it('detects busy hours without throwing', () => {

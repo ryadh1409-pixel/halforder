@@ -28,4 +28,5 @@ export const adminRoutes = {
   payouts: '/(tabs)/admin/payouts',
   transactions: '/(tabs)/admin/transactions',
   stripeDiagnostics: '/(tabs)/admin/stripe-diagnostics',
+  promotionBadges: '/(tabs)/admin/promotion-badges',
 } as const;

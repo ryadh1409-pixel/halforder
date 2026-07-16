@@ -324,9 +324,15 @@ function docCreatedAtMs(data: Record<string, unknown>): number | null {
   return null;
 }
 
+import {
+  isLegacyNewOnHalfOrderLabel,
+  promotionBadgeDisplayFromData,
+} from '@/lib/promotionBadge';
+
 function normalizePromoText(raw: string): string | null {
   const lower = raw.trim().toLowerCase();
   if (!lower) return null;
+  if (isLegacyNewOnHalfOrderLabel(raw)) return null;
   if (lower.includes('bogo') || lower.includes('buy 1') || lower.includes('buy one')) {
     return 'Buy 1 Get 1';
   }
@@ -348,9 +354,9 @@ export type PromoContext = {
 export function resolvePromoTags(ctx: PromoContext): string[] {
   const tags: string[] = [];
 
-  if (ctx.reviewCount === 0 && !tags.includes('New on HalfOrder')) {
-    tags.push('New on HalfOrder');
-  }
+  // Admin-controlled promotion badge takes priority.
+  const adminBadge = promotionBadgeDisplayFromData(ctx.data);
+  if (adminBadge) tags.push(adminBadge);
 
   if (ctx.deliveryFeeAmount != null && ctx.deliveryFeeAmount <= 0) {
     if (!tags.includes('Free delivery')) tags.push('Free delivery');
@@ -363,7 +369,9 @@ export function resolvePromoTags(ctx: PromoContext): string[] {
     null;
   if (docPromo) {
     const n = normalizePromoText(docPromo);
-    if (n && !tags.includes(n)) tags.push(n);
+    if (n && !tags.includes(n) && !isLegacyNewOnHalfOrderLabel(n)) {
+      tags.push(n);
+    }
   }
 
   for (const p of ctx.menuPromotions) {
@@ -405,7 +413,7 @@ export function resolveStoreStatusLabel(
     const days = (Date.now() - createdMs) / 86_400_000;
     if (days <= 45) return 'Recently added';
   }
-  return 'New on HalfOrder';
+  return null;
 }
 
 export function resolveStoreStatusSubtext(reviewCount: number): string | null {

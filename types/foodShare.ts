@@ -1,3 +1,5 @@
+import type { PromotionBadgeValue } from '@/lib/promotionBadge';
+
 /** Admin-controlled swipe catalog card (`adminFoodShares/{1..10}`). */
 export type AdminFoodShareDoc = {
   id: string;
@@ -10,6 +12,8 @@ export type AdminFoodShareDoc = {
   description: string;
   active: boolean;
   createdAtMs: number | null;
+  /** Admin promotion badge: none | most_ordered | great_price */
+  promotionBadge: PromotionBadgeValue;
 };
 
 export type FoodSharePaymentStatus =

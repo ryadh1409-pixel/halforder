@@ -1,3 +1,4 @@
+import { PromotionBadge } from '@/components/PromotionBadge';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
 import { BlurView } from 'expo-blur';
@@ -156,7 +157,12 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                     <Text style={styles.heroPhTxt}>Fresh</Text>
                   </View>
                 )}
-                {item.offerLabel ? (
+                {item.promotionBadge && item.promotionBadge !== 'none' ? (
+                  <PromotionBadge
+                    value={item.promotionBadge}
+                    style={styles.promoBadge}
+                  />
+                ) : item.offerLabel ? (
                   <View style={styles.bogo}>
                     <Text style={styles.bogoTxt}>{item.offerLabel}</Text>
                   </View>
@@ -366,6 +372,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   bogoTxt: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  promoBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    zIndex: 2,
+  },
   itemTitle: { fontSize: 26, fontWeight: '900', color: RP.text, letterSpacing: -0.5 },
   desc: { marginTop: 8, fontSize: 15, fontWeight: '600', color: RP.textSecondary, lineHeight: 22 },
   prevBanner: {

@@ -1,3 +1,4 @@
+import { PromotionBadge } from '@/components/PromotionBadge';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import type { DisplayMenuItem } from '@/utils/menuDisplayEnrich';
 import { Image } from 'expo-image';
@@ -23,6 +24,8 @@ export function MenuCarouselCard({ item, qty, onPress, onAdd }: Props) {
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+  const hasAdminBadge =
+    item.promotionBadge != null && item.promotionBadge !== 'none';
 
   return (
     <AnimatedPressable
@@ -51,7 +54,9 @@ export function MenuCarouselCard({ item, qty, onPress, onAdd }: Props) {
             <Text style={styles.imagePhTxt}>🍽</Text>
           </View>
         )}
-        {item.offerLabel ? (
+        {hasAdminBadge ? (
+          <PromotionBadge value={item.promotionBadge} style={styles.promoBadge} />
+        ) : item.offerLabel ? (
           <View style={styles.offerBadge}>
             <Text style={styles.offerBadgeTxt}>{item.offerLabel}</Text>
           </View>
@@ -116,6 +121,12 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   offerBadgeTxt: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  promoBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    zIndex: 2,
+  },
   plusBtn: {
     position: 'absolute',
     right: 6,
