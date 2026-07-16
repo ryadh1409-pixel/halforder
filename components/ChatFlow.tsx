@@ -1057,7 +1057,7 @@ export function ChatFlow({ userLocation, onOrderNow }: ChatFlowProps) {
               activeOpacity={0.9}
             >
               {groupJoining ? (
-                <ActivityIndicator color="#0f172a" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.groupModalBtnPrimaryText}>I agree ✅</Text>
               )}
@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
   },
-  actionPrimary: { backgroundColor: '#F97316' },
+  actionPrimary: { backgroundColor: '#FF6B35' },
   actionPrimaryText: {
     color: '#fff',
     fontSize: 16,
@@ -1285,7 +1285,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251, 191, 36, 0.35)',
   },
   nudgeText: {
-    color: '#FDE68A',
+    color: '#F59E0B',
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
@@ -1295,14 +1295,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   recommendedLead: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
   recommendedCard: {
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(110, 231, 183, 0.25)',
   },
@@ -1360,13 +1360,13 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   groupModalTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '900',
     textAlign: 'center',
   },
   groupModalBody: {
-    color: 'rgba(248,250,252,0.88)',
+    color: '#B7BDC9',
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 22,
@@ -1381,7 +1381,7 @@ const styles = StyleSheet.create({
   },
   groupModalBtnPrimary: { backgroundColor: '#6EE7B7' },
   groupModalBtnPrimaryText: {
-    color: '#0f172a',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -1391,7 +1391,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(248,250,252,0.28)',
   },
   groupModalBtnSecondaryText: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -1405,7 +1405,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   groupDisclaimerText: {
-    color: '#FDE68A',
+    color: '#F59E0B',
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,
@@ -1430,7 +1430,7 @@ const styles = StyleSheet.create({
   groupLiveCard: {
     padding: 14,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(110, 231, 183, 0.28)',
     gap: 10,
@@ -1442,7 +1442,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   groupLiveTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
     flex: 1,
@@ -1457,7 +1457,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(250, 204, 21, 0.45)',
   },
   groupAlmostFullText: {
-    color: '#FDE68A',
+    color: '#F59E0B',
     fontSize: 14,
     fontWeight: '800',
     textAlign: 'center',
@@ -1485,7 +1485,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(251, 146, 60, 0.9)',
     gap: 10,
-    shadowColor: '#F97316',
+    shadowColor: '#FF6B35',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 14,
@@ -1511,7 +1511,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   groupTimeoutTitle: {
-    color: '#FDE68A',
+    color: '#F59E0B',
     fontSize: 16,
     fontWeight: '800',
   },

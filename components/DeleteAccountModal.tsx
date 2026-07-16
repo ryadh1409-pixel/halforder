@@ -28,8 +28,8 @@ const PALETTE = {
   secondaryLabel: '#E5E7EB',
   destructive: '#DC2626',
   destructivePressed: '#B91C1C',
-  error: '#F87171',
-  successIcon: '#34D399',
+  error: '#EF4444',
+  successIcon: '#22C55E',
 } as const;
 
 type Phase = 'confirm' | 'success';

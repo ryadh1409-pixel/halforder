@@ -559,7 +559,7 @@ export default function FoodShareChatScreen() {
                 ? 'Messaging disabled'
                 : `Message ${partnerFirstName}…`
             }
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            placeholderTextColor="#7D8493"
             value={draft}
             onChangeText={setDraft}
             multiline
@@ -575,7 +575,7 @@ export default function FoodShareChatScreen() {
             disabled={!draft.trim() || sending || chatClosed || chatReadOnly}
             onPress={() => void handleSend()}
           >
-            <Ionicons name="send" size={18} color="#0A0A0A" />
+            <Ionicons name="send" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -602,10 +602,10 @@ export default function FoodShareChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#06080C', direction: 'ltr' },
+  root: { flex: 1, backgroundColor: '#09090B', direction: 'ltr' },
   flex: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center', gap: 12 },
-  loadingText: { color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
+  loadingText: { color: '#B7BDC9', fontWeight: '600' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   },
   headerCopy: { flex: 1, minWidth: 0 },
   headerTitle: { color: '#FFF', fontWeight: '900', fontSize: 17 },
-  headerSub: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600' },
+  headerSub: { color: '#B7BDC9', fontSize: 13, fontWeight: '600' },
   closedBanner: {
     marginHorizontal: 16,
     marginTop: 10,
@@ -643,7 +643,7 @@ const styles = StyleSheet.create({
   bubbleWrapTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
   bubbleWrapSystem: { alignSelf: 'center', maxWidth: '92%' },
   senderName: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 4,
@@ -675,11 +675,11 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     writingDirection: 'ltr',
   },
-  bubbleTextMine: { color: '#0A0A0A' },
+  bubbleTextMine: { color: '#FFFFFF' },
   bubbleTextTheirs: { color: '#FFF' },
   timestamp: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#7D8493',
     textAlign: 'left',
     writingDirection: 'ltr',
   },
@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
   bubbleMetaRowMine: { alignSelf: 'flex-end', justifyContent: 'flex-end' },
   bubbleMetaRowTheirs: { alignSelf: 'flex-start', justifyContent: 'flex-start' },
   statusLabel: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     fontSize: 11,
     fontWeight: '900',
     textAlign: 'left',
@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
   statusLabelRead: { color: '#38BDF8' },
   emptyChat: {
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.5)',
+    color: '#B7BDC9',
     fontWeight: '600',
     marginTop: 40,
     lineHeight: 20,

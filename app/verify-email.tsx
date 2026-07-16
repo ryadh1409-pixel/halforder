@@ -217,7 +217,7 @@ export default function VerifyEmailScreen() {
         <MaterialIcons
           name="mark-email-unread"
           size={20}
-          color="#FBBF24"
+          color="#F59E0B"
           style={styles.bannerIcon}
         />
         <Text style={styles.bannerText}>Email not verified</Text>
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   bannerText: {
-    color: '#FDE68A',
+    color: '#F59E0B',
     fontSize: 15,
     fontWeight: '600',
   },

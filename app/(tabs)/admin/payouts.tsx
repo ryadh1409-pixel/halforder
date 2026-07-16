@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     gap: 6,
   },
-  headerRow: { backgroundColor: '#f8fafc' },
+  headerRow: { backgroundColor: '#FFFFFF' },
   headerCell: { fontWeight: '800', color: COLORS.textMuted, fontSize: 11 },
   cell: { color: COLORS.text, fontSize: 12 },
   subCell: { color: COLORS.textMuted, fontSize: 10, marginTop: 2 },

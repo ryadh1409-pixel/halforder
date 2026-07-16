@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   text: {
-    color: '#9CA3AF',
+    color: '#7D8493',
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',

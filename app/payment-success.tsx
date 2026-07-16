@@ -36,7 +36,7 @@ export default function PaymentSuccessScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <AppHeader title="Payment received" />
       <View style={styles.center}>
-        {!timedOut ? <ActivityIndicator size="large" color="#16A34A" /> : null}
+        {!timedOut ? <ActivityIndicator size="large" color="#22C55E" /> : null}
         <Text style={styles.title}>{timedOut ? 'Almost there' : 'Thank you!'}</Text>
         <Text style={styles.sub}>{hint}</Text>
         {orderId ? (
@@ -60,12 +60,12 @@ export default function PaymentSuccessScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginTop: 16 },
+  title: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginTop: 16 },
   sub: {
     marginTop: 12,
-    color: '#64748B',
+    color: '#7D8493',
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 22,
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 28,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,

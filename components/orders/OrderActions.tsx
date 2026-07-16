@@ -82,5 +82,5 @@ export default function OrderActions({
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  waiting: { color: '#334155', fontWeight: '700', marginTop: 12 },
+  waiting: { color: '#B7BDC9', fontWeight: '700', marginTop: 12 },
 });

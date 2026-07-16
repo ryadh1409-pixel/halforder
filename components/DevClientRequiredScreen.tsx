@@ -36,10 +36,10 @@ export function DevClientRequiredScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: '#09090B' },
   inner: { flex: 1, padding: 24, justifyContent: 'center' },
-  title: { color: '#f8fafc', fontSize: 22, fontWeight: '800', marginBottom: 12 },
-  body: { color: '#94a3b8', fontSize: 15, lineHeight: 22, marginBottom: 20 },
+  title: { color: '#FFFFFF', fontSize: 22, fontWeight: '800', marginBottom: 12 },
+  body: { color: '#7D8493', fontSize: 15, lineHeight: 22, marginBottom: 20 },
   btn: {
     alignSelf: 'flex-start',
     backgroundColor: '#22c55e',

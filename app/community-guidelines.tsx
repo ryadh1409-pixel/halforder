@@ -78,7 +78,7 @@ export default function CommunityGuidelinesScreen() {
           onPress={handleAccept}
         >
           {busy ? (
-            <ActivityIndicator color="#0A0A0A" />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.btnTxt}>I agree — continue to chat</Text>
           )}
@@ -95,11 +95,11 @@ export default function CommunityGuidelinesScreen() {
 const c = theme.colors;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   pad: { padding: 24, alignItems: 'center', gap: 14 },
   title: { color: '#FFF', fontSize: 26, fontWeight: '900', textAlign: 'center' },
   sub: {
-    color: 'rgba(255,255,255,0.65)',
+    color: '#B7BDC9',
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 16,
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     gap: 12,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnDisabled: { opacity: 0.6 },
-  btnTxt: { color: '#0A0A0A', fontWeight: '900', fontSize: 16 },
+  btnTxt: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
   linkBtn: { paddingVertical: 12 },
   linkTxt: { color: c.primary, fontWeight: '700' },
 });

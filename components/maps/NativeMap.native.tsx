@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.95)',
     borderWidth: 2,
-    borderColor: '#111',
+    borderColor: '#171923',
   },
   driverEmoji: { fontSize: 22 },
   destDot: {

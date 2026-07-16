@@ -1,13 +1,13 @@
 import * as admin from "firebase-admin";
-import type {CallableContext} from "firebase-functions/v1/https";
-import * as functions from "firebase-functions/v1";
 import * as logger from "firebase-functions/logger";
+import * as functions from "firebase-functions/v1";
+import type { CallableContext } from "firebase-functions/v1/https";
 import Stripe from "stripe";
+import { confirmFoodSharePaymentCore } from "./confirmFoodSharePaymentCore.js";
 import {
   foodSharePaymentDocId,
   quoteFoodSharePayment,
 } from "./foodSharePaymentLogic.js";
-import {confirmFoodSharePaymentCore} from "./confirmFoodSharePaymentCore.js";
 
 function paymentDebugState(input: {
   matchId: string | null;

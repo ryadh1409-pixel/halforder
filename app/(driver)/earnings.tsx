@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0f0f1a' },
   content: { padding: 16, paddingBottom: 32 },
   heroTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '900' },
-  heroSubtitle: { color: '#9CA3AF', marginTop: 4, marginBottom: 16, fontWeight: '600' },
+  heroSubtitle: { color: '#7D8493', marginTop: 4, marginBottom: 16, fontWeight: '600' },
   heroCard: {
     backgroundColor: '#00C853',
     borderRadius: 18,
@@ -123,17 +123,17 @@ const styles = StyleSheet.create({
     padding: 14,
     flexGrow: 1,
   },
-  statLabel: { color: '#9CA3AF', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  statLabel: { color: '#7D8493', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
   statValue: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', marginTop: 8 },
-  statSub: { color: '#6B7280', marginTop: 4, fontWeight: '600', fontSize: 12 },
+  statSub: { color: '#7D8493', marginTop: 4, fontWeight: '600', fontSize: 12 },
   sectionTitle: {
-    color: '#9CA3AF',
+    color: '#7D8493',
     fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
     marginBottom: 10,
   },
-  empty: { color: '#6B7280', fontWeight: '600', fontSize: 15 },
+  empty: { color: '#7D8493', fontWeight: '600', fontSize: 15 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,6 +144,6 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1 },
   rowTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  rowMeta: { color: '#9CA3AF', marginTop: 4, fontWeight: '600', fontSize: 13 },
+  rowMeta: { color: '#7D8493', marginTop: 4, fontWeight: '600', fontSize: 13 },
   rowEarning: { color: '#00C853', fontWeight: '900', fontSize: 16 },
 });

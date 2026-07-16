@@ -677,8 +677,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(245,158,11,0.14)',
     padding: 14,
   },
   stripeWarn: {

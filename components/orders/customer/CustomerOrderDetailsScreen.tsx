@@ -487,7 +487,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
                               id: 'route',
                               coordinates: mapPoints,
                               strokeWidth: 4,
-                              strokeColor: '#34D399',
+                              strokeColor: '#22C55E',
                             },
                           ]
                         : []
@@ -607,7 +607,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             onPress={() => void onCancel()}
           >
             {cancelling ? (
-              <ActivityIndicator color="#FECACA" />
+              <ActivityIndicator color="#EF4444" />
             ) : (
               <Text style={styles.cancelBtnText}>Cancel order</Text>
             )}
@@ -627,17 +627,17 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#06080C' },
+  screen: { flex: 1, backgroundColor: '#09090B' },
   scrollContent: { paddingBottom: 48 },
   stickyHeader: {
-    backgroundColor: '#06080C',
+    backgroundColor: '#09090B',
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  orderId: { color: 'rgba(148,163,184,0.95)', fontWeight: '700', paddingHorizontal: 16 },
+  orderId: { color: '#7D8493', fontWeight: '700', paddingHorizontal: 16 },
   phaseHeadline: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontWeight: '900',
     fontSize: 20,
     paddingHorizontal: 16,
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   phaseSubtitle: {
-    color: 'rgba(226,232,240,0.72)',
+    color: '#B7BDC9',
     fontWeight: '600',
     fontSize: 14,
     paddingHorizontal: 16,
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.32)',
   },
-  pinLabel: { color: '#FDE68A', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
+  pinLabel: { color: '#F59E0B', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
   pinDigits: {
     color: '#FFFBEB',
     fontWeight: '900',
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   completedCardTitle: { color: '#86EFAC', fontWeight: '900', fontSize: 18 },
-  completedCardBody: { color: '#CBD5E1', marginTop: 8, fontWeight: '600', lineHeight: 20 },
+  completedCardBody: { color: '#7D8493', marginTop: 8, fontWeight: '600', lineHeight: 20 },
   card: {
     marginHorizontal: 16,
     marginTop: 14,
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0E1218',
     padding: 16,
   },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: '#F8FAFC', marginBottom: 10 },
+  cardTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroImageWrap: { width: 66, height: 66, borderRadius: 16, overflow: 'hidden' },
   heroImage: { width: '100%', height: '100%' },
@@ -733,8 +733,8 @@ const styles = StyleSheet.create({
   },
   heroImageFallbackIcon: { fontSize: 28 },
   heroBody: { flex: 1 },
-  heroTitle: { color: '#F8FAFC', fontSize: 17, fontWeight: '800' },
-  etaText: { marginTop: 6, color: '#FDE68A', fontWeight: '700', fontSize: 13 },
+  heroTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
+  etaText: { marginTop: 6, color: '#F59E0B', fontWeight: '700', fontSize: 13 },
   avatarWrap: { width: 52, height: 52, borderRadius: 26, overflow: 'hidden' },
   avatar: { width: '100%', height: '100%' },
   avatarFallback: {
@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
   avatarFallbackText: { fontSize: 20 },
   meta: { color: 'rgba(226,232,240,0.78)', fontWeight: '600', marginTop: 4, fontSize: 14 },
   metaStrong: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontWeight: '800',
     fontSize: 12,
     marginTop: 12,
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
   mapPlaceholder: {
     height: 200,
     borderRadius: 14,
-    backgroundColor: '#11161F',
+    backgroundColor: '#171923',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -777,13 +777,13 @@ const styles = StyleSheet.create({
   },
   itemImageFallbackText: { fontSize: 18 },
   itemBody: { flex: 1 },
-  itemName: { color: '#E2E8F0', fontWeight: '700', fontSize: 14 },
+  itemName: { color: 'rgba(255,255,255,0.1)', fontWeight: '700', fontSize: 14 },
   itemSubtotal: { color: 'rgba(148,163,184,0.9)', fontWeight: '600', marginTop: 2 },
   priceBlock: {
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(23,25,35,0.92)',
   },
   priceRow: {
     flexDirection: 'row',
@@ -791,16 +791,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  priceLabel: { color: 'rgba(226,232,240,0.72)', fontWeight: '600', fontSize: 14 },
-  priceVal: { color: '#F8FAFC', fontWeight: '700', fontSize: 14 },
+  priceLabel: { color: '#B7BDC9', fontWeight: '600', fontSize: 14 },
+  priceVal: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 14,
   },
-  totalLabel: { color: '#F8FAFC', fontWeight: '800', fontSize: 16 },
-  totalVal: { color: '#34D399', fontWeight: '900', fontSize: 17 },
+  totalLabel: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  totalVal: { color: '#22C55E', fontWeight: '900', fontSize: 17 },
   mapOpenBtn: {
     marginTop: 14,
     alignSelf: 'flex-start',
@@ -819,8 +819,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.45)',
-    backgroundColor: 'rgba(52,211,153,0.18)',
+    borderColor: 'rgba(34,197,94,0.4)',
+    backgroundColor: 'rgba(34,197,94,0.16)',
   },
   reorderBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 13 },
   secondaryBtn: {
@@ -829,11 +829,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.35)',
-    backgroundColor: 'rgba(148,163,184,0.12)',
+    backgroundColor: 'rgba(125,132,147,0.16)',
     alignItems: 'center',
   },
   secondaryBtnDisabled: { opacity: 0.45 },
-  secondaryBtnText: { color: '#E2E8F0', fontWeight: '800', fontSize: 14 },
+  secondaryBtnText: { color: 'rgba(255,255,255,0.1)', fontWeight: '800', fontSize: 14 },
   cancelBtn: {
     marginTop: 14,
     paddingVertical: 14,
@@ -843,14 +843,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(248,113,113,0.15)',
     alignItems: 'center',
   },
-  cancelBtnText: { color: '#FECACA', fontWeight: '800', fontSize: 15 },
+  cancelBtnText: { color: '#EF4444', fontWeight: '800', fontSize: 15 },
   rateBtn: {
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 12,
     paddingVertical: 16,
     borderRadius: 14,
-    backgroundColor: '#FF3008',
+    backgroundColor: '#FF6B35',
     alignItems: 'center',
   },
   rateBtnText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },

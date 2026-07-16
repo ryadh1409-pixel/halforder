@@ -1876,7 +1876,7 @@ export default function OrderRoomScreen() {
                   >
                     <Text
                       style={{
-                        color: '#FDE68A',
+                        color: '#F59E0B',
                         fontSize: 16,
                         fontWeight: '800',
                         textAlign: 'center',

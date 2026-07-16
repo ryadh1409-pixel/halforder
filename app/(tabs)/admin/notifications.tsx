@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#fef2f2',
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: '#EF4444',
   },
   errorText: { color: COLORS.error, fontWeight: '700' },
   empty: {

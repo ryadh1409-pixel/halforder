@@ -226,7 +226,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
           <Image source={{ uri: item.foodImageUrl }} style={styles.thumb} contentFit="cover" />
         ) : (
           <View style={[styles.thumb, styles.thumbPh]}>
-            <Ionicons name="fast-food-outline" size={22} color="rgba(255,255,255,0.35)" />
+            <Ionicons name="fast-food-outline" size={22} color="#7D8493" />
           </View>
         )}
         <View style={styles.topCopy}>
@@ -257,7 +257,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
 
       {item.countdownLabel ? (
         <View style={styles.countdown}>
-          <Ionicons name="time-outline" size={14} color="#FBBF24" />
+          <Ionicons name="time-outline" size={14} color="#F59E0B" />
           <Text style={styles.countdownText}>{item.countdownLabel}</Text>
         </View>
       ) : null}
@@ -276,7 +276,7 @@ function MetaChip({
 }) {
   return (
     <View style={styles.chip}>
-      <Ionicons name={icon} size={12} color="rgba(255,255,255,0.55)" />
+      <Ionicons name={icon} size={12} color="#B7BDC9" />
       <Text style={styles.chipText} numberOfLines={1}>{label}</Text>
     </View>
   );
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 14,
     marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 14,
-    backgroundColor: '#1a2030',
+    backgroundColor: '#1E2230',
   },
   thumbPh: { alignItems: 'center', justifyContent: 'center' },
   topCopy: { flex: 1, minWidth: 0 },
@@ -304,14 +304,14 @@ const styles = StyleSheet.create({
   restaurant: {
     fontSize: 12,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginTop: 2,
     textTransform: 'uppercase',
   },
   joined: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.45)',
+    color: '#7D8493',
     marginTop: 6,
   },
   badge: {
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
   },
-  totalLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.55)' },
+  totalLabel: { fontSize: 12, fontWeight: '700', color: '#B7BDC9' },
   totalValue: { fontSize: 16, fontWeight: '900', color: '#FFF' },
   countdown: {
     flexDirection: 'row',
@@ -370,12 +370,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(251,191,36,0.1)',
+    backgroundColor: 'rgba(245,158,11,0.14)',
   },
   countdownText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#FDE68A',
+    color: '#F59E0B',
     flex: 1,
   },
   actions: { gap: 8, marginTop: 12 },
@@ -392,8 +392,8 @@ const styles = StyleSheet.create({
     borderColor: '#FF6B35',
   },
   actionBtnDanger: {
-    borderColor: 'rgba(248,113,113,0.35)',
-    backgroundColor: 'rgba(248,113,113,0.08)',
+    borderColor: 'rgba(239,68,68,0.35)',
+    backgroundColor: 'rgba(239,68,68,0.14)',
   },
   actionBtnBusy: { opacity: 0.65 },
   actionBtnText: {
@@ -402,5 +402,5 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
   },
   actionBtnTextPrimary: { color: '#FFF' },
-  actionBtnTextDanger: { color: '#FCA5A5' },
+  actionBtnTextDanger: { color: '#EF4444' },
 });

@@ -32,7 +32,7 @@ function PrefRow({
         value={value}
         onValueChange={onChange}
         trackColor={{ false: '#334155', true: 'rgba(125,255,184,0.45)' }}
-        thumbColor={value ? '#7DFFB8' : '#94a3b8'}
+        thumbColor={value ? '#7DFFB8' : '#7D8493'}
       />
     </View>
   );
@@ -121,11 +121,11 @@ export default function NotificationSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C', padding: 20 },
+  safe: { flex: 1, backgroundColor: '#09090B', padding: 20 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { color: '#FFF', fontSize: 24, fontWeight: '900' },
   sub: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginTop: 6,
     marginBottom: 20,
     fontWeight: '600',
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   copy: { flex: 1 },
   label: { color: '#FFF', fontWeight: '800', fontSize: 16 },
   desc: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginTop: 4,
     fontSize: 13,
     fontWeight: '600',
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   saving: {
     marginTop: 16,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#7D8493',
     fontWeight: '600',
     textAlign: 'center',
   },

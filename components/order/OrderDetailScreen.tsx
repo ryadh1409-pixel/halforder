@@ -15,9 +15,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const BG = '#06080C';
+const BG = '#09090B';
 const BLUE = '#1A6FE8';
-const GRAY = '#94A3B8';
+const GRAY = '#7D8493';
 
 function OrderDetailErrorShell({
   title,
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
-  errorTitle: { fontSize: 20, fontWeight: '800', color: '#F8FAFC' },
+  errorTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
   errorSub: { marginTop: 8, fontSize: 14, color: GRAY, fontWeight: '500', lineHeight: 20 },
   retryBtn: {
     marginTop: 20,

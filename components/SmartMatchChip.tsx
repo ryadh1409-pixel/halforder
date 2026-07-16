@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   chipTitle: {
     flex: 1,
     minWidth: 0,
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 14,
     letterSpacing: -0.2,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   chipFood: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 12,
     marginTop: 4,
     fontWeight: '600',
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(110, 231, 183, 0.08)',
   },
   metaChipText: {
-    color: '#CBD5E1',
+    color: '#7D8493',
     fontSize: 11,
     fontWeight: '700',
   },

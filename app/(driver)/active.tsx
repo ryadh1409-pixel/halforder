@@ -73,7 +73,7 @@ export default function DriverActiveScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#16A34A" />
+          <ActivityIndicator size="large" color="#22C55E" />
         </View>
       ) : (
         <View style={styles.list}>
@@ -88,7 +88,7 @@ export default function DriverActiveScreen() {
             </View>
           ) : (
             <View style={styles.centered}>
-              <ActivityIndicator color="#16A34A" />
+              <ActivityIndicator color="#22C55E" />
               <Text style={styles.muted}>Opening your active delivery...</Text>
             </View>
           )}
@@ -99,9 +99,9 @@ export default function DriverActiveScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0F172A' },
+  screen: { flex: 1, backgroundColor: '#09090B' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  muted: { color: '#94A3B8' },
+  muted: { color: '#7D8493' },
   list: { flex: 1, padding: 16, paddingBottom: 40 },
   empty: {
     borderRadius: 16,
@@ -112,8 +112,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyIcon: { fontSize: 24 },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#F8FAFC' },
-  emptySub: { marginTop: 8, color: '#94A3B8', fontWeight: '600', textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  emptySub: { marginTop: 8, color: '#7D8493', fontWeight: '600', textAlign: 'center' },
   secondary: {
     marginTop: 16,
     height: 40,
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
     justifyContent: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#09090B',
   },
-  secondaryText: { color: '#CBD5E1', fontWeight: '600', marginTop: 4 },
+  secondaryText: { color: '#7D8493', fontWeight: '600', marginTop: 4 },
 });

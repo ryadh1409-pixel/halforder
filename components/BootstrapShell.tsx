@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 60,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#09090B',
     zIndex: 999,
   },
   spinner: { marginTop: 40 },

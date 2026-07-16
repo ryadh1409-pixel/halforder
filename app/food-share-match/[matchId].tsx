@@ -296,7 +296,7 @@ export default function FoodShareMatchScreen() {
           <Ionicons
             name={canChat ? 'chatbubbles' : 'card-outline'}
             size={20}
-            color="#0A0A0A"
+            color="#FFFFFF"
           />
           <Text style={styles.actionPrimaryTxt}>
             {canChat
@@ -395,7 +395,7 @@ function CostRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   hint: { color: c.textSecondary, fontSize: 14 },
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   restaurant: {
     fontSize: 14,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginBottom: 16,
     textTransform: 'uppercase',
   },
@@ -429,21 +429,21 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 20,
     marginBottom: 16,
-    backgroundColor: '#1a2030',
+    backgroundColor: '#1E2230',
   },
   heroPh: { opacity: 0.5 },
   glass: {
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   section: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     marginBottom: 12,
     letterSpacing: 0.4,
@@ -472,15 +472,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  stepDotActive: { backgroundColor: '#06C167' },
-  stepLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: '600' },
+  stepDotActive: { backgroundColor: '#22C55E' },
+  stepLabel: { color: '#7D8493', fontSize: 13, fontWeight: '600' },
   stepLabelActive: { color: '#FFF' },
   costRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
-  costLabel: { color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
+  costLabel: { color: '#B7BDC9', fontWeight: '600' },
   costValue: { color: '#FFF', fontWeight: '800' },
   totalRow: {
     flexDirection: 'row',
@@ -496,13 +496,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     height: 52,
     borderRadius: 999,
-    backgroundColor: '#FFF',
+    backgroundColor: '#09090B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  actionPrimaryTxt: { color: '#0A0A0A', fontWeight: '900', fontSize: 16 },
+  actionPrimaryTxt: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
   actionSecondary: {
     marginTop: 10,
     paddingVertical: 14,
@@ -522,10 +522,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#F87171',
-    backgroundColor: 'rgba(248,113,113,0.08)',
+    borderColor: '#EF4444',
+    backgroundColor: 'rgba(239,68,68,0.14)',
   },
-  actionDangerOutlineTxt: { color: '#F87171', fontWeight: '900' },
+  actionDangerOutlineTxt: { color: '#EF4444', fontWeight: '900' },
   actionDanger: { marginTop: 10, paddingVertical: 14, alignItems: 'center' },
   actionDangerTxt: { color: '#FB7185', fontWeight: '800' },
   primaryBtn: {

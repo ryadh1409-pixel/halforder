@@ -26,6 +26,6 @@ export default function CustomerLiveTrackRedirect() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#09090B' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });

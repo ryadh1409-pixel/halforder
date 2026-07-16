@@ -452,7 +452,7 @@ export default function ChatByIdScreen() {
 
         {loading ? (
           <View style={styles.centered}>
-            <ActivityIndicator color="#34D399" />
+            <ActivityIndicator color="#22C55E" />
           </View>
         ) : (
           <FlatList
@@ -531,7 +531,7 @@ export default function ChatByIdScreen() {
                       <MaterialIcons
                         name="more-horiz"
                         size={22}
-                        color="#94A3B8"
+                        color="#7D8493"
                       />
                     </TouchableOpacity>
                   ) : null}
@@ -597,11 +597,11 @@ const styles = StyleSheet.create({
     direction: 'ltr',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomColor: '#1F2937',
+    borderBottomColor: '#1E2230',
     borderBottomWidth: 1,
   },
-  back: { color: '#34D399', fontWeight: '700' },
-  title: { color: '#F8FAFC', fontWeight: '700', fontSize: 17 },
+  back: { color: '#22C55E', fontWeight: '700' },
+  title: { color: '#FFFFFF', fontWeight: '700', fontSize: 17 },
   bubbleRow: {
     flexDirection: 'row',
     direction: 'ltr',
@@ -628,13 +628,13 @@ const styles = StyleSheet.create({
     borderBottomColor: '#3F2A2A',
   },
   bannerMuted: {
-    backgroundColor: 'rgba(251,191,36,0.1)',
+    backgroundColor: 'rgba(245,158,11,0.14)',
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#3F3829',
   },
-  bannerText: { color: '#E5E7EB', fontSize: 13, lineHeight: 18 },
+  bannerText: { color: 'rgba(255,255,255,0.1)', fontSize: 13, lineHeight: 18 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContent: { padding: 12, paddingBottom: 20, direction: 'ltr' },
   bubble: { maxWidth: '76%', borderRadius: 14, padding: 10, direction: 'ltr' },
@@ -665,13 +665,13 @@ const styles = StyleSheet.create({
   metaRowMine: { alignSelf: 'flex-end', justifyContent: 'flex-end' },
   metaRowTheirs: { alignSelf: 'flex-start', justifyContent: 'flex-start' },
   msgTime: {
-    color: '#6B7280',
+    color: '#7D8493',
     fontSize: 11,
     textAlign: 'left',
     writingDirection: 'ltr',
   },
   statusLabel: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 11,
     fontWeight: '900',
     textAlign: 'left',
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: '#1F2937',
+    borderTopColor: '#1E2230',
   },
   input: {
     flex: 1,
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#232A35',
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     paddingHorizontal: 12,
     backgroundColor: '#141922',
     textAlign: 'left',
@@ -702,13 +702,13 @@ const styles = StyleSheet.create({
     minHeight: 44,
     minWidth: 68,
     borderRadius: 12,
-    backgroundColor: '#34D399',
+    backgroundColor: '#22C55E',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 14,
   },
   sendText: { color: '#052E1A', fontWeight: '800' },
   disabled: { opacity: 0.6 },
-  empty: { color: '#9CA3AF' },
-  error: { color: '#FCA5A5', marginTop: 6 },
+  empty: { color: '#7D8493' },
+  error: { color: '#EF4444', marginTop: 6 },
 });

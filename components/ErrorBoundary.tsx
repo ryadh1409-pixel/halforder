@@ -55,11 +55,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#fff',
+    backgroundColor: '#09090B',
   },
   message: {
     fontSize: 16,
     textAlign: 'center',
-    color: '#334155',
+    color: '#B7BDC9',
   },
 });

@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: '#09090B',
     borderRadius: 14,
     padding: 20,
     gap: 10,
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#000',
+    color: '#FFFFFF',
   },
   sub: { fontSize: 14, color: '#3C3C43', lineHeight: 20, marginBottom: 4 },
   chip: {
@@ -163,9 +163,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   chipOn: { borderColor: '#007AFF', backgroundColor: 'rgba(0,122,255,0.08)' },
-  chipTxt: { color: '#000', fontWeight: '500', fontSize: 16 },
+  chipTxt: { color: '#FFFFFF', fontWeight: '500', fontSize: 16 },
   chipTxtOn: { color: '#007AFF', fontWeight: '600' },
-  err: { color: '#FF3B30', fontSize: 14, marginTop: 4 },
+  err: { color: '#EF4444', fontSize: 14, marginTop: 4 },
   actions: {
     flexDirection: 'row',
     gap: 12,

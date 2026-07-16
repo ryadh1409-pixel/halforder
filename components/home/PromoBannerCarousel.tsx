@@ -44,7 +44,7 @@ const DEFAULT_BANNERS: Banner[] = [
     cta: 'See deals',
     imageUri:
       'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&q=80&auto=format&fit=crop',
-    accent: '#048848',
+    accent: '#22C55E',
   },
   {
     id: 'zero',
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: UE.radiusPill,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#09090B',
   },
   ctaTxt: { fontSize: 14, fontWeight: '900', color: UE.text },
   ctaArrow: { fontSize: 18, fontWeight: '300', color: UE.text, marginTop: -2 },

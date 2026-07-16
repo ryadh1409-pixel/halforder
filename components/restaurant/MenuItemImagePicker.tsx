@@ -48,7 +48,7 @@ export function MenuItemImagePicker({
           <Image source={{ uri: displayUri }} style={styles.preview} />
         ) : (
           <View style={[styles.preview, styles.previewEmpty]}>
-            <Ionicons name="image-outline" size={40} color="#94a3b8" />
+            <Ionicons name="image-outline" size={40} color="#7D8493" />
             <Text style={styles.previewHint}>No photo yet</Text>
           </View>
         )}
@@ -78,13 +78,13 @@ const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
   },
   pickBtnDisabled: { opacity: 0.55 },
-  pickBtnText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  pickBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
   previewFrame: {
     width: '100%',
     aspectRatio: 4 / 3,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   preview: { width: '100%', height: '100%' },
   previewEmpty: {

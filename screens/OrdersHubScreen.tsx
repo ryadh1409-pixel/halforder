@@ -36,7 +36,7 @@ function EmptyBlock({
 }) {
   return (
     <View style={styles.emptyBlock}>
-      <Ionicons name="restaurant-outline" size={28} color="rgba(255,255,255,0.25)" />
+      <Ionicons name="restaurant-outline" size={28} color="#7D8493" />
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyBody}>{body}</Text>
     </View>
@@ -213,7 +213,7 @@ export function OrdersHubScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   scroll: { padding: 20, paddingBottom: 120 },
   centered: {
     flex: 1,
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.5)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -234,13 +234,13 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginTop: 6,
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: 'rgba(255,255,255,0.75)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 10,
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   sectionTitleMuted: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.4)',
+    color: '#7D8493',
     textTransform: 'uppercase',
     marginBottom: 10,
     marginTop: 16,
@@ -262,24 +262,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(23,25,35,0.72)',
     marginBottom: 12,
     gap: 6,
   },
   emptyTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.75)',
+    color: '#B7BDC9',
     textAlign: 'center',
   },
   emptyBody: {
     fontSize: 12,
     lineHeight: 18,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#7D8493',
     textAlign: 'center',
   },
   signInTitle: { fontSize: 24, fontWeight: '900', color: '#FFF' },
-  signInBody: { fontSize: 14, color: 'rgba(255,255,255,0.55)', textAlign: 'center' },
+  signInBody: { fontSize: 14, color: '#B7BDC9', textAlign: 'center' },
   cta: {
     marginTop: 8,
     backgroundColor: '#FF6B35',

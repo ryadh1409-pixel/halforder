@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   tileBusy: { opacity: 0.7 },
   imageWrap: {
     height: 108,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
     position: 'relative',
   },
   image: {
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(245,158,11,0.14)',
     alignSelf: 'flex-start',
   },
   waitingBadgeText: {

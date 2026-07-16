@@ -197,14 +197,14 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#09090B',
     padding: 16,
     marginBottom: 14,
     ...platformElevation({
       web: '0px 4px 14px rgba(15, 23, 42, 0.07)',
       ios: {
-        shadowColor: '#0F172A',
+        shadowColor: '#09090B',
         shadowOpacity: 0.07,
         shadowRadius: 12,
         shadowOffset: { width: 0, height: 4 },
@@ -222,14 +222,14 @@ const styles = StyleSheet.create({
   customerName: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
     letterSpacing: -0.2,
   },
   phone: {
     marginTop: 4,
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#B7BDC9',
   },
   kitchenBadge: {
     paddingHorizontal: 12,
@@ -245,15 +245,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#171923',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
     gap: 4,
   },
   dateText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   timeMetaRow: {
     flexDirection: 'row',
@@ -264,12 +264,12 @@ const styles = StyleSheet.create({
   clockText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#475569',
+    color: '#B7BDC9',
   },
   age: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#16A34A',
+    color: '#22C55E',
   },
   badgeRow: {
     marginTop: 12,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#1E2230',
   },
   courierBadgeText: {
     fontSize: 12,
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: '#7D8493',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginBottom: 6,
@@ -303,13 +303,13 @@ const styles = StyleSheet.create({
   itemLine: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: '#B7BDC9',
     lineHeight: 20,
   },
   muted: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#7D8493',
   },
   metaGrid: {
     marginTop: 14,
@@ -320,12 +320,12 @@ const styles = StyleSheet.create({
   metaCell: {
     minWidth: '30%',
     flexGrow: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#171923',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   metaCellWide: {
     minWidth: '100%',
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   metaLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#7D8493',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -341,12 +341,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   address: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: '#B7BDC9',
     lineHeight: 20,
   },
 });

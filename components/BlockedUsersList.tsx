@@ -11,12 +11,12 @@ import {
 
 /** Matches Profile tab dark palette (Instagram-style settings). */
 const D = {
-  card: '#1C1C1E',
+  card: '#171923',
   text: '#FFFFFF',
-  sub: 'rgba(255,255,255,0.55)',
+  sub: '#B7BDC9',
   border: 'rgba(255,255,255,0.12)',
-  avatarPh: '#2C2C2E',
-  danger: '#F87171',
+  avatarPh: '#1E2230',
+  danger: '#EF4444',
 };
 
 type Props = {

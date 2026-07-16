@@ -34,10 +34,10 @@ import { showError, showNotice } from '../utils/toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const D = {
-  bg: '#06080C',
-  card: '#11161F',
+  bg: '#09090B',
+  card: '#171923',
   border: 'rgba(255,255,255,0.1)',
-  text: '#F8FAFC',
+  text: '#FFFFFF',
   muted: 'rgba(248,250,252,0.55)',
 };
 
@@ -211,7 +211,7 @@ export default function BrowseScreen() {
       </View>
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#34D399" />
+          <ActivityIndicator color="#22C55E" />
           <Text style={styles.loadingHint}>Loading food cards…</Text>
         </View>
       ) : visibleCards.length === 0 ? (
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     height: 46,
     borderRadius: 12,
-    backgroundColor: '#34D399',
+    backgroundColor: '#22C55E',
     alignItems: 'center',
     justifyContent: 'center',
   },

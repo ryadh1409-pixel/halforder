@@ -39,7 +39,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const TAB_SPINNER = '#34D399';
+const TAB_SPINNER = '#22C55E';
 const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
 type OrderHistoryFilter = 'active' | 'completed' | 'cancelled';
 
@@ -696,7 +696,7 @@ export default function MarketplaceOrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#06080C' },
+  root: { flex: 1, backgroundColor: '#09090B' },
   safe: { flex: 1 },
   scrollFlex: { flex: 1 },
   glass: {
@@ -708,11 +708,11 @@ const styles = StyleSheet.create({
   glassAndroid: { backgroundColor: 'rgba(18,22,30,0.92)' },
   headerBar: { marginHorizontal: 16, marginTop: 4, marginBottom: 14 },
   headerInner: { paddingHorizontal: 18, paddingVertical: 14 },
-  headerTitle: { color: '#F8FAFC', fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
-  headerSub: { marginTop: 4, color: 'rgba(255,255,255,0.45)', fontSize: 14, fontWeight: '600' },
+  headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  headerSub: { marginTop: 4, color: '#7D8493', fontSize: 14, fontWeight: '600' },
   centerBlock: { flex: 1, paddingHorizontal: 18, justifyContent: 'center', alignItems: 'center' },
   flexCenter: { justifyContent: 'center', alignItems: 'center' },
-  loadingCaption: { marginTop: 14, color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
+  loadingCaption: { marginTop: 14, color: '#B7BDC9', fontSize: 14, fontWeight: '600' },
   listContent: { paddingHorizontal: 18, paddingBottom: 40 },
   filterRow: {
     flexDirection: 'row',
@@ -723,29 +723,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   filterChipActive: {
-    backgroundColor: 'rgba(52,211,153,0.18)',
-    borderColor: 'rgba(52,211,153,0.45)',
+    backgroundColor: 'rgba(34,197,94,0.16)',
+    borderColor: 'rgba(34,197,94,0.4)',
   },
   filterText: {
     color: 'rgba(255,255,255,0.58)',
     fontWeight: '800',
     fontSize: 13,
   },
-  filterTextActive: { color: '#BBF7D0' },
+  filterTextActive: { color: '#22C55E' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
   sectionTitleMuted: {
     fontSize: 18,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.45)',
+    color: '#7D8493',
     marginTop: 22,
     marginBottom: 10,
   },
-  emptySection: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 6, fontWeight: '600' },
+  emptySection: { fontSize: 14, color: '#B7BDC9', marginBottom: 6, fontWeight: '600' },
   emptySectionMuted: { fontSize: 14, color: 'rgba(255,255,255,0.38)', marginBottom: 6, fontWeight: '600' },
   primaryBtn: {
     marginTop: 16,
@@ -780,6 +780,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251,191,36,0.28)',
     marginBottom: 16,
   },
-  bannerText: { color: '#FDE68A', fontWeight: '600', fontSize: 13, lineHeight: 18 },
+  bannerText: { color: '#F59E0B', fontWeight: '600', fontSize: 13, lineHeight: 18 },
   globalEmpty: { alignItems: 'center', paddingVertical: 36 },
 });

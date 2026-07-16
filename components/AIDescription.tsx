@@ -88,7 +88,7 @@ export function AIDescription({
               <MaterialIcons
                 name="info-outline"
                 size={17}
-                color="rgba(148,163,184,0.95)"
+                color="#7D8493"
               />
             </TouchableOpacity>
           </View>
@@ -144,22 +144,22 @@ const sheetDark = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.1)',
   },
   handle: { backgroundColor: 'rgba(255,255,255,0.2)' },
-  title: { color: '#F8FAFC' },
+  title: { color: '#FFFFFF' },
   body: { color: 'rgba(226,232,240,0.92)' },
   btn: { backgroundColor: 'rgba(255,255,255,0.12)' },
-  btnText: { color: '#F8FAFC' },
+  btnText: { color: '#FFFFFF' },
 });
 
 const sheetLight = StyleSheet.create({
   panel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#09090B',
     borderTopColor: 'rgba(0,0,0,0.08)',
   },
   handle: { backgroundColor: 'rgba(0,0,0,0.15)' },
-  title: { color: '#0F172A' },
+  title: { color: '#FFFFFF' },
   body: { color: 'rgba(51,65,85,0.95)' },
-  btn: { backgroundColor: '#0F172A' },
-  btnText: { color: '#F8FAFC' },
+  btn: { backgroundColor: '#09090B' },
+  btnText: { color: '#FFFFFF' },
 });
 
 const styles = StyleSheet.create({
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   body: {
-    color: 'rgba(248,250,252,0.88)',
+    color: '#B7BDC9',
     fontSize: 14,
     lineHeight: 21,
     fontWeight: '400',
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   label: {
-    color: 'rgba(148,163,184,0.95)',
+    color: '#7D8493',
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.35,

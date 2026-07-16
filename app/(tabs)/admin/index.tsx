@@ -52,7 +52,7 @@ function startOfWeekMs(): number {
   return d.getTime();
 }
 
-const PAGE_BG = '#f8fafc';
+const PAGE_BG = '#FFFFFF';
 const PRIMARY = '#16a34a';
 
 export default function AdminScreen() {
@@ -556,13 +556,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   sectionHeading: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#FFFFFF',
     marginBottom: 10,
   },
   sectionSpacer: { marginTop: 20 },
@@ -579,12 +579,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panel: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#09090B',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(15, 23, 42, 0.06)',
-    shadowColor: '#0f172a',
+    shadowColor: '#09090B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   devLink: { fontSize: 13, fontWeight: '600', color: PRIMARY },
-  devSep: { fontSize: 13, color: '#94a3b8' },
+  devSep: { fontSize: 13, color: '#7D8493' },
   accessDenied: {
     fontSize: 18,
     fontWeight: '600',

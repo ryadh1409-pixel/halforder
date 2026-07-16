@@ -53,7 +53,7 @@ type RestaurantState = {
 };
 
 const PRIMARY = '#16a34a';
-const PAGE = '#f8fafc';
+const PAGE = '#FFFFFF';
 const CARD = '#ffffff';
 const AVATAR_SIZE = 90;
 
@@ -456,7 +456,7 @@ export default function HostDashboardScreen() {
                 <Image source={{ uri: restaurant.logoUrl }} style={styles.profileAvatarImage} />
               ) : (
                 <View style={styles.profileAvatarPlaceholder}>
-                  <Ionicons name="storefront-outline" size={40} color="#94a3b8" />
+                  <Ionicons name="storefront-outline" size={40} color="#7D8493" />
                 </View>
               )}
             </Pressable>
@@ -468,7 +468,7 @@ export default function HostDashboardScreen() {
                 value={nameDraft}
                 onChangeText={setNameDraft}
                 placeholder="Restaurant"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#7D8493"
                 autoCapitalize="words"
               />
 
@@ -478,7 +478,7 @@ export default function HostDashboardScreen() {
                 value={phoneDraft}
                 onChangeText={setPhoneDraft}
                 placeholder="+1 (613) 123-4567"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#7D8493"
                 keyboardType="phone-pad"
               />
             </View>
@@ -509,7 +509,7 @@ export default function HostDashboardScreen() {
                   value={locationDraft}
                   onChangeText={setLocationDraft}
                   placeholder="Address or service area"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#7D8493"
                   multiline
                 />
                 <TouchableOpacity
@@ -600,23 +600,23 @@ const styles = StyleSheet.create({
     marginHorizontal: -16,
     marginBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#B7BDC9',
     backgroundColor: CARD,
-    shadowColor: '#0f172a',
+    shadowColor: '#09090B',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
   headerMain: { flex: 1, paddingRight: 12 },
-  screenTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', lineHeight: 26 },
+  screenTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', lineHeight: 26 },
   onlineRow: {
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  onlineLabel: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  onlineLabel: { fontSize: 14, fontWeight: '700', color: '#B7BDC9' },
   topLink: { fontSize: 15, fontWeight: '700', color: PRIMARY, marginTop: 2 },
   scroll: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 120, flexGrow: 1 },
   profileHeader: {
@@ -638,11 +638,11 @@ const styles = StyleSheet.create({
   profileInput: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
     borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 16,
-    color: '#0f172a',
+    color: '#FFFFFF',
     backgroundColor: '#fafafa',
     textAlign: 'center',
   },
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'rgba(22,163,74,0.55)',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   profileAvatarImage: {
     width: AVATAR_SIZE,
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     borderRadius: AVATAR_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   statsRow: {
     flexDirection: 'row',
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.06)',
-    shadowColor: '#0f172a',
+    shadowColor: '#09090B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 20,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#FFFFFF',
   },
   statLabel: { marginTop: 4, fontSize: 11, color: '#64748b', fontWeight: '700' },
   card: {
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.06)',
-    shadowColor: '#0f172a',
+    shadowColor: '#09090B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
   logoWrap: { alignItems: 'center', marginBottom: 16 },
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 20,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   logoPh: { alignItems: 'center', justifyContent: 'center' },
   logoHint: { marginTop: 8, fontSize: 13, color: '#64748b', fontWeight: '500' },
@@ -734,12 +734,12 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#0f172a',
+    color: '#FFFFFF',
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },
@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0f172a',
+    shadowColor: '#09090B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.22,
     shadowRadius: 8,
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   },
   menuHint: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#7D8493',
     marginTop: -6,
     marginBottom: 14,
     lineHeight: 17,
@@ -811,10 +811,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 14,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#0f172a',
+    borderColor: '#B7BDC9',
+    shadowColor: '#09090B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -823,12 +823,12 @@ const styles = StyleSheet.create({
   menuDishImage: {
     width: '100%',
     height: 140,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   menuDishImagePh: { alignItems: 'center', justifyContent: 'center' },
   menuDishBody: { padding: 14 },
   menuDishText: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  menuDishName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  menuDishName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   menuDishPrice: { fontSize: 16, fontWeight: '800', color: PRIMARY },
   menuDishActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   menuActionBtn: {
@@ -846,34 +846,34 @@ const styles = StyleSheet.create({
   orderRow: {
     padding: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
     borderRadius: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#09090B',
     marginBottom: 10,
   },
   orderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   orderId: { fontSize: 12, color: '#64748b', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   orderBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   orderBadgeText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
-  orderMeta: { fontSize: 13, color: '#334155', marginTop: 4, fontWeight: '600' },
+  orderMeta: { fontSize: 13, color: '#B7BDC9', marginTop: 4, fontWeight: '600' },
   orderItems: { fontSize: 13, color: '#64748b', marginTop: 4 },
-  orderTotal: { fontSize: 16, color: '#0f172a', marginTop: 8, fontWeight: '800' },
+  orderTotal: { fontSize: 16, color: '#FFFFFF', marginTop: 8, fontWeight: '800' },
   ordersSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   ordersSummaryTile: {
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#171923',
     padding: 8,
     alignItems: 'center',
   },
-  ordersSummaryValue: { color: '#0F172A', fontWeight: '800', fontSize: 14 },
-  ordersSummaryLabel: { color: '#64748B', fontWeight: '700', fontSize: 11, marginTop: 2 },
+  ordersSummaryValue: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+  ordersSummaryLabel: { color: '#7D8493', fontWeight: '700', fontSize: 11, marginTop: 2 },
   orderSkeleton: {
     height: 92,
     borderRadius: 14,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginTop: 10,
   },
   footerHint: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8 },
@@ -886,10 +886,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#B7BDC9',
     backgroundColor: CARD,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   modalClose: { fontSize: 16, fontWeight: '600', color: PRIMARY },
   modalBody: { padding: 16, paddingBottom: 40 },
   preview: {
@@ -897,6 +897,6 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 14,
     marginBottom: 12,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
 });

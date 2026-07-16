@@ -24,10 +24,10 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#09090B',
     padding: 14,
     marginBottom: 12,
   },
-  section: { color: '#0F172A', fontWeight: '800', fontSize: 16, marginBottom: 8 },
+  section: { color: '#FFFFFF', fontWeight: '800', fontSize: 16, marginBottom: 8 },
 });

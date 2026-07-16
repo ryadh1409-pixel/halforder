@@ -46,14 +46,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Auth stack dark theme — aligned with login / onboarding */
 const AUTH = {
-  bg: '#0B0F14',
-  card: '#111827',
+  bg: '#09090B',
+  card: '#171923',
   text: '#FFFFFF',
-  textMuted: 'rgba(255,255,255,0.72)',
-  inputBg: '#1F2937',
-  inputBorder: '#374151',
-  placeholder: '#9CA3AF',
-  primary: '#F97316',
+  textMuted: '#B7BDC9',
+  inputBg: '#1C2030',
+  inputBorder: 'rgba(255,255,255,0.08)',
+  placeholder: '#7D8493',
+  primary: '#FF6B35',
 } as const;
 
 export default function RegisterScreen() {
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AUTH.bg,
   },
-  keyboardAvoid: { flex: 1, backgroundColor: '#0B0F14' },
+  keyboardAvoid: { flex: 1, backgroundColor: '#09090B' },
   scrollHost: { flex: 1 },
   scroll: {
     flexGrow: 1,
@@ -467,9 +467,9 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   fieldInput: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#1E2230',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryBtnLoading: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: '#7D8493',
   },
   primaryBtnText: {
     color: '#FFFFFF',

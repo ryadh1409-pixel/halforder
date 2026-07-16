@@ -98,20 +98,20 @@ export default function PaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   content: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
   title: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontSize: 26,
     fontWeight: '800',
     textAlign: 'center',
   },
   subtitle: {
-    color: '#64748B',
+    color: '#7D8493',
     marginTop: 10,
     marginBottom: 28,
     fontWeight: '600',
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     minWidth: 260,
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

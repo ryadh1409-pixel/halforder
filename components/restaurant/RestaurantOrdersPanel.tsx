@@ -272,7 +272,7 @@ export function RestaurantOrdersPanel({
             value={archivedSearch}
             onChangeText={setArchivedSearch}
             placeholder="Search order, customer, driver…"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor="#7D8493"
             style={styles.searchInput}
           />
           <Text style={styles.revenueLine}>
@@ -288,7 +288,7 @@ export function RestaurantOrdersPanel({
         </View>
       ) : listOrders.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Ionicons name="receipt-outline" size={36} color="#94a3b8" />
+          <Ionicons name="receipt-outline" size={36} color="#7D8493" />
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
           <Text style={styles.emptySub}>{emptySubtitle}</Text>
         </View>
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
   },
-  title: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
+  title: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
   count: { fontSize: 13, fontWeight: '600', color: '#64748b' },
   filterRow: { gap: 8, paddingVertical: 2 },
   filterChip: {
@@ -348,36 +348,36 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#f1f5f9',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
   },
   filterChipActive: {
     backgroundColor: '#16a34a',
     borderColor: '#16a34a',
   },
-  filterChipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  filterChipText: { fontSize: 13, fontWeight: '700', color: '#B7BDC9' },
   filterChipTextActive: { color: '#fff' },
   summaryRow: { flexDirection: 'row', gap: 8 },
   summaryTile: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
   },
-  summaryValue: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
   summaryLabel: { marginTop: 2, fontSize: 10, fontWeight: '700', color: '#64748b' },
   archivedTools: { gap: 8 },
   searchInput: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#fff',
-    color: '#0f172a',
+    backgroundColor: '#09090B',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   revenueLine: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
@@ -395,11 +395,11 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 20,
     borderRadius: 16,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FFFFFF',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
   },
-  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#334155', marginTop: 6 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#B7BDC9', marginTop: 6 },
   emptySub: {
     fontSize: 14,
     color: '#64748b',
@@ -417,9 +417,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  assignBtnText: { color: '#334155', fontWeight: '800', fontSize: 14 },
+  assignBtnText: { color: '#B7BDC9', fontWeight: '800', fontSize: 14 },
 });

@@ -399,7 +399,7 @@ export default function SwipeExploreFeed() {
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#34D399" />
+          <ActivityIndicator color="#22C55E" />
           <Text style={styles.loadingHint}>Loading food cards…</Text>
         </View>
       ) : !topCard ? (
@@ -490,16 +490,16 @@ export default function SwipeExploreFeed() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#070A0F' },
+  container: { flex: 1, backgroundColor: '#09090B' },
   header: { paddingHorizontal: theme.spacing.screen, paddingVertical: 12 },
   templateSection: {
     paddingLeft: theme.spacing.screen,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(23,25,35,0.92)',
   },
   templateSectionTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -516,26 +516,26 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#11161F',
+    backgroundColor: '#171923',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-  templateImage: { width: '100%', height: 104, backgroundColor: '#1a1f28' },
+  templateImage: { width: '100%', height: 104, backgroundColor: '#1E2230' },
   templateImagePh: { alignItems: 'center', justifyContent: 'center' },
   templateCardBody: { padding: 10 },
   templateName: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 18,
   },
   templatePrice: {
-    color: '#34D399',
+    color: '#22C55E',
     fontSize: 15,
     fontWeight: '800',
     marginTop: 6,
   },
-  title: { color: '#F8FAFC', fontSize: 24, fontWeight: '800' },
+  title: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
   subtitle: { color: 'rgba(248,250,252,0.6)', marginTop: 4 },
   dashboardBtn: {
     marginTop: 10,
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251, 191, 36, 0.45)',
   },
   adminBannerText: {
-    color: '#FDE68A',
+    color: '#F59E0B',
     fontWeight: '700',
     fontSize: 13,
     lineHeight: 18,

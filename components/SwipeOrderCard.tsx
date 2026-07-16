@@ -73,7 +73,7 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <MaterialIcons name="schedule" size={20} color="#34D399" />
+            <MaterialIcons name="schedule" size={20} color="#22C55E" />
             <View>
               <Text style={styles.statLabel}>Arrives in</Text>
               <Text style={styles.statValue}>{order.etaMin} min</Text>
@@ -81,7 +81,7 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <MaterialIcons name="near-me" size={20} color="#60A5FA" />
+            <MaterialIcons name="near-me" size={20} color="#3B82F6" />
             <View>
               <Text style={styles.statLabel}>Distance</Text>
               <Text style={styles.statValue}>{order.distanceKm.toFixed(1)} km</Text>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148, 163, 184, 0.35)',
   },
   reportPillText: {
-    color: '#FCA5A5',
+    color: '#EF4444',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     backgroundColor: '#0E131B',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(23,25,35,0.92)',
     gap: 12,
     justifyContent: 'space-between',
   },
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   priceLabel: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(23,25,35,0.92)',
   },
   statItem: {
     flex: 1,
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   statLabel: {
-    color: '#64748B',
+    color: '#7D8493',
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   joinedTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
   },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   urgencyFootText: {
     flex: 1,
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 12,
     fontWeight: '600',
   },

@@ -37,18 +37,18 @@ export function chipForFulfillment(status: OrderStatus | undefined): { bg: strin
   switch (status) {
     case 'awaiting_payment':
     case 'payment_processing':
-      return { bg: 'rgba(148,163,184,0.35)', fg: '#E2E8F0' };
+      return { bg: 'rgba(148,163,184,0.35)', fg: '#B7BDC9' };
     case 'payment_failed':
-      return { bg: 'rgba(239,68,68,0.25)', fg: '#FECACA' };
+      return { bg: 'rgba(239,68,68,0.25)', fg: '#EF4444' };
     case 'pending_driver':
-      return { bg: 'rgba(234,179,8,0.25)', fg: '#FDE68A' };
+      return { bg: 'rgba(234,179,8,0.25)', fg: '#F59E0B' };
     case 'pending':
       return { bg: 'rgba(251,191,36,0.2)', fg: '#FCD34D' };
     case 'restaurant_accepted':
     case 'preparing':
       return { bg: 'rgba(59,130,246,0.25)', fg: '#BFDBFE' };
     case 'ready_for_pickup':
-      return { bg: 'rgba(34,197,94,0.2)', fg: '#BBF7D0' };
+      return { bg: 'rgba(34,197,94,0.2)', fg: '#22C55E' };
     case 'picked_up':
     case 'on_the_way':
     case 'arrived_customer':
@@ -58,9 +58,9 @@ export function chipForFulfillment(status: OrderStatus | undefined): { bg: strin
       return { bg: 'rgba(34,197,94,0.28)', fg: '#DCFCE7' };
     case 'cancelled':
     case 'rejected':
-      return { bg: 'rgba(248,113,113,0.2)', fg: '#FECACA' };
+      return { bg: 'rgba(248,113,113,0.2)', fg: '#EF4444' };
     default:
-      return { bg: 'rgba(255,255,255,0.08)', fg: '#CBD5E1' };
+      return { bg: 'rgba(255,255,255,0.08)', fg: '#7D8493' };
   }
 }
 
@@ -71,15 +71,15 @@ export function paymentBadge(paymentStatus: RestaurantOrder['paymentStatus']): {
 } {
   switch (paymentStatus) {
     case 'paid':
-      return { label: 'Paid', bg: 'rgba(34,197,94,0.25)', fg: '#BBF7D0' };
+      return { label: 'Paid', bg: 'rgba(34,197,94,0.25)', fg: '#22C55E' };
     case 'processing':
-      return { label: 'Processing', bg: 'rgba(251,191,36,0.2)', fg: '#FDE68A' };
+      return { label: 'Processing', bg: 'rgba(251,191,36,0.2)', fg: '#F59E0B' };
     case 'failed':
-      return { label: 'Payment issue', bg: 'rgba(239,68,68,0.25)', fg: '#FECACA' };
+      return { label: 'Payment issue', bg: 'rgba(239,68,68,0.25)', fg: '#EF4444' };
     case 'refunded':
-      return { label: 'Refunded', bg: 'rgba(148,163,184,0.25)', fg: '#E2E8F0' };
+      return { label: 'Refunded', bg: 'rgba(148,163,184,0.25)', fg: '#B7BDC9' };
     default:
-      return { label: 'Unpaid', bg: 'rgba(148,163,184,0.2)', fg: '#CBD5E1' };
+      return { label: 'Unpaid', bg: 'rgba(148,163,184,0.2)', fg: '#7D8493' };
   }
 }
 

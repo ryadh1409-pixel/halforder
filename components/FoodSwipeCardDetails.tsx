@@ -128,10 +128,10 @@ export const FoodSwipeCardDetails = React.memo(function FoodSwipeCardDetails({
 });
 
 const styles = StyleSheet.create({
-  cardTitle: { color: '#F8FAFC', fontSize: 19, fontWeight: '800', lineHeight: 24 },
+  cardTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '800', lineHeight: 24 },
   meta: { color: 'rgba(248,250,252,0.7)', marginTop: 4, fontSize: 13, lineHeight: 18 },
   cardDisclaimer: { alignSelf: 'stretch' },
-  timer: { color: '#34D399', marginTop: 6, fontWeight: '700', fontSize: 13 },
+  timer: { color: '#22C55E', marginTop: 6, fontWeight: '700', fontSize: 13 },
   detailsBtn: {
     marginTop: 8,
     paddingVertical: 10,
@@ -143,24 +143,24 @@ const styles = StyleSheet.create({
   },
   detailsBtnText: { color: '#6EE7B7', fontWeight: '800', fontSize: 14 },
   hostRow: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1f2937' },
-  avatarPlaceholder: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1E2230' },
+  avatarPlaceholder: { borderWidth: 1, borderColor: '#7D8493' },
   hostName: { color: '#D1FAE5', fontWeight: '700', flex: 1 },
   matchPill: {
     marginTop: 8,
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(148,163,184,0.12)',
+    backgroundColor: 'rgba(125,132,147,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.22)',
   },
   matchPillWaiting: {
     backgroundColor: 'rgba(251,191,36,0.12)',
-    borderColor: 'rgba(251,191,36,0.35)',
+    borderColor: 'rgba(245,158,11,0.35)',
   },
   matchPillJoined: {
-    backgroundColor: 'rgba(52,211,153,0.14)',
+    backgroundColor: 'rgba(34,197,94,0.14)',
     borderColor: 'rgba(52,211,153,0.35)',
   },
   matchPillText: {
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#34D399',
+    backgroundColor: '#22C55E',
     alignItems: 'center',
     justifyContent: 'center',
   },

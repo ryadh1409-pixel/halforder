@@ -20,10 +20,10 @@ export default function TestNavigationScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   content: { flex: 1, padding: 16, justifyContent: 'center' },
-  title: { color: '#0F172A', fontSize: 28, fontWeight: '800' },
-  subtitle: { color: '#64748B', marginTop: 8, fontWeight: '600' },
+  title: { color: '#FFFFFF', fontSize: 28, fontWeight: '800' },
+  subtitle: { color: '#7D8493', marginTop: 8, fontWeight: '600' },
   button: {
     marginTop: 16,
     height: 44,

@@ -53,7 +53,7 @@ function DeliveryMapCardInner({
             id: m.id,
             latitude: m.latitude,
             longitude: m.longitude,
-            pinColor: '#111827',
+            pinColor: '#171923',
           }))}
           webTitle={mapTitle}
           webSubtitle={mapSubtitle}

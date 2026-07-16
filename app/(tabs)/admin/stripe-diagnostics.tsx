@@ -206,8 +206,8 @@ const styles = StyleSheet.create({
   card: { ...adminCardShell },
   warnCard: {
     ...adminCardShell,
-    backgroundColor: '#fff7ed',
-    borderColor: '#fdba74',
+    backgroundColor: 'rgba(245,158,11,0.14)',
+    borderColor: 'rgba(245,158,11,0.35)',
   },
   okCard: {
     ...adminCardShell,

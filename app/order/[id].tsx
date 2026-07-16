@@ -66,11 +66,11 @@ export default function OrderDetailRoute() {
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-    backgroundColor: '#06080C',
+    backgroundColor: '#09090B',
     padding: 24,
     justifyContent: 'center',
   },
-  title: { color: '#F8FAFC', fontSize: 20, fontWeight: '800' },
-  sub: { color: '#94A3B8', marginTop: 8, fontSize: 14, lineHeight: 20 },
-  debug: { color: '#64748B', marginTop: 16, fontSize: 12, fontFamily: 'monospace' },
+  title: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
+  sub: { color: '#7D8493', marginTop: 8, fontSize: 14, lineHeight: 20 },
+  debug: { color: '#7D8493', marginTop: 16, fontSize: 12, fontFamily: 'monospace' },
 });

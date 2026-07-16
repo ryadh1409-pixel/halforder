@@ -398,7 +398,7 @@ export default function OrderChatScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#06080C',
+    backgroundColor: '#09090B',
     paddingHorizontal: 14,
   },
   headerRow: {
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 16,
   },
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    color: '#FCA5A5',
+    color: '#EF4444',
     fontSize: 14,
   },
   readOnlyBanner: {
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251,191,36,0.24)',
   },
   readOnlyTitle: {
-    color: '#FBBF24',
+    color: '#F59E0B',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(23,25,35,0.92)',
   },
   bubbleMine: {
     backgroundColor: 'rgba(16, 36, 29, 0.95)',
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     color: '#E9FFF6',
   },
   textTheirs: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
   },
   metaRow: {
     flexDirection: 'row',
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   statusText: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,

@@ -200,7 +200,7 @@ export function ProfileOrdersSection({
               </View>
             ) : null}
             {[0, 1, 2].map((k) => (
-              <View key={k} style={[styles.skeletonRow, { backgroundColor: 'rgba(255,255,255,0.06)' }]} />
+              <View key={k} style={[styles.skeletonRow, { backgroundColor: 'rgba(23,25,35,0.92)' }]} />
             ))}
           </View>
         ) : errorMessage ? (
@@ -253,11 +253,11 @@ export function ProfileOrdersSection({
               );
               const badgeStyle =
                 tone === 'green'
-                  ? { bg: '#16A34A', fg: '#FFFFFF' }
+                  ? { bg: '#22C55E', fg: '#FFFFFF' }
                   : tone === 'red'
-                    ? { bg: '#DC2626', fg: '#FFFFFF' }
+                    ? { bg: '#EF4444', fg: '#FFFFFF' }
                     : tone === 'blue'
-                      ? { bg: 'rgba(59,130,246,0.2)', fg: '#93C5FD' }
+                      ? { bg: 'rgba(59,130,246,0.2)', fg: '#3B82F6' }
                       : tone === 'orange'
                         ? { bg: 'rgba(251,146,60,0.2)', fg: '#FDBA74' }
                         : { bg: 'rgba(255,255,255,0.1)', fg: pal.textSecondary };
@@ -376,8 +376,8 @@ export function ProfileOrdersSection({
                           },
                         ]}
                       >
-                        <MaterialIcons name="highlight-off" size={14} color="#FCA5A5" />
-                        <Text style={[styles.cancelledText, { color: '#FCA5A5' }]}>Order cancelled</Text>
+                        <MaterialIcons name="highlight-off" size={14} color="#EF4444" />
+                        <Text style={[styles.cancelledText, { color: '#EF4444' }]}>Order cancelled</Text>
                       </Animated.View>
                     ) : cancelEnabled ? (
                       <TouchableOpacity
@@ -429,7 +429,7 @@ export function ProfileOrdersSection({
                           <Text style={[styles.restaurant, { color: pal.text }]} numberOfLines={1}>
                             {order.restaurantName}
                           </Text>
-                          <View style={[styles.badge, { backgroundColor: '#16A34A' }]}>
+                          <View style={[styles.badge, { backgroundColor: '#22C55E' }]}>
                             <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>Delivered</Text>
                           </View>
                         </View>
@@ -474,7 +474,7 @@ export function ProfileOrdersSection({
                           >
                             {order.restaurantName}
                           </Text>
-                          <View style={[styles.badge, { backgroundColor: '#DC2626' }]}>
+                          <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
                             <MaterialIcons
                               name="highlight-off"
                               size={12}
@@ -516,7 +516,7 @@ export function ProfileOrdersSection({
         <View style={styles.sheetWrap}>
           <View style={[styles.sheetCard, { backgroundColor: 'rgba(20,20,22,0.94)', borderColor: 'rgba(255,255,255,0.12)' }]}>
             <View style={styles.sheetIconWrap}>
-              <MaterialIcons name="warning-amber" size={24} color="#F87171" />
+              <MaterialIcons name="warning-amber" size={24} color="#EF4444" />
             </View>
             <Text style={styles.sheetTitle}>Cancel this order?</Text>
             <Text style={styles.sheetSub}>
@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
   groupWrap: { gap: 10 },
   groupTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
   rowCard: { borderWidth: 1, borderRadius: 14, padding: 10, flexDirection: 'row', gap: 10 },
-  thumb: { width: 58, height: 58, borderRadius: 12, backgroundColor: '#1F2937' },
+  thumb: { width: 58, height: 58, borderRadius: 12, backgroundColor: '#1E2230' },
   mainCol: { flex: 1 },
   topLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   restaurant: { flex: 1, fontSize: 15, fontWeight: '700' },
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sheetTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
-  sheetSub: { color: 'rgba(255,255,255,0.72)', marginTop: 6, fontSize: 13, lineHeight: 19 },
+  sheetSub: { color: '#B7BDC9', marginTop: 6, fontSize: 13, lineHeight: 19 },
   sheetActions: { marginTop: 14, gap: 10 },
   keepBtn: {
     borderRadius: 12,
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
   keepBtnText: { color: '#FFFFFF', fontWeight: '700' },
   cancelCta: {
     borderRadius: 12,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#EF4444',
     paddingVertical: 12,
     alignItems: 'center',
   },

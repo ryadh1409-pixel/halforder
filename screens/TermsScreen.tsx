@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     fontSize: 13,
-    color: '#fca5a5',
+    color: '#EF4444',
     textAlign: 'center',
   },
   retryBtn: {

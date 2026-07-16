@@ -6,10 +6,10 @@ import { ProfileGrowIcon } from './ProfileGrowIcon';
 import type { ProfileGrowIconKind } from './profileGrowIconShared';
 
 export const PROFILE_MENU_COLORS = {
-  surface: '#1C1C1E',
+  surface: '#171923',
   text: '#FFFFFF',
-  textSecondary: 'rgba(255,255,255,0.65)',
-  textTertiary: 'rgba(255,255,255,0.42)',
+  textSecondary: '#B7BDC9',
+  textTertiary: '#7D8493',
   border: 'rgba(255,255,255,0.12)',
 } as const;
 

@@ -104,12 +104,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardOk: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: 'rgba(34,197,94,0.16)',
+    borderColor: '#22C55E',
   },
   cardWarn: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
+    backgroundColor: 'rgba(245,158,11,0.14)',
+    borderColor: '#F59E0B',
   },
   cardNeutral: {
     backgroundColor: CK.surface,

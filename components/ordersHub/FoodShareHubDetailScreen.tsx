@@ -60,7 +60,7 @@ function ParticipantRow({
         <Image source={{ uri: photoUrl }} style={styles.avatar} contentFit="cover" />
       ) : (
         <View style={[styles.avatar, styles.avatarPh]}>
-          <Ionicons name="person" size={18} color="rgba(255,255,255,0.45)" />
+          <Ionicons name="person" size={18} color="#7D8493" />
         </View>
       )}
       <View style={styles.participantCopy}>
@@ -388,7 +388,7 @@ function Row({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   back: {
@@ -405,14 +405,14 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 20,
     marginBottom: 14,
-    backgroundColor: '#1a2030',
+    backgroundColor: '#1E2230',
   },
   heroPh: { opacity: 0.5 },
   foodName: { fontSize: 26, fontWeight: '900', color: '#FFF' },
   restaurant: {
     fontSize: 13,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginTop: 4,
     textTransform: 'uppercase',
   },
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     marginBottom: 10,
     letterSpacing: 0.4,
@@ -469,11 +469,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1a2030' },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1E2230' },
   avatarPh: { alignItems: 'center', justifyContent: 'center' },
   participantCopy: { flex: 1 },
   participantName: { fontSize: 14, fontWeight: '800', color: '#FFF' },
-  participantStatus: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
+  participantStatus: { fontSize: 12, color: '#B7BDC9', marginTop: 2 },
   timelineRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   timelineDot: {
     width: 10,
@@ -482,10 +482,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  timelineDotDone: { backgroundColor: '#34D399' },
+  timelineDotDone: { backgroundColor: '#22C55E' },
   timelineCopy: { flex: 1 },
   timelineLabel: { fontSize: 13, fontWeight: '800', color: '#FFF' },
-  timelineAt: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  timelineAt: { fontSize: 12, color: '#B7BDC9', marginTop: 2 },
   title: { fontSize: 20, fontWeight: '800', color: '#FFF' },
   cta: {
     backgroundColor: '#FF6B35',

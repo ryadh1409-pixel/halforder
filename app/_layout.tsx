@@ -27,6 +27,20 @@ import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDi
 import { AuthProvider } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
+import { ordersPalette } from '@/theme/theme';
+
+const HalfOrderNavigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: ordersPalette.accent,
+    background: ordersPalette.bg,
+    card: ordersPalette.surfaceSolid,
+    text: ordersPalette.text,
+    border: ordersPalette.border,
+    notification: ordersPalette.accentCta,
+  },
+};
 
 forceEnglishLayout();
 logDevStartupConfig();
@@ -138,7 +152,7 @@ export default function RootLayout() {
         merchantIdentifier={APPLE_PAY_MERCHANT_ID}
         urlScheme="halforder"
       >
-        <ThemeProvider value={DarkTheme}>
+        <ThemeProvider value={HalfOrderNavigationTheme}>
           <View style={styles.ltrRoot}>
             <AuthProvider>
               <HomeMarketplaceLocationProvider>
@@ -166,5 +180,6 @@ const styles = StyleSheet.create({
   ltrRoot: {
     flex: 1,
     direction: 'ltr',
+    backgroundColor: ordersPalette.bg,
   },
 });

@@ -1,17 +1,19 @@
-/** Design tokens — Uber Eats / DoorDash inspired (light, premium). */
+import { ordersPalette } from '@/theme/theme';
+
+/** Restaurant surfaces — Orders Hub dark palette (colors only; layout metrics unchanged). */
 export const RP = {
-  bg: '#FFFFFF',
-  surface: '#F7F7F8',
-  surface2: '#EFEFEF',
-  text: '#0A0A0A',
-  textSecondary: '#5C5C5C',
-  textMuted: '#8E8E93',
-  border: '#E8E8EA',
-  shadow: 'rgba(10, 10, 10, 0.08)',
-  accent: '#00C853',
-  offer: '#E53935',
-  gold: '#C9A227',
-  blackBtn: '#0A0A0A',
+  bg: ordersPalette.bg,
+  surface: ordersPalette.surfaceSolid,
+  surface2: ordersPalette.surfaceElevated,
+  text: ordersPalette.text,
+  textSecondary: ordersPalette.textSecondary,
+  textMuted: ordersPalette.textMuted,
+  border: ordersPalette.border,
+  shadow: 'rgba(0, 0, 0, 0.28)',
+  accent: ordersPalette.success,
+  offer: ordersPalette.danger,
+  gold: ordersPalette.warning,
+  blackBtn: ordersPalette.accent,
   radiusL: 24,
   radiusM: 16,
   radiusS: 12,

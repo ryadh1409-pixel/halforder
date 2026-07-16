@@ -21,7 +21,7 @@ export function ShimmerSkeleton({
   const baseColor = tone === 'light' ? '#EBEBEB' : '#1D2430';
   const shimmerColors =
     tone === 'light'
-      ? (['rgba(255,255,255,0)', 'rgba(255,255,255,0.65)', 'rgba(255,255,255,0)'] as const)
+      ? (['rgba(255,255,255,0)', '#B7BDC9', 'rgba(255,255,255,0)'] as const)
       : ([
           'rgba(255,255,255,0)',
           'rgba(255,255,255,0.18)',

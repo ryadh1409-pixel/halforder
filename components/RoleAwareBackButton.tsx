@@ -35,13 +35,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#09090B',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   text: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
 });

@@ -241,11 +241,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   card: {
-    backgroundColor: '#111',
+    backgroundColor: '#171923',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2c2c2e',
+    borderColor: '#1E2230',
   },
   cardTitle: {
     color: '#fff',
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cardMessage: {
-    color: '#c4c4c4',
+    color: '#B7BDC9',
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 20,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnSecondary: {
-    backgroundColor: '#2c2c2e',
+    backgroundColor: '#1E2230',
   },
   btnSecondaryText: {
     color: '#fff',
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   btnDanger: {
-    backgroundColor: '#ff3b30',
+    backgroundColor: '#EF4444',
   },
   btnDangerText: {
     color: '#fff',
@@ -296,12 +296,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sheet: {
-    backgroundColor: '#111',
+    backgroundColor: '#171923',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingTop: 16,
     borderWidth: 1,
-    borderColor: '#2c2c2e',
+    borderColor: '#1E2230',
   },
   sheetTitle: {
     color: '#fff',
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sheetMessage: {
-    color: '#c4c4c4',
+    color: '#B7BDC9',
     fontSize: 14,
     paddingHorizontal: 20,
     marginBottom: 12,
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#2c2c2e',
+    borderTopColor: '#1E2230',
   },
   actionLabel: {
     color: '#fff',
@@ -330,12 +330,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionDestructive: {
-    color: '#ff3b30',
+    color: '#EF4444',
     fontWeight: '600',
   },
   actionCancel: {
     marginTop: 8,
-    backgroundColor: '#1c1c1e',
+    backgroundColor: '#171923',
   },
   actionCancelLabel: {
     color: palette.primaryOrange,

@@ -72,7 +72,7 @@ export function PostPaymentLoadingShell({
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#16A34A" />
+        <ActivityIndicator size="large" color="#22C55E" />
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
       </View>
@@ -81,7 +81,7 @@ export function PostPaymentLoadingShell({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F8FAFC' },
+  root: { flex: 1, backgroundColor: '#171923' },
   center: {
     flex: 1,
     padding: 24,
@@ -92,21 +92,21 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
     textAlign: 'center',
   },
   sub: {
     marginTop: 10,
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#7D8493',
     textAlign: 'center',
     lineHeight: 20,
     maxWidth: 320,
   },
   btn: {
     marginTop: 20,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     paddingVertical: 12,
     paddingHorizontal: 22,
     borderRadius: 12,

@@ -164,7 +164,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
   if (exitingToHub || isDeliveryComplete) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <ActivityIndicator size="large" color="#16A34A" />
+        <ActivityIndicator size="large" color="#22C55E" />
         <Text style={styles.exitLabel}>Returning to Driver Hub…</Text>
       </SafeAreaView>
     );
@@ -173,7 +173,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <ActivityIndicator size="large" color="#16A34A" />
+        <ActivityIndicator size="large" color="#22C55E" />
       </SafeAreaView>
     );
   }
@@ -374,7 +374,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#020617' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617' },
-  exitLabel: { color: '#94A3B8', marginTop: 12, fontSize: 15 },
+  exitLabel: { color: '#7D8493', marginTop: 12, fontSize: 15 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 100 },
   timelineActionSpacer: { height: 8 },
@@ -383,8 +383,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     borderTopWidth: 1,
-    borderTopColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderTopColor: '#1E2230',
+    backgroundColor: '#171923',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.25,
@@ -392,10 +392,10 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   headerCard: {
-    backgroundColor: '#111827',
+    backgroundColor: '#171923',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: '#1E2230',
     padding: 14,
   },
   pill: {
@@ -409,21 +409,21 @@ const styles = StyleSheet.create({
   },
   pillText: { color: '#22C55E', fontWeight: '800', fontSize: 12 },
   metrics: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between' },
-  metric: { color: '#F8FAFC', fontWeight: '700', fontSize: 13 },
+  metric: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   card: {
     marginTop: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: '#1E2230',
+    backgroundColor: '#171923',
     padding: 14,
   },
-  cardTitle: { color: '#F8FAFC', fontWeight: '800', marginBottom: 10 },
+  cardTitle: { color: '#FFFFFF', fontWeight: '800', marginBottom: 10 },
   map: { height: 240, borderRadius: 12 },
   mapFallback: {
     height: 180,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#09090B',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -439,13 +439,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryBtnText: { color: '#CBD5E1', fontWeight: '700', fontSize: 12 },
+  secondaryBtnText: { color: '#7D8493', fontWeight: '700', fontSize: 12 },
   row: { flexDirection: 'row', gap: 10 },
   logo: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#334155' },
   logoFallback: { opacity: 0.3 },
-  title: { color: '#F8FAFC', fontSize: 16, fontWeight: '800' },
-  meta: { color: '#94A3B8', marginTop: 3, fontWeight: '600' },
-  metaStrong: { color: '#E2E8F0', fontWeight: '700', marginTop: 3 },
+  title: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  meta: { color: '#7D8493', marginTop: 3, fontWeight: '600' },
+  metaStrong: { color: 'rgba(255,255,255,0.1)', fontWeight: '700', marginTop: 3 },
   rowButtons: { marginTop: 10, flexDirection: 'row', gap: 8 },
   smallBtn: {
     flex: 1,
@@ -455,10 +455,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  smallBtnText: { color: '#CBD5E1', fontWeight: '700' },
+  smallBtnText: { color: '#7D8493', fontWeight: '700' },
   itemRow: {
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: '#1E2230',
     paddingVertical: 8,
   },
   financialRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },

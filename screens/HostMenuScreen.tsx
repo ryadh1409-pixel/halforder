@@ -37,7 +37,7 @@ import {
 } from 'react-native-safe-area-context';
 
 const PRIMARY = '#16a34a';
-const PAGE = '#f8fafc';
+const PAGE = '#FFFFFF';
 const CARD = '#ffffff';
 
 /**
@@ -235,7 +235,7 @@ export default function HostMenuScreen() {
                     />
                   ) : (
                     <View style={[styles.menuDishImage, styles.menuDishImagePh]}>
-                      <Ionicons name="fast-food-outline" size={36} color="#94a3b8" />
+                      <Ionicons name="fast-food-outline" size={36} color="#7D8493" />
                     </View>
                   )}
                   <View style={styles.menuDishBody}>
@@ -326,7 +326,7 @@ export default function HostMenuScreen() {
                 value={itemName}
                 onChangeText={setItemName}
                 placeholder="Item name"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#7D8493"
               />
               <Text style={styles.inputLabel}>Price (USD)</Text>
               <AppTextInput
@@ -334,7 +334,7 @@ export default function HostMenuScreen() {
                 value={itemPrice}
                 onChangeText={setItemPrice}
                 placeholder="0.00"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#7D8493"
                 keyboardType="decimal-pad"
               />
               <TouchableOpacity
@@ -373,10 +373,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#B7BDC9',
     backgroundColor: CARD,
   },
-  screenTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  screenTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
   topLink: { fontSize: 15, fontWeight: '700', color: PRIMARY },
   scroll: { padding: 16, paddingBottom: 120 },
   card: {
@@ -387,10 +387,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.06)',
   },
-  sectionLabel: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  sectionLabel: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', marginBottom: 12 },
   menuHint: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#7D8493',
     marginTop: -6,
     marginBottom: 14,
     lineHeight: 17,
@@ -400,11 +400,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 14,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
   },
-  menuDishImage: { width: '100%', height: 140, backgroundColor: '#e2e8f0' },
+  menuDishImage: { width: '100%', height: 140, backgroundColor: '#B7BDC9' },
   menuDishImagePh: { alignItems: 'center', justifyContent: 'center' },
   menuDishBody: { padding: 14 },
   menuDishText: {
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  menuDishName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  menuDishName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   menuDishPrice: { fontSize: 16, fontWeight: '800', color: PRIMARY },
   menuDishActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   menuActionBtn: {
@@ -450,20 +450,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#B7BDC9',
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
   modalClose: { fontSize: 16, fontWeight: '700', color: PRIMARY },
   modalBody: { padding: 16, paddingBottom: 32 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 6 },
   input: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#B7BDC9',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#0f172a',
+    color: '#FFFFFF',
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },

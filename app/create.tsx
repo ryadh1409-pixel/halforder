@@ -44,7 +44,7 @@ export default function CreateTabDisabledScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#06080C',
+          backgroundColor: '#09090B',
           alignItems: 'center',
           justifyContent: 'center',
           padding: 24,
@@ -52,7 +52,7 @@ export default function CreateTabDisabledScreen() {
       >
         <Text
           style={{
-            color: '#9CA3AF',
+            color: '#7D8493',
             fontSize: 12,
             fontWeight: '700',
             textAlign: 'center',
@@ -65,7 +65,7 @@ export default function CreateTabDisabledScreen() {
         </Text>
         <Text
           style={{
-            color: '#F8FAFC',
+            color: '#FFFFFF',
             fontSize: 22,
             fontWeight: '800',
             textAlign: 'center',
@@ -82,14 +82,14 @@ export default function CreateTabDisabledScreen() {
               height: 160,
               borderRadius: 16,
               marginTop: 20,
-              backgroundColor: '#1a1f28',
+              backgroundColor: '#1E2230',
             }}
             resizeMode="cover"
           />
         ) : null}
         <Text
           style={{
-            color: '#34D399',
+            color: '#22C55E',
             marginTop: 20,
             fontSize: 18,
             fontWeight: '700',
@@ -147,7 +147,7 @@ export default function CreateTabDisabledScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#06080C',
+          backgroundColor: '#09090B',
           alignItems: 'center',
           justifyContent: 'center',
           padding: 24,
@@ -155,7 +155,7 @@ export default function CreateTabDisabledScreen() {
       >
         <Text
           style={{
-            color: '#9CA3AF',
+            color: '#7D8493',
             fontSize: 12,
             fontWeight: '700',
             textAlign: 'center',
@@ -168,7 +168,7 @@ export default function CreateTabDisabledScreen() {
         </Text>
         <Text
           style={{
-            color: '#F8FAFC',
+            color: '#FFFFFF',
             fontSize: 22,
             fontWeight: '800',
             textAlign: 'center',
@@ -178,7 +178,7 @@ export default function CreateTabDisabledScreen() {
         </Text>
         <Text
           style={{
-            color: '#34D399',
+            color: '#22C55E',
             marginTop: 16,
             fontSize: 18,
             fontWeight: '700',
@@ -229,7 +229,7 @@ export default function CreateTabDisabledScreen() {
     <View
       style={{
         flex: 1,
-        backgroundColor: '#06080C',
+        backgroundColor: '#09090B',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
@@ -237,7 +237,7 @@ export default function CreateTabDisabledScreen() {
     >
       <Text
         style={{
-          color: '#F8FAFC',
+          color: '#FFFFFF',
           fontSize: 22,
           fontWeight: '800',
           textAlign: 'center',

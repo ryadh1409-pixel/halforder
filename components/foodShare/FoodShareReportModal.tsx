@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   title: { fontSize: 20, fontWeight: '800', color: '#FFF' },
-  sub: { fontSize: 14, color: 'rgba(255,255,255,0.65)', lineHeight: 20, marginTop: 6, marginBottom: 12 },
+  sub: { fontSize: 14, color: '#B7BDC9', lineHeight: 20, marginTop: 6, marginBottom: 12 },
   scroll: { maxHeight: 360 },
   chip: {
     borderWidth: 1,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     marginTop: 8,
     marginBottom: 6,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     fontWeight: '700',
     fontSize: 12,
     textTransform: 'uppercase',
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   err: { color: '#FB7185', fontSize: 14, marginTop: 4 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 16, justifyContent: 'flex-end' },
   secondaryBtn: { paddingVertical: 12, paddingHorizontal: 8 },
-  secondaryTxt: { color: 'rgba(255,255,255,0.75)', fontWeight: '700', fontSize: 16 },
+  secondaryTxt: { color: '#B7BDC9', fontWeight: '700', fontSize: 16 },
   primaryBtn: {
     backgroundColor: '#7DFFB8',
     paddingVertical: 12,
@@ -183,5 +183,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnOff: { opacity: 0.6 },
-  primaryTxt: { color: '#0A0A0A', fontWeight: '800', fontSize: 16 },
+  primaryTxt: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
 });

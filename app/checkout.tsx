@@ -161,7 +161,7 @@ export default function CheckoutScreen() {
       <View style={styles.center}>
         {(phase === 'loading' || phase === 'paying') && (
           <>
-            <ActivityIndicator size="large" color="#16A34A" />
+            <ActivityIndicator size="large" color="#22C55E" />
             <Text style={styles.hint}>
               {phase === 'paying'
                 ? message || 'Complete payment in the payment sheet…'
@@ -171,7 +171,7 @@ export default function CheckoutScreen() {
         )}
         {phase === 'confirming' && (
           <>
-            <ActivityIndicator size="large" color="#16A34A" />
+            <ActivityIndicator size="large" color="#22C55E" />
             <Text style={styles.title}>Confirming payment</Text>
             <Text style={styles.sub}>{confirmingHint}</Text>
             {timedOut && orderIdTrimmed ? (
@@ -218,13 +218,13 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
-  hint: { marginTop: 16, color: '#64748B', fontWeight: '600', textAlign: 'center' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0F172A', textAlign: 'center' },
+  hint: { marginTop: 16, color: '#7D8493', fontWeight: '600', textAlign: 'center' },
+  title: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
   sub: {
     marginTop: 10,
-    color: '#64748B',
+    color: '#7D8493',
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 22,
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 24,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,

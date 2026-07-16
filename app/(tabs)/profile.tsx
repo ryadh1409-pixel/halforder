@@ -235,20 +235,20 @@ type Palette = {
 function useProfilePalette(): Palette {
   return useMemo(
     () => ({
-      bg: '#000000',
-      surface: '#1C1C1E',
-      surfaceMuted: '#2C2C2E',
+      bg: '#09090B',
+      surface: '#171923',
+      surfaceMuted: '#1E2230',
       text: '#FFFFFF',
-      textSecondary: 'rgba(255,255,255,0.65)',
-      textTertiary: 'rgba(255,255,255,0.42)',
-      border: 'rgba(255,255,255,0.12)',
-      inputBg: '#141414',
+      textSecondary: '#B7BDC9',
+      textTertiary: '#7D8493',
+      border: 'rgba(255,255,255,0.08)',
+      inputBg: '#1C2030',
       chipBg: 'rgba(255,255,255,0.08)',
-      primary: '#FF6B00',
+      primary: '#FF6B35',
       onPrimary: '#FFFFFF',
-      danger: '#F87171',
-      success: '#34D399',
-      star: '#FFD60A',
+      danger: '#EF4444',
+      success: '#22C55E',
+      star: '#F59E0B',
     }),
     [],
   );
@@ -1813,7 +1813,7 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     },
     chipActive: {
       borderColor: pal.primary,
-      backgroundColor: isDarkMode ? 'rgba(255,122,0,0.15)' : tc.primaryLight,
+      backgroundColor: isDarkMode ? 'rgba(255,107,53,0.18)' : tc.primaryLight,
     },
     chipText: {
       color: pal.textSecondary,
@@ -1899,7 +1899,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   legalLinkWeb: {
-    color: '#9CA3AF',
+    color: '#7D8493',
     textDecorationLine: 'underline',
     fontSize: 12,
     fontWeight: '600',

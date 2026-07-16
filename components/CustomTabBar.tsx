@@ -204,7 +204,7 @@ function CustomTabBar(props: CustomTabBarProps) {
   return (
     <View style={[styles.outer, { bottom: Math.max(14, insets.bottom + 4) }]}>
       {Platform.OS === 'ios' ? (
-        <BlurView intensity={92} tint="light" style={styles.blurFill} />
+        <BlurView intensity={92} tint="dark" style={styles.blurFill} />
       ) : null}
       <View
         style={[
@@ -244,12 +244,12 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: 'rgba(255,255,255,0.08)',
     ...platformElevation({
-      web: '0px 12px 40px rgba(0, 0, 0, 0.14)',
+      web: '0px 12px 40px rgba(0, 0, 0, 0.35)',
       ios: {
         shadowColor: '#000',
-        shadowOpacity: 0.14,
+        shadowOpacity: 0.35,
         shadowOffset: { width: 0, height: 12 },
         shadowRadius: 28,
       },
@@ -258,12 +258,13 @@ const styles = StyleSheet.create({
   },
   blurFill: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,17,24,0.82)',
   },
   androidFill: {
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: 'rgba(15,17,24,0.82)',
   },
   webFill: {
-    backgroundColor: 'rgba(255,255,255,0.88)',
+    backgroundColor: 'rgba(15,17,24,0.82)',
     backdropFilter: 'blur(20px)' as never,
   },
   container: {
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconSlotActive: {
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   label: {
     fontSize: 11,

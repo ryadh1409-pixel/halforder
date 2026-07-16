@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { AppTextInput } from './AppTextInput';
 
-const BG = '#f8fafc';
+const BG = '#FFFFFF';
 const CARD = '#ffffff';
 const TEXT = '#0f172a';
 const MUTED = '#64748b';
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 16,
     marginBottom: 14,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   input: {
     backgroundColor: INPUT_BG,

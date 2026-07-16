@@ -22,7 +22,7 @@ import { useAuth } from '../services/AuthContext';
 import { startOnboarding } from '../services/stripeConnect';
 import { alertFriendly } from '../utils/friendlyAlert';
 
-const BG = '#0B0F14';
+const BG = '#09090B';
 const { width } = Dimensions.get('window');
 
 const GREEN_GRADIENT = ['#1B5E20', '#2E7D32', '#4CAF50'] as const;
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
   },
   ctaPress: {
     flex: 1,

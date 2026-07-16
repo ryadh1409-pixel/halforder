@@ -3,7 +3,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, S
 import { Image as ExpoImage } from 'expo-image';
 import { AppTextInput } from '../AppTextInput';
 
-const BG = '#f8fafc';
+const BG = '#FFFFFF';
 const CARD = '#ffffff';
 const TEXT = '#0f172a';
 const MUTED = '#64748b';
@@ -254,14 +254,14 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 16,
     marginBottom: 14,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   previewPlaceholder: {
     width: '100%',
     height: 160,
     borderRadius: 16,
     marginBottom: 14,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,

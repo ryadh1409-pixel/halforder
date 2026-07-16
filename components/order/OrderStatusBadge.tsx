@@ -14,7 +14,7 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }) {
 const styles = StyleSheet.create({
   badge: {
     borderRadius: 999,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#1E2230',
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignSelf: 'flex-start',

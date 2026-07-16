@@ -206,7 +206,7 @@ export default function CartScreen() {
       <SafeAreaView style={styles.screen}>
         <AppHeader title="Cart" />
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color="#16A34A" />
+          <ActivityIndicator size="large" color="#22C55E" />
         </View>
       </SafeAreaView>
     );
@@ -297,14 +297,14 @@ export default function CartScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingBottom: 120 },
   setupCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(245,158,11,0.14)',
     padding: 12,
     marginBottom: 12,
   },
@@ -323,15 +323,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   setupButtonText: { color: '#FFFFFF', fontWeight: '800' },
-  title: { color: '#0F172A', fontSize: 30, fontWeight: '800', marginBottom: 12 },
-  emptyCard: { borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', padding: 16 },
-  emptyTitle: { color: '#64748B', fontWeight: '700' },
-  emptySubTitle: { color: '#94A3B8', fontWeight: '600', marginTop: 4 },
+  title: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginBottom: 12 },
+  emptyCard: { borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#09090B', padding: 16 },
+  emptyTitle: { color: '#7D8493', fontWeight: '700' },
+  emptySubTitle: { color: '#7D8493', fontWeight: '600', marginTop: 4 },
   card: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#09090B',
     padding: 12,
     marginBottom: 10,
     flexDirection: 'row',
@@ -342,31 +342,31 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 10,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   lineThumbPh: { backgroundColor: '#f1f5f9' },
   lineBody: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { color: '#0F172A', fontWeight: '700', flex: 1, paddingRight: 8 },
-  price: { color: '#16A34A', fontWeight: '800' },
+  name: { color: '#FFFFFF', fontWeight: '700', flex: 1, paddingRight: 8 },
+  price: { color: '#22C55E', fontWeight: '800' },
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#09090B',
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  total: { color: '#0F172A', fontWeight: '800', fontSize: 16 },
+  total: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
   placeButton: {
     marginLeft: 'auto',
     height: 42,
     borderRadius: 10,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',

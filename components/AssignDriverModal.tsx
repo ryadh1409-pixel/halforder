@@ -48,9 +48,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: 16,
   },
-  card: { borderRadius: 16, backgroundColor: '#FFFFFF', padding: 16 },
-  title: { color: '#0F172A', fontSize: 20, fontWeight: '800', marginBottom: 12 },
-  hint: { color: '#64748B', fontWeight: '600', marginBottom: 12 },
+  card: { borderRadius: 16, backgroundColor: '#09090B', padding: 16 },
+  title: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 12 },
+  hint: { color: '#7D8493', fontWeight: '600', marginBottom: 12 },
   closeButton: { marginTop: 6, alignSelf: 'flex-end', paddingHorizontal: 10, height: 34, justifyContent: 'center' },
-  closeText: { color: '#64748B', fontWeight: '700' },
+  closeText: { color: '#7D8493', fontWeight: '700' },
 });

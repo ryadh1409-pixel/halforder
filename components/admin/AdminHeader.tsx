@@ -51,7 +51,7 @@ export function AdminHeader({
           paddingTop: Math.max(insets.top, 10),
           ...Platform.select({
             ios: {
-              shadowColor: '#0f172a',
+              shadowColor: '#09090B',
               shadowOffset: { width: 0, height: 1 },
               shadowOpacity: 0.08,
               shadowRadius: 6,
@@ -80,7 +80,7 @@ export function AdminHeader({
             accessibilityRole="button"
             accessibilityLabel="Home"
           >
-            <Ionicons name="home-outline" size={20} color="#0f172a" />
+            <Ionicons name="home-outline" size={20} color="#FFFFFF" />
             <Text style={styles.homeLabel}>Home</Text>
           </Pressable>
         ) : (
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(15, 23, 42, 0.1)',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#09090B',
   },
   toolbar: {
     flexDirection: 'row',
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   homePlaceholder: { width: 88 },
   pressed: { opacity: 0.72 },
   backText: { fontSize: 16, color: C.primary, fontWeight: '600' },
-  homeLabel: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  homeLabel: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   title: { fontSize: 22, fontWeight: '700', color: C.text },
   sub: { fontSize: 14, fontWeight: '500', color: C.textMuted, marginTop: 4 },
 });

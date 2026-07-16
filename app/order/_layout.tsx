@@ -13,7 +13,7 @@ export default function OrderLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#06080C' },
+        contentStyle: { backgroundColor: '#09090B' },
       }}
     />
   );

@@ -685,7 +685,7 @@ export default function ChatScreen() {
               accessibilityRole="button"
               accessibilityLabel="Safety, report, and legal"
             >
-              <MaterialIcons name="more-vert" size={26} color="#94A3B8" />
+              <MaterialIcons name="more-vert" size={26} color="#7D8493" />
             </TouchableOpacity>
           </View>
           <Text style={styles.ugcNotice}>
@@ -875,7 +875,7 @@ export default function ChatScreen() {
           ListEmptyComponent={
             introLoading ? (
               <View style={styles.introPlaceholder}>
-                <ActivityIndicator size="small" color="#6B7280" />
+                <ActivityIndicator size="small" color="#7D8493" />
               </View>
             ) : null
           }
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   screenTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.3,
@@ -1086,12 +1086,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   quickChipText: {
-    color: '#E2E8F0',
+    color: 'rgba(255,255,255,0.1)',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   suggestedOrderTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -1173,7 +1173,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorText: {
-    color: '#FCA5A5',
+    color: '#EF4444',
     paddingHorizontal: 14,
     marginBottom: 8,
     fontSize: 13,
@@ -1244,17 +1244,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   growthSubtitle: {
-    color: '#9CA3AF',
+    color: '#7D8493',
     fontSize: 12,
     marginTop: 8,
   },
   growthAi: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
   },
-  growthEmpty: { color: '#9CA3AF', fontSize: 13 },
+  growthEmpty: { color: '#7D8493', fontSize: 13 },
   growthErrorCard: {
     borderColor: 'rgba(248, 113, 113, 0.45)',
   },
@@ -1266,7 +1266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
   },
-  growthRetryBtnText: { color: '#FECACA', fontWeight: '700', fontSize: 13 },
+  growthRetryBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
   growthSkeletonRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
   },
@@ -1322,7 +1322,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   guidedChipText: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },

@@ -83,13 +83,13 @@ export function MarketplaceDeliveryActionBar({
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
-  hint: { color: '#94A3B8', fontWeight: '600', fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  hint: { color: '#7D8493', fontWeight: '600', fontSize: 13, lineHeight: 18, textAlign: 'center' },
   btn: {
     minHeight: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     paddingHorizontal: 16,
   },
   disabled: { opacity: 0.6 },

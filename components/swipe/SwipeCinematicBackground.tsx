@@ -7,7 +7,7 @@ function SwipeCinematicBackgroundInner() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient
-        colors={['#0a0c12', '#12151f', '#1a1028', '#0a0c12']}
+        colors={['#09090B', '#111217', '#111217', '#09090B']}
         locations={[0, 0.35, 0.7, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
     width: '60%',
     height: 200,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 90, 60, 0.12)',
+    backgroundColor: 'rgba(255, 107, 53, 0.14)',
   },
   glowBottom: {
     position: 'absolute',
@@ -36,6 +36,6 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 999,
-    backgroundColor: 'rgba(6, 193, 103, 0.1)',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
 });

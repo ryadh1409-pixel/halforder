@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   driverPhone: {
     marginTop: 6,
-    color: '#9CA3AF',
+    color: '#7D8493',
     fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnText: { color: '#E5E7EB', fontWeight: '700', fontSize: 15 },
+  btnText: { color: 'rgba(255,255,255,0.1)', fontWeight: '700', fontSize: 15 },
   signOutBtn: {
     marginTop: 12,
     height: 48,
@@ -200,5 +200,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  signOutText: { color: '#FCA5A5', fontWeight: '700', fontSize: 15 },
+  signOutText: { color: '#EF4444', fontWeight: '700', fontSize: 15 },
 });

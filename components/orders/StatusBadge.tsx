@@ -19,7 +19,7 @@ function statusTone(status: OrderStatus): { bg: string; fg: string } {
     case 'rejected':
       return { bg: '#FEE2E2', fg: '#991B1B' };
     default:
-      return { bg: '#E2E8F0', fg: '#334155' };
+      return { bg: '#B7BDC9', fg: '#334155' };
   }
 }
 

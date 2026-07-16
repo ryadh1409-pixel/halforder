@@ -53,19 +53,19 @@ export default function OrderScreen({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   content: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { color: '#0F172A', fontSize: 28, fontWeight: '800', marginBottom: 12 },
-  meta: { color: '#64748B', fontSize: 15, fontWeight: '600', marginBottom: 6 },
+  title: { color: '#FFFFFF', fontSize: 28, fontWeight: '800', marginBottom: 12 },
+  meta: { color: '#7D8493', fontSize: 15, fontWeight: '600', marginBottom: 6 },
   payButton: {
     marginTop: 16,
     height: 52,
     borderRadius: 12,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     alignItems: 'center',
     justifyContent: 'center',
   },
   payButtonDisabled: { opacity: 0.65 },
   payButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
-  errorText: { marginTop: 12, color: '#DC2626', fontWeight: '700' },
+  errorText: { marginTop: 12, color: '#EF4444', fontWeight: '700' },
 });

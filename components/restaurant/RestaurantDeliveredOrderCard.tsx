@@ -82,8 +82,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
+    borderColor: '#B7BDC9',
+    backgroundColor: '#09090B',
     padding: 14,
     marginBottom: 10,
   },
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  orderNumber: { fontSize: 16, fontWeight: '900', color: '#0f172a' },
+  orderNumber: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
   amount: { fontSize: 16, fontWeight: '900', color: '#16a34a' },
   metaRow: {
     flexDirection: 'row',
@@ -107,6 +107,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    color: '#B7BDC9',
   },
 });

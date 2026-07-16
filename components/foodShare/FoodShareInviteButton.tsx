@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 13,
     lineHeight: 20,
-    color: 'rgba(255,255,255,0.65)',
+    color: '#B7BDC9',
     marginBottom: 14,
   },
   cta: {

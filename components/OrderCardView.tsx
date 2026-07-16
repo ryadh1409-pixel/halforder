@@ -149,7 +149,7 @@ export function OrderCardView({
             <View style={styles.heartCol}>
               {isMatched ? (
                 <LinearGradient
-                  colors={['#34D399', '#10B981']}
+                  colors={['#22C55E', '#10B981']}
                   style={styles.heartBubble}
                 >
                   <MaterialIcons name="favorite" size={22} color="#052E1A" />
@@ -228,10 +228,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusDotOn: {
-    backgroundColor: '#34D399',
+    backgroundColor: '#22C55E',
   },
   statusDotPending: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#F59E0B',
   },
   statusLabel: {
     color: 'rgba(226,232,240,0.85)',
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
-    backgroundColor: 'rgba(52,211,153,0.18)',
+    backgroundColor: 'rgba(34,197,94,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(52,211,153,0.35)',
   },
@@ -338,10 +338,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(251,191,36,0.12)',
     borderWidth: 2,
-    borderColor: 'rgba(251,191,36,0.35)',
+    borderColor: 'rgba(245,158,11,0.35)',
   },
   headline: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '800',
     textAlign: 'center',
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     textAlign: 'center',
-    color: 'rgba(148,163,184,0.95)',
+    color: '#7D8493',
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '500',

@@ -93,14 +93,14 @@ const styles = StyleSheet.create({
   placeholderTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#FFFFFF',
   },
-  sub: { fontSize: 14, color: '#334155', fontWeight: '600' },
+  sub: { fontSize: 14, color: '#B7BDC9', fontWeight: '600' },
   muted: { fontSize: 12, color: '#64748b' },
   eta: { fontSize: 13, color: '#0f766e', fontWeight: '700' },
   row: { marginTop: 4 },
   label: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
-  mono: { fontSize: 12, color: '#0f172a', fontFamily: 'monospace' },
+  mono: { fontSize: 12, color: '#FFFFFF', fontFamily: 'monospace' },
   btn: {
     marginTop: 12,
     alignSelf: 'flex-start',

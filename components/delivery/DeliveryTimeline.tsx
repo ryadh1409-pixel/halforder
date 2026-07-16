@@ -39,10 +39,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#334155',
-    backgroundColor: '#111827',
+    backgroundColor: '#171923',
     padding: 14,
   },
-  title: { color: '#F8FAFC', fontWeight: '800', marginBottom: 8 },
+  title: { color: '#FFFFFF', fontWeight: '800', marginBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   dot: {
     width: 11,
@@ -52,6 +52,6 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   dotDone: { backgroundColor: '#22C55E' },
-  label: { color: '#94A3B8', fontWeight: '600' },
-  labelDone: { color: '#F8FAFC', fontWeight: '800' },
+  label: { color: '#7D8493', fontWeight: '600' },
+  labelDone: { color: '#FFFFFF', fontWeight: '800' },
 });

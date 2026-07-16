@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     padding: 16,
     justifyContent: 'center',
   },
-  title: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  title: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 8 },
   meta: { fontSize: 13, color: '#64748b', marginBottom: 8 },
-  addr: { fontSize: 14, color: '#0f172a', fontWeight: '600' },
+  addr: { fontSize: 14, color: '#FFFFFF', fontWeight: '600' },
 });

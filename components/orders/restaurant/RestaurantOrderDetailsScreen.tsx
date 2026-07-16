@@ -173,7 +173,7 @@ export function RestaurantOrderDetailsScreen({ order }: { order: RestaurantOrder
               disabled={busy}
               onPress={() => void runKitchen('accept', 'Order accepted')}
             >
-              {busy ? <ActivityIndicator color="#0f172a" /> : <Text style={styles.acceptText}>Accept order</Text>}
+              {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.acceptText}>Accept order</Text>}
             </Pressable>
           ) : null}
 
@@ -249,13 +249,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.35)',
+    borderColor: 'rgba(245,158,11,0.35)',
     backgroundColor: '#1c1410',
   },
   kicker: { color: '#fcd34d', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-  title: { color: '#fff7ed', fontWeight: '900', fontSize: 26, marginTop: 6 },
+  title: { color: 'rgba(245,158,11,0.14)', fontWeight: '900', fontSize: 26, marginTop: 6 },
   status: { color: 'rgba(254,243,199,0.85)', fontWeight: '700', marginTop: 8 },
-  timer: { color: '#fde68a', fontWeight: '800', marginTop: 10, fontSize: 18 },
+  timer: { color: '#F59E0B', fontWeight: '800', marginTop: 10, fontSize: 18 },
   timerMuted: { color: 'rgba(253,230,138,0.55)', marginTop: 10, fontWeight: '600' },
   card: {
     marginTop: 14,
@@ -278,10 +278,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251,191,36,0.45)',
     alignItems: 'center',
   },
-  outlineBtnText: { color: '#fde68a', fontWeight: '800' },
+  outlineBtnText: { color: '#F59E0B', fontWeight: '800' },
   actions: { marginTop: 18, gap: 12 },
   acceptBtn: {
-    backgroundColor: '#fbbf24',
+    backgroundColor: '#F59E0B',
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: 'center',
@@ -295,16 +295,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(248,113,113,0.12)',
   },
-  rejectText: { color: '#fecaca', fontWeight: '800', fontSize: 15 },
+  rejectText: { color: '#EF4444', fontWeight: '800', fontSize: 15 },
   secondaryBtn: {
     paddingVertical: 16,
     borderRadius: 14,
     backgroundColor: '#422006',
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.35)',
+    borderColor: 'rgba(245,158,11,0.35)',
     alignItems: 'center',
   },
-  secondaryText: { color: '#fde68a', fontWeight: '900', fontSize: 16 },
+  secondaryText: { color: '#F59E0B', fontWeight: '900', fontSize: 16 },
   readyBtn: {
     paddingVertical: 18,
     borderRadius: 16,

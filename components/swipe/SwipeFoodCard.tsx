@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#06C167',
+    backgroundColor: '#22C55E',
   },
   liveTxt: { fontSize: 12, fontWeight: '800', color: '#FFF' },
   body: {
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   restaurant: {
     fontSize: 13,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.75)',
+    color: '#B7BDC9',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 6,
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
+    color: '#B7BDC9',
     lineHeight: 18,
   },
   original: {
@@ -170,6 +170,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
+    color: '#B7BDC9',
   },
 });

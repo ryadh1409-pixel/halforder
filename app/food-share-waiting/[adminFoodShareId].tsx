@@ -217,7 +217,7 @@ export default function FoodShareWaitingScreen() {
       <SafeAreaView style={styles.safe}>
         <SwipeCinematicBackground />
         <View style={[styles.centered, styles.pad]}>
-          <Ionicons name="alert-circle-outline" size={40} color="#F87171" />
+          <Ionicons name="alert-circle-outline" size={40} color="#EF4444" />
           <Text style={styles.title}>Unable to load</Text>
           <Text style={styles.hint}>{error ?? 'Meal share not found.'}</Text>
           <Pressable style={styles.primaryBtn} onPress={handleBackToSwipe}>
@@ -233,7 +233,7 @@ export default function FoodShareWaitingScreen() {
       <SafeAreaView style={styles.safe}>
         <SwipeCinematicBackground />
         <View style={[styles.centered, styles.pad]}>
-          <Ionicons name="close-circle-outline" size={40} color="rgba(255,255,255,0.5)" />
+          <Ionicons name="close-circle-outline" size={40} color="#B7BDC9" />
           <Text style={styles.title}>Request cancelled</Text>
           <Text style={styles.hint}>You are no longer waiting for a partner on this meal.</Text>
           <Pressable style={styles.primaryBtn} onPress={handleBackToSwipe}>
@@ -356,7 +356,7 @@ function CostRow({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   hint: { color: c.textSecondary, fontSize: 14, textAlign: 'center' },
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   restaurant: {
     fontSize: 14,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginBottom: 16,
     textTransform: 'uppercase',
   },
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 20,
     marginBottom: 16,
-    backgroundColor: '#1a2030',
+    backgroundColor: '#1E2230',
   },
   heroPh: { opacity: 0.5 },
   statusPill: {
@@ -410,25 +410,25 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#F59E0B',
   },
   statusText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#FDE68A',
+    color: '#F59E0B',
   },
   glass: {
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   section: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     marginBottom: 12,
     letterSpacing: 0.4,
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-  costLabel: { fontSize: 14, color: 'rgba(255,255,255,0.65)', flex: 1 },
+  costLabel: { fontSize: 14, color: '#B7BDC9', flex: 1 },
   costValue: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   costValueBold: { fontSize: 16, fontWeight: '900' },
   costMono: { fontSize: 11, fontFamily: 'monospace' },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   infoNote: {
     fontSize: 13,
     lineHeight: 20,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginBottom: 20,
   },
   primaryBtn: {
@@ -470,9 +470,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: 'rgba(248,113,113,0.45)',
-    backgroundColor: 'rgba(248,113,113,0.08)',
+    backgroundColor: 'rgba(239,68,68,0.14)',
   },
-  outlineBtnText: { color: '#FCA5A5', fontSize: 15, fontWeight: '800' },
+  outlineBtnText: { color: '#EF4444', fontSize: 15, fontWeight: '800' },
   secondaryBtn: {
     borderRadius: 16,
     paddingVertical: 14,

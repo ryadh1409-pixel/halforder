@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     borderRadius: theme.radius.lg,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#B7BDC9',
   },
   heroPlaceholder: {
     alignItems: 'center',

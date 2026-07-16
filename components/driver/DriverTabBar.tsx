@@ -65,6 +65,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  label: { color: '#9CA3AF', fontSize: 11, fontWeight: '700' },
+  label: { color: '#7D8493', fontSize: 11, fontWeight: '700' },
   labelFocused: { color: '#00C853' },
 });

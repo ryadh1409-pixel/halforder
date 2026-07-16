@@ -21,7 +21,7 @@ const VISIBILITY_MS = 3000;
 
 const cardBase: ViewStyle = {
   width: '90%',
-  backgroundColor: '#111111',
+  backgroundColor: '#171923',
   borderLeftWidth: 4,
   padding: 14,
   borderRadius: 12,
@@ -53,10 +53,10 @@ export const toastConfig: ToastConfig = {
     </View>
   ),
   error: ({ text2 }) => (
-    <View style={[cardBase, { borderLeftColor: '#ff3b30' }]}>
+    <View style={[cardBase, { borderLeftColor: '#EF4444' }]}>
       <Text
         style={{
-          color: '#ff3b30',
+          color: '#EF4444',
           fontWeight: 'bold',
           marginBottom: 4,
         }}
@@ -67,7 +67,7 @@ export const toastConfig: ToastConfig = {
     </View>
   ),
   info: ({ text1, text2 }) => (
-    <View style={[cardBase, { borderLeftColor: '#9ca3af' }]}>
+    <View style={[cardBase, { borderLeftColor: '#7D8493' }]}>
       <Text
         style={{
           color: palette.primaryOrange,

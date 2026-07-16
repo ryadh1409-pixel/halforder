@@ -6,6 +6,7 @@ export {
   colors,
   gradients,
   layoutStyles,
+  ordersPalette,
   palette,
   radius,
   shadows,

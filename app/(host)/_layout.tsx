@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FFFFFF',
   },
   shellLoadingText: {
     marginTop: 12,
@@ -80,8 +80,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabBar: {
-    backgroundColor: '#fff',
-    borderTopColor: '#e2e8f0',
+    backgroundColor: '#09090B',
+    borderTopColor: '#B7BDC9',
     height: Platform.OS === 'ios' ? 88 : 64,
     paddingTop: 6,
   },

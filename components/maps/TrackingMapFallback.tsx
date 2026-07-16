@@ -37,11 +37,11 @@ export function TrackingMapFallbackCard({
 
 const styles = StyleSheet.create({
   root: { flex: 1, padding: 16, justifyContent: 'center' },
-  title: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 12 },
+  title: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   emoji: { fontSize: 22, marginTop: 2 },
   label: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
-  addr: { fontSize: 14, color: '#0f172a', fontWeight: '600', marginTop: 2 },
+  addr: { fontSize: 14, color: '#FFFFFF', fontWeight: '600', marginTop: 2 },
   divider: { height: 1, backgroundColor: 'rgba(15,23,42,0.08)', marginVertical: 10 },
   hint: { fontSize: 12, color: '#64748b', marginTop: 8, fontWeight: '500' },
 });

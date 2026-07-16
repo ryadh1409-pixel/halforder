@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
   },
   disabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 16 },

@@ -18,37 +18,37 @@ export const HUB_STATUS_META: Record<
   waiting_partner: {
     label: 'Waiting for partner',
     emoji: '🟡',
-    color: '#FBBF24',
+    color: '#F59E0B',
     priority: 1,
   },
   match_found: {
     label: 'Match found',
     emoji: '🔵',
-    color: '#60A5FA',
+    color: '#3B82F6',
     priority: 2,
   },
   awaiting_payment: {
     label: 'Awaiting payment',
     emoji: '🟣',
-    color: '#A78BFA',
+    color: '#3B82F6',
     priority: 3,
   },
   active_chat: {
     label: 'Active chat',
     emoji: '🟢',
-    color: '#34D399',
+    color: '#22C55E',
     priority: 4,
   },
   completed: {
     label: 'Completed',
     emoji: '⚫',
-    color: '#94A3B8',
+    color: '#7D8493',
     priority: 90,
   },
   cancelled: {
     label: 'Cancelled',
     emoji: '🔴',
-    color: '#F87171',
+    color: '#EF4444',
     priority: 99,
   },
 };

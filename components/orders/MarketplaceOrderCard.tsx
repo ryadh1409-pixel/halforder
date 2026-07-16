@@ -92,7 +92,7 @@ export function MarketplaceOrderCard({
             <Image source={{ uri: row.restaurant.image }} style={styles.img} />
           ) : (
             <View style={styles.imgPlaceholder}>
-              <MaterialIcons name="restaurant" size={28} color="rgba(255,255,255,0.35)" />
+              <MaterialIcons name="restaurant" size={28} color="#7D8493" />
             </View>
           )}
         </View>
@@ -102,16 +102,16 @@ export function MarketplaceOrderCard({
           </Text>
           <View style={styles.pillRow}>
             <View style={styles.pill}>
-              <MaterialIcons name="schedule" size={13} color="#93C5FD" />
+              <MaterialIcons name="schedule" size={13} color="#3B82F6" />
               <Text style={styles.pillText}>{row.createdAtLabel}</Text>
             </View>
             <View style={styles.pill}>
-              <MaterialIcons name="people" size={13} color="#FBBF24" />
+              <MaterialIcons name="people" size={13} color="#F59E0B" />
               <Text style={styles.pillText}>{row.participantCount}</Text>
             </View>
           </View>
         </View>
-        <MaterialIcons name="chevron-right" size={22} color="rgba(255,255,255,0.35)" />
+        <MaterialIcons name="chevron-right" size={22} color="#7D8493" />
       </View>
 
       <View style={styles.statusRow}>
@@ -139,7 +139,7 @@ export function MarketplaceOrderCard({
 
       {row.deliveryAddress ? (
         <View style={styles.addrRow}>
-          <MaterialIcons name="location-on" size={16} color="#94A3B8" />
+          <MaterialIcons name="location-on" size={16} color="#7D8493" />
           <Text style={styles.addr} numberOfLines={2}>
             {formatAddress(row.deliveryAddress)}
           </Text>
@@ -167,7 +167,7 @@ export function MarketplaceOrderCard({
             }}
             style={styles.reportBtn}
           >
-            <MaterialIcons name="flag" size={14} color="#FCA5A5" />
+            <MaterialIcons name="flag" size={14} color="#EF4444" />
             <Text style={styles.reportText}>Report</Text>
           </Pressable>
         ) : (
@@ -182,26 +182,26 @@ export function MarketplaceOrderCard({
 function payBadgeStyle(p: string): object {
   switch (p) {
     case 'paid':
-      return { backgroundColor: 'rgba(52,211,153,0.18)', borderColor: 'rgba(52,211,153,0.45)' };
+      return { backgroundColor: 'rgba(34,197,94,0.16)', borderColor: 'rgba(34,197,94,0.4)' };
     case 'processing':
-      return { backgroundColor: 'rgba(251,191,36,0.14)', borderColor: 'rgba(251,191,36,0.35)' };
+      return { backgroundColor: 'rgba(245,158,11,0.14)', borderColor: 'rgba(245,158,11,0.35)' };
     case 'failed':
-      return { backgroundColor: 'rgba(248,113,113,0.14)', borderColor: 'rgba(248,113,113,0.35)' };
+      return { backgroundColor: 'rgba(239,68,68,0.14)', borderColor: 'rgba(239,68,68,0.35)' };
     default:
-      return { backgroundColor: 'rgba(148,163,184,0.12)', borderColor: 'rgba(148,163,184,0.28)' };
+      return { backgroundColor: 'rgba(125,132,147,0.16)', borderColor: 'rgba(125,132,147,0.28)' };
   }
 }
 
 function payBadgeTextStyle(p: string): object {
   switch (p) {
     case 'paid':
-      return { color: '#BBF7D0' };
+      return { color: '#22C55E' };
     case 'processing':
-      return { color: '#FDE68A' };
+      return { color: '#F59E0B' };
     case 'failed':
-      return { color: '#FECACA' };
+      return { color: '#EF4444' };
     default:
-      return { color: '#CBD5E1' };
+      return { color: '#7D8493' };
   }
 }
 
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    backgroundColor: '#11161F',
+    backgroundColor: '#171923',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     ...platformElevation({
@@ -231,12 +231,12 @@ const styles = StyleSheet.create({
   img: { width: '100%', height: '100%' },
   imgPlaceholder: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   topMain: { flex: 1 },
-  restaurantName: { color: '#F8FAFC', fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
+  restaurantName: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   pill: {
     flexDirection: 'row',
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.07)',
   },
-  pillText: { color: 'rgba(248,250,252,0.88)', fontSize: 12, fontWeight: '700' },
+  pillText: { color: '#B7BDC9', fontSize: 12, fontWeight: '700' },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   statusMain: {
     flex: 1,
-    color: '#E2E8F0',
+    color: '#B7BDC9',
     fontWeight: '800',
     fontSize: 15,
     textTransform: 'capitalize',
@@ -269,19 +269,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   payBadgeText: { fontWeight: '800', fontSize: 11 },
-  eta: { marginTop: 8, color: '#FDE68A', fontWeight: '700', fontSize: 13 },
-  driverLine: { marginTop: 6, color: 'rgba(148,163,184,0.95)', fontWeight: '600', fontSize: 13 },
-  preview: { marginTop: 10, color: 'rgba(226,232,240,0.72)', fontWeight: '600', fontSize: 13, lineHeight: 18 },
+  eta: { marginTop: 8, color: '#F59E0B', fontWeight: '700', fontSize: 13 },
+  driverLine: { marginTop: 6, color: '#7D8493', fontWeight: '600', fontSize: 13 },
+  preview: { marginTop: 10, color: '#B7BDC9', fontWeight: '600', fontSize: 13, lineHeight: 18 },
   addrRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10 },
-  addr: { flex: 1, color: 'rgba(148,163,184,0.95)', fontWeight: '600', fontSize: 13, lineHeight: 18 },
+  addr: { flex: 1, color: '#7D8493', fontWeight: '600', fontSize: 13, lineHeight: 18 },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 12,
   },
-  totalLabel: { color: 'rgba(148,163,184,0.95)', fontWeight: '700', fontSize: 13 },
-  totalVal: { color: '#F8FAFC', fontWeight: '900', fontSize: 18 },
+  totalLabel: { color: '#7D8493', fontWeight: '700', fontSize: 13 },
+  totalVal: { color: '#FFFFFF', fontWeight: '900', fontSize: 18 },
   progressWrap: { marginTop: 14 },
   footerRow: {
     flexDirection: 'row',
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   },
   openCue: {
     alignSelf: 'flex-end',
-    color: 'rgba(52,211,153,0.85)',
+    color: 'rgba(34,197,94,0.85)',
     fontWeight: '800',
     fontSize: 13,
   },
@@ -303,12 +303,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(248,113,113,0.08)',
+    backgroundColor: 'rgba(239,68,68,0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.22)',
+    borderColor: 'rgba(239,68,68,0.35)',
   },
   reportText: {
-    color: '#FCA5A5',
+    color: '#EF4444',
     fontSize: 12,
     fontWeight: '800',
   },

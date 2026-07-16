@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   stampLike: {
     right: 24,
-    borderColor: '#06C167',
+    borderColor: '#22C55E',
     transform: [{ rotate: '12deg' }],
   },
   stampNope: {
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   stampLikeTxt: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#06C167',
+    color: '#22C55E',
     letterSpacing: 2,
   },
   stampNopeTxt: {
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(6,193,103,0.18)',
     borderWidth: 1,
     borderColor: 'rgba(125,255,184,0.35)',
-    shadowColor: '#06C167',
+    shadowColor: '#22C55E',
     shadowOpacity: 0.35,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 15,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
+    color: '#B7BDC9',
     textAlign: 'center',
     lineHeight: 22,
   },

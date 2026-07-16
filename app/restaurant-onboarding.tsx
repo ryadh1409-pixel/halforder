@@ -126,7 +126,7 @@ export default function RestaurantOnboardingScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: '#171923',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#09090B',
     borderWidth: 1,
     borderColor: '#E7EBF3',
     padding: 24,
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   preparing: {
     marginTop: 16,
-    color: '#64748B',
+    color: '#7D8493',
     fontWeight: '600',
     textAlign: 'center',
   },

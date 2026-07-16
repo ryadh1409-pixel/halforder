@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
   headerLeft: { flex: 1 },
   headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   roleBadge: {
-    color: '#93C5FD',
+    color: '#3B82F6',
     fontWeight: '900',
     fontSize: 11,
     letterSpacing: 0.6,
@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
   onlineCardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   onlineCardText: { flex: 1 },
   onlineCardTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  onlineCardSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12, fontWeight: '600' },
+  onlineCardSub: { color: '#7D8493', marginTop: 2, fontSize: 12, fontWeight: '600' },
   onlineCardRight: {
     minWidth: 52,
     flexDirection: 'row',
@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
   },
   statCardMid: { backgroundColor: '#00C853' },
   statValue: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
-  statLabel: { color: '#9CA3AF', marginTop: 2, fontWeight: '600', fontSize: 11 },
+  statLabel: { color: '#7D8493', marginTop: 2, fontWeight: '600', fontSize: 11 },
   statLabelMid: { color: '#E7FBEA', marginTop: 2, fontWeight: '700', fontSize: 11 },
   activeSection: { marginBottom: 8 },
   sectionHeader: {
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
-  sectionCount: { color: '#9CA3AF', fontWeight: '700' },
+  sectionCount: { color: '#7D8493', fontWeight: '700' },
   stateCard: {
     backgroundColor: '#22223A',
     borderRadius: 14,
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stateTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
-  stateSub: { color: '#9CA3AF', marginTop: 6, textAlign: 'center', fontWeight: '600' },
+  stateSub: { color: '#7D8493', marginTop: 6, textAlign: 'center', fontWeight: '600' },
   orderCard: {
     backgroundColor: '#22223A',
     borderRadius: 14,
@@ -737,8 +737,8 @@ const styles = StyleSheet.create({
   brandFallbackText: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
   brandMeta: { marginLeft: 10, flex: 1 },
   restaurantName: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
-  timestamp: { color: '#9CA3AF', marginTop: 2, fontWeight: '600', fontSize: 12 },
-  timestampExpired: { color: '#FCA5A5' },
+  timestamp: { color: '#7D8493', marginTop: 2, fontWeight: '600', fontSize: 12 },
+  timestampExpired: { color: '#EF4444' },
   earningPill: {
     backgroundColor: '#00C853',
     borderRadius: 10,
@@ -750,8 +750,8 @@ const styles = StyleSheet.create({
   earningLabel: { color: '#D1FAE5', fontWeight: '700', fontSize: 10, marginTop: 2 },
   detailBlock: { marginBottom: 10 },
   detailTitle: { color: '#A3A3C2', fontWeight: '700', fontSize: 11, marginBottom: 3 },
-  detailValue: { color: '#E5E7EB', fontWeight: '600', marginTop: 2 },
-  metaLine: { color: '#9CA3AF', fontWeight: '600', marginTop: 3, fontSize: 12 },
+  detailValue: { color: 'rgba(255,255,255,0.1)', fontWeight: '600', marginTop: 2 },
+  metaLine: { color: '#7D8493', fontWeight: '600', marginTop: 3, fontSize: 12 },
   callBtn: {
     marginTop: 8,
     height: 34,

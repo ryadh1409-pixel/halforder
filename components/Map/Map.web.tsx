@@ -26,8 +26,8 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 10,
   },
-  text: { color: '#475569', fontWeight: '700' },
+  text: { color: '#B7BDC9', fontWeight: '700' },
 });

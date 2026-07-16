@@ -43,7 +43,7 @@ function NotificationRow({
         <Ionicons
           name={item.read ? 'notifications-outline' : 'notifications'}
           size={20}
-          color={item.read ? 'rgba(255,255,255,0.55)' : '#7DFFB8'}
+          color={item.read ? '#B7BDC9' : '#7DFFB8'}
         />
       </View>
       <View style={styles.rowBody}>
@@ -113,7 +113,7 @@ export default function InboxScreen() {
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name="notifications-off-outline" size={40} color="rgba(255,255,255,0.35)" />
+          <Ionicons name="notifications-off-outline" size={40} color="#7D8493" />
           <Text style={styles.emptyTitle}>All caught up</Text>
           <Text style={styles.emptyBody}>
             Match, chat, and order updates will appear here.
@@ -134,7 +134,7 @@ export default function InboxScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: '#FFF', fontWeight: '800', fontSize: 18 },
   emptyBody: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textAlign: 'center',
     lineHeight: 20,
     fontWeight: '600',
@@ -200,14 +200,14 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, minWidth: 0 },
   rowTitle: { color: '#FFF', fontWeight: '800', fontSize: 15 },
   rowBodyText: {
-    color: 'rgba(255,255,255,0.65)',
+    color: '#B7BDC9',
     marginTop: 4,
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
   },
   rowTime: {
-    color: 'rgba(255,255,255,0.4)',
+    color: '#7D8493',
     marginTop: 6,
     fontSize: 12,
     fontWeight: '600',

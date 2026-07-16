@@ -29,14 +29,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Auth stack dark theme — aligned with onboarding / app chrome */
 const AUTH = {
-  bg: '#0B0F14',
-  card: '#111827',
+  bg: '#09090B',
+  card: '#171923',
   text: '#FFFFFF',
-  textMuted: 'rgba(255,255,255,0.72)',
-  inputBg: '#1F2937',
-  inputBorder: '#374151',
-  placeholder: '#9CA3AF',
-  primary: '#F97316',
+  textMuted: '#B7BDC9',
+  inputBg: '#1C2030',
+  inputBorder: 'rgba(255,255,255,0.08)',
+  placeholder: '#7D8493',
+  primary: '#FF6B35',
 } as const;
 
 export default function LoginScreen() {
@@ -232,7 +232,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: AUTH.bg },
-  keyboardAvoid: { flex: 1, backgroundColor: '#0B0F14' },
+  keyboardAvoid: { flex: 1, backgroundColor: '#09090B' },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -269,13 +269,13 @@ const styles = StyleSheet.create({
   form: { width: '100%' },
   input: {
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
     fontSize: 16,
     color: '#FFFFFF',
-    backgroundColor: '#1F2937',
+    backgroundColor: '#1E2230',
     textAlign: 'left',
     writingDirection: 'ltr',
   },
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryBtnLoading: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: '#7D8493',
   },
   primaryBtnText: {
     color: '#FFFFFF',

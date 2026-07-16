@@ -39,12 +39,12 @@ export default function CheckoutCancelledScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#171923' },
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0F172A', textAlign: 'center' },
+  title: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
   sub: {
     marginTop: 10,
-    color: '#64748B',
+    color: '#7D8493',
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 22,
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 24,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#22C55E',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,

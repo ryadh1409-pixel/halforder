@@ -1010,7 +1010,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
                 style={styles.partnerChatCtaWrap}
               >
                 <LinearGradient
-                  colors={['#34D399', '#059669']}
+                  colors={['#22C55E', '#059669']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.partnerChatCta}
@@ -1205,7 +1205,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyText: { color: '#E5E7EB', fontSize: 16 },
+  emptyText: { color: 'rgba(255,255,255,0.1)', fontSize: 16 },
   skeletonGap: { marginBottom: 16 },
   skeletonGapLine: { marginBottom: 10 },
   backBtn: {
@@ -1220,7 +1220,7 @@ const styles = StyleSheet.create({
   backBtnText: { color: '#C7D2FE', fontWeight: '700' },
   content: { padding: 16, paddingBottom: 32 },
   image: { width: '100%', height: 260, borderRadius: 20, marginBottom: 14 },
-  foodName: { color: '#F8FAFC', fontSize: 28, fontWeight: '800' },
+  foodName: { color: '#FFFFFF', fontSize: 28, fontWeight: '800' },
   aiDescOrderWrap: {
     marginTop: 4,
     marginBottom: 4,
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   participantsLoadingText: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 13,
   },
   price: { color: '#6EE7B7', fontSize: 18, fontWeight: '700', marginTop: 6, marginBottom: 14 },
@@ -1259,8 +1259,8 @@ const styles = StyleSheet.create({
   hostAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1e293b' },
   hostAvatarPlaceholder: { borderWidth: 1, borderColor: '#334155' },
   hostTextCol: { flex: 1, gap: 2 },
-  hostLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  hostName: { color: '#F8FAFC', fontSize: 16, fontWeight: '800' },
+  hostLabel: { color: '#7D8493', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  hostName: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   timerRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -1286,7 +1286,7 @@ const styles = StyleSheet.create({
   chatNavButtonText: { color: '#7dd3fc', fontWeight: '800', fontSize: 16 },
   joinButton: {
     marginTop: 16,
-    backgroundColor: '#34D399',
+    backgroundColor: '#22C55E',
     borderRadius: 14,
     minHeight: 50,
     alignItems: 'center',
@@ -1310,7 +1310,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#4B1D24',
   },
-  blockButtonText: { color: '#FCA5A5', fontSize: 14, fontWeight: '800' },
+  blockButtonText: { color: '#EF4444', fontSize: 14, fontWeight: '800' },
   cancelledBanner: {
     marginTop: 12,
     padding: 12,
@@ -1319,7 +1319,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#7f1d1d',
   },
-  cancelledBannerText: { color: '#FECACA', fontWeight: '700', textAlign: 'center' },
+  cancelledBannerText: { color: '#EF4444', fontWeight: '700', textAlign: 'center' },
   sectionDivider: {
     height: 1,
     backgroundColor: '#232A35',
@@ -1390,13 +1390,13 @@ const styles = StyleSheet.create({
     borderColor: '#232A35',
   },
   emailModalTitle: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 8,
   },
   emailModalHint: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 13,
     marginBottom: 14,
     lineHeight: 18,
@@ -1407,7 +1407,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 16,
     marginBottom: 16,
   },
@@ -1420,7 +1420,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  emailModalCancelText: { color: '#94A3B8', fontWeight: '700' },
+  emailModalCancelText: { color: '#7D8493', fontWeight: '700' },
   emailModalSend: {
     backgroundColor: '#2563EB',
     paddingVertical: 10,
@@ -1439,7 +1439,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   matchedWithLabel: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -1468,26 +1468,26 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
   },
   partnerAvatarLetter: {
-    color: '#E2E8F0',
+    color: 'rgba(255,255,255,0.1)',
     fontSize: 28,
     fontWeight: '800',
   },
   partnerHeartBetween: {
-    color: '#34D399',
+    color: '#22C55E',
     fontSize: 22,
     fontWeight: '700',
     marginBottom: 28,
   },
   partnerDualName: {
     marginTop: 8,
-    color: '#F8FAFC',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
     maxWidth: 88,
   },
   partnerMeta: {
-    color: '#9CA3AF',
+    color: '#7D8493',
     fontSize: 14,
     textAlign: 'center',
     marginTop: 4,
@@ -1508,7 +1508,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   inviteMoreHint: {
-    color: '#94A3B8',
+    color: '#7D8493',
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
@@ -1535,7 +1535,7 @@ const styles = StyleSheet.create({
     borderColor: '#4B1D24',
   },
   primaryActionBtnText: { color: '#7dd3fc', fontWeight: '800', fontSize: 14 },
-  primaryActionBtnDangerText: { color: '#FCA5A5', fontWeight: '800', fontSize: 14 },
+  primaryActionBtnDangerText: { color: '#EF4444', fontWeight: '800', fontSize: 14 },
   secondaryActionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1545,9 +1545,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingBottom: 4,
   },
-  secondaryActionLink: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
-  secondaryDot: { color: '#475569', fontSize: 13 },
-  secondaryActionLinkDanger: { color: '#fca5a5', fontSize: 13, fontWeight: '600' },
+  secondaryActionLink: { color: '#7D8493', fontSize: 13, fontWeight: '600' },
+  secondaryDot: { color: '#B7BDC9', fontSize: 13 },
+  secondaryActionLinkDanger: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
 });
 
 export default HalfOrderDetailsScreen;

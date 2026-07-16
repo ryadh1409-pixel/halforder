@@ -19,7 +19,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: 'rgba(59,130,246,0.18)',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },

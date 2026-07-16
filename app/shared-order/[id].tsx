@@ -99,7 +99,7 @@ function Avatar({ participant }: { participant: SharedOrderParticipant }) {
           colors={
             participant.isCurrentUser
               ? ['#FF7A3D', '#FF3D6E']
-              : ['#06C167', '#02A8FF']
+              : ['#22C55E', '#02A8FF']
           }
           style={styles.avatar}
         >
@@ -424,7 +424,7 @@ function GlassCard({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#06080C' },
+  root: { flex: 1, backgroundColor: '#09090B' },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: 'rgba(255,255,255,0.7)', fontWeight: '700' },
   content: { padding: 18, paddingBottom: 24 },
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   personRole: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 3,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: 'rgba(6,193,103,0.12)',
   },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#06C167' },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
   liveTxt: { color: '#7DFFB8', fontSize: 12, fontWeight: '900' },
   cartRow: {
     flexDirection: 'row',
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   cartTitle: { color: '#FFF', fontSize: 16, fontWeight: '900' },
   cartMeta: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     fontSize: 13,
     fontWeight: '700',
     marginTop: 4,
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   muted: {
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 20,
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: '#06C167',
+    shadowColor: '#22C55E',
     shadowOpacity: 0.42,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 13,
     borderRadius: 999,
-    backgroundColor: '#FFF',
+    backgroundColor: '#09090B',
   },
   primaryTxt: { color: '#05070A', fontWeight: '900' },
 });

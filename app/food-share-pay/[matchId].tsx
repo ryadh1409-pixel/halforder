@@ -303,7 +303,7 @@ export default function FoodSharePayScreen() {
             <Ionicons
               name={partnerPaid ? 'checkmark-circle' : 'time-outline'}
               size={20}
-              color={partnerPaid ? '#7DFFB8' : '#FBBF24'}
+              color={partnerPaid ? '#7DFFB8' : '#F59E0B'}
             />
             <Text style={styles.partnerBannerTxt}>
               {partnerPaid
@@ -328,10 +328,10 @@ export default function FoodSharePayScreen() {
             onPress={() => void runPayment()}
           >
             {phase === 'paying' ? (
-              <ActivityIndicator color="#0A0A0A" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
-                <Ionicons name="lock-closed" size={18} color="#0A0A0A" />
+                <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
                 <Text style={styles.payBtnTxt}>
                   Pay {formatShareCurrency(breakdown.totalPerUser)} with Stripe
                 </Text>
@@ -347,7 +347,7 @@ export default function FoodSharePayScreen() {
             onPress={() => void handleCancelShare()}
           >
             {cancelling ? (
-              <ActivityIndicator color="#F87171" />
+              <ActivityIndicator color="#EF4444" />
             ) : (
               <Text style={styles.cancelLinkTxt}>Cancel & Go Back</Text>
             )}
@@ -372,7 +372,7 @@ function CostRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#06080C' },
+  safe: { flex: 1, backgroundColor: '#09090B' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   hint: { color: c.textSecondary, fontSize: 14 },
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   restaurant: {
     fontSize: 14,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     marginBottom: 16,
     textTransform: 'uppercase',
   },
@@ -406,21 +406,21 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 20,
     marginBottom: 16,
-    backgroundColor: '#1a2030',
+    backgroundColor: '#1E2230',
   },
   heroPh: { opacity: 0.5 },
   glass: {
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   section: {
     fontSize: 12,
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: '#B7BDC9',
     textTransform: 'uppercase',
     marginBottom: 12,
     letterSpacing: 0.4,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
-  costLabel: { color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
+  costLabel: { color: '#B7BDC9', fontWeight: '600' },
   costValue: { color: '#FFF', fontWeight: '800' },
   totalRow: {
     flexDirection: 'row',
@@ -448,14 +448,14 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 14,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     marginBottom: 16,
   },
   partnerBannerTxt: { flex: 1, color: '#FFF', fontWeight: '600', fontSize: 14 },
   payBtn: {
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#FFF',
+    backgroundColor: '#09090B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -463,20 +463,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   payBtnDisabled: { opacity: 0.7 },
-  payBtnTxt: { color: '#0A0A0A', fontWeight: '900', fontSize: 16 },
+  payBtnTxt: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
   cancelLink: {
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
     paddingVertical: 10,
   },
-  cancelLinkTxt: { color: '#F87171', fontWeight: '900', fontSize: 15 },
+  cancelLinkTxt: { color: '#EF4444', fontWeight: '900', fontSize: 15 },
   confirmBox: {
     alignItems: 'center',
     gap: 10,
     padding: 24,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(23,25,35,0.92)',
     marginTop: 8,
   },
   confirmTitle: { color: '#FFF', fontWeight: '800', fontSize: 16 },
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   secureNote: {
     marginTop: 16,
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.45)',
+    color: '#7D8493',
     fontSize: 12,
     lineHeight: 18,
   },
