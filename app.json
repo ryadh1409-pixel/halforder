@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F88355"
+      "backgroundColor": "#ffffff"
     },
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -225,7 +225,7 @@
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#F88355",
+        "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/app-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true,
@@ -266,9 +266,9 @@
           "image": "./assets/images/logo.png",
           "imageWidth": 280,
           "resizeMode": "contain",
-          "backgroundColor": "#F88355",
+          "backgroundColor": "#ffffff",
           "dark": {
-            "backgroundColor": "#F88355"
+            "backgroundColor": "#ffffff"
           }
         }
       ],
