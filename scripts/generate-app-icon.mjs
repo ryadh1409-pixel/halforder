@@ -1,5 +1,7 @@
 /**
- * HalfOrder app icon — minimal two hands sharing food (flat, App Store safe).
+ * HalfOrder app icon — regenerate all store / splash / favicon assets
+ * from the canonical branding image: assets/images/halforder-logo.png
+ *
  * Usage: npm run generate:app-icon
  */
 import fs from 'node:fs/promises';
@@ -14,100 +16,109 @@ const assetsRoot = join(root, 'assets');
 const assetsImages = join(assetsRoot, 'images');
 const iosOut = join(assetsRoot, 'icons', 'ios');
 
-const BG = '#4A90E2';
-const HAND = '#FFFFFF';
-const FOOD = '#FFBD59';
+/** Source of truth — uploaded HalfOrder branding (pizza / noodles). */
+const SOURCE = join(assetsImages, 'halforder-logo.png');
+
+/** Sampled from logo corner — adaptive / splash chrome. */
+const BG = '#F88355';
+
+async function squareFromSource(size, { transparent = false } = {}) {
+  const base = sharp(SOURCE).rotate().resize(size, size, {
+    fit: 'cover',
+    position: 'centre',
+  });
+  if (transparent) {
+    return base.ensureAlpha().png({ compressionLevel: 9 }).toBuffer();
+  }
+  return base
+    .flatten({ background: BG })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+async function writePng(file, buffer) {
+  await fs.mkdir(dirname(file), { recursive: true });
+  await fs.writeFile(file, buffer);
+}
 
 /**
- * ~155px margin — art stays inside squircle safe zone on 1024 canvas.
+ * Adaptive foreground: logo inset ~82% on transparent canvas (safe zone).
  */
-const GLYPH = `
-  <!-- Food: soft triangular “half share” (reads as pizza / offering) -->
-  <path fill="${FOOD}" d="M 512 322 Q 388 508 512 572 Q 636 508 512 322 Z"/>
+async function adaptiveForeground(size = 1024) {
+  const inset = Math.round(size * 0.82);
+  const glyph = await sharp(SOURCE)
+    .rotate()
+    .resize(inset, inset, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
 
-  <!-- Left hand: one cupped palm + three finger bars -->
-  <path fill="${HAND}" d="
-    M 268 588
-    C 242 520 256 432 322 392
-    C 382 358 448 392 468 452
-    C 476 488 462 528 432 552
-    C 412 566 396 578 388 608
-    C 376 652 334 676 292 662
-    C 252 648 248 616 268 588
-    Z"/>
-  <rect x="332" y="412" width="112" height="38" rx="19" transform="rotate(16 388 431)" fill="${HAND}"/>
-  <rect x="348" y="458" width="120" height="38" rx="19" transform="rotate(6 408 477)" fill="${HAND}"/>
-  <rect x="360" y="504" width="126" height="38" rx="19" transform="rotate(-4 423 523)" fill="${HAND}"/>
-
-  <!-- Right hand: mirrored -->
-  <g transform="translate(1024 0) scale(-1 1)">
-    <path fill="${HAND}" d="
-      M 268 588
-      C 242 520 256 432 322 392
-      C 382 358 448 392 468 452
-      C 476 488 462 528 432 552
-      C 412 566 396 578 388 608
-      C 376 652 334 676 292 662
-      C 252 648 248 616 268 588
-      Z"/>
-    <rect x="332" y="412" width="112" height="38" rx="19" transform="rotate(16 388 431)" fill="${HAND}"/>
-    <rect x="348" y="458" width="120" height="38" rx="19" transform="rotate(6 408 477)" fill="${HAND}"/>
-    <rect x="360" y="504" width="126" height="38" rx="19" transform="rotate(-4 423 523)" fill="${HAND}"/>
-  </g>
-`;
-
-function svgFull() {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <rect width="1024" height="1024" fill="${BG}"/>
-  ${GLYPH}
-</svg>`;
-}
-
-function svgForeground() {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <rect width="1024" height="1024" fill="none"/>
-  <g transform="translate(512 512) scale(0.82) translate(-512 -512)">
-    ${GLYPH}
-  </g>
-</svg>`;
-}
-
-async function pngFromSvg(svgString, size, file, opts = {}) {
-  await fs.mkdir(dirname(file), { recursive: true });
-  let pipeline = sharp(Buffer.from(svgString)).resize(size, size);
-  if (opts.flattenHex) {
-    pipeline = pipeline.flatten({ background: opts.flattenHex });
-  }
-  await pipeline.png({ compressionLevel: 9 }).toFile(file);
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: glyph, gravity: 'centre' }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
 }
 
 async function main() {
-  const full = svgFull();
-  const fg = svgForeground();
+  await fs.access(SOURCE);
 
-  await pngFromSvg(full, 1024, join(assetsRoot, 'icon.png'), { flattenHex: BG });
-  console.log('Wrote assets/icon.png (1024 × 1024, opaque)');
+  const full1024 = await squareFromSource(1024);
 
-  await pngFromSvg(full, 1024, join(assetsImages, 'icon.png'), {
-    flattenHex: BG,
-  });
-  console.log('Wrote assets/images/icon.png (1024 × 1024, opaque)');
+  await writePng(join(assetsRoot, 'icon.png'), full1024);
+  console.log('Wrote assets/icon.png (1024 × 1024)');
 
-  /** In-app + splash (`AppLogo`, expo-splash-screen) — same art as store icon. */
-  await pngFromSvg(full, 1024, join(assetsImages, 'logo.png'), {
-    flattenHex: BG,
-  });
-  console.log('Wrote assets/images/logo.png (splash / header)');
+  await writePng(join(assetsImages, 'icon.png'), full1024);
+  console.log('Wrote assets/images/icon.png (1024 × 1024)');
 
-  await pngFromSvg(full, 48, join(assetsImages, 'favicon.png'), {
-    flattenHex: BG,
-  });
-  console.log('Wrote assets/images/favicon.png (web)');
+  await writePng(join(assetsImages, 'logo.png'), full1024);
+  console.log('Wrote assets/images/logo.png (splash / AppLogo)');
+
+  await writePng(join(assetsImages, 'splash-icon.png'), full1024);
+  console.log('Wrote assets/images/splash-icon.png');
+
+  const favicon = await squareFromSource(48);
+  await writePng(join(assetsImages, 'favicon.png'), favicon);
+  console.log('Wrote assets/images/favicon.png (48 × 48)');
+
+  const fg = await adaptiveForeground(1024);
+  await writePng(join(assetsImages, 'app-icon-foreground.png'), fg);
+  console.log('Wrote assets/images/app-icon-foreground.png (adaptive)');
+
+  // Legacy Expo template android adaptive names (keep in sync if referenced later)
+  await writePng(join(assetsImages, 'android-icon-foreground.png'), fg);
+  const bgTile = await sharp({
+    create: {
+      width: 1024,
+      height: 1024,
+      channels: 3,
+      background: BG,
+    },
+  })
+    .png()
+    .toBuffer();
+  await writePng(join(assetsImages, 'android-icon-background.png'), bgTile);
+  console.log('Wrote android-icon-foreground/background.png');
+
+  // Simple white silhouette for notification / monochrome (full-bleed light mask)
+  const mono = await sharp(SOURCE)
+    .rotate()
+    .resize(1024, 1024, { fit: 'cover', position: 'centre' })
+    .greyscale()
+    .threshold(200)
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+  await writePng(join(assetsImages, 'android-icon-monochrome.png'), mono);
+  console.log('Wrote android-icon-monochrome.png');
 
   await fs.mkdir(iosOut, { recursive: true });
-
   const iosSizes = [
     ['Icon-20@2x.png', 40],
     ['Icon-20@3x.png', 60],
@@ -119,14 +130,16 @@ async function main() {
     ['Icon-60@3x.png', 180],
     ['Icon-1024.png', 1024],
   ];
-
   for (const [name, px] of iosSizes) {
-    await pngFromSvg(full, px, join(iosOut, name), { flattenHex: BG });
+    await writePng(join(iosOut, name), await squareFromSource(px));
   }
   console.log(`Wrote ${iosSizes.length} files to assets/icons/ios/`);
 
-  await pngFromSvg(fg, 1024, join(assetsImages, 'app-icon-foreground.png'));
-  console.log('Wrote assets/images/app-icon-foreground.png');
+  // Keep halforder-logo.jpg identical to the PNG master for any jpeg references
+  await sharp(SOURCE)
+    .jpeg({ quality: 95 })
+    .toFile(join(assetsImages, 'halforder-logo.jpg'));
+  console.log('Synced assets/images/halforder-logo.jpg');
 }
 
 main().catch((e) => {
