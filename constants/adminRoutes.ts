@@ -32,4 +32,5 @@ export const adminRoutes = {
   restaurantFees: '/(tabs)/admin/restaurant-fees',
   promoCodes: '/(tabs)/admin/promo-codes',
   balances: '/(tabs)/admin/balances',
+  homeBanners: '/(tabs)/admin/home-banners',
 } as const;

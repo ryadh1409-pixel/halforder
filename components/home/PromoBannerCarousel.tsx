@@ -1,11 +1,12 @@
 import { UE } from '@/constants/uberEatsTheme';
-import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
+import type { HomeBannerDoc } from '@/types/homeBanner';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   Dimensions,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -18,59 +19,27 @@ const W = Dimensions.get('window').width;
 const CARD_W = W - 32;
 const SNAP = CARD_W + 14;
 
-type Banner = {
-  id: string;
-  title: string;
-  subtitle: string;
-  cta: string;
-  imageUri: string;
-  accent: string;
-};
-
-const DEFAULT_BANNERS: Banner[] = [
-  {
-    id: 'bogo',
-    title: 'Buy 1, get 1 free',
-    subtitle: 'On burgers & bowls near you',
-    cta: 'Order now',
-    imageUri:
-      'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=900&q=80&auto=format&fit=crop',
-    accent: '#E11900',
-  },
-  {
-    id: 'sale',
-    title: 'Items on sale',
-    subtitle: 'Save up to 40% near you',
-    cta: 'See deals',
-    imageUri:
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&q=80&auto=format&fit=crop',
-    accent: '#22C55E',
-  },
-  {
-    id: 'zero',
-    title: '$0 delivery fee',
-    subtitle: 'When you spend $15+',
-    cta: 'Browse',
-    imageUri:
-      'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=900&q=80&auto=format&fit=crop',
-    accent: '#000000',
-  },
-];
-
 type Props = {
-  banners?: Banner[];
-  onBannerPress?: (id: string) => void;
+  banners: HomeBannerDoc[];
+  onNavigate?: (destination: string) => void;
 };
 
-function PromoBannerCarouselInner({
-  banners = DEFAULT_BANNERS,
-  onBannerPress,
-}: Props) {
-  const { addressLine } = useHomeMarketplaceLocation();
-  const regionEyebrow =
-    addressLine && !addressLine.toLowerCase().includes('enable location')
-      ? `HalfOrder · ${addressLine.split('·').pop()?.trim() ?? addressLine}`
-      : 'HalfOrder';
+function PromoBannerCarouselInner({ banners, onNavigate }: Props) {
+  const handlePress = useCallback(
+    (banner: HomeBannerDoc) => {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const dest = banner.buttonDestination.trim();
+      if (!dest) return;
+      if (/^https?:\/\//i.test(dest)) {
+        void Linking.openURL(dest);
+        return;
+      }
+      onNavigate?.(dest);
+    },
+    [onNavigate],
+  );
+
+  if (banners.length === 0) return null;
 
   return (
     <ScrollView
@@ -82,44 +51,51 @@ function PromoBannerCarouselInner({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
-      {banners.map((b) => (
-        <Pressable
-          key={b.id}
-          accessibilityRole="button"
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onBannerPress?.(b.id);
-          }}
-          style={({ pressed }) => [
-            styles.card,
-            { width: CARD_W },
-            pressed && styles.cardPressed,
-          ]}
-        >
-          <Image
-            source={{ uri: b.imageUri }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.72)']}
-            locations={[0.25, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={[styles.accentBar, { backgroundColor: b.accent }]} />
-          <View style={styles.copy}>
-            <Text style={styles.eyebrow} numberOfLines={1}>
-              {regionEyebrow}
-            </Text>
-            <Text style={styles.title}>{b.title}</Text>
-            <Text style={styles.sub}>{b.subtitle}</Text>
-            <View style={styles.ctaPill}>
-              <Text style={styles.ctaTxt}>{b.cta}</Text>
-              <Text style={styles.ctaArrow}>›</Text>
+      {banners.map((b) => {
+        const hasDestination = b.buttonDestination.trim().length > 0;
+        const showButton = b.buttonText.trim().length > 0;
+
+        return (
+          <Pressable
+            key={b.id}
+            accessibilityRole="button"
+            disabled={!hasDestination}
+            onPress={() => handlePress(b)}
+            style={({ pressed }) => [
+              styles.card,
+              { width: CARD_W },
+              pressed && hasDestination && styles.cardPressed,
+            ]}
+          >
+            <Image
+              source={{ uri: b.imageUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.72)']}
+              locations={[0.25, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.accentBar} />
+            <View style={styles.copy}>
+              {b.badgeText ? (
+                <Text style={styles.eyebrow} numberOfLines={1}>
+                  {b.badgeText}
+                </Text>
+              ) : null}
+              <Text style={styles.title}>{b.headline}</Text>
+              {b.subtitle ? <Text style={styles.sub}>{b.subtitle}</Text> : null}
+              {showButton ? (
+                <View style={styles.ctaPill}>
+                  <Text style={styles.ctaTxt}>{b.buttonText}</Text>
+                  <Text style={styles.ctaArrow}>›</Text>
+                </View>
+              ) : null}
             </View>
-          </View>
-        </Pressable>
-      ))}
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -157,6 +133,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
+    backgroundColor: UE.promo,
   },
   copy: { padding: 20, paddingLeft: 22, zIndex: 1 },
   eyebrow: {

@@ -5,6 +5,7 @@ import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useFoodShareUnreadCount } from '@/hooks/useFoodShareInbox';
+import { useHomeBanners } from '@/hooks/useHomeBanners';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
 import { auth } from '@/services/firebase';
 import { useRouter } from 'expo-router';
@@ -25,8 +26,20 @@ export function UberEatsHomeScreen() {
   const router = useRouter();
   const { addressLine, refreshLocation, locationLoading } = useHomeMarketplaceLocation();
   const { restaurants, loading, error } = useHomeRestaurants();
+  const { banners, settings: bannerSettings, loading: bannersLoading } = useHomeBanners();
   const unreadNotifications = useFoodShareUnreadCount(auth.currentUser?.uid);
   const [refreshing, setRefreshing] = useState(false);
+
+  const showBanners = bannerSettings.visible && banners.length > 0;
+  const showBannerSkeleton =
+    bannerSettings.visible && bannersLoading && banners.length === 0;
+
+  const onBannerNavigate = useCallback(
+    (destination: string) => {
+      router.push(destination as never);
+    },
+    [router],
+  );
 
   const featured = useMemo(() => restaurants.slice(0, 8), [restaurants]);
 
@@ -65,9 +78,16 @@ export function UberEatsHomeScreen() {
         }
         contentContainerStyle={styles.content}
       >
-        <PromoBannerCarousel />
+        {showBanners ? (
+          <PromoBannerCarousel
+            banners={banners}
+            onNavigate={onBannerNavigate}
+          />
+        ) : null}
 
-        {loading && restaurants.length === 0 ? <HomeFeedSkeleton /> : null}
+        {loading && restaurants.length === 0 ? (
+          <HomeFeedSkeleton showBanner={showBannerSkeleton} />
+        ) : null}
 
         {error ? <Text style={styles.err}>{error}</Text> : null}
 

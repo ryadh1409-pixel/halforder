@@ -516,6 +516,31 @@ export default function AdminScreen() {
                   label="Balances"
                   onPress={() => router.push(adminRoutes.balances as never)}
                 />
+                <ActionCard
+                  icon="images-outline"
+                  label="Home banners"
+                  onPress={() => router.push(adminRoutes.homeBanners as never)}
+                />
+              </View>
+
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                Home banners
+              </Text>
+              <View style={styles.panel}>
+                <TouchableOpacity
+                  style={styles.promoBadgesEntry}
+                  onPress={() => router.push(adminRoutes.homeBanners as never)}
+                  activeOpacity={0.88}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.promoBadgesTitle}>Home Banners</Text>
+                    <Text style={styles.promoBadgesSub}>
+                      Manage promotional carousel images, copy, and visibility on
+                      Home
+                    </Text>
+                  </View>
+                  <Text style={styles.promoBadgesCta}>Open</Text>
+                </TouchableOpacity>
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>

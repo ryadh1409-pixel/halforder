@@ -57,16 +57,18 @@ function SectionSkeleton() {
 }
 
 /** Home feed placeholder while Firestore restaurants load. */
-function HomeFeedSkeletonInner() {
+function HomeFeedSkeletonInner({ showBanner = true }: { showBanner?: boolean }) {
   return (
     <View style={styles.wrap}>
-      <ShimmerSkeleton
-        width={Dimensions.get('window').width - 32}
-        height={176}
-        borderRadius={UE.radiusXL + 4}
-        tone="light"
-        style={styles.banner}
-      />
+      {showBanner ? (
+        <ShimmerSkeleton
+          width={Dimensions.get('window').width - 32}
+          height={176}
+          borderRadius={UE.radiusXL + 4}
+          tone="light"
+          style={styles.banner}
+        />
+      ) : null}
       <SectionSkeleton />
       <SectionSkeleton />
     </View>
