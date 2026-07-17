@@ -3,22 +3,12 @@ import {
   ProfileMenuItem,
   PROFILE_MENU_COLORS,
 } from '@/components/profile/ProfileMenuItem';
-import { KEYBOARD_TOOLBAR_NATIVE_ID, KeyboardToolbar } from '../../components/KeyboardToolbar';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { DeleteAccountModal } from '../../components/DeleteAccountModal';
 import { adminRoutes } from '../../constants/adminRoutes';
 import { isAdminUser } from '../../constants/adminUid';
 import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
-import {
-  displayFromStoredProfilePhone,
-  formatProfileWhatsAppDisplay,
-  isCompleteNaProfilePhone,
-  isIncompleteNaProfilePhone,
-  isProfilePhoneStorageEmpty,
-  profilePhoneForFirestore,
-  profileWhatsAppOnChangeText,
-} from '../../lib/profileWhatsAppPhone';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
@@ -37,12 +27,7 @@ import { subscribeHalfOrderBalance } from '@/services/halfOrderBalance';
 import { applyPromoCode } from '@/services/promoCodes';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
-import { auth, db, ensureAuthReady } from '../../services/firebase';
-import {
-  ImagePickerPermissionError,
-  pickImageFromLibrary,
-} from '../../services/imagePicker';
-import { uploadProfilePhoto } from '../../services/profilePhoto';
+import { auth, db } from '../../services/firebase';
 import {
   logProfileFsFail,
   logProfileFsStart,
@@ -54,19 +39,16 @@ import {
   submitReport,
   type ReportReason,
 } from '../../services/reports';
-import { moderateUserContent } from '../../utils/contentModeration';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { logError } from '../../utils/errorLogger';
 import { showError, showNotice, showSuccess } from '../../utils/toast';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { updateProfile, type User } from '@firebase/auth';
+import { type User } from '@firebase/auth';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
 import {
-  deleteField,
   doc,
   getDoc,
   getDocFromServer,
@@ -76,7 +58,7 @@ import {
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -87,7 +69,6 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -262,17 +243,10 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const pal = useProfilePalette();
   const isDark = true;
-  const { user, signOutUser, reloadAuthUser, firestoreUserRole } = useAuth();
+  const { user, signOutUser, firestoreUserRole } = useAuth();
   const [displayNameInput, setDisplayNameInput] = useState('');
-  const [phone, setPhone] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [savingName, setSavingName] = useState(false);
-  const [nameSaved, setNameSaved] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [nameSuccessMessage, setNameSuccessMessage] = useState('');
-  const [nameErrorMessage, setNameErrorMessage] = useState('');
-  const [initialDisplayName, setInitialDisplayName] = useState('');
-  const [initialPhone, setInitialPhone] = useState('');
   const [averageRating, setAverageRating] = useState(0);
   const [totalRatings, setTotalRatings] = useState(0);
   /** `users/{uid}.email` when set; UI falls back to Auth email. */
@@ -280,7 +254,6 @@ export default function ProfileScreen() {
     null,
   );
   const [photoURL, setPhotoURL] = useState<string | null>(null);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deleteAccountModalVisible, setDeleteAccountModalVisible] =
     useState(false);
   const [reportUserId, setReportUserId] = useState('');
@@ -290,7 +263,6 @@ export default function ProfileScreen() {
   const [profileOrdersCancellingIds, setProfileOrdersCancellingIds] = useState<
     Record<string, boolean>
   >({});
-  const [focusedInputIndex, setFocusedInputIndex] = useState<number | null>(null);
   const [halfOrderBalance, setHalfOrderBalance] = useState(0);
   const [profilePromoCode, setProfilePromoCode] = useState('');
   const [profilePromoBusy, setProfilePromoBusy] = useState(false);
@@ -298,8 +270,6 @@ export default function ProfileScreen() {
     null,
   );
   const [profilePromoOk, setProfilePromoOk] = useState(false);
-  const displayNameInputRef = useRef<TextInput>(null);
-  const nameFeedbackClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const registered = isRegisteredAuthUser(user);
   const uid = registered ? (user?.uid ?? null) : null;
@@ -426,15 +396,11 @@ export default function ProfileScreen() {
       const authUser = auth.currentUser;
       const mapped = mapUsersCollectionToProfile(data, authUser);
       setDisplayNameInput(mapped.displayName);
-      setInitialDisplayName(mapped.displayName);
       setNotificationsEnabled(mapped.notificationsEnabled);
       setAverageRating(mapped.averageRating);
       setTotalRatings(mapped.totalRatings);
       setEmailFromFirestore(mapped.emailFromDoc);
       setPhotoURL(mapped.photoURL);
-      const phoneDisp = displayFromStoredProfilePhone(mapped.phone);
-      setPhone(phoneDisp);
-      setInitialPhone(phoneDisp);
       setProfileLoading(false);
     };
 
@@ -500,180 +466,6 @@ export default function ProfileScreen() {
       unsubscribe();
     };
   }, [uid, isFocused, user?.isAnonymous]);
-
-  useEffect(() => {
-    return () => {
-      if (nameFeedbackClearRef.current != null) {
-        clearTimeout(nameFeedbackClearRef.current);
-      }
-    };
-  }, []);
-
-  const handleSaveDisplayName = async () => {
-    if (savingName) return;
-    const trimmed = displayNameInput.trim();
-    if (!uid) return;
-
-    const phoneDigits = profilePhoneForFirestore(phone);
-    const initialDigits = profilePhoneForFirestore(initialPhone);
-    const phoneChanged = phoneDigits !== initialDigits;
-    const phoneTreatEmpty = isProfilePhoneStorageEmpty(phone);
-
-    if (phoneChanged) {
-      if (!phoneTreatEmpty && !isCompleteNaProfilePhone(phone)) {
-        showError(
-          'Enter a complete WhatsApp number (10 digits after +1), or clear the field to only +1.',
-        );
-        return;
-      }
-    }
-
-    const trimmedPhoneDigits = phoneChanged
-      ? phoneTreatEmpty
-        ? ''
-        : phoneDigits
-      : isProfilePhoneStorageEmpty(initialDigits)
-        ? ''
-        : initialDigits;
-    const phoneForFirestore = trimmedPhoneDigits
-      ? formatProfileWhatsAppDisplay(trimmedPhoneDigits)
-      : '';
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      const msg = 'Not signed in. Please sign in again.';
-      setNameErrorMessage(msg);
-      showError(msg);
-      return;
-    }
-    if (!trimmed) {
-      showError('Display name cannot be empty.');
-      return;
-    }
-    const mod = moderateUserContent(trimmed, { maxLength: 80 });
-    if (!mod.ok) {
-      showError(mod.reason);
-      return;
-    }
-    if (nameFeedbackClearRef.current != null) {
-      clearTimeout(nameFeedbackClearRef.current);
-      nameFeedbackClearRef.current = null;
-    }
-    setSavingName(true);
-    setNameSaved(false);
-    setNameSuccessMessage('');
-    setNameErrorMessage('');
-    try {
-      const userRef = doc(db, 'users', uid);
-      const userPath = `users/${uid}`;
-      await updateProfile(currentUser, { displayName: mod.text });
-      await currentUser.reload();
-      await profileFirestoreOp(
-        {
-          file: 'app/(tabs)/profile.tsx',
-          operation: 'setDoc(merge)',
-          path: userPath,
-        },
-        () =>
-          setDoc(
-            userRef,
-            {
-              displayName: mod.text,
-              name: mod.text,
-              avatar: currentUser.photoURL ?? null,
-              phone: phoneForFirestore,
-              whatsapp: phoneForFirestore,
-              dateOfBirth: deleteField(),
-            },
-            { merge: true },
-          ),
-      );
-      setDisplayNameInput(mod.text);
-      setInitialDisplayName(mod.text);
-      const nextDisp = displayFromStoredProfilePhone(phoneForFirestore);
-      setPhone(nextDisp);
-      setInitialPhone(nextDisp);
-      setNameSaved(true);
-      setNameSuccessMessage('Name updated');
-      nameFeedbackClearRef.current = setTimeout(() => {
-        setNameSaved(false);
-        setNameSuccessMessage('');
-        nameFeedbackClearRef.current = null;
-      }, 2000);
-    } catch (err) {
-      logError(err);
-      const msg = getUserFriendlyError(err);
-      setNameErrorMessage(msg);
-      showError(msg);
-      nameFeedbackClearRef.current = setTimeout(() => {
-        setNameErrorMessage('');
-        nameFeedbackClearRef.current = null;
-      }, 4000);
-    } finally {
-      setSavingName(false);
-    }
-  };
-
-  const handlePickProfilePhoto = async () => {
-    if (!uid || uploadingPhoto) return;
-    await ensureAuthReady();
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      showError('Authentication is still initializing.');
-      return;
-    }
-    let imageUri: string | null;
-    try {
-      imageUri = await pickImageFromLibrary({ quality: 0.7 });
-    } catch (e) {
-      if (e instanceof ImagePickerPermissionError) {
-        showError(getUserFriendlyError(e));
-        return;
-      }
-      if (e instanceof Error && e.message === 'PICKER_LAUNCH_FAILED') {
-        showError('Could not open your photo library. Please try again.');
-        return;
-      }
-      logError(e);
-      showError('Could not open your photo library. Please try again.');
-      return;
-    }
-    if (!imageUri) return;
-
-    setUploadingPhoto(true);
-    try {
-      const downloadURL = await uploadProfilePhoto(imageUri);
-      await updateProfile(currentUser, { photoURL: downloadURL });
-
-      const userRef = doc(db, 'users', uid);
-      await profileFirestoreOp(
-        {
-          file: 'app/(tabs)/profile.tsx',
-          operation: 'setDoc(merge)',
-          path: `users/${uid}`,
-        },
-        () =>
-          setDoc(
-            userRef,
-            { photoURL: downloadURL, avatar: downloadURL, photo: downloadURL },
-            { merge: true },
-          ),
-      );
-
-      try {
-        await reloadAuthUser();
-      } catch (e) {
-        logError(e);
-      }
-      setPhotoURL(downloadURL);
-      showSuccess('Your profile picture has been saved.');
-    } catch (e) {
-      logError(e);
-      const msg = getUserFriendlyError(e);
-      showError(msg);
-    } finally {
-      setUploadingPhoto(false);
-    }
-  };
 
   const handleNotificationsToggle = async (value: boolean) => {
     if (!uid) return;
@@ -931,12 +723,6 @@ export default function ProfileScreen() {
   const emailLabel =
     emailFromFirestore ?? user?.email ?? 'Not set';
   const displayName = displayNameInput.trim() || 'User';
-  const canSaveName =
-    !savingName &&
-    displayNameInput.trim().length > 0 &&
-    (displayNameInput.trim() !== initialDisplayName.trim() ||
-      phone.trim() !== initialPhone.trim());
-  const saveButtonLabel = savingName ? 'Saving…' : nameSaved ? 'Saved ✓' : 'Save name';
 
   const reviewCount =
     totalRatings > 0 ? totalRatings : trustScore?.count ?? 0;
@@ -1022,7 +808,6 @@ export default function ProfileScreen() {
     <SwipeWrapper currentIndex={5}>
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <KeyboardToolbar focusedIndex={focusedInputIndex} totalInputs={2} />
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -1038,7 +823,13 @@ export default function ProfileScreen() {
         }
       >
         <View style={styles.profileBody}>
-          <View style={dynamicStyles.profileHeader}>
+          <TouchableOpacity
+            style={dynamicStyles.profileHeader}
+            onPress={() => router.push('/personal-information' as never)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Open personal information"
+          >
             <View style={dynamicStyles.profileHeaderTextCol}>
               <Text style={dynamicStyles.profileNameTitle} numberOfLines={2}>
                 {displayName}
@@ -1074,29 +865,23 @@ export default function ProfileScreen() {
                 </View>
               ) : null}
             </View>
-            <View style={dynamicStyles.profilePhotoCol}>
-              <TouchableOpacity
-                style={dynamicStyles.profileAvatarWrap}
-                onPress={handlePickProfilePhoto}
-                activeOpacity={0.85}
-                disabled={uploadingPhoto}
-                accessibilityLabel="Change profile photo"
-              >
-                {uploadingPhoto ? (
-                  <ActivityIndicator size="large" color={pal.primary} />
-                ) : (
-                  <Image
-                    key={photoURL ?? 'default'}
-                    source={photoURL ? { uri: photoURL } : DEFAULT_AVATAR}
-                    style={dynamicStyles.profileAvatarImage}
-                    contentFit="cover"
-                    transition={200}
-                    cachePolicy="memory-disk"
-                  />
-                )}
-              </TouchableOpacity>
+            <View style={dynamicStyles.profileAvatarWrap}>
+              <Image
+                key={photoURL ?? 'default'}
+                source={photoURL ? { uri: photoURL } : DEFAULT_AVATAR}
+                style={dynamicStyles.profileAvatarImage}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
             </View>
-          </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={26}
+              color={pal.textTertiary}
+              style={dynamicStyles.profileHeaderChevron}
+            />
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={dynamicStyles.quickAction}
@@ -1134,93 +919,6 @@ export default function ProfileScreen() {
               </View>
             </>
           ) : null}
-
-          <Text style={dynamicStyles.sectionHeading}>Account</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.label}>Display name</Text>
-            <AppTextInput
-              ref={displayNameInputRef}
-              style={dynamicStyles.input}
-              value={displayNameInput}
-              onChangeText={setDisplayNameInput}
-              placeholder="Your name"
-              placeholderTextColor={pal.textTertiary}
-              editable={!savingName}
-              inputAccessoryViewID={
-                Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-              }
-              onFocus={() => setFocusedInputIndex(0)}
-            />
-            <Text style={dynamicStyles.label}>WhatsApp (for coordination)</Text>
-            <View style={dynamicStyles.phoneFieldShell}>
-              <MaterialCommunityIcons
-                name="whatsapp"
-                size={24}
-                color="#25D366"
-                style={dynamicStyles.phoneFieldIcon}
-              />
-              <AppTextInput
-                style={dynamicStyles.phoneFieldInput}
-                value={phone}
-                onChangeText={(t) => setPhone(profileWhatsAppOnChangeText(t))}
-                placeholder="+1 437 000 0000"
-                placeholderTextColor={pal.textTertiary}
-                keyboardType="phone-pad"
-                editable={!savingName}
-                inputAccessoryViewID={
-                  Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-                }
-                onFocus={() => setFocusedInputIndex(1)}
-              />
-            </View>
-            <Text style={dynamicStyles.phoneFieldHint}>
-              Used only to coordinate pickup
-              {isIncompleteNaProfilePhone(phone)
-                ? ' · Enter all 10 digits after +1.'
-                : ''}
-            </Text>
-            <TouchableOpacity
-              style={[
-                dynamicStyles.saveNameButton,
-                nameSaved && { backgroundColor: pal.success },
-                !canSaveName && !nameSaved && dynamicStyles.buttonDisabled,
-              ]}
-              disabled={!canSaveName}
-              onPress={() => {
-                void handleSaveDisplayName();
-              }}
-            >
-              {savingName ? (
-                <ActivityIndicator size="small" color={pal.onPrimary} />
-              ) : (
-                <Text style={dynamicStyles.saveNameButtonText}>
-                  {saveButtonLabel}
-                </Text>
-              )}
-            </TouchableOpacity>
-            {nameSuccessMessage ? (
-              <Text style={dynamicStyles.feedbackOk}>{nameSuccessMessage}</Text>
-            ) : null}
-            {nameErrorMessage ? (
-              <Text style={dynamicStyles.feedbackErr}>{nameErrorMessage}</Text>
-            ) : null}
-
-            <View style={dynamicStyles.divider} />
-
-            <View style={dynamicStyles.readonlyRow}>
-              <View style={dynamicStyles.readonlyIcon}>
-                <MaterialIcons name="mail-outline" size={20} color={pal.textSecondary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={dynamicStyles.label}>Email</Text>
-                <Text style={dynamicStyles.readOnlyValue}>{emailLabel}</Text>
-                <View style={dynamicStyles.readonlyHintRow}>
-                  <MaterialIcons name="lock" size={14} color={pal.textTertiary} />
-                  <Text style={dynamicStyles.hint}>Read-only — managed by your login</Text>
-                </View>
-              </View>
-            </View>
-          </View>
 
           <Text style={dynamicStyles.sectionHeading}>Delivery location</Text>
           <ProfileLocationPicker userId={uid} palette={pal} />
@@ -1649,6 +1347,10 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     },
     profilePhotoCol: {
       alignItems: 'flex-end',
+    },
+    profileHeaderChevron: {
+      alignSelf: 'center',
+      marginLeft: 6,
     },
     profileAvatarWrap: {
       width: 88,
