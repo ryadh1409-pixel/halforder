@@ -1,17 +1,36 @@
-import { CK } from '@/constants/checkoutUi';
+import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { AppTextInput } from '../AppTextInput';
 
 type Props = {
   value: string;
   appliedLabel?: string | null;
   onChange: (next: string) => void;
+  onApply?: () => void;
+  applying?: boolean;
   hint?: string;
+  error?: string | null;
 };
 
-function PromoCodeRowInner({ value, appliedLabel, onChange, hint }: Props) {
+function PromoCodeRowInner({
+  value,
+  appliedLabel,
+  onChange,
+  onApply,
+  applying,
+  hint,
+  error,
+}: Props) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -35,8 +54,22 @@ function PromoCodeRowInner({ value, appliedLabel, onChange, hint }: Props) {
             <View style={styles.badge}>
               <Text style={styles.badgeTxt}>{appliedLabel}</Text>
             </View>
+          ) : onApply ? (
+            <Pressable
+              {...checkoutPressableProps}
+              onPress={onApply}
+              disabled={applying || !value.trim()}
+              style={styles.applyBtn}
+            >
+              {applying ? (
+                <ActivityIndicator size="small" color={CK.offer} />
+              ) : (
+                <Text style={styles.applyTxt}>Apply</Text>
+              )}
+            </Pressable>
           ) : null}
         </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
     </KeyboardAvoidingView>
@@ -78,5 +111,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(229,57,53,0.1)',
   },
   badgeTxt: { fontSize: 11, fontWeight: '900', color: CK.offer },
+  applyBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+  applyTxt: { fontSize: 14, fontWeight: '800', color: CK.offer },
   hint: { marginTop: 10, fontSize: 13, fontWeight: '600', color: CK.textMuted },
+  error: { marginTop: 8, fontSize: 13, fontWeight: '700', color: CK.offer },
 });

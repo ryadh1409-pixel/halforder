@@ -242,7 +242,40 @@ export async function runCreateFoodSharePaymentIntent(input: {
     typeof share.sharedPrice === "number" ? share.sharedPrice : 0;
   const deliveryShare =
     typeof share.deliveryShare === "number" ? share.deliveryShare : 0;
-  const quote = quoteFoodSharePayment({sharedPrice, deliveryShare});
+
+  // Prefer fees configured on the admin food share; else restaurant doc; else defaults.
+  let serviceFee: number | null =
+    typeof share.serviceFee === "number" ? share.serviceFee : null;
+  let taxRate: number | null =
+    typeof share.taxRate === "number" ? share.taxRate : null;
+  const restaurantId =
+    typeof share.restaurantId === "string" ? share.restaurantId.trim() : "";
+  if (restaurantId && (serviceFee == null || taxRate == null)) {
+    const restSnap = await db.doc(`restaurants/${restaurantId}`).get();
+    if (restSnap.exists) {
+      const rest = restSnap.data() ?? {};
+      if (serviceFee == null && typeof rest.serviceFee === "number") {
+        serviceFee = rest.serviceFee;
+      }
+      if (taxRate == null && typeof rest.taxRate === "number") {
+        taxRate = rest.taxRate;
+      }
+    }
+  }
+  // Platform default tax when still unset
+  if (taxRate == null) {
+    const feeSnap = await db.doc("platformSettings/fees").get();
+    if (feeSnap.exists && typeof feeSnap.data()?.defaultTaxRate === "number") {
+      taxRate = feeSnap.data()!.defaultTaxRate as number;
+    }
+  }
+
+  const quote = quoteFoodSharePayment({
+    sharedPrice,
+    deliveryShare,
+    serviceFee,
+    taxRate,
+  });
 
   const paymentId = foodSharePaymentDocId(matchId, uid);
   const paymentPath = `payments/${paymentId}`;
@@ -307,6 +340,10 @@ export async function runCreateFoodSharePaymentIntent(input: {
         foodShareCostCents: quote.foodShareCents,
         deliveryShareCostCents: quote.deliveryShareCents,
         platformFeeCents: quote.platformFeeCents,
+        serviceFeeCents: quote.serviceFeeCents,
+        taxCents: quote.taxCents,
+        promoDiscountCents: quote.promoDiscountCents,
+        taxRate: quote.taxRate,
         paymentStatus: "PENDING",
         stripeCheckoutSessionId: session.id,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -374,6 +411,10 @@ export async function runCreateFoodSharePaymentIntent(input: {
       foodShareCostCents: quote.foodShareCents,
       deliveryShareCostCents: quote.deliveryShareCents,
       platformFeeCents: quote.platformFeeCents,
+      serviceFeeCents: quote.serviceFeeCents,
+      taxCents: quote.taxCents,
+      promoDiscountCents: quote.promoDiscountCents,
+      taxRate: quote.taxRate,
       paymentStatus: "PENDING",
       stripePaymentIntentId: paymentIntent.id,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

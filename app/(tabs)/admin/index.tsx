@@ -501,6 +501,21 @@ export default function AdminScreen() {
                   label="Promo badges"
                   onPress={() => router.push(adminRoutes.promotionBadges as never)}
                 />
+                <ActionCard
+                  icon="cash-outline"
+                  label="Restaurant fees"
+                  onPress={() => router.push(adminRoutes.restaurantFees as never)}
+                />
+                <ActionCard
+                  icon="ticket-outline"
+                  label="Promo codes"
+                  onPress={() => router.push(adminRoutes.promoCodes as never)}
+                />
+                <ActionCard
+                  icon="wallet-outline"
+                  label="Balances"
+                  onPress={() => router.push(adminRoutes.balances as never)}
+                />
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>

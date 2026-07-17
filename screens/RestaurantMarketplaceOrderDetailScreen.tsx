@@ -3,6 +3,7 @@ import OrderActions from '@/components/orders/OrderActions';
 import OrderItems from '@/components/orders/OrderItems';
 import OrderTimeline from '@/components/orders/OrderTimeline';
 import PaymentSummary from '@/components/orders/PaymentSummary';
+import { computeOrderPricing } from '@/lib/orderPricing';
 import { PaymentBadge } from '@/components/orders/StatusBadge';
 import { merchantStatusFromOrder } from '@/components/orders/statusFlow';
 import {
@@ -284,10 +285,13 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
         <OrderItems items={order.items} itemCount={itemCount} />
 
         <PaymentSummary
-          subtotal={order.subtotal}
-          tax={order.tax}
-          deliveryFee={order.deliveryFee}
-          total={order.totalPrice}
+          pricing={computeOrderPricing({
+            foodSubtotal: order.subtotal,
+            deliveryFee: order.deliveryFee,
+            serviceFee: order.serviceFee ?? 0,
+            promoDiscount: order.promoDiscount ?? 0,
+            taxRate: order.taxRate ?? 0.13,
+          })}
         />
 
         <View style={styles.card}>

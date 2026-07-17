@@ -1,5 +1,6 @@
 import { FoodShareInviteButton } from '@/components/foodShare/FoodShareInviteButton';
 import { FoodShareHubCard } from '@/components/ordersHub/FoodShareHubCard';
+import { OrderReceiptBreakdown } from '@/components/orders/OrderReceiptBreakdown';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import {
   HUB_STATUS_META,
@@ -12,7 +13,7 @@ import {
   resolveShareDateLabel,
   resolveShareTimeLabel,
 } from '@/lib/foodShareInvite';
-import { formatShareCurrency } from '@/lib/foodSharePricing';
+import { computeOrderPricing, DEFAULT_TAX_RATE } from '@/lib/orderPricing';
 import { foodShareLifecycleLabel } from '@/lib/foodShareLifecycle';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
@@ -126,6 +127,9 @@ export function FoodShareHubDetailScreen({
   const [shareRaw, setShareRaw] = useState<Record<string, unknown> | null>(null);
   const [request, setRequest] = useState<MatchRequestDoc | null>(null);
   const [matchRaw, setMatchRaw] = useState<ReturnType<typeof mapMatchDoc> | null>(null);
+  const [paymentRaw, setPaymentRaw] = useState<Record<string, unknown> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!id) {
@@ -197,6 +201,16 @@ export function FoodShareHubDetailScreen({
     );
   }, [kind, matchRaw, myUid, request, shareRaw]);
 
+  useEffect(() => {
+    if (!myUid || kind !== 'match' || !id) {
+      setPaymentRaw(null);
+      return undefined;
+    }
+    return onSnapshot(doc(db, 'payments', `${id}_${myUid}`), (snap) => {
+      setPaymentRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
+    });
+  }, [id, kind, myUid]);
+
   const timeline = useMemo(() => buildTimeline(hubItem), [hubItem]);
   const schedule = useMemo(() => {
     const raw = shareRaw ?? {};
@@ -212,6 +226,52 @@ export function FoodShareHubDetailScreen({
             : '—',
     };
   }, [shareRaw]);
+
+  const receiptPricing = useMemo(() => {
+    const food =
+      typeof paymentRaw?.foodShareCostCents === 'number'
+        ? paymentRaw.foodShareCostCents / 100
+        : hubItem?.sharedPrice ?? 0;
+    const delivery =
+      typeof paymentRaw?.deliveryShareCostCents === 'number'
+        ? paymentRaw.deliveryShareCostCents / 100
+        : hubItem?.deliveryShare ?? 0;
+    const service =
+      typeof paymentRaw?.serviceFeeCents === 'number'
+        ? paymentRaw.serviceFeeCents / 100
+        : typeof paymentRaw?.platformFeeCents === 'number'
+          ? paymentRaw.platformFeeCents / 100
+          : typeof shareRaw?.serviceFee === 'number'
+            ? shareRaw.serviceFee
+            : 0;
+    const promo =
+      typeof paymentRaw?.promoDiscountCents === 'number'
+        ? paymentRaw.promoDiscountCents / 100
+        : 0;
+    const taxRate =
+      typeof paymentRaw?.taxRate === 'number'
+        ? paymentRaw.taxRate
+        : typeof shareRaw?.taxRate === 'number'
+          ? shareRaw.taxRate
+          : DEFAULT_TAX_RATE;
+    const computed = computeOrderPricing({
+      foodSubtotal: food,
+      deliveryFee: delivery,
+      serviceFee: service,
+      promoDiscount: promo,
+      taxRate,
+    });
+    // Prefer server-stored tax/total when present (matches Stripe charge).
+    if (typeof paymentRaw?.taxCents === 'number') {
+      computed.hst = paymentRaw.taxCents / 100;
+    }
+    if (typeof paymentRaw?.amount === 'number') {
+      computed.totalPaid = paymentRaw.amount / 100;
+    }
+    return computed;
+  }, [hubItem?.deliveryShare, hubItem?.sharedPrice, paymentRaw, shareRaw]);
+
+  const paidAtRaw = paymentRaw?.paidAt ?? null;
 
   if (loading) {
     return (
@@ -248,6 +308,27 @@ export function FoodShareHubDetailScreen({
   const partnerParticipant =
     match && match.userA.uid === myUid ? match.userB : match?.userA;
 
+  const paymentStatusLabel =
+    typeof paymentRaw?.paymentStatus === 'string'
+      ? paymentRaw.paymentStatus
+      : match?.userPayments?.[myUid]?.paymentStatus ?? '—';
+  const stripeTxnId =
+    (typeof paymentRaw?.stripePaymentIntentId === 'string' &&
+      paymentRaw.stripePaymentIntentId) ||
+    (typeof match?.userPayments?.[myUid]?.stripePaymentIntentId === 'string' &&
+      match.userPayments[myUid]!.stripePaymentIntentId) ||
+    null;
+  const paymentMethodLabel =
+    typeof paymentRaw?.paymentMethodBrand === 'string'
+      ? `${String(paymentRaw.paymentMethodBrand)}${
+          typeof paymentRaw.paymentMethodLast4 === 'string'
+            ? ` •••• ${paymentRaw.paymentMethodLast4}`
+            : ''
+        }`
+      : typeof paymentRaw?.paymentMethodType === 'string'
+        ? String(paymentRaw.paymentMethodType)
+        : 'Card';
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <SwipeCinematicBackground />
@@ -273,20 +354,18 @@ export function FoodShareHubDetailScreen({
           <Text style={styles.description}>{shareRaw.description.trim()}</Text>
         ) : null}
 
-        <Section title="Pricing">
-          <Row
-            label="Original price"
-            value={formatShareCurrency(
-              hubItem.sharedPrice > 0 ? hubItem.sharedPrice * 2 : hubItem.totalPerUser,
-            )}
-          />
-          <Row label="Your share" value={formatShareCurrency(hubItem.sharedPrice)} />
-          <Row label="Delivery share" value={formatShareCurrency(hubItem.deliveryShare)} />
-          <Row label="Total per person" value={formatShareCurrency(hubItem.totalPerUser)} bold />
-          {hubItem.totalPaid != null ? (
-            <Row label="Total paid" value={formatShareCurrency(hubItem.totalPaid)} bold />
-          ) : null}
-        </Section>
+        <OrderReceiptBreakdown
+          pricing={receiptPricing}
+          tone="dark"
+          title="Order Summary"
+          meta={{
+            idForReceipt: hubItem.matchId ?? hubItem.hubId,
+            paymentMethod: paymentMethodLabel,
+            paymentStatus: String(paymentStatusLabel),
+            stripeTransactionId: stripeTxnId,
+            paidAt: paidAtRaw,
+          }}
+        />
 
         {match ? (
           <Section title="Participants">
@@ -313,8 +392,17 @@ export function FoodShareHubDetailScreen({
         <Section title="Logistics">
           <Row label="Pickup or delivery" value={schedule.pickupOrDelivery} />
           <Row label="Address" value={schedule.address} />
-          <Row label="Scheduled date" value={schedule.dateLabel} />
-          <Row label="Scheduled time" value={schedule.timeLabel} />
+          <Row
+            label="Paid At"
+            value={
+              paidAtRaw
+                ? (() => {
+                    const ms = safeToMillis(paidAtRaw);
+                    return ms != null ? formatFirestoreTime(ms) : '—';
+                  })()
+                : '—'
+            }
+          />
           {match ? (
             <Row label="Lifecycle" value={foodShareLifecycleLabel(match.lifecycle)} />
           ) : null}

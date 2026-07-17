@@ -1,40 +1,48 @@
+import {
+  formatHstLabel,
+  moneyLabel,
+  type OrderPricingBreakdown,
+} from '@/lib/orderPricing';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-function money(value: number): string {
-  return `$${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
-}
-
+/**
+ * Uber Eats–style payment summary (no tip / membership).
+ */
 export default function PaymentSummary({
-  subtotal,
-  tax,
-  deliveryFee,
-  total,
+  pricing,
 }: {
-  subtotal: number;
-  tax: number;
-  deliveryFee: number;
-  total: number;
+  pricing: OrderPricingBreakdown;
 }) {
   return (
     <View style={styles.card}>
-      <Text style={styles.section}>Payment</Text>
+      <Text style={styles.section}>Order Summary</Text>
       <View style={styles.line} />
       <View style={styles.row}>
-        <Text style={styles.label}>Subtotal</Text>
-        <Text style={styles.value}>{money(subtotal)}</Text>
+        <Text style={styles.label}>Food subtotal</Text>
+        <Text style={styles.value}>{moneyLabel(pricing.foodSubtotal)}</Text>
       </View>
       <View style={styles.row}>
-        <Text style={styles.label}>Tax</Text>
-        <Text style={styles.value}>{money(tax)}</Text>
+        <Text style={styles.label}>{formatHstLabel(pricing.taxRate)}</Text>
+        <Text style={styles.value}>{moneyLabel(pricing.hst)}</Text>
       </View>
       <View style={styles.row}>
-        <Text style={styles.label}>Delivery Fee</Text>
-        <Text style={styles.value}>{money(deliveryFee)}</Text>
+        <Text style={styles.label}>Delivery fee</Text>
+        <Text style={styles.value}>{moneyLabel(pricing.deliveryFee)}</Text>
       </View>
       <View style={styles.row}>
-        <Text style={styles.total}>Total</Text>
-        <Text style={styles.total}>{money(total)}</Text>
+        <Text style={styles.label}>Service fee</Text>
+        <Text style={styles.value}>{moneyLabel(pricing.serviceFee)}</Text>
+      </View>
+      {pricing.promoDiscount > 0 ? (
+        <View style={styles.row}>
+          <Text style={styles.label}>Promotion discount</Text>
+          <Text style={styles.value}>-{moneyLabel(pricing.promoDiscount)}</Text>
+        </View>
+      ) : null}
+      <View style={styles.row}>
+        <Text style={styles.total}>Total paid</Text>
+        <Text style={styles.total}>{moneyLabel(pricing.totalPaid)}</Text>
       </View>
     </View>
   );

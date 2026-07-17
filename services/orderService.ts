@@ -134,6 +134,12 @@ export type RestaurantOrder = {
   subtotal: number;
   tax: number;
   deliveryFee: number;
+  /** Service fee charged on the order (CAD). */
+  serviceFee: number;
+  /** Promo discount applied (CAD). */
+  promoDiscount: number;
+  /** Tax rate used when the order was priced (e.g. 0.13). */
+  taxRate: number;
   totalPrice: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
@@ -141,6 +147,11 @@ export type RestaurantOrder = {
   stripePaymentIntentId: string | null;
   /** Canonical Stripe PI id (mirrors `stripePaymentIntentId` when set). */
   paymentIntentId: string | null;
+  /** Server timestamp when Stripe payment succeeded. */
+  paidAt: unknown;
+  paidAtMs: number | null;
+  receiptNumber: string | null;
+  paymentMethod: string | null;
   checkoutSessionId: string | null;
   driverId: string | null;
   assignedDriverId: string | null;
@@ -425,6 +436,13 @@ function mapDocToRestaurantOrderFromData(
             : 0,
     tax: typeof data.tax === 'number' ? data.tax : 0,
     deliveryFee: typeof data.deliveryFee === 'number' ? data.deliveryFee : 0,
+    serviceFee: typeof data.serviceFee === 'number' ? data.serviceFee : 0,
+    promoDiscount:
+      typeof data.promoDiscount === 'number' ? data.promoDiscount : 0,
+    taxRate:
+      typeof data.taxRate === 'number' && Number.isFinite(data.taxRate)
+        ? data.taxRate
+        : 0.13,
     totalPrice:
       typeof data.totalPrice === 'number'
         ? data.totalPrice
@@ -445,6 +463,16 @@ function mapDocToRestaurantOrderFromData(
         ? data.paymentIntentId
         : typeof data.stripePaymentIntentId === 'string'
           ? data.stripePaymentIntentId
+          : null,
+    paidAt: data.paidAt ?? null,
+    paidAtMs: safeToMillis(data.paidAt),
+    receiptNumber:
+      typeof data.receiptNumber === 'string' ? data.receiptNumber : null,
+    paymentMethod:
+      typeof data.paymentMethod === 'string'
+        ? data.paymentMethod
+        : typeof data.paymentMethodBrand === 'string'
+          ? data.paymentMethodBrand
           : null,
     checkoutSessionId:
       typeof data.checkoutSessionId === 'string' ? data.checkoutSessionId : null,
@@ -616,6 +644,14 @@ export type MarketplaceOrderCreatePayload = {
   restaurantId: string;
   items: OrderItem[];
   totalPrice: number;
+  /** Food items subtotal before fees/tax/promo. */
+  foodSubtotal?: number;
+  tax?: number;
+  taxRate?: number;
+  deliveryFee?: number;
+  serviceFee?: number;
+  promoDiscount?: number;
+  promoCode?: string | null;
   deliveryType?: 'delivery' | 'pickup';
   driverId?: string | null;
   deliveryLocation: { lat: number; lng: number; address: string };
@@ -801,13 +837,41 @@ export async function createOrder(
         zoneCheck.distanceKm,
         zoneCheck.settings,
       );
-      orderDeliveryFee = feeEst.amount ?? 0;
+      // Prefer checkout-provided restaurant-configured fee when present.
+      orderDeliveryFee =
+        typeof payload.deliveryFee === 'number' &&
+        Number.isFinite(payload.deliveryFee) &&
+        payload.deliveryFee >= 0
+          ? payload.deliveryFee
+          : (feeEst.amount ?? 0);
     }
   } catch (zoneErr) {
     if (deliveryType === 'delivery') {
       throw zoneErr;
     }
   }
+
+  const foodSubtotal =
+    typeof payload.foodSubtotal === 'number' && Number.isFinite(payload.foodSubtotal)
+      ? payload.foodSubtotal
+      : payload.totalPrice;
+  const serviceFee =
+    typeof payload.serviceFee === 'number' && Number.isFinite(payload.serviceFee)
+      ? payload.serviceFee
+      : 0;
+  const promoDiscount =
+    typeof payload.promoDiscount === 'number' && Number.isFinite(payload.promoDiscount)
+      ? payload.promoDiscount
+      : 0;
+  const taxRate =
+    typeof payload.taxRate === 'number' && Number.isFinite(payload.taxRate)
+      ? payload.taxRate
+      : 0.13;
+  const tax =
+    typeof payload.tax === 'number' && Number.isFinite(payload.tax)
+      ? payload.tax
+      : 0;
+  const receiptNumber = `HO-${Date.now().toString(36).toUpperCase().slice(-8)}`;
 
   const orderPayload = {
     userId: customerUid,
@@ -817,9 +881,14 @@ export async function createOrder(
     items: payload.items,
     customerName: null,
     customerPhone: null,
-    subtotal: payload.totalPrice,
-    tax: 0,
+    subtotal: foodSubtotal,
+    tax,
+    taxRate,
     deliveryFee: orderDeliveryFee,
+    serviceFee,
+    promoDiscount,
+    promoCode: payload.promoCode ?? null,
+    receiptNumber,
     deliveryDistanceKm,
     deliveryEligible,
     deliveryTier,

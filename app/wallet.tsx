@@ -1,6 +1,6 @@
 import { useAuth } from '../services/AuthContext';
 import { db } from '../services/firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../constants/theme';
+import { parseHalfOrderBalance } from '@/services/halfOrderBalance';
 
 const c = theme.colors;
 
@@ -33,30 +34,15 @@ export default function WalletScreen() {
     const unsub = onSnapshot(
       userRef,
       (snap) => {
-        const data = snap.data();
-        const b =
-          typeof data?.walletBalance === 'number' ? data.walletBalance : 0;
-        setBalance(b);
+        setBalance(
+          parseHalfOrderBalance(snap.data() as Record<string, unknown> | undefined),
+        );
         setLoading(false);
       },
       () => setLoading(false),
     );
     return () => unsub();
   }, [uid]);
-
-  const handleAddFunds = async () => {
-    if (!uid) return;
-    // Simulate adding funds: increment by 10 for demo
-    try {
-      await setDoc(
-        doc(db, 'users', uid),
-        { walletBalance: balance + 10 },
-        { merge: true },
-      );
-    } catch {
-      // ignore
-    }
-  };
 
   if (!uid) {
     return (
@@ -94,18 +80,12 @@ export default function WalletScreen() {
         ) : (
           <>
             <View style={styles.balanceCard}>
-              <Text style={styles.balanceLabel}>Balance</Text>
+              <Text style={styles.balanceLabel}>HalfOrder Balance</Text>
               <Text style={styles.balanceValue}>${balance.toFixed(2)}</Text>
             </View>
-            <TouchableOpacity
-              style={styles.addFundsButton}
-              onPress={handleAddFunds}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addFundsText}>Add Funds</Text>
-            </TouchableOpacity>
             <Text style={styles.disclaimer}>
-              For now, balance is simulated. Add Funds adds $10 for demo.
+              Balance is managed by HalfOrder. Only admins can add or remove
+              credit.
             </Text>
           </>
         )}

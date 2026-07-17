@@ -1187,11 +1187,16 @@ service cloud.firestore {
       allow create: if isAdmin()
         || (request.auth != null && request.auth.uid == userId && request.resource.data.get('stripeOnboardingComplete', false) == false);
       allow update: if isAdmin()
-        || (request.auth != null && request.auth.uid == userId && userStripeOnboardingCompleteNotForged())
+        || (request.auth != null && request.auth.uid == userId
+            && userStripeOnboardingCompleteNotForged()
+            && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['halfOrderBalance', 'walletBalance']))
         || (
           request.auth != null
           && request.auth.uid == userId
           && userStripeOnboardingCompleteNotForged()
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['halfOrderBalance', 'walletBalance'])
           && (
             request.resource.data.role == resource.data.role
             || usersRoleSelfAssignOk()
@@ -3088,6 +3093,20 @@ service cloud.firestore {
     match /driver_marketplace_pool/{orderId} {
       allow read, list: if isAdmin() || hasDriverAccountDoc();
       allow write: if false;
+    }
+    match /platformSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /promoCodes/{promoId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+    match /balanceLedger/{entryId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
     match /drivers/{driverId} {
       allow read: if isAdmin()

@@ -108,6 +108,9 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
           <View style={styles.pill}>
             <Text style={styles.pillTxt} numberOfLines={1}>
               {restaurant.deliveryFeeLabel}
+              {restaurant.serviceFeeLabel
+                ? ` · ${restaurant.serviceFeeLabel}`
+                : ''}
             </Text>
           </View>
         </View>

@@ -3,7 +3,9 @@ import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketpl
 import { OrderRatingPrompt } from '@/components/order-rating-prompt';
 import { DeliveryProgressBar } from '@/components/order/DeliveryProgressBar';
 import { OrderPaymentTimeline } from '@/components/order/OrderPaymentTimeline';
+import { OrderReceiptBreakdown } from '@/components/orders/OrderReceiptBreakdown';
 import { ETAChip } from '@/components/order/ETAChip';
+import { computeOrderPricing } from '@/lib/orderPricing';
 import {
   chipForFulfillment,
   driverStatusLabel,
@@ -546,20 +548,26 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           <Text style={styles.cardTitle}>Delivery details</Text>
           <Text style={styles.metaStrong}>Address</Text>
           <Text style={styles.meta}>{formatAddress(order.deliveryLocation?.address)}</Text>
-          <View style={styles.priceBlock}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Subtotal</Text>
-              <Text style={styles.priceVal}>${order.subtotal.toFixed(2)}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Fees / tax</Text>
-              <Text style={styles.priceVal}>${(order.tax + order.deliveryFee).toFixed(2)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalVal}>${order.totalPrice.toFixed(2)}</Text>
-            </View>
-          </View>
+          <OrderReceiptBreakdown
+            tone="dark"
+            title="Order Summary"
+            pricing={computeOrderPricing({
+              foodSubtotal: order.subtotal,
+              deliveryFee: order.deliveryFee,
+              serviceFee: order.serviceFee,
+              promoDiscount: order.promoDiscount,
+              taxRate: order.taxRate,
+            })}
+            meta={{
+              receiptNumber: order.receiptNumber,
+              idForReceipt: order.id,
+              paymentMethod: order.paymentMethod ?? 'Card',
+              paymentStatus: order.paymentStatus,
+              stripeTransactionId:
+                order.stripePaymentIntentId ?? order.paymentIntentId,
+              paidAt: order.paidAt,
+            }}
+          />
           <Pressable
             style={styles.mapOpenBtn}
             onPress={() =>

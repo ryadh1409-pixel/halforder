@@ -29,6 +29,9 @@ import { useAuth } from '@/services/AuthContext';
 import { useCart } from '@/services/CartContext';
 import { useCheckoutStore } from '@/store/checkoutStore';
 import { createOrder } from '@/services/orderService';
+import { applyPromoCode } from '@/services/promoCodes';
+import { resolveRestaurantTaxRate } from '@/services/platformFees';
+import { computeOrderPricing } from '@/lib/orderPricing';
 import {
   fetchRestaurantLocation,
   resolveDeliveryLocationForCheckout,
@@ -41,7 +44,7 @@ import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/st
 import { getHostStripeOnboardingUrl } from '@/services/stripeOnboarding';
 import { calculateServiceFee } from '@/lib/restaurantStoreMetrics';
 import { alertFriendly } from '@/utils/friendlyAlert';
-import { showError, showFriendlyError } from '@/utils/toast';
+import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -96,6 +99,10 @@ export default function CheckoutPremiumScreen() {
   const [placing, setPlacing] = useState(false);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   const [checkingStripe, setCheckingStripe] = useState(false);
+  const [promoDiscount, setPromoDiscount] = useState(0);
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const cartItems = useMemo(
     () =>
@@ -133,8 +140,6 @@ export default function CheckoutPremiumScreen() {
 
   const priorityFee =
     fulfillmentMode === 'pickup' ? 0 : timing === 'priority' ? 2.49 : 0;
-  const promoDiscount =
-    promo.trim().toUpperCase() === 'HALF20' ? Math.min(subtotal * 0.2, 12) : 0;
 
   const serviceFee = useMemo(
     () =>
@@ -144,9 +149,26 @@ export default function CheckoutPremiumScreen() {
       }).amount ?? 0,
     [subtotal, profile?.serviceFee],
   );
-  const preTax = Math.max(0, subtotal - promoDiscount + deliveryFee + priorityFee + serviceFee);
-  const taxes = preTax * 0.13;
-  const total = preTax + taxes;
+
+  const taxRate = useMemo(
+    () => resolveRestaurantTaxRate(profile?.raw, 0.13),
+    [profile?.raw],
+  );
+
+  const pricing = useMemo(
+    () =>
+      computeOrderPricing({
+        foodSubtotal: subtotal,
+        deliveryFee: deliveryFee + priorityFee,
+        serviceFee,
+        promoDiscount,
+        taxRate,
+      }),
+    [subtotal, deliveryFee, priorityFee, serviceFee, promoDiscount, taxRate],
+  );
+
+  const taxes = pricing.hst;
+  const total = pricing.totalPaid;
   const strikeSubtotal = subtotal + deliveryFee + serviceFee + priorityFee;
 
   const totalFmt = `$${total.toFixed(2)}`;
@@ -155,6 +177,28 @@ export default function CheckoutPremiumScreen() {
   const savingsRibbonAmount = useMemo(() => {
     return promoDiscount > 0 ? promoDiscount : 0;
   }, [promoDiscount]);
+
+  const onApplyPromo = useCallback(async () => {
+    setPromoError(null);
+    setPromoBusy(true);
+    try {
+      const applied = await applyPromoCode({
+        code: promo,
+        foodSubtotal: subtotal,
+        restaurantId,
+      });
+      setPromoDiscount(applied.discountAmount);
+      setAppliedPromoCode(applied.code);
+      setPromo(applied.code);
+      showSuccess(`Promo ${applied.code} applied`);
+    } catch (e) {
+      setPromoDiscount(0);
+      setAppliedPromoCode(null);
+      setPromoError(e instanceof Error ? e.message : 'Invalid promo code');
+    } finally {
+      setPromoBusy(false);
+    }
+  }, [promo, restaurantId, setPromo, subtotal]);
 
   const refreshStripeReadiness = useCallback(async () => {
     if (!restaurantId) {
@@ -316,6 +360,13 @@ export default function CheckoutPremiumScreen() {
         restaurantId,
         items: cartItems,
         totalPrice: total,
+        foodSubtotal: subtotal,
+        tax: taxes,
+        taxRate,
+        deliveryFee,
+        serviceFee: serviceFee + priorityFee,
+        promoDiscount,
+        promoCode: appliedPromoCode,
         deliveryType: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
         deliveryLocation,
         customerLocation,
@@ -368,7 +419,7 @@ export default function CheckoutPremiumScreen() {
     });
     rows.push({
       key: 'tax',
-      label: 'Taxes & charges (estimate)',
+      label: `HST (${Math.round(taxRate * 1000) / 10}%)`,
       value: `$${taxes.toFixed(2)}`,
     });
     rows.push({
@@ -392,6 +443,7 @@ export default function CheckoutPremiumScreen() {
     strikeSubtotal,
     subtotal,
     taxes,
+    taxRate,
     totalFmt,
   ]);
 
@@ -522,9 +574,17 @@ export default function CheckoutPremiumScreen() {
 
         <PromoCodeRow
           value={promo}
-          onChange={setPromo}
-          appliedLabel={promoDiscount > 0 ? 'HALF20' : null}
-          hint="Unlock HALF20 for 20% off (cap $12) — persists with Firestore `promotions`."
+          onChange={(next) => {
+            setPromo(next);
+            setPromoDiscount(0);
+            setAppliedPromoCode(null);
+            setPromoError(null);
+          }}
+          onApply={() => void onApplyPromo()}
+          applying={promoBusy}
+          appliedLabel={appliedPromoCode}
+          error={promoError}
+          hint="Enter a promo code from HalfOrder and tap Apply."
         />
 
         <View style={{ height: 6 }} />

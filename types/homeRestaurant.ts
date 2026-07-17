@@ -7,8 +7,10 @@ import {
   restaurantEntityForDistance,
 } from '@/lib/location/restaurantMarketplaceCoords';
 import {
+  formatCad,
   pickRatingAverage,
   pickReviewCount,
+  pickFirestoreServiceFee,
   resolvePromoTags,
 } from '@/lib/restaurantStoreMetrics';
 
@@ -22,6 +24,8 @@ export type HomeRestaurant = {
   reviewCount: number;
   etaLabel: string;
   deliveryFeeLabel: string;
+  /** Service fee label when restaurant has a configured serviceFee. */
+  serviceFeeLabel: string | null;
   promoLabel: string | null;
   cuisine: string | null;
   isOpen: boolean;
@@ -78,6 +82,10 @@ export function mapFirestoreRestaurant(
     isPopularNearby,
   });
 
+  const serviceFeeAmt = pickFirestoreServiceFee(data);
+  const serviceFeeLabel =
+    serviceFeeAmt != null ? `Service ${formatCad(serviceFeeAmt)}` : null;
+
   return {
     id,
     name,
@@ -87,6 +95,7 @@ export function mapFirestoreRestaurant(
     reviewCount,
     etaLabel: eligibility.etaLabel,
     deliveryFeeLabel: eligibility.deliveryFee.label,
+    serviceFeeLabel,
     promoLabel: promoTags[0] ?? null,
     cuisine: typeof data.cuisine === 'string' ? data.cuisine : null,
     isOpen: data.isOpen !== false,

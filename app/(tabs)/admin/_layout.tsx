@@ -51,6 +51,12 @@ export default function AdminLayout() {
         options={{ title: 'Promotion Badges' }}
       />
       <Stack.Screen
+        name="restaurant-fees"
+        options={{ title: 'Restaurant Fees' }}
+      />
+      <Stack.Screen name="promo-codes" options={{ title: 'Promo Codes' }} />
+      <Stack.Screen name="balances" options={{ title: 'Balances' }} />
+      <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}
       />

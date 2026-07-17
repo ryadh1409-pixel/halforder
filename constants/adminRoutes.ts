@@ -29,4 +29,7 @@ export const adminRoutes = {
   transactions: '/(tabs)/admin/transactions',
   stripeDiagnostics: '/(tabs)/admin/stripe-diagnostics',
   promotionBadges: '/(tabs)/admin/promotion-badges',
+  restaurantFees: '/(tabs)/admin/restaurant-fees',
+  promoCodes: '/(tabs)/admin/promo-codes',
+  balances: '/(tabs)/admin/balances',
 } as const;
