@@ -29,19 +29,6 @@ export function UberEatsHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const featured = useMemo(() => restaurants.slice(0, 8), [restaurants]);
-  const popular = useMemo(
-    () =>
-      [...restaurants]
-        .filter((r) => r.reviewCount > 0 && r.rating != null)
-        .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-        .slice(0, 10),
-    [restaurants],
-  );
-  const mightLike = useMemo(() => restaurants.slice(2, 12), [restaurants]);
-  const offers = useMemo(
-    () => restaurants.filter((r) => r.promoLabel != null).slice(0, 10),
-    [restaurants],
-  );
 
   const openRestaurant = useCallback(
     (id: string) => {
@@ -91,26 +78,6 @@ export function UberEatsHomeScreen() {
               restaurants={featured}
               onRestaurantPress={openRestaurant}
             />
-            <FeaturedSection
-              title="Places you might like"
-              restaurants={mightLike}
-              onRestaurantPress={openRestaurant}
-            />
-            {popular.length > 0 ? (
-              <FeaturedSection
-                title="Popular now"
-                subtitle="Highest rated with reviews"
-                restaurants={popular}
-                onRestaurantPress={openRestaurant}
-              />
-            ) : null}
-            {offers.length > 0 ? (
-              <FeaturedSection
-                title="Offers for you"
-                restaurants={offers}
-                onRestaurantPress={openRestaurant}
-              />
-            ) : null}
 
             {!loading && restaurants.length === 0 ? (
               <View style={styles.empty}>
