@@ -50,6 +50,11 @@ const EMPTY: DraftVoucher = {
   description: '',
 };
 
+/** Form fields sit on a light input fill — do not use COLORS.text (#fff). */
+const FORM_INPUT_TEXT = '#0f172a';
+const FORM_INPUT_PLACEHOLDER = '#94a3b8';
+const FORM_INPUT_SELECTION = 'rgba(22, 163, 74, 0.28)';
+
 function formatValue(v: PromoCodeDoc): string {
   return v.discountType === 'percent'
     ? `${v.discountValue}%`
@@ -299,6 +304,9 @@ export default function AdminVouchersScreen() {
                 value={draft.code}
                 onChangeText={(code) => setDraft((d) => ({ ...d, code }))}
                 autoCapitalize="characters"
+                placeholderTextColor={FORM_INPUT_PLACEHOLDER}
+                cursorColor={COLORS.primary}
+                selectionColor={FORM_INPUT_SELECTION}
                 editable={!saving}
               />
 
@@ -338,6 +346,9 @@ export default function AdminVouchersScreen() {
                   setDraft((d) => ({ ...d, discountValue }))
                 }
                 keyboardType="decimal-pad"
+                placeholderTextColor={FORM_INPUT_PLACEHOLDER}
+                cursorColor={COLORS.primary}
+                selectionColor={FORM_INPUT_SELECTION}
                 editable={!saving}
               />
 
@@ -349,7 +360,9 @@ export default function AdminVouchersScreen() {
                   setDraft((d) => ({ ...d, usageLimit }))
                 }
                 placeholder="Leave blank for unlimited"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={FORM_INPUT_PLACEHOLDER}
+                cursorColor={COLORS.primary}
+                selectionColor={FORM_INPUT_SELECTION}
                 keyboardType="number-pad"
                 editable={!saving}
               />
@@ -362,7 +375,9 @@ export default function AdminVouchersScreen() {
                   setDraft((d) => ({ ...d, expiresInput }))
                 }
                 placeholder="YYYY-MM-DD or days from now"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={FORM_INPUT_PLACEHOLDER}
+                cursorColor={COLORS.primary}
+                selectionColor={FORM_INPUT_SELECTION}
                 editable={!saving}
               />
 
@@ -373,6 +388,9 @@ export default function AdminVouchersScreen() {
                 onChangeText={(description) =>
                   setDraft((d) => ({ ...d, description }))
                 }
+                placeholderTextColor={FORM_INPUT_PLACEHOLDER}
+                cursorColor={COLORS.primary}
+                selectionColor={FORM_INPUT_SELECTION}
                 editable={!saving}
               />
 
@@ -495,7 +513,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: COLORS.text,
+    color: FORM_INPUT_TEXT,
     backgroundColor: '#f8fafc',
   },
   typeRow: { flexDirection: 'row', gap: 8 },
