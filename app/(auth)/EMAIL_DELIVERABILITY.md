@@ -72,15 +72,19 @@ Start with `p=none` while monitoring reports, then tighten to `p=quarantine` or
 ## Email enumeration protection (Continue flow)
 
 The login **Continue** button uses Firebase `fetchSignInMethodsForEmail()` to decide
-whether to open the Password screen or Sign Up.
+whether to open the Password screen or the **Account not found** screen.
+
+- Existing email → Password
+- Unknown email → Account not found → user must tap **Create Account** to open Sign Up
 
 If **Email enumeration protection** is enabled in Firebase Authentication settings,
 that API may always return an empty list. For the Continue UX to work correctly:
 
 1. Firebase Console → Authentication → Settings
 2. Review **User actions / Email enumeration protection**
-3. Disable protection **or** accept that Continue will always route new-looking emails
-   to Sign Up (existing users can still use Forgot Password / Google / Apple)
+3. Disable protection **or** accept that Continue will always show Account not found
+   for lookups that return no methods (existing users can still use Forgot Password /
+   Google / Apple)
 
 ## App behavior (unchanged by DNS)
 

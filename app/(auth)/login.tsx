@@ -3,8 +3,8 @@ import { navigateForRole } from '../../lib/navigation';
 import { getUserRole } from '@/services/userService';
 import { auth } from '../../services/firebase';
 import { signInWithApple } from '../../services/auth/appleSignIn';
+import { resolveAuthEmailAccountStatus } from '../../services/auth/emailAccountStatus';
 import { useGoogleAuth } from '../../services/googleAuth';
-import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -40,12 +40,17 @@ const AUTH = {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { redirectTo } = useLocalSearchParams<{ redirectTo?: string }>();
+  const { redirectTo, email: emailParam } = useLocalSearchParams<{
+    redirectTo?: string;
+    email?: string;
+  }>();
   const { signInWithGoogle, loading: googleHookLoading, requestReady } =
     useGoogleAuth();
   const emailRef = useRef<TextInput>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(
+    typeof emailParam === 'string' ? emailParam.trim().toLowerCase() : '',
+  );
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(
     null,
@@ -78,18 +83,18 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const methods = await fetchSignInMethodsForEmail(auth, trimmed);
+      const status = await resolveAuthEmailAccountStatus(trimmed);
       const params: Record<string, string> = { email: trimmed };
       if (redirectTo) params.redirectTo = String(redirectTo);
 
-      if (methods.length > 0) {
+      if (status === 'exists') {
         router.push({
           pathname: '/(auth)/password',
           params,
         } as never);
       } else {
         router.push({
-          pathname: '/(auth)/register',
+          pathname: '/(auth)/account-not-found',
           params,
         } as never);
       }

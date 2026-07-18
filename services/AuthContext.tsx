@@ -82,6 +82,11 @@ import { claimReferralInboxRewards } from './referralRewards';
 import { createRestaurant } from './restaurantService';
 import { uploadImageAsync } from './uploadImage';
 import type { UserRole } from './userService';
+import {
+  isEmailAlreadyInUseError,
+  resolveAuthEmailAccountStatus,
+  throwAuthFlowError,
+} from './auth/emailAccountStatus';
 
 const REFERRAL_CREDIT = 2;
 
@@ -640,6 +645,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Password must be at least 6 characters.');
     }
 
+    // Race-condition / enumeration-protection safety: never call create when known existing.
+    try {
+      const status = await resolveAuthEmailAccountStatus(trimmed);
+      if (status === 'exists') {
+        throwAuthFlowError({
+          code: 'auth/email-already-in-use',
+          message: 'This email already has an account. Please sign in instead.',
+        });
+      }
+    } catch (preCheckErr: unknown) {
+      if (isEmailAlreadyInUseError(preCheckErr)) {
+        throw preCheckErr;
+      }
+      // Lookup failures should not block signup; createUser will still catch conflicts.
+    }
+
     let userCredential;
     try {
       userCredential = await createUserWithEmailAndPassword(
@@ -649,7 +670,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     } catch (err: unknown) {
       logError(err);
-      throw new Error(getUserFriendlyError(err));
+      throwAuthFlowError(err);
     }
 
     const firebaseUser = userCredential.user;

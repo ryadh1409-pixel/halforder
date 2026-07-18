@@ -9,6 +9,7 @@ const AUTH_ROUTE_PATHS = new Set([
   '/login',
   '/register',
   '/password',
+  '/account-not-found',
   '/phone',
   '/reset-password',
   '/verify-email',

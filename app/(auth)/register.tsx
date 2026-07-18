@@ -36,8 +36,13 @@ import {
 import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { systemActionSheet } from '../../components/SystemDialogHost';
-import { getUserFriendlyError, showUserError } from '@/services/errors';
+import {
+  getAuthFlowFriendlyMessage,
+  isEmailAlreadyInUseError,
+  resolveAuthEmailAccountStatus,
+} from '@/services/auth/emailAccountStatus';
 import { showError, showSuccess } from '../../utils/toast';
+import { showUserError } from '@/services/errors';
 
 const REGISTER_INPUTS = 5;
 const PHOTO_SIZE = 92;
@@ -81,6 +86,8 @@ export default function RegisterScreen() {
   const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pickingPhoto, setPickingPhoto] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [showSignInCta, setShowSignInCta] = useState(false);
 
   const refs = [nameRef, emailRef, whatsappRef, passwordRef, confirmPasswordRef];
   const focusPrev = () => {
@@ -187,16 +194,29 @@ export default function RegisterScreen() {
   const handleSignup = async () => {
     const validationError = validate();
     if (validationError) {
+      setFormError(validationError);
+      setShowSignInCta(false);
       showError(validationError);
       return;
     }
 
     const nameTrim = name.trim();
-    const emailTrim = email.trim();
+    const emailTrim = email.trim().toLowerCase();
 
     Keyboard.dismiss();
     setLoading(true);
+    setFormError(null);
+    setShowSignInCta(false);
     try {
+      const status = await resolveAuthEmailAccountStatus(emailTrim);
+      if (status === 'exists') {
+        setFormError(
+          'This email already has an account. Please sign in instead.',
+        );
+        setShowSignInCta(true);
+        return;
+      }
+
       await signUpWithEmail({
         email: emailTrim,
         password,
@@ -211,7 +231,12 @@ export default function RegisterScreen() {
       const role = uid ? await getUserRole(uid) : 'user';
       navigateForRole(role);
     } catch (err: unknown) {
-      showError(getUserFriendlyError(err));
+      const friendly = getAuthFlowFriendlyMessage(err);
+      setFormError(friendly);
+      setShowSignInCta(isEmailAlreadyInUseError(err));
+      if (!isEmailAlreadyInUseError(err)) {
+        showError(friendly);
+      }
     } finally {
       setLoading(false);
     }
@@ -290,7 +315,13 @@ export default function RegisterScreen() {
                     placeholder="Email"
                     placeholderTextColor={AUTH.placeholder}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(t) => {
+                      setEmail(t);
+                      if (formError) {
+                        setFormError(null);
+                        setShowSignInCta(false);
+                      }
+                    }}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -384,6 +415,28 @@ export default function RegisterScreen() {
                     <Text style={styles.primaryBtnText}>Create Account</Text>
                   )}
                 </TouchableOpacity>
+
+                {formError ? (
+                  <View style={styles.errorBanner}>
+                    <Text style={styles.errorBannerText}>{formError}</Text>
+                    {showSignInCta ? (
+                      <TouchableOpacity
+                        style={styles.signInCtaBtn}
+                        onPress={() =>
+                          router.replace({
+                            pathname: '/(auth)/login',
+                            params: email.trim()
+                              ? { email: email.trim().toLowerCase() }
+                              : undefined,
+                          } as never)
+                        }
+                        activeOpacity={0.9}
+                      >
+                        <Text style={styles.signInCtaText}>Go to Sign In</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.footer}>
@@ -409,37 +462,38 @@ const styles = StyleSheet.create({
   scrollHost: { flex: 1 },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 28,
     paddingBottom: 120,
   },
   card: {
     backgroundColor: AUTH.card,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 22,
+    padding: 28,
     borderWidth: 1,
     borderColor: 'rgba(55,65,81,0.6)',
   },
   cardTitle: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: AUTH.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.6,
     textAlign: 'center',
   },
   cardSubtitle: {
     fontSize: 15,
     color: AUTH.textMuted,
     textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 12,
+    lineHeight: 21,
   },
   photoWrap: {
     alignSelf: 'center',
     width: PHOTO_SIZE,
     height: PHOTO_SIZE,
     borderRadius: PHOTO_SIZE / 2,
-    marginTop: 16,
+    marginTop: 20,
     borderWidth: 1,
     borderColor: AUTH.inputBorder,
     overflow: 'hidden',
@@ -460,35 +514,38 @@ const styles = StyleSheet.create({
   photoCaption: {
     textAlign: 'center',
     fontSize: 14,
+    fontWeight: '500',
     color: AUTH.textMuted,
-    marginTop: 10,
-    marginBottom: 16,
+    marginTop: 12,
+    marginBottom: 20,
   },
   fields: {
     marginTop: 0,
+    gap: 0,
   },
   fieldInput: {
     backgroundColor: '#1E2230',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 14,
     fontSize: 16,
     color: '#FFFFFF',
   },
   fieldHelper: {
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
     color: AUTH.textMuted,
-    marginTop: -4,
-    marginBottom: 10,
+    marginTop: -2,
+    marginBottom: 14,
   },
   consentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   consentIcon: {
     marginTop: 1,
@@ -501,15 +558,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   lastField: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   primaryBtn: {
     backgroundColor: AUTH.primary,
     borderRadius: 14,
-    height: 55,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 12,
   },
   primaryBtnLoading: {
     backgroundColor: '#7D8493',
@@ -517,14 +574,43 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  errorBanner: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+  },
+  errorBannerText: {
+    color: '#FCA5A5',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  signInCtaBtn: {
+    marginTop: 12,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH.primary,
+  },
+  signInCtaText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     flexWrap: 'wrap',
-    marginTop: 28,
+    marginTop: 32,
   },
   footerMuted: {
     color: AUTH.textMuted,
