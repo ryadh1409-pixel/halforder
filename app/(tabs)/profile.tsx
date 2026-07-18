@@ -23,8 +23,6 @@ import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
 import { navigateForRole } from '@/lib/navigation';
 import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
 import { USER_ROUTES } from '@/lib/navigationPaths';
-import { subscribeHalfOrderBalance } from '@/services/halfOrderBalance';
-import { applyPromoCode } from '@/services/promoCodes';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { useAuth } from '../../services/AuthContext';
 import { auth, db } from '../../services/firebase';
@@ -263,51 +261,9 @@ export default function ProfileScreen() {
   const [profileOrdersCancellingIds, setProfileOrdersCancellingIds] = useState<
     Record<string, boolean>
   >({});
-  const [halfOrderBalance, setHalfOrderBalance] = useState(0);
-  const [profilePromoCode, setProfilePromoCode] = useState('');
-  const [profilePromoBusy, setProfilePromoBusy] = useState(false);
-  const [profilePromoMessage, setProfilePromoMessage] = useState<string | null>(
-    null,
-  );
-  const [profilePromoOk, setProfilePromoOk] = useState(false);
-
   const registered = isRegisteredAuthUser(user);
   const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
-
-  useEffect(() => {
-    if (!uid) {
-      setHalfOrderBalance(0);
-      return undefined;
-    }
-    return subscribeHalfOrderBalance(uid, setHalfOrderBalance);
-  }, [uid]);
-
-  const handleApplyProfilePromo = useCallback(async () => {
-    setProfilePromoMessage(null);
-    setProfilePromoBusy(true);
-    try {
-      const applied = await applyPromoCode({
-        code: profilePromoCode,
-        foodSubtotal: 0,
-      });
-      // Validate-only on profile (discount applies at checkout).
-      setProfilePromoOk(true);
-      setProfilePromoMessage(
-        applied.discountAmount > 0
-          ? `${applied.code} is valid. Apply it again at checkout to redeem.`
-          : `${applied.code} is valid. Use it at checkout on an eligible order.`,
-      );
-      showSuccess('Promo code is valid');
-    } catch (e) {
-      setProfilePromoOk(false);
-      setProfilePromoMessage(
-        e instanceof Error ? e.message : 'Invalid promo code',
-      );
-    } finally {
-      setProfilePromoBusy(false);
-    }
-  }, [profilePromoCode]);
 
   const {
     activeRows: profileActiveOrders,
@@ -885,6 +841,21 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={dynamicStyles.quickAction}
+            onPress={() => router.push('/wallet' as never)}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons name="account-balance-wallet" size={22} color={pal.primary} />
+            <View style={dynamicStyles.quickActionTextCol}>
+              <Text style={dynamicStyles.quickActionText}>Wallet</Text>
+              <Text style={dynamicStyles.quickActionSub}>
+                Balance, cards, and vouchers
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={dynamicStyles.quickAction}
             onPress={() => router.push('/help')}
             activeOpacity={0.85}
           >
@@ -942,62 +913,6 @@ export default function ProfileScreen() {
                 thumbColor={notificationsEnabled ? pal.primary : pal.inputBg}
               />
             </View>
-          </View>
-
-          <Text style={dynamicStyles.sectionHeading}>HalfOrder Balance</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.bodyMuted}>Available credit</Text>
-            <Text
-              style={[
-                dynamicStyles.cardTitle,
-                { fontSize: 32, marginTop: 8, marginBottom: 4 },
-              ]}
-            >
-              ${halfOrderBalance.toFixed(2)}
-            </Text>
-            <Text style={dynamicStyles.bodyMuted}>
-              Managed by HalfOrder. Contact support if you need an adjustment.
-            </Text>
-          </View>
-
-          <Text style={dynamicStyles.sectionHeading}>Promotions</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.bodyMuted}>
-              Enter a promo code to redeem HalfOrder offers.
-            </Text>
-            <AppTextInput
-              style={dynamicStyles.input}
-              value={profilePromoCode}
-              onChangeText={setProfilePromoCode}
-              placeholder="Promo code"
-              placeholderTextColor={pal.textTertiary}
-              autoCapitalize="characters"
-            />
-            {profilePromoMessage ? (
-              <Text
-                style={[
-                  dynamicStyles.bodyMuted,
-                  {
-                    marginTop: 8,
-                    color: profilePromoOk ? pal.success : pal.danger,
-                  },
-                ]}
-              >
-                {profilePromoMessage}
-              </Text>
-            ) : null}
-            <TouchableOpacity
-              style={[dynamicStyles.primaryButton, { marginTop: 12 }]}
-              onPress={() => void handleApplyProfilePromo()}
-              disabled={profilePromoBusy}
-              activeOpacity={0.85}
-            >
-              {profilePromoBusy ? (
-                <ActivityIndicator color={pal.onPrimary} />
-              ) : (
-                <Text style={dynamicStyles.primaryButtonText}>Apply code</Text>
-              )}
-            </TouchableOpacity>
           </View>
 
           <ProfileOrdersSection

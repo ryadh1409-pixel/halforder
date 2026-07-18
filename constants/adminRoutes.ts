@@ -33,4 +33,5 @@ export const adminRoutes = {
   promoCodes: '/(tabs)/admin/promo-codes',
   balances: '/(tabs)/admin/balances',
   homeBanners: '/(tabs)/admin/home-banners',
+  vouchers: '/(tabs)/admin/vouchers',
 } as const;

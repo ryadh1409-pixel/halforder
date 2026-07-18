@@ -15,6 +15,11 @@ import {
   isFoodShareConfirmPayload,
   isFoodSharePaymentPayload,
 } from "./foodSharePaymentIntentCore.js";
+import {
+  createWalletSetupIntentCallable,
+  detachWalletPaymentMethodCallable,
+  listWalletPaymentMethodsCallable,
+} from "./walletPaymentMethods.js";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -351,3 +356,18 @@ export {
   getStripeTreasurySummary,
   getStripeAccountDiagnostics,
 } from "./adminStripeTreasury.js";
+
+export const walletCreateSetupIntent = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
+  .region("us-central1")
+  .https.onCall(createWalletSetupIntentCallable(getStripe));
+
+export const walletListPaymentMethods = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
+  .region("us-central1")
+  .https.onCall(listWalletPaymentMethodsCallable(getStripe));
+
+export const walletDetachPaymentMethod = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
+  .region("us-central1")
+  .https.onCall(detachWalletPaymentMethodCallable(getStripe));

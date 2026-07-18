@@ -521,6 +521,11 @@ export default function AdminScreen() {
                   label="Home banners"
                   onPress={() => router.push(adminRoutes.homeBanners as never)}
                 />
+                <ActionCard
+                  icon="pricetags-outline"
+                  label="Vouchers"
+                  onPress={() => router.push(adminRoutes.vouchers as never)}
+                />
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>

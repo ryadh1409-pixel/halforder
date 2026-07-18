@@ -57,6 +57,7 @@ export default function AdminLayout() {
       <Stack.Screen name="promo-codes" options={{ title: 'Promo Codes' }} />
       <Stack.Screen name="balances" options={{ title: 'Balances' }} />
       <Stack.Screen name="home-banners" options={{ title: 'Home Banners' }} />
+      <Stack.Screen name="vouchers" options={{ title: 'Voucher Management' }} />
       <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}
