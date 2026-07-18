@@ -28,7 +28,6 @@ import {
   onAuthStateChanged,
   RecaptchaVerifier,
   reload,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   updateProfile,
@@ -742,15 +741,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (e) {
       logError(e);
-    }
-
-    try {
-      await sendEmailVerification(firebaseUser);
-    } catch (e) {
-      logError(e);
-      if (__DEV__) {
-        console.error('[auth] sendEmailVerification failed (user can resend from settings later)', e);
-      }
     }
 
     void syncUserRoleToFirestore(firebaseUser);

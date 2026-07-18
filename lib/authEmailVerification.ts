@@ -1,7 +1,9 @@
 import type { User } from 'firebase/auth';
 
-/** Email/password accounts must verify; phone-only users have no email. */
-export function userNeedsEmailVerification(user: User | null): boolean {
-  if (!user || user.isAnonymous) return false;
-  return Boolean(user.email && !user.emailVerified);
+/**
+ * HalfOrder no longer requires email verification before app access.
+ * Password-reset and other auth emails still use Firebase Auth templates.
+ */
+export function userNeedsEmailVerification(_user: User | null): boolean {
+  return false;
 }

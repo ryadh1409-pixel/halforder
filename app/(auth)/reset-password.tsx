@@ -1,17 +1,39 @@
 import { auth } from '../../services/firebase';
 import { sendPasswordResetEmail } from '@firebase/auth';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { theme } from '../../constants/theme';
 import { getUserFriendlyError } from '../../utils/errorHandler';
+
+const AUTH = {
+  bg: '#09090B',
+  text: '#FFFFFF',
+  textMuted: '#B7BDC9',
+  inputBg: '#1C2030',
+  inputBorder: 'rgba(255,255,255,0.08)',
+  placeholder: '#7D8493',
+  primary: '#FF6B35',
+  success: '#22C55E',
+  danger: '#EF4444',
+} as const;
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(
+    typeof emailParam === 'string' ? emailParam.trim().toLowerCase() : '',
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -46,15 +68,15 @@ export default function ResetPasswordScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Reset your password</Text>
           <Text style={styles.subtitle}>
-            {'Enter your email and we\'ll send you a link to reset your password.'}
+            {"Enter your email and we'll send you a link to reset your password."}
           </Text>
 
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
             <AppTextInput
-              style={[styles.input, { fontSize: 16 }]}
+              style={styles.input}
               placeholder="you@example.com"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={AUTH.placeholder}
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -72,11 +94,11 @@ export default function ResetPasswordScreen() {
 
             <TouchableOpacity
               style={[styles.primaryBtn, busy && styles.btnDisabled]}
-              onPress={handleReset}
+              onPress={() => void handleReset()}
               disabled={busy}
             >
               {loading ? (
-                <ActivityIndicator color={theme.colors.textOnPrimary} />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.primaryBtnText}>Send Reset Email</Text>
               )}
@@ -97,23 +119,23 @@ export default function ResetPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: AUTH.bg },
   keyboard: { flex: 1 },
   content: {
     flex: 1,
-    paddingHorizontal: theme.spacing.screen,
+    paddingHorizontal: 24,
     paddingTop: 48,
     alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: theme.colors.text,
+    color: AUTH.text,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: theme.colors.textMuted,
+    color: AUTH.textMuted,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 32,
@@ -123,39 +145,40 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.colors.text,
+    color: AUTH.text,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 12,
-    borderRadius: 8,
-    color: theme.colors.text,
-    backgroundColor: theme.colors.background,
+    borderColor: AUTH.inputBorder,
+    padding: 14,
+    borderRadius: 12,
+    color: AUTH.text,
+    backgroundColor: AUTH.inputBg,
+    fontSize: 16,
   },
   errorText: {
     fontSize: 14,
-    color: theme.colors.dangerText,
+    color: AUTH.danger,
     marginTop: 4,
     textAlign: 'center',
   },
   messageText: {
     fontSize: 14,
-    color: theme.colors.success,
+    color: AUTH.success,
     marginTop: 4,
     textAlign: 'center',
   },
   primaryBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.button,
+    backgroundColor: AUTH.primary,
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
   },
   primaryBtnText: {
-    color: theme.colors.textOnPrimary,
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   backBtn: {
     alignItems: 'center',
@@ -163,7 +186,7 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     fontSize: 15,
-    color: theme.colors.primary,
+    color: AUTH.primary,
     fontWeight: '600',
   },
   btnDisabled: { opacity: 0.7 },

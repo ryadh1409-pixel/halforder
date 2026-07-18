@@ -8,6 +8,7 @@ export function isRegisteredAuthUser(user: User | null | undefined): boolean {
 const AUTH_ROUTE_PATHS = new Set([
   '/login',
   '/register',
+  '/password',
   '/phone',
   '/reset-password',
   '/verify-email',

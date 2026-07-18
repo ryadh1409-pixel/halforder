@@ -1,5 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { OAuthProvider, signInWithCredential } from 'firebase/auth';
+import { OAuthProvider, signInWithCredential, updateProfile } from 'firebase/auth';
 import { auth } from '../firebase';
 
 export async function signInWithApple(): Promise<void> {
@@ -23,5 +23,17 @@ export async function signInWithApple(): Promise<void> {
   const firebaseCredential = provider.credential({
     idToken: appleCredential.identityToken,
   });
-  await signInWithCredential(auth, firebaseCredential);
+  const userCredential = await signInWithCredential(auth, firebaseCredential);
+
+  // Apple only returns the full name on the first authorization.
+  const given = appleCredential.fullName?.givenName?.trim() ?? '';
+  const family = appleCredential.fullName?.familyName?.trim() ?? '';
+  const displayName = [given, family].filter(Boolean).join(' ').trim();
+  if (displayName && !userCredential.user.displayName) {
+    try {
+      await updateProfile(userCredential.user, { displayName });
+    } catch {
+      // Non-fatal — Firestore profile bootstrap still runs from auth state.
+    }
+  }
 }

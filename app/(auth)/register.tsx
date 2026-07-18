@@ -58,7 +58,10 @@ const AUTH = {
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { intent: intentParam } = useLocalSearchParams<{ intent?: string }>();
+  const { intent: intentParam, email: emailParam } = useLocalSearchParams<{
+    intent?: string;
+    email?: string;
+  }>();
   const signupIntent = parseSignupIntent(intentParam);
   const { signUpWithEmail } = useAuth();
   const nameRef = useRef<TextInput>(null);
@@ -68,7 +71,9 @@ export default function RegisterScreen() {
   const confirmPasswordRef = useRef<TextInput>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(
+    typeof emailParam === 'string' ? emailParam.trim().toLowerCase() : '',
+  );
   const [whatsapp, setWhatsapp] = useState('+1 ');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -204,11 +209,7 @@ export default function RegisterScreen() {
       showSuccess('Account created successfully 🎉');
       const uid = auth.currentUser?.uid;
       const role = uid ? await getUserRole(uid) : 'user';
-      if (signupIntent === 'user') {
-        router.replace('/verify-email' as Parameters<typeof router.replace>[0]);
-      } else {
-        navigateForRole(role);
-      }
+      navigateForRole(role);
     } catch (err: unknown) {
       showError(getUserFriendlyError(err));
     } finally {
