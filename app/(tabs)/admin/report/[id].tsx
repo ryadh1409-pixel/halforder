@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   ignoreT: { fontWeight: '800', color: COLORS.text },
   warn: { backgroundColor: 'rgba(245,158,11,0.14)' },
   warnT: { fontWeight: '800', color: '#92400E' },
-  suspend: { backgroundColor: 'rgba(255,107,53,0.18)' },
+  suspend: { backgroundColor: 'rgba(168, 85, 247,0.18)' },
   suspendT: { fontWeight: '800', color: '#C2410C' },
   ban: { backgroundColor: COLORS.dangerBg },
   banT: { fontWeight: '800', color: COLORS.error },

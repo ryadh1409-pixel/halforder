@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#1E293B',
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   earningsLabel: { color: '#7D8493', fontSize: 11, marginTop: 2 },
   more: { color: '#7D8493', fontSize: 12, textAlign: 'center', marginTop: 4 },
   emptyCard: {
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#1E293B',

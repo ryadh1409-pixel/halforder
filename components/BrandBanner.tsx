@@ -8,7 +8,7 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Full-width horizontal green → orange bar (e.g. section headers). */
+/** Full-width horizontal purple brand bar (e.g. section headers). */
 export function BrandBanner({ children, style }: Props) {
   const g = gradients.brandHorizontal;
   return (

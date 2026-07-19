@@ -388,8 +388,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
   actionBtnPrimary: {
-    backgroundColor: '#FF6B35',
-    borderColor: '#FF6B35',
+    backgroundColor: '#A855F7',
+    borderColor: '#A855F7',
   },
   actionBtnDanger: {
     borderColor: 'rgba(239,68,68,0.35)',

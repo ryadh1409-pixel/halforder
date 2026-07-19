@@ -121,7 +121,7 @@ export default function NotificationSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090B', padding: 20 },
+  safe: { flex: 1, backgroundColor: '#000000', padding: 20 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { color: '#FFF', fontSize: 24, fontWeight: '900' },
   sub: {

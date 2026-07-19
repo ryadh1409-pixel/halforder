@@ -382,7 +382,7 @@ export default function FoodShareChatScreen() {
     return (
       <View style={[styles.root, styles.center]}>
         <SwipeCinematicBackground />
-        <ActivityIndicator color="#7DFFB8" size="large" />
+        <ActivityIndicator color="#A855F7" size="large" />
         <Text style={styles.loadingText}>Opening chat…</Text>
       </View>
     );
@@ -602,7 +602,7 @@ export default function FoodShareChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#09090B', direction: 'ltr' },
+  root: { flex: 1, backgroundColor: '#000000', direction: 'ltr' },
   flex: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { color: '#B7BDC9', fontWeight: '600' },
@@ -657,16 +657,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     direction: 'ltr',
   },
-  bubbleMine: { backgroundColor: '#7DFFB8' },
+  bubbleMine: { backgroundColor: '#A855F7' },
   bubbleTheirs: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
   bubbleSystem: {
-    backgroundColor: 'rgba(255,107,53,0.15)',
+    backgroundColor: 'rgba(168, 85, 247,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(255,107,53,0.25)',
+    borderColor: 'rgba(168, 85, 247,0.25)',
   },
   bubbleText: {
     fontSize: 15,
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#7DFFB8',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
   },

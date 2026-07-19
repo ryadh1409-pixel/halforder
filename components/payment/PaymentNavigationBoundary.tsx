@@ -72,7 +72,7 @@ export function PostPaymentLoadingShell({
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#22C55E" />
+        <ActivityIndicator size="large" color="#A855F7" />
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
       </View>
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   },
   btn: {
     marginTop: 20,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#A855F7',
     paddingVertical: 12,
     paddingHorizontal: 22,
     borderRadius: 12,

@@ -303,7 +303,7 @@ export default function FoodSharePayScreen() {
             <Ionicons
               name={partnerPaid ? 'checkmark-circle' : 'time-outline'}
               size={20}
-              color={partnerPaid ? '#7DFFB8' : '#F59E0B'}
+              color={partnerPaid ? '#C084FC' : '#F59E0B'}
             />
             <Text style={styles.partnerBannerTxt}>
               {partnerPaid
@@ -372,7 +372,7 @@ function CostRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090B' },
+  safe: { flex: 1, backgroundColor: '#000000' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   hint: { color: c.textSecondary, fontSize: 14 },
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.12)',
   },
   totalLabel: { color: '#FFF', fontWeight: '900', fontSize: 16 },
-  totalValue: { color: '#7DFFB8', fontWeight: '900', fontSize: 18 },
+  totalValue: { color: '#C084FC', fontWeight: '900', fontSize: 18 },
   partnerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   payBtn: {
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

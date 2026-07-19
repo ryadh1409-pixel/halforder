@@ -162,7 +162,7 @@ export function SwipeDiscoveryScreen() {
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <Ionicons name="flame" size={22} color="#FF6B35" />
+          <Ionicons name="flame" size={22} color="#A855F7" />
           <Text style={styles.headerTitle}>Swipe</Text>
           <FoodShareNotificationBell />
           <Text style={styles.headerSub}>

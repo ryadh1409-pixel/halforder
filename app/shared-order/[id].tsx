@@ -98,7 +98,7 @@ function Avatar({ participant }: { participant: SharedOrderParticipant }) {
         <LinearGradient
           colors={
             participant.isCurrentUser
-              ? ['#FF7A3D', '#FF3D6E']
+              ? ['#A855F7', '#C084FC']
               : ['#22C55E', '#02A8FF']
           }
           style={styles.avatar}
@@ -265,7 +265,7 @@ export default function SharedOrderRoomScreen() {
     return (
       <View style={[styles.root, styles.center]}>
         <SwipeCinematicBackground />
-        <ActivityIndicator color="#7DFFB8" size="large" />
+        <ActivityIndicator color="#A855F7" size="large" />
         <Text style={styles.loadingText}>Opening shared order...</Text>
       </View>
     );
@@ -424,7 +424,7 @@ function GlassCard({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#09090B' },
+  root: { flex: 1, backgroundColor: '#000000' },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: 'rgba(255,255,255,0.7)', fontWeight: '700' },
   content: { padding: 18, paddingBottom: 24 },
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   kicker: {
-    color: '#7DFFB8',
+    color: '#C084FC',
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.8,
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
     marginTop: 6,
   },
-  split: { color: '#7DFFB8', fontSize: 23, fontWeight: '900', marginTop: 8 },
+  split: { color: '#C084FC', fontSize: 23, fontWeight: '900', marginTop: 8 },
   glass: {
     borderRadius: 24,
     overflow: 'hidden',
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(6,193,103,0.12)',
   },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
-  liveTxt: { color: '#7DFFB8', fontSize: 12, fontWeight: '900' },
+  liveTxt: { color: '#C084FC', fontSize: 12, fontWeight: '900' },
   cartRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -573,8 +573,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   totalValue: { color: '#FFF', fontSize: 17, fontWeight: '900' },
-  perPerson: { color: '#7DFFB8', fontSize: 24, fontWeight: '900' },
-  link: { color: '#7DFFB8', fontWeight: '900' },
+  perPerson: { color: '#C084FC', fontSize: 24, fontWeight: '900' },
+  link: { color: '#C084FC', fontWeight: '900' },
   messageRow: {
     marginTop: 14,
     padding: 12,
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 13,
     borderRadius: 999,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
   },
   primaryTxt: { color: '#05070A', fontWeight: '900' },
 });

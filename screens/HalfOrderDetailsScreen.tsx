@@ -902,7 +902,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
         alreadyMember &&
         halfParticipantCount === 1 ? (
           <LinearGradient
-            colors={['rgba(251,191,36,0.15)', 'rgba(20,25,34,1)']}
+            colors={['rgba(168, 85, 247,0.15)', 'rgba(20,25,34,1)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.waitingCardGradient}
@@ -1010,7 +1010,7 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
                 style={styles.partnerChatCtaWrap}
               >
                 <LinearGradient
-                  colors={['#22C55E', '#059669']}
+                  colors={['#C084FC', '#A855F7']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.partnerChatCta}
@@ -1198,10 +1198,10 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0D10' },
+  container: { flex: 1, backgroundColor: '#000000' },
   loadingWrap: {
     flex: 1,
-    backgroundColor: '#0B0D10',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1267,8 +1267,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  timerLabel: { color: '#FB923C', fontSize: 14, fontWeight: '700' },
-  timerValue: { color: '#FB923C', fontSize: 24, fontWeight: '900' },
+  timerLabel: { color: '#A855F7', fontSize: 14, fontWeight: '700' },
+  timerValue: { color: '#A855F7', fontSize: 24, fontWeight: '900' },
   orderDetailCoordinationNote: {
     alignSelf: 'stretch',
     marginTop: 14,
@@ -1286,7 +1286,7 @@ const styles = StyleSheet.create({
   chatNavButtonText: { color: '#7dd3fc', fontWeight: '800', fontSize: 16 },
   joinButton: {
     marginTop: 16,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#A855F7',
     borderRadius: 14,
     minHeight: 50,
     alignItems: 'center',
@@ -1460,7 +1460,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     backgroundColor: '#1e293b',
     borderWidth: 3,
-    borderColor: 'rgba(52,211,153,0.35)',
+    borderColor: 'rgba(168,85,247,0.35)',
   },
   partnerAvatarPlaceholder: {
     alignItems: 'center',

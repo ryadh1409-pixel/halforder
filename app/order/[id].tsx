@@ -66,7 +66,7 @@ export default function OrderDetailRoute() {
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     padding: 24,
     justifyContent: 'center',
   },

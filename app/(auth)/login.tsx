@@ -28,14 +28,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Auth stack dark theme — aligned with onboarding / app chrome */
 const AUTH = {
-  bg: '#09090B',
+  bg: '#000000',
   card: '#171923',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   inputBg: '#1C2030',
   inputBorder: 'rgba(255,255,255,0.08)',
   placeholder: '#7D8493',
-  primary: '#FF6B35',
+  primary: '#A855F7',
 } as const;
 
 export default function LoginScreen() {

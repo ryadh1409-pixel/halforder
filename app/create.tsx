@@ -44,7 +44,7 @@ export default function CreateTabDisabledScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#09090B',
+          backgroundColor: '#000000',
           alignItems: 'center',
           justifyContent: 'center',
           padding: 24,
@@ -147,7 +147,7 @@ export default function CreateTabDisabledScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#09090B',
+          backgroundColor: '#000000',
           alignItems: 'center',
           justifyContent: 'center',
           padding: 24,
@@ -229,7 +229,7 @@ export default function CreateTabDisabledScreen() {
     <View
       style={{
         flex: 1,
-        backgroundColor: '#09090B',
+        backgroundColor: '#000000',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,

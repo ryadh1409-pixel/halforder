@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   mapFallback: {
     height: 180,
     borderRadius: 12,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,

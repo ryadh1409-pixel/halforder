@@ -22,7 +22,7 @@ import { useAuth } from '../services/AuthContext';
 import { startOnboarding } from '../services/stripeConnect';
 import { alertFriendly } from '../utils/friendlyAlert';
 
-const BG = '#09090B';
+const BG = '#000000';
 const { width } = Dimensions.get('window');
 
 const GREEN_GRADIENT = ['#1B5E20', '#2E7D32', '#4CAF50'] as const;

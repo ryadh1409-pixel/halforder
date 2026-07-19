@@ -1012,8 +1012,8 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0d0f14' },
-  container: { flex: 1, backgroundColor: '#0d0f14' },
+  safe: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#000000' },
   screenHeader: {
     paddingHorizontal: 16,
     paddingTop: 6,
@@ -1073,12 +1073,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.35)',
+    borderColor: 'rgba(168, 85, 247, 0.35)',
   },
   ideaChipText: {
-    color: '#A7F3D0',
+    color: '#C084FC',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1132,7 +1132,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   suggestedBadge: {
-    color: '#A7F3D0',
+    color: '#C084FC',
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',

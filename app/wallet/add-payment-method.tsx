@@ -14,13 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const PAL = {
-  bg: '#09090B',
+  bg: '#000000',
   surface: '#171923',
   surfaceMuted: '#1E2230',
   text: '#FFFFFF',
   textMuted: '#7D8493',
   border: 'rgba(255,255,255,0.08)',
-  primary: '#FF6B35',
+  primary: '#A855F7',
 } as const;
 
 export default function AddPaymentMethodScreen() {

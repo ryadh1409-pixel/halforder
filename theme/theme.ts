@@ -8,7 +8,7 @@ import { platformElevation } from '../utils/platformElevation';
 
 /**
  * Centralized premium palette (Emo AI reference).
- * Purple accent: #A855F7 · Orange brand CTA: #FF6B35
+ * Primary brand: purple #A855F7
  */
 export const ordersPalette = {
   /** Page / safe-area background — deep black */
@@ -44,15 +44,15 @@ export const ordersPalette = {
   textSection: '#B7BDC9',
   textSlate: '#8B93A7',
   textSlateSolid: '#8B93A7',
-  /** Brand CTA — orange */
-  accent: '#FF6B35',
-  accentCta: '#FF6B35',
-  accentGlow: 'rgba(255, 107, 53, 0.22)',
-  /** Primary chrome accent — purple (Emo AI) */
+  /** Primary brand — Emo AI purple */
+  accent: '#A855F7',
+  accentCta: '#A855F7',
+  accentGlow: 'rgba(168, 85, 247, 0.28)',
   purple: '#A855F7',
   purpleSoft: 'rgba(168, 85, 247, 0.18)',
   purpleGlow: 'rgba(168, 85, 247, 0.28)',
   purpleBorder: 'rgba(168, 85, 247, 0.35)',
+  /** Semantic success (status only — not decorative) */
   success: '#22C55E',
   successBright: '#22C55E',
   successSoft: 'rgba(34,197,94,0.16)',
@@ -71,7 +71,8 @@ export const ordersPalette = {
   info: '#A855F7',
   infoSoft: 'rgba(168,85,247,0.18)',
   whatsapp: '#25D366',
-  greenGlow: 'rgba(34, 197, 94, 0.1)',
+  /** Deprecated decorative alias → purple soft */
+  greenGlow: 'rgba(168, 85, 247, 0.12)',
   /** Navigation glass */
   navGlass: 'rgba(12,13,18,0.88)',
   shadow: '#000000',
@@ -81,7 +82,8 @@ export const ordersPalette = {
 
 export const palette = {
   primaryGreen: ordersPalette.successBright,
-  primaryOrange: ordersPalette.accent,
+  /** Legacy name — now maps to primary purple */
+  primaryOrange: ordersPalette.purple,
   background: ordersPalette.bg,
   lightGray: ordersPalette.surfaceSolid,
   textDark: ordersPalette.text,
@@ -95,11 +97,10 @@ export const colors = {
   borderSubtle: ordersPalette.border,
   white: ordersPalette.text,
   danger: ordersPalette.danger,
-  /** Primary CTA — orange accent */
-  primary: palette.primaryOrange,
-  primaryLight: 'rgba(255,107,53,0.35)',
-  primaryDark: '#FF6B35',
-  /** Chrome / active accent — purple */
+  /** Primary CTA — purple */
+  primary: ordersPalette.purple,
+  primaryLight: ordersPalette.purpleSoft,
+  primaryDark: '#9333EA',
   purple: ordersPalette.purple,
   purpleSoft: ordersPalette.purpleSoft,
   purpleGlow: ordersPalette.purpleGlow,
@@ -136,7 +137,7 @@ export const colors = {
   sheetDark: ordersPalette.bg,
   surfaceDark: ordersPalette.surfaceSolid,
   surfaceDarkElevated: ordersPalette.surfaceElevated,
-  mapRouteTint: 'rgba(255, 107, 53, 0.55)',
+  mapRouteTint: 'rgba(168, 85, 247, 0.45)',
   imessageGreen: ordersPalette.success,
   instagramBrand: '#E4405F',
   bannerNavy: ordersPalette.bgSecondary,
@@ -235,21 +236,21 @@ export const typography = {
   },
 };
 
-/** Brand gradients — orange CTA + purple→orange chrome. */
+/** Brand gradients — purple primary. */
 export const gradients = {
   brand: {
-    colors: ['#FF8A5B', '#FF6B35'] as [string, string],
+    colors: ['#C084FC', '#A855F7'] as [string, string],
     start: { x: 0, y: 0 },
     end: { x: 1, y: 1 },
   },
   brandHorizontal: {
-    colors: ['#FF8A5B', '#FF6B35'] as [string, string],
+    colors: ['#C084FC', '#A855F7'] as [string, string],
     start: { x: 0, y: 0.5 },
     end: { x: 1, y: 0.5 },
   },
-  /** Purple → orange (headers / brand hairline) */
+  /** Purple brand hairline */
   brandAccent: {
-    colors: ['#A855F7', '#FF6B35'] as [string, string],
+    colors: ['#A855F7', '#7C3AED'] as [string, string],
     start: { x: 0, y: 0.5 },
     end: { x: 1, y: 0.5 },
   },
@@ -320,9 +321,9 @@ export const layoutStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  /** Orange — main call-to-action */
+  /** Purple — main call-to-action */
   primaryButton: {
-    backgroundColor: colors.primaryOrange,
+    backgroundColor: colors.purple,
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.xl,
@@ -330,11 +331,11 @@ export const layoutStyles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 52,
     ...platformElevation({
-      web: '0px 6px 18px rgba(255, 107, 53, 0.35)',
+      web: '0px 6px 18px rgba(168, 85, 247, 0.4)',
       ios: {
-        shadowColor: '#FF6B35',
+        shadowColor: '#A855F7',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.35,
+        shadowOpacity: 0.4,
         shadowRadius: 14,
       },
       android: { elevation: 5 },

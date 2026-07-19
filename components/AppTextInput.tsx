@@ -25,8 +25,8 @@ export const AppTextInput = forwardRef<TextInput, TextInputProps>(
         {...ENGLISH_DEFAULTS}
         {...props}
         placeholderTextColor={placeholderTextColor ?? '#7D8493'}
-        selectionColor="#FF6B35"
-        cursorColor="#FF6B35"
+        selectionColor="#A855F7"
+        cursorColor="#A855F7"
         style={[styles.base, styles.ltr, style]}
         {...(Platform.OS === 'android'
           ? { textAlign: props.textAlign ?? 'left' }

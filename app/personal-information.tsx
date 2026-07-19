@@ -59,7 +59,7 @@ import {
 const DEFAULT_AVATAR = require('../assets/default-avatar.png') as number;
 
 const PAL = {
-  bg: '#09090B',
+  bg: '#000000',
   surface: '#171923',
   surfaceMuted: '#1E2230',
   text: '#FFFFFF',
@@ -67,7 +67,7 @@ const PAL = {
   textTertiary: '#7D8493',
   border: 'rgba(255,255,255,0.08)',
   inputBg: '#1C2030',
-  primary: '#FF6B35',
+  primary: '#A855F7',
   onPrimary: '#FFFFFF',
   success: '#22C55E',
   danger: '#EF4444',

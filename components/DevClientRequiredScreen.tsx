@@ -36,7 +36,7 @@ export function DevClientRequiredScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#09090B' },
+  root: { flex: 1, backgroundColor: '#000000' },
   inner: { flex: 1, padding: 24, justifyContent: 'center' },
   title: { color: '#FFFFFF', fontSize: 22, fontWeight: '800', marginBottom: 12 },
   body: { color: '#7D8493', fontSize: 15, lineHeight: 22, marginBottom: 20 },

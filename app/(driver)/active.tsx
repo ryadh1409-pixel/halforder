@@ -99,7 +99,7 @@ export default function DriverActiveScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#09090B' },
+  screen: { flex: 1, backgroundColor: '#000000' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   muted: { color: '#7D8493' },
   list: { flex: 1, padding: 16, paddingBottom: 40 },
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
     justifyContent: 'center',
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
   },
   secondaryText: { color: '#7D8493', fontWeight: '600', marginTop: 4 },
 });

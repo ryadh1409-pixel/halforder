@@ -204,7 +204,7 @@ export function OrdersHubScreen() {
           style={styles.swipeLink}
           onPress={() => router.push(USER_ROUTES.hub as never)}
         >
-          <Ionicons name="flame" size={16} color="#FF6B35" />
+          <Ionicons name="flame" size={16} color="#A855F7" />
           <Text style={styles.swipeLinkText}>Discover meal shares on Swipe</Text>
         </Pressable>
       </ScrollView>
@@ -213,7 +213,7 @@ export function OrdersHubScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090B' },
+  safe: { flex: 1, backgroundColor: '#000000' },
   scroll: { padding: 20, paddingBottom: 120 },
   centered: {
     flex: 1,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   signInBody: { fontSize: 14, color: '#B7BDC9', textAlign: 'center' },
   cta: {
     marginTop: 8,
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#A855F7',
     paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 14,
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingVertical: 12,
   },
-  swipeLinkText: { color: '#FF6B35', fontWeight: '800', fontSize: 13 },
+  swipeLinkText: { color: '#A855F7', fontWeight: '800', fontSize: 13 },
 });
 
 export default OrdersHubScreen;

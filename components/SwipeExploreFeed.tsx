@@ -490,7 +490,7 @@ export default function SwipeExploreFeed() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090B' },
+  container: { flex: 1, backgroundColor: '#000000' },
   header: { paddingHorizontal: theme.spacing.screen, paddingVertical: 12 },
   templateSection: {
     paddingLeft: theme.spacing.screen,
@@ -543,12 +543,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(52, 211, 153, 0.18)',
+    backgroundColor: 'rgba(168, 85, 247, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
+    borderColor: 'rgba(168, 85, 247, 0.45)',
   },
   dashboardBtnText: {
-    color: '#A7F3D0',
+    color: '#C084FC',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -583,11 +583,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
+    borderColor: 'rgba(168, 85, 247, 0.45)',
   },
-  retryBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 15 },
+  retryBtnText: { color: '#C084FC', fontWeight: '800', fontSize: 15 },
   deckWithActions: { flex: 1, position: 'relative' },
   actionsBarWrap: {
     position: 'absolute',

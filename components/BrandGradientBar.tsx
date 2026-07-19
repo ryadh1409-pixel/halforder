@@ -6,7 +6,7 @@ import { gradients } from '../theme/theme';
 type Props = {
   height?: number;
   style?: ViewStyle | ViewStyle[];
-  /** Use horizontal purple → orange brand hairline */
+  /** Use horizontal purple brand hairline */
   variant?: 'diagonal' | 'horizontal';
 };
 

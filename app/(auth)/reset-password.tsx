@@ -17,13 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getUserFriendlyError } from '../../utils/errorHandler';
 
 const AUTH = {
-  bg: '#09090B',
+  bg: '#000000',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   inputBg: '#1C2030',
   inputBorder: 'rgba(255,255,255,0.08)',
   placeholder: '#7D8493',
-  primary: '#FF6B35',
+  primary: '#A855F7',
   success: '#22C55E',
   danger: '#EF4444',
 } as const;

@@ -95,7 +95,7 @@ export default function CommunityGuidelinesScreen() {
 const c = theme.colors;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090B' },
+  safe: { flex: 1, backgroundColor: '#000000' },
   pad: { padding: 24, alignItems: 'center', gap: 14 },
   title: { color: '#FFF', fontSize: 26, fontWeight: '900', textAlign: 'center' },
   sub: {

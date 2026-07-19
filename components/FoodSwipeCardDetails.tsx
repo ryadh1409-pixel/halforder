@@ -138,8 +138,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
-    backgroundColor: 'rgba(52, 211, 153, 0.08)',
+    borderColor: 'rgba(168, 85, 247, 0.45)',
+    backgroundColor: 'rgba(168, 85, 247, 0.08)',
   },
   detailsBtnText: { color: '#6EE7B7', fontWeight: '800', fontSize: 14 },
   hostRow: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -156,12 +156,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148,163,184,0.22)',
   },
   matchPillWaiting: {
-    backgroundColor: 'rgba(251,191,36,0.12)',
+    backgroundColor: 'rgba(168, 85, 247,0.12)',
     borderColor: 'rgba(245,158,11,0.35)',
   },
   matchPillJoined: {
     backgroundColor: 'rgba(34,197,94,0.14)',
-    borderColor: 'rgba(52,211,153,0.35)',
+    borderColor: 'rgba(168,85,247,0.35)',
   },
   matchPillText: {
     color: 'rgba(248,250,252,0.92)',

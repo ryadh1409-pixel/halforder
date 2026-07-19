@@ -213,12 +213,12 @@ const styles = StyleSheet.create({
   webWrap: {
     flex: 1,
     marginHorizontal: 0,
-    backgroundColor: '#0a0c10',
+    backgroundColor: '#000000',
     overflow: 'hidden',
   },
   webview: {
     flex: 1,
-    backgroundColor: '#0a0c10',
+    backgroundColor: '#000000',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

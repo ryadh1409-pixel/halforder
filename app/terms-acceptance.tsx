@@ -63,6 +63,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0d0f14',
+    backgroundColor: '#000000',
   },
 });

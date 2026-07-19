@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#B7BDC9',
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     padding: 14,
     marginBottom: 10,
   },

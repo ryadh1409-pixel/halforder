@@ -231,7 +231,7 @@ function useProfilePalette(): Palette {
       border: 'rgba(168, 85, 247, 0.22)',
       inputBg: '#1C2030',
       chipBg: 'rgba(168,85,247,0.10)',
-      primary: '#FF6B35',
+      primary: '#A855F7',
       onPrimary: '#FFFFFF',
       danger: '#EF4444',
       success: '#22C55E',
@@ -1581,7 +1581,7 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     },
     chipActive: {
       borderColor: pal.primary,
-      backgroundColor: isDarkMode ? 'rgba(255,107,53,0.18)' : tc.primaryLight,
+      backgroundColor: isDarkMode ? 'rgba(168, 85, 247,0.18)' : tc.primaryLight,
     },
     chipText: {
       color: pal.textSecondary,

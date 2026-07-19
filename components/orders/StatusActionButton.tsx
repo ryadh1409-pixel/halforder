@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 14,
   },
-  primary: { backgroundColor: '#22C55E' },
+  primary: { backgroundColor: '#A855F7' },
   secondary: { backgroundColor: '#171923', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   danger: { backgroundColor: 'rgba(239,68,68,0.14)', borderWidth: 1, borderColor: '#EF4444' },
   disabled: { opacity: 0.6 },

@@ -630,7 +630,7 @@ export default function JoinScreen() {
                 </Text>
                 <Text
                   style={{
-                    color: '#FF6B35',
+                    color: '#A855F7',
                     fontSize: 14,
                     fontWeight: '600',
                     marginTop: 6,

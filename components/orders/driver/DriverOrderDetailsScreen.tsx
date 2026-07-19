@@ -318,9 +318,9 @@ const styles = StyleSheet.create({
   hero: {
     borderRadius: 16,
     padding: 16,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.25)',
+    borderColor: 'rgba(168,85,247,0.25)',
   },
   status: { color: '#a7f3d0', fontWeight: '800', fontSize: 13, marginBottom: 6 },
   restaurant: { color: '#FFFFFF', fontWeight: '900', fontSize: 22 },
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.35)',
-    backgroundColor: 'rgba(251,191,36,0.08)',
+    backgroundColor: 'rgba(168, 85, 247,0.08)',
   },
   pinLabel: { color: '#F59E0B', fontWeight: '800', fontSize: 12 },
   pinInput: {

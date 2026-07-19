@@ -43,12 +43,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AUTH = {
-  bg: '#09090B',
+  bg: '#000000',
   card: '#171923',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   placeholder: '#7D8493',
-  primary: '#FF6B35',
+  primary: '#A855F7',
   border: 'rgba(255,255,255,0.08)',
   inputBg: '#1E2230',
 } as const;
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
     borderBottomColor: AUTH.border,
   },
   pickerRowOn: {
-    backgroundColor: 'rgba(255,107,53,0.12)',
+    backgroundColor: 'rgba(168, 85, 247,0.12)',
   },
   pickerFlag: { fontSize: 22 },
   pickerName: {

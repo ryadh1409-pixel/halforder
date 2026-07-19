@@ -19,7 +19,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
   },
   fallbackDark: { backgroundColor: '#020617' },
   fallbackText: {

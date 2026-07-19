@@ -39,7 +39,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const TAB_SPINNER = '#22C55E';
+const TAB_SPINNER = '#A855F7';
 const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
 type OrderHistoryFilter = 'active' | 'completed' | 'cancelled';
 
@@ -696,7 +696,7 @@ export default function MarketplaceOrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#09090B' },
+  root: { flex: 1, backgroundColor: '#000000' },
   safe: { flex: 1 },
   scrollFlex: { flex: 1 },
   glass: {
@@ -728,15 +728,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   filterChipActive: {
-    backgroundColor: 'rgba(34,197,94,0.16)',
-    borderColor: 'rgba(34,197,94,0.4)',
+    backgroundColor: 'rgba(168,85,247,0.16)',
+    borderColor: 'rgba(168,85,247,0.4)',
   },
   filterText: {
     color: 'rgba(255,255,255,0.58)',
     fontWeight: '800',
     fontSize: 13,
   },
-  filterTextActive: { color: '#22C55E' },
+  filterTextActive: { color: '#A855F7' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
   sectionTitleMuted: {
     fontSize: 18,
@@ -752,11 +752,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.4)',
+    borderColor: 'rgba(168, 85, 247, 0.4)',
   },
-  primaryBtnText: { color: '#A7F3D0', fontWeight: '700', fontSize: 16 },
+  primaryBtnText: { color: '#C084FC', fontWeight: '700', fontSize: 16 },
   emptyTitle: {
     color: '#F1F5F9',
     fontSize: 20,
@@ -775,9 +775,9 @@ const styles = StyleSheet.create({
   banner: {
     padding: 14,
     borderRadius: 16,
-    backgroundColor: 'rgba(251,191,36,0.08)',
+    backgroundColor: 'rgba(168, 85, 247,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.28)',
+    borderColor: 'rgba(168, 85, 247,0.28)',
     marginBottom: 16,
   },
   bannerText: { color: '#F59E0B', fontWeight: '600', fontSize: 13, lineHeight: 18 },

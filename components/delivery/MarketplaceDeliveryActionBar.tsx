@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22C55E',
+    backgroundColor: '#A855F7',
     paddingHorizontal: 16,
   },
   disabled: { opacity: 0.6 },
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   completedText: {
-    color: '#22C55E',
+    color: '#A855F7',
     fontWeight: '800',
     fontSize: 17,
     textAlign: 'center',

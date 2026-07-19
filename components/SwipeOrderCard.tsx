@@ -108,7 +108,7 @@ export function SwipeOrderCard({ order, dimmed = false, onReport }: Props) {
         </View>
 
         <View style={styles.urgencyFoot}>
-          <MaterialIcons name="local-fire-department" size={16} color="#FB923C" />
+          <MaterialIcons name="local-fire-department" size={16} color="#A855F7" />
           <Text style={styles.urgencyFootText}>
             Closing in ~{order.closingInMin} min · join while spots last
           </Text>
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pillGreen: {
-    backgroundColor: 'rgba(52, 211, 153, 0.95)',
+    backgroundColor: 'rgba(168, 85, 247, 0.95)',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   joinedSub: {
-    color: '#FDBA74',
+    color: '#C084FC',
     fontSize: 13,
     fontWeight: '700',
     marginTop: 2,

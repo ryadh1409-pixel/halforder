@@ -24,13 +24,13 @@ import { errorHaptic, successHaptic } from '../../utils/haptics';
 import { showError, showFriendlyError, showSuccess } from '../../utils/toast';
 
 const AUTH = {
-  bg: '#09090B',
+  bg: '#000000',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   inputBg: '#1C2030',
   inputBorder: 'rgba(255,255,255,0.08)',
   placeholder: '#7D8493',
-  primary: '#FF6B35',
+  primary: '#A855F7',
 } as const;
 
 export default function PasswordScreen() {

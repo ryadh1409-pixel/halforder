@@ -43,7 +43,7 @@ export function chipForFulfillment(status: OrderStatus | undefined): { bg: strin
     case 'pending_driver':
       return { bg: 'rgba(234,179,8,0.25)', fg: '#F59E0B' };
     case 'pending':
-      return { bg: 'rgba(251,191,36,0.2)', fg: '#FCD34D' };
+      return { bg: 'rgba(245,158,11,0.2)', fg: '#FCD34D' };
     case 'restaurant_accepted':
     case 'preparing':
       return { bg: 'rgba(59,130,246,0.25)', fg: '#BFDBFE' };
@@ -73,7 +73,7 @@ export function paymentBadge(paymentStatus: RestaurantOrder['paymentStatus']): {
     case 'paid':
       return { label: 'Paid', bg: 'rgba(34,197,94,0.25)', fg: '#22C55E' };
     case 'processing':
-      return { label: 'Processing', bg: 'rgba(251,191,36,0.2)', fg: '#F59E0B' };
+      return { label: 'Processing', bg: 'rgba(245,158,11,0.2)', fg: '#F59E0B' };
     case 'failed':
       return { label: 'Payment issue', bg: 'rgba(239,68,68,0.25)', fg: '#EF4444' };
     case 'refunded':

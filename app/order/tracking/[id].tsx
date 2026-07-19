@@ -17,7 +17,7 @@ export default function LegacyOrderTrackingRedirect() {
   }, [oid]);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#09090B' }}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000000' }}>
       <ActivityIndicator size="large" color="#22C55E" />
     </View>
   );

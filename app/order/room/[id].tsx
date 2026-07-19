@@ -398,7 +398,7 @@ export default function OrderChatScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     paddingHorizontal: 14,
   },
   headerRow: {
@@ -434,9 +434,9 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(251,191,36,0.12)',
+    backgroundColor: 'rgba(168, 85, 247,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.24)',
+    borderColor: 'rgba(168, 85, 247,0.24)',
   },
   readOnlyTitle: {
     color: '#F59E0B',
@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
   },
   bubbleMine: {
     backgroundColor: 'rgba(16, 36, 29, 0.95)',
-    borderColor: 'rgba(52, 211, 153, 0.25)',
+    borderColor: 'rgba(168, 85, 247, 0.25)',
   },
   bubbleTheirs: {
     backgroundColor: 'rgba(20, 25, 34, 0.95)',
@@ -544,19 +544,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sendBtn: {
-    backgroundColor: 'rgba(52, 211, 153, 0.22)',
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
     borderRadius: 14,
     paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.45)',
+    borderColor: 'rgba(168, 85, 247, 0.45)',
   },
   sendBtnDisabled: {
     opacity: 0.6,
   },
   sendBtnText: {
-    color: '#A7F3D0',
+    color: '#C084FC',
     fontWeight: '800',
     fontSize: 14,
   },

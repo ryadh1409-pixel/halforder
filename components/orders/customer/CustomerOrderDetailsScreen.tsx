@@ -635,10 +635,10 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#09090B' },
+  screen: { flex: 1, backgroundColor: '#000000' },
   scrollContent: { paddingBottom: 48 },
   stickyHeader: {
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
@@ -665,12 +665,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(52, 211, 153, 0.14)',
+    backgroundColor: 'rgba(168, 85, 247, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.35)',
+    borderColor: 'rgba(168, 85, 247, 0.35)',
     alignItems: 'center',
   },
-  trackFullscreenBtnText: { color: '#A7F3D0', fontWeight: '900', fontSize: 15 },
+  trackFullscreenBtnText: { color: '#C084FC', fontWeight: '900', fontSize: 15 },
   pinCard: {
     marginHorizontal: 16,
     marginTop: 14,
@@ -830,7 +830,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(34,197,94,0.4)',
     backgroundColor: 'rgba(34,197,94,0.16)',
   },
-  reorderBtnText: { color: '#A7F3D0', fontWeight: '800', fontSize: 13 },
+  reorderBtnText: { color: '#C084FC', fontWeight: '800', fontSize: 13 },
   secondaryBtn: {
     marginTop: 10,
     paddingVertical: 12,
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingVertical: 16,
     borderRadius: 14,
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
   },
   rateBtnText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },

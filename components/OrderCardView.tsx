@@ -116,8 +116,8 @@ export function OrderCardView({
       <LinearGradient
         colors={
           isMatched
-            ? ['rgba(52,211,153,0.25)', 'rgba(15,23,42,0.95)']
-            : ['rgba(251,191,36,0.12)', 'rgba(15,23,42,0.96)']
+            ? ['rgba(168,85,247,0.25)', 'rgba(15,23,42,0.95)']
+            : ['rgba(168, 85, 247,0.12)', 'rgba(15,23,42,0.96)']
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -149,7 +149,7 @@ export function OrderCardView({
             <View style={styles.heartCol}>
               {isMatched ? (
                 <LinearGradient
-                  colors={['#22C55E', '#10B981']}
+                  colors={['#C084FC', '#A855F7']}
                   style={styles.heartBubble}
                 >
                   <MaterialIcons name="favorite" size={22} color="#052E1A" />
@@ -159,7 +159,7 @@ export function OrderCardView({
                   <MaterialIcons
                     name="hourglass-empty"
                     size={20}
-                    color="rgba(251,191,36,0.95)"
+                    color="rgba(168, 85, 247,0.95)"
                   />
                 </View>
               )}
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusDotOn: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#A855F7',
   },
   statusDotPending: {
     backgroundColor: '#F59E0B',
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(34,197,94,0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.35)',
+    borderColor: 'rgba(168,85,247,0.35)',
   },
   youBadgeText: {
     color: '#6EE7B7',
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(251,191,36,0.12)',
+    backgroundColor: 'rgba(168, 85, 247,0.12)',
     borderWidth: 2,
     borderColor: 'rgba(245,158,11,0.35)',
   },

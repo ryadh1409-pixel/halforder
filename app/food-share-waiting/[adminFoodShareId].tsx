@@ -356,7 +356,7 @@ function CostRow({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090B' },
+  safe: { flex: 1, backgroundColor: '#000000' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   hint: { color: c.textSecondary, fontSize: 14, textAlign: 'center' },
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   primaryBtn: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#A855F7',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',

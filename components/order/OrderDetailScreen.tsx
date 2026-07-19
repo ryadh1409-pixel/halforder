@@ -15,7 +15,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const BG = '#09090B';
+const BG = '#000000';
 const BLUE = '#1A6FE8';
 const GRAY = '#7D8493';
 

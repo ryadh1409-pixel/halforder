@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function CreateOrderScreen() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#09090B' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>
           Order creation removed

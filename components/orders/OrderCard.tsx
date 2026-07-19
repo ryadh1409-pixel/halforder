@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     paddingTop: 16,
     paddingBottom: 14,
     paddingLeft: 16,
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     ...platformElevation({
       web: '0px 3px 10px rgba(15, 23, 42, 0.06)',
       ios: {
-        shadowColor: '#09090B',
+        shadowColor: '#000000',
         shadowOpacity: 0.06,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 3 },

@@ -476,7 +476,7 @@ function Row({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090B' },
+  safe: { flex: 1, backgroundColor: '#000000' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   back: {
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   timelineAt: { fontSize: 12, color: '#B7BDC9', marginTop: 2 },
   title: { fontSize: 20, fontWeight: '800', color: '#FFF' },
   cta: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#A855F7',
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 12,

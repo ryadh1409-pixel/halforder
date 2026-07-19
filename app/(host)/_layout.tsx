@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabBar: {
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     borderTopColor: '#B7BDC9',
     height: Platform.OS === 'ios' ? 88 : 64,
     paddingTop: 6,

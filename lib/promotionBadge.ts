@@ -27,7 +27,7 @@ export const PROMOTION_BADGE_COLORS: Record<
   Exclude<PromotionBadgeValue, 'none'>,
   string
 > = {
-  most_ordered: '#FF6B35',
+  most_ordered: '#A855F7',
   great_price: '#22C55E',
 };
 

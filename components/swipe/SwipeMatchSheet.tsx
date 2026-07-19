@@ -53,7 +53,7 @@ function SwipeMatchSheetInner({
         )}
         <View style={styles.sheet}>
           <View style={styles.flameRing}>
-            <Ionicons name="flame" size={48} color="#FF6B35" />
+            <Ionicons name="flame" size={48} color="#A855F7" />
           </View>
           <Text style={styles.title}>It&apos;s a match</Text>
           <Text style={styles.food}>{foodTitle}</Text>
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: 'rgba(255,107,53,0.15)',
+    backgroundColor: 'rgba(168, 85, 247,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  split: { marginTop: 8, fontSize: 20, fontWeight: '900', color: '#7DFFB8' },
+  split: { marginTop: 8, fontSize: 20, fontWeight: '900', color: '#C084FC' },
   avatarRow: {
     flexDirection: 'row',
     marginTop: 18,
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#171922',
   },
-  avatarWarm: { backgroundColor: '#FF6B35' },
+  avatarWarm: { backgroundColor: '#A855F7' },
   avatarGreen: { backgroundColor: '#22C55E', marginLeft: -10 },
   avatarTxt: { color: '#FFF', fontSize: 18, fontWeight: '900' },
   sub: {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },

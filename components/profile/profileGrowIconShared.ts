@@ -1,4 +1,4 @@
-/** Muted gold-orange — matches HalfOrder accent (#F5B041). */
-export const PROFILE_GROW_ICON_COLOR = '#F5B041';
+/** Profile grow icon — Emo AI purple brand accent. */
+export const PROFILE_GROW_ICON_COLOR = '#A855F7';
 
 export type ProfileGrowIconKind = 'business' | 'restaurant' | 'driver';

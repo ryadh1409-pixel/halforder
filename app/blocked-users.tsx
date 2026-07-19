@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
-  backLink: { color: '#FF6B35', fontSize: 16, fontWeight: '600' },
+  backLink: { color: '#A855F7', fontSize: 16, fontWeight: '600' },
   screenTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   muted: { color: '#B7BDC9', fontSize: 15, textAlign: 'center' },

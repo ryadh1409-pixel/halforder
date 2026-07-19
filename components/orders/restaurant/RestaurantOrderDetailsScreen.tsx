@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.45)',
+    borderColor: 'rgba(168, 85, 247,0.45)',
     alignItems: 'center',
   },
   outlineBtnText: { color: '#F59E0B', fontWeight: '800' },

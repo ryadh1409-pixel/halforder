@@ -51,7 +51,7 @@ export function AdminHeader({
           paddingTop: Math.max(insets.top, 10),
           ...Platform.select({
             ios: {
-              shadowColor: '#09090B',
+              shadowColor: '#000000',
               shadowOffset: { width: 0, height: 1 },
               shadowOpacity: 0.08,
               shadowRadius: 6,
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(15, 23, 42, 0.1)',
-    backgroundColor: '#09090B',
+    backgroundColor: '#000000',
   },
   toolbar: {
     flexDirection: 'row',

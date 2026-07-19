@@ -1,6 +1,6 @@
 import { ordersPalette } from '@/theme/theme';
 
-/** Marketplace tokens — Emo AI–aligned dark palette (colors only; layout metrics unchanged). */
+/** Marketplace tokens — Emo AI purple brand (colors only; layout metrics unchanged). */
 export const UE = {
   bg: ordersPalette.bg,
   surface: ordersPalette.surfaceSolid,
@@ -16,8 +16,8 @@ export const UE = {
   promoSoft: ordersPalette.dangerSoft,
   gold: ordersPalette.warning,
   black: ordersPalette.text,
-  blackBtn: ordersPalette.accent,
-  chipActive: ordersPalette.accent,
+  blackBtn: ordersPalette.purple,
+  chipActive: ordersPalette.purple,
   chipInactiveBg: ordersPalette.surface,
   chipInactiveText: ordersPalette.text,
   shadow: 'rgba(168, 85, 247, 0.18)',

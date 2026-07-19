@@ -259,7 +259,7 @@ export function ProfileOrdersSection({
                     : tone === 'blue'
                       ? { bg: 'rgba(59,130,246,0.2)', fg: '#3B82F6' }
                       : tone === 'orange'
-                        ? { bg: 'rgba(251,146,60,0.2)', fg: '#FDBA74' }
+                        ? { bg: 'rgba(168,85,247,0.2)', fg: '#C084FC' }
                         : { bg: 'rgba(255,255,255,0.1)', fg: pal.textSecondary };
               const cancelEnabled = canCancelProfileOrder({
                 status: effectiveStatus,
