@@ -95,8 +95,14 @@ export type EmailSignUpPayload = {
   password: string;
   fullName: string;
   whatsapp: string;
+  /** Display form of phone (includes country dial code). Stored on `phone` / `whatsapp`. */
+  phoneDisplay?: string;
   /** User accepted WhatsApp coordination consent on the sign-up form */
   whatsappConsent: boolean;
+  /** Terms of Service accepted on the sign-up form */
+  termsAccepted?: boolean;
+  /** Privacy Policy accepted on the sign-up form */
+  privacyAccepted?: boolean;
   /** Local file URI from ImagePicker; uploaded to `users/{uid}/profile.jpg` */
   localPhotoUri?: string | null;
   /** Account type from register URL or host/driver signup entry points. */
@@ -632,14 +638,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const trimmed = typeof payload.email === 'string' ? payload.email.trim() : '';
     const nameTrim = payload.fullName.trim();
     const waDigits = profilePhoneDigitsOnly(payload.whatsapp);
-    const phoneFormatted = formatProfileWhatsAppDisplay(waDigits);
+    const phoneFormatted =
+      typeof payload.phoneDisplay === 'string' && payload.phoneDisplay.trim()
+        ? payload.phoneDisplay.trim()
+        : formatProfileWhatsAppDisplay(waDigits);
     const pwd = payload.password;
+    const termsAccepted = payload.termsAccepted === true;
+    const privacyAccepted = payload.privacyAccepted === true;
 
     if (!trimmed || !pwd || !nameTrim || !waDigits) {
       throw new Error('Please fill in all required fields.');
     }
-    if (!payload.whatsappConsent) {
-      throw new Error('Please accept WhatsApp usage to continue.');
+    if (!termsAccepted || !privacyAccepted) {
+      throw new Error('Please agree to the Terms of Service and Privacy Policy.');
     }
     if (pwd.length < 6) {
       throw new Error('Password must be at least 6 characters.');
@@ -726,7 +737,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           reviewsCount: 0,
           averageRating: 5,
           totalRatings: 0,
-          whatsappConsent: true,
+          whatsappConsent: payload.whatsappConsent === true,
+          termsAccepted: true,
+          privacyAccepted: true,
+          // Existing post-login ToS gate — keep in sync when accepted at signup.
+          hasAcceptedTerms: true,
+          acceptedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
           trustScore: 0,
           totalOrdersCompleted: 0,

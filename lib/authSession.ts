@@ -13,6 +13,7 @@ const AUTH_ROUTE_PATHS = new Set([
   '/phone',
   '/reset-password',
   '/verify-email',
+  '/location-permission',
 ]);
 
 /** True when the current route is inside the `(auth)` group or a bare auth screen path. */

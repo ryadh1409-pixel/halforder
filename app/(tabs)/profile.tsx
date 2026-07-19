@@ -24,6 +24,12 @@ import { navigateForRole } from '@/lib/navigation';
 import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { applySignupRole } from '@/services/authRoleAssignment';
+import {
+  captureAndSaveCurrentProfileLocation,
+  formatProfileLocationLabel,
+  subscribeUserProfileLocation,
+  type ProfileLocationFields,
+} from '@/services/signupProfileLocation';
 import { useAuth } from '../../services/AuthContext';
 import { auth, db } from '../../services/firebase';
 import {
@@ -261,9 +267,20 @@ export default function ProfileScreen() {
   const [profileOrdersCancellingIds, setProfileOrdersCancellingIds] = useState<
     Record<string, boolean>
   >({});
+  const [profileLocation, setProfileLocation] =
+    useState<ProfileLocationFields | null>(null);
+  const [changingLocation, setChangingLocation] = useState(false);
   const registered = isRegisteredAuthUser(user);
   const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
+
+  useEffect(() => {
+    if (!uid) {
+      setProfileLocation(null);
+      return undefined;
+    }
+    return subscribeUserProfileLocation(uid, setProfileLocation);
+  }, [uid]);
 
   const {
     activeRows: profileActiveOrders,
@@ -890,6 +907,40 @@ export default function ProfileScreen() {
               </View>
             </>
           ) : null}
+
+          <Text style={dynamicStyles.sectionHeading}>Location</Text>
+          <View style={dynamicStyles.card}>
+            <Text style={dynamicStyles.cardTitle}>
+              📍 {formatProfileLocationLabel(profileLocation)}
+            </Text>
+            <TouchableOpacity
+              style={[dynamicStyles.primaryButton, { marginTop: 12 }]}
+              onPress={() => {
+                if (!uid || changingLocation) return;
+                setChangingLocation(true);
+                void captureAndSaveCurrentProfileLocation(uid)
+                  .then(() => showSuccess('Location updated.'))
+                  .catch((e) =>
+                    showError(
+                      e instanceof Error
+                        ? e.message
+                        : 'Could not update location.',
+                    ),
+                  )
+                  .finally(() => setChangingLocation(false));
+              }}
+              disabled={changingLocation || !uid}
+              activeOpacity={0.85}
+            >
+              {changingLocation ? (
+                <ActivityIndicator color={pal.onPrimary} />
+              ) : (
+                <Text style={dynamicStyles.primaryButtonText}>
+                  Change Location
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
           <Text style={dynamicStyles.sectionHeading}>Delivery location</Text>
           <ProfileLocationPicker userId={uid} palette={pal} />

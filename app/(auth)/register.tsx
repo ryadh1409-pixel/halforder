@@ -1,65 +1,74 @@
-import { KeyboardToolbar, KEYBOARD_TOOLBAR_NATIVE_ID } from '../../components/KeyboardToolbar';
-import {
-  isCompleteNaProfilePhone,
-  isProfilePhoneStorageEmpty,
-  profilePhoneForFirestore,
-  profileWhatsAppOnChangeText,
-} from '../../lib/profileWhatsAppPhone';
 import { parseSignupIntent } from '@/lib/authRole';
-import { navigateForRole } from '@/lib/navigation';
-import { auth } from '@/services/firebase';
-import { useAuth } from '../../services/AuthContext';
-import { getUserRole } from '@/services/userService';
 import {
-  ImagePickerPermissionError,
-  pickImageFromLibrary,
-  takePhoto,
-} from '../../services/imagePicker';
+  DEFAULT_SIGNUP_COUNTRY,
+  formatSignupPhoneDisplay,
+  isCompleteSignupPhone,
+  SIGNUP_COUNTRIES,
+  signupPhoneDigitsOnly,
+  signupPhoneForFirestore,
+  type SignupCountry,
+} from '@/lib/signupPhoneCountry';
+import { useAuth } from '../../services/AuthContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
-  ScrollView,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { AppTextInput } from '../../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { systemActionSheet } from '../../components/SystemDialogHost';
 import {
   getAuthFlowFriendlyMessage,
   isEmailAlreadyInUseError,
   resolveAuthEmailAccountStatus,
 } from '@/services/auth/emailAccountStatus';
 import { showError, showSuccess } from '../../utils/toast';
-import { showUserError } from '@/services/errors';
 
-const REGISTER_INPUTS = 5;
-const PHOTO_SIZE = 92;
-
+const TOTAL_STEPS = 5;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-/** Auth stack dark theme — aligned with login / onboarding */
 const AUTH = {
   bg: '#09090B',
   card: '#171923',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
-  inputBg: '#1C2030',
-  inputBorder: 'rgba(255,255,255,0.08)',
   placeholder: '#7D8493',
   primary: '#FF6B35',
+  border: 'rgba(255,255,255,0.08)',
+  inputBg: '#1E2230',
 } as const;
+
+function detectSignupCountry(): SignupCountry {
+  try {
+    const locale =
+      Intl.DateTimeFormat().resolvedOptions().locale ||
+      (typeof navigator !== 'undefined' ? navigator.language : '') ||
+      '';
+    const region = locale.split(/[-_]/)[1]?.toUpperCase();
+    if (region) {
+      const match = SIGNUP_COUNTRIES.find((c) => c.code === region);
+      if (match) return match;
+    }
+  } catch {
+    /* fall through */
+  }
+  return DEFAULT_SIGNUP_COUNTRY;
+}
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -69,532 +78,622 @@ export default function RegisterScreen() {
   }>();
   const signupIntent = parseSignupIntent(intentParam);
   const { signUpWithEmail } = useAuth();
+
+  const [step, setStep] = useState(0);
+  const slideX = useRef(new Animated.Value(0)).current;
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
-  const whatsappRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
-  const confirmPasswordRef = useRef<TextInput>(null);
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState(
     typeof emailParam === 'string' ? emailParam.trim().toLowerCase() : '',
   );
-  const [whatsapp, setWhatsapp] = useState('+1 ');
+  const [country, setCountry] = useState<SignupCountry>(DEFAULT_SIGNUP_COUNTRY);
+  const [phoneNational, setPhoneNational] = useState('');
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [whatsappCoordinationConsent, setWhatsappCoordinationConsent] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
+  const [termsConsent, setTermsConsent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [pickingPhoto, setPickingPhoto] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [showSignInCta, setShowSignInCta] = useState(false);
 
-  const refs = [nameRef, emailRef, whatsappRef, passwordRef, confirmPasswordRef];
-  const focusPrev = () => {
-    if (focusedIndex !== null && focusedIndex > 0) {
-      refs[focusedIndex - 1].current?.focus();
-      setFocusedIndex(focusedIndex - 1);
-    }
-  };
-  const focusNext = () => {
-    if (focusedIndex !== null && focusedIndex < REGISTER_INPUTS - 1) {
-      refs[focusedIndex + 1].current?.focus();
-      setFocusedIndex(focusedIndex + 1);
-    }
+  useEffect(() => {
+    setCountry(detectSignupCountry());
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (step === 0) nameRef.current?.focus();
+      if (step === 1) emailRef.current?.focus();
+      if (step === 2) phoneRef.current?.focus();
+      if (step === 3) passwordRef.current?.focus();
+    }, 280);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  const phonePreview = useMemo(
+    () => formatSignupPhoneDisplay(country, phoneNational),
+    [country, phoneNational],
+  );
+
+  const animateToStep = (next: number) => {
+    Keyboard.dismiss();
+    setFormError(null);
+    setShowSignInCta(false);
+    setStep(next);
+    Animated.timing(slideX, {
+      toValue: -next * SCREEN_WIDTH,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   };
 
-  const handleChooseFromLibrary = async () => {
-    setPickingPhoto(true);
-    try {
-      const uri = await pickImageFromLibrary({ quality: 0.7 });
-      if (uri) {
-        setPhotoUri(uri);
+  const goBack = () => {
+    if (loading) return;
+    if (step === 0) {
+      router.back();
+      return;
+    }
+    animateToStep(step - 1);
+  };
+
+  const validateStep = (index: number): string => {
+    if (index === 0) {
+      if (!name.trim()) return 'Enter your name';
+      return '';
+    }
+    if (index === 1) {
+      const emailTrim = email.trim().toLowerCase();
+      if (!emailTrim || !EMAIL_RE.test(emailTrim)) return 'Enter a valid email';
+      return '';
+    }
+    if (index === 2) {
+      if (!signupPhoneDigitsOnly(phoneNational)) return 'Enter your phone number';
+      if (!isCompleteSignupPhone(country, phoneNational)) {
+        return 'Enter a complete phone number';
       }
-    } catch (e) {
-      if (e instanceof ImagePickerPermissionError) {
-        showUserError(e, { useAlert: true, alertTitle: 'Photo access needed' });
-      } else if (e instanceof Error && e.message === 'PICKER_LAUNCH_FAILED') {
-        Alert.alert('Error', 'Could not open photo library.');
-      } else {
-        showUserError(e, { useAlert: true, alertTitle: 'Error' });
+      return '';
+    }
+    if (index === 3) {
+      if (password.length < 8) return 'Use at least 8 characters';
+      return '';
+    }
+    if (index === 4) {
+      if (!termsConsent) {
+        return 'Please agree to the Terms of Service and Privacy Policy.';
       }
-    } finally {
-      setPickingPhoto(false);
+      return '';
     }
-  };
-
-  const handleTakePhoto = async () => {
-    setPickingPhoto(true);
-    try {
-      const uri = await takePhoto({ quality: 0.7 });
-      if (uri) {
-        setPhotoUri(uri);
-      }
-    } catch (e) {
-      if (e instanceof ImagePickerPermissionError) {
-        showUserError(e, { useAlert: true, alertTitle: 'Camera access needed' });
-      } else if (e instanceof Error && e.message === 'CAMERA_LAUNCH_FAILED') {
-        Alert.alert('Error', 'Could not open the camera.');
-      } else {
-        showUserError(e, { useAlert: true, alertTitle: 'Error' });
-      }
-    } finally {
-      setPickingPhoto(false);
-    }
-  };
-
-  const openPhotoOptions = () => {
-    if (pickingPhoto || loading) return;
-    void systemActionSheet({
-      title: 'Profile photo',
-      message: 'Choose a source',
-      actions: [
-        { label: 'Take photo', onPress: () => void handleTakePhoto() },
-        {
-          label: 'Choose from library',
-          onPress: () => void handleChooseFromLibrary(),
-        },
-        ...(photoUri
-          ? [
-              {
-                label: 'Remove photo',
-                destructive: true,
-                onPress: () => setPhotoUri(null),
-              },
-            ]
-          : []),
-      ],
-    });
-  };
-
-  const validate = (): string => {
-    const nameTrim = name.trim();
-    if (!nameTrim) return 'Enter your name';
-
-    const emailTrim = email.trim();
-    if (!emailTrim || !emailTrim.includes('@')) return 'Enter a valid email';
-    if (!EMAIL_RE.test(emailTrim)) return 'Enter a valid email';
-
-    if (!whatsapp.trim() || isProfilePhoneStorageEmpty(whatsapp)) {
-      return 'Enter WhatsApp number';
-    }
-    if (!isCompleteNaProfilePhone(whatsapp)) {
-      return 'Enter a complete WhatsApp number';
-    }
-
-    if (!whatsappCoordinationConsent) {
-      return 'Please accept WhatsApp usage to continue.';
-    }
-
-    if (password.length < 6) return 'Password must be at least 6 characters';
-    if (password !== confirmPassword) return 'Passwords do not match';
     return '';
   };
 
-  const handleSignup = async () => {
-    const validationError = validate();
-    if (validationError) {
-      setFormError(validationError);
-      setShowSignInCta(false);
-      showError(validationError);
+  const onContinue = async () => {
+    const err = validateStep(step);
+    if (err) {
+      setFormError(err);
+      showError(err);
       return;
     }
 
-    const nameTrim = name.trim();
-    const emailTrim = email.trim().toLowerCase();
+    if (step < TOTAL_STEPS - 1) {
+      if (step === 1) {
+        const emailTrim = email.trim().toLowerCase();
+        setLoading(true);
+        try {
+          const status = await resolveAuthEmailAccountStatus(emailTrim);
+          if (status === 'exists') {
+            setFormError(
+              'This email already has an account. Please sign in instead.',
+            );
+            setShowSignInCta(true);
+            return;
+          }
+        } catch {
+          /* lookup failure — allow continue; create will catch conflicts */
+        } finally {
+          setLoading(false);
+        }
+      }
+      animateToStep(step + 1);
+      return;
+    }
 
-    Keyboard.dismiss();
     setLoading(true);
     setFormError(null);
     setShowSignInCta(false);
     try {
-      const status = await resolveAuthEmailAccountStatus(emailTrim);
-      if (status === 'exists') {
-        setFormError(
-          'This email already has an account. Please sign in instead.',
-        );
-        setShowSignInCta(true);
-        return;
-      }
-
       await signUpWithEmail({
-        email: emailTrim,
+        email: email.trim().toLowerCase(),
         password,
-        fullName: nameTrim,
-        whatsapp: profilePhoneForFirestore(whatsapp),
-        whatsappConsent: true,
-        localPhotoUri: photoUri,
+        fullName: name.trim(),
+        whatsapp: signupPhoneForFirestore(country, phoneNational),
+        phoneDisplay: phonePreview,
+        whatsappConsent,
+        termsAccepted: true,
+        privacyAccepted: true,
+        localPhotoUri: null,
         signupIntent,
       });
       showSuccess('Account created successfully 🎉');
-      const uid = auth.currentUser?.uid;
-      const role = uid ? await getUserRole(uid) : 'user';
-      navigateForRole(role);
-    } catch (err: unknown) {
-      const friendly = getAuthFlowFriendlyMessage(err);
+      router.replace('/(auth)/location-permission' as never);
+    } catch (e: unknown) {
+      const friendly = getAuthFlowFriendlyMessage(e);
       setFormError(friendly);
-      setShowSignInCta(isEmailAlreadyInUseError(err));
-      if (!isEmailAlreadyInUseError(err)) {
-        showError(friendly);
-      }
+      setShowSignInCta(isEmailAlreadyInUseError(e));
+      if (!isEmailAlreadyInUseError(e)) showError(friendly);
     } finally {
       setLoading(false);
     }
   };
 
+  const primaryDisabled =
+    loading || (step === TOTAL_STEPS - 1 && !termsConsent);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <KeyboardToolbar
-        onFocusPrevious={focusPrev}
-        onFocusNext={focusNext}
-        focusedIndex={focusedIndex}
-        totalInputs={REGISTER_INPUTS}
-      />
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={goBack}
+          hitSlop={12}
+          disabled={loading}
+          accessibilityLabel={step === 0 ? 'Go back' : 'Previous step'}
+        >
+          <MaterialIcons name="arrow-back" size={24} color={AUTH.text} />
+        </TouchableOpacity>
+        <Text style={styles.stepLabel}>
+          Step {step + 1} of {TOTAL_STEPS}
+        </Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <View style={styles.progressRow}>
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+          <View key={i} style={styles.progressSegment}>
+            <View
+              style={[
+                styles.progressDot,
+                i <= step ? styles.progressDotOn : styles.progressDotOff,
+              ]}
+            />
+            {i < TOTAL_STEPS - 1 ? (
+              <View
+                style={[
+                  styles.progressLine,
+                  i < step ? styles.progressLineOn : styles.progressLineOff,
+                ]}
+              />
+            ) : null}
+          </View>
+        ))}
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoid}
+        style={styles.flex}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.scrollHost}>
-            <ScrollView
-              contentContainerStyle={styles.scroll}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Create account</Text>
-                <Text style={styles.cardSubtitle}>
-                  {signupIntent === 'restaurant'
-                    ? 'Restaurant partner account'
-                    : signupIntent === 'driver'
-                      ? 'Driver account'
-                      : 'Add your details to get started'}
-                </Text>
+        <View style={styles.sliderClip}>
+          <Animated.View
+            style={[
+              styles.sliderTrack,
+              { width: SCREEN_WIDTH * TOTAL_STEPS, transform: [{ translateX: slideX }] },
+            ]}
+          >
+            {/* Step 1 — Name */}
+            <View style={styles.stepPane}>
+              <Text style={styles.title}>What's your name?</Text>
+              <Text style={styles.subtitle}>
+                This is how other people will recognize you.
+              </Text>
+              <AppTextInput
+                ref={nameRef}
+                style={styles.input}
+                placeholder="Name"
+                placeholderTextColor={AUTH.placeholder}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                editable={!loading}
+                returnKeyType="next"
+                onSubmitEditing={() => void onContinue()}
+              />
+            </View>
 
+            {/* Step 2 — Email */}
+            <View style={styles.stepPane}>
+              <Text style={styles.title}>What's your email?</Text>
+              <Text style={styles.subtitle}>We'll use this to sign you in.</Text>
+              <AppTextInput
+                ref={emailRef}
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={AUTH.placeholder}
+                value={email}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  if (formError) {
+                    setFormError(null);
+                    setShowSignInCta(false);
+                  }
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                returnKeyType="next"
+                onSubmitEditing={() => void onContinue()}
+              />
+            </View>
+
+            {/* Step 3 — Phone */}
+            <View style={styles.stepPane}>
+              <Text style={styles.title}>What's your phone number?</Text>
+              <Text style={styles.subtitle}>
+                Used only to coordinate meal pickup.
+              </Text>
+              <View style={styles.phoneRow}>
                 <TouchableOpacity
-                  style={styles.photoWrap}
-                  onPress={openPhotoOptions}
-                  disabled={loading || pickingPhoto}
-                  activeOpacity={0.85}
-                  accessibilityLabel="Add profile photo"
-                >
-                  {pickingPhoto ? (
-                    <View style={[styles.photoEmpty, styles.photoLoading]}>
-                      <ActivityIndicator size="large" color={AUTH.primary} />
-                    </View>
-                  ) : photoUri ? (
-                    <Image source={{ uri: photoUri }} style={styles.photoImage} contentFit="cover" />
-                  ) : (
-                    <View style={styles.photoEmpty}>
-                      <MaterialIcons name="add-a-photo" size={36} color={AUTH.placeholder} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.photoCaption}>Add profile photo (optional)</Text>
-
-                <View style={styles.fields}>
-                  <AppTextInput
-                    ref={nameRef}
-                    style={styles.fieldInput}
-                    placeholder="Full name"
-                    placeholderTextColor={AUTH.placeholder}
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="words"
-                    editable={!loading}
-                    inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-                    }
-                    onFocus={() => setFocusedIndex(0)}
-                  />
-
-                  <AppTextInput
-                    ref={emailRef}
-                    style={styles.fieldInput}
-                    placeholder="Email"
-                    placeholderTextColor={AUTH.placeholder}
-                    value={email}
-                    onChangeText={(t) => {
-                      setEmail(t);
-                      if (formError) {
-                        setFormError(null);
-                        setShowSignInCta(false);
-                      }
-                    }}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!loading}
-                    inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-                    }
-                    onFocus={() => setFocusedIndex(1)}
-                  />
-
-                  <AppTextInput
-                    ref={whatsappRef}
-                    style={styles.fieldInput}
-                    placeholder="WhatsApp number"
-                    placeholderTextColor={AUTH.placeholder}
-                    value={whatsapp}
-                    onChangeText={(t) => setWhatsapp(profileWhatsAppOnChangeText(t))}
-                    keyboardType="phone-pad"
-                    editable={!loading}
-                    inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-                    }
-                    onFocus={() => setFocusedIndex(2)}
-                  />
-
-                  <Text style={styles.fieldHelper}>
-                    This number is used only to coordinate pickup with other users. It will not be
-                    shared publicly.
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.consentRow}
-                    onPress={() => setWhatsappCoordinationConsent((v) => !v)}
-                    disabled={loading}
-                    activeOpacity={0.75}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: whatsappCoordinationConsent }}
-                    accessibilityLabel="I agree to use my WhatsApp number for coordination"
-                  >
-                    <MaterialIcons
-                      name={whatsappCoordinationConsent ? 'check-box' : 'check-box-outline-blank'}
-                      size={22}
-                      color={whatsappCoordinationConsent ? AUTH.primary : AUTH.placeholder}
-                      style={styles.consentIcon}
-                    />
-                    <Text style={styles.consentLabel}>
-                      I agree to use my WhatsApp number for coordination.
-                    </Text>
-                  </TouchableOpacity>
-
-                  <AppTextInput
-                    ref={passwordRef}
-                    style={styles.fieldInput}
-                    placeholder="Password"
-                    placeholderTextColor={AUTH.placeholder}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    editable={!loading}
-                    inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-                    }
-                    onFocus={() => setFocusedIndex(3)}
-                  />
-
-                  <AppTextInput
-                    ref={confirmPasswordRef}
-                    style={[styles.fieldInput, styles.lastField]}
-                    placeholder="Confirm password"
-                    placeholderTextColor={AUTH.placeholder}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                    editable={!loading}
-                    inputAccessoryViewID={
-                      Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
-                    }
-                    onFocus={() => setFocusedIndex(4)}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
-                  onPress={() => void handleSignup()}
+                  style={styles.countryBtn}
+                  onPress={() => setCountryPickerOpen(true)}
                   disabled={loading}
-                  activeOpacity={0.9}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Select country code"
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Create Account</Text>
-                  )}
+                  <Text style={styles.countryFlag}>{country.flag}</Text>
+                  <Text style={styles.countryDial}>+{country.dial}</Text>
+                  <MaterialIcons
+                    name="arrow-drop-down"
+                    size={20}
+                    color={AUTH.textMuted}
+                  />
                 </TouchableOpacity>
-
-                {formError ? (
-                  <View style={styles.errorBanner}>
-                    <Text style={styles.errorBannerText}>{formError}</Text>
-                    {showSignInCta ? (
-                      <TouchableOpacity
-                        style={styles.signInCtaBtn}
-                        onPress={() =>
-                          router.replace({
-                            pathname: '/(auth)/login',
-                            params: email.trim()
-                              ? { email: email.trim().toLowerCase() }
-                              : undefined,
-                          } as never)
-                        }
-                        activeOpacity={0.9}
-                      >
-                        <Text style={styles.signInCtaText}>Go to Sign In</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ) : null}
+                <AppTextInput
+                  ref={phoneRef}
+                  style={styles.phoneInput}
+                  placeholder="Phone number"
+                  placeholderTextColor={AUTH.placeholder}
+                  value={phoneNational}
+                  onChangeText={(t) => setPhoneNational(signupPhoneDigitsOnly(t))}
+                  keyboardType="phone-pad"
+                  editable={!loading}
+                  returnKeyType="next"
+                  onSubmitEditing={() => void onContinue()}
+                />
               </View>
+            </View>
 
-              <View style={styles.footer}>
-                <Text style={styles.footerMuted}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => router.back()} disabled={loading} hitSlop={8}>
-                  <Text style={styles.footerLink}>Log in</Text>
+            {/* Step 4 — Password */}
+            <View style={styles.stepPane}>
+              <Text style={styles.title}>Create a password</Text>
+              <Text style={styles.subtitle}>Use at least 8 characters.</Text>
+              <AppTextInput
+                ref={passwordRef}
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor={AUTH.placeholder}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                editable={!loading}
+                returnKeyType="next"
+                onSubmitEditing={() => void onContinue()}
+              />
+            </View>
+
+            {/* Step 5 — Agreements */}
+            <View style={styles.stepPane}>
+              <Text style={styles.title}>Almost done</Text>
+              <Text style={styles.subtitle}>
+                Review and accept the required agreements.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.consentRow}
+                onPress={() => setWhatsappConsent((v) => !v)}
+                disabled={loading}
+                activeOpacity={0.75}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: whatsappConsent }}
+              >
+                <MaterialIcons
+                  name={
+                    whatsappConsent ? 'check-box' : 'check-box-outline-blank'
+                  }
+                  size={22}
+                  color={whatsappConsent ? AUTH.primary : AUTH.placeholder}
+                />
+                <Text style={styles.consentLabel}>
+                  I agree to use my WhatsApp number for order coordination.
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.consentRow}>
+                <TouchableOpacity
+                  onPress={() => setTermsConsent((v) => !v)}
+                  disabled={loading}
+                  hitSlop={8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: termsConsent }}
+                >
+                  <MaterialIcons
+                    name={
+                      termsConsent ? 'check-box' : 'check-box-outline-blank'
+                    }
+                    size={22}
+                    color={termsConsent ? AUTH.primary : AUTH.placeholder}
+                  />
                 </TouchableOpacity>
+                <Text style={styles.consentLabel}>
+                  I agree to the{' '}
+                  <Text
+                    style={styles.legalLink}
+                    onPress={() => router.push('/terms' as never)}
+                  >
+                    Terms of Service
+                  </Text>
+                  {' and '}
+                  <Text
+                    style={styles.legalLink}
+                    onPress={() => router.push('/privacy' as never)}
+                  >
+                    Privacy Policy
+                  </Text>
+                  .
+                </Text>
               </View>
-            </ScrollView>
-          </View>
-        </TouchableWithoutFeedback>
+            </View>
+          </Animated.View>
+        </View>
+
+        <View style={styles.footer}>
+          {formError ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{formError}</Text>
+              {showSignInCta ? (
+                <TouchableOpacity
+                  style={styles.signInCta}
+                  onPress={() =>
+                    router.replace({
+                      pathname: '/(auth)/login',
+                      params: email.trim()
+                        ? { email: email.trim().toLowerCase() }
+                        : undefined,
+                    } as never)
+                  }
+                >
+                  <Text style={styles.signInCtaText}>Go to Sign In</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, primaryDisabled && styles.primaryBtnDisabled]}
+            onPress={() => void onContinue()}
+            disabled={primaryDisabled}
+            activeOpacity={0.9}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryBtnText}>
+                {step === TOTAL_STEPS - 1 ? 'Create Account' : 'Continue'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={countryPickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCountryPickerOpen(false)}
+      >
+        <Pressable
+          style={styles.pickerBackdrop}
+          onPress={() => setCountryPickerOpen(false)}
+        >
+          <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.pickerTitle}>Country code</Text>
+            <FlatList
+              data={SIGNUP_COUNTRIES}
+              keyExtractor={(item) => item.code}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const selected = item.code === country.code;
+                return (
+                  <TouchableOpacity
+                    style={[styles.pickerRow, selected && styles.pickerRowOn]}
+                    onPress={() => {
+                      setCountry(item);
+                      setCountryPickerOpen(false);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.pickerFlag}>{item.flag}</Text>
+                    <Text style={styles.pickerName}>{item.name}</Text>
+                    <Text style={styles.pickerDial}>+{item.dial}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  screen: { flex: 1, backgroundColor: AUTH.bg },
+  flex: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  stepLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: AUTH.textMuted,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingBottom: 12,
+  },
+  progressSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  progressDotOn: { backgroundColor: AUTH.primary },
+  progressDotOff: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  progressLine: {
+    width: 28,
+    height: 2,
+    marginHorizontal: 4,
+  },
+  progressLineOn: { backgroundColor: AUTH.primary },
+  progressLineOff: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  sliderClip: {
     flex: 1,
-    backgroundColor: AUTH.bg,
+    overflow: 'hidden',
   },
-  keyboardAvoid: { flex: 1, backgroundColor: '#09090B' },
-  scrollHost: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
+  sliderTrack: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  stepPane: {
+    width: SCREEN_WIDTH,
+    paddingHorizontal: 28,
     paddingTop: 28,
-    paddingBottom: 120,
   },
-  card: {
-    backgroundColor: AUTH.card,
-    borderRadius: 22,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(55,65,81,0.6)',
-  },
-  cardTitle: {
+  title: {
     fontSize: 28,
     fontWeight: '800',
     color: AUTH.text,
-    letterSpacing: -0.6,
-    textAlign: 'center',
+    letterSpacing: -0.5,
+    marginBottom: 10,
   },
-  cardSubtitle: {
+  subtitle: {
     fontSize: 15,
+    lineHeight: 22,
     color: AUTH.textMuted,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 12,
-    lineHeight: 21,
-  },
-  photoWrap: {
-    alignSelf: 'center',
-    width: PHOTO_SIZE,
-    height: PHOTO_SIZE,
-    borderRadius: PHOTO_SIZE / 2,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: AUTH.inputBorder,
-    overflow: 'hidden',
-    backgroundColor: AUTH.inputBg,
-  },
-  photoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  photoEmpty: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoLoading: {
-    backgroundColor: AUTH.inputBg,
-  },
-  photoCaption: {
-    textAlign: 'center',
-    fontSize: 14,
+    marginBottom: 28,
     fontWeight: '500',
-    color: AUTH.textMuted,
-    marginTop: 12,
-    marginBottom: 20,
   },
-  fields: {
-    marginTop: 0,
-    gap: 0,
-  },
-  fieldInput: {
-    backgroundColor: '#1E2230',
+  input: {
+    backgroundColor: AUTH.inputBg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    marginBottom: 14,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: AUTH.text,
   },
-  fieldHelper: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: AUTH.textMuted,
-    marginTop: -2,
-    marginBottom: 14,
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  countryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AUTH.inputBg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  countryFlag: { fontSize: 18 },
+  countryDial: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AUTH.text,
+  },
+  phoneInput: {
+    flex: 1,
+    backgroundColor: AUTH.inputBg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: AUTH.text,
   },
   consentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 16,
-  },
-  consentIcon: {
-    marginTop: 1,
+    gap: 12,
+    marginBottom: 18,
   },
   consentLabel: {
     flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     color: AUTH.text,
     fontWeight: '500',
   },
-  lastField: {
-    marginBottom: 10,
+  legalLink: {
+    color: AUTH.primary,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  footer: {
+    paddingHorizontal: 28,
+    paddingBottom: 16,
+    paddingTop: 8,
   },
   primaryBtn: {
-    backgroundColor: AUTH.primary,
-    borderRadius: 14,
     height: 56,
+    borderRadius: 14,
+    backgroundColor: AUTH.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
   },
-  primaryBtnLoading: {
+  primaryBtnDisabled: {
     backgroundColor: '#7D8493',
   },
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '800',
-    letterSpacing: -0.2,
   },
   errorBanner: {
-    marginTop: 16,
+    marginBottom: 12,
     padding: 14,
     borderRadius: 14,
     backgroundColor: 'rgba(239, 68, 68, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.35)',
   },
-  errorBannerText: {
+  errorText: {
     color: '#FCA5A5',
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
     textAlign: 'center',
   },
-  signInCtaBtn: {
+  signInCta: {
     marginTop: 12,
-    height: 48,
+    height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -605,20 +704,48 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
-  footer: {
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    maxHeight: '70%',
+    backgroundColor: AUTH.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: AUTH.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  pickerRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: AUTH.border,
   },
-  footerMuted: {
-    color: AUTH.textMuted,
-    fontSize: 15,
+  pickerRowOn: {
+    backgroundColor: 'rgba(255,107,53,0.12)',
   },
-  footerLink: {
-    color: AUTH.primary,
+  pickerFlag: { fontSize: 22 },
+  pickerName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: AUTH.text,
+  },
+  pickerDial: {
     fontSize: 15,
     fontWeight: '700',
+    color: AUTH.textMuted,
   },
 });
