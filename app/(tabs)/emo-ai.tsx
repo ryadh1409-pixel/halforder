@@ -4,25 +4,32 @@ import { EmoAiHeader } from '@/components/emoAi/EmoAiHeader';
 import { EmoAiHero } from '@/components/emoAi/EmoAiHero';
 import { EmoAiMessageList } from '@/components/emoAi/EmoAiMessageList';
 import { EmoAiQuickReplies } from '@/components/emoAi/EmoAiQuickReplies';
+import { UE } from '@/constants/uberEatsTheme';
 import { useEmoAiChat } from '@/hooks/useEmoAiChat';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
 import { EMO_AI_BG } from '@/types/emoAi';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 export default function EmoAiScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const uid = isRegisteredAuthUser(user) ? user!.uid : null;
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const {
     ready,
@@ -36,6 +43,36 @@ export default function EmoAiScreen() {
   } = useEmoAiChat(uid);
 
   const busy = typing || Boolean(streamingText);
+
+  /**
+   * Floating CustomTabBar footprint (pinned to screen bottom).
+   * Composer sits immediately above this spacer — never under the tabs.
+   */
+  const tabBarBottomOffset = Math.max(14, insets.bottom + 4);
+  const tabBarReserve = keyboardOpen
+    ? 0
+    : UE.tabBarHeight + tabBarBottomOffset + 10;
+
+  useEffect(() => {
+    const showEvt =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, () => setKeyboardOpen(true));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const lastUserMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m?.role === 'user') return m.content;
+    }
+    return null;
+  }, [messages]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -52,7 +89,12 @@ export default function EmoAiScreen() {
             )
           }
         />
-        <EmoAiHero />
+        <EmoAiHero
+          typing={typing && !streamingText}
+          streaming={Boolean(streamingText)}
+          streamingTick={streamingText.length}
+          lastUserMessage={lastUserMessage}
+        />
 
         {!ready ? (
           <View style={styles.loading}>
@@ -74,12 +116,15 @@ export default function EmoAiScreen() {
               disabled={busy}
               onSelect={(t) => void sendMessage(t)}
             />
+            {/* Messages → composer → tab-bar reserve (tabs float in this space) */}
             <EmoAiComposer
               disabled={busy}
               onSend={(t) => void sendMessage(t)}
             />
           </>
         )}
+
+        <View style={{ height: tabBarReserve }} pointerEvents="none" />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
