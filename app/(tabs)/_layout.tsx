@@ -1,4 +1,5 @@
 import CustomTabBar from '@/components/CustomTabBar';
+import { EmoAiDeliveredNudgeHost } from '@/components/emoAi/EmoAiDeliveredNudgeHost';
 import { useCustomerTabsAccess } from '@/hooks/useCustomerTabsAccess';
 import { tabHrefForRole } from '@/lib/tabsRoleVisibility';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
@@ -34,56 +35,65 @@ export default function TabLayout() {
   }
 
   return (
-    <Tabs
-      {...({ id: 'main' } as object)}
-      screenOptions={{
-        headerShown: false,
-        lazy: true,
-      }}
-      tabBar={(props) => <CustomTabBar {...props} />}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.hub, customerTabs),
+    <>
+      <EmoAiDeliveredNudgeHost />
+      <Tabs
+        {...({ id: 'main' } as object)}
+        screenOptions={{
+          headerShown: false,
+          lazy: true,
         }}
-      />
-      <Tabs.Screen
-        name="swipe"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.swipe, customerTabs),
-        }}
-      />
-      <Tabs.Screen name="explore" options={HIDDEN_TAB} />
-      <Tabs.Screen
-        name="search"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.search, customerTabs),
-        }}
-      />
-      <Tabs.Screen name="cart" options={HIDDEN_TAB} />
-      <Tabs.Screen name="ai" options={HIDDEN_TAB} />
-      <Tabs.Screen name="orders" options={HIDDEN_TAB} />
-      <Tabs.Screen name="home" options={HIDDEN_TAB} />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          href: tabHrefForRole(role, TABS_ROUTES.profile, {
-            allow: ['user', 'admin'],
-          }),
-        }}
-      />
-      <Tabs.Screen
-        name="admin"
-        options={{
-          href: tabHrefForRole(role, '/(tabs)/admin' as const, {
-            allow: ['admin'],
-          }),
-        }}
-      />
-      <Tabs.Screen name="host" options={HIDDEN_TAB} />
-      <Tabs.Screen name="driver" options={HIDDEN_TAB} />
-      <Tabs.Screen name="menu" options={HIDDEN_TAB} />
-    </Tabs>
+        tabBar={(props) => <CustomTabBar {...props} />}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            href: tabHrefForRole(role, TABS_ROUTES.hub, customerTabs),
+          }}
+        />
+        <Tabs.Screen
+          name="swipe"
+          options={{
+            href: tabHrefForRole(role, TABS_ROUTES.swipe, customerTabs),
+          }}
+        />
+        <Tabs.Screen name="explore" options={HIDDEN_TAB} />
+        <Tabs.Screen
+          name="search"
+          options={{
+            href: tabHrefForRole(role, TABS_ROUTES.search, customerTabs),
+          }}
+        />
+        <Tabs.Screen
+          name="emo-ai"
+          options={{
+            href: tabHrefForRole(role, TABS_ROUTES.emoAi, customerTabs),
+          }}
+        />
+        <Tabs.Screen name="cart" options={HIDDEN_TAB} />
+        <Tabs.Screen name="ai" options={HIDDEN_TAB} />
+        <Tabs.Screen name="orders" options={HIDDEN_TAB} />
+        <Tabs.Screen name="home" options={HIDDEN_TAB} />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            href: tabHrefForRole(role, TABS_ROUTES.profile, {
+              allow: ['user', 'admin'],
+            }),
+          }}
+        />
+        <Tabs.Screen
+          name="admin"
+          options={{
+            href: tabHrefForRole(role, '/(tabs)/admin' as const, {
+              allow: ['admin'],
+            }),
+          }}
+        />
+        <Tabs.Screen name="host" options={HIDDEN_TAB} />
+        <Tabs.Screen name="driver" options={HIDDEN_TAB} />
+        <Tabs.Screen name="menu" options={HIDDEN_TAB} />
+      </Tabs>
+    </>
   );
 }

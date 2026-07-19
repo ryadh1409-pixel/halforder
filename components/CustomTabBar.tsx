@@ -34,6 +34,8 @@ function hrefForTabRoute(routeName: string): Href {
       return TABS_ROUTES.explore as Href;
     case 'search':
       return TABS_ROUTES.orders as Href;
+    case 'emo-ai':
+      return TABS_ROUTES.emoAi as Href;
     case 'cart':
       return TABS_ROUTES.cart as Href;
     case 'profile':
@@ -53,6 +55,8 @@ function hrefForTabRoute(routeName: string): Href {
   }
 }
 
+const EMO_PURPLE = '#A855F7';
+
 function iconGlyph(
   routeName: string,
   focused: boolean,
@@ -71,6 +75,8 @@ function iconGlyph(
       return pick('grid', 'grid-outline');
     case 'search':
       return pick('receipt', 'receipt-outline');
+    case 'emo-ai':
+      return pick('happy', 'happy-outline');
     case 'cart':
       return pick('bag', 'bag-outline');
     case 'profile':
@@ -98,6 +104,8 @@ function tabLabel(routeName: string): string {
       return 'Browse';
     case 'search':
       return 'Orders';
+    case 'emo-ai':
+      return 'Emo AI';
     case 'cart':
       return 'Cart';
     case 'profile':
@@ -142,6 +150,14 @@ const TabBarItem = memo(function TabBarItem({
 
   const iconName = iconGlyph(route?.name ?? '', focused);
   const label = tabLabel(route.name);
+  const isEmo = route.name === 'emo-ai';
+  const iconColor = isEmo
+    ? focused
+      ? EMO_PURPLE
+      : '#9B7BB8'
+    : focused
+      ? ACTIVE
+      : INACTIVE;
 
   return (
     <Pressable
@@ -157,13 +173,15 @@ const TabBarItem = memo(function TabBarItem({
       onPress={onPress}
       style={styles.tab}
     >
-      <View style={[styles.iconSlot, focused && styles.iconSlotActive]}>
+      <View
+        style={[
+          styles.iconSlot,
+          focused && styles.iconSlotActive,
+          isEmo && focused && styles.iconSlotEmo,
+        ]}
+      >
         <Animated.View style={iconAnim}>
-          <Ionicons
-            name={iconName}
-            size={ICON_SIZE}
-            color={focused ? ACTIVE : INACTIVE}
-          />
+          <Ionicons name={iconName} size={ICON_SIZE} color={iconColor} />
         </Animated.View>
         {badge != null && badge > 0 ? (
           <View style={styles.badge}>
@@ -171,7 +189,15 @@ const TabBarItem = memo(function TabBarItem({
           </View>
         ) : null}
       </View>
-      <Text style={[styles.label, focused && styles.labelActive]}>{label}</Text>
+      <Text
+        style={[
+          styles.label,
+          focused && styles.labelActive,
+          isEmo && focused && styles.labelEmo,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 });
@@ -294,6 +320,9 @@ const styles = StyleSheet.create({
   iconSlotActive: {
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
+  iconSlotEmo: {
+    backgroundColor: 'rgba(168, 85, 247, 0.16)',
+  },
   label: {
     fontSize: 11,
     fontWeight: '700',
@@ -301,6 +330,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   labelActive: { color: ACTIVE, fontWeight: '900' },
+  labelEmo: { color: EMO_PURPLE, fontWeight: '900' },
   badge: {
     position: 'absolute',
     right: 2,

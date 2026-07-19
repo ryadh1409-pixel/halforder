@@ -28,6 +28,7 @@ export const CUSTOMER_TAB_NAMES = [
   'index',
   'swipe',
   'search',
+  'emo-ai',
   'profile',
 ] as const;
 

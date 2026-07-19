@@ -63,6 +63,7 @@ export const TABS_ROUTES = {
   search: '/(tabs)/search',
   /** Customer Orders Hub (tab label: Orders). */
   orders: '/(tabs)/search',
+  emoAi: '/(tabs)/emo-ai',
   driverEntry: '/(tabs)/driver',
   ai: '/(tabs)/ai',
 } as const;
