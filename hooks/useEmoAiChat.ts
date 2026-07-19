@@ -5,24 +5,35 @@ import {
   saveEmoAiChatStarted,
   saveEmoAiMessages,
 } from '@/services/emoAi/emoAiStorage';
+import { db } from '@/services/firebase';
 import {
-  EMO_AI_STARTER_MESSAGES,
+  buildEmoAiStarterMessages,
   type EmoAiMessage,
 } from '@/types/emoAi';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 function newId(): string {
   return `emo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function buildStarterMessages(): EmoAiMessage[] {
+function buildStarterMessages(userDisplayName: string | null): EmoAiMessage[] {
   const base = Date.now();
-  return EMO_AI_STARTER_MESSAGES.map((m, i) => ({
+  return buildEmoAiStarterMessages(userDisplayName).map((m, i) => ({
     id: newId(),
     role: m.role,
     content: m.content,
     createdAtMs: base + i,
   }));
+}
+
+function parseProfileName(data: Record<string, unknown> | undefined): string | null {
+  if (!data) return null;
+  for (const key of ['name', 'displayName', 'fullName'] as const) {
+    const raw = data[key];
+    if (typeof raw === 'string' && raw.trim()) return raw.trim().split(/\s+/)[0] ?? raw.trim();
+  }
+  return null;
 }
 
 export function useEmoAiChat(uid: string | null) {
@@ -33,12 +44,34 @@ export function useEmoAiChat(uid: string | null) {
   const [streamingText, setStreamingText] = useState('');
   const [typing, setTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const messagesRef = useRef<EmoAiMessage[]>([]);
+  const nameRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    nameRef.current = userDisplayName;
+  }, [userDisplayName]);
+
+  useEffect(() => {
+    if (!uid?.trim()) {
+      setUserDisplayName(null);
+      return undefined;
+    }
+    return onSnapshot(
+      doc(db, 'users', uid),
+      (snap) => {
+        setUserDisplayName(
+          parseProfileName(snap.data() as Record<string, unknown> | undefined),
+        );
+      },
+      () => setUserDisplayName(null),
+    );
+  }, [uid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +99,7 @@ export function useEmoAiChat(uid: string | null) {
   );
 
   const startChatting = useCallback(async () => {
-    const starters = buildStarterMessages();
+    const starters = buildStarterMessages(nameRef.current);
     setStarted(true);
     await saveEmoAiChatStarted(storageUid);
     await persist(starters);
@@ -96,30 +129,34 @@ export function useEmoAiChat(uid: string | null) {
       setTyping(true);
       setStreamingText('');
 
-      await streamEmoAiReply(withUser, {
-        onToken: (token) => {
-          setStreamingText((prev) => prev + token);
+      await streamEmoAiReply(
+        withUser,
+        {
+          onToken: (token) => {
+            setStreamingText((prev) => prev + token);
+          },
+          onDone: (full) => {
+            const assistantMsg: EmoAiMessage = {
+              id: newId(),
+              role: 'assistant',
+              content: full,
+              createdAtMs: Date.now(),
+            };
+            const next = [...withUser, assistantMsg];
+            void persist(next);
+            setStreamingText('');
+            setTyping(false);
+            sendingRef.current = false;
+          },
+          onError: (message) => {
+            setError(message);
+            setStreamingText('');
+            setTyping(false);
+            sendingRef.current = false;
+          },
         },
-        onDone: (full) => {
-          const assistantMsg: EmoAiMessage = {
-            id: newId(),
-            role: 'assistant',
-            content: full,
-            createdAtMs: Date.now(),
-          };
-          const next = [...withUser, assistantMsg];
-          void persist(next);
-          setStreamingText('');
-          setTyping(false);
-          sendingRef.current = false;
-        },
-        onError: (message) => {
-          setError(message);
-          setStreamingText('');
-          setTyping(false);
-          sendingRef.current = false;
-        },
-      });
+        nameRef.current,
+      );
     },
     [persist, started, storageUid],
   );
@@ -131,6 +168,7 @@ export function useEmoAiChat(uid: string | null) {
     streamingText,
     typing,
     error,
+    userDisplayName,
     startChatting,
     sendMessage,
   };

@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import OpenAI from 'openai';
 
-import { EMO_AI_SYSTEM_PROMPT } from '@/services/emoAi/emoAiPrompt';
+import { buildEmoAiSystemPrompt } from '@/services/emoAi/emoAiPrompt';
 import type { EmoAiMessage } from '@/types/emoAi';
 
 function openAiApiKey(): string | undefined {
@@ -21,9 +21,10 @@ function openAiApiKey(): string | undefined {
 
 function toOpenAiMessages(
   history: EmoAiMessage[],
+  userDisplayName: string | null,
 ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   return [
-    { role: 'system', content: EMO_AI_SYSTEM_PROMPT },
+    { role: 'system', content: buildEmoAiSystemPrompt(userDisplayName) },
     ...history.map((m) => ({
       role: m.role,
       content: m.content,
@@ -43,6 +44,7 @@ export type EmoAiStreamHandlers = {
 export async function streamEmoAiReply(
   history: EmoAiMessage[],
   handlers: EmoAiStreamHandlers,
+  userDisplayName: string | null = null,
 ): Promise<void> {
   const key = openAiApiKey();
   if (!key) {
@@ -56,7 +58,7 @@ export async function streamEmoAiReply(
     apiKey: key,
     dangerouslyAllowBrowser: true,
   });
-  const messages = toOpenAiMessages(history);
+  const messages = toOpenAiMessages(history, userDisplayName);
 
   try {
     const stream = await client.chat.completions.create({

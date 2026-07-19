@@ -58,7 +58,7 @@ export function EmoAiMessageList({ messages, streamingText, typing }: Props) {
   useEffect(() => {
     const t = setTimeout(() => {
       listRef.current?.scrollToEnd({ animated: true });
-    }, 60);
+    }, 80);
     return () => clearTimeout(t);
   }, [messages.length, streamingText, typing]);
 
@@ -70,16 +70,15 @@ export function EmoAiMessageList({ messages, streamingText, typing }: Props) {
       contentContainerStyle={styles.list}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      maintainVisibleContentPosition={undefined}
       renderItem={({ item }) => {
         const mine = item.role === 'user';
         return (
           <View style={[styles.row, mine ? styles.rowMine : styles.rowAi]}>
             {!mine ? (
               <Image source={AVATAR} style={styles.msgAvatar} contentFit="cover" />
-            ) : (
-              <View style={styles.msgAvatarSpacer} />
-            )}
-            <View style={styles.bubbleCol}>
+            ) : null}
+            <View style={[styles.bubbleCol, mine && styles.bubbleColMine]}>
               {!mine ? <Text style={styles.sender}>Emo AI</Text> : null}
               <View style={[styles.bubble, mine ? styles.userBubble : styles.aiBubble]}>
                 <Text style={styles.bubbleText}>{item.content}</Text>
@@ -117,40 +116,55 @@ export function EmoAiMessageList({ messages, streamingText, typing }: Props) {
 const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 16,
+    flexGrow: 1,
   },
   row: {
     flexDirection: 'row',
-    marginBottom: 14,
-    maxWidth: '92%',
+    marginBottom: 18,
+    maxWidth: '88%',
+    alignItems: 'flex-end',
   },
   rowAi: { alignSelf: 'flex-start' },
-  rowMine: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
-  msgAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginRight: 8,
-    backgroundColor: EMO_AI_SURFACE,
+  rowMine: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row-reverse',
   },
-  msgAvatarSpacer: { width: 0 },
-  bubbleCol: { flexShrink: 1, maxWidth: '100%' },
+  msgAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
+    marginBottom: 18,
+    backgroundColor: EMO_AI_SURFACE,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+  },
+  bubbleCol: {
+    flexShrink: 1,
+    maxWidth: '100%',
+  },
+  bubbleColMine: {
+    alignItems: 'flex-end',
+  },
   sender: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#7D8493',
-    marginBottom: 4,
-    marginLeft: 4,
+    color: '#9AA3B2',
+    marginBottom: 5,
+    marginLeft: 2,
   },
   bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   aiBubble: {
     backgroundColor: EMO_AI_BUBBLE_AI,
     borderBottomLeftRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   userBubble: {
     backgroundColor: EMO_AI_PURPLE,
@@ -158,28 +172,30 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 23,
     fontWeight: '500',
   },
   time: {
-    marginTop: 4,
-    marginLeft: 4,
+    marginTop: 5,
+    marginLeft: 2,
     fontSize: 11,
-    color: '#7D8493',
+    color: '#8B93A7',
     fontWeight: '500',
+    letterSpacing: 0.1,
   },
   timeMine: {
     textAlign: 'right',
-    marginRight: 4,
+    marginRight: 2,
     marginLeft: 0,
   },
   typingBubble: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
   typingText: {
-    color: '#B7BDC9',
-    fontSize: 14,
+    color: '#C5CAD6',
+    fontSize: 15,
     fontWeight: '600',
   },
 });
