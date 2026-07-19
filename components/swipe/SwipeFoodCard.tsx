@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(168, 85, 247, 0.28)',
   },
   liveDot: {
     width: 8,

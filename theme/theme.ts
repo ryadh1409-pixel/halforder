@@ -1,5 +1,5 @@
 /**
- * HalfOrder design system — premium luxury dark palette (single source of truth).
+ * HalfOrder design system — premium dark palette aligned with Emo AI.
  * Color tokens only; spacing / radius / typography sizes unchanged.
  */
 import { StyleSheet, type TextStyle } from 'react-native';
@@ -7,46 +7,52 @@ import { StyleSheet, type TextStyle } from 'react-native';
 import { platformElevation } from '../utils/platformElevation';
 
 /**
- * Centralized premium palette (Linear / Stripe / Apple–inspired luxury dark).
- * Orange accent: #FF6B35
+ * Centralized premium palette (Emo AI reference).
+ * Purple accent: #A855F7 · Orange brand CTA: #FF6B35
  */
 export const ordersPalette = {
-  /** Page / safe-area background */
-  bg: '#09090B',
-  bgDeep: '#09090B',
-  bgMid: '#111217',
+  /** Page / safe-area background — deep black */
+  bg: '#000000',
+  bgDeep: '#000000',
+  bgMid: '#0C0D12',
   bgWash: '#111217',
   /** Secondary background */
-  bgSecondary: '#111217',
-  /** Card */
+  bgSecondary: '#0C0D12',
+  /** Card — dark charcoal with subtle purple tint */
   surfaceSolid: '#171923',
   /** Elevated card */
-  surfaceElevated: '#1E2230',
+  surfaceElevated: '#1C1F2E',
   /** Input fill */
   input: '#1C2030',
   /** Translucent card surface (depth on dark bg) */
-  surface: 'rgba(23,25,35,0.92)',
-  surfaceSoft: 'rgba(23,25,35,0.72)',
-  surfaceChip: 'rgba(255,255,255,0.05)',
-  surfacePill: 'rgba(255,255,255,0.07)',
-  border: 'rgba(255,255,255,0.08)',
-  borderStrong: 'rgba(255,255,255,0.08)',
-  borderMuted: 'rgba(255,255,255,0.08)',
+  surface: 'rgba(23,25,35,0.94)',
+  surfaceSoft: 'rgba(28,31,46,0.78)',
+  surfaceChip: 'rgba(168,85,247,0.08)',
+  surfacePill: 'rgba(168,85,247,0.10)',
+  /** Subtle purple glow borders */
+  border: 'rgba(168, 85, 247, 0.22)',
+  borderStrong: 'rgba(168, 85, 247, 0.38)',
+  borderMuted: 'rgba(168, 85, 247, 0.14)',
   text: '#FFFFFF',
   textBright: '#FFFFFF',
-  textBody: '#B7BDC9',
+  textBody: '#E8EAF0',
   textSecondary: '#B7BDC9',
-  textMuted: '#7D8493',
+  textMuted: '#8B93A7',
   textTertiary: '#7D8493',
   textDim: '#7D8493',
   textSubtle: '#7D8493',
   textSection: '#B7BDC9',
-  textSlate: '#7D8493',
-  textSlateSolid: '#7D8493',
-  /** Primary accent */
+  textSlate: '#8B93A7',
+  textSlateSolid: '#8B93A7',
+  /** Brand CTA — orange */
   accent: '#FF6B35',
   accentCta: '#FF6B35',
-  accentGlow: 'rgba(255, 107, 53, 0.14)',
+  accentGlow: 'rgba(255, 107, 53, 0.22)',
+  /** Primary chrome accent — purple (Emo AI) */
+  purple: '#A855F7',
+  purpleSoft: 'rgba(168, 85, 247, 0.18)',
+  purpleGlow: 'rgba(168, 85, 247, 0.28)',
+  purpleBorder: 'rgba(168, 85, 247, 0.35)',
   success: '#22C55E',
   successBright: '#22C55E',
   successSoft: 'rgba(34,197,94,0.16)',
@@ -62,13 +68,12 @@ export const ordersPalette = {
   dangerBorder: 'rgba(239,68,68,0.35)',
   dangerText: '#EF4444',
   dangerTextBright: '#EF4444',
-  info: '#3B82F6',
-  infoSoft: 'rgba(59,130,246,0.18)',
-  purple: '#3B82F6',
+  info: '#A855F7',
+  infoSoft: 'rgba(168,85,247,0.18)',
   whatsapp: '#25D366',
   greenGlow: 'rgba(34, 197, 94, 0.1)',
   /** Navigation glass */
-  navGlass: 'rgba(15,17,24,0.82)',
+  navGlass: 'rgba(12,13,18,0.88)',
   shadow: '#000000',
   overlayScrim: 'rgba(0,0,0,0.55)',
   badgeScrim: 'rgba(0,0,0,0.2)',
@@ -94,14 +99,19 @@ export const colors = {
   primary: palette.primaryOrange,
   primaryLight: 'rgba(255,107,53,0.35)',
   primaryDark: '#FF6B35',
+  /** Chrome / active accent — purple */
+  purple: ordersPalette.purple,
+  purpleSoft: ordersPalette.purpleSoft,
+  purpleGlow: ordersPalette.purpleGlow,
+  purpleBorder: ordersPalette.purpleBorder,
   surface: ordersPalette.surfaceSolid,
   /** Legacy alias */
   backgroundDark: ordersPalette.bg,
   text: palette.textDark,
   textOnPrimary: '#FFFFFF',
-  accentBlue: ordersPalette.info,
+  accentBlue: ordersPalette.purple,
   iconInactive: ordersPalette.textMuted,
-  dotInactive: ordersPalette.border,
+  dotInactive: ordersPalette.borderMuted,
   success: ordersPalette.successBright,
   warning: ordersPalette.warning,
   whatsapp: ordersPalette.whatsapp,
@@ -118,7 +128,7 @@ export const colors = {
   borderStrong: ordersPalette.borderStrong,
   textSlate: ordersPalette.textSlateSolid,
   textSlateDark: ordersPalette.textBody,
-  chatBubbleMine: 'rgba(255,107,53,0.18)',
+  chatBubbleMine: 'rgba(168,85,247,0.22)',
   overlayScrim: ordersPalette.overlayScrim,
   timerAccent: ordersPalette.accentCta,
   shadow: ordersPalette.shadow,
@@ -225,15 +235,21 @@ export const typography = {
   },
 };
 
-/** Green → orange (diagonal). Use with expo-linear-gradient. */
+/** Brand gradients — orange CTA + purple→orange chrome. */
 export const gradients = {
   brand: {
-    colors: [palette.primaryGreen, palette.primaryOrange] as [string, string],
+    colors: ['#FF8A5B', '#FF6B35'] as [string, string],
     start: { x: 0, y: 0 },
     end: { x: 1, y: 1 },
   },
   brandHorizontal: {
-    colors: [palette.primaryGreen, palette.primaryOrange] as [string, string],
+    colors: ['#FF8A5B', '#FF6B35'] as [string, string],
+    start: { x: 0, y: 0.5 },
+    end: { x: 1, y: 0.5 },
+  },
+  /** Purple → orange (headers / brand hairline) */
+  brandAccent: {
+    colors: ['#A855F7', '#FF6B35'] as [string, string],
     start: { x: 0, y: 0.5 },
     end: { x: 1, y: 0.5 },
   },
@@ -258,14 +274,14 @@ export const theme = {
   orders: ordersPalette,
 };
 
-/** Subtle elevation — cards, floating panels (Orders marketplace card) */
+/** Soft elevation — cards with subtle purple glow */
 export const shadows = {
   card: platformElevation({
-    web: '0px 8px 24px rgba(0, 0, 0, 0.28)',
+    web: '0px 8px 28px rgba(168, 85, 247, 0.12)',
     ios: {
-      shadowColor: colors.shadow,
+      shadowColor: '#A855F7',
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.28,
+      shadowOpacity: 0.16,
       shadowRadius: 24,
     },
     android: { elevation: 6 },
@@ -287,10 +303,10 @@ export const layoutStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.lightGray,
   },
-  /** Card with border + soft shadow */
+  /** Card with purple-tinted border + soft shadow */
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -299,47 +315,61 @@ export const layoutStyles = StyleSheet.create({
   /** Flat panel (no shadow) */
   cardFlat: {
     backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   /** Orange — main call-to-action */
   primaryButton: {
     backgroundColor: colors.primaryOrange,
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.button,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
+    ...platformElevation({
+      web: '0px 6px 18px rgba(255, 107, 53, 0.35)',
+      ios: {
+        shadowColor: '#FF6B35',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 14,
+      },
+      android: { elevation: 5 },
+    }),
   },
   primaryButtonText: {
     ...typography.button,
     color: colors.textOnPrimary,
   },
-  /** Green — secondary emphasis */
+  /** Purple outline — secondary */
   secondaryButton: {
-    backgroundColor: colors.primaryGreen,
+    backgroundColor: 'transparent',
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.button,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
+    borderWidth: 1.5,
+    borderColor: colors.purpleBorder,
   },
   secondaryButtonText: {
     ...typography.button,
-    color: colors.textOnPrimary,
+    color: colors.purple,
   },
   outlineButton: {
     backgroundColor: colors.surfaceMuted,
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.button,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.purpleBorder,
   },
   outlineButtonText: {
     ...typography.button,
@@ -359,22 +389,22 @@ export const layoutStyles = StyleSheet.create({
   },
 });
 
-/** Expo template hook compatibility — both modes use Orders dark */
+/** Expo template hook compatibility — both modes use Emo AI dark */
 export const Colors = {
   light: {
     text: ordersPalette.text,
     background: ordersPalette.bg,
-    tint: colors.primaryOrange,
+    tint: ordersPalette.purple,
     icon: ordersPalette.textDim,
     tabIconDefault: ordersPalette.textDim,
-    tabIconSelected: colors.primaryOrange,
+    tabIconSelected: ordersPalette.purple,
   },
   dark: {
     text: ordersPalette.text,
     background: ordersPalette.bg,
-    tint: colors.primaryOrange,
+    tint: ordersPalette.purple,
     icon: ordersPalette.textDim,
     tabIconDefault: ordersPalette.textDim,
-    tabIconSelected: colors.primaryOrange,
+    tabIconSelected: ordersPalette.purple,
   },
 } as const;

@@ -222,15 +222,15 @@ type Palette = {
 function useProfilePalette(): Palette {
   return useMemo(
     () => ({
-      bg: '#09090B',
+      bg: '#000000',
       surface: '#171923',
-      surfaceMuted: '#1E2230',
+      surfaceMuted: '#1C1F2E',
       text: '#FFFFFF',
       textSecondary: '#B7BDC9',
-      textTertiary: '#7D8493',
-      border: 'rgba(255,255,255,0.08)',
+      textTertiary: '#8B93A7',
+      border: 'rgba(168, 85, 247, 0.22)',
       inputBg: '#1C2030',
-      chipBg: 'rgba(255,255,255,0.08)',
+      chipBg: 'rgba(168,85,247,0.10)',
       primary: '#FF6B35',
       onPrimary: '#FFFFFF',
       danger: '#EF4444',

@@ -1,6 +1,6 @@
 import { ordersPalette } from '@/theme/theme';
 
-/** Marketplace tokens — Orders Hub dark palette (colors only; layout metrics unchanged). */
+/** Marketplace tokens — Emo AI–aligned dark palette (colors only; layout metrics unchanged). */
 export const UE = {
   bg: ordersPalette.bg,
   surface: ordersPalette.surfaceSolid,
@@ -9,9 +9,9 @@ export const UE = {
   textSecondary: ordersPalette.textSecondary,
   textMuted: ordersPalette.textMuted,
   border: ordersPalette.border,
-  borderLight: ordersPalette.border,
-  accent: ordersPalette.success,
-  accentDark: ordersPalette.success,
+  borderLight: ordersPalette.borderMuted,
+  accent: ordersPalette.purple,
+  accentDark: ordersPalette.purple,
   promo: ordersPalette.danger,
   promoSoft: ordersPalette.dangerSoft,
   gold: ordersPalette.warning,
@@ -20,10 +20,10 @@ export const UE = {
   chipActive: ordersPalette.accent,
   chipInactiveBg: ordersPalette.surface,
   chipInactiveText: ordersPalette.text,
-  shadow: 'rgba(0, 0, 0, 0.35)',
-  radiusXL: 16,
-  radiusL: 12,
-  radiusM: 8,
+  shadow: 'rgba(168, 85, 247, 0.18)',
+  radiusXL: 20,
+  radiusL: 16,
+  radiusM: 12,
   radiusPill: 999,
   fontHero: 28,
   fontTitle: 20,

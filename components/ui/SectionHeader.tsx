@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   action: {
     fontSize: UE.fontCaption,
     fontWeight: '800',
-    color: UE.text,
+    color: UE.accent,
     textDecorationLine: 'underline',
   },
 });

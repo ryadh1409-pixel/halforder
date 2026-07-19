@@ -35,7 +35,11 @@ export default function AppHeader({
             style={styles.button}
             onPress={handleBack}
             hitSlop={12}
-            android_ripple={Platform.OS === 'android' ? { color: 'rgba(0,0,0,0.08)' } : undefined}
+            android_ripple={
+              Platform.OS === 'android'
+                ? { color: 'rgba(168,85,247,0.2)' }
+                : undefined
+            }
           >
             <Text style={styles.buttonText}>Back</Text>
           </Pressable>
@@ -50,7 +54,11 @@ export default function AppHeader({
             style={styles.button}
             onPress={handleHome}
             hitSlop={12}
-            android_ripple={Platform.OS === 'android' ? { color: 'rgba(0,0,0,0.08)' } : undefined}
+            android_ripple={
+              Platform.OS === 'android'
+                ? { color: 'rgba(168,85,247,0.2)' }
+                : undefined
+            }
           >
             <Text style={styles.buttonText}>Home</Text>
           </Pressable>
@@ -66,8 +74,8 @@ const styles = StyleSheet.create({
     elevation: 6,
     height: 56,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#09090B',
+    borderBottomColor: 'rgba(168, 85, 247, 0.22)',
+    backgroundColor: '#000000',
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -82,18 +90,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     paddingHorizontal: 8,
+    letterSpacing: -0.3,
   },
   button: {
     zIndex: 3,
     minHeight: 40,
     minWidth: 64,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.35)',
     paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#09090B',
+    backgroundColor: '#171923',
   },
   buttonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 });

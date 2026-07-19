@@ -22,8 +22,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { platformElevation } from '@/utils/platformElevation';
 
-const ACTIVE = UE.text;
-const INACTIVE = UE.textMuted;
+/** Purple active / gray inactive — Emo AI tab chrome. */
+const ACTIVE = '#A855F7';
+const INACTIVE = '#7D8493';
 const ICON_SIZE = 26;
 
 function hrefForTabRoute(routeName: string): Href {
@@ -150,14 +151,7 @@ const TabBarItem = memo(function TabBarItem({
 
   const iconName = iconGlyph(route?.name ?? '', focused);
   const label = tabLabel(route.name);
-  const isEmo = route.name === 'emo-ai';
-  const iconColor = isEmo
-    ? focused
-      ? EMO_PURPLE
-      : '#9B7BB8'
-    : focused
-      ? ACTIVE
-      : INACTIVE;
+  const iconColor = focused ? ACTIVE : INACTIVE;
 
   return (
     <Pressable
@@ -173,13 +167,7 @@ const TabBarItem = memo(function TabBarItem({
       onPress={onPress}
       style={styles.tab}
     >
-      <View
-        style={[
-          styles.iconSlot,
-          focused && styles.iconSlotActive,
-          isEmo && focused && styles.iconSlotEmo,
-        ]}
-      >
+      <View style={[styles.iconSlot, focused && styles.iconSlotActive]}>
         <Animated.View style={iconAnim}>
           <Ionicons name={iconName} size={ICON_SIZE} color={iconColor} />
         </Animated.View>
@@ -189,15 +177,7 @@ const TabBarItem = memo(function TabBarItem({
           </View>
         ) : null}
       </View>
-      <Text
-        style={[
-          styles.label,
-          focused && styles.labelActive,
-          isEmo && focused && styles.labelEmo,
-        ]}
-      >
-        {label}
-      </Text>
+      <Text style={[styles.label, focused && styles.labelActive]}>{label}</Text>
     </Pressable>
   );
 });
@@ -269,13 +249,13 @@ const styles = StyleSheet.create({
     right: 18,
     borderRadius: 32,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.28)',
     ...platformElevation({
-      web: '0px 12px 40px rgba(0, 0, 0, 0.35)',
+      web: '0px 12px 40px rgba(168, 85, 247, 0.18)',
       ios: {
-        shadowColor: '#000',
-        shadowOpacity: 0.35,
+        shadowColor: '#A855F7',
+        shadowOpacity: 0.22,
         shadowOffset: { width: 0, height: 12 },
         shadowRadius: 28,
       },
@@ -284,13 +264,13 @@ const styles = StyleSheet.create({
   },
   blurFill: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,17,24,0.82)',
+    backgroundColor: 'rgba(12,13,18,0.88)',
   },
   androidFill: {
-    backgroundColor: 'rgba(15,17,24,0.82)',
+    backgroundColor: 'rgba(12,13,18,0.92)',
   },
   webFill: {
-    backgroundColor: 'rgba(15,17,24,0.82)',
+    backgroundColor: 'rgba(12,13,18,0.88)',
     backdropFilter: 'blur(20px)' as never,
   },
   container: {
@@ -318,9 +298,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconSlotActive: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  iconSlotEmo: {
     backgroundColor: 'rgba(168, 85, 247, 0.16)',
   },
   label: {
@@ -330,7 +307,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   labelActive: { color: ACTIVE, fontWeight: '900' },
-  labelEmo: { color: EMO_PURPLE, fontWeight: '900' },
   badge: {
     position: 'absolute',
     right: 2,

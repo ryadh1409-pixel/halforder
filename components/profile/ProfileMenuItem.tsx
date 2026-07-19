@@ -9,8 +9,8 @@ export const PROFILE_MENU_COLORS = {
   surface: '#171923',
   text: '#FFFFFF',
   textSecondary: '#B7BDC9',
-  textTertiary: '#7D8493',
-  border: 'rgba(255,255,255,0.12)',
+  textTertiary: '#8B93A7',
+  border: 'rgba(168, 85, 247, 0.22)',
 } as const;
 
 export type ProfileMenuItemProps = {

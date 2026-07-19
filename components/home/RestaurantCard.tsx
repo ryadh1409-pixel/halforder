@@ -157,11 +157,14 @@ export const RestaurantCard = memo(RestaurantCardInner);
 const styles = StyleSheet.create({
   card: {
     marginRight: UE.spaceCard,
+    borderWidth: 1,
+    borderColor: UE.border,
+    borderRadius: UE.radiusL,
     ...platformElevation({
-      web: '0px 4px 20px rgba(0, 0, 0, 0.08)',
+      web: '0px 8px 24px rgba(168, 85, 247, 0.12)',
       ios: {
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
+        shadowColor: '#A855F7',
+        shadowOpacity: 0.16,
         shadowOffset: { width: 0, height: 6 },
         shadowRadius: 16,
       },

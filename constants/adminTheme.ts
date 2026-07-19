@@ -7,8 +7,8 @@ const t = theme.colors;
 
 /** Consistent elevated card shell for admin lists / stats */
 export const adminCardShell = {
-  backgroundColor: t.background,
-  borderRadius: theme.radius.lg,
+  backgroundColor: t.surface,
+  borderRadius: theme.radius.xl,
   padding: theme.spacing.md,
   borderWidth: 1,
   borderColor: t.border,
@@ -16,14 +16,14 @@ export const adminCardShell = {
 } as const;
 
 export const adminColors = {
-  background: t.lightGray,
-  card: t.background,
+  background: t.backgroundDark,
+  card: t.surface,
   text: t.text,
   textMuted: t.textMuted,
   primary: t.primary,
   border: t.border,
   error: t.dangerText,
-  accentBlue: t.accentBlue,
+  accentBlue: t.purple,
   dangerBg: t.dangerBackground,
   successBg: t.successBackground,
   successText: t.successTextDark,

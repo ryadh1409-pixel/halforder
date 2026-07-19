@@ -9,9 +9,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-const CARD = '#ffffff';
-const TEXT = '#0f172a';
-const PRIMARY = '#16a34a';
+const CARD = '#171923';
+const TEXT = '#FFFFFF';
+const PRIMARY = '#A855F7';
 
 export type ActionCardProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -44,23 +44,23 @@ const styles = StyleSheet.create({
     maxWidth: 96,
     aspectRatio: 1,
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.06)',
-    shadowColor: '#09090B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: 'rgba(168, 85, 247, 0.28)',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 3,
   },
   iconCircle: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(22, 163, 74, 0.12)',
+    backgroundColor: 'rgba(168, 85, 247, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,

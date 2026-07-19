@@ -15,23 +15,35 @@ const ENGLISH_DEFAULTS = {
 
 /**
  * English-first text field: LTR alignment, dark keyboard, no autocorrect.
- * Pass props to override (e.g. `secureTextEntry`, `keyboardType`).
+ * Default visual style matches Emo AI inputs (pages may still override via `style`).
  */
 export const AppTextInput = forwardRef<TextInput, TextInputProps>(
-  function AppTextInput({ style, ...props }, ref) {
+  function AppTextInput({ style, placeholderTextColor, ...props }, ref) {
     return (
       <TextInput
         ref={ref}
         {...ENGLISH_DEFAULTS}
         {...props}
-        style={[styles.ltr, style]}
-        {...(Platform.OS === 'android' ? { textAlign: props.textAlign ?? 'left' } : {})}
+        placeholderTextColor={placeholderTextColor ?? '#7D8493'}
+        selectionColor="#FF6B35"
+        cursorColor="#FF6B35"
+        style={[styles.base, styles.ltr, style]}
+        {...(Platform.OS === 'android'
+          ? { textAlign: props.textAlign ?? 'left' }
+          : {})}
       />
     );
   },
 );
 
 const styles = StyleSheet.create({
+  base: {
+    color: '#FFFFFF',
+    backgroundColor: '#1C2030',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    borderRadius: 14,
+  },
   ltr: {
     writingDirection: 'ltr',
   },

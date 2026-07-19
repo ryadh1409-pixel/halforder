@@ -6,7 +6,7 @@ import { gradients } from '../theme/theme';
 type Props = {
   height?: number;
   style?: ViewStyle | ViewStyle[];
-  /** Use horizontal green → orange */
+  /** Use horizontal purple → orange brand hairline */
   variant?: 'diagonal' | 'horizontal';
 };
 
@@ -15,8 +15,7 @@ export function BrandGradientBar({
   style,
   variant = 'diagonal',
 }: Props) {
-  const g =
-    variant === 'horizontal' ? gradients.brandHorizontal : gradients.brand;
+  const g = gradients.brandAccent ?? gradients.brand;
   return (
     <LinearGradient
       colors={[g.colors[0], g.colors[1]]}
