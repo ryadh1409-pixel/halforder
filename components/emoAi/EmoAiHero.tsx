@@ -1,13 +1,33 @@
-import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-const HERO = require('../../assets/emo-ai/hero.png');
+import { EmoAiLiveCompanion } from './live/EmoAiLiveCompanion';
+import { useEmoAiLiveEngine } from './live/useEmoAiLiveEngine';
 
-export function EmoAiHero() {
+type Props = {
+  typing?: boolean;
+  streaming?: boolean;
+  /** Bumps while tokens stream so mouth stays in sync. */
+  streamingTick?: number;
+  lastUserMessage?: string | null;
+};
+
+/** Hero slot — same layout chrome; character is a live companion. */
+export function EmoAiHero({
+  typing = false,
+  streaming = false,
+  streamingTick = 0,
+  lastUserMessage = null,
+}: Props) {
+  const engine = useEmoAiLiveEngine({
+    typing,
+    streaming,
+    lastUserMessage,
+  });
+
   return (
     <View style={styles.wrap}>
-      <Image source={HERO} style={styles.image} contentFit="cover" />
+      <EmoAiLiveCompanion {...engine} streamingTick={streamingTick} />
     </View>
   );
 }
@@ -21,9 +41,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#171923',
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.22)',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
   },
 });

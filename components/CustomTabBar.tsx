@@ -9,6 +9,7 @@ import { useAuth } from '@/services/AuthContext';
 import { selectCartTotals, useCartStore } from '@/store/cartStore';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { type Href, useRouter } from 'expo-router';
 import React, { memo, useCallback, useMemo } from 'react';
@@ -26,6 +27,7 @@ import { platformElevation } from '@/utils/platformElevation';
 const ACTIVE = '#A855F7';
 const INACTIVE = '#7D8493';
 const ICON_SIZE = 26;
+const EMO_TAB_AVATAR = require('../assets/emo-ai/tab-avatar.png');
 
 function hrefForTabRoute(routeName: string): Href {
   switch (routeName) {
@@ -55,8 +57,6 @@ function hrefForTabRoute(routeName: string): Href {
       return `/(tabs)/${routeName}` as Href;
   }
 }
-
-const EMO_PURPLE = '#A855F7';
 
 function iconGlyph(
   routeName: string,
@@ -139,6 +139,7 @@ const TabBarItem = memo(function TabBarItem({
 }: ItemProps) {
   const router = useRouter();
   const scale = useSharedValue(1);
+  const isEmoAi = route.name === 'emo-ai';
 
   const iconAnim = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -167,9 +168,32 @@ const TabBarItem = memo(function TabBarItem({
       onPress={onPress}
       style={styles.tab}
     >
-      <View style={[styles.iconSlot, focused && styles.iconSlotActive]}>
+      <View
+        style={[
+          styles.iconSlot,
+          focused && !isEmoAi && styles.iconSlotActive,
+        ]}
+      >
         <Animated.View style={iconAnim}>
-          <Ionicons name={iconName} size={ICON_SIZE} color={iconColor} />
+          {isEmoAi ? (
+            <View
+              style={[
+                styles.emoAvatarGlow,
+                focused && styles.emoAvatarGlowActive,
+              ]}
+            >
+              <View style={styles.emoAvatarRing}>
+                <Image
+                  source={EMO_TAB_AVATAR}
+                  style={styles.emoAvatar}
+                  contentFit="cover"
+                  recyclingKey="emo-ai-tab-avatar"
+                />
+              </View>
+            </View>
+          ) : (
+            <Ionicons name={iconName} size={ICON_SIZE} color={iconColor} />
+          )}
         </Animated.View>
         {badge != null && badge > 0 ? (
           <View style={styles.badge}>
@@ -299,6 +323,47 @@ const styles = StyleSheet.create({
   },
   iconSlotActive: {
     backgroundColor: 'rgba(168, 85, 247, 0.16)',
+  },
+  emoAvatarGlow: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    borderRadius: ICON_SIZE / 2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(168, 85, 247, 0.55)',
+    ...platformElevation({
+      web: '0px 0px 6px rgba(168, 85, 247, 0.35)',
+      ios: {
+        shadowColor: '#A855F7',
+        shadowOpacity: 0.4,
+        shadowOffset: { width: 0, height: 0 },
+        shadowRadius: 4,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  emoAvatarGlowActive: {
+    borderWidth: 2,
+    borderColor: '#A855F7',
+    ...platformElevation({
+      web: '0px 0px 10px rgba(168, 85, 247, 0.75)',
+      ios: {
+        shadowColor: '#A855F7',
+        shadowOpacity: 0.75,
+        shadowOffset: { width: 0, height: 0 },
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  emoAvatarRing: {
+    flex: 1,
+    borderRadius: ICON_SIZE / 2,
+    overflow: 'hidden',
+    backgroundColor: '#0C0D12',
+  },
+  emoAvatar: {
+    width: '100%',
+    height: '100%',
   },
   label: {
     fontSize: 11,
