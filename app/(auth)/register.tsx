@@ -223,8 +223,9 @@ export default function RegisterScreen() {
     } catch (e: unknown) {
       const friendly = getAuthFlowFriendlyMessage(e);
       setFormError(friendly);
-      setShowSignInCta(isEmailAlreadyInUseError(e));
-      if (!isEmailAlreadyInUseError(e)) showError(friendly);
+      const alreadyInUse = isEmailAlreadyInUseError(e);
+      setShowSignInCta(alreadyInUse);
+      if (!alreadyInUse) showError(friendly);
     } finally {
       setLoading(false);
     }
@@ -455,14 +456,14 @@ export default function RegisterScreen() {
               {showSignInCta ? (
                 <TouchableOpacity
                   style={styles.signInCta}
-                  onPress={() =>
+                  onPress={() => {
+                    const trimmed = email.trim().toLowerCase();
+                    // Existing account — continue on Sign In (password) flow.
                     router.replace({
-                      pathname: '/(auth)/login',
-                      params: email.trim()
-                        ? { email: email.trim().toLowerCase() }
-                        : undefined,
-                    } as never)
-                  }
+                      pathname: '/(auth)/password',
+                      params: trimmed ? { email: trimmed } : undefined,
+                    } as never);
+                  }}
                 >
                   <Text style={styles.signInCtaText}>Go to Sign In</Text>
                 </TouchableOpacity>

@@ -681,6 +681,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     } catch (err: unknown) {
       logError(err);
+      // Preserve email-already-in-use so Sign Up UI can show Go to Sign In.
+      if (isEmailAlreadyInUseError(err)) {
+        throwAuthFlowError({
+          code: 'auth/email-already-in-use',
+          message: 'This email already has an account. Please sign in instead.',
+        });
+      }
       throwAuthFlowError(err);
     }
 

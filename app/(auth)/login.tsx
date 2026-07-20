@@ -3,7 +3,6 @@ import { navigateForRole } from '../../lib/navigation';
 import { getUserRole } from '@/services/userService';
 import { auth } from '../../services/firebase';
 import { signInWithApple } from '../../services/auth/appleSignIn';
-import { resolveAuthEmailAccountStatus } from '../../services/auth/emailAccountStatus';
 import { useGoogleAuth } from '../../services/googleAuth';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
@@ -70,7 +69,7 @@ export default function LoginScreen() {
     navigateForRole(role);
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
       showError('Please enter your email.');
@@ -81,26 +80,16 @@ export default function LoginScreen() {
       return;
     }
 
+    // Sign-in flow only: never route to create-account from Login.
+    // Password screen uses signInWithEmailAndPassword.
+    const params: Record<string, string> = { email: trimmed };
+    if (redirectTo) params.redirectTo = String(redirectTo);
     setLoading(true);
     try {
-      const status = await resolveAuthEmailAccountStatus(trimmed);
-      const params: Record<string, string> = { email: trimmed };
-      if (redirectTo) params.redirectTo = String(redirectTo);
-
-      if (status === 'exists') {
-        router.push({
-          pathname: '/(auth)/password',
-          params,
-        } as never);
-      } else {
-        router.push({
-          pathname: '/(auth)/account-not-found',
-          params,
-        } as never);
-      }
-    } catch (err: unknown) {
-      errorHaptic();
-      showFriendlyError(err);
+      router.push({
+        pathname: '/(auth)/password',
+        params,
+      } as never);
     } finally {
       setLoading(false);
     }
@@ -167,7 +156,7 @@ export default function LoginScreen() {
                 autoCorrect={false}
                 editable={!busy}
                 returnKeyType="go"
-                onSubmitEditing={() => void handleContinue()}
+                onSubmitEditing={() => handleContinue()}
                 inputAccessoryViewID={
                   Platform.OS === 'ios' ? KEYBOARD_TOOLBAR_NATIVE_ID : undefined
                 }
@@ -176,7 +165,7 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={[styles.primaryBtn, busy && styles.primaryBtnLoading]}
-                onPress={() => void handleContinue()}
+                onPress={() => handleContinue()}
                 disabled={busy}
                 activeOpacity={0.9}
               >
