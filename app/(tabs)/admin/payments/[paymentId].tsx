@@ -4,9 +4,9 @@ import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import {
-  subscribeSupportMessages,
-  type SupportMessage,
-} from '@/services/adminSupportInbox';
+  subscribeSupportConversationMessages,
+  type SupportConversationMessage,
+} from '@/services/supportConversations';
 import {
   fetchAdminPaymentTransactions,
   formatCurrency,
@@ -89,7 +89,7 @@ type HistoryRow = {
 
 function mergeHistory(
   paymentMsgs: PaymentSupportHistoryMessage[],
-  supportMsgs: SupportMessage[],
+  supportMsgs: SupportConversationMessage[],
   paymentId: string,
 ): HistoryRow[] {
   const rows: HistoryRow[] = paymentMsgs.map((m) => ({
@@ -102,7 +102,7 @@ function mergeHistory(
   }));
 
   for (const m of supportMsgs) {
-    const isCustomer = m.sender === 'user';
+    const isCustomer = m.sender === 'customer';
     const mentionsPayment = m.body.includes(paymentId);
     if (!isCustomer && !mentionsPayment) continue;
     const key = `${m.createdAtMs ?? 0}|${m.body.slice(0, 80)}`;
@@ -118,7 +118,7 @@ function mergeHistory(
       sender: isCustomer ? 'customer' : 'admin',
       body: m.body,
       createdAtMs: m.createdAtMs,
-      read: isCustomer ? m.readByAdmin : m.readByUser,
+      read: isCustomer ? m.readByAdmin : m.readByCustomer,
       delivered: true,
     });
   }
@@ -148,7 +148,7 @@ export default function AdminPaymentDetailScreen() {
   const [historyPayment, setHistoryPayment] = useState<
     PaymentSupportHistoryMessage[]
   >([]);
-  const [historySupport, setHistorySupport] = useState<SupportMessage[]>([]);
+  const [historySupport, setHistorySupport] = useState<SupportConversationMessage[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerText, setComposerText] = useState('');
   const [sending, setSending] = useState(false);
@@ -198,7 +198,7 @@ export default function AdminPaymentDetailScreen() {
   useEffect(() => {
     const uid = payment?.customerId;
     if (!uid) return;
-    return subscribeSupportMessages(uid, setHistorySupport);
+    return subscribeSupportConversationMessages(uid, setHistorySupport);
   }, [payment?.customerId]);
 
   const created = useMemo(() => formatWhen(payment?.createdAtMs), [payment?.createdAtMs]);

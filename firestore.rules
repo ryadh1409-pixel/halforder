@@ -3201,10 +3201,6 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
-    /**
-     * Admin Support Inbox (user ↔ admin).
-     * Doc id = user uid. Users own their thread; admins manage all.
-     */
     match /adminSupportThreads/{userId} {
       allow read: if isSignedIn()
         && (isAdmin() || request.auth.uid == userId);
@@ -3248,6 +3244,53 @@ service cloud.firestore {
             || (
               request.auth.uid == userId
               && request.resource.data.sender == 'user'
+              && request.resource.data.senderUid == request.auth.uid
+              && request.resource.data.body is string
+              && request.resource.data.body.size() > 0
+              && request.resource.data.body.size() <= 4000
+            )
+          );
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /**
+     * Customer support conversations (Uber-style).
+     * Doc id = customer uid. Messages append-only in subcollection.
+     */
+    match /supportConversations/{conversationId} {
+      allow read: if isSignedIn()
+        && (isAdmin() || request.auth.uid == conversationId);
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && (
+          isAdmin()
+          || (
+            request.auth.uid == conversationId
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.lastMessage is string
+            && request.resource.data.lastMessage.size() > 0
+            && request.resource.data.lastMessage.size() <= 4000
+          )
+        );
+      allow update: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && (
+          isAdmin()
+          || request.auth.uid == conversationId
+        );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && (isAdmin() || request.auth.uid == conversationId);
+        allow create: if isSignedIn()
+          && !isCurrentUserRestricted()
+          && (
+            isAdmin()
+            || (
+              request.auth.uid == conversationId
+              && request.resource.data.sender == 'customer'
               && request.resource.data.senderUid == request.auth.uid
               && request.resource.data.body is string
               && request.resource.data.body.size() > 0

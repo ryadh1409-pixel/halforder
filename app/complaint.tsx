@@ -1,10 +1,21 @@
 import { goBackFromProfileScreen } from '@/lib/profileBack';
-import { submitComplaint } from '../services/complaints';
+import {
+  submitComplaint,
+  type ComplaintCategory,
+} from '../services/complaints';
 import { moderateUserContent } from '../utils/contentModeration';
 import { useAuth } from '../services/AuthContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../constants/theme';
@@ -13,10 +24,21 @@ import { showError, showSuccess } from '../utils/toast';
 
 const c = theme.colors;
 
+const CATEGORIES: ComplaintCategory[] = [
+  'General',
+  'Order',
+  'Payment',
+  'Account',
+  'Other',
+];
+
 export default function ComplaintScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [message, setMessage] = useState('');
+  const [category, setCategory] = useState<ComplaintCategory>('General');
+  const [orderId, setOrderId] = useState('');
+  const [paymentId, setPaymentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -37,11 +59,20 @@ export default function ComplaintScreen() {
     setSubmitting(true);
     try {
       await submitComplaint(
-        { uid: user.uid, email: user.email ?? null },
+        {
+          uid: user.uid,
+          email: user.email ?? null,
+          displayName: user.displayName,
+        },
         mod.text,
+        {
+          category,
+          orderId: orderId.trim() || null,
+          paymentId: paymentId.trim() || null,
+        },
       );
       setMessage('');
-      showSuccess('Your message has been sent. We will get back to you soon.');
+      showSuccess('Your complaint was sent. Our team will reply in Support.');
       goBackFromProfileScreen(router);
     } catch (e) {
       showError(getUserFriendlyError(e));
@@ -79,29 +110,67 @@ export default function ComplaintScreen() {
       <KeyboardAvoidingView
         style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <Text style={styles.label}>Your message</Text>
-        <AppTextInput
-          value={message}
-          onChangeText={setMessage}
-          placeholder="Describe your complaint or inquiry..."
-          placeholderTextColor={c.iconInactive}
-          style={styles.input}
-          multiline
-          numberOfLines={5}
-          maxLength={2000}
-          editable={!submitting}
-        />
-        <TouchableOpacity
-          style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting || !message.trim()}
-        >
-          <Text style={styles.submitBtnText}>
-            {submitting ? 'Sending...' : 'Submit'}
-          </Text>
-        </TouchableOpacity>
+        <ScrollView keyboardShouldPersistTaps="handled">
+          <Text style={styles.label}>Category</Text>
+          <View style={styles.chipRow}>
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.chip, category === cat && styles.chipOn]}
+                onPress={() => setCategory(cat)}
+              >
+                <Text
+                  style={[styles.chipText, category === cat && styles.chipTextOn]}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Order ID (optional)</Text>
+          <AppTextInput
+            value={orderId}
+            onChangeText={setOrderId}
+            placeholder="Order ID if applicable"
+            placeholderTextColor={c.iconInactive}
+            style={styles.field}
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.label}>Payment ID (optional)</Text>
+          <AppTextInput
+            value={paymentId}
+            onChangeText={setPaymentId}
+            placeholder="Payment ID if applicable"
+            placeholderTextColor={c.iconInactive}
+            style={styles.field}
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.label}>Your message</Text>
+          <AppTextInput
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Describe your complaint or inquiry..."
+            placeholderTextColor={c.iconInactive}
+            style={styles.input}
+            multiline
+            numberOfLines={5}
+            maxLength={2000}
+            editable={!submitting}
+          />
+          <TouchableOpacity
+            style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting || !message.trim()}
+          >
+            <Text style={styles.submitBtnText}>
+              {submitting ? 'Sending...' : 'Submit'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -140,6 +209,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: c.text,
     marginBottom: 8,
+    marginTop: 12,
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  chip: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  chipOn: { borderColor: c.primary, backgroundColor: 'rgba(168,85,247,0.15)' },
+  chipText: { color: c.textMuted, fontWeight: '600', fontSize: 13 },
+  chipTextOn: { color: c.primary },
+  field: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: c.text,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
@@ -157,6 +247,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 24,
+    marginBottom: 24,
   },
   submitBtnDisabled: {
     opacity: 0.6,

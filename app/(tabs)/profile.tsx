@@ -944,7 +944,7 @@ export default function ProfileScreen() {
                   key: 'support',
                   label: 'Customer Support',
                   icon: 'headset-mic' as const,
-                  onPress: () => void openSupportEmail(),
+                  onPress: () => router.push('/customer-support' as never),
                 },
                 {
                   key: 'complaint',

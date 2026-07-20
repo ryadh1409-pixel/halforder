@@ -2,8 +2,8 @@
  * Enrichment + contact-customer for Admin Payment Details (read-only Stripe side).
  */
 import {
-  adminReplySupportMessage,
-} from '@/services/adminSupportInbox';
+  sendAdminSupportMessageToCustomer,
+} from '@/services/supportConversations';
 import { createInboxNotification } from '@/services/foodShareInbox';
 import { auth, db } from '@/services/firebase';
 import { appendPaymentSupportHistoryMessage } from '@/services/paymentAdminMeta';
@@ -11,13 +11,8 @@ import { sendExpoPush } from '@/services/sendExpoPush';
 import type { AdminPaymentTransaction } from '@/types/adminPaymentTransaction';
 import { safeToMillis } from '@/utils/safeToMillis';
 import {
-  addDoc,
-  collection,
   doc,
   getDoc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
 } from 'firebase/firestore';
 
 export type PaymentCustomerProfile = {
@@ -363,73 +358,6 @@ function formatContextBlock(input: {
   ].join('\n');
 }
 
-async function ensureAdminSupportThreadMessage(input: {
-  customerId: string;
-  customerName: string | null;
-  customerEmail: string | null;
-  orderId: string | null;
-  paymentId: string;
-  body: string;
-}): Promise<void> {
-  const caller = auth.currentUser;
-  if (!caller) return;
-  const threadRef = doc(db, 'adminSupportThreads', input.customerId);
-  const existing = await getDoc(threadRef);
-
-  if (!existing.exists()) {
-    await setDoc(threadRef, {
-      userId: input.customerId,
-      userName: input.customerName ?? 'Customer',
-      userEmail: input.customerEmail,
-      lastMessage: input.body.slice(0, 500),
-      lastSender: 'admin',
-      unreadAdmin: 0,
-      unreadUser: 1,
-      archived: false,
-      orderId: input.orderId,
-      paymentId: input.paymentId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    await addDoc(collection(db, 'adminSupportThreads', input.customerId, 'messages'), {
-      sender: 'admin',
-      senderUid: caller.uid,
-      body: input.body,
-      createdAt: serverTimestamp(),
-      readByAdmin: true,
-      readByUser: false,
-      paymentId: input.paymentId,
-      delivered: true,
-    });
-    return;
-  }
-
-  try {
-    await adminReplySupportMessage(input.customerId, input.body);
-    await updateDoc(threadRef, {
-      paymentId: input.paymentId,
-      ...(input.orderId ? { orderId: input.orderId } : {}),
-    });
-  } catch {
-    await addDoc(collection(db, 'adminSupportThreads', input.customerId, 'messages'), {
-      sender: 'admin',
-      senderUid: caller.uid,
-      body: input.body,
-      createdAt: serverTimestamp(),
-      readByAdmin: true,
-      readByUser: false,
-      paymentId: input.paymentId,
-      delivered: true,
-    });
-    await updateDoc(threadRef, {
-      lastMessage: input.body.slice(0, 500),
-      lastSender: 'admin',
-      paymentId: input.paymentId,
-      updatedAt: serverTimestamp(),
-    });
-  }
-}
-
 /**
  * Contact customer from Payment Details:
  * inbox + push + payment conversation history + support thread.
@@ -466,7 +394,7 @@ export async function sendPaymentCustomerSupportMessage(input: {
     type: 'admin_message',
     title: 'HalfOrder',
     body: fullBody,
-    deepLink: '/inbox',
+    deepLink: '/customer-support',
     matchId: input.payment.matchId,
     skipPush: true,
   });
@@ -486,8 +414,8 @@ export async function sendPaymentCustomerSupportMessage(input: {
       'HalfOrder',
       'New message from HalfOrder Support',
       {
-        type: 'admin_message',
-        deepLink: '/inbox',
+        type: 'support_reply',
+        deepLink: '/customer-support',
         paymentId: input.payment.id,
       },
       { priority: 'high', channelId: 'halforder', badge: 1 },
@@ -502,16 +430,12 @@ export async function sendPaymentCustomerSupportMessage(input: {
     read: false,
   });
 
-  try {
-    await ensureAdminSupportThreadMessage({
-      customerId,
-      customerName: input.payment.customerName,
-      customerEmail: input.customerEmail ?? null,
-      orderId: input.payment.orderId,
-      paymentId: input.payment.id,
-      body: fullBody,
-    });
-  } catch {
-    /* history already stored on payment meta */
-  }
+  await sendAdminSupportMessageToCustomer({
+    customerId,
+    body: fullBody,
+    orderId: input.payment.orderId,
+    paymentId: input.payment.id,
+    customerName: input.payment.customerName,
+    customerEmail: input.customerEmail ?? null,
+  });
 }
