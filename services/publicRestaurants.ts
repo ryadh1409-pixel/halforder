@@ -22,8 +22,9 @@ export type PublicRestaurantRow = {
 
 const MAX_LIST = 48;
 
-function mapDocToRow(d: { id: string; data: () => Record<string, unknown> }): PublicRestaurantRow {
+function mapDocToRow(d: { id: string; data: () => Record<string, unknown> }): PublicRestaurantRow | null {
   const data = d.data();
+  if (data.adminEnabled === false) return null;
   return {
     id: d.id,
     name:
@@ -42,9 +43,11 @@ function mapDocToRow(d: { id: string; data: () => Record<string, unknown> }): Pu
 /** One-shot fetch (e.g. Food Trucks tab). Prefer with pull-to-refresh / focus. */
 export async function fetchPublicRestaurants(): Promise<PublicRestaurantRow[]> {
   const snap = await getDocs(query(collection(db, 'restaurants'), limit(MAX_LIST)));
-  const rows = snap.docs.map((docSnap) =>
-    mapDocToRow({ id: docSnap.id, data: () => docSnap.data() }),
-  );
+  const rows = snap.docs
+    .map((docSnap) =>
+      mapDocToRow({ id: docSnap.id, data: () => docSnap.data() }),
+    )
+    .filter((r): r is PublicRestaurantRow => r != null);
   rows.sort((a, b) => a.name.localeCompare(b.name));
   return rows;
 }
@@ -57,9 +60,9 @@ export function subscribePublicRestaurants(
   return onSnapshot(
     q,
     (snap) => {
-      const rows: PublicRestaurantRow[] = snap.docs.map((d) =>
-        mapDocToRow({ id: d.id, data: () => d.data() }),
-      );
+      const rows: PublicRestaurantRow[] = snap.docs
+        .map((d) => mapDocToRow({ id: d.id, data: () => d.data() }))
+        .filter((r): r is PublicRestaurantRow => r != null);
       rows.sort((a, b) => a.name.localeCompare(b.name));
       onData(rows);
     },

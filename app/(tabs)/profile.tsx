@@ -11,6 +11,7 @@ import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
+import { ReferralProgramCard } from '../../components/profile/ReferralProgramCard';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
 import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
@@ -922,6 +923,20 @@ export default function ProfileScreen() {
             onOpenOrder={handleOpenOrderDetails}
             onCancelOrder={handleCancelProfileOrder}
             onRetry={() => void refreshProfileOrders()}
+          />
+
+          <Text style={dynamicStyles.sectionHeading}>Referral Program</Text>
+          <ReferralProgramCard
+            uid={uid}
+            pal={{
+              surface: pal.surface,
+              border: pal.border,
+              text: pal.text,
+              textSecondary: pal.textSecondary,
+              textTertiary: pal.textTertiary,
+              primary: pal.primary,
+              onPrimary: pal.onPrimary,
+            }}
           />
 
           <Text style={dynamicStyles.sectionHeading}>Support & legal</Text>

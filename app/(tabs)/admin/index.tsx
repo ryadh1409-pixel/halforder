@@ -564,6 +564,20 @@ export default function AdminScreen() {
                   onPress={() => router.push(adminRoutes.vouchers as never)}
                 />
                 <ActionCard
+                  icon="restaurant-outline"
+                  label="Restaurants"
+                  onPress={() =>
+                    router.push(adminRoutes.restaurantManagement as never)
+                  }
+                />
+                <ActionCard
+                  icon="car-outline"
+                  label="Drivers"
+                  onPress={() =>
+                    router.push(adminRoutes.driverManagement as never)
+                  }
+                />
+                <ActionCard
                   icon="bulb-outline"
                   label="Emo AI Reports"
                   onPress={() => router.push(adminRoutes.emoAiReports as never)}

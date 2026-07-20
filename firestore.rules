@@ -1173,6 +1173,21 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/orders/$(orderId)).data.get('users', []).size() >= 2;
       allow update, delete: if isAdmin();
     }
+    match /friendReferrals/{referralId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.referrerUid == request.auth.uid);
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    match /referralCodes/{code} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
     function usersRoleSelfAssignOk() {
       let before = resource.data.get('role', 'user');
       let after = request.resource.data.get('role', 'user');
@@ -3133,10 +3148,12 @@ service cloud.firestore {
         || (
           authTokenRoleIsRestaurant()
           && resource.data.isOnline == true
+          && resource.data.get('adminSuspended', false) != true
         );
-      // Driver self-service profile + liveLocation / presence (syncDriverLiveLocation batch).
-      allow create, update, delete: if isSignedIn()
+      allow create, delete: if isSignedIn()
         && request.auth.uid == driverId;
+      allow update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == driverId);
     }
     match /app_sessions/{sessionId} {
       allow read, write: if request.auth != null;

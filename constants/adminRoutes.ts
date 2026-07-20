@@ -48,4 +48,6 @@ export const adminRoutes = {
   onboardingManager: '/(tabs)/admin/onboarding-manager',
   pushCenter: '/(tabs)/admin/push-center',
   notificationHistory: '/(tabs)/admin/notification-history',
+  restaurantManagement: '/(tabs)/admin/restaurant-management',
+  driverManagement: '/(tabs)/admin/driver-management',
 } as const;

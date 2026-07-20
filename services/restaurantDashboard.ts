@@ -229,31 +229,32 @@ export function subscribeOnlineDrivers(onData: (drivers: DriverDoc[]) => void): 
   return onSnapshot(
     query(collection(db, 'drivers'), where('isOnline', '==', true)),
     (snap) => {
-      onData(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            name: typeof data.name === 'string' ? data.name : 'Driver',
-            phone: typeof data.phone === 'string' ? data.phone : null,
-            isOnline: true,
-            location:
-              data.location &&
-              typeof data.location === 'object' &&
-              'latitude' in data.location &&
-              'longitude' in data.location
-                ? {
-                    latitude: Number(
-                      (data.location as { latitude: unknown }).latitude,
-                    ),
-                    longitude: Number(
-                      (data.location as { longitude: unknown }).longitude,
-                    ),
-                  }
-                : null,
-          };
-        }),
-      );
+      const rows: DriverDoc[] = [];
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.adminSuspended === true) continue;
+        rows.push({
+          id: d.id,
+          name: typeof data.name === 'string' ? data.name : 'Driver',
+          phone: typeof data.phone === 'string' ? data.phone : null,
+          isOnline: true,
+          location:
+            data.location &&
+            typeof data.location === 'object' &&
+            'latitude' in data.location &&
+            'longitude' in data.location
+              ? {
+                  latitude: Number(
+                    (data.location as { latitude: unknown }).latitude,
+                  ),
+                  longitude: Number(
+                    (data.location as { longitude: unknown }).longitude,
+                  ),
+                }
+              : null,
+        });
+      }
+      onData(rows);
     },
     () => onData([]),
   );

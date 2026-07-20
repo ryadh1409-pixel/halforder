@@ -13,6 +13,7 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { assertDriverCanReceiveDeliveries } from '@/services/adminDriverManagement';
 import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
 import { isTerminalMarketplaceOrder } from '@/lib/orderTerminalStatus';
 import {
@@ -1111,6 +1112,14 @@ export async function claimMarketplaceDriverOrder(
   driver: DriverProfile,
   vehicle?: string | null,
 ): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    await assertDriverCanReceiveDeliveries(driver.id);
+  } catch (e) {
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : 'suspended',
+    };
+  }
   const orderRef = doc(db, 'orders', orderId);
   const ruleSafePayload = {
     driverId: driver.id,

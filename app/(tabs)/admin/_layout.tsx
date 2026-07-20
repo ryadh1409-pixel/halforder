@@ -107,6 +107,14 @@ export default function AdminLayout() {
         options={{ title: 'Notification History' }}
       />
       <Stack.Screen
+        name="restaurant-management"
+        options={{ title: 'Restaurant Management' }}
+      />
+      <Stack.Screen
+        name="driver-management"
+        options={{ title: 'Driver Management' }}
+      />
+      <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}
       />

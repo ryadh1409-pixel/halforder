@@ -25,6 +25,7 @@ import { useAuth } from '../../services/AuthContext';
 import { useCart } from '../../services/CartContext';
 import { auth, ensureAuthReady } from '../../services/firebase';
 import { createOrder } from '../../services/orderService';
+import { assertRestaurantAcceptsNewOrders } from '@/services/adminRestaurantManagement';
 import { resolveDeliveryLocationForCheckout } from '../../services/location';
 import { isOwnerHost } from '../../services/roles';
 import { checkStripeStatus, resolveRestaurantPaymentsReady } from '../../services/stripeConnect';
@@ -177,6 +178,7 @@ export default function CartScreen() {
     }
     setPlacing(true);
     try {
+      await assertRestaurantAcceptsNewOrders(restaurantId);
       const delivery = await resolveDeliveryLocationForCheckout({ required: true });
       const orderId = await createOrder({
         userId: user.uid,

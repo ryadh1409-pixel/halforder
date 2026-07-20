@@ -40,14 +40,14 @@ export function useHomeRestaurants(): State {
     unsub = onSnapshot(
       q,
       (snap) => {
-        const rows = snap.docs.map((d) => {
+        const rows = snap.docs
+          .map((d) => {
           const raw = d.data() as Record<string, unknown>;
-          if (__DEV__) {
-            console.log('[RAW RESTAURANT]', { id: d.id, ...raw });
-          }
+          if (raw.adminEnabled === false) return null;
           const normalized = normalizeRestaurantFirestoreDoc(d.id, raw);
           return mapFirestoreRestaurant(d.id, normalized, userCoords);
-        });
+        })
+          .filter((r): r is HomeRestaurant => r != null);
         rows.sort((a, b) => a.name.localeCompare(b.name));
         setRestaurants(rows);
         setError(null);
