@@ -18,6 +18,7 @@ import { db } from '@/services/firebase';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -147,7 +148,10 @@ export default function WalletScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <TouchableOpacity
+            onPress={() => goBackFromProfileScreen(router)}
+            hitSlop={12}
+          >
             <MaterialIcons name="arrow-back" size={24} color={PAL.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Wallet</Text>
@@ -163,7 +167,10 @@ export default function WalletScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <TouchableOpacity
+          onPress={() => goBackFromProfileScreen(router)}
+          hitSlop={12}
+        >
           <MaterialIcons name="arrow-back" size={24} color={PAL.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Wallet</Text>

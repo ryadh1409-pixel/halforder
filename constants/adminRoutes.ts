@@ -37,4 +37,6 @@ export const adminRoutes = {
   emoAiReports: '/(tabs)/admin/emo-ai-reports',
   emoAiReport: (id: string) =>
     `/(tabs)/admin/emo-ai-reports/${encodeURIComponent(id)}`,
+  /** Compose messages that appear in each user's Profile Inbox. */
+  inboxMessages: '/(tabs)/admin/inbox-messages',
 } as const;

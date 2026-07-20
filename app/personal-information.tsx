@@ -30,6 +30,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { updateProfile, type User } from '@firebase/auth';
 import { Image } from 'expo-image';
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -376,13 +377,7 @@ export default function PersonalInformationScreen() {
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(tabs)/profile' as never);
-            }
-          }}
+          onPress={() => goBackFromProfileScreen(router)}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Go back"

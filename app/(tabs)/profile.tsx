@@ -12,7 +12,6 @@ import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
-import { ProfileLocationPicker } from '../../components/profile/ProfileLocationPicker';
 import { useBlockedUsers } from '../../hooks/useBlockedUsers';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
 import { useTrustScore } from '../../hooks/useTrustScore';
@@ -24,12 +23,7 @@ import { navigateForRole } from '@/lib/navigation';
 import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { applySignupRole } from '@/services/authRoleAssignment';
-import {
-  captureAndSaveCurrentProfileLocation,
-  formatProfileLocationLabel,
-  subscribeUserProfileLocation,
-  type ProfileLocationFields,
-} from '@/services/signupProfileLocation';
+import { subscribeUnreadInboxCount } from '@/services/foodShareInbox';
 import { useAuth } from '../../services/AuthContext';
 import { auth, db } from '../../services/firebase';
 import {
@@ -62,7 +56,7 @@ import {
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -75,7 +69,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  type LayoutChangeEvent,
 } from 'react-native';
 import { AppTextInput } from '../../components/AppTextInput';
 import {
@@ -268,21 +261,17 @@ export default function ProfileScreen() {
   const [profileOrdersCancellingIds, setProfileOrdersCancellingIds] = useState<
     Record<string, boolean>
   >({});
-  const [profileLocation, setProfileLocation] =
-    useState<ProfileLocationFields | null>(null);
-  const [changingLocation, setChangingLocation] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const locationSectionY = useRef(0);
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const registered = isRegisteredAuthUser(user);
   const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
 
   useEffect(() => {
     if (!uid) {
-      setProfileLocation(null);
+      setInboxUnreadCount(0);
       return undefined;
     }
-    return subscribeUserProfileLocation(uid, setProfileLocation);
+    return subscribeUnreadInboxCount(uid, setInboxUnreadCount);
   }, [uid]);
 
   const {
@@ -325,34 +314,12 @@ export default function ProfileScreen() {
   } = useBlockedUsers();
 
   const openTerms = useCallback(() => {
-    void (async () => {
-      const url = LEGAL_URLS.terms;
-      try {
-        if (await Linking.canOpenURL(url)) {
-          await Linking.openURL(url);
-        } else {
-          showNotice('Terms of Service', url);
-        }
-      } catch {
-        showNotice('Terms of Service', url);
-      }
-    })();
-  }, []);
+    router.push('/terms' as never);
+  }, [router]);
 
   const openPrivacy = useCallback(() => {
-    void (async () => {
-      const url = LEGAL_URLS.privacy;
-      try {
-        if (await Linking.canOpenURL(url)) {
-          await Linking.openURL(url);
-        } else {
-          showNotice('Privacy Policy', url);
-        }
-      } catch {
-        showNotice('Privacy Policy', url);
-      }
-    })();
-  }, []);
+    router.push('/privacy' as never);
+  }, [router]);
 
   useEffect(() => {
     if (!uid || user?.isAnonymous) {
@@ -770,8 +737,6 @@ export default function ProfileScreen() {
                 <Text style={styles.legalLinkWeb}>Privacy</Text>
               </TouchableOpacity>
             </View>
-              <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
-              <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
             </View>
           </View>
         </ScrollView>
@@ -785,7 +750,6 @@ export default function ProfileScreen() {
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
-        ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: scrollBottomPadding },
@@ -915,13 +879,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={dynamicStyles.quickGridCard}
-              onPress={() => {
-                // layout.y is relative to profileBody (paddingTop: 16)
-                scrollRef.current?.scrollTo({
-                  y: Math.max(0, 16 + locationSectionY.current - 8),
-                  animated: true,
-                });
-              }}
+              onPress={() => router.push('/location' as never)}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Location"
@@ -942,10 +900,21 @@ export default function ProfileScreen() {
               onPress={() => router.push('/inbox' as never)}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Inbox"
+              accessibilityLabel={
+                inboxUnreadCount > 0
+                  ? `Inbox, ${inboxUnreadCount} unread`
+                  : 'Inbox'
+              }
             >
               <View style={dynamicStyles.quickGridIconWrap}>
                 <MaterialIcons name="inbox" size={26} color={pal.primary} />
+                {inboxUnreadCount > 0 ? (
+                  <View style={dynamicStyles.inboxBadge}>
+                    <Text style={dynamicStyles.inboxBadgeText}>
+                      {inboxUnreadCount > 99 ? '99+' : String(inboxUnreadCount)}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
               <Text style={dynamicStyles.quickGridTitle}>Inbox</Text>
               <MaterialIcons
@@ -956,7 +925,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {__DEV__ && firestoreUserRole ? (
+          {isAdminUser(user, firestoreUserRole) && firestoreUserRole ? (
             <>
               <Text style={dynamicStyles.sectionHeading}>Account type</Text>
               <View style={dynamicStyles.card}>
@@ -966,49 +935,6 @@ export default function ProfileScreen() {
               </View>
             </>
           ) : null}
-
-          <View
-            onLayout={(e: LayoutChangeEvent) => {
-              locationSectionY.current = e.nativeEvent.layout.y;
-            }}
-          >
-            <Text style={dynamicStyles.sectionHeading}>Location</Text>
-            <View style={dynamicStyles.card}>
-              <Text style={dynamicStyles.cardTitle}>
-                📍 {formatProfileLocationLabel(profileLocation)}
-              </Text>
-              <TouchableOpacity
-                style={[dynamicStyles.primaryButton, { marginTop: 12 }]}
-                onPress={() => {
-                  if (!uid || changingLocation) return;
-                  setChangingLocation(true);
-                  void captureAndSaveCurrentProfileLocation(uid)
-                    .then(() => showSuccess('Location updated.'))
-                    .catch((e) =>
-                      showError(
-                        e instanceof Error
-                          ? e.message
-                          : 'Could not update location.',
-                      ),
-                    )
-                    .finally(() => setChangingLocation(false));
-                }}
-                disabled={changingLocation || !uid}
-                activeOpacity={0.85}
-              >
-                {changingLocation ? (
-                  <ActivityIndicator color={pal.onPrimary} />
-                ) : (
-                  <Text style={dynamicStyles.primaryButtonText}>
-                    Change Location
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <Text style={dynamicStyles.sectionHeading}>Delivery location</Text>
-            <ProfileLocationPicker userId={uid} palette={pal} />
-          </View>
 
           <Text style={dynamicStyles.sectionHeading}>Notifications</Text>
           <View style={dynamicStyles.card}>
@@ -1057,48 +983,73 @@ export default function ProfileScreen() {
           />
 
           <Text style={dynamicStyles.sectionHeading}>Support & legal</Text>
-          <View style={dynamicStyles.card}>
-            <TouchableOpacity onPress={openSupportEmail} activeOpacity={0.75}>
-              <Text style={dynamicStyles.label}>Customer support</Text>
-              <Text style={dynamicStyles.link}>{SUPPORT_EMAIL}</Text>
-            </TouchableOpacity>
-            <View style={dynamicStyles.divider} />
-            <View style={dynamicStyles.legalGrid}>
+          <View style={dynamicStyles.supportListCard}>
+            {(
+              [
+                {
+                  key: 'terms',
+                  label: 'Terms',
+                  icon: 'description' as const,
+                  onPress: () => router.push('/terms'),
+                },
+                {
+                  key: 'privacy',
+                  label: 'Privacy',
+                  icon: 'shield' as const,
+                  onPress: () => router.push('/privacy'),
+                },
+                {
+                  key: 'support',
+                  label: 'Customer Support',
+                  icon: 'headset-mic' as const,
+                  onPress: () => void openSupportEmail(),
+                },
+                {
+                  key: 'complaint',
+                  label: 'Complaint',
+                  icon: 'flag' as const,
+                  onPress: () => router.push('/complaint'),
+                },
+                {
+                  key: 'guidelines',
+                  label: 'Community Guidelines',
+                  icon: 'groups' as const,
+                  onPress: () => router.push('/safety'),
+                },
+                {
+                  key: 'report',
+                  label: 'Report User',
+                  icon: 'warning-amber' as const,
+                  onPress: () => router.push('/help'),
+                },
+              ] as const
+            ).map((item, index, arr) => (
               <TouchableOpacity
-                style={dynamicStyles.outlineBtn}
-                onPress={() => router.push('/terms')}
+                key={item.key}
+                style={[
+                  dynamicStyles.supportRow,
+                  index < arr.length - 1 && dynamicStyles.supportRowBorder,
+                ]}
+                onPress={item.onPress}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
               >
-                <Text style={dynamicStyles.outlineBtnText}>Terms of Use (in app)</Text>
+                <View style={dynamicStyles.supportIconWrap}>
+                  <MaterialIcons
+                    name={item.icon}
+                    size={22}
+                    color={pal.primary}
+                  />
+                </View>
+                <Text style={dynamicStyles.supportRowLabel}>{item.label}</Text>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={22}
+                  color={pal.textTertiary}
+                />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={dynamicStyles.outlineBtn}
-                onPress={() => router.push('/privacy')}
-              >
-                <Text style={dynamicStyles.outlineBtnText}>Privacy (in app)</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={[dynamicStyles.outlineBtn, { marginTop: 10 }]}
-              onPress={() => void Linking.openURL(LEGAL_URLS.terms)}
-            >
-              <Text style={dynamicStyles.outlineBtnText}>Terms of Service (website)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={dynamicStyles.outlineBtn}
-              onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}
-            >
-              <Text style={dynamicStyles.outlineBtnText}>Privacy Policy (website)</Text>
-            </TouchableOpacity>
-            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
-            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
-            <TouchableOpacity
-              style={[dynamicStyles.primaryButton, { marginTop: 14 }]}
-              onPress={() => router.push('/complaint')}
-            >
-              <Text style={dynamicStyles.primaryButtonText}>
-                Submit complaint or inquiry
-              </Text>
-            </TouchableOpacity>
+            ))}
           </View>
 
           <Text style={dynamicStyles.sectionHeading}>Trust &amp; safety</Text>
@@ -1109,18 +1060,6 @@ export default function ProfileScreen() {
             <Text style={[dynamicStyles.bodyMuted, { marginTop: 10 }]}>
               To block someone, use the menu in an order chat or on the Join tab. Blocked people cannot match or join orders with you. Unblock anytime below.
             </Text>
-            <TouchableOpacity
-              style={[dynamicStyles.outlineBtn, { marginTop: 12 }]}
-              onPress={() => router.push('/safety')}
-            >
-              <Text style={dynamicStyles.outlineBtnText}>Community guidelines</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={dynamicStyles.outlineBtn}
-              onPress={() => router.push('/help')}
-            >
-              <Text style={dynamicStyles.outlineBtnText}>Help — report from an order</Text>
-            </TouchableOpacity>
           </View>
 
           <Text style={dynamicStyles.sectionHeading}>Report a user</Text>
@@ -1297,8 +1236,6 @@ export default function ProfileScreen() {
                 <Text style={styles.legalLinkWeb}>Privacy</Text>
               </TouchableOpacity>
             </View>
-            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.terms}</Text>
-            <Text style={dynamicStyles.legalUrlHint}>{LEGAL_URLS.privacy}</Text>
           </View>
         </View>
       </ScrollView>
@@ -1497,6 +1434,61 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       backgroundColor: 'rgba(168, 85, 247, 0.14)',
       alignItems: 'center',
       justifyContent: 'center',
+      position: 'relative',
+    },
+    inboxBadge: {
+      position: 'absolute',
+      top: -4,
+      right: -6,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      paddingHorizontal: 4,
+      backgroundColor: pal.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: pal.bg,
+    },
+    inboxBadgeText: {
+      color: pal.onPrimary,
+      fontSize: 10,
+      fontWeight: '800',
+    },
+    supportListCard: {
+      backgroundColor: pal.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: pal.border,
+      marginBottom: 12,
+      overflow: 'hidden',
+    },
+    supportRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      gap: 12,
+      minHeight: 56,
+    },
+    supportRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: pal.border,
+    },
+    supportIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(168, 85, 247, 0.14)',
+    },
+    supportRowLabel: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: '700',
+      color: pal.text,
+      letterSpacing: -0.2,
     },
     quickGridTitle: {
       flex: 1,

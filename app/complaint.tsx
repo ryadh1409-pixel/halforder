@@ -1,3 +1,4 @@
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { submitComplaint } from '../services/complaints';
 import { moderateUserContent } from '../utils/contentModeration';
 import { useAuth } from '../services/AuthContext';
@@ -41,7 +42,7 @@ export default function ComplaintScreen() {
       );
       setMessage('');
       showSuccess('Your message has been sent. We will get back to you soon.');
-      router.back();
+      goBackFromProfileScreen(router);
     } catch (e) {
       showError(getUserFriendlyError(e));
     } finally {
@@ -53,7 +54,7 @@ export default function ComplaintScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => goBackFromProfileScreen(router)}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Complaint or inquiry</Text>
@@ -70,7 +71,7 @@ export default function ComplaintScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => goBackFromProfileScreen(router)}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Complaint or inquiry</Text>

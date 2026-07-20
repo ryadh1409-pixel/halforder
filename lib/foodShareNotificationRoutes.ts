@@ -18,6 +18,11 @@ export function resolveFoodShareNotificationRoute(input: {
   const adminFoodShareId = input.adminFoodShareId?.trim() || null;
   const orderId = input.orderId?.trim() || null;
 
+  if (type.startsWith('admin_')) {
+    if (input.deepLink?.trim()) return input.deepLink.trim();
+    return '/inbox';
+  }
+
   switch (type) {
     case 'share_joined':
       if (adminFoodShareId) return USER_ROUTES.foodShareWaiting(adminFoodShareId);

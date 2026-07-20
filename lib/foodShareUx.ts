@@ -50,7 +50,14 @@ export type FoodShareNotificationType =
   | 'chat_warning'
   | 'user_blocked'
   | 'report_submitted'
-  | 'order_completed';
+  | 'order_completed'
+  | 'admin_message'
+  | 'admin_announcement'
+  | 'admin_maintenance'
+  | 'admin_promotion'
+  | 'admin_feature'
+  | 'admin_alert'
+  | 'admin_account';
 
 export type FoodShareLifecycleAlertKey =
   | 'order_placed'

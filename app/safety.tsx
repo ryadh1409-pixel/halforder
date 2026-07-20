@@ -1,3 +1,4 @@
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { LEGAL_URLS } from '../constants/legalLinks';
 import { theme } from '../constants/theme';
 import { useRouter } from 'expo-router';
@@ -45,7 +46,7 @@ export default function SafetyScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => goBackFromProfileScreen(router)}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
       </View>

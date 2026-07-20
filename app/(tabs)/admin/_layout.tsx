@@ -67,6 +67,10 @@ export default function AdminLayout() {
         options={{ title: 'Emo AI Report' }}
       />
       <Stack.Screen
+        name="inbox-messages"
+        options={{ title: 'Inbox Messages' }}
+      />
+      <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}
       />

@@ -1,13 +1,15 @@
 import { auth } from '@/services/firebase';
 import { resolveFoodShareNotificationRoute } from '@/lib/foodShareNotificationRoutes';
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import {
+  markAllInboxNotificationsRead,
   markInboxNotificationRead,
   subscribeInboxNotifications,
   type InboxNotification,
 } from '@/services/foodShareInbox';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -27,6 +29,19 @@ function formatTimestamp(ms: number | null): string {
   return new Date(ms).toLocaleDateString();
 }
 
+function iconForType(type: string): keyof typeof Ionicons.glyphMap {
+  if (type.startsWith('admin_')) {
+    if (type === 'admin_promotion') return 'pricetag';
+    if (type === 'admin_maintenance') return 'construct';
+    if (type === 'admin_alert') return 'warning';
+    if (type === 'admin_feature') return 'rocket';
+    if (type === 'admin_account') return 'person-circle';
+    if (type === 'admin_announcement') return 'megaphone';
+    return 'mail';
+  }
+  return 'notifications';
+}
+
 function NotificationRow({
   item,
   onPress,
@@ -34,6 +49,7 @@ function NotificationRow({
   item: InboxNotification;
   onPress: () => void;
 }) {
+  const filled = iconForType(item.type);
   return (
     <Pressable
       style={[styles.row, !item.read && styles.rowUnread]}
@@ -41,9 +57,9 @@ function NotificationRow({
     >
       <View style={styles.rowIcon}>
         <Ionicons
-          name={item.read ? 'notifications-outline' : 'notifications'}
+          name={filled}
           size={20}
-          color={item.read ? '#B7BDC9' : '#7DFFB8'}
+          color={item.read ? '#B7BDC9' : '#A855F7'}
         />
       </View>
       <View style={styles.rowBody}>
@@ -75,6 +91,16 @@ export default function InboxScreen() {
     });
   }, [uid]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!uid) return undefined;
+      void markAllInboxNotificationsRead(uid).catch(() => {
+        /* best-effort — badge clears as docs update */
+      });
+      return undefined;
+    }, [uid]),
+  );
+
   const openNotification = async (item: InboxNotification) => {
     if (uid && !item.read) {
       try {
@@ -89,16 +115,23 @@ export default function InboxScreen() {
       matchId: item.matchId,
       adminFoodShareId: item.adminFoodShareId,
     });
+    if (href === '/inbox' || String(item.type).startsWith('admin_')) {
+      // Admin / inbox-native messages stay on this screen.
+      return;
+    }
     router.push(href as never);
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable style={styles.back} onPress={() => router.back()}>
+        <Pressable
+          style={styles.back}
+          onPress={() => goBackFromProfileScreen(router)}
+        >
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </Pressable>
-        <Text style={styles.title}>Notifications</Text>
+        <Text style={styles.title}>Inbox</Text>
         <Pressable
           style={styles.settings}
           onPress={() => router.push('/notification-settings' as never)}
@@ -109,14 +142,15 @@ export default function InboxScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color="#7DFFB8" />
+          <ActivityIndicator color="#A855F7" />
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name="notifications-off-outline" size={40} color="#7D8493" />
+          <Ionicons name="mail-open-outline" size={40} color="#7D8493" />
           <Text style={styles.emptyTitle}>All caught up</Text>
           <Text style={styles.emptyBody}>
-            Match, chat, and order updates will appear here.
+            Admin messages, announcements, promotions, and order updates appear
+            here.
           </Text>
         </View>
       ) : (
@@ -125,7 +159,10 @@ export default function InboxScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <NotificationRow item={item} onPress={() => void openNotification(item)} />
+            <NotificationRow
+              item={item}
+              onPress={() => void openNotification(item)}
+            />
           )}
         />
       )}
@@ -186,8 +223,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   rowUnread: {
-    backgroundColor: 'rgba(125,255,184,0.08)',
-    borderColor: 'rgba(125,255,184,0.2)',
+    backgroundColor: 'rgba(168,85,247,0.10)',
+    borderColor: 'rgba(168,85,247,0.28)',
   },
   rowIcon: {
     width: 36,
@@ -216,7 +253,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#7DFFB8',
+    backgroundColor: '#A855F7',
     marginTop: 6,
   },
 });

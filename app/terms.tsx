@@ -1,3 +1,4 @@
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { theme } from '../constants/theme';
 import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
@@ -41,7 +42,7 @@ export default function TermsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBackFromProfileScreen(router)}
           style={styles.backButton}
         >
           <Text style={styles.backText}>← Back</Text>

@@ -2,6 +2,7 @@ import { useAuth } from '../services/AuthContext';
 import { db } from '../services/firebase';
 import { blockUser, submitUserReport } from '../services/userSafety';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import React, { useCallback, useState } from 'react';
@@ -173,7 +174,7 @@ export default function HelpScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => goBackFromProfileScreen(router)}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>
@@ -189,7 +190,7 @@ export default function HelpScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => goBackFromProfileScreen(router)}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help</Text>

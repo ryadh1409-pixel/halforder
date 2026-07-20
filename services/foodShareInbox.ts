@@ -14,6 +14,8 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
+  getDocs,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -286,14 +288,20 @@ export async function markInboxNotificationRead(
   uid: string,
   notificationId: string,
 ): Promise<void> {
+  // Rules allow only `{ read: true }` on update — do not write extra fields.
   await updateDoc(doc(db, 'users', uid, 'inboxNotifications', notificationId), {
     read: true,
-    readAt: serverTimestamp(),
   });
 }
 
 export async function markAllInboxNotificationsRead(uid: string): Promise<void> {
-  // Lightweight: mark on open in UI per-item; bulk optional later.
+  const snap = await getDocs(query(inboxCol(uid), where('read', '==', false)));
+  if (snap.empty) return;
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => {
+    batch.update(d.ref, { read: true });
+  });
+  await batch.commit();
 }
 
 export function deepLinkForMatch(matchId: string): string {
