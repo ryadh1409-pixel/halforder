@@ -3051,6 +3051,16 @@ service cloud.firestore {
       allow read, list: if isAdmin();
       allow write: if false;
     }
+    /**
+     * Admin-only payment support notes + conversation history.
+     * Separate from paymentTransactions (client writes denied there).
+     */
+    match /paymentAdminMeta/{paymentId} {
+      allow read, create, update, delete: if isAdmin();
+      match /messages/{messageId} {
+        allow read, create, update, delete: if isAdmin();
+      }
+    }
     match /paymentAuditLogs/{logId} {
       allow read, list: if isAdmin();
       allow write: if false;
