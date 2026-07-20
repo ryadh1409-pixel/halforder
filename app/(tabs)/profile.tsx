@@ -62,7 +62,7 @@ import {
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -75,6 +75,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { AppTextInput } from '../../components/AppTextInput';
 import {
@@ -270,6 +271,8 @@ export default function ProfileScreen() {
   const [profileLocation, setProfileLocation] =
     useState<ProfileLocationFields | null>(null);
   const [changingLocation, setChangingLocation] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const locationSectionY = useRef(0);
   const registered = isRegisteredAuthUser(user);
   const uid = registered ? (user?.uid ?? null) : null;
   const trustScore = useTrustScore(uid);
@@ -782,6 +785,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: scrollBottomPadding },
@@ -807,36 +811,54 @@ export default function ProfileScreen() {
               <Text style={dynamicStyles.profileNameTitle} numberOfLines={2}>
                 {displayName}
               </Text>
-              <Text
-                style={dynamicStyles.profileEmailLine}
-                numberOfLines={1}
-              >
-                {emailLabel}
-              </Text>
-              <View style={dynamicStyles.profileRatingRow}>
-                <MaterialIcons name="star" size={20} color={pal.star} />
-                {showNewUserBadge ? (
-                  <Text style={dynamicStyles.profileNewUserLabel}>New user</Text>
-                ) : (
-                  <>
-                    <Text style={dynamicStyles.profileRatingValue}>
+              {emailLabel ? (
+                <Text style={dynamicStyles.profileEmailLine} numberOfLines={1}>
+                  {emailLabel}
+                </Text>
+              ) : null}
+              <View style={dynamicStyles.profileBadgeRow}>
+                <View style={dynamicStyles.profileBadge}>
+                  <MaterialIcons name="star" size={14} color={pal.star} />
+                  {showNewUserBadge ? (
+                    <Text style={dynamicStyles.profileBadgeText}>New</Text>
+                  ) : (
+                    <Text style={dynamicStyles.profileBadgeText}>
                       {ratingValue != null ? ratingValue.toFixed(1) : '—'}
+                      {reviewCount > 0 ? ` · ${reviewCount}` : ''}
                     </Text>
-                    <Text style={dynamicStyles.profileReviewMeta}>
-                      {reviewCount > 0
-                        ? ` · ${reviewCount} review${reviewCount === 1 ? '' : 's'}`
-                        : ''}
+                  )}
+                </View>
+                {trustScore || isAdminUser(user, firestoreUserRole) ? (
+                  <View
+                    style={[
+                      dynamicStyles.profileBadge,
+                      dynamicStyles.profileBadgeVerified,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="verified"
+                      size={14}
+                      color={pal.primary}
+                    />
+                    <Text style={dynamicStyles.profileBadgeText}>
+                      {isAdminUser(user, firestoreUserRole)
+                        ? 'Admin'
+                        : (trustScore?.label ?? 'Verified')}
                     </Text>
-                  </>
+                  </View>
+                ) : (
+                  <View style={dynamicStyles.profileBadge}>
+                    <MaterialIcons
+                      name="shield"
+                      size={14}
+                      color={pal.textTertiary}
+                    />
+                    <Text style={dynamicStyles.profileBadgeTextMuted}>
+                      Member
+                    </Text>
+                  </View>
                 )}
               </View>
-              {trustScore || isAdminUser(user, firestoreUserRole) ? (
-                <View style={dynamicStyles.trustChip}>
-                  <Text style={dynamicStyles.trustChipText}>
-                    {isAdminUser(user, firestoreUserRole) ? 'Admin' : (trustScore?.label ?? '')}
-                  </Text>
-                </View>
-              ) : null}
             </View>
             <View style={dynamicStyles.profileAvatarWrap}>
               <Image
@@ -848,54 +870,91 @@ export default function ProfileScreen() {
                 cachePolicy="memory-disk"
               />
             </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={26}
-              color={pal.textTertiary}
-              style={dynamicStyles.profileHeaderChevron}
-            />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={dynamicStyles.quickAction}
-            onPress={() => router.push('/wallet' as never)}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="account-balance-wallet" size={22} color={pal.primary} />
-            <View style={dynamicStyles.quickActionTextCol}>
-              <Text style={dynamicStyles.quickActionText}>Wallet</Text>
-              <Text style={dynamicStyles.quickActionSub}>
-                Balance, cards, and vouchers
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
-          </TouchableOpacity>
+          <View style={dynamicStyles.quickGrid}>
+            <TouchableOpacity
+              style={dynamicStyles.quickGridCard}
+              onPress={() => router.push('/help')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Help"
+            >
+              <View style={dynamicStyles.quickGridIconWrap}>
+                <MaterialIcons name="help-outline" size={26} color={pal.primary} />
+              </View>
+              <Text style={dynamicStyles.quickGridTitle}>Help</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={22}
+                color={pal.textTertiary}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={dynamicStyles.quickAction}
-            onPress={() => router.push('/help')}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="help-outline" size={22} color={pal.primary} />
-            <View style={dynamicStyles.quickActionTextCol}>
-              <Text style={dynamicStyles.quickActionText}>Help &amp; Support</Text>
-              <Text style={dynamicStyles.quickActionSub}>Guides and FAQs</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={dynamicStyles.quickGridCard}
+              onPress={() => router.push('/wallet' as never)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Wallet"
+            >
+              <View style={dynamicStyles.quickGridIconWrap}>
+                <MaterialIcons
+                  name="account-balance-wallet"
+                  size={26}
+                  color={pal.primary}
+                />
+              </View>
+              <Text style={dynamicStyles.quickGridTitle}>Wallet</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={22}
+                color={pal.textTertiary}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={dynamicStyles.quickAction}
-            onPress={() => router.push('/privacy')}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="privacy-tip" size={22} color={pal.primary} />
-            <View style={dynamicStyles.quickActionTextCol}>
-              <Text style={dynamicStyles.quickActionText}>Privacy Policy</Text>
-              <Text style={dynamicStyles.quickActionSub}>How we use your data</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color={pal.textTertiary} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={dynamicStyles.quickGridCard}
+              onPress={() => {
+                // layout.y is relative to profileBody (paddingTop: 16)
+                scrollRef.current?.scrollTo({
+                  y: Math.max(0, 16 + locationSectionY.current - 8),
+                  animated: true,
+                });
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Location"
+            >
+              <View style={dynamicStyles.quickGridIconWrap}>
+                <MaterialIcons name="place" size={26} color={pal.primary} />
+              </View>
+              <Text style={dynamicStyles.quickGridTitle}>Location</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={22}
+                color={pal.textTertiary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={dynamicStyles.quickGridCard}
+              onPress={() => router.push('/inbox' as never)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Inbox"
+            >
+              <View style={dynamicStyles.quickGridIconWrap}>
+                <MaterialIcons name="inbox" size={26} color={pal.primary} />
+              </View>
+              <Text style={dynamicStyles.quickGridTitle}>Inbox</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={22}
+                color={pal.textTertiary}
+              />
+            </TouchableOpacity>
+          </View>
 
           {__DEV__ && firestoreUserRole ? (
             <>
@@ -908,42 +967,48 @@ export default function ProfileScreen() {
             </>
           ) : null}
 
-          <Text style={dynamicStyles.sectionHeading}>Location</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.cardTitle}>
-              📍 {formatProfileLocationLabel(profileLocation)}
-            </Text>
-            <TouchableOpacity
-              style={[dynamicStyles.primaryButton, { marginTop: 12 }]}
-              onPress={() => {
-                if (!uid || changingLocation) return;
-                setChangingLocation(true);
-                void captureAndSaveCurrentProfileLocation(uid)
-                  .then(() => showSuccess('Location updated.'))
-                  .catch((e) =>
-                    showError(
-                      e instanceof Error
-                        ? e.message
-                        : 'Could not update location.',
-                    ),
-                  )
-                  .finally(() => setChangingLocation(false));
-              }}
-              disabled={changingLocation || !uid}
-              activeOpacity={0.85}
-            >
-              {changingLocation ? (
-                <ActivityIndicator color={pal.onPrimary} />
-              ) : (
-                <Text style={dynamicStyles.primaryButtonText}>
-                  Change Location
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <View
+            onLayout={(e: LayoutChangeEvent) => {
+              locationSectionY.current = e.nativeEvent.layout.y;
+            }}
+          >
+            <Text style={dynamicStyles.sectionHeading}>Location</Text>
+            <View style={dynamicStyles.card}>
+              <Text style={dynamicStyles.cardTitle}>
+                📍 {formatProfileLocationLabel(profileLocation)}
+              </Text>
+              <TouchableOpacity
+                style={[dynamicStyles.primaryButton, { marginTop: 12 }]}
+                onPress={() => {
+                  if (!uid || changingLocation) return;
+                  setChangingLocation(true);
+                  void captureAndSaveCurrentProfileLocation(uid)
+                    .then(() => showSuccess('Location updated.'))
+                    .catch((e) =>
+                      showError(
+                        e instanceof Error
+                          ? e.message
+                          : 'Could not update location.',
+                      ),
+                    )
+                    .finally(() => setChangingLocation(false));
+                }}
+                disabled={changingLocation || !uid}
+                activeOpacity={0.85}
+              >
+                {changingLocation ? (
+                  <ActivityIndicator color={pal.onPrimary} />
+                ) : (
+                  <Text style={dynamicStyles.primaryButtonText}>
+                    Change Location
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
 
-          <Text style={dynamicStyles.sectionHeading}>Delivery location</Text>
-          <ProfileLocationPicker userId={uid} palette={pal} />
+            <Text style={dynamicStyles.sectionHeading}>Delivery location</Text>
+            <ProfileLocationPicker userId={uid} palette={pal} />
+          </View>
 
           <Text style={dynamicStyles.sectionHeading}>Notifications</Text>
           <View style={dynamicStyles.card}>
@@ -1260,31 +1325,65 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     },
     profileHeader: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 20,
+      paddingVertical: 28,
       paddingHorizontal: 4,
       marginBottom: 8,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: 'rgba(255,255,255,0.1)',
+      gap: 16,
     },
     profileHeaderTextCol: {
       flex: 1,
-      paddingRight: 16,
+      paddingRight: 8,
       minWidth: 0,
+      justifyContent: 'center',
     },
     profileNameTitle: {
-      fontSize: 32,
+      fontSize: 34,
       fontWeight: '800',
       color: pal.text,
-      letterSpacing: -1,
-      lineHeight: 38,
+      letterSpacing: -1.2,
+      lineHeight: 40,
     },
     profileEmailLine: {
-      marginTop: 8,
-      fontSize: 14,
+      marginTop: 6,
+      fontSize: 13,
       fontWeight: '500',
-      color: pal.textSecondary,
+      color: pal.textTertiary,
+    },
+    profileBadgeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 14,
+    },
+    profileBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: pal.surfaceMuted,
+      borderWidth: 1,
+      borderColor: pal.border,
+    },
+    profileBadgeVerified: {
+      backgroundColor: 'rgba(168, 85, 247, 0.16)',
+      borderColor: 'rgba(168, 85, 247, 0.45)',
+    },
+    profileBadgeText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: pal.text,
+      letterSpacing: -0.1,
+    },
+    profileBadgeTextMuted: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: pal.textTertiary,
+      letterSpacing: -0.1,
     },
     profileRatingRow: {
       flexDirection: 'row',
@@ -1319,20 +1418,30 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       marginLeft: 6,
     },
     profileAvatarWrap: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
+      width: 112,
+      height: 112,
+      borderRadius: 56,
       backgroundColor: pal.surfaceMuted,
-      borderWidth: 2,
-      borderColor: 'rgba(255,255,255,0.18)',
+      borderWidth: 2.5,
+      borderColor: 'rgba(168, 85, 247, 0.45)',
       justifyContent: 'center',
       alignItems: 'center',
       overflow: 'hidden',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#A855F7',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.28,
+          shadowRadius: 16,
+        },
+        android: { elevation: 6 },
+        default: {},
+      }),
     },
     profileAvatarImage: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
+      width: 112,
+      height: 112,
+      borderRadius: 56,
     },
     trustChip: {
       alignSelf: 'flex-start',
@@ -1349,6 +1458,52 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       fontWeight: '700',
       color: pal.text,
       letterSpacing: 0.2,
+    },
+    quickGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      rowGap: 14,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    quickGridCard: {
+      width: '48%',
+      minHeight: 76,
+      borderRadius: 20,
+      backgroundColor: pal.surface,
+      borderWidth: 1,
+      borderColor: pal.border,
+      paddingVertical: 18,
+      paddingHorizontal: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#A855F7',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.14,
+          shadowRadius: 14,
+        },
+        android: { elevation: 4 },
+        default: {},
+      }),
+    },
+    quickGridIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: 'rgba(168, 85, 247, 0.14)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickGridTitle: {
+      flex: 1,
+      fontSize: 18,
+      fontWeight: '800',
+      color: pal.text,
+      letterSpacing: -0.3,
     },
     quickAction: {
       flexDirection: 'row',
