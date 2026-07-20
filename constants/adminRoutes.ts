@@ -34,4 +34,7 @@ export const adminRoutes = {
   balances: '/(tabs)/admin/balances',
   homeBanners: '/(tabs)/admin/home-banners',
   vouchers: '/(tabs)/admin/vouchers',
+  emoAiReports: '/(tabs)/admin/emo-ai-reports',
+  emoAiReport: (id: string) =>
+    `/(tabs)/admin/emo-ai-reports/${encodeURIComponent(id)}`,
 } as const;

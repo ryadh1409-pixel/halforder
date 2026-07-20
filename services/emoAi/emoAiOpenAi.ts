@@ -1,6 +1,10 @@
 import Constants from 'expo-constants';
 import OpenAI from 'openai';
 
+import {
+  buildEmoAiPlatformContext,
+  formatPlatformContextForPrompt,
+} from '@/services/emoAi/agent/emoAiContextService';
 import { buildEmoAiSystemPrompt } from '@/services/emoAi/emoAiPrompt';
 import type { EmoAiMessage } from '@/types/emoAi';
 
@@ -19,12 +23,27 @@ function openAiApiKey(): string | undefined {
   return fromEnv || fromExtra || undefined;
 }
 
-function toOpenAiMessages(
+async function toOpenAiMessages(
   history: EmoAiMessage[],
   userDisplayName: string | null,
-): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  uid: string | null,
+): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
+  const latestUser = [...history].reverse().find((m) => m.role === 'user');
+  let platformBlock = '';
+  try {
+    const ctx = await buildEmoAiPlatformContext({
+      uid,
+      latestUserMessage: latestUser?.content ?? null,
+    });
+    platformBlock = formatPlatformContextForPrompt(ctx);
+  } catch {
+    platformBlock =
+      'LIVE HALFORDER PLATFORM DATA unavailable this turn — stay in character as Tham and avoid inventing specific prices.';
+  }
+
   return [
     { role: 'system', content: buildEmoAiSystemPrompt(userDisplayName) },
+    { role: 'system', content: platformBlock },
     ...history.map((m) => ({
       role: m.role,
       content: m.content,
@@ -39,12 +58,14 @@ export type EmoAiStreamHandlers = {
 };
 
 /**
- * Stream an Emo AI reply. Falls back to a non-stream completion if streaming fails.
+ * Stream an Emo AI reply with live HalfOrder platform awareness.
+ * Falls back to a non-stream completion if streaming fails.
  */
 export async function streamEmoAiReply(
   history: EmoAiMessage[],
   handlers: EmoAiStreamHandlers,
   userDisplayName: string | null = null,
+  uid: string | null = null,
 ): Promise<void> {
   const key = openAiApiKey();
   if (!key) {
@@ -58,15 +79,15 @@ export async function streamEmoAiReply(
     apiKey: key,
     dangerouslyAllowBrowser: true,
   });
-  const messages = toOpenAiMessages(history, userDisplayName);
+  const messages = await toOpenAiMessages(history, userDisplayName, uid);
 
   try {
     const stream = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
       stream: true,
-      max_tokens: 220,
-      temperature: 0.85,
+      max_tokens: 450,
+      temperature: 0.75,
     });
 
     let full = '';
@@ -87,8 +108,8 @@ export async function streamEmoAiReply(
       const res = await client.chat.completions.create({
         model: 'gpt-4o-mini',
         messages,
-        max_tokens: 220,
-        temperature: 0.85,
+        max_tokens: 450,
+        temperature: 0.75,
       });
       const text = res.choices[0]?.message?.content?.trim() ?? '';
       if (!text) {

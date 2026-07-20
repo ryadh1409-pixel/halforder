@@ -526,6 +526,11 @@ export default function AdminScreen() {
                   label="Vouchers"
                   onPress={() => router.push(adminRoutes.vouchers as never)}
                 />
+                <ActionCard
+                  icon="bulb-outline"
+                  label="Emo AI Reports"
+                  onPress={() => router.push(adminRoutes.emoAiReports as never)}
+                />
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>

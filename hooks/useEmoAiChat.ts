@@ -156,9 +156,10 @@ export function useEmoAiChat(uid: string | null) {
           },
         },
         nameRef.current,
+        uid,
       );
     },
-    [persist, started, storageUid],
+    [persist, started, storageUid, uid],
   );
 
   return {
