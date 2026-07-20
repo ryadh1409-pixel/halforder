@@ -25,8 +25,6 @@
       },
       "associatedDomains": [
         "applinks:halforder.app",
-        "applinks:www.halforder.app",
-        "applinks:halforder.app",
         "applinks:www.halforder.app"
       ],
       "infoPlist": {
@@ -63,86 +61,6 @@
     },
     "android": {
       "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/order"
-            },
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/join"
-            },
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/group"
-            },
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/terms"
-            },
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/privacy"
-            },
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/safety-community-guidelines"
-            },
-            {
-              "scheme": "https",
-              "host": "halforder.app",
-              "pathPrefix": "/subscribe"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/order"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/join"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/group"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/terms"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/privacy"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/safety-community-guidelines"
-            },
-            {
-              "scheme": "https",
-              "host": "www.halforder.app",
-              "pathPrefix": "/subscribe"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
         {
           "action": "VIEW",
           "autoVerify": true,
