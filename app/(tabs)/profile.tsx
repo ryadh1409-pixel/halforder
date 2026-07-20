@@ -10,9 +10,7 @@ import { isAdminUser } from '../../constants/adminUid';
 import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
-import { BlockedUsersList } from '../../components/BlockedUsersList';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
-import { useBlockedUsers } from '../../hooks/useBlockedUsers';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
 import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
@@ -32,11 +30,6 @@ import {
   logProfileFsSuccess,
   profileFirestoreOp,
 } from '../../services/profileFirestoreLog';
-import {
-  reportContentIdUser,
-  submitReport,
-  type ReportReason,
-} from '../../services/reports';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { logError } from '../../utils/errorLogger';
 import { showError, showNotice, showSuccess } from '../../utils/toast';
@@ -70,7 +63,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { AppTextInput } from '../../components/AppTextInput';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -254,10 +246,6 @@ export default function ProfileScreen() {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [deleteAccountModalVisible, setDeleteAccountModalVisible] =
     useState(false);
-  const [reportUserId, setReportUserId] = useState('');
-  const [reportReason, setReportReason] = useState<ReportReason>('spam');
-  const [submittingReport, setSubmittingReport] = useState(false);
-  const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [profileOrdersCancellingIds, setProfileOrdersCancellingIds] = useState<
     Record<string, boolean>
   >({});
@@ -306,12 +294,6 @@ export default function ProfileScreen() {
       return Date.now() - createdAtMs < staleUnpaidMs;
     });
   }, [profileActiveOrders]);
-  const {
-    blockedUsers,
-    blockedUserIds,
-    loadingProfiles,
-    unblockUser: unblockBlockedAccount,
-  } = useBlockedUsers();
 
   const openTerms = useCallback(() => {
     router.push('/terms' as never);
@@ -568,46 +550,6 @@ export default function ProfileScreen() {
     }
     router.replace(POST_LOGOUT_ROUTE as Parameters<typeof router.replace>[0]);
   }, [router, signOutUser]);
-
-  const handleSubmitProfileReport = async () => {
-    if (!uid) return;
-    const target = reportUserId.trim();
-    if (!target) {
-      showError('Enter the user ID you want to report.');
-      return;
-    }
-    if (target === uid) {
-      showError('You cannot report yourself.');
-      return;
-    }
-    setSubmittingReport(true);
-    try {
-      await submitReport({
-        reporterId: uid,
-        reportedUserId: target,
-        contentId: reportContentIdUser(target),
-        reason: reportReason,
-      });
-      showSuccess('Thanks. We will review this report.');
-    } catch (e) {
-      showError(getUserFriendlyError(e));
-    } finally {
-      setSubmittingReport(false);
-    }
-  };
-
-  const handleUnblockUser = async (blockedUserId: string) => {
-    if (!uid) return;
-    setUnblockingId(blockedUserId);
-    try {
-      await unblockBlockedAccount(blockedUserId);
-      showSuccess('User unblocked');
-    } catch (e) {
-      showError(getUserFriendlyError(e));
-    } finally {
-      setUnblockingId(null);
-    }
-  };
 
   const handleBusinessAccount = useCallback(() => {
     Alert.alert('Coming soon');
@@ -1020,7 +962,13 @@ export default function ProfileScreen() {
                   key: 'report',
                   label: 'Report User',
                   icon: 'warning-amber' as const,
-                  onPress: () => router.push('/help'),
+                  onPress: () => router.push('/report-user' as never),
+                },
+                {
+                  key: 'block',
+                  label: 'Block Users',
+                  icon: 'block' as const,
+                  onPress: () => router.push('/blocked-users' as never),
                 },
               ] as const
             ).map((item, index, arr) => (
@@ -1050,110 +998,6 @@ export default function ProfileScreen() {
                 />
               </TouchableOpacity>
             ))}
-          </View>
-
-          <Text style={dynamicStyles.sectionHeading}>Trust &amp; safety</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.bodyMuted}>
-              Users can report inappropriate behavior.
-            </Text>
-            <Text style={[dynamicStyles.bodyMuted, { marginTop: 10 }]}>
-              To block someone, use the menu in an order chat or on the Join tab. Blocked people cannot match or join orders with you. Unblock anytime below.
-            </Text>
-          </View>
-
-          <Text style={dynamicStyles.sectionHeading}>Report a user</Text>
-          <View style={dynamicStyles.card}>
-            <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
-              Submit a report by user ID, or use Report in any order or direct message chat.
-            </Text>
-            <TouchableOpacity
-              style={[
-                dynamicStyles.primaryButton,
-                { flexDirection: 'row', justifyContent: 'center', gap: 8 },
-              ]}
-              onPress={() => router.push('/help')}
-              accessibilityRole="button"
-              accessibilityLabel="Open help to report from an order"
-            >
-              <MaterialIcons name="flag" size={20} color={pal.onPrimary} />
-              <Text style={dynamicStyles.primaryButtonText}>
-                Report from Help &amp; past orders
-              </Text>
-            </TouchableOpacity>
-            <AppTextInput
-              value={reportUserId}
-              onChangeText={setReportUserId}
-              placeholder="Reported user ID"
-              placeholderTextColor={pal.textTertiary}
-              style={dynamicStyles.input}
-            />
-            <View style={styles.reasonRow}>
-              {(['spam', 'abuse', 'inappropriate'] as ReportReason[]).map(
-                (reason) => {
-                  const active = reason === reportReason;
-                  return (
-                    <TouchableOpacity
-                      key={reason}
-                      style={[
-                        dynamicStyles.chip,
-                        active && dynamicStyles.chipActive,
-                      ]}
-                      onPress={() => setReportReason(reason)}
-                    >
-                      <Text
-                        style={[
-                          dynamicStyles.chipText,
-                          active && dynamicStyles.chipTextActive,
-                        ]}
-                      >
-                        {reason}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                },
-              )}
-            </View>
-            <TouchableOpacity
-              style={[
-                dynamicStyles.primaryButton,
-                submittingReport && dynamicStyles.buttonDisabled,
-              ]}
-              onPress={handleSubmitProfileReport}
-              disabled={submittingReport}
-            >
-              {submittingReport ? (
-                <ActivityIndicator size="small" color={pal.onPrimary} />
-              ) : (
-                <Text style={dynamicStyles.primaryButtonText}>Submit report</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <Text style={dynamicStyles.sectionHeading}>Blocked Users</Text>
-          <View style={[dynamicStyles.card, styles.blockedUsersCard]}>
-            <Text style={[dynamicStyles.bodyMuted, { marginBottom: 12 }]}>
-              Accounts you block cannot see your activity or contact you. You can
-              unblock them anytime.
-            </Text>
-            <BlockedUsersList
-              blockedUsers={blockedUsers}
-              onUnblock={(id) => void handleUnblockUser(id)}
-              unblockingId={unblockingId}
-              loading={loadingProfiles && blockedUserIds.length > 0}
-              emptyMessage="No blocked users"
-            />
-            {blockedUserIds.length > 8 ? (
-              <TouchableOpacity
-                style={dynamicStyles.blockedSeeAllBtn}
-                onPress={() => router.push('/blocked-users' as never)}
-                activeOpacity={0.85}
-              >
-                <Text style={dynamicStyles.blockedSeeAllText}>
-                  View all blocked users
-                </Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
 
           <Text style={[dynamicStyles.sectionHeading, styles.growSectionHeading]}>

@@ -1,5 +1,6 @@
 import { BlockedUsersList } from '../components/BlockedUsersList';
 import { useBlockedUsers } from '../hooks/useBlockedUsers';
+import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -39,7 +40,10 @@ export default function BlockedUsersScreen() {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <TouchableOpacity
+            onPress={() => goBackFromProfileScreen(router)}
+            hitSlop={12}
+          >
             <Text style={styles.backLink}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Blocked Users</Text>
@@ -54,7 +58,10 @@ export default function BlockedUsersScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <TouchableOpacity
+          onPress={() => goBackFromProfileScreen(router)}
+          hitSlop={12}
+        >
           <Text style={styles.backLink}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Blocked Users</Text>
@@ -64,8 +71,9 @@ export default function BlockedUsersScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.hint}>
-          People you block cannot message you or appear in your matches and orders.
-          Unblocking restores access instantly.
+          Accounts you block cannot see your activity or contact you. You can
+          unblock them anytime. To block someone, use the menu in an order chat
+          or on the Join tab.
         </Text>
         <BlockedUsersList
           blockedUsers={blockedUsers}
