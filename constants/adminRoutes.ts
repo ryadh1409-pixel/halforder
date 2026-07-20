@@ -39,4 +39,6 @@ export const adminRoutes = {
     `/(tabs)/admin/emo-ai-reports/${encodeURIComponent(id)}`,
   /** Compose messages that appear in each user's Profile Inbox. */
   inboxMessages: '/(tabs)/admin/inbox-messages',
+  /** Investor-ready Finance Dashboard (additive). */
+  finance: '/(tabs)/admin/finance',
 } as const;

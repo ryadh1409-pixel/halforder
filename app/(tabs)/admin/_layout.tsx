@@ -70,6 +70,7 @@ export default function AdminLayout() {
         name="inbox-messages"
         options={{ title: 'Inbox Messages' }}
       />
+      <Stack.Screen name="finance/index" options={{ title: 'Finance' }} />
       <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}

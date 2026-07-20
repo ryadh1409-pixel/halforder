@@ -494,6 +494,11 @@ export default function AdminScreen() {
                   onPress={() => router.push(adminRoutes.payments as never)}
                 />
                 <ActionCard
+                  icon="pie-chart-outline"
+                  label="Finance"
+                  onPress={() => router.push(adminRoutes.finance as never)}
+                />
+                <ActionCard
                   icon="bar-chart-outline"
                   label="Revenue"
                   onPress={() => router.push(adminRoutes.revenue as never)}
