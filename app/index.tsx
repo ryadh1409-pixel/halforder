@@ -4,6 +4,7 @@ import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { roleTermsReturnPath } from '@/lib/routing/roleReturnPaths';
 import { useAuth } from '../services/AuthContext';
+import { fetchOnboardingConfig } from '../services/onboardingAdmin';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
@@ -28,6 +29,26 @@ export default function Index() {
     let cancelled = false;
     (async () => {
       try {
+        const cfg = await fetchOnboardingConfig();
+        if (cfg.displayMode === 'disabled') {
+          if (!cancelled) setGate({ phase: 'ready', onboardingDone: true });
+          return;
+        }
+        if (cfg.displayMode === 'every_launch') {
+          if (!cancelled) setGate({ phase: 'ready', onboardingDone: false });
+          return;
+        }
+        if (cfg.displayMode === 'every_login' && user?.uid) {
+          const loginKey = `${ONBOARDING_COMPLETE_KEY}:login:${user.uid}`;
+          const loginDone = await AsyncStorage.getItem(loginKey);
+          if (!cancelled) {
+            setGate({
+              phase: 'ready',
+              onboardingDone: loginDone === 'true',
+            });
+          }
+          return;
+        }
         const obRaw = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
         if (!cancelled) {
           setGate({
@@ -47,7 +68,7 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.uid]);
 
   const waitingForTerms =
     isRegisteredAuthUser(user) && !termsReady && gate.phase === 'ready';

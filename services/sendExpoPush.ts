@@ -12,6 +12,14 @@ type SendResult = {
   error?: string;
 };
 
+export type ExpoPushMessageOptions = {
+  priority?: 'default' | 'normal' | 'high';
+  channelId?: string;
+  badge?: number;
+  mutableContent?: boolean;
+  ttl?: number;
+};
+
 /**
  * Send push notifications to Expo push tokens.
  * Batches requests (max {@link EXPO_PUSH_BATCH_SIZE} messages per request).
@@ -22,6 +30,7 @@ export async function sendExpoPush(
   title: string,
   body: string,
   data?: Record<string, unknown>,
+  options?: ExpoPushMessageOptions,
 ): Promise<SendResult> {
   const valid = tokens.filter((t) => typeof t === 'string' && t.length > 0);
   if (valid.length === 0) return { sent: 0, failed: 0 };
@@ -31,7 +40,15 @@ export async function sendExpoPush(
     sound: 'default' as const,
     title,
     body,
+    priority: options?.priority ?? 'high',
+    channelId: options?.channelId ?? 'halforder',
+    ...(typeof options?.badge === 'number' ? { badge: options.badge } : {}),
+    ...(options?.mutableContent ? { mutableContent: true } : {}),
+    ...(typeof options?.ttl === 'number' ? { ttl: options.ttl } : {}),
     ...(data && Object.keys(data).length > 0 ? { data } : {}),
+    ...(typeof data?.image === 'string' && data.image.trim()
+      ? { richContent: { image: data.image.trim() } }
+      : {}),
   }));
   let sent = 0;
   let failed = 0;
@@ -41,7 +58,11 @@ export async function sendExpoPush(
     try {
       const res = await fetch(EXPO_PUSH_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+        },
         body: JSON.stringify(chunk),
       });
       const json = (await res.json()) as {
@@ -49,7 +70,7 @@ export async function sendExpoPush(
       };
       const results = Array.isArray(json?.data) ? json.data : [];
       results.forEach((r, idx) => {
-      if (r?.status === 'ok') {
+        if (r?.status === 'ok') {
           sent += 1;
         } else {
           failed += 1;

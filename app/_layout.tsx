@@ -11,6 +11,7 @@ import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
+import { PushNotificationDeepLinkListener } from '@/components/PushNotificationDeepLinkListener';
 import { APPLE_PAY_MERCHANT_ID } from '@/constants/applePay';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
@@ -159,6 +160,7 @@ export default function RootLayout() {
                 <AppLocationSync />
                 <CartProvider>
                   <BootstrapShell>
+                    <PushNotificationDeepLinkListener />
                     <Slot />
                     <SystemDialogHost />
                     <Toast config={toastConfig} />

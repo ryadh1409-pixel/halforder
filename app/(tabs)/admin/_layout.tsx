@@ -1,7 +1,8 @@
+import { adminColors as COLORS } from '@/constants/adminTheme';
+import { requireRole } from '@/utils/requireRole';
 import { Stack } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { requireRole } from '../../../utils/requireRole';
 
 export default function AdminLayout() {
   const { loading, authorized } = requireRole(['admin']);
@@ -9,14 +10,28 @@ export default function AdminLayout() {
   /** Wrong-role UI only; root `/` role landing is handled by `RoleRouteGuard` in `app/_layout.tsx`. */
   if (loading || !authorized) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: COLORS.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: COLORS.background,
+        },
+      }}
+    >
       <Stack.Screen name="index" options={{ title: 'Admin' }} />
       <Stack.Screen
         name="food-templates"
@@ -71,6 +86,26 @@ export default function AdminLayout() {
         options={{ title: 'Inbox Messages' }}
       />
       <Stack.Screen name="finance/index" options={{ title: 'Finance' }} />
+      <Stack.Screen
+        name="support-inbox/index"
+        options={{ title: 'Support Inbox' }}
+      />
+      <Stack.Screen
+        name="support-inbox/[threadId]"
+        options={{ title: 'Conversation' }}
+      />
+      <Stack.Screen
+        name="onboarding-manager"
+        options={{ title: 'Onboarding Manager' }}
+      />
+      <Stack.Screen
+        name="push-center"
+        options={{ title: 'Push Center' }}
+      />
+      <Stack.Screen
+        name="notification-history"
+        options={{ title: 'Notification History' }}
+      />
       <Stack.Screen
         name="test-order-flow"
         options={{ title: 'Order Flow Test' }}

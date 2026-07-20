@@ -1,21 +1,26 @@
 import { auth } from '@/services/firebase';
 import { resolveFoodShareNotificationRoute } from '@/lib/foodShareNotificationRoutes';
 import { goBackFromProfileScreen } from '@/lib/profileBack';
+import { userSendSupportMessage } from '@/services/adminSupportInbox';
 import {
   markAllInboxNotificationsRead,
   markInboxNotificationRead,
   subscribeInboxNotifications,
   type InboxNotification,
 } from '@/services/foodShareInbox';
+import { getReadableErrorMessageOr } from '@/utils/errorMessages';
+import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -79,6 +84,9 @@ export default function InboxScreen() {
   const uid = auth.currentUser?.uid ?? '';
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<InboxNotification[]>([]);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportBody, setSupportBody] = useState('');
+  const [supportBusy, setSupportBusy] = useState(false);
 
   useEffect(() => {
     if (!uid) {
@@ -122,6 +130,24 @@ export default function InboxScreen() {
     router.push(href as never);
   };
 
+  const sendSupport = async () => {
+    if (!supportBody.trim()) {
+      showError('Enter a message for support.');
+      return;
+    }
+    setSupportBusy(true);
+    try {
+      await userSendSupportMessage({ body: supportBody });
+      setSupportBody('');
+      setSupportOpen(false);
+      showSuccess('Message sent to HalfOrder support.');
+    } catch (e) {
+      showError(getReadableErrorMessageOr(e, 'Could not send message.'));
+    } finally {
+      setSupportBusy(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -134,11 +160,17 @@ export default function InboxScreen() {
         <Text style={styles.title}>Inbox</Text>
         <Pressable
           style={styles.settings}
-          onPress={() => router.push('/notification-settings' as never)}
+          onPress={() => setSupportOpen(true)}
+          accessibilityLabel="Message Admin"
         >
-          <Ionicons name="settings-outline" size={20} color="#FFF" />
+          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFF" />
         </Pressable>
       </View>
+
+      <Pressable style={styles.supportBanner} onPress={() => setSupportOpen(true)}>
+        <Ionicons name="headset-outline" size={18} color="#A855F7" />
+        <Text style={styles.supportBannerText}>Message HalfOrder Support</Text>
+      </Pressable>
 
       {loading ? (
         <View style={styles.center}>
@@ -166,6 +198,39 @@ export default function InboxScreen() {
           )}
         />
       )}
+
+      <Modal visible={supportOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Message Admin</Text>
+            <TextInput
+              value={supportBody}
+              onChangeText={setSupportBody}
+              placeholder="How can we help?"
+              placeholderTextColor="#7D8493"
+              style={styles.modalInput}
+              multiline
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => setSupportOpen(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSend, supportBusy && { opacity: 0.6 }]}
+                onPress={() => void sendSupport()}
+                disabled={supportBusy}
+              >
+                <Text style={styles.modalSendText}>
+                  {supportBusy ? 'Sending…' : 'Send'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -195,6 +260,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  supportBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(168,85,247,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.28)',
+  },
+  supportBannerText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
   center: {
     flex: 1,
@@ -256,4 +339,55 @@ const styles = StyleSheet.create({
     backgroundColor: '#A855F7',
     marginTop: 6,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#171923',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: {
+    color: '#FFF',
+    fontWeight: '800',
+    fontSize: 18,
+    marginBottom: 12,
+  },
+  modalInput: {
+    minHeight: 110,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    padding: 12,
+    color: '#FFF',
+    backgroundColor: '#1C2030',
+    textAlignVertical: 'top',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  modalCancel: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  modalCancelText: { color: '#FFF', fontWeight: '700' },
+  modalSend: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#A855F7',
+  },
+  modalSendText: { color: '#FFF', fontWeight: '800' },
 });

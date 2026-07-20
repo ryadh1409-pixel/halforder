@@ -50,10 +50,9 @@ const EMPTY: DraftVoucher = {
   description: '',
 };
 
-/** Form fields sit on a light input fill — do not use COLORS.text (#fff). */
-const FORM_INPUT_TEXT = '#0f172a';
-const FORM_INPUT_PLACEHOLDER = '#94a3b8';
-const FORM_INPUT_SELECTION = 'rgba(22, 163, 74, 0.28)';
+/** Form field accents on dark admin surfaces. */
+const FORM_INPUT_PLACEHOLDER = COLORS.textMuted;
+const FORM_INPUT_SELECTION = 'rgba(168, 85, 247, 0.35)';
 
 function formatValue(v: PromoCodeDoc): string {
   return v.discountType === 'percent'
@@ -436,13 +435,13 @@ const styles = StyleSheet.create({
   toolbar: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
   search: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
     color: COLORS.text,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
   },
   createBtn: {
     alignSelf: 'flex-start',
@@ -474,24 +473,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
   smallBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  deleteBtn: { borderColor: '#fecaca', backgroundColor: '#fef2f2' },
-  deleteText: { color: '#dc2626' },
+  deleteBtn: { borderColor: 'rgba(239,68,68,0.45)', backgroundColor: COLORS.dangerBg },
+  deleteText: { color: COLORS.error },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     maxHeight: '92%',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
     paddingBottom: 28,
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
   },
   modalTitle: {
     fontSize: 20,
@@ -508,13 +509,13 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: FORM_INPUT_TEXT,
-    backgroundColor: '#f8fafc',
+    color: COLORS.text,
+    backgroundColor: COLORS.background,
   },
   typeRow: { flexDirection: 'row', gap: 8 },
   typeChip: {
@@ -522,12 +523,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: COLORS.border,
     alignItems: 'center',
   },
   typeChipOn: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(22,163,74,0.1)',
+    backgroundColor: 'rgba(168,85,247,0.15)',
   },
   typeChipText: { fontWeight: '700', color: COLORS.textMuted },
   typeChipTextOn: { color: COLORS.primary },
@@ -545,7 +546,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: COLORS.border,
     alignItems: 'center',
   },
   cancelText: { fontWeight: '700', color: COLORS.textMuted },

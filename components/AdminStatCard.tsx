@@ -1,3 +1,4 @@
+import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import React from 'react';
 import {
   StyleSheet,
@@ -7,11 +8,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-
-const CARD = '#ffffff';
-const TEXT = '#0f172a';
-const MUTED = '#64748b';
-const PRIMARY = '#16a34a';
 
 export type AdminStatCardProps = {
   label: string;
@@ -53,32 +49,23 @@ export function AdminStatCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.06)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    ...adminCardShell,
   },
   label: {
     fontSize: 13,
-    fontWeight: '500',
-    color: MUTED,
+    fontWeight: '600',
+    color: COLORS.textMuted,
     marginBottom: 6,
   },
   value: {
     fontSize: 22,
-    fontWeight: '700',
-    color: TEXT,
+    fontWeight: '800',
+    color: COLORS.text,
   },
   hint: {
     marginTop: 8,
     fontSize: 12,
-    fontWeight: '500',
-    color: PRIMARY,
+    fontWeight: '600',
+    color: COLORS.textMuted,
   },
 });

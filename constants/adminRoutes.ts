@@ -41,4 +41,11 @@ export const adminRoutes = {
   inboxMessages: '/(tabs)/admin/inbox-messages',
   /** Investor-ready Finance Dashboard (additive). */
   finance: '/(tabs)/admin/finance',
+  /** Customer → Admin support conversations. */
+  supportInbox: '/(tabs)/admin/support-inbox',
+  supportThread: (id: string) =>
+    `/(tabs)/admin/support-inbox/${encodeURIComponent(id)}`,
+  onboardingManager: '/(tabs)/admin/onboarding-manager',
+  pushCenter: '/(tabs)/admin/push-center',
+  notificationHistory: '/(tabs)/admin/notification-history',
 } as const;

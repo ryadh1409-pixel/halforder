@@ -52,8 +52,7 @@ function startOfWeekMs(): number {
   return d.getTime();
 }
 
-const PAGE_BG = '#FFFFFF';
-const PRIMARY = '#16a34a';
+const PRIMARY = COLORS.primary;
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -484,9 +483,35 @@ export default function AdminScreen() {
                   }
                 />
                 <ActionCard
+                  icon="chatbubbles-outline"
+                  label="Support Inbox"
+                  onPress={() =>
+                    router.push(adminRoutes.supportInbox as never)
+                  }
+                />
+                <ActionCard
                   icon="notifications-circle-outline"
                   label="Admin alerts"
                   onPress={() => router.push(adminRoutes.notifications as never)}
+                />
+                <ActionCard
+                  icon="phone-portrait-outline"
+                  label="Push Center"
+                  onPress={() => router.push(adminRoutes.pushCenter as never)}
+                />
+                <ActionCard
+                  icon="time-outline"
+                  label="Notif History"
+                  onPress={() =>
+                    router.push(adminRoutes.notificationHistory as never)
+                  }
+                />
+                <ActionCard
+                  icon="albums-outline"
+                  label="Onboarding"
+                  onPress={() =>
+                    router.push(adminRoutes.onboardingManager as never)
+                  }
                 />
                 <ActionCard
                   icon="card-outline"
@@ -628,7 +653,7 @@ export default function AdminScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: PAGE_BG },
+  container: { flex: 1, backgroundColor: COLORS.background },
   mainCol: { flex: 1 },
   scrollView: { flex: 1 },
   centered: {
@@ -637,17 +662,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  scrollContent: { padding: 16, paddingBottom: 48 },
+  scrollContent: { padding: 16, paddingBottom: 24 },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: COLORS.text,
     marginBottom: 16,
   },
   sectionHeading: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: COLORS.text,
     marginBottom: 10,
   },
   sectionSpacer: { marginTop: 20 },
@@ -664,16 +689,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panel: {
-    backgroundColor: '#000000',
+    backgroundColor: COLORS.card,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.06)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: COLORS.border,
   },
   promoBadgesEntry: {
     flexDirection: 'row',
@@ -683,13 +703,13 @@ const styles = StyleSheet.create({
   promoBadgesTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: COLORS.text,
   },
   promoBadgesSub: {
     marginTop: 4,
     fontSize: 13,
     fontWeight: '600',
-    color: '#7D8493',
+    color: COLORS.textMuted,
     lineHeight: 18,
   },
   promoBadgesCta: {
@@ -706,7 +726,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   devLink: { fontSize: 13, fontWeight: '600', color: PRIMARY },
-  devSep: { fontSize: 13, color: '#7D8493' },
+  devSep: { fontSize: 13, color: COLORS.textMuted },
   accessDenied: {
     fontSize: 18,
     fontWeight: '600',

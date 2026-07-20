@@ -3190,6 +3190,75 @@ service cloud.firestore {
     match /emoAiReports/{reportId} {
       allow read, create, update, delete: if isAdmin();
     }
+
+    /**
+     * Admin Support Inbox (user ↔ admin).
+     * Doc id = user uid. Users own their thread; admins manage all.
+     */
+    match /adminSupportThreads/{userId} {
+      allow read: if isSignedIn()
+        && (isAdmin() || request.auth.uid == userId);
+      allow create: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && (
+          isAdmin()
+          || (
+            request.auth.uid == userId
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.lastMessage is string
+            && request.resource.data.lastMessage.size() > 0
+            && request.resource.data.lastMessage.size() <= 4000
+            && request.resource.data.lastSender == 'user'
+            && request.resource.data.archived == false
+          )
+        );
+      allow update: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && (
+          isAdmin()
+          || (
+            request.auth.uid == userId
+            && resource.data.userId == request.auth.uid
+            && request.resource.data.userId == resource.data.userId
+            && request.resource.data.lastSender == 'user'
+            && request.resource.data.lastMessage is string
+            && request.resource.data.lastMessage.size() > 0
+            && request.resource.data.lastMessage.size() <= 4000
+          )
+        );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && (isAdmin() || request.auth.uid == userId);
+        allow create: if isSignedIn()
+          && !isCurrentUserRestricted()
+          && (
+            isAdmin()
+            || (
+              request.auth.uid == userId
+              && request.resource.data.sender == 'user'
+              && request.resource.data.senderUid == request.auth.uid
+              && request.resource.data.body is string
+              && request.resource.data.body.size() > 0
+              && request.resource.data.body.size() <= 4000
+            )
+          );
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /** App-wide config (onboarding slides / display mode). */
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    /** Admin push campaign history / delivery tracking. */
+    match /pushCampaigns/{campaignId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if isAdmin();
     }

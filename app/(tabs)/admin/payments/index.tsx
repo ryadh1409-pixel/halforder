@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     gap: 8,
   },
-  headerRow: { backgroundColor: '#FFFFFF' },
+  headerRow: { backgroundColor: COLORS.card },
   headerCell: { fontWeight: '800', color: COLORS.textMuted, fontSize: 11 },
   cell: { color: COLORS.text, fontSize: 13 },
   subCell: { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },

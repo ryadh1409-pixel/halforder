@@ -41,7 +41,14 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
     name: 'Default',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#34D399',
+    lightColor: '#A855F7',
+  });
+  await Notifications.setNotificationChannelAsync('halforder', {
+    name: 'HalfOrder',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#A855F7',
+    sound: 'default',
   });
 }
 

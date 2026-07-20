@@ -1,3 +1,8 @@
+import {
+  FLOATING_TAB_BAR,
+  floatingTabBarBottomOffset,
+  floatingTabBarOccupiedHeight,
+} from '@/constants/chromeLayout';
 import { UE } from '@/constants/uberEatsTheme';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
@@ -231,34 +236,42 @@ function CustomTabBar(props: CustomTabBarProps) {
     .map((name) => state.routes.find((r) => r.name === name))
     .filter(Boolean) as BottomTabBarProps['state']['routes'];
 
+  const occupied = floatingTabBarOccupiedHeight(insets.bottom);
+  const bottomGap = floatingTabBarBottomOffset(insets.bottom);
+
   return (
-    <View style={[styles.outer, { bottom: Math.max(14, insets.bottom + 4) }]}>
-      {Platform.OS === 'ios' ? (
-        <BlurView intensity={92} tint="dark" style={styles.blurFill} />
-      ) : null}
-      <View
-        style={[
-          styles.blurFill,
-          Platform.OS !== 'ios' && styles.androidFill,
-          Platform.OS === 'web' && styles.webFill,
-        ]}
-      />
-      <View style={styles.container}>
-        {visibleRoutes.map((route) => {
-          if (!route?.key) return null;
-          const isFocused = activeRoute === route.name;
-          const href = hrefForTabRoute(route.name);
-          const badge = route.name === 'cart' ? cartQty : undefined;
-          return (
-            <TabBarItem
-              key={route.key}
-              route={route}
-              focused={isFocused}
-              href={href}
-              badge={badge}
-            />
-          );
-        })}
+    <View
+      style={[styles.layoutReserve, { height: occupied }]}
+      pointerEvents="box-none"
+    >
+      <View style={[styles.outer, { marginBottom: bottomGap }]}>
+        {Platform.OS === 'ios' ? (
+          <BlurView intensity={92} tint="dark" style={styles.blurFill} />
+        ) : null}
+        <View
+          style={[
+            styles.blurFill,
+            Platform.OS !== 'ios' && styles.androidFill,
+            Platform.OS === 'web' && styles.webFill,
+          ]}
+        />
+        <View style={styles.container}>
+          {visibleRoutes.map((route) => {
+            if (!route?.key) return null;
+            const isFocused = activeRoute === route.name;
+            const href = hrefForTabRoute(route.name);
+            const badge = route.name === 'cart' ? cartQty : undefined;
+            return (
+              <TabBarItem
+                key={route.key}
+                route={route}
+                focused={isFocused}
+                href={href}
+                badge={badge}
+              />
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -267,10 +280,12 @@ function CustomTabBar(props: CustomTabBarProps) {
 export default memo(CustomTabBar);
 
 const styles = StyleSheet.create({
+  layoutReserve: {
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+  },
   outer: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
+    marginHorizontal: 18,
     borderRadius: 32,
     overflow: 'hidden',
     borderWidth: 1,
@@ -299,8 +314,8 @@ const styles = StyleSheet.create({
   },
   container: {
     flexDirection: 'row',
-    minHeight: UE.tabBarHeight,
-    paddingVertical: 10,
+    minHeight: FLOATING_TAB_BAR.height,
+    paddingVertical: FLOATING_TAB_BAR.innerVerticalPadding,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'space-around',

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import React, { useCallback, useRef, useState } from 'react';
+import { Image } from 'expo-image';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +20,11 @@ import AppLogo from '../components/AppLogo';
 import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { goHome } from '../lib/navigation';
 import { useAuth } from '../services/AuthContext';
+import {
+  DEFAULT_ONBOARDING_SLIDES,
+  fetchOnboardingConfig,
+  type OnboardingSlideAdmin,
+} from '../services/onboardingAdmin';
 import { startOnboarding } from '../services/stripeConnect';
 import { alertFriendly } from '../utils/friendlyAlert';
 
@@ -28,34 +34,50 @@ const { width } = Dimensions.get('window');
 const GREEN_GRADIENT = ['#1B5E20', '#2E7D32', '#4CAF50'] as const;
 const GREEN_GRADIENT_END = ['#2E7D32', '#43A047', '#66BB6A'] as const;
 
-const SLIDES = [
-  {
-    title: 'Split meals,\npay half',
-    description:
-      'Share a meal with someone nearby and pay only half the price on every order.',
-    icon: '🍽️',
-  },
-  {
-    title: 'Create or join\nin seconds',
-    description:
-      'Start your own shared order or join an open one from the community.',
-    icon: '⚡',
-  },
-  {
-    title: 'Save more,\nevery day',
-    description:
-      'HalfOrder is free to use — split costs, try new spots, and enjoy more for less.',
-    icon: '✨',
-  },
-] as const;
+const FALLBACK_ICONS = ['🍽️', '⚡', '✨'] as const;
+
+type SlideView = {
+  id: string;
+  title: string;
+  description: string;
+  imageUri: string;
+  icon: string;
+};
+
+function toSlideView(s: OnboardingSlideAdmin, index: number): SlideView {
+  return {
+    id: s.id,
+    title: s.title,
+    description: s.subtitle,
+    imageUri: s.imageUri,
+    icon: FALLBACK_ICONS[index % FALLBACK_ICONS.length] ?? '✨',
+  };
+}
 
 export default function OnboardingScreen() {
-  const flatListRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
+  const flatListRef = useRef<FlatList<SlideView>>(null);
   const [index, setIndex] = useState(0);
   const { user, role, loading: authLoading } = useAuth();
   const [stripeLoading, setStripeLoading] = useState(false);
+  const [slides, setSlides] = useState<SlideView[]>(
+    DEFAULT_ONBOARDING_SLIDES.filter((s) => s.enabled).map(toSlideView),
+  );
   const showRestaurantStripeCta =
     !authLoading && !!user?.uid && (role === 'restaurant' || role === 'host' || role === 'admin');
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchOnboardingConfig().then((cfg) => {
+      if (cancelled) return;
+      const enabled = cfg.slides.filter((s) => s.enabled);
+      setSlides(
+        (enabled.length ? enabled : DEFAULT_ONBOARDING_SLIDES).map(toSlideView),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCompleteStripeSetup = useCallback(async () => {
     if (!user?.uid) return;
@@ -74,15 +96,21 @@ export default function OnboardingScreen() {
 
   const completeOnboarding = useCallback(async () => {
     await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+    if (user?.uid) {
+      await AsyncStorage.setItem(
+        `${ONBOARDING_COMPLETE_KEY}:login:${user.uid}`,
+        'true',
+      );
+    }
     goHome();
-  }, []);
+  }, [user?.uid]);
 
   const handleSkip = () => {
     void completeOnboarding();
   };
 
   const handleNextOrDone = () => {
-    if (index < SLIDES.length - 1) {
+    if (index < slides.length - 1) {
       const next = index + 1;
       flatListRef.current?.scrollToIndex({ index: next, animated: true });
       setIndex(next);
@@ -99,9 +127,11 @@ export default function OnboardingScreen() {
     [],
   );
 
-  const isLast = index === SLIDES.length - 1;
+  const isLast = index === Math.max(slides.length - 1, 0);
   const gradientColors =
-    index === SLIDES.length - 1 ? GREEN_GRADIENT_END : GREEN_GRADIENT;
+    isLast ? GREEN_GRADIENT_END : GREEN_GRADIENT;
+
+  const listData = useMemo(() => slides, [slides]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -111,7 +141,7 @@ export default function OnboardingScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={[...SLIDES]}
+        data={listData}
         horizontal
         pagingEnabled
         decelerationRate="fast"
@@ -119,12 +149,20 @@ export default function OnboardingScreen() {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
         onScrollToIndexFailed={() => {}}
-        keyExtractor={(_, i) => String(i)}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={[styles.slide, { width }]}>
-            <View style={styles.iconBubble}>
-              <Text style={styles.iconEmoji}>{item.icon}</Text>
-            </View>
+            {item.imageUri ? (
+              <Image
+                source={{ uri: item.imageUri }}
+                style={styles.heroImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.iconBubble}>
+                <Text style={styles.iconEmoji}>{item.icon}</Text>
+              </View>
+            )}
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.description}>{item.description}</Text>
           </View>
@@ -133,9 +171,9 @@ export default function OnboardingScreen() {
 
       <View style={styles.footer}>
         <View style={styles.dots}>
-          {SLIDES.map((_, i) => (
+          {listData.map((s, i) => (
             <View
-              key={i}
+              key={s.id}
               style={[
                 styles.dot,
                 i === index ? styles.dotActive : styles.dotInactive,
@@ -219,6 +257,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 28,
+  },
+  heroImage: {
+    width: width - 64,
+    height: 200,
+    borderRadius: 20,
+    marginBottom: 28,
+    backgroundColor: '#171923',
   },
   iconEmoji: {
     fontSize: 52,
