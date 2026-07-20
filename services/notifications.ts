@@ -83,6 +83,16 @@ export function configureForegroundNotificationHandler(): void {
           shouldShowList: false,
         };
       }
+      /** Admin support inbound — in-app banner via Firestore listener avoids duplicate OS banner. */
+      if (data?.type === 'support_inbound') {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: false,
+          shouldShowList: true,
+        };
+      }
       return {
         shouldShowAlert: true,
         shouldPlaySound: true,

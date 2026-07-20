@@ -6,12 +6,17 @@ import {
   DEFAULT_ONBOARDING_CONFIG,
   saveOnboardingConfig,
   subscribeOnboardingConfig,
+  uploadOnboardingSlideImage,
   type OnboardingConfig,
   type OnboardingDisplayMode,
   type OnboardingSlideAdmin,
 } from '@/services/onboardingAdmin';
+import { auth } from '@/services/firebase';
+import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { showError, showSuccess } from '@/utils/toast';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -35,6 +40,8 @@ export default function OnboardingManagerScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [uploadingSlideId, setUploadingSlideId] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<Record<string, string>>({});
 
   useEffect(() => {
     return subscribeOnboardingConfig((next) => {
@@ -80,6 +87,81 @@ export default function OnboardingManagerScreen() {
       setSaving(false);
     }
   };
+
+  const pickSlideImage = async (slide: OnboardingSlideAdmin) => {
+    const uid = auth.currentUser?.uid ?? '';
+    if (!uid) {
+      showError('Sign in required.');
+      return;
+    }
+
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      showError('Allow photo library access to upload.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: [PickerMediaType.Images],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.88,
+    });
+
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    const localUri = result.assets[0].uri;
+    setLocalPreview((prev) => ({ ...prev, [slide.id]: localUri }));
+    setUploadingSlideId(slide.id);
+    try {
+      const downloadUrl = await uploadOnboardingSlideImage(
+        slide.id,
+        localUri,
+        uid,
+      );
+      const nextSlides = cfg.slides.map((s) =>
+        s.id === slide.id ? { ...s, imageUri: downloadUrl } : s,
+      );
+      setCfg((prev) => ({ ...prev, slides: nextSlides }));
+      setLocalPreview((prev) => {
+        const next = { ...prev };
+        delete next[slide.id];
+        return next;
+      });
+      await saveOnboardingConfig({
+        displayMode: cfg.displayMode,
+        slides: nextSlides,
+      });
+      showSuccess('Slide image uploaded.');
+    } catch (e) {
+      showError(getReadableErrorMessageOr(e, 'Image upload failed.'));
+    } finally {
+      setUploadingSlideId(null);
+    }
+  };
+
+  const removeSlideImage = async (slideId: string) => {
+    const nextSlides = cfg.slides.map((s) =>
+      s.id === slideId ? { ...s, imageUri: '' } : s,
+    );
+    setCfg((prev) => ({ ...prev, slides: nextSlides }));
+    setLocalPreview((prev) => {
+      const next = { ...prev };
+      delete next[slideId];
+      return next;
+    });
+    try {
+      await saveOnboardingConfig({
+        displayMode: cfg.displayMode,
+        slides: nextSlides,
+      });
+    } catch (e) {
+      showError(getReadableErrorMessageOr(e, 'Could not remove image.'));
+    }
+  };
+
+  const slideImageUri = (slide: OnboardingSlideAdmin) =>
+    localPreview[slide.id] ?? slide.imageUri;
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -171,20 +253,59 @@ export default function OnboardingManagerScreen() {
                   style={styles.input}
                   multiline
                 />
-                <AppTextInput
-                  value={slide.imageUri}
-                  onChangeText={(t) => updateSlide(slide.id, { imageUri: t })}
-                  placeholder="Image URL (optional)"
-                  placeholderTextColor={COLORS.textMuted}
-                  style={styles.input}
-                  autoCapitalize="none"
-                />
+                <View style={styles.imageSection}>
+                  <Text style={styles.imageLabel}>Slide image</Text>
+                  {slideImageUri(slide) ? (
+                    <Image
+                      source={{ uri: slideImageUri(slide) }}
+                      style={styles.imagePreview}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imagePlaceholderText}>
+                        No image selected
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.imageActions}>
+                    <Pressable
+                      style={[
+                        styles.imageBtn,
+                        uploadingSlideId === slide.id && { opacity: 0.6 },
+                      ]}
+                      onPress={() => void pickSlideImage(slide)}
+                      disabled={uploadingSlideId === slide.id}
+                    >
+                      {uploadingSlideId === slide.id ? (
+                        <ActivityIndicator color={COLORS.primary} size="small" />
+                      ) : (
+                        <Text style={styles.imageBtnText}>
+                          {slide.imageUri ? 'Replace image' : 'Choose from library'}
+                        </Text>
+                      )}
+                    </Pressable>
+                    {slide.imageUri || localPreview[slide.id] ? (
+                      <Pressable
+                        style={[styles.imageBtn, styles.imageBtnDanger]}
+                        onPress={() => void removeSlideImage(slide.id)}
+                        disabled={uploadingSlideId === slide.id}
+                      >
+                        <Text style={styles.imageBtnDangerText}>Remove</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
                 {previewId === slide.id ? (
                   <View style={styles.preview}>
                     <Text style={styles.previewTitle}>{slide.title}</Text>
                     <Text style={styles.previewSub}>{slide.subtitle}</Text>
-                    {slide.imageUri ? (
-                      <Text style={styles.meta}>Image: {slide.imageUri}</Text>
+                    {slideImageUri(slide) ? (
+                      <Image
+                        source={{ uri: slideImageUri(slide) }}
+                        style={styles.previewImage}
+                        contentFit="cover"
+                      />
                     ) : (
                       <Text style={styles.meta}>No image — emoji/default UI</Text>
                     )}
@@ -277,6 +398,55 @@ const styles = StyleSheet.create({
   },
   previewSub: { color: COLORS.textMuted, fontWeight: '600', lineHeight: 20 },
   meta: { color: COLORS.textMuted, marginTop: 8, fontSize: 12 },
+  imageSection: { marginBottom: 8 },
+  imageLabel: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  imagePreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: COLORS.background,
+    marginBottom: 8,
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  imagePlaceholderText: { color: COLORS.textMuted, fontSize: 13 },
+  imageActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  imageBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(168,85,247,0.12)',
+  },
+  imageBtnText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
+  imageBtnDanger: {
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.dangerBg,
+  },
+  imageBtnDangerText: { color: COLORS.error, fontWeight: '700', fontSize: 13 },
+  previewImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 10,
+    marginTop: 10,
+  },
   saveBtn: {
     marginTop: 8,
     backgroundColor: COLORS.primary,

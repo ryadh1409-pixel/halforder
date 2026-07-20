@@ -12,6 +12,7 @@ import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
 import { PushNotificationDeepLinkListener } from '@/components/PushNotificationDeepLinkListener';
+import { AdminSupportInboundListener } from '@/components/AdminSupportInboundListener';
 import { APPLE_PAY_MERCHANT_ID } from '@/constants/applePay';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
@@ -161,6 +162,7 @@ export default function RootLayout() {
                 <CartProvider>
                   <BootstrapShell>
                     <PushNotificationDeepLinkListener />
+                    <AdminSupportInboundListener />
                     <Slot />
                     <SystemDialogHost />
                     <Toast config={toastConfig} />

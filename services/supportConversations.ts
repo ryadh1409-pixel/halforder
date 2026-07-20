@@ -62,12 +62,44 @@ export type SupportConversationMessage = {
 const COL = 'supportConversations';
 
 export const SUPPORT_PUSH = {
+  appName: 'HalfOrder',
   customerTitle: 'HalfOrder Support',
   customerBody: 'You have a new reply from our support team.',
-  adminTitle: 'HalfOrder Support',
-  adminBody: 'New support message received.',
   customerDeepLink: '/customer-support',
 } as const;
+
+export type AdminSupportInboundKind =
+  | 'new_conversation'
+  | 'new_message'
+  | 'complaint';
+
+export function buildAdminSupportInboundPush(input: {
+  kind: AdminSupportInboundKind;
+  userName: string;
+}): { title: string; body: string } {
+  const first =
+    input.userName.trim().split(/\s+/).filter(Boolean)[0] ?? 'A customer';
+  if (input.kind === 'complaint') {
+    return {
+      title: 'New Complaint Received',
+      body: 'You received a new complaint.',
+    };
+  }
+  if (input.kind === 'new_conversation') {
+    return {
+      title: 'New Customer Inquiry',
+      body: 'A customer needs assistance.',
+    };
+  }
+  return {
+    title: 'New Support Message',
+    body: `${first} sent a new support message.`,
+  };
+}
+
+function adminSupportDeepLink(conversationId: string): string {
+  return `/(tabs)/admin/support-inbox/${encodeURIComponent(conversationId)}`;
+}
 
 function tokenFromUserData(data: Record<string, unknown>): string | null {
   for (const key of ['expoPushToken', 'pushToken', 'fcmToken'] as const) {
@@ -214,20 +246,38 @@ async function pushToCustomer(
   }
 }
 
-async function pushToAdmins(title: string, body: string, conversationId: string): Promise<void> {
+async function countAdminUnreadBadge(): Promise<number> {
+  try {
+    const snap = await getDocs(
+      query(collection(db, COL), where('unreadAdmin', '>', 0)),
+    );
+    return snap.size;
+  } catch {
+    return 1;
+  }
+}
+
+async function pushToAdmins(
+  conversationId: string,
+  kind: AdminSupportInboundKind,
+  userName: string,
+): Promise<void> {
   try {
     const tokens = await collectAdminPushTokens();
     if (tokens.length === 0) return;
+    const { title, body } = buildAdminSupportInboundPush({ kind, userName });
+    const badge = await countAdminUnreadBadge();
     await sendExpoPush(
       tokens,
       title,
       body,
       {
         type: 'support_inbound',
-        deepLink: `/(tabs)/admin/support-inbox/${conversationId}`,
+        deepLink: adminSupportDeepLink(conversationId),
         conversationId,
+        kind,
       },
-      { priority: 'high', channelId: 'halforder' },
+      { priority: 'high', channelId: 'halforder', badge },
     );
   } catch {
     /* best-effort */
@@ -416,9 +466,9 @@ export async function sendCustomerSupportMessage(input: {
   });
 
   void pushToAdmins(
-    SUPPORT_PUSH.adminTitle,
-    SUPPORT_PUSH.adminBody,
     conversationId,
+    existing.exists() ? 'new_message' : 'new_conversation',
+    userName,
   );
 
   return conversationId;
@@ -546,9 +596,9 @@ export async function createComplaintSupportConversation(input: {
   });
 
   void pushToAdmins(
-    SUPPORT_PUSH.adminTitle,
-    SUPPORT_PUSH.adminBody,
     conversationId,
+    'complaint',
+    userName,
   );
 
   return conversationId;

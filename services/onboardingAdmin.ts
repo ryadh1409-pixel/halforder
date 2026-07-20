@@ -1,4 +1,5 @@
-import { db } from '@/services/firebase';
+import { db, storage } from '@/services/firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import {
   doc,
   getDoc,
@@ -147,4 +148,25 @@ export async function saveOnboardingConfig(
     },
     { merge: true },
   );
+}
+
+/** Upload a slide image from a local device URI → public Storage URL. */
+export async function uploadOnboardingSlideImage(
+  slideId: string,
+  localUri: string,
+  adminUid: string,
+): Promise<string> {
+  const uri = localUri.trim();
+  const uid = adminUid.trim();
+  const sid = slideId.trim();
+  if (!uri) throw new Error('No image selected.');
+  if (!uid) throw new Error('Sign in required.');
+  if (!sid) throw new Error('Invalid slide.');
+
+  const res = await fetch(uri);
+  const blob = await res.blob();
+  const storagePath = `onboarding/${sid}/${uid}_${Date.now()}.jpg`;
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
+  return getDownloadURL(storageRef);
 }
