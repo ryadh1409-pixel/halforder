@@ -12,12 +12,12 @@
       "backgroundColor": "#ffffff"
     },
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "icon": "./assets/icon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.halforder.app",
-      "buildNumber": "3",
+      "buildNumber": "41",
       "entitlements": {
         "com.apple.developer.in-app-payments": [
           "merchant.com.halforder.app"
