@@ -1,57 +1,34 @@
-import Constants from 'expo-constants';
-import OpenAI from 'openai';
+import { httpsCallable } from 'firebase/functions';
 
-function openAiApiKey(): string | undefined {
-  const fromEnv =
-    typeof process !== 'undefined'
-      ? process.env?.EXPO_PUBLIC_OPENAI_API_KEY
-      : undefined;
-  const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
-  const fromExtra =
-    typeof extra?.openaiApiKey === 'string' ? extra.openaiApiKey : '';
-  return (fromEnv || fromExtra || '').trim() || undefined;
-}
+import { functions, syncAuthForFirestoreReads } from '@/services/firebase';
 
 /**
- * Short menu-style blurb for a swipe card (client-side, optional API key).
+ * Short menu-style blurb for a swipe card via Firebase Callable.
+ * OpenAI secret never leaves the backend.
  */
 export async function generateFoodCardAiDescription(input: {
   title: string;
   restaurantName: string;
   adminDescription?: string;
 }): Promise<string | null> {
-  const key = openAiApiKey();
-  if (!key) return null;
-
   const title = input.title.trim();
   const restaurant = input.restaurantName.trim();
   const hint = (input.adminDescription ?? '').trim();
 
   try {
-    const client = new OpenAI({
-      apiKey: key,
-      dangerouslyAllowBrowser: true,
+    await syncAuthForFirestoreReads();
+    const fn = httpsCallable(functions, 'generateFoodCardDescription');
+    const result = await fn({
+      title,
+      restaurantName: restaurant,
+      adminDescription: hint,
     });
-    const res = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You write concise food app card descriptions. 1–2 sentences, max 280 characters, appetizing but not claiming allergens or dietary facts. No markdown, no emojis unless one tasteful food emoji at end. Do not invent ingredients.',
-        },
-        {
-          role: 'user',
-          content: `Dish name: ${title}\nVenue: ${restaurant}${hint ? `\nNotes from venue: ${hint}` : ''}`,
-        },
-      ],
-      max_tokens: 120,
-      temperature: 0.65,
-    });
-    const text = res.choices[0]?.message?.content?.trim();
-    if (text) return text.slice(0, 400);
+    const data = result.data as { description?: unknown };
+    const text =
+      typeof data?.description === 'string' ? data.description.trim() : '';
+    return text ? text.slice(0, 400) : null;
   } catch (e) {
-    console.warn('[foodCardAiDescription] OpenAI failed', e);
+    console.warn('[foodCardAiDescription] callable failed', e);
+    return null;
   }
-  return null;
 }

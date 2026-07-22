@@ -71,7 +71,6 @@
     "geolib": "^3.3.14",
     "lucide-react-native": "^1.16.0",
     "node-fetch": "^2.7.0",
-    "openai": "^6.33.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

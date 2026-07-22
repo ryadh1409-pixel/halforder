@@ -94,6 +94,26 @@ Quick checks:
 3. `npm run test:webhook`
 4. Logs: Firebase console → Functions → `stripeWebhook`
 
+## OpenAI (server-only)
+
+OpenAI must **never** ship in the mobile bundle. Do not set `EXPO_PUBLIC_OPENAI_API_KEY`.
+
+| Surface | How it calls OpenAI |
+|---------|---------------------|
+| Emo AI | Callable `emoAiChat` |
+| Matching copy | Callable `generateMatchSuggestion` |
+| Food card AI (admin) | Callable `generateFoodCardDescription` |
+| Chat moderation | Callable `sendModeratedMatchChatMessage` |
+
+Configure the secret for Firebase Functions:
+
+```bash
+firebase functions:secrets:set OPENAI_API_KEY
+firebase deploy --only functions:functions:emoAiChat,functions:functions:generateMatchSuggestion,functions:functions:generateFoodCardDescription
+```
+
+Local Expo `.env` may still contain `OPENAI_API_KEY` for documentation/scripts, but the Expo app config does **not** embed it.
+
 ## Learn more
 
 - [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/)

@@ -351,6 +351,11 @@ export {
   sendModeratedMatchChatMessage,
   acceptCommunityGuidelines,
 } from "./sendModeratedMatchChatMessage.js";
+export {
+  emoAiChat,
+  generateMatchSuggestion,
+  generateFoodCardDescription,
+} from "./openAiCallables.js";
 export {getAdminStripePayouts} from "./adminStripePayouts.js";
 export {
   getStripeTreasurySummary,

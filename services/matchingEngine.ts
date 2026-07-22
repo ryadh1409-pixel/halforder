@@ -1,18 +1,17 @@
 /**
  * Smart + geo matching for growth: scores orders by food overlap and distance,
- * optional OpenAI copy for the assistant UI.
+ * optional AI copy via Firebase Callable (OpenAI secret stays server-side).
  */
-import OpenAI from 'openai';
-import Constants from 'expo-constants';
 import { getDistance } from 'geolib';
 import { getDocs } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 import {
   GROWTH_MATCH_RADIUS_KM,
   GROWTH_ORDER_SCAN_LIMIT,
 } from '../constants/growth';
 import { getHiddenUserIds } from './block';
-import { auth, syncAuthForFirestoreReads } from './firebase';
+import { auth, functions, syncAuthForFirestoreReads } from './firebase';
 import {
   fetchUserRoleWithLog,
   logFirestoreQuery,
@@ -96,17 +95,6 @@ function parseFirestoreError(e: unknown): SmartMatchesErrorCode {
   return 'unknown';
 }
 
-function openAiApiKey(): string | undefined {
-  const fromEnv =
-    typeof process !== 'undefined'
-      ? process.env?.EXPO_PUBLIC_OPENAI_API_KEY
-      : undefined;
-  const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
-  const fromExtra =
-    typeof extra?.openaiApiKey === 'string' ? extra.openaiApiKey : '';
-  return (fromEnv || fromExtra || '').trim() || undefined;
-}
-
 function createdAtMillis(data: PublicMatchableOrderDoc): number | null {
   const c = data.createdAt;
   if (c == null) return null;
@@ -171,52 +159,34 @@ async function generateAiSuggestion(
   userFood: string,
   matches: Order[],
 ): Promise<string> {
-  const key = openAiApiKey();
-  if (!key) {
-    if (matches.length === 0) {
-      return 'No smart matches available yet — check back soon, or start an order others can join.';
-    }
-    const top = matches[0]?.foodName ?? 'food';
-    return `Found ${matches.length} nearby option(s) for ${userFood || 'you'} — top pick: ${top}. Tap an order below to join.`;
+  if (matches.length === 0) {
+    return 'No smart matches available yet — check back soon, or start an order others can join.';
   }
+  const top = matches[0]?.foodName ?? 'food';
+  const fallback = `Found ${matches.length} nearby option(s) for ${userFood || 'you'} — top pick: ${top}. Tap an order below to join.`;
+
   try {
-    const client = new OpenAI({
-      apiKey: key,
-      dangerouslyAllowBrowser: true,
+    await syncAuthForFirestoreReads();
+    const fn = httpsCallable(functions, 'generateMatchSuggestion');
+    const result = await fn({
+      userFood,
+      matches: matches.slice(0, 5).map((m) => ({
+        restaurantName: m.restaurantName,
+        foodName: m.foodName,
+        distanceMeters: m.distanceMeters,
+      })),
     });
-    const lines = matches
-      .slice(0, 5)
-      .map(
-        (m, i) =>
-          `${i + 1}. ${m.restaurantName || m.foodName} (~${m.distanceMeters != null ? `${Math.round(m.distanceMeters)}m` : '?'} )`,
-      )
-      .join('\n');
-    const res = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You help people split food orders. One short friendly sentence (max 220 chars), no markdown, suggest the best nearby pick.',
-        },
-        {
-          role: 'user',
-          content: `User wants: ${userFood || 'something to eat'}.\nNearby:\n${lines || 'none'}`,
-        },
-      ],
-      max_tokens: 120,
-      temperature: 0.6,
-    });
-    const text = res.choices[0]?.message?.content?.trim();
+    const data = result.data as { text?: unknown };
+    const text = typeof data?.text === 'string' ? data.text.trim() : '';
     if (text) return text;
   } catch (e) {
     if (__DEV__) {
-      console.warn('[matchingEngine] OpenAI failed', e);
+      console.warn('[matchingEngine] generateMatchSuggestion failed', e);
     }
   }
   return matches.length > 0
     ? `Nearby: ${matches[0].restaurantName || matches[0].foodName} is your closest match.`
-    : 'Try again soon for more local matches.';
+    : fallback;
 }
 
 /**

@@ -359,7 +359,7 @@ export default function AdminFoodCardDetailScreen() {
       else {
         showNotice(
           'OpenAI',
-          'Configure EXPO_PUBLIC_OPENAI_API_KEY or type a description manually.',
+          'AI description unavailable. Deploy generateFoodCardDescription, ensure OPENAI_API_KEY is set on Firebase Functions, or type a description manually.',
         );
       }
     } finally {
