@@ -84,6 +84,50 @@ function requireApiKey(): string {
   return key;
 }
 
+/** Temporary TestFlight diagnostics — logs key metadata + Google responses without full key. */
+function redactGoogleUrl(url: string, key: string): string {
+  if (!key) return url;
+  return url.split(key).join(`${key.slice(0, 10)}…(redacted)`);
+}
+
+function logGoogleRequest(endpoint: string, key: string, url: string): void {
+  console.log('[GOOGLE_MAPS_DIAG] request', {
+    endpoint,
+    apiKeyPrefix: key.slice(0, 10),
+    apiKeyLength: key.length,
+    url: redactGoogleUrl(url, key),
+  });
+}
+
+async function fetchGoogleJson<T extends { status?: string; error_message?: string }>(
+  endpoint: string,
+  key: string,
+  url: string,
+): Promise<{ httpStatus: number; data: T }> {
+  logGoogleRequest(endpoint, key, url);
+  const res = await fetch(url);
+  let data: T;
+  try {
+    data = (await res.json()) as T;
+  } catch {
+    console.log('[GOOGLE_MAPS_DIAG] response', {
+      endpoint,
+      httpStatus: res.status,
+      parseError: true,
+      body: null,
+    });
+    throw new PlacesApiError(`Google request failed (${res.status}).`, 'HTTP_ERROR');
+  }
+  console.log('[GOOGLE_MAPS_DIAG] response', {
+    endpoint,
+    httpStatus: res.status,
+    googleStatus: data.status ?? null,
+    googleErrorMessage: data.error_message ?? null,
+    body: data,
+  });
+  return { httpStatus: res.status, data };
+}
+
 export type SafeGeocodeResult =
   | {
       ok: true;
@@ -154,12 +198,15 @@ export async function fetchPlaceAutocompleteSuggestions(
 
   const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`;
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new PlacesApiError(`Places search failed (${res.status}).`, 'HTTP_ERROR');
+  const { httpStatus, data } = await fetchGoogleJson<AutocompleteResponse>(
+    'place/autocomplete',
+    key,
+    url,
+  );
+  if (httpStatus < 200 || httpStatus >= 300) {
+    throw new PlacesApiError(`Places search failed (${httpStatus}).`, 'HTTP_ERROR');
   }
 
-  const data = (await res.json()) as AutocompleteResponse;
   if (data.status === 'REQUEST_DENIED') {
     throw new PlacesApiError(
       'Location search unavailable. Please check API key.',
@@ -199,12 +246,15 @@ export async function fetchPlaceDetails(
     fields: 'place_id,formatted_address,geometry,address_components',
   });
   const url = `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new PlacesApiError(`Place details failed (${res.status}).`, 'HTTP_ERROR');
+  const { httpStatus, data } = await fetchGoogleJson<PlaceDetailsResponse>(
+    'place/details',
+    key,
+    url,
+  );
+  if (httpStatus < 200 || httpStatus >= 300) {
+    throw new PlacesApiError(`Place details failed (${httpStatus}).`, 'HTTP_ERROR');
   }
 
-  const data = (await res.json()) as PlaceDetailsResponse;
   if (data.status !== 'OK' || !data.result?.geometry?.location) {
     mapGeocodeStatus(data.status, data.error_message);
   }
@@ -286,16 +336,18 @@ export async function reverseGeocodeCoordinatesSafe(
   const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
 
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
+    const { httpStatus, data } = await fetchGoogleJson<GeocodeResponse>(
+      'geocode/reverse',
+      key,
+      url,
+    );
+    if (httpStatus < 200 || httpStatus >= 300) {
       return {
         ok: false,
         status: 'HTTP_ERROR',
-        message: `Reverse geocoding failed (${res.status}).`,
+        message: `Reverse geocoding failed (${httpStatus}).`,
       };
     }
-
-    const data = (await res.json()) as GeocodeResponse;
 
     if (data.status !== 'OK' || !data.results?.length) {
       return {
@@ -385,12 +437,14 @@ export async function geocodeAddressToCoordinates(
   });
   const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new PlacesApiError(`Geocoding failed (${res.status}).`, 'HTTP_ERROR');
+  const { httpStatus, data } = await fetchGoogleJson<GeocodeResponse>(
+    'geocode/forward',
+    key,
+    url,
+  );
+  if (httpStatus < 200 || httpStatus >= 300) {
+    throw new PlacesApiError(`Geocoding failed (${httpStatus}).`, 'HTTP_ERROR');
   }
-
-  const data = (await res.json()) as GeocodeResponse;
 
   if (data.status !== 'OK' || !data.results?.length) {
     mapGeocodeStatus(data.status, data.error_message);

@@ -11,7 +11,40 @@ import {
 
 import { resolveGoogleMapsApiKey } from '@/lib/maps/googleMapsApiKey';
 
-const GOOGLE_API_KEY = resolveGoogleMapsApiKey();
+function mapsApiKey(): string {
+  // Resolve per call — module-load capture can miss Expo env inlining edge cases.
+  return resolveGoogleMapsApiKey().trim();
+}
+
+function redactGoogleUrl(url: string, key: string): string {
+  if (!key) return url;
+  return url.split(key).join(`${key.slice(0, 10)}…(redacted)`);
+}
+
+function logGooglePlacesDiag(
+  endpoint: string,
+  key: string,
+  url: string,
+  httpStatus?: number,
+  body?: { status?: string; error_message?: string },
+): void {
+  if (httpStatus == null) {
+    console.log('[GOOGLE_MAPS_DIAG] request', {
+      endpoint,
+      apiKeyPrefix: key.slice(0, 10),
+      apiKeyLength: key.length,
+      url: redactGoogleUrl(url, key),
+    });
+    return;
+  }
+  console.log('[GOOGLE_MAPS_DIAG] response', {
+    endpoint,
+    httpStatus,
+    googleStatus: body?.status ?? null,
+    googleErrorMessage: body?.error_message ?? null,
+    body,
+  });
+}
 
 export type PlaceRestaurant = {
   id: string;
@@ -49,7 +82,7 @@ export const PLACE_IMAGE_FALLBACK =
 export function getPlacePhoto(
   photos: { photo_reference: string }[] | undefined | null,
 ): string {
-  const key = GOOGLE_API_KEY.trim();
+  const key = mapsApiKey();
   if (!photos?.length || !key) {
     return PLACE_IMAGE_FALLBACK;
   }
@@ -60,13 +93,15 @@ export function getPlacePhoto(
 export async function getCoordinates(
   placeName: string,
 ): Promise<{ lat: number; lng: number } | null> {
-  const key = GOOGLE_API_KEY.trim();
+  const key = mapsApiKey();
   const q = placeName.trim();
   if (!key || !q) return null;
 
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${encodeURIComponent(key)}`;
+  logGooglePlacesDiag('geocode/address', key, url);
   const res = await fetch(url);
   const data = (await res.json()) as GeocodeResult;
+  logGooglePlacesDiag('geocode/address', key, url, res.status, data);
   if (data.status !== 'OK' || !data.results?.length) return null;
   return data.results[0].geometry.location;
 }
@@ -86,12 +121,14 @@ async function nearbyFromCoords(
   lng: number,
   keyword: string,
 ): Promise<PlaceRestaurant[]> {
-  const key = GOOGLE_API_KEY.trim();
+  const key = mapsApiKey();
   if (!key) return [];
 
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=2000&keyword=${encodeURIComponent(keyword)}&key=${encodeURIComponent(key)}`;
+  logGooglePlacesDiag('place/nearbysearch', key, url);
   const res = await fetch(url);
   const data = (await res.json()) as NearbySearchResult;
+  logGooglePlacesDiag('place/nearbysearch', key, url, res.status, data);
 
   if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
     return [];
@@ -116,7 +153,7 @@ export async function getNearbyRestaurantsWithCoords(
   restaurants: PlaceRestaurant[];
   coords: LatLng | null;
 }> {
-  const key = GOOGLE_API_KEY.trim();
+  const key = mapsApiKey();
   const text = locationText.trim();
   if (!key || !text) {
     return { restaurants: [], coords: null };
