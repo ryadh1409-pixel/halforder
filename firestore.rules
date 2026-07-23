@@ -749,6 +749,12 @@ service cloud.firestore {
                 && request.resource.data.cancelReason == 'CANCELLED_BY_USER'
               )
               || (
+                resource.data.status == 'WAITING'
+                && request.resource.data.status == 'MATCHED'
+                && request.resource.data.matchId is string
+                && request.resource.data.matchId.size() > 0
+              )
+              || (
                 resource.data.status == 'CANCELLED'
                 && request.resource.data.status in ['WAITING', 'MATCHED']
               )

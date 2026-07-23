@@ -129,6 +129,10 @@ export function subscribeActiveAdminFoodShares(
   const collectionPath = 'adminFoodShares';
   const queryDescription =
     "collection('adminFoodShares').where('active', '==', true).limit(10)";
+  console.log('[SHARE QUERY]', {
+    collectionPath,
+    queryDescription,
+  });
   console.log('[SWIPE COLLECTION]', collectionPath);
   console.log('[SWIPE QUERY]', queryDescription);
 

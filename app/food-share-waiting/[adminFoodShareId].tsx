@@ -116,6 +116,13 @@ export default function FoodShareWaitingScreen() {
 
         if (status === 'MATCHED' && nextMatchId) {
           setPhase('matched');
+          console.log('[LISTENER UPDATE]', {
+            screen: 'food-share-waiting',
+            adminFoodShareId: shareId,
+            userId: myUid,
+            status: 'MATCHED',
+            matchId: nextMatchId,
+          });
           if (!navigatedRef.current) {
             navigatedRef.current = true;
             console.log('[MATCH FOUND]', {

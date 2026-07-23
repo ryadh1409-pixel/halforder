@@ -102,8 +102,11 @@ export async function joinAdminFoodShare(
   const myFirstName = await resolveFirstName(uid);
   const requestPath = `matchRequests/${adminFoodShareId}_${uid}`;
 
-  console.log('[MATCH REQUEST PATH]', requestPath);
-  console.log('[MATCH REQUEST UID]', uid);
+  console.log('[SHARE SWIPE]', {
+    adminFoodShareId,
+    uid,
+    requestPath,
+  });
 
   const queuePreview = await getDoc(queueRef);
   const waitingPreview =
@@ -111,15 +114,35 @@ export async function joinAdminFoodShare(
     typeof queuePreview.data()?.waitingUserId === 'string'
       ? (queuePreview.data()?.waitingUserId as string)
       : null;
+  console.log('[SHARE FILTER]', {
+    adminFoodShareId,
+    waitingUserId: waitingPreview,
+    selfIsWaiting: waitingPreview === uid,
+  });
   if (waitingPreview && waitingPreview !== uid) {
     if (await hasBlockBetween(uid, waitingPreview)) {
+      console.log('[MATCH FAILURE]', {
+        reason: 'blocked',
+        uid,
+        waitingPreview,
+      });
       return { ok: false, error: 'You cannot match with this user.' };
     }
   }
 
   let txResult: QueueTxResult;
   try {
+    console.log('[MATCH START]', {
+      adminFoodShareId,
+      uid,
+      waitingPreview,
+    });
     txResult = await runTransaction(db, async (tx) => {
+      console.log('[MATCH TRANSACTION]', {
+        phase: 'begin',
+        adminFoodShareId,
+        uid,
+      });
       const shareSnap = await tx.get(shareRef);
       if (!shareSnap.exists()) {
         throw new Error('This meal share is no longer available.');
@@ -142,12 +165,11 @@ export async function joinAdminFoodShare(
           : 'Partner';
 
       const existingReq = await tx.get(requestRef);
-      console.log('[MATCH REQUEST READ]', {
+      console.log('[MATCH TRANSACTION]', {
+        phase: 'read',
         path: requestPath,
         exists: existingReq.exists(),
-        userId: existingReq.exists()
-          ? (existingReq.data()?.userId as string | undefined)
-          : null,
+        waitingUserId,
         authUid: uid,
       });
 
@@ -173,6 +195,11 @@ export async function joinAdminFoodShare(
               { merge: true },
             );
           }
+          console.log('[SHARE CREATE]', {
+            kind: 'reclaim_waiting',
+            adminFoodShareId,
+            uid,
+          });
           return { kind: 'waiting' as const };
         }
         // status === WAITING && waitingUserId === other user → fall through and match.
@@ -199,11 +226,11 @@ export async function joinAdminFoodShare(
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        console.log('[MATCH REQUEST CREATE]', {
+        console.log('[SHARE CREATE]', {
+          kind: 'first_seat',
           path: requestPath,
-          userId: uid,
+          uid,
           status: 'WAITING',
-          authUid: uid,
         });
         return { kind: 'waiting' as const };
       }
@@ -217,8 +244,6 @@ export async function joinAdminFoodShare(
         'matchRequests',
         `${adminFoodShareId}_${waitingUserId}`,
       );
-      const partnerPath = `matchRequests/${adminFoodShareId}_${waitingUserId}`;
-      console.log('[MATCH REQUEST PATH]', partnerPath);
       // Do NOT tx.get(partnerRequestRef): rules deny reading another user's request.
       // Create/update partner MATCHED via set(merge) — allowed by partner match rules.
 
@@ -243,13 +268,6 @@ export async function joinAdminFoodShare(
         },
         { merge: true },
       );
-      console.log('[MATCH REQUEST CREATE]', {
-        path: requestPath,
-        userId: uid,
-        status: 'MATCHED',
-        authUid: uid,
-        matchId,
-      });
       tx.set(requestRef, {
         adminFoodShareId,
         userId: uid,
@@ -260,6 +278,12 @@ export async function joinAdminFoodShare(
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      console.log('[MATCH TRANSACTION]', {
+        phase: 'second_seat',
+        matchId,
+        partnerUid: waitingUserId,
+        uid,
+      });
 
       return {
         kind: 'matched' as const,
@@ -268,6 +292,13 @@ export async function joinAdminFoodShare(
       };
     });
   } catch (e) {
+    console.log('[MATCH FAILURE]', {
+      phase: 'transaction',
+      adminFoodShareId,
+      uid,
+      error: e instanceof Error ? e.message : String(e),
+      code: (e as { code?: string })?.code,
+    });
     const readable = getReadableErrorMessage(e) || FOOD_SHARE_ERRORS.unableToJoin;
     return {
       ok: false,
@@ -276,11 +307,10 @@ export async function joinAdminFoodShare(
   }
 
   if (txResult.kind === 'waiting') {
-    console.log('[MATCH FLOW STEP]', {
-      step: 'waiting_for_partner',
+    console.log('[MATCH SUCCESS]', {
+      kind: 'waiting_for_partner',
       adminFoodShareId,
-      userId: uid,
-      nextTrigger: 'second_user_likes_same_adminFoodShareId',
+      uid,
     });
     const shareSnap = await getDoc(shareRef);
     const foodName =
@@ -293,24 +323,17 @@ export async function joinAdminFoodShare(
       foodName,
       adminFoodShareId,
     }).then(() => {
-      console.log('[MATCH FLOW STEP]', {
+      console.log('[LISTENER UPDATE]', {
         step: 'waiting_inbox_notification_sent',
         adminFoodShareId,
-        userId: uid,
+        uid,
         deepLink: USER_ROUTES.foodShareWaiting(adminFoodShareId),
       });
-    });
-    console.log('[MATCH FLOW STEP]', {
-      step: 'waiting_complete',
-      matched: false,
-      payment: false,
-      chat: false,
-      order: false,
-      redirect: 'food-share-waiting',
     });
     return { ok: true, matched: false, adminFoodShareId };
   }
 
+  try {
   const shareSnap = await getDoc(shareRef);
   if (!shareSnap.exists()) {
     return { ok: false, error: 'Meal share not found.' };
@@ -326,16 +349,23 @@ export async function joinAdminFoodShare(
   );
 
   const partnerUid = txResult.partnerUid;
+  const partnerFirstNameFromQueue = txResult.partnerFirstName;
   const [u0, u1] = sortedPair(partnerUid, uid);
   const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
   const matchChatId = matchId;
 
-  const [nameA, nameB, photoA, photoB] = await Promise.all([
-    resolveFirstName(u0),
-    resolveFirstName(u1),
-    resolvePhotoUrl(u0),
-    resolvePhotoUrl(u1),
-  ]);
+  // Rules only allow reading own users/{uid}. Never getDoc the partner profile —
+  // use queue/tx first names and own photo only (fixes second-user join failure).
+  let myPhoto: string | null = null;
+  try {
+    myPhoto = await resolvePhotoUrl(uid);
+  } catch {
+    myPhoto = null;
+  }
+  const nameA = u0 === uid ? myFirstName : partnerFirstNameFromQueue;
+  const nameB = u1 === uid ? myFirstName : partnerFirstNameFromQueue;
+  const photoA = u0 === uid ? myPhoto : null;
+  const photoB = u1 === uid ? myPhoto : null;
 
   const matchRef = doc(db, 'matches', matchId);
   const existingMatch = await getDoc(matchRef);
@@ -383,19 +413,12 @@ export async function joinAdminFoodShare(
       deliveredAt: null,
       readAt: null,
     }, { merge: false }).catch(() => undefined);
-    console.log('[MATCH FOUND]', {
+    console.log('[MATCH SUCCESS]', {
       matchId,
       adminFoodShareId,
       users: [u0, u1],
       lifecycle: 'WAITING_FOR_PAYMENT',
       matchChatId,
-      chatCreated: true,
-      orderCreated: false,
-    });
-    console.log('[MATCH FLOW STEP]', {
-      step: 'match_doc_created_awaiting_payment',
-      matchId,
-      nextStep: 'navigate_to_payment_screen',
     });
   } else {
     await setDoc(doc(db, 'matchChats', matchChatId), {
@@ -420,7 +443,7 @@ export async function joinAdminFoodShare(
       deliveredAt: null,
       readAt: null,
     }, { merge: false }).catch(() => undefined);
-    console.log('[MATCH FOUND]', {
+    console.log('[MATCH SUCCESS]', {
       matchId,
       adminFoodShareId,
       existing: true,
@@ -428,8 +451,7 @@ export async function joinAdminFoodShare(
     });
   }
 
-  const partnerFirstName =
-    uid === u0 ? nameB : uid === u1 ? nameA : txResult.partnerFirstName;
+  const partnerFirstName = partnerFirstNameFromQueue;
 
   void notifyPairingAwaitingPayment({
     recipientUid: partnerUid,
@@ -469,6 +491,20 @@ export async function joinAdminFoodShare(
     costBreakdown,
     adminFoodShareId,
   };
+  } catch (e) {
+    console.log('[MATCH FAILURE]', {
+      phase: 'post_transaction_match_doc',
+      adminFoodShareId,
+      uid,
+      error: e instanceof Error ? e.message : String(e),
+      code: (e as { code?: string })?.code,
+    });
+    const readable = getReadableErrorMessage(e) || FOOD_SHARE_ERRORS.unableToJoin;
+    return {
+      ok: false,
+      error: foodShareErrorMessage(readable, FOOD_SHARE_ERRORS.unableToJoin),
+    };
+  }
 }
 
 export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShareMatchDoc {
