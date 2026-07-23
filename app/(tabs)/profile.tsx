@@ -944,18 +944,6 @@ export default function ProfileScreen() {
             {(
               [
                 {
-                  key: 'terms',
-                  label: 'Terms',
-                  icon: 'description' as const,
-                  onPress: () => router.push('/terms'),
-                },
-                {
-                  key: 'privacy',
-                  label: 'Privacy',
-                  icon: 'shield' as const,
-                  onPress: () => router.push('/privacy'),
-                },
-                {
                   key: 'support',
                   label: 'Customer Support',
                   icon: 'headset-mic' as const,
@@ -966,6 +954,18 @@ export default function ProfileScreen() {
                   label: 'Complaint',
                   icon: 'flag' as const,
                   onPress: () => router.push('/complaint'),
+                },
+                {
+                  key: 'terms',
+                  label: 'Terms',
+                  icon: 'description' as const,
+                  onPress: () => router.push('/terms'),
+                },
+                {
+                  key: 'privacy',
+                  label: 'Privacy',
+                  icon: 'shield' as const,
+                  onPress: () => router.push('/privacy'),
                 },
                 {
                   key: 'guidelines',

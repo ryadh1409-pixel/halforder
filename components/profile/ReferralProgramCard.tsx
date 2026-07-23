@@ -49,9 +49,21 @@ export function ReferralProgramCard({ uid, pal }: Props) {
 
   const shareInvite = async () => {
     if (!stats) return;
-    const message = `Join me on HalfOrder! Use my code ${stats.referralCode} or open ${stats.inviteLink}`;
+    const message = `🍽️ Join me on HalfOrder!
+
+Save money by sharing meals with people nearby.
+
+🎁 Use my referral code:
+${stats.referralCode}
+
+📲 Download the app:
+https://halforder.app/download/
+
+After installing HalfOrder, enter my referral code during sign up to receive the referral benefits.
+
+See you on HalfOrder!`;
     try {
-      await Share.share({ message, url: stats.inviteLink, title: 'Invite Friends' });
+      await Share.share({ message, title: 'Invite Friends' });
     } catch {
       showError('Could not open share sheet.');
     }
