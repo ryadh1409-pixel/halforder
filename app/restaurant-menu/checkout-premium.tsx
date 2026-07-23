@@ -723,15 +723,6 @@ export default function CheckoutPremiumScreen() {
 
         <CheckoutPriceBreakdown lines={priceLines} />
 
-        <Pressable
-          {...checkoutPressableProps}
-          onPress={() =>
-            router.push(`/restaurant-menu/cart?restaurantId=${encodeURIComponent(restaurantId)}` as never)
-          }
-        >
-          <Text style={styles.classicLink}>Open classic cart breakdown</Text>
-        </Pressable>
-
         {/* Space for pinned footer */}
         <View style={{ height: 190 }} />
       </Animated.ScrollView>
