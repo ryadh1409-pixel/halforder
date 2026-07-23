@@ -27,6 +27,7 @@ type Props = {
   qtyForItem: (id: string) => number;
   onItemPress: (item: DisplayMenuItem) => void;
   onItemAdd: (item: DisplayMenuItem) => void;
+  onItemRemove?: (item: DisplayMenuItem) => void;
   containerStyle?: StyleProp<ViewStyle>;
 };
 
@@ -37,6 +38,7 @@ export function MenuHorizontalCarousel({
   qtyForItem,
   onItemPress,
   onItemAdd,
+  onItemRemove,
   containerStyle,
 }: Props) {
   if (items.length === 0) return null;
@@ -50,6 +52,14 @@ export function MenuHorizontalCarousel({
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onItemAdd(item);
       }}
+      onRemove={
+        onItemRemove
+          ? () => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onItemRemove(item);
+            }
+          : undefined
+      }
     />
   );
 

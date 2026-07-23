@@ -18,12 +18,13 @@ type Props = {
   qty: number;
   onPress: () => void;
   onAdd: () => void;
+  onRemove?: () => void;
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Uber Eats menu row — copy left, large image + floating + on the right. */
-function MenuItemRowCardInner({ item, qty, onPress, onAdd }: Props) {
+function MenuItemRowCardInner({ item, qty, onPress, onAdd, onRemove }: Props) {
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -86,6 +87,21 @@ function MenuItemRowCardInner({ item, qty, onPress, onAdd }: Props) {
             <Text style={styles.imagePhTxt}>🍽</Text>
           </View>
         )}
+        {qty > 0 && onRemove ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Remove one ${item.name}`}
+            style={[styles.plusBtn, styles.minusBtn]}
+            hitSlop={12}
+            onPress={(e) => {
+              e.stopPropagation();
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onRemove();
+            }}
+          >
+            <Text style={styles.plusTxt}>−</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Add ${item.name}`}
@@ -179,6 +195,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: UE.bg,
+  },
+  minusBtn: {
+    right: 50,
   },
   plusTxt: { color: '#FFF', fontSize: 22, fontWeight: '500', marginTop: -2 },
 });

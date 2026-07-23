@@ -30,16 +30,25 @@ export type ItemSheetAddPayload = {
 type Props = {
   visible: boolean;
   item: DisplayMenuItem | null;
+  /** Current cart qty for this menu item (0 if not in cart). */
+  initialQty?: number;
   onClose: () => void;
   onAdd: (payload: ItemSheetAddPayload) => void;
 };
 
-export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
+export function ItemDetailsSheet({
+  visible,
+  item,
+  initialQty = 0,
+  onClose,
+  onAdd,
+}: Props) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(DISMISS_Y);
   const dragStartY = useSharedValue(0);
   const [qty, setQty] = useState(1);
   const [notes, setNotes] = useState('');
+  const editingExisting = initialQty > 0;
 
   const closeSheet = useCallback(() => {
     translateY.value = withSpring(DISMISS_Y, { damping: 22, stiffness: 220 }, (finished) => {
@@ -50,13 +59,13 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
 
   useEffect(() => {
     if (visible && item) {
-      setQty(1);
+      setQty(initialQty > 0 ? initialQty : 1);
       setNotes('');
       translateY.value = withSpring(0, { damping: 24, stiffness: 260 });
     } else if (!visible) {
       translateY.value = DISMISS_Y;
     }
-  }, [visible, item, translateY]);
+  }, [visible, item, initialQty, translateY]);
 
   const pan = useMemo(
     () =>
@@ -171,9 +180,10 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                 <View style={styles.qtyCtrl}>
                   <Pressable
                     style={styles.qtyBtn}
+                    accessibilityLabel="Decrease quantity"
                     onPress={() => {
                       void Haptics.selectionAsync();
-                      setQty((q) => Math.max(1, q - 1));
+                      setQty((q) => Math.max(0, q - 1));
                     }}
                   >
                     <Text style={styles.qtyBtnTxt}>−</Text>
@@ -181,6 +191,7 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                   <Text style={styles.qtyVal}>{qty}</Text>
                   <Pressable
                     style={styles.qtyBtn}
+                    accessibilityLabel="Increase quantity"
                     onPress={() => {
                       void Haptics.selectionAsync();
                       setQty((q) => q + 1);
@@ -212,7 +223,11 @@ export function ItemDetailsSheet({ visible, item, onClose, onAdd }: Props) {
                 }}
               >
                 <Text style={styles.ctaTxt}>
-                  Add to cart · ${lineTotal.toFixed(2)}
+                  {qty <= 0
+                    ? 'Remove from cart'
+                    : editingExisting
+                      ? `Update cart · $${lineTotal.toFixed(2)}`
+                      : `Add to cart · $${lineTotal.toFixed(2)}`}
                 </Text>
               </Pressable>
             </View>

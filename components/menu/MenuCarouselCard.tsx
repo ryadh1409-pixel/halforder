@@ -14,12 +14,13 @@ type Props = {
   qty: number;
   onPress: () => void;
   onAdd: () => void;
+  onRemove?: () => void;
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Compact dish tile for horizontal “Popular / Deals” carousels. */
-export function MenuCarouselCard({ item, qty, onPress, onAdd }: Props) {
+export function MenuCarouselCard({ item, qty, onPress, onAdd, onRemove }: Props) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -60,6 +61,19 @@ export function MenuCarouselCard({ item, qty, onPress, onAdd }: Props) {
           <View style={styles.offerBadge}>
             <Text style={styles.offerBadgeTxt}>{item.offerLabel}</Text>
           </View>
+        ) : null}
+        {qty > 0 && onRemove ? (
+          <Pressable
+            style={[styles.plusBtn, styles.minusBtn]}
+            hitSlop={10}
+            accessibilityLabel={`Remove one ${item.name}`}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onRemove();
+            }}
+          >
+            <Text style={styles.plusTxt}>−</Text>
+          </Pressable>
         ) : null}
         <Pressable
           style={styles.plusBtn}
@@ -137,6 +151,9 @@ const styles = StyleSheet.create({
     backgroundColor: RP.text,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  minusBtn: {
+    right: 46,
   },
   plusTxt: { color: '#fff', fontSize: 22, fontWeight: '500', marginTop: -2 },
   title: { marginTop: 8, fontSize: 14, fontWeight: '900', color: RP.text, minHeight: 36 },

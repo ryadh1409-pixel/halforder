@@ -21,6 +21,8 @@ type CartState = {
   items: CartLine[];
   activeRestaurantId: string | null;
   addToCart: (item: CartAddInput) => void;
+  /** Absolute qty for a menu item at a restaurant; replaces existing lines. qty <= 0 removes. */
+  setMenuItemQty: (item: CartAddInput & { qty: number }) => void;
   removeFromCart: (cartLineId: string) => void;
   clearCart: () => void;
   clearCartForRestaurant: (restaurantId: string) => void;
@@ -52,6 +54,32 @@ export const useCartStore = create<CartState>((set) => ({
       return {
         activeRestaurantId: item.restaurantId,
         items: [...state.items, { ...line, cartLineId: lineKey, qty: addQty }],
+      };
+    });
+  },
+
+  setMenuItemQty(item) {
+    const nextQty = Number.isFinite(item.qty) ? Math.floor(item.qty) : 0;
+    const lineKey = item.cartLineId ?? item.id;
+    set((state) => {
+      const without = state.items.filter(
+        (row) =>
+          !(row.restaurantId === item.restaurantId && row.id === item.id),
+      );
+      if (nextQty <= 0) {
+        return {
+          activeRestaurantId: item.restaurantId,
+          items: without,
+        };
+      }
+      const { qty: _omit, ...rest } = item;
+      const line = rest as Omit<CartLine, 'qty'>;
+      return {
+        activeRestaurantId: item.restaurantId,
+        items: [
+          ...without,
+          { ...line, cartLineId: lineKey, qty: nextQty },
+        ],
       };
     });
   },

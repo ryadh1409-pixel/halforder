@@ -99,7 +99,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     error,
     refetch,
   } = useMenu(restaurantId || null);
-  const { items: cart, addToCart } = useCart();
+  const { items: cart, addToCart, setMenuItemQty, removeFromCart } = useCart();
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('delivery');
   const [refreshing, setRefreshing] = useState(false);
@@ -305,13 +305,17 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       const it = selectedItem;
       if (!it) return;
       const fp = cartFingerprint(buildOptionsFingerprint(payload));
+      const hasCustom = Boolean(
+        payload.optionsSummary?.trim() || payload.notes?.trim(),
+      );
       const optParts = [
         payload.optionsSummary,
         payload.notes ? `Note: ${payload.notes}` : '',
       ].filter(Boolean);
-      addToCart({
+      // Absolute set — never stack qty on top of existing lines for this item.
+      setMenuItemQty({
         id: it.id,
-        cartLineId: `${it.id}__${fp}`,
+        cartLineId: hasCustom ? `${it.id}__${fp}` : it.id,
         name: it.name,
         price: it.price,
         image: it.image,
@@ -320,7 +324,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         qty: payload.qty,
       });
     },
-    [addToCart, restaurantId, selectedItem],
+    [restaurantId, selectedItem, setMenuItemQty],
   );
 
   const quickAdd = useCallback(
@@ -334,6 +338,18 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       });
     },
     [addToCart, restaurantId],
+  );
+
+  const quickRemove = useCallback(
+    (it: DisplayMenuItem) => {
+      const lines = cartForRestaurant.filter((c) => c.id === it.id);
+      if (lines.length === 0) return;
+      // Prefer the plain quick-add line; otherwise decrement the first matching line.
+      const target =
+        lines.find((c) => c.cartLineId === it.id) ?? lines[0];
+      removeFromCart(target.cartLineId);
+    },
+    [cartForRestaurant, removeFromCart],
   );
 
   const openRestaurantMenu = useCallback(() => {
@@ -438,6 +454,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
             onItemAdd={quickAdd}
+            onItemRemove={quickRemove}
           />
           <MenuHorizontalCarousel
             title="Deals"
@@ -446,6 +463,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
             onItemAdd={quickAdd}
+            onItemRemove={quickRemove}
           />
           <MenuHorizontalCarousel
             title="Recommended"
@@ -454,6 +472,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
             onItemAdd={quickAdd}
+            onItemRemove={quickRemove}
           />
           <MenuHorizontalCarousel
             title="Drinks"
@@ -462,6 +481,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
             onItemAdd={quickAdd}
+            onItemRemove={quickRemove}
           />
           <MenuHorizontalCarousel
             title="Desserts"
@@ -470,6 +490,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
             qtyForItem={qtyForBaseMenuItem}
             onItemPress={openSheet}
             onItemAdd={quickAdd}
+            onItemRemove={quickRemove}
           />
         </View>
 
@@ -501,6 +522,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                   qty={qtyForBaseMenuItem(it.id)}
                   onPress={() => openSheet(it)}
                   onAdd={() => quickAdd(it)}
+                  onRemove={() => quickRemove(it)}
                 />
               ))
             )}
@@ -524,6 +546,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       <ItemDetailsSheet
         visible={sheetOpen}
         item={selectedItem}
+        initialQty={selectedItem ? qtyForBaseMenuItem(selectedItem.id) : 0}
         onClose={closeSheet}
         onAdd={addFromSheet}
       />
