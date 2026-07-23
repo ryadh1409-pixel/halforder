@@ -24,7 +24,7 @@ export async function incrementGrowthOrders(): Promise<void> {
     );
   } catch (e) {
     logFirestoreUncaught(`growthMetrics/${todayKey()}`, 'getDoc/setDoc(merge)', e);
-    throw e;
+    // Admin-only metrics — never fail customer flows.
   }
 }
 
@@ -46,6 +46,6 @@ export async function incrementGrowthMatches(): Promise<void> {
     );
   } catch (e) {
     logFirestoreUncaught(`growthMetrics/${todayKey()}`, 'getDoc/setDoc(merge)', e);
-    throw e;
+    // Admin-only metrics — never fail customer flows.
   }
 }

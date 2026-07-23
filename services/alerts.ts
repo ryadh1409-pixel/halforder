@@ -34,6 +34,6 @@ export async function createAlert(
     await addDoc(collection(db, 'alerts'), data);
   } catch (e) {
     logFirestoreUncaught('alerts', 'addDoc', e);
-    throw e;
+    // Best-effort admin telemetry — never fail auth/order flows.
   }
 }

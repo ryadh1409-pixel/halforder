@@ -107,7 +107,7 @@ export async function claimReferralInboxRewards(uid: string): Promise<void> {
     }
   } catch (e) {
     logFirestoreUncaught(`users/${u}/referralInbox`, 'getDocs/writeBatch.commit', e);
-    throw e;
+    // Non-fatal — bootstrap uses void; do not surface permission noise.
   }
 }
 

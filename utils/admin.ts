@@ -50,6 +50,6 @@ export async function syncUserRoleToFirestore(user: User): Promise<void> {
       error,
     });
     logFirestoreUncaught(`users/${user.uid}`, 'setDoc(merge role/email)', error);
-    throw error;
+    // Callers use void — do not leave an uncaught rejection.
   }
 }

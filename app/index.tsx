@@ -57,11 +57,23 @@ export default function Index() {
           });
         }
       } catch {
-        if (!cancelled) {
-          setGate({
-            phase: 'ready',
-            onboardingDone: false,
-          });
+        // Config fetch can fail (rules/network). Do NOT force onboarding —
+        // fall back to the local completion flag so launch stays quiet.
+        try {
+          const obRaw = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
+          if (!cancelled) {
+            setGate({
+              phase: 'ready',
+              onboardingDone: obRaw === 'true',
+            });
+          }
+        } catch {
+          if (!cancelled) {
+            setGate({
+              phase: 'ready',
+              onboardingDone: false,
+            });
+          }
         }
       }
     })();

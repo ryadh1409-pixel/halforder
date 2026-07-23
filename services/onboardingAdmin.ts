@@ -144,7 +144,8 @@ export async function fetchOnboardingConfig(): Promise<OnboardingConfig> {
     console.error('request payload: (none)');
     console.error(`current authenticated user uid: ${uid}`);
     console.error('==========================');
-    throw error;
+    // Never reject launch/onboarding on a public config read failure.
+    return DEFAULT_ONBOARDING_CONFIG;
   }
 }
 
