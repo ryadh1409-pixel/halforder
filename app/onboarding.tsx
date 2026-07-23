@@ -67,13 +67,17 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchOnboardingConfig().then((cfg) => {
-      if (cancelled) return;
-      const enabled = cfg.slides.filter((s) => s.enabled);
-      setSlides(
-        (enabled.length ? enabled : DEFAULT_ONBOARDING_SLIDES).map(toSlideView),
-      );
-    });
+    void fetchOnboardingConfig()
+      .then((cfg) => {
+        if (cancelled) return;
+        const enabled = cfg.slides.filter((s) => s.enabled);
+        setSlides(
+          (enabled.length ? enabled : DEFAULT_ONBOARDING_SLIDES).map(toSlideView),
+        );
+      })
+      .catch(() => {
+        /* keep DEFAULT_ONBOARDING_SLIDES — appConfig may be unavailable offline */
+      });
     return () => {
       cancelled = true;
     };

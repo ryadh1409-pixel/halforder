@@ -1,4 +1,4 @@
-import { db, storage } from '@/services/firebase';
+import { auth, db, storage } from '@/services/firebase';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import {
   doc,
@@ -111,10 +111,41 @@ function mapConfig(data: Record<string, unknown> | undefined): OnboardingConfig 
 }
 
 export async function fetchOnboardingConfig(): Promise<OnboardingConfig> {
-  const snap = await getDoc(doc(db, 'appConfig', 'onboarding'));
-  return mapConfig(
-    snap.exists() ? (snap.data() as Record<string, unknown>) : undefined,
-  );
+  const path = 'appConfig/onboarding';
+  const uid = auth.currentUser?.uid ?? null;
+  console.log('==========================');
+  console.log('Firestore Operation');
+  console.log('==========================');
+  console.log('Operation: getDoc');
+  console.log('Collection: appConfig');
+  console.log('Document: onboarding');
+  console.log(`Full path: ${path}`);
+  console.log(`Current UID: ${uid}`);
+  console.log(`Authenticated: ${Boolean(uid)}`);
+  console.log('Method: getDoc');
+  console.log('Payload: (none)');
+  console.log('==========================');
+  try {
+    const snap = await getDoc(doc(db, 'appConfig', 'onboarding'));
+    return mapConfig(
+      snap.exists() ? (snap.data() as Record<string, unknown>) : undefined,
+    );
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    console.error('==========================');
+    console.error('Firestore Operation FAILED');
+    console.error('==========================');
+    console.error(`error.code: ${err?.code ?? 'unknown'}`);
+    console.error(`error.message: ${err?.message ?? String(error)}`);
+    console.error(`full path: ${path}`);
+    console.error('collection: appConfig');
+    console.error('document: onboarding');
+    console.error('operation: getDoc');
+    console.error('request payload: (none)');
+    console.error(`current authenticated user uid: ${uid}`);
+    console.error('==========================');
+    throw error;
+  }
 }
 
 export function subscribeOnboardingConfig(
