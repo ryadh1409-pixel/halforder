@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import { Platform, Share } from 'react-native';
 
-export const FOOD_SHARE_WEB_ORIGIN = 'https://ourfood.app';
+export const FOOD_SHARE_WEB_ORIGIN = 'https://halforder.app';
 
 export type FoodShareInviteMessageInput = {
   adminFoodShareId: string;
@@ -33,7 +33,7 @@ export function buildFoodShareAppInviteUrl(
   inviteId?: string | null,
 ): string {
   const id = encodeURIComponent(adminFoodShareId.trim());
-  const base = `ourfood://food-share/${id}`;
+  const base = `halforder://food-share/${id}`;
   if (inviteId?.trim()) {
     return `${base}?invite=${encodeURIComponent(inviteId.trim())}`;
   }
@@ -63,20 +63,25 @@ export function resolvePickupOrDeliveryLabel(raw: Record<string, unknown>): stri
   return deliveryShare > 0 ? 'Delivery' : 'Pickup / Delivery';
 }
 
+function isUsableLabel(value: string): boolean {
+  const t = value.trim();
+  return t.length > 0 && t !== '—' && t !== '-' && t.toLowerCase() !== 'n/a';
+}
+
 export function resolveShareDateLabel(raw: Record<string, unknown>): string {
   for (const key of ['pickupDate', 'deliveryDate', 'eventDate', 'date'] as const) {
     const v = raw[key];
-    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'string' && isUsableLabel(v)) return v.trim();
   }
-  return '—';
+  return '';
 }
 
 export function resolveShareTimeLabel(raw: Record<string, unknown>): string {
   for (const key of ['pickupTime', 'deliveryTime', 'eventTime', 'time'] as const) {
     const v = raw[key];
-    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'string' && isUsableLabel(v)) return v.trim();
   }
-  return '—';
+  return '';
 }
 
 function formatMoney(amount: number): string {
@@ -87,22 +92,28 @@ function formatMoney(amount: number): string {
 export function buildFoodShareInviteMessage(
   input: FoodShareInviteMessageInput,
 ): string {
-  return `🍔 Join me on OurFood
+  const lines = [
+    'Join me on HalfOrder',
+    '',
+    `Food: ${input.foodName}`,
+    `Restaurant: ${input.restaurantName}`,
+    '',
+    `Food share: ${formatMoney(input.sharedPrice)}`,
+    `Delivery share: ${formatMoney(input.deliveryShare)}`,
+    `Total per person: ${formatMoney(input.totalPerUser)}`,
+    '',
+    `Order type: ${input.pickupOrDelivery}`,
+  ];
 
-Food: ${input.foodName}
-Restaurant: ${input.restaurantName}
+  if (isUsableLabel(input.dateLabel)) {
+    lines.push(`Date: ${input.dateLabel.trim()}`);
+  }
+  if (isUsableLabel(input.timeLabel)) {
+    lines.push(`Time: ${input.timeLabel.trim()}`);
+  }
 
-Food Share: ${formatMoney(input.sharedPrice)}
-Delivery Share: ${formatMoney(input.deliveryShare)}
-Total Per Person: ${formatMoney(input.totalPerUser)}
-
-Pickup / Delivery: ${input.pickupOrDelivery}
-
-Date: ${input.dateLabel}
-Time: ${input.timeLabel}
-
-Tap to join:
-${input.inviteLink}`;
+  lines.push('', 'Tap to join:', input.inviteLink);
+  return lines.join('\n');
 }
 
 export function buildFoodShareWhatsAppUrl(message: string): string {
@@ -130,7 +141,7 @@ export async function shareFoodShareInviteViaShareSheet(
 ): Promise<boolean> {
   try {
     await Share.share({
-      title: 'Share Food Together',
+      title: 'Share a meal on HalfOrder',
       message,
       url: Platform.OS === 'ios' ? inviteLink : undefined,
     });
