@@ -261,11 +261,13 @@ export function ProfileOrdersSection({
                       : tone === 'orange'
                         ? { bg: 'rgba(168,85,247,0.2)', fg: '#C084FC' }
                         : { bg: 'rgba(255,255,255,0.1)', fg: pal.textSecondary };
-              const cancelEnabled = canCancelProfileOrder({
-                status: effectiveStatus,
-                deliveryStatus: effectiveDeliveryStatus,
-                paymentStatus: order.paymentStatus,
-              });
+              const cancelEnabled =
+                order.source !== 'food_share' &&
+                canCancelProfileOrder({
+                  status: effectiveStatus,
+                  deliveryStatus: effectiveDeliveryStatus,
+                  paymentStatus: order.paymentStatus,
+                });
               const isCancelling = Boolean(cancellingIds[order.id]);
               const orderTs = getOrderTimestamp(order);
               const expiresLabel = formatOrderExpiresIn(orderTs, nowMs);

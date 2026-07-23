@@ -115,13 +115,28 @@ export async function payFoodShareMatch(params: {
   );
 
   console.log('[STRIPE STEP] init_payment_sheet');
+  const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
+  const amountCents =
+    typeof data.amountCents === 'number' && Number.isFinite(data.amountCents)
+      ? Math.max(0, data.amountCents)
+      : 0;
   const initResult: InitPaymentSheetResult = await initPaymentSheet({
     paymentIntentClientSecret: clientSecret,
     ...(customerId && ephemeralKey
       ? { customerId, customerEphemeralKeySecret: ephemeralKey }
       : {}),
-    merchantDisplayName: params.merchantDisplayName ?? 'HalfOrder',
+    merchantDisplayName,
     returnURL: 'halforder://stripe-redirect',
+    applePay: {
+      merchantCountryCode: 'CA',
+      cartItems: [
+        {
+          paymentType: 'Immediate',
+          label: merchantDisplayName,
+          amount: (amountCents / 100).toFixed(2),
+        },
+      ],
+    },
   });
   if (initResult.error) {
     console.error('[STRIPE ERROR]', initResult.error);

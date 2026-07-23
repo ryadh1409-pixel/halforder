@@ -373,7 +373,7 @@ export function FoodShareHubDetailScreen({
               firstName={myParticipant?.firstName ?? 'You'}
               photoUrl={myParticipant?.photoUrl ?? null}
               status={
-                match.userPayments[myUid]?.paymentStatus === 'PAID' ? 'Paid' : 'Pending'
+                match.userPayments[myUid]?.paymentStatus === 'PAID' ? 'Paid' : 'Not paid yet'
               }
             />
             <ParticipantRow
@@ -383,7 +383,7 @@ export function FoodShareHubDetailScreen({
                 partnerParticipant &&
                 match.userPayments[partnerParticipant.uid]?.paymentStatus === 'PAID'
                   ? 'Paid'
-                  : 'Pending'
+                  : 'Not paid yet'
               }
             />
           </Section>

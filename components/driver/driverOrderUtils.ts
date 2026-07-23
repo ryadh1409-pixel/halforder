@@ -78,9 +78,9 @@ export function getNextDriverAction(status: OrderStatus):
 }
 
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-CA', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'CAD',
     minimumFractionDigits: 2,
   }).format(Number.isFinite(value) ? value : 0);
 }

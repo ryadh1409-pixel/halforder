@@ -7,6 +7,7 @@ export type FoodShareHubStatus =
   | 'waiting_partner'
   | 'match_found'
   | 'awaiting_payment'
+  | 'waiting_partner_payment'
   | 'active_chat'
   | 'completed'
   | 'cancelled';
@@ -31,6 +32,12 @@ export const HUB_STATUS_META: Record<
     label: 'Awaiting payment',
     emoji: '🟣',
     color: '#3B82F6',
+    priority: 3,
+  },
+  waiting_partner_payment: {
+    label: 'Waiting for partner to pay',
+    emoji: '🟣',
+    color: '#A855F7',
     priority: 3,
   },
   active_chat: {
@@ -112,9 +119,11 @@ export function resolveHubStatus(input: {
     lc === 'WAITING_FOR_PAYMENT_CONFIRMATION' ||
     lc === 'PAYMENT_CONFIRMED'
   ) {
+    if (allPaid) return 'active_chat';
+    // Current user already paid — wait for partner (never show Continue Payment).
+    if (myPaid) return 'waiting_partner_payment';
     if (!anyPaid) return 'match_found';
-    if (!myPaid || !allPaid) return 'awaiting_payment';
-    return 'active_chat';
+    return 'awaiting_payment';
   }
 
   if (request?.status === 'MATCHED') return 'match_found';
@@ -133,6 +142,9 @@ export function buildCountdownLabel(input: {
       return mins < 1 ? 'Just joined' : `Waiting ${mins}m`;
     }
     return 'Looking for partner';
+  }
+  if (input.status === 'waiting_partner_payment') {
+    return 'Waiting for partner to pay';
   }
   if (input.status === 'awaiting_payment' || input.status === 'match_found') {
     return 'Complete payment to activate chat';

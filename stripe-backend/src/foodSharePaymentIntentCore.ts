@@ -305,7 +305,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
       line_items: [
         {
           price_data: {
-            currency: "usd",
+            currency: "cad",
             product_data: {name: `${foodName} — meal share`},
             unit_amount: quote.totalCents,
           },
@@ -336,7 +336,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
         userId: uid,
         adminFoodShareId,
         amount: quote.totalCents,
-        currency: "usd",
+        currency: "cad",
         foodShareCostCents: quote.foodShareCents,
         deliveryShareCostCents: quote.deliveryShareCents,
         platformFeeCents: quote.platformFeeCents,
@@ -389,7 +389,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: quote.totalCents,
-    currency: "usd",
+    currency: "cad",
     customer: customerId,
     automatic_payment_methods: {enabled: true},
     metadata: {
@@ -407,7 +407,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
       userId: uid,
       adminFoodShareId,
       amount: quote.totalCents,
-      currency: "usd",
+      currency: "cad",
       foodShareCostCents: quote.foodShareCents,
       deliveryShareCostCents: quote.deliveryShareCents,
       platformFeeCents: quote.platformFeeCents,

@@ -13,7 +13,7 @@ function formatCompletedAt(ms: number | null | undefined): string {
 }
 
 function money(value: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(
     value || 0,
   );
 }

@@ -253,7 +253,7 @@ export const createPaymentIntent = functions
           line_items: [
             {
               price_data: {
-                currency: "usd",
+                currency: "cad",
                 product_data: {
                   name: restaurantName,
                 },
@@ -315,7 +315,7 @@ export const createPaymentIntent = functions
 
       const paymentIntent = await stripe.paymentIntents.create({
         amount,
-        currency: "usd",
+        currency: "cad",
         customer: customerId,
         automatic_payment_methods: {
           enabled: true,

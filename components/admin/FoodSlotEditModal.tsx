@@ -176,7 +176,7 @@ export function FoodSlotEditModal({
               value={draft.restaurantName}
               onChangeText={(t) => onChange({ restaurantName: t })}
             />
-            <Text style={styles.fieldLabel}>Total price (USD)</Text>
+            <Text style={styles.fieldLabel}>Total price (CAD)</Text>
             <AppTextInput
               style={styles.input}
               placeholder="0.00"

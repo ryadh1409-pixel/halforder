@@ -464,6 +464,11 @@ export default function ProfileScreen() {
             deliveryStatus: o.deliveryStatus,
           })),
       });
+      if (picked?.source === 'food_share') {
+        const matchId = picked.matchId || orderId;
+        router.push(USER_ROUTES.foodShareHubMatch(matchId) as never);
+        return;
+      }
       const href = customerOrderDetailHref(orderId);
       router.push(href);
     },

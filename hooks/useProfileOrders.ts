@@ -5,6 +5,7 @@ import { mergeProfileOrderRowsById } from '@/lib/profileOrderMerge';
 import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
 import { isProfileOrderCancelled } from '@/constants/profileOrders';
 import { DAY_MS, getOrderTimestamp } from '@/lib/userOrderFreshness';
+import { foodShareLifecycleToProfileFields } from '@/lib/foodShareOrderFollowUp';
 import { db } from '@/services/firebase';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -51,6 +52,10 @@ export type ProfileOrderRow = {
   completedAtMs?: number | null;
   marketplaceArchived?: boolean;
   imageUrl: string | null;
+  /** marketplace = orders collection; food_share = matches collection */
+  source?: 'marketplace' | 'food_share';
+  matchId?: string | null;
+  foodName?: string | null;
 };
 
 function profileOrdersSince24h(): Timestamp {
@@ -123,6 +128,69 @@ function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
       safeToMillis(d?.completedAtMs) ?? safeToMillis(d?.completedAt) ?? null,
     marketplaceArchived: d?.marketplaceArchived === true,
     imageUrl: imageFromItem || imageFromRestaurant,
+    source: 'marketplace',
+    matchId: null,
+    foodName: null,
+  };
+}
+
+function parseFoodShareMatchRow(id: string, d: DocumentData, uid: string): ProfileOrderRow | null {
+  const users = Array.isArray(d?.users)
+    ? d.users.filter((x: unknown): x is string => typeof x === 'string')
+    : [];
+  if (!users.includes(uid)) return null;
+
+  const createdAtMs =
+    safeToMillis(d?.createdAt) ?? safeToMillis(d?.createdAtMs) ?? 0;
+  if (createdAtMs > 0 && createdAtMs < Date.now() - DAY_MS) return null;
+
+  const lifecycle = typeof d?.lifecycle === 'string' ? d.lifecycle : 'ORDER_PLACED';
+  const fields = foodShareLifecycleToProfileFields(lifecycle);
+  const payments = (d?.userPayments ?? {}) as Record<string, unknown>;
+  const myPay = (payments[uid] ?? {}) as Record<string, unknown>;
+  const amountCents = typeof myPay.amount === 'number' ? myPay.amount : null;
+  const breakdown = (d?.costBreakdown ?? {}) as Record<string, unknown>;
+  const totalPerUser =
+    typeof breakdown.totalPerUser === 'number' ? breakdown.totalPerUser : 0;
+  const totalPrice = amountCents != null ? amountCents / 100 : totalPerUser;
+  const foodName = typeof d?.foodName === 'string' ? d.foodName : 'Food share';
+  const restaurantName =
+    (typeof d?.restaurantName === 'string' && d.restaurantName.trim()) ||
+    'Restaurant';
+  const imageUrl = typeof d?.foodImageUrl === 'string' ? d.foodImageUrl : null;
+  const orderId = typeof d?.orderId === 'string' && d.orderId ? d.orderId : id;
+
+  return {
+    id: orderId,
+    status: fields.status,
+    deliveryStatus:
+      (typeof d?.deliveryStatus === 'string' && d.deliveryStatus) ||
+      fields.deliveryStatus,
+    paymentStatus:
+      String(myPay.paymentStatus ?? '').toUpperCase() === 'PAID'
+        ? 'paid'
+        : fields.paymentStatus,
+    restaurantName: foodName !== 'Food share' ? `${foodName} · ${restaurantName}` : restaurantName,
+    totalPrice,
+    subtotal: totalPrice,
+    fees: 0,
+    deliveryAddress: 'Food share',
+    driverId: typeof d?.driverId === 'string' ? d.driverId : null,
+    assignedDriverId:
+      typeof d?.assignedDriverId === 'string' ? d.assignedDriverId : null,
+    driverName: null,
+    driverPhone: null,
+    itemsCount: 1,
+    createdAtMs: createdAtMs || Date.now(),
+    createdAt: d?.createdAt,
+    updatedAtMs: safeToMillis(d?.updatedAt) ?? (createdAtMs > 0 ? createdAtMs : null),
+    deliveredAtMs: fields.status === 'completed' ? createdAtMs : null,
+    completedAtMs: fields.status === 'completed' ? createdAtMs : null,
+    marketplaceArchived: false,
+    imageUrl,
+    source: 'food_share',
+    matchId: id,
+    foodName,
   };
 }
 
@@ -211,6 +279,7 @@ export function useProfileOrders(uid: string | null) {
   const userIdRowsRef = useRef<ProfileOrderRow[]>([]);
   const customerIdRowsRef = useRef<ProfileOrderRow[]>([]);
   const legacyRowsRef = useRef<ProfileOrderRow[]>([]);
+  const foodShareRowsRef = useRef<ProfileOrderRow[]>([]);
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current) {
@@ -236,6 +305,7 @@ export function useProfileOrders(uid: string | null) {
         ...userIdRowsRef.current,
         ...customerIdRowsRef.current,
         ...legacyRowsRef.current,
+        ...foodShareRowsRef.current,
       ]),
     );
   }, []);
@@ -244,14 +314,20 @@ export function useProfileOrders(uid: string | null) {
     if (!uid) return;
     setRefreshing(true);
     try {
-      const [userIdRows, customerIdRows, legacyRows] = await Promise.all([
+      const [userIdRows, customerIdRows, legacyRows, matchesSnap] = await Promise.all([
         fetchOrdersFor(uid, 'userId', { fromServer: true }),
         fetchOrdersFor(uid, 'customerId', { fromServer: true }),
         fetchLegacyOrders(uid, { fromServer: true }),
+        getDocsFromServer(
+          query(collection(db, 'matches'), where('users', 'array-contains', uid)),
+        ),
       ]);
       userIdRowsRef.current = userIdRows;
       customerIdRowsRef.current = customerIdRows;
       legacyRowsRef.current = legacyRows;
+      foodShareRowsRef.current = matchesSnap.docs
+        .map((d) => parseFoodShareMatchRow(d.id, d.data(), uid))
+        .filter((row): row is ProfileOrderRow => row != null);
       publishMergedRows();
       setErrorMessage(null);
       setIndexBuilding(false);
@@ -283,6 +359,7 @@ export function useProfileOrders(uid: string | null) {
       userIdRowsRef.current = [];
       customerIdRowsRef.current = [];
       legacyRowsRef.current = [];
+      foodShareRowsRef.current = [];
       setRows([]);
       setLoading(false);
       setErrorMessage(null);
@@ -357,6 +434,26 @@ export function useProfileOrders(uid: string | null) {
 
     attachListener('userId', userIdRowsRef);
     attachListener('customerId', customerIdRowsRef);
+
+    const foodShareGate = new QuerySnapshotFreshnessGate();
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, 'matches'), where('users', 'array-contains', uid)),
+        (snap) => {
+          if (!foodShareGate.shouldApply(snap.metadata.fromCache, snap.docs.length)) {
+            return;
+          }
+          foodShareRowsRef.current = snap.docs
+            .map((d) => parseFoodShareMatchRow(d.id, d.data(), uid))
+            .filter((row): row is ProfileOrderRow => row != null);
+          publishMergedRows();
+          setLoading(false);
+        },
+        () => {
+          /* food-share list is best-effort; don't block marketplace orders */
+        },
+      ),
+    );
 
     void (async () => {
       try {

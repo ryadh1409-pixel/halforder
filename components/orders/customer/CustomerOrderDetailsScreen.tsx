@@ -578,12 +578,6 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           >
             <Text style={styles.mapOpenBtnText}>Open in Apple Maps</Text>
           </Pressable>
-          <Pressable
-            style={styles.reorderBtn}
-            onPress={() => router.push('/(tabs)/index' as never)}
-          >
-            <Text style={styles.reorderBtnText}>Reorder from home</Text>
-          </Pressable>
 
           <Text style={[styles.metaStrong, { marginTop: 18 }]}>Help</Text>
           <Pressable

@@ -10,7 +10,7 @@ export type FoodSharePaymentQuote = {
   promoDiscountCents: number;
   totalCents: number;
   taxRate: number;
-  currency: "usd";
+  currency: "cad";
 };
 
 export type FoodSharePaymentStatus =
@@ -85,7 +85,7 @@ export function quoteFoodSharePayment(input: {
     promoDiscountCents,
     totalCents,
     taxRate,
-    currency: "usd",
+    currency: "cad",
   };
 }
 

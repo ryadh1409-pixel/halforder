@@ -10,7 +10,7 @@ describe('quoteFoodSharePayment', () => {
     expect(quote.foodShareCents).toBe(1000);
     expect(quote.deliveryShareCents).toBe(300);
     expect(quote.totalCents).toBe(1300);
-    expect(quote.currency).toBe('usd');
+    expect(quote.currency).toBe('cad');
   });
 
   it('rejects zero totals', () => {

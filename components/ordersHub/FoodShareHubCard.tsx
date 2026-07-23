@@ -1,4 +1,5 @@
 import { FoodShareInviteButton } from '@/components/foodShare/FoodShareInviteButton';
+import { FoodShareOrderDetailsPanel } from '@/components/ordersHub/FoodShareOrderDetailsPanel';
 import {
   HUB_STATUS_META,
   type FoodShareHubItem,
@@ -195,6 +196,14 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
             <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
           </View>
         ) : null;
+      case 'waiting_partner_payment':
+        return item.matchId ? (
+          <View style={styles.actions}>
+            <ActionBtn label="Partner Chat" onPress={() => router.push(USER_ROUTES.foodShareChat(item.matchId!) as never)} />
+            <ActionBtn label="View Match" onPress={() => router.push(USER_ROUTES.foodShareHubMatch(item.matchId!) as never)} />
+            <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
+          </View>
+        ) : null;
       case 'active_chat':
         return item.matchId ? (
           <View style={styles.actions}>
@@ -205,6 +214,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
                 onPress={() => router.push(orderRoomHref(driverChatOrderId, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)}
               />
             ) : null}
+            <FoodShareOrderDetailsPanel item={item} />
             <ActionBtn label="Cancel Share" danger busy={cancelling} onPress={handleCancelMatch} />
           </View>
         ) : null;
@@ -212,6 +222,7 @@ export function FoodShareHubCard({ item }: { item: FoodShareHubItem }) {
         return item.matchId ? (
           <View style={styles.actions}>
             <ActionBtn label="View Summary" onPress={() => router.push(USER_ROUTES.foodShareHubMatch(item.matchId!) as never)} />
+            <FoodShareOrderDetailsPanel item={item} />
           </View>
         ) : null;
       default:

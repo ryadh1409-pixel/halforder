@@ -35,7 +35,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 function money(value: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value || 0);
 }
 
 function elapsedLabel(acceptedAtMs: number | null): string {

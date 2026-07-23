@@ -1,13 +1,25 @@
 import { useAuth } from '../services/AuthContext';
 import { db } from '../services/firebase';
 import { blockUser, submitUserReport } from '../services/userSafety';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import {
+  FOOD_SHARE_ISSUE_REASONS,
+  type FoodShareIssueReason,
+} from '@/lib/foodShareOrderFollowUp';
 import { goBackFromProfileScreen } from '@/lib/profileBack';
+import { safeToMillis } from '@/utils/safeToMillis';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+} from 'firebase/firestore';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,8 +36,11 @@ const c = theme.colors;
 
 type PreviousOrder = {
   id: string;
+  kind: 'marketplace' | 'food_share';
   restaurantName: string;
+  foodName?: string;
   date: string;
+  createdAtMs: number;
   totalPrice: number;
   itemsCount?: number;
   /** Another participant on the order (for report/block). Null if only you or data missing. */
@@ -39,11 +54,23 @@ const REPORT_REASONS = [
   'Other',
 ] as const;
 
+function formatHelpDate(ms: number): string {
+  return new Date(ms).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export default function HelpScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [orders, setOrders] = useState<PreviousOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [issueOrder, setIssueOrder] = useState<PreviousOrder | null>(null);
+  const [issueReason, setIssueReason] = useState<FoodShareIssueReason>(
+    FOOD_SHARE_ISSUE_REASONS[0],
+  );
 
   const uid = user?.uid ?? null;
 
@@ -53,6 +80,8 @@ export default function HelpScreen() {
       return;
     }
     try {
+      const list: PreviousOrder[] = [];
+
       const ordersRef = collection(db, 'orders');
       const q = query(
         ordersRef,
@@ -60,29 +89,27 @@ export default function HelpScreen() {
         where('status', '==', 'completed'),
       );
       const snap = await getDocs(q);
-      const list: PreviousOrder[] = [];
       snap.docs.forEach((d) => {
         const data = d.data();
         const createdAt =
           data?.createdAt?.toMillis?.() ?? data?.createdAt ?? Date.now();
+        const createdMs =
+          typeof createdAt === 'number' ? createdAt : Date.now();
         const plist: string[] = Array.isArray(data?.participants)
           ? data.participants.filter((x): x is string => typeof x === 'string')
           : [];
         const hostId =
           typeof data?.hostId === 'string' && data.hostId ? data.hostId : null;
-        let otherUserId =
-          plist.find((pid) => pid !== uid) ?? null;
+        let otherUserId = plist.find((pid) => pid !== uid) ?? null;
         if (!otherUserId && hostId && hostId !== uid) {
           otherUserId = hostId;
         }
         list.push({
           id: d.id,
+          kind: 'marketplace',
           restaurantName: data?.restaurantName ?? 'Unknown',
-          date: new Date(createdAt).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          }),
+          date: formatHelpDate(createdMs),
+          createdAtMs: createdMs,
           totalPrice:
             typeof data?.totalPrice === 'number' ? data.totalPrice : 0,
           itemsCount:
@@ -90,6 +117,59 @@ export default function HelpScreen() {
           otherUserId,
         });
       });
+
+      // Food share matches (active + past) — exclude pure waiting-for-payment.
+      const matchesSnap = await getDocs(
+        query(collection(db, 'matches'), where('users', 'array-contains', uid)),
+      );
+      matchesSnap.docs.forEach((d) => {
+        const data = d.data() as Record<string, unknown>;
+        const lifecycle = String(data.lifecycle ?? '').toUpperCase();
+        if (
+          lifecycle === 'WAITING_FOR_PAYMENT' ||
+          lifecycle === 'WAITING_FOR_PAYMENT_CONFIRMATION' ||
+          lifecycle === 'CREATED' ||
+          lifecycle === 'WAITING_FOR_PARTNER'
+        ) {
+          return;
+        }
+        const users = Array.isArray(data.users)
+          ? data.users.filter((x): x is string => typeof x === 'string')
+          : [];
+        const otherUserId = users.find((id) => id !== uid) ?? null;
+        const payments = (data.userPayments ?? {}) as Record<string, unknown>;
+        const myPay = (payments[uid] ?? {}) as Record<string, unknown>;
+        const amountCents =
+          typeof myPay.amount === 'number' ? myPay.amount : null;
+        const breakdown = (data.costBreakdown ?? {}) as Record<string, unknown>;
+        const totalPerUser =
+          typeof breakdown.totalPerUser === 'number' ? breakdown.totalPerUser : 0;
+        const totalPrice =
+          amountCents != null ? amountCents / 100 : totalPerUser;
+        const createdMs =
+          safeToMillis(data.createdAt) ??
+          safeToMillis(data.createdAtMs) ??
+          Date.now();
+        const foodName =
+          typeof data.foodName === 'string' ? data.foodName : 'Food share';
+        const restaurantName =
+          typeof data.restaurantName === 'string'
+            ? data.restaurantName
+            : 'Restaurant';
+
+        list.push({
+          id: d.id,
+          kind: 'food_share',
+          restaurantName,
+          foodName,
+          date: formatHelpDate(createdMs),
+          createdAtMs: createdMs,
+          totalPrice,
+          otherUserId,
+        });
+      });
+
+      list.sort((a, b) => b.createdAtMs - a.createdAtMs);
       setOrders(list);
     } catch {
       setOrders([]);
@@ -119,6 +199,23 @@ export default function HelpScreen() {
       const url = `mailto:support@halforder.app?subject=${subject}&body=${body}`;
       Linking.openURL(url).catch(() => {});
     })();
+  };
+
+  const openSupportChat = (order?: PreviousOrder) => {
+    router.push('/customer-support' as never);
+    if (order) {
+      showSuccess(
+        `Support opened for ${order.foodName ?? order.restaurantName}`,
+      );
+    }
+  };
+
+  const submitFoodShareIssue = () => {
+    if (!issueOrder) return;
+    const order = issueOrder;
+    setIssueOrder(null);
+    showSuccess(`Issue noted: ${issueReason}`);
+    openSupportChat(order);
   };
 
   const handleReportUser = (order: PreviousOrder) => {
@@ -211,49 +308,117 @@ export default function HelpScreen() {
         ) : orders.length === 0 ? (
           <Text style={styles.emptyText}>No completed orders yet.</Text>
         ) : (
-          orders.map((order) => (
-            <View key={order.id} style={styles.orderCard}>
-              <Text style={styles.orderRestaurant}>{order.restaurantName}</Text>
-              <Text style={styles.orderDate}>{order.date}</Text>
-              <Text style={styles.orderTotal}>
-                Total: ${order.totalPrice.toFixed(2)}
-              </Text>
-              {order.itemsCount != null && (
-                <Text style={styles.orderItems}>Items: {order.itemsCount}</Text>
-              )}
-              {order.otherUserId ? (
+          orders.map((order) =>
+            order.kind === 'food_share' ? (
+              <View key={`fs_${order.id}`} style={styles.orderCard}>
+                <Text style={styles.shareBadge}>Food share</Text>
+                <Text style={styles.orderRestaurant}>
+                  {order.foodName ?? order.restaurantName}
+                </Text>
+                <Text style={styles.orderDate}>{order.date}</Text>
+                <Text style={styles.orderMeta}>{order.restaurantName}</Text>
+                <Text style={styles.orderTotal}>
+                  Amount paid: ${order.totalPrice.toFixed(2)}
+                </Text>
                 <View style={styles.safetyRow}>
                   <TouchableOpacity
                     style={styles.safetyBtn}
-                    onPress={() => handleReportUser(order)}
+                    onPress={() => {
+                      setIssueReason(FOOD_SHARE_ISSUE_REASONS[0]);
+                      setIssueOrder(order);
+                    }}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.safetyBtnText}>Report user</Text>
+                    <Text style={styles.safetyBtnText}>Report issue</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.safetyBtnDanger}
-                    onPress={() => handleBlockUser(order)}
+                    style={styles.supportBtnInline}
+                    onPress={() => openSupportChat(order)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.safetyBtnTextLight}>Block user</Text>
+                    <Text style={styles.supportBtnText}>Contact support</Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
-                <Text style={styles.reportHintMuted}>
-                  No other participant linked — use email support below.
+              </View>
+            ) : (
+              <View key={order.id} style={styles.orderCard}>
+                <Text style={styles.orderRestaurant}>{order.restaurantName}</Text>
+                <Text style={styles.orderDate}>{order.date}</Text>
+                <Text style={styles.orderTotal}>
+                  Total: ${order.totalPrice.toFixed(2)}
                 </Text>
-              )}
-              <TouchableOpacity
-                style={styles.supportBtn}
-                onPress={() => handleReportOrder(order)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.supportBtnText}>Email support</Text>
-              </TouchableOpacity>
-            </View>
-          ))
+                {order.itemsCount != null && (
+                  <Text style={styles.orderItems}>Items: {order.itemsCount}</Text>
+                )}
+                {order.otherUserId ? (
+                  <View style={styles.safetyRow}>
+                    <TouchableOpacity
+                      style={styles.safetyBtn}
+                      onPress={() => handleReportUser(order)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.safetyBtnText}>Report user</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.safetyBtnDanger}
+                      onPress={() => handleBlockUser(order)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.safetyBtnTextLight}>Block user</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.reportHintMuted}>
+                    No other participant linked — use email support below.
+                  </Text>
+                )}
+                <TouchableOpacity
+                  style={styles.supportBtn}
+                  onPress={() => handleReportOrder(order)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.supportBtnText}>Email support</Text>
+                </TouchableOpacity>
+              </View>
+            ),
+          )
         )}
       </ScrollView>
+
+      <Modal
+        visible={issueOrder != null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIssueOrder(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setIssueOrder(null)} />
+        <View style={styles.modalSheet}>
+          <Text style={styles.modalTitle}>Report an issue</Text>
+          <Text style={styles.modalSub}>
+            {issueOrder?.foodName ?? issueOrder?.restaurantName} · {issueOrder?.date}
+          </Text>
+          {FOOD_SHARE_ISSUE_REASONS.map((reason) => {
+            const active = reason === issueReason;
+            return (
+              <TouchableOpacity
+                key={reason}
+                style={[styles.reasonChip, active && styles.reasonChipOn]}
+                onPress={() => setIssueReason(reason)}
+              >
+                <Text style={[styles.reasonText, active && styles.reasonTextOn]}>
+                  {reason}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity style={styles.modalPrimary} onPress={submitFoodShareIssue}>
+            <Text style={styles.modalPrimaryText}>Continue to support</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalCancel} onPress={() => setIssueOrder(null)}>
+            <Text style={styles.modalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -300,6 +465,14 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  shareBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 11,
+    fontWeight: '800',
+    color: c.primary,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
   orderRestaurant: {
     fontSize: 16,
     fontWeight: '700',
@@ -308,6 +481,11 @@ const styles = StyleSheet.create({
   },
   orderDate: {
     fontSize: 14,
+    color: c.textMuted,
+    marginBottom: 4,
+  },
+  orderMeta: {
+    fontSize: 13,
     color: c.textMuted,
     marginBottom: 4,
   },
@@ -373,6 +551,16 @@ const styles = StyleSheet.create({
     backgroundColor: c.warningBackground,
     minHeight: theme.spacing.touchMin,
   },
+  supportBtnInline: {
+    paddingVertical: 12,
+    paddingHorizontal: theme.spacing.sm + 2,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: c.primary,
+    backgroundColor: c.warningBackground,
+    minHeight: theme.spacing.touchMin,
+    justifyContent: 'center',
+  },
   supportBtnText: {
     fontSize: 14,
     fontWeight: '600',
@@ -390,6 +578,72 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 16,
+    color: c.textMuted,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalSheet: {
+    backgroundColor: c.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderColor: c.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: c.text,
+  },
+  modalSub: {
+    fontSize: 13,
+    color: c.textMuted,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  reasonChip: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  reasonChipOn: {
+    borderColor: c.primary,
+    backgroundColor: c.chromeWash,
+  },
+  reasonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: c.text,
+  },
+  reasonTextOn: {
+    color: c.primary,
+  },
+  modalPrimary: {
+    marginTop: 8,
+    borderRadius: 12,
+    backgroundColor: c.primary,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalPrimaryText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: c.textOnPrimary,
+  },
+  modalCancel: {
+    marginTop: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: c.textMuted,
   },
 });
