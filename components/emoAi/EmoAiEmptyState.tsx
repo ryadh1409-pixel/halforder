@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const MASCOT = require('../../assets/emo-ai/hero.png');
+const MASCOT = require('../../assets/emo-ai/tab-avatar.png');
 
 type Props = {
   onStart: () => void;
@@ -31,9 +31,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   mascot: {
-    width: 140,
-    height: 140,
-    borderRadius: 28,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     marginBottom: 20,
     backgroundColor: EMO_AI_SURFACE,
     borderWidth: 1,

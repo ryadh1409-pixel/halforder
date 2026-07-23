@@ -660,27 +660,6 @@ export default function ProfileScreen() {
                 <Text style={dynamicStyles.primaryButtonText}>Sign In</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.footer}>
-              <Text style={dynamicStyles.footerMuted}>❤️ Made with love in Toronto</Text>
-              <Text style={dynamicStyles.footerMuted}>v1.0</Text>
-              <Text style={[dynamicStyles.bodyMuted, { marginTop: 12 }]}>
-              Users can report inappropriate behavior.{' '}
-              <Text
-                onPress={() => void Linking.openURL(LEGAL_URLS.safetyCommunityGuidelines)}
-                style={dynamicStyles.link}
-              >
-                Safety guidelines
-              </Text>
-            </Text>
-            <View style={styles.legalLinksRow}>
-              <TouchableOpacity onPress={openTerms} accessibilityRole="link">
-                <Text style={styles.legalLinkWeb}>Terms</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={openPrivacy} accessibilityRole="link">
-                <Text style={styles.legalLinkWeb}>Privacy</Text>
-              </TouchableOpacity>
-            </View>
-            </View>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1081,21 +1060,6 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          <View style={styles.footer}>
-            <Text style={dynamicStyles.footerMuted}>❤️ Made with love in Toronto</Text>
-            <Text style={dynamicStyles.footerMuted}>v1.0</Text>
-            <Text style={[dynamicStyles.bodyMuted, { textAlign: 'center', marginTop: 4 }]}>
-              Users can report inappropriate behavior.
-            </Text>
-            <View style={styles.legalLinksRow}>
-              <TouchableOpacity onPress={openTerms} accessibilityRole="link">
-                <Text style={styles.legalLinkWeb}>Terms</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={openPrivacy} accessibilityRole="link">
-                <Text style={styles.legalLinkWeb}>Privacy</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
       </ScrollView>
       <DeleteAccountModal

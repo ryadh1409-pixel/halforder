@@ -20,7 +20,7 @@ import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import type { EmoCompanionSnapshot, EmoEmotion } from './emoAiCompanionTypes';
 import { randBetween } from './emoAiEmotionEngine';
 
-const HERO = require('../../../assets/emo-ai/hero.png');
+const HERO = require('../../../assets/emo-ai/chat-header.png');
 
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -579,7 +579,7 @@ function EmoAiLiveCompanionInner({
     <View style={styles.root}>
       <Animated.View style={[styles.scene, sceneStyle]}>
         <Animated.View style={[StyleSheet.absoluteFill, hoodieStyle]}>
-          <Image source={HERO} style={styles.image} contentFit="cover" />
+          <Image source={HERO} style={styles.image} contentFit="contain" />
         </Animated.View>
 
         <Animated.View style={[styles.hairShim, hairStyle]} pointerEvents="none" />
