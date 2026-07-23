@@ -87,34 +87,51 @@ function MenuItemRowCardInner({ item, qty, onPress, onAdd, onRemove }: Props) {
             <Text style={styles.imagePhTxt}>🍽</Text>
           </View>
         )}
-        {qty > 0 && onRemove ? (
+        {qty > 0 ? (
+          <View style={styles.stepper}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Remove one ${item.name}`}
+              style={styles.stepBtn}
+              hitSlop={8}
+              onPress={(e) => {
+                e.stopPropagation();
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onRemove?.();
+              }}
+            >
+              <Text style={styles.stepTxt}>−</Text>
+            </Pressable>
+            <Text style={styles.stepQty}>{qty}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${item.name}`}
+              style={styles.stepBtn}
+              hitSlop={8}
+              onPress={(e) => {
+                e.stopPropagation();
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onAdd();
+              }}
+            >
+              <Text style={styles.stepTxt}>+</Text>
+            </Pressable>
+          </View>
+        ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Remove one ${item.name}`}
-            style={[styles.plusBtn, styles.minusBtn]}
+            accessibilityLabel={`Add ${item.name}`}
+            style={styles.plusBtn}
             hitSlop={12}
             onPress={(e) => {
               e.stopPropagation();
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onRemove();
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onAdd();
             }}
           >
-            <Text style={styles.plusTxt}>−</Text>
+            <Text style={styles.plusTxt}>+</Text>
           </Pressable>
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Add ${item.name}`}
-          style={styles.plusBtn}
-          hitSlop={12}
-          onPress={(e) => {
-            e.stopPropagation();
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onAdd();
-          }}
-        >
-          <Text style={styles.plusTxt}>+</Text>
-        </Pressable>
+        )}
       </View>
     </AnimatedPressable>
   );
@@ -190,14 +207,38 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: UE.black,
+    backgroundColor: '#171923',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: UE.bg,
-  },
-  minusBtn: {
-    right: 50,
+    borderColor: '#FFFFFF',
   },
   plusTxt: { color: '#FFF', fontSize: 22, fontWeight: '500', marginTop: -2 },
+  stepper: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#171923',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    paddingHorizontal: 2,
+  },
+  stepBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepTxt: { color: '#FFFFFF', fontSize: 20, fontWeight: '600', marginTop: -1 },
+  stepQty: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    minWidth: 22,
+    textAlign: 'center',
+  },
 });

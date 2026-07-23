@@ -62,29 +62,44 @@ export function MenuCarouselCard({ item, qty, onPress, onAdd, onRemove }: Props)
             <Text style={styles.offerBadgeTxt}>{item.offerLabel}</Text>
           </View>
         ) : null}
-        {qty > 0 && onRemove ? (
+        {qty > 0 ? (
+          <View style={styles.stepper}>
+            <Pressable
+              style={styles.stepBtn}
+              hitSlop={8}
+              accessibilityLabel={`Remove one ${item.name}`}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onRemove?.();
+              }}
+            >
+              <Text style={styles.stepTxt}>−</Text>
+            </Pressable>
+            <Text style={styles.stepQty}>{qty}</Text>
+            <Pressable
+              style={styles.stepBtn}
+              hitSlop={8}
+              accessibilityLabel={`Add ${item.name}`}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onAdd();
+              }}
+            >
+              <Text style={styles.stepTxt}>+</Text>
+            </Pressable>
+          </View>
+        ) : (
           <Pressable
-            style={[styles.plusBtn, styles.minusBtn]}
+            style={styles.plusBtn}
             hitSlop={10}
-            accessibilityLabel={`Remove one ${item.name}`}
             onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onRemove();
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onAdd();
             }}
           >
-            <Text style={styles.plusTxt}>−</Text>
+            <Text style={styles.plusTxt}>+</Text>
           </Pressable>
-        ) : null}
-        <Pressable
-          style={styles.plusBtn}
-          hitSlop={10}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onAdd();
-          }}
-        >
-          <Text style={styles.plusTxt}>+</Text>
-        </Pressable>
+        )}
       </View>
       <Text style={styles.title} numberOfLines={2}>
         {item.name}
@@ -148,14 +163,40 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: RP.text,
+    backgroundColor: '#171923',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  plusTxt: { color: '#fff', fontSize: 22, fontWeight: '500', marginTop: -2 },
+  stepper: {
+    position: 'absolute',
+    right: 4,
+    bottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#171923',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    paddingHorizontal: 2,
+  },
+  stepBtn: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  minusBtn: {
-    right: 46,
+  stepTxt: { color: '#FFFFFF', fontSize: 18, fontWeight: '600', marginTop: -1 },
+  stepQty: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    minWidth: 18,
+    textAlign: 'center',
   },
-  plusTxt: { color: '#fff', fontSize: 22, fontWeight: '500', marginTop: -2 },
   title: { marginTop: 8, fontSize: 14, fontWeight: '900', color: RP.text, minHeight: 36 },
   price: { marginTop: 4, fontSize: 14, fontWeight: '800', color: RP.text },
   desc: {

@@ -9,11 +9,15 @@ import {
 import { isNativePaymentsAndMapsSupported } from '@/constants/runtimeEnvironment';
 import { httpsCallable } from 'firebase/functions';
 import React from 'react';
+import { Platform } from 'react-native';
 import { auth, functions } from '@/services/firebase';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { logError } from '@/utils/errorLogger';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
+
+/** Prevents duplicate PaymentIntent creation / double PaymentSheet present. */
+let paymentSheetInFlight = false;
 
 function assertNonAnonymousPaymentUser(): void {
   const currentUser = auth.currentUser;
@@ -49,6 +53,10 @@ function parsePaymentIntentId(clientSecret: string): string {
   return idx > 0 ? clientSecret.slice(0, idx) : clientSecret;
 }
 
+function amountDollarsLabel(cents: number): string {
+  return (Math.max(0, cents) / 100).toFixed(2);
+}
+
 export async function initializePaymentSheet(
   params: InitSheetParams,
 ): Promise<InitSheetResult> {
@@ -59,6 +67,8 @@ export async function initializePaymentSheet(
 
   assertNonAnonymousPaymentUser();
   await auth.currentUser?.getIdToken(true);
+
+  const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
 
   const fn = httpsCallable(functions, 'createPaymentIntent');
   const result = await fn({
@@ -86,10 +96,38 @@ export async function initializePaymentSheet(
     ...(customerId && ephemeralKey
       ? { customerId, customerEphemeralKeySecret: ephemeralKey }
       : {}),
-    merchantDisplayName: params.merchantDisplayName ?? 'HalfOrder',
+    merchantDisplayName,
     returnURL: 'halforder://stripe-redirect',
+    allowsDelayedPaymentMethods: false,
     applePay: {
       merchantCountryCode: 'CA',
+      cartItems: [
+        {
+          paymentType: 'Immediate',
+          label: merchantDisplayName,
+          amount: amountDollarsLabel(amount),
+        },
+      ],
+    },
+    // Native sheet chrome aligned with HalfOrder dark UI (PaymentSheet only).
+    appearance: {
+      colors: {
+        primary: '#A855F7',
+        background: '#171923',
+        componentBackground: '#1C1F2E',
+        componentBorder: 'rgba(168, 85, 247, 0.28)',
+        componentDivider: 'rgba(168, 85, 247, 0.16)',
+        primaryText: '#FFFFFF',
+        secondaryText: '#B7BDC9',
+        componentText: '#FFFFFF',
+        placeholderText: '#7D8493',
+        icon: '#FFFFFF',
+        error: '#EF4444',
+      },
+      shapes: {
+        borderRadius: 12,
+        borderWidth: 1,
+      },
     },
   });
   if (initResult.error) {
@@ -108,6 +146,7 @@ export async function initializePaymentSheet(
         msg: 'payment_flow_sheet_initialized',
         orderId: params.orderId,
         paymentIntentId,
+        platform: Platform.OS,
       }),
     );
   }
@@ -118,19 +157,35 @@ export async function initializePaymentSheet(
 export async function openPaymentSheet(
   params: InitSheetParams,
 ): Promise<OpenPaymentSheetResult> {
-  const init = await initializePaymentSheet(params);
-  const presentResult: PresentPaymentSheetResult = await presentPaymentSheet();
-  if (presentResult.error) {
-    if (presentResult.error.code === 'Canceled') {
-      return { status: 'canceled', ...init };
-    }
+  if (paymentSheetInFlight) {
     return {
       status: 'failed',
-      message: getUserFriendlyError(presentResult.error, { context: 'payment' }),
-      ...init,
+      message: 'Payment is already in progress.',
+      clientSecret: '',
+      paymentIntentId: '',
     };
   }
-  return { status: 'success', ...init };
+
+  paymentSheetInFlight = true;
+  try {
+    const init = await initializePaymentSheet(params);
+
+    // Present the native sheet as soon as init completes (Apple Pay / Face ID).
+    const presentResult: PresentPaymentSheetResult = await presentPaymentSheet();
+    if (presentResult.error) {
+      if (presentResult.error.code === 'Canceled') {
+        return { status: 'canceled', ...init };
+      }
+      return {
+        status: 'failed',
+        message: getUserFriendlyError(presentResult.error, { context: 'payment' }),
+        ...init,
+      };
+    }
+    return { status: 'success', ...init };
+  } finally {
+    paymentSheetInFlight = false;
+  }
 }
 
 type StripeProviderProps = React.ComponentProps<typeof StripeProvider>;
@@ -144,4 +199,3 @@ export function AppStripeProvider(props: StripeProviderProps) {
 }
 
 export { useStripe };
-

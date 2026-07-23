@@ -7,14 +7,14 @@ import { useAuth } from '@/services/AuthContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
 import { openPaymentSheet } from '@/services/stripe';
-import { getUserFriendlyError, showUserError } from '@/services/errors';
-import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '@/services/errors';
+import { showError } from '@/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Phase = 'loading' | 'paying' | 'confirming' | 'error' | 'done';
+type Phase = 'loading' | 'paying' | 'confirming' | 'error';
 
 /** Root checkout — outside `(tabs)` so no tab chrome appears during payment. */
 export default function CheckoutScreen() {
@@ -25,12 +25,20 @@ export default function CheckoutScreen() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
   const started = useRef(false);
+  /** Blocks duplicate PaymentSheet / PaymentIntent from double taps. */
+  const processingRef = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   const awaitingPaid = phase === 'confirming';
   const { timedOut, listening, navigateToLiveOrder } = useAwaitOrderPaidNavigation({
     orderId: orderIdTrimmed,
     enabled: awaitingPaid,
   });
+
+  const unlock = useCallback(() => {
+    processingRef.current = false;
+    setBusy(false);
+  }, []);
 
   const runCheckout = useCallback(async () => {
     const id = orderIdTrimmed;
@@ -39,6 +47,10 @@ export default function CheckoutScreen() {
       setMessage('Missing order or sign-in.');
       return;
     }
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setBusy(true);
+
     setPhase('loading');
     setMessage('');
     try {
@@ -46,11 +58,13 @@ export default function CheckoutScreen() {
       if (!auth.currentUser) {
         setPhase('error');
         setMessage('Missing order or sign-in.');
+        unlock();
         return;
       }
       if (auth.currentUser.isAnonymous) {
         await auth.signOut();
         showError('Please sign in to complete payment');
+        unlock();
         router.replace('/(auth)/login');
         return;
       }
@@ -58,10 +72,11 @@ export default function CheckoutScreen() {
       if (!order?.restaurantId) {
         setPhase('error');
         setMessage('Order not found.');
+        unlock();
         return;
       }
 
-      // Platform admin Stripe only — no restaurant Connect gate.
+      // Preparing → native PaymentSheet / Apple Pay (presented once).
       setPhase('paying');
       const result = await openPaymentSheet({
         amount: Math.round(order.totalPrice * 100),
@@ -72,18 +87,20 @@ export default function CheckoutScreen() {
       if (result.status === 'redirected') {
         setPhase('paying');
         setMessage('Redirecting to secure Stripe Checkout…');
+        // Keep locked while redirecting.
         return;
       }
 
       if (result.status === 'canceled') {
-        setPhase('done');
-        setMessage('Payment was canceled. You can try again anytime.');
+        logPaymentNavigation('checkout_payment_canceled', { orderId: id });
+        unlock();
+        router.back();
         return;
       }
       if (result.status === 'failed') {
         setPhase('error');
         setMessage(result.message || 'Payment failed. Please try again.');
-        showError('Payment failed.');
+        unlock();
         return;
       }
 
@@ -99,21 +116,25 @@ export default function CheckoutScreen() {
 
       logPaymentNavigation('checkout_payment_success', { orderId: id });
       setPhase('confirming');
-      setMessage('Payment submitted. Confirming your order…');
-      showSuccess('Payment submitted. Confirming your order…');
+      setMessage('Confirming your order…');
+      // Remain locked until this screen is replaced after webhook navigation.
     } catch (e) {
       console.warn('[checkout]', e);
       if (e instanceof Error && e.message === 'Please sign in to complete payment') {
         await auth.signOut();
         showError(getUserFriendlyError(e));
+        unlock();
         router.replace('/(auth)/login');
         return;
       }
       setPhase('error');
-      setMessage('Could not start payment. You can try again.');
-      showUserError(e, { context: 'payment' });
+      setMessage(
+        getUserFriendlyError(e, { context: 'payment' }) ||
+          'Could not start payment. You can try again.',
+      );
+      unlock();
     }
-  }, [orderIdTrimmed, user, router]);
+  }, [orderIdTrimmed, user, router, unlock]);
 
   useEffect(() => {
     if (started.current) return;
@@ -137,23 +158,28 @@ export default function CheckoutScreen() {
     navigateToLiveOrder(orderIdTrimmed, 'checkout_manual_timeout');
   }, [orderIdTrimmed, navigateToLiveOrder]);
 
+  const onRetry = useCallback(() => {
+    if (processingRef.current || busy) return;
+    void runCheckout();
+  }, [runCheckout, busy]);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <AppHeader title="Pay now" />
       <View style={styles.center}>
         {(phase === 'loading' || phase === 'paying') && (
           <>
-            <ActivityIndicator size="large" color="#22C55E" />
+            <ActivityIndicator size="large" color="#A855F7" />
             <Text style={styles.hint}>
               {phase === 'paying'
-                ? message || 'Complete payment in the payment sheet…'
-                : 'Preparing secure payment…'}
+                ? message || 'Opening Apple Pay…'
+                : 'Preparing Apple Pay…'}
             </Text>
           </>
         )}
         {phase === 'confirming' && (
           <>
-            <ActivityIndicator size="large" color="#22C55E" />
+            <ActivityIndicator size="large" color="#A855F7" />
             <Text style={styles.title}>Confirming payment</Text>
             <Text style={styles.sub}>{confirmingHint}</Text>
             {timedOut && orderIdTrimmed ? (
@@ -165,25 +191,20 @@ export default function CheckoutScreen() {
         )}
         {phase === 'error' && (
           <>
-            <Text style={styles.title}>Checkout unavailable</Text>
+            <Text style={styles.title}>Payment unsuccessful</Text>
             <Text style={styles.sub}>{message}</Text>
-            <Pressable style={styles.button} onPress={() => void runCheckout()}>
+            <Pressable
+              style={[styles.button, busy && styles.buttonDisabled]}
+              onPress={onRetry}
+              disabled={busy}
+            >
               <Text style={styles.buttonText}>Try again</Text>
             </Pressable>
-            <Pressable style={styles.link} onPress={() => router.back()}>
+            <Pressable style={styles.link} onPress={() => router.back()} disabled={busy}>
               <Text style={styles.linkText}>Back</Text>
             </Pressable>
           </>
         )}
-        {phase === 'done' && message ? (
-          <>
-            <Text style={styles.title}>Payment update</Text>
-            <Text style={styles.sub}>{message}</Text>
-            <Pressable style={styles.button} onPress={() => router.back()}>
-              <Text style={styles.buttonText}>Back</Text>
-            </Pressable>
-          </>
-        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -204,12 +225,13 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 24,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#A855F7',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,
   },
+  buttonDisabled: { opacity: 0.55 },
   buttonText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   link: { marginTop: 16, padding: 8 },
-  linkText: { color: '#2563EB', fontWeight: '700' },
+  linkText: { color: '#A855F7', fontWeight: '700' },
 });
