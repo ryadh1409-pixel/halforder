@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtnDisabled: { opacity: 0.45 },
-  secondaryBtnText: { color: 'rgba(255,255,255,0.1)', fontWeight: '800', fontSize: 14 },
+  secondaryBtnText: { color: 'rgba(255,255,255,0.9)', fontWeight: '800', fontSize: 14 },
   cancelBtn: {
     marginTop: 14,
     paddingVertical: 14,
