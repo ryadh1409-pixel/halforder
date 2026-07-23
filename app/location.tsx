@@ -1,7 +1,14 @@
+import { LocationScreenMap } from '@/components/location/LocationScreenMap';
 import { ProfileLocationPicker } from '@/components/profile/ProfileLocationPicker';
+import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { useAuth } from '@/services/AuthContext';
 import { isRegisteredAuthUser } from '@/lib/authSession';
+import {
+  resolveAddressFromGps,
+  savedLocationFromGpsResolve,
+} from '@/services/location/resolveAddressFromGps';
+import { saveAccountSavedLocation } from '@/services/location/savedLocationFirestore';
 import {
   captureAndSaveCurrentProfileLocation,
   formatProfileLocationLabel,
@@ -54,6 +61,10 @@ export default function LocationScreen() {
     useState<ProfileLocationFields | null>(null);
   const [changingLocation, setChangingLocation] = useState(false);
 
+  const { saved: deliveryLocation } = useAccountSavedLocation('users', uid, {
+    skipCacheSnapshots: true,
+  });
+
   const locationPalette = useMemo(
     () => ({
       surface: PAL.surface,
@@ -71,6 +82,34 @@ export default function LocationScreen() {
     }),
     [],
   );
+
+  const mapPin = useMemo(() => {
+    if (
+      deliveryLocation &&
+      Number.isFinite(deliveryLocation.latitude) &&
+      Number.isFinite(deliveryLocation.longitude)
+    ) {
+      return {
+        latitude: deliveryLocation.latitude,
+        longitude: deliveryLocation.longitude,
+        label:
+          deliveryLocation.address?.trim() ||
+          formatProfileLocationLabel(profileLocation),
+      };
+    }
+    if (
+      profileLocation &&
+      Number.isFinite(profileLocation.latitude) &&
+      Number.isFinite(profileLocation.longitude)
+    ) {
+      return {
+        latitude: profileLocation.latitude,
+        longitude: profileLocation.longitude,
+        label: formatProfileLocationLabel(profileLocation),
+      };
+    }
+    return null;
+  }, [deliveryLocation, profileLocation]);
 
   useEffect(() => {
     if (!uid) {
@@ -116,23 +155,47 @@ export default function LocationScreen() {
             <Text style={styles.sectionHeading}>Location</Text>
             <View style={styles.card}>
               <Text style={styles.cardTitle}>
-                📍 {formatProfileLocationLabel(profileLocation)}
+                📍{' '}
+                {deliveryLocation?.address?.trim() ||
+                  formatProfileLocationLabel(profileLocation)}
               </Text>
               <TouchableOpacity
                 style={[styles.primaryButton, { marginTop: 12 }]}
                 onPress={() => {
                   if (!uid || changingLocation) return;
                   setChangingLocation(true);
-                  void captureAndSaveCurrentProfileLocation(uid)
-                    .then(() => showSuccess('Location updated.'))
-                    .catch((e) =>
+                  void (async () => {
+                    try {
+                      const fields =
+                        await captureAndSaveCurrentProfileLocation(uid);
+                      const resolved = await resolveAddressFromGps(
+                        fields.latitude,
+                        fields.longitude,
+                      );
+                      const delivery = savedLocationFromGpsResolve(
+                        fields.latitude,
+                        fields.longitude,
+                        resolved,
+                      );
+                      if (delivery) {
+                        await saveAccountSavedLocation(
+                          'users',
+                          uid,
+                          delivery,
+                          { role: 'user' },
+                        );
+                      }
+                      showSuccess('Location updated.');
+                    } catch (e) {
                       showError(
                         e instanceof Error
                           ? e.message
                           : 'Could not update location.',
-                      ),
-                    )
-                    .finally(() => setChangingLocation(false));
+                      );
+                    } finally {
+                      setChangingLocation(false);
+                    }
+                  })();
                 }}
                 disabled={changingLocation}
                 activeOpacity={0.85}
@@ -144,6 +207,19 @@ export default function LocationScreen() {
                 )}
               </TouchableOpacity>
             </View>
+
+            {mapPin ? (
+              <>
+                <Text style={styles.sectionHeading}>Map</Text>
+                <LocationScreenMap
+                  latitude={mapPin.latitude}
+                  longitude={mapPin.longitude}
+                />
+                <Text style={styles.mapCaption} numberOfLines={2}>
+                  {mapPin.label}
+                </Text>
+              </>
+            ) : null}
 
             <Text style={styles.sectionHeading}>Delivery location</Text>
             <ProfileLocationPicker userId={uid} palette={locationPalette} />
@@ -204,6 +280,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: PAL.textSecondary,
     lineHeight: 20,
+  },
+  mapCaption: {
+    fontSize: 13,
+    color: PAL.textSecondary,
+    marginTop: -4,
+    marginBottom: 4,
+    lineHeight: 18,
   },
   primaryButton: {
     backgroundColor: PAL.primary,

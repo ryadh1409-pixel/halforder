@@ -15,7 +15,6 @@ import type { LocationPalette } from '@/components/location/locationPalette';
 import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { useLocationPickerMount } from '@/hooks/useLocationPickerMount';
 import { logRoleGps, type AccountLocationRole } from '@/services/location/accountLocationRole';
-import { clearDeliveryLocationCache } from '@/services/location/locationLocalCache';
 import { useLocationSearch } from '@/services/location/useLocationSearch';
 import { PlacesApiError } from '@/services/places/googlePlacesClient';
 import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
@@ -184,7 +183,6 @@ export function LocationSearchInput({
     loading: savedLoading,
     saving: persistSaving,
     persist,
-    clearSaved,
   } = useAccountSavedLocation(collection, accountId, { skipCacheSnapshots: true });
 
   const {
@@ -323,13 +321,6 @@ export function LocationSearchInput({
       await persistImmediately(location);
     }
   }, [applyCurrentDeviceLocation, persistImmediately]);
-
-  const handleClearLocationCache = useCallback(async () => {
-    await clearDeliveryLocationCache({ log: true, reason: 'manual' });
-    clearAllLocalState();
-    clearSaved();
-    showSuccess('Saved location cache cleared.');
-  }, [clearAllLocalState, clearSaved]);
 
   const renderSuggestion = useCallback(
     ({ item }: { item: PlaceAutocompleteSuggestion }) => {
@@ -507,16 +498,6 @@ export function LocationSearchInput({
 
       {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
 
-      {deliveryMode ? (
-        <TouchableOpacity
-          style={styles.debugClearButton}
-          onPress={() => void handleClearLocationCache()}
-          disabled={gpsBusy || busy}
-        >
-          <Text style={styles.debugClearText}>Clear saved location cache</Text>
-        </TouchableOpacity>
-      ) : null}
-
       {savedLoading ? (
         <View style={styles.savedRow}>
           <ActivityIndicator size="small" color={palette.textSecondary} />
@@ -687,16 +668,6 @@ function createStyles(p: LocationPalette) {
     primaryButtonText: { fontSize: 14, fontWeight: '700', color: p.onPrimary },
     buttonDisabled: { opacity: 0.55 },
     errorText: { marginTop: 10, fontSize: 13, color: p.danger, lineHeight: 18 },
-    debugClearButton: {
-      marginTop: 10,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: p.border,
-      alignItems: 'center',
-    },
-    debugClearText: { fontSize: 12, fontWeight: '600', color: p.textTertiary },
     savedRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
