@@ -353,9 +353,10 @@ export async function joinAdminFoodShare(
   const [u0, u1] = sortedPair(partnerUid, uid);
   const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
   const matchChatId = matchId;
+  const matchPath = `matches/${matchId}`;
 
   // Rules only allow reading own users/{uid}. Never getDoc the partner profile —
-  // use queue/tx first names and own photo only (fixes second-user join failure).
+  // use queue/tx first names and own photo only.
   let myPhoto: string | null = null;
   try {
     myPhoto = await resolvePhotoUrl(uid);
@@ -368,28 +369,72 @@ export async function joinAdminFoodShare(
   const photoB = u1 === uid ? myPhoto : null;
 
   const matchRef = doc(db, 'matches', matchId);
-  const existingMatch = await getDoc(matchRef);
+  console.log('[MATCH POST WRITE]', {
+    operation: 'getDoc',
+    path: matchPath,
+    matchId,
+    uid,
+  });
+  let existingMatch;
+  try {
+    existingMatch = await getDoc(matchRef);
+  } catch (e) {
+    console.log('[MATCH FAILURE]', {
+      phase: 'post_transaction_match_doc',
+      operation: 'getDoc',
+      path: matchPath,
+      uid,
+      error: e instanceof Error ? e.message : String(e),
+      code: (e as { code?: string })?.code,
+    });
+    throw e;
+  }
   if (!existingMatch.exists()) {
-    await setDoc(matchRef, {
-      adminFoodShareId,
-      foodShareId: adminFoodShareId,
+    console.log('[MATCH POST WRITE]', {
+      operation: 'setDoc(create)',
+      path: matchPath,
+      matchId,
       users: [u0, u1],
-      userA: { uid: u0, firstName: nameA, photoUrl: photoA },
-      userB: { uid: u1, firstName: nameB, photoUrl: photoB },
-      foodName: share.foodName,
-      restaurantName: share.restaurantName,
-      foodImageUrl: share.image,
-      status: 'pending_payment',
-      lifecycle: 'WAITING_FOR_PAYMENT',
-      paymentStatus: 'pending',
-      userPayments: {},
-      orderStatus: null,
-      deliveryStatus: null,
-      costBreakdown,
-      matchChatId,
-      matchSource: 'admin_food_share_swipe',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      uid,
+    });
+    try {
+      await setDoc(matchRef, {
+        adminFoodShareId,
+        foodShareId: adminFoodShareId,
+        users: [u0, u1],
+        userA: { uid: u0, firstName: nameA, photoUrl: photoA },
+        userB: { uid: u1, firstName: nameB, photoUrl: photoB },
+        foodName: share.foodName,
+        restaurantName: share.restaurantName,
+        foodImageUrl: share.image,
+        status: 'pending_payment',
+        lifecycle: 'WAITING_FOR_PAYMENT',
+        paymentStatus: 'pending',
+        userPayments: {},
+        orderStatus: null,
+        deliveryStatus: null,
+        costBreakdown,
+        matchChatId,
+        matchSource: 'admin_food_share_swipe',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.log('[MATCH FAILURE]', {
+        phase: 'post_transaction_match_doc',
+        operation: 'setDoc(create)',
+        path: matchPath,
+        uid,
+        error: e instanceof Error ? e.message : String(e),
+        code: (e as { code?: string })?.code,
+      });
+      throw e;
+    }
+    const chatPath = `matchChats/${matchChatId}`;
+    console.log('[MATCH POST WRITE]', {
+      operation: 'setDoc(merge)',
+      path: chatPath,
+      uid,
     });
     await setDoc(doc(db, 'matchChats', matchChatId), {
       matchId,
@@ -419,6 +464,7 @@ export async function joinAdminFoodShare(
       users: [u0, u1],
       lifecycle: 'WAITING_FOR_PAYMENT',
       matchChatId,
+      path: matchPath,
     });
   } else {
     await setDoc(doc(db, 'matchChats', matchChatId), {

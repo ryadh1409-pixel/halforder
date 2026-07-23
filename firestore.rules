@@ -1589,8 +1589,25 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /matches/{matchId} {
-      allow read: if isAdmin()
-        || (isSignedIn() && request.auth.uid in resource.data.users);
+      /**
+       * Pre-create existence check: second joiner does getDoc(matches/{id}) before setDoc.
+       * Non-existent docs have no resource.data — allow get only when matchId embeds auth.uid
+       * (format: {shareId}_{uidA}_{uidB}). Existing docs: participants only.
+       */
+      allow get: if isAdmin()
+        || (
+          isSignedIn()
+          && (
+            (
+              !exists(/databases/$(database)/documents/matches/$(matchId))
+              && matchId.matches('.*_' + request.auth.uid + '(_.*|$)')
+            )
+            || (
+              exists(/databases/$(database)/documents/matches/$(matchId))
+              && request.auth.uid in resource.data.users
+            )
+          )
+        );
       allow list: if isAdmin()
         || (
           isSignedIn()
