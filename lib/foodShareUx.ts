@@ -130,7 +130,20 @@ export function foodShareErrorMessage(error: unknown, fallback?: string): string
         ? error.trim()
         : '';
   const lower = msg.toLowerCase();
-  if (lower.includes('full') || lower.includes('already matched')) {
+
+  // Keep "already matched" distinct from capacity-full — they are different failures.
+  if (
+    lower.includes('already matched') ||
+    lower === FOOD_SHARE_ERRORS.alreadyMatched.toLowerCase()
+  ) {
+    return FOOD_SHARE_ERRORS.alreadyMatched;
+  }
+  if (
+    lower.includes('already full') ||
+    lower === FOOD_SHARE_ERRORS.matchFull.toLowerCase() ||
+    /(^|\b)(match|order|share|card)\b.*\bfull\b/.test(lower) ||
+    /\bfull\b.*\b(match|order|share|card)\b/.test(lower)
+  ) {
     return FOOD_SHARE_ERRORS.matchFull;
   }
   if (lower.includes('no longer available') || lower.includes('not active')) {

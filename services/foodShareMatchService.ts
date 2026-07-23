@@ -1,5 +1,5 @@
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
-import { FOOD_SHARE_ERRORS } from '@/lib/foodShareUx';
+import { FOOD_SHARE_ERRORS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import {
   notifyAdminMatchCreated,
@@ -85,6 +85,10 @@ type QueueTxResult =
  * Swipe-right on an admin card:
  * 1) create/wait on `matchRequests` + `matchQueues`
  * 2) when a second user joins the same card → match + chat
+ *
+ * Pairing capacity is exactly 2 users per match. A card stays open for new pairs
+ * after prior matches complete/cancel. Duplicate joins from the same user who is
+ * already MATCHED on this card are rejected with alreadyMatched (not "full").
  */
 export async function joinAdminFoodShare(
   adminFoodShareId: string,
@@ -125,25 +129,6 @@ export async function joinAdminFoodShare(
         throw new Error('This meal share is not active.');
       }
 
-      const existingReq = await tx.get(requestRef);
-      console.log('[MATCH REQUEST READ]', {
-        path: requestPath,
-        exists: existingReq.exists(),
-        userId: existingReq.exists()
-          ? (existingReq.data()?.userId as string | undefined)
-          : null,
-        authUid: uid,
-      });
-      if (existingReq.exists()) {
-        const status = existingReq.data()?.status;
-        if (status === 'MATCHED') {
-          throw new Error('You already matched on this card.');
-        }
-        if (status === 'WAITING') {
-          return { kind: 'waiting' as const };
-        }
-      }
-
       const queueSnap = await tx.get(queueRef);
       const waitingUserId =
         queueSnap.exists() &&
@@ -155,6 +140,43 @@ export async function joinAdminFoodShare(
         typeof queueSnap.data()?.waitingUserFirstName === 'string'
           ? (queueSnap.data()?.waitingUserFirstName as string)
           : 'Partner';
+
+      const existingReq = await tx.get(requestRef);
+      console.log('[MATCH REQUEST READ]', {
+        path: requestPath,
+        exists: existingReq.exists(),
+        userId: existingReq.exists()
+          ? (existingReq.data()?.userId as string | undefined)
+          : null,
+        authUid: uid,
+      });
+
+      if (existingReq.exists()) {
+        const status = String(existingReq.data()?.status ?? '').toUpperCase();
+
+        if (status === 'MATCHED') {
+          // Same user already paired on this card — not a "meal full" capacity error.
+          throw new Error(FOOD_SHARE_ERRORS.alreadyMatched);
+        }
+
+        // Stale WAITING must not block pairing when someone else is already in the queue.
+        if (status === 'WAITING' && (!waitingUserId || waitingUserId === uid)) {
+          if (!waitingUserId) {
+            tx.set(
+              queueRef,
+              {
+                adminFoodShareId,
+                waitingUserId: uid,
+                waitingUserFirstName: myFirstName,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true },
+            );
+          }
+          return { kind: 'waiting' as const };
+        }
+        // status === WAITING && waitingUserId === other user → fall through and match.
+      }
 
       if (!waitingUserId) {
         tx.set(
@@ -197,6 +219,9 @@ export async function joinAdminFoodShare(
       );
       const partnerPath = `matchRequests/${adminFoodShareId}_${waitingUserId}`;
       console.log('[MATCH REQUEST PATH]', partnerPath);
+      // Do NOT tx.get(partnerRequestRef): rules deny reading another user's request.
+      // Create/update partner MATCHED via set(merge) — allowed by partner match rules.
+
       const [u0, u1] = sortedPair(waitingUserId, uid);
       const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
 
@@ -243,7 +268,11 @@ export async function joinAdminFoodShare(
       };
     });
   } catch (e) {
-    return { ok: false, error: getReadableErrorMessage(e) || FOOD_SHARE_ERRORS.unableToJoin };
+    const readable = getReadableErrorMessage(e) || FOOD_SHARE_ERRORS.unableToJoin;
+    return {
+      ok: false,
+      error: foodShareErrorMessage(readable, FOOD_SHARE_ERRORS.unableToJoin),
+    };
   }
 
   if (txResult.kind === 'waiting') {
