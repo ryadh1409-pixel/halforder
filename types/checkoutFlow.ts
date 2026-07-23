@@ -4,7 +4,7 @@ export type CheckoutFulfillmentMode = 'delivery' | 'pickup';
 /** Timing tiles — maps to pricing in `checkout-premium` screen logic. */
 export type CheckoutDeliveryTiming = 'priority' | 'standard' | 'scheduled';
 
-/** Mock payment snapshot — swap for Stripe Customer + Firestore wallet docs. */
+/** Payment method row preview — hydrated from Stripe Customer (Wallet). */
 export type CheckoutPaymentMethodPreview = {
   id: string;
   brand: 'visa' | 'mastercard' | 'amex' | 'generic';
@@ -34,14 +34,4 @@ export type CheckoutPriceLine = {
   emphasizeDiscount?: boolean;
   /** Tiny pill left of value (optional) */
   badge?: string;
-};
-
-/** Dev / analytics default row — hydrate from Stripe + users/{uid}/wallet. */
-export const CHECKOUT_MOCK_DEFAULT_PAYMENT: CheckoutPaymentMethodPreview = {
-  id: 'pm_mock_default',
-  brand: 'visa',
-  last4: '4242',
-  cardholderName: 'Alex M.',
-  expiryLabel: '12/28',
-  isDefault: true,
 };

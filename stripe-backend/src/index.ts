@@ -40,6 +40,27 @@ function getStripe(): Stripe {
   return stripeSingleton;
 }
 
+/** Same Customer as Wallet / Swipe — admin Stripe account only (no Connect). */
+async function getOrCreateStripeCustomer(
+  stripe: Stripe,
+  uid: string,
+  email?: string | null,
+): Promise<string> {
+  const userRef = admin.firestore().doc(`users/${uid}`);
+  const snap = await userRef.get();
+  const data = snap.data() ?? {};
+  const existing =
+    typeof data.stripeCustomerId === "string" ? data.stripeCustomerId.trim() : "";
+  if (existing) return existing;
+
+  const customer = await stripe.customers.create({
+    metadata: {uid, purpose: "checkout"},
+    ...(email ? {email} : {}),
+  });
+  await userRef.set({stripeCustomerId: customer.id}, {merge: true});
+  return customer.id;
+}
+
 export const startRestaurantStripeConnect = functions
   .runWith({secrets: ["STRIPE_SECRET_KEY"]})
   .region("us-central1")
@@ -204,6 +225,12 @@ export const createPaymentIntent = functions
 
     try {
       const stripe = getStripe();
+      const email =
+        typeof context.auth.token.email === "string"
+          ? context.auth.token.email
+          : null;
+      // Admin platform Customer only — no Connect destination / transfer_data.
+      const customerId = await getOrCreateStripeCustomer(stripe, uid, email);
 
       if (platform === "web") {
         const totalPriceRaw = orderData.totalPrice ?? orderData.total;
@@ -221,6 +248,7 @@ export const createPaymentIntent = functions
         const appUrl = resolveAppBaseUrl();
         const session = await stripe.checkout.sessions.create({
           mode: "payment",
+          customer: customerId,
           payment_method_types: ["card"],
           line_items: [
             {
@@ -265,6 +293,7 @@ export const createPaymentIntent = functions
             orderId,
             userId: uid,
             restaurantId,
+            customerId,
           }),
         );
 
@@ -280,12 +309,14 @@ export const createPaymentIntent = functions
         return {
           checkoutSessionId: session.id,
           checkoutUrl,
+          customerId,
         };
       }
 
       const paymentIntent = await stripe.paymentIntents.create({
         amount,
         currency: "usd",
+        customer: customerId,
         automatic_payment_methods: {
           enabled: true,
         },
@@ -299,6 +330,10 @@ export const createPaymentIntent = functions
           restaurantStripeAccountId: restaurantStripeAccountId ?? "",
         },
       });
+      const ephemeralKey = await stripe.ephemeralKeys.create(
+        {customer: customerId},
+        {apiVersion: "2025-02-24.acacia"},
+      );
       console.log(
         JSON.stringify({
           msg: "createPaymentIntent_success",
@@ -307,13 +342,20 @@ export const createPaymentIntent = functions
           userId: uid,
           restaurantId,
           driverId: driverIdRaw || null,
+          customerId,
+          treasury: "halforder_platform",
         }),
       );
       const clientSecret = paymentIntent.client_secret;
       if (!clientSecret) {
         throw new Error("Missing payment intent client secret");
       }
-      return {clientSecret};
+      return {
+        clientSecret,
+        paymentIntentId: paymentIntent.id,
+        customerId,
+        ephemeralKey: ephemeralKey.secret ?? null,
+      };
     } catch (err) {
       const stripeErr = err as {
         message?: string;

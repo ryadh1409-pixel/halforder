@@ -76,17 +76,31 @@ export async function initializePaymentSheet(
 
   if (!clientSecret) throw new Error('clientSecret missing');
 
+  const customerId =
+    typeof data?.customerId === 'string' ? data.customerId.trim() : '';
+  const ephemeralKey =
+    typeof data?.ephemeralKey === 'string' ? data.ephemeralKey.trim() : '';
+
   const initResult: InitPaymentSheetResult = await initPaymentSheet({
     paymentIntentClientSecret: clientSecret,
-    merchantDisplayName: params.merchantDisplayName ?? 'Halforder',
+    ...(customerId && ephemeralKey
+      ? { customerId, customerEphemeralKeySecret: ephemeralKey }
+      : {}),
+    merchantDisplayName: params.merchantDisplayName ?? 'HalfOrder',
     returnURL: 'halforder://stripe-redirect',
+    applePay: {
+      merchantCountryCode: 'CA',
+    },
   });
   if (initResult.error) {
     logError(initResult.error);
     throw new Error(getUserFriendlyError(initResult.error, { context: 'payment' }));
   }
 
-  const paymentIntentId = parsePaymentIntentId(clientSecret);
+  const paymentIntentId =
+    typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
+      ? data.paymentIntentId.trim()
+      : parsePaymentIntentId(clientSecret);
 
   if (params.orderId && __DEV__) {
     console.log(

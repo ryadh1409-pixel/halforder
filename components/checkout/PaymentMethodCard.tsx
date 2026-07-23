@@ -26,7 +26,7 @@ function BrandMark({ brand }: { brand: CheckoutPaymentMethodPreview['brand'] }) 
   );
 }
 
-/** Stripe / wallet payment row stub — replace `method` prop with live customer payment methods. */
+/** Stripe / wallet payment row — `method` from live Customer payment methods. */
 function PaymentMethodCardInner({ method, onPress }: Props) {
   return (
     <Pressable
@@ -40,10 +40,13 @@ function PaymentMethodCardInner({ method, onPress }: Props) {
       <BrandMark brand={method.brand} />
       <View style={styles.mid}>
         <Text style={styles.line1}>
-          {method.brand === 'generic'
-            ? 'Card'
-            : method.brand.charAt(0).toUpperCase() + method.brand.slice(1)}{' '}
-          ···· {method.last4}
+          {method.id === 'apple_pay'
+            ? 'Apple Pay'
+            : method.id === 'none'
+              ? 'No card saved'
+              : method.brand === 'generic'
+                ? `Card ···· ${method.last4}`
+                : `${method.brand.charAt(0).toUpperCase() + method.brand.slice(1)} ···· ${method.last4}`}
         </Text>
         <Text style={styles.line2}>
           {method.cardholderName} · {method.expiryLabel}

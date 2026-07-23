@@ -6,8 +6,6 @@ import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { useAuth } from '@/services/AuthContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
-import { isOwnerHost } from '@/services/roles';
-import { resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
 import { openPaymentSheet } from '@/services/stripe';
 import { getUserFriendlyError, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
@@ -23,10 +21,9 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
   const orderIdTrimmed = typeof orderId === 'string' ? orderId.trim() : '';
-  const { user, role, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
-  const [stripeBlockedRestaurantId, setStripeBlockedRestaurantId] = useState<string | null>(null);
   const started = useRef(false);
 
   const awaitingPaid = phase === 'confirming';
@@ -40,12 +37,10 @@ export default function CheckoutScreen() {
     if (!id || !user?.uid) {
       setPhase('error');
       setMessage('Missing order or sign-in.');
-      setStripeBlockedRestaurantId(null);
       return;
     }
     setPhase('loading');
     setMessage('');
-    setStripeBlockedRestaurantId(null);
     try {
       await ensureAuthReady();
       if (!auth.currentUser) {
@@ -65,20 +60,8 @@ export default function CheckoutScreen() {
         setMessage('Order not found.');
         return;
       }
-      const ready = await resolveRestaurantPaymentsReady(order.restaurantId);
-      if (!ready) {
-        setStripeBlockedRestaurantId(order.restaurantId);
-        const isOwnerOfOrderRestaurant =
-          !authLoading && isOwnerHost(user, role, order.restaurantId);
-        setPhase('error');
-        setMessage(
-          isOwnerOfOrderRestaurant
-            ? 'Complete Stripe setup to receive payments'
-            : 'Payments are temporarily unavailable for this restaurant',
-        );
-        return;
-      }
 
+      // Platform admin Stripe only — no restaurant Connect gate.
       setPhase('paying');
       const result = await openPaymentSheet({
         amount: Math.round(order.totalPrice * 100),
@@ -126,12 +109,11 @@ export default function CheckoutScreen() {
         router.replace('/(auth)/login');
         return;
       }
-      setStripeBlockedRestaurantId(null);
       setPhase('error');
       setMessage('Could not start payment. You can try again.');
       showUserError(e, { context: 'payment' });
     }
-  }, [orderIdTrimmed, user, role, authLoading, router]);
+  }, [orderIdTrimmed, user, router]);
 
   useEffect(() => {
     if (started.current) return;
@@ -185,16 +167,6 @@ export default function CheckoutScreen() {
           <>
             <Text style={styles.title}>Checkout unavailable</Text>
             <Text style={styles.sub}>{message}</Text>
-            {stripeBlockedRestaurantId &&
-            !authLoading &&
-            isOwnerHost(user, role, stripeBlockedRestaurantId) ? (
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={() => router.push('/restaurant-onboarding')}
-              >
-                <Text style={styles.secondaryButtonText}>Complete Setup</Text>
-              </Pressable>
-            ) : null}
             <Pressable style={styles.button} onPress={() => void runCheckout()}>
               <Text style={styles.buttonText}>Try again</Text>
             </Pressable>
@@ -237,14 +209,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 12,
   },
-  secondaryButton: {
-    marginTop: 16,
-    backgroundColor: '#635BFF',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  secondaryButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   buttonText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   link: { marginTop: 16, padding: 8 },
   linkText: { color: '#2563EB', fontWeight: '700' },

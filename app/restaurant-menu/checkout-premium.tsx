@@ -1,7 +1,7 @@
 /**
  * Marketplace checkout — Uber Eats–tier layout composed from `components/checkout/*`.
- * Firebase: cart via `CartContext`, restaurant/menu via hooks, orders via `createOrder`,
- * payouts readiness via `resolveRestaurantPaymentsReady`.
+ * Firebase: cart via `CartContext`, restaurant/menu via hooks, orders via `createOrder`.
+ * Payments: admin Stripe Customer + PaymentSheet (same account as Wallet / Swipe).
  */
 import {
   AddressRow,
@@ -20,8 +20,11 @@ import {
 } from '@/components/checkout';
 import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
 import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
-import type { CheckoutDeliveryTiming, CheckoutFulfillmentMode, CheckoutPriceLine } from '@/types/checkoutFlow';
-import { CHECKOUT_MOCK_DEFAULT_PAYMENT } from '@/types/checkoutFlow';
+import type {
+  CheckoutDeliveryTiming,
+  CheckoutPaymentMethodPreview,
+  CheckoutPriceLine,
+} from '@/types/checkoutFlow';
 import { useMenu } from '@/hooks/useMenu';
 import { useRestaurantProfile } from '@/hooks/useRestaurantProfile';
 import { auth, ensureAuthReady } from '@/services/firebase';
@@ -39,19 +42,24 @@ import {
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
-import { isOwnerHost } from '@/services/roles';
-import { checkStripeStatus, resolveRestaurantPaymentsReady } from '@/services/stripeConnect';
-import { getHostStripeOnboardingUrl } from '@/services/stripeOnboarding';
+import { presentWalletAddPaymentMethod } from '@/services/walletAddPaymentMethod';
+import {
+  formatCardBrand,
+  formatCardExpiry,
+  formatCardLabel,
+  listWalletPaymentMethods,
+  resolveApplePayAvailable,
+  setWalletDefaultPaymentMethod,
+  subscribeWalletDefaultPaymentMethodId,
+  type WalletCardPaymentMethod,
+} from '@/services/walletPaymentMethods';
 import { calculateServiceFee } from '@/lib/restaurantStoreMetrics';
-import { alertFriendly } from '@/utils/friendlyAlert';
 import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  AppState,
-  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -61,14 +69,35 @@ import {
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+function mapBrand(brand: string): CheckoutPaymentMethodPreview['brand'] {
+  const b = brand.trim().toLowerCase();
+  if (b === 'visa') return 'visa';
+  if (b === 'mastercard' || b === 'master_card') return 'mastercard';
+  if (b === 'amex' || b === 'american_express') return 'amex';
+  return 'generic';
+}
+
+function toPaymentPreview(
+  pm: WalletCardPaymentMethod,
+  isDefault: boolean,
+): CheckoutPaymentMethodPreview {
+  const expiry = formatCardExpiry(pm);
+  return {
+    id: pm.id,
+    brand: mapBrand(pm.brand),
+    last4: pm.last4,
+    cardholderName: formatCardBrand(pm.brand),
+    expiryLabel: expiry ?? 'Saved card',
+    isDefault,
+  };
+}
+
 export default function CheckoutPremiumScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ restaurantId: string }>();
   const restaurantId = typeof params.restaurantId === 'string' ? params.restaurantId : '';
 
-  const { user, role, loading: authLoading } = useAuth();
-  const isOwnerOfThisRestaurant =
-    !authLoading && isOwnerHost(user, role, restaurantId);
+  const { user, loading: authLoading } = useAuth();
 
   const { items: cart, clearCartForRestaurant } = useCart();
   const { profile } = useRestaurantProfile(restaurantId || null);
@@ -97,12 +126,17 @@ export default function CheckoutPremiumScreen() {
   const gift = useCheckoutStore((s) => s.gift);
   const setGift = useCheckoutStore((s) => s.setGift);
   const [placing, setPlacing] = useState(false);
-  const [stripeReady, setStripeReady] = useState<boolean | null>(null);
-  const [checkingStripe, setCheckingStripe] = useState(false);
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [walletMethods, setWalletMethods] = useState<WalletCardPaymentMethod[]>([]);
+  const [defaultPmId, setDefaultPmId] = useState<string | null>(null);
+  const [selectedPmId, setSelectedPmId] = useState<string | null>(null);
+  const [preferApplePay, setPreferApplePay] = useState(false);
+  const [applePayAvailable, setApplePayAvailable] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [addingCard, setAddingCard] = useState(false);
 
   const cartItems = useMemo(
     () =>
@@ -172,7 +206,53 @@ export default function CheckoutPremiumScreen() {
   const strikeSubtotal = subtotal + deliveryFee + serviceFee + priorityFee;
 
   const totalFmt = `$${total.toFixed(2)}`;
-  const walletSummary = `${CHECKOUT_MOCK_DEFAULT_PAYMENT.brand.toUpperCase()} ···· ${CHECKOUT_MOCK_DEFAULT_PAYMENT.last4}`;
+
+  const selectedCard = useMemo(() => {
+    if (!walletMethods.length) return null;
+    const preferred =
+      (selectedPmId && walletMethods.find((m) => m.id === selectedPmId)) ||
+      (defaultPmId && walletMethods.find((m) => m.id === defaultPmId)) ||
+      walletMethods[0];
+    return preferred ?? null;
+  }, [walletMethods, selectedPmId, defaultPmId]);
+
+  const paymentPreview: CheckoutPaymentMethodPreview = useMemo(() => {
+    if (preferApplePay && applePayAvailable) {
+      return {
+        id: 'apple_pay',
+        brand: 'generic',
+        last4: 'Pay',
+        cardholderName: 'Apple Pay',
+        expiryLabel: 'Pays via Stripe PaymentSheet',
+        isDefault: true,
+      };
+    }
+    if (selectedCard) {
+      return toPaymentPreview(
+        selectedCard,
+        selectedCard.id === defaultPmId || selectedCard.id === selectedPmId,
+      );
+    }
+    return {
+      id: 'none',
+      brand: 'generic',
+      last4: '————',
+      cardholderName: 'No card saved',
+      expiryLabel: 'Add a payment method',
+    };
+  }, [
+    preferApplePay,
+    applePayAvailable,
+    selectedCard,
+    defaultPmId,
+    selectedPmId,
+  ]);
+
+  const walletSummary = preferApplePay && applePayAvailable
+    ? 'Apple Pay'
+    : selectedCard
+      ? formatCardLabel(selectedCard)
+      : 'Stripe PaymentSheet';
 
   const savingsRibbonAmount = useMemo(() => {
     return promoDiscount > 0 ? promoDiscount : 0;
@@ -200,65 +280,102 @@ export default function CheckoutPremiumScreen() {
     }
   }, [promo, restaurantId, setPromo, subtotal]);
 
-  const refreshStripeReadiness = useCallback(async () => {
-    if (!restaurantId) {
-      setStripeReady(null);
-      setCheckingStripe(false);
+  const refreshWalletPayments = useCallback(async () => {
+    if (!user?.uid || user.isAnonymous) {
+      setWalletMethods([]);
+      setLoadingPayments(false);
       return;
     }
-    if (!user?.uid) {
-      setStripeReady(null);
-      setCheckingStripe(false);
-      return;
-    }
-    setCheckingStripe(true);
+    setLoadingPayments(true);
     try {
       await ensureAuthReady();
-      if (user?.uid && isOwnerHost(user, role, restaurantId)) {
-        try {
-          await checkStripeStatus(restaurantId);
-        } catch {
-          /* ignore */
-        }
-      }
-      const ready = await resolveRestaurantPaymentsReady(restaurantId);
-      setStripeReady(ready);
+      const [methods, appleOk] = await Promise.all([
+        listWalletPaymentMethods(),
+        resolveApplePayAvailable(),
+      ]);
+      setWalletMethods(methods);
+      setApplePayAvailable(appleOk);
+      setSelectedPmId((prev) => {
+        if (prev && methods.some((m) => m.id === prev)) return prev;
+        return null;
+      });
     } catch {
-      setStripeReady(false);
+      setWalletMethods([]);
     } finally {
-      setCheckingStripe(false);
+      setLoadingPayments(false);
     }
-  }, [restaurantId, user, role]);
+  }, [user?.uid, user?.isAnonymous]);
 
   useEffect(() => {
-    void refreshStripeReadiness();
-  }, [refreshStripeReadiness]);
+    void refreshWalletPayments();
+  }, [refreshWalletPayments]);
+
+  useEffect(() => {
+    if (!user?.uid || user.isAnonymous) {
+      setDefaultPmId(null);
+      return;
+    }
+    return subscribeWalletDefaultPaymentMethodId(user.uid, setDefaultPmId);
+  }, [user?.uid, user?.isAnonymous]);
 
   useFocusEffect(
     useCallback(() => {
       void refreshCustomerLocation();
-      void refreshStripeReadiness();
-    }, [refreshCustomerLocation, refreshStripeReadiness]),
+      void refreshWalletPayments();
+    }, [refreshCustomerLocation, refreshWalletPayments]),
   );
 
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void refreshStripeReadiness();
-    });
-    return () => sub.remove();
-  }, [refreshStripeReadiness]);
-
-  async function handleConnectSetup() {
+  const onAddPaymentMethod = useCallback(async () => {
+    if (addingCard) return;
+    setAddingCard(true);
     try {
-      await ensureAuthReady();
-      if (!auth.currentUser?.uid) return;
-      const url = await getHostStripeOnboardingUrl(restaurantId);
-      await Linking.openURL(url);
-      void refreshStripeReadiness();
-    } catch (e) {
-      alertFriendly('Checkout', e, 'payment');
+      const result = await presentWalletAddPaymentMethod();
+      if (result.status === 'success') {
+        showSuccess('Payment method saved');
+        setPreferApplePay(false);
+        await refreshWalletPayments();
+      } else if (result.status === 'failed' || result.status === 'unsupported') {
+        showError(result.message);
+      }
+    } finally {
+      setAddingCard(false);
     }
-  }
+  }, [addingCard, refreshWalletPayments]);
+
+  const onSelectPaymentMethod = useCallback(() => {
+    if (!walletMethods.length) {
+      void onAddPaymentMethod();
+      return;
+    }
+    Alert.alert(
+      'Payment methods',
+      'Choose a saved card for this order.',
+      [
+        ...walletMethods.map((pm) => ({
+          text: formatCardLabel(pm),
+          onPress: () => {
+            setPreferApplePay(false);
+            setSelectedPmId(pm.id);
+            void setWalletDefaultPaymentMethod(pm.id).catch(() => undefined);
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+    );
+  }, [walletMethods, onAddPaymentMethod]);
+
+  const onApplePayPress = useCallback(() => {
+    if (Platform.OS !== 'ios') {
+      showError('Apple Pay is available on iOS.');
+      return;
+    }
+    if (!applePayAvailable) {
+      showError('Apple Pay is not available on this device.');
+      return;
+    }
+    setPreferApplePay(true);
+    showSuccess('Apple Pay will be offered in Stripe PaymentSheet');
+  }, [applePayAvailable]);
 
   const addressPrimary =
     fulfillmentMode === 'pickup'
@@ -270,10 +387,9 @@ export default function CheckoutPremiumScreen() {
   async function submitOrder() {
     console.log('[CHECKOUT NEXT CLICKED]', {
       placing,
-      checkingStripe,
-      stripeReady,
       cartCount: cartItems.length,
       blocked,
+      payment: walletSummary,
     });
     if (!user?.uid) {
       showError('Please sign in first.');
@@ -295,16 +411,6 @@ export default function CheckoutPremiumScreen() {
     }
     if (!auth.currentUser) {
       showError('Please sign in first.');
-      return;
-    }
-    const ready = await resolveRestaurantPaymentsReady(restaurantId);
-    if (!ready) {
-      setStripeReady(false);
-      if (isOwnerOfThisRestaurant) {
-        showError('Complete Stripe setup to receive payments');
-      } else {
-        showError('Payments are temporarily unavailable for this restaurant');
-      }
       return;
     }
 
@@ -471,9 +577,7 @@ export default function CheckoutPremiumScreen() {
   const blocked =
     placing ||
     cartItems.length === 0 ||
-    checkingStripe ||
     authLoading ||
-    stripeReady === false ||
     (fulfillmentMode === 'delivery' &&
       (distanceCheckLoading || !userCoords || eligibility.blocked));
 
@@ -591,45 +695,33 @@ export default function CheckoutPremiumScreen() {
 
         <Text style={[styles.payEyebrow, { marginHorizontal: 16 }]}>Payment</Text>
         <PaymentMethodCard
-          method={CHECKOUT_MOCK_DEFAULT_PAYMENT}
-          onPress={() => Alert.alert('Payment methods', 'Hook to Stripe PaymentSheet + saved instruments.')}
+          method={paymentPreview}
+          onPress={onSelectPaymentMethod}
         />
+        {applePayAvailable ? (
+          <Pressable
+            {...checkoutPressableProps}
+            style={[styles.altPay, preferApplePay && styles.altPaySelected]}
+            onPress={onApplePayPress}
+          >
+            <Text style={styles.altPayStrong}>
+              Apple Pay{preferApplePay ? ' · Selected' : ''}
+            </Text>
+            <Text style={styles.altPayChev}>›</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           {...checkoutPressableProps}
-          style={styles.altPay}
-          onPress={() => Alert.alert('Apple Pay', 'Enable via Stripe + ApplePayButton on native binaries.')}
-        >
-          <Text style={styles.altPayStrong}>Apple Pay</Text>
-          <Text style={styles.altPayChev}>›</Text>
-        </Pressable>
-        <Pressable
-          {...checkoutPressableProps}
-          onPress={() => Alert.alert('Add card', 'Use Stripe Elements / PaymentSheet.')}
+          onPress={() => void onAddPaymentMethod()}
           style={styles.payLink}
+          disabled={addingCard || loadingPayments}
         >
-          <Text style={styles.payLinkTxt}>Add payment method</Text>
+          <Text style={styles.payLinkTxt}>
+            {addingCard ? 'Adding…' : 'Add payment method'}
+          </Text>
         </Pressable>
 
         <CheckoutPriceBreakdown lines={priceLines} />
-
-        {stripeReady === false && cartItems.length > 0 && !authLoading ? (
-          <View style={styles.setupCard}>
-            <Text style={styles.stripeWarn}>
-              {isOwnerOfThisRestaurant
-                ? 'Complete Stripe setup to receive payments'
-                : 'Payments are temporarily unavailable for this restaurant'}
-            </Text>
-            {isOwnerOfThisRestaurant ? (
-              <Pressable
-                {...checkoutPressableProps}
-                style={styles.setupButton}
-                onPress={() => void handleConnectSetup()}
-              >
-                <Text style={styles.setupButtonText}>Complete Setup</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
 
         <Pressable
           {...checkoutPressableProps}
@@ -654,7 +746,7 @@ export default function CheckoutPremiumScreen() {
           sublabel={`Total ${totalFmt}`}
           onPress={() => void submitOrder()}
           disabled={blocked}
-          loading={placing || checkingStripe}
+          loading={placing}
         />
       </View>
     </SafeAreaView>
@@ -722,6 +814,7 @@ const styles = StyleSheet.create({
   },
   altPayStrong: { fontSize: 16, fontWeight: '900', color: CK.text },
   altPayChev: { fontSize: 22, color: CK.textMuted, fontWeight: '300' },
+  altPaySelected: { borderColor: CK.text, backgroundColor: CK.bg },
   payLink: { paddingVertical: 10, paddingHorizontal: 16 },
   payLinkTxt: { fontSize: 15, fontWeight: '800', color: CK.text, textDecorationLine: 'underline' },
   lineRow: {
@@ -732,30 +825,6 @@ const styles = StyleSheet.create({
   },
   lineLeft: { flex: 1, fontSize: 14, fontWeight: '600', color: CK.textSecondary, lineHeight: 19 },
   lineRight: { fontSize: 14, fontWeight: '800', color: CK.text },
-  setupCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    backgroundColor: 'rgba(245,158,11,0.14)',
-    padding: 14,
-  },
-  stripeWarn: {
-    color: '#B45309',
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  setupButton: {
-    marginTop: 10,
-    alignSelf: 'center',
-    backgroundColor: '#635BFF',
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  setupButtonText: { color: '#FFFFFF', fontWeight: '800' },
   locationLoading: {
     marginHorizontal: 16,
     marginVertical: 8,
