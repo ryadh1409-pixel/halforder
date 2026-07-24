@@ -1,59 +1,30 @@
 import type { CheckoutPaymentMethodPreview } from '@/types/checkoutFlow';
-import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { CK } from '@/constants/checkoutUi';
 import React, { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 type Props = {
-  method: CheckoutPaymentMethodPreview;
-  onPress: () => void;
+  /** @deprecated Custom payment pickers were removed — PaymentSheet is the only UI. */
+  method?: CheckoutPaymentMethodPreview;
+  onPress?: () => void;
 };
 
-function BrandMark({ brand }: { brand: CheckoutPaymentMethodPreview['brand'] }) {
-  const label = brand === 'mastercard' ? 'MC' : brand === 'visa' ? 'V' : brand === 'amex' ? 'AE' : '◆';
+/**
+ * Informational payment row only. Method selection happens inside Stripe PaymentSheet.
+ */
+function PaymentMethodCardInner(_props: Props) {
   return (
-    <View
-      style={[
-        styles.icon,
-        brand === 'visa' && styles.visa,
-        brand === 'mastercard' && styles.mc,
-        brand === 'amex' && styles.amex,
-      ]}
-    >
-      <Text style={styles.iconTxt}>{label}</Text>
-    </View>
-  );
-}
-
-/** Stripe / wallet payment row — `method` from live Customer payment methods. */
-function PaymentMethodCardInner({ method, onPress }: Props) {
-  return (
-    <Pressable
-      {...checkoutPressableProps}
-      onPress={() => {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
-    >
-      <BrandMark brand={method.brand} />
+    <View style={styles.wrap}>
+      <View style={styles.icon}>
+        <Text style={styles.iconTxt}>◆</Text>
+      </View>
       <View style={styles.mid}>
-        <Text style={styles.line1}>
-          {method.id === 'apple_pay'
-            ? 'Apple Pay'
-            : method.id === 'none'
-              ? 'No card saved'
-              : method.brand === 'generic'
-                ? `Card ···· ${method.last4}`
-                : `${method.brand.charAt(0).toUpperCase() + method.brand.slice(1)} ···· ${method.last4}`}
-        </Text>
+        <Text style={styles.line1}>Stripe PaymentSheet</Text>
         <Text style={styles.line2}>
-          {method.cardholderName} · {method.expiryLabel}
+          Apple Pay, Link, saved cards, and new cards — managed by Stripe
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={CK.textMuted} />
-    </Pressable>
+    </View>
   );
 }
 
@@ -77,7 +48,6 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 10,
   },
-  pressed: { transform: [{ scale: 0.992 }], opacity: 0.96 },
   icon: {
     width: 52,
     height: 36,
@@ -86,9 +56,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: CK.text,
   },
-  visa: { backgroundColor: '#1434CB' },
-  mc: { backgroundColor: '#EB001B' },
-  amex: { backgroundColor: '#016FD0' },
   iconTxt: { color: '#fff', fontWeight: '900', fontSize: 12, letterSpacing: 0.4 },
   mid: { flex: 1, minWidth: 0 },
   line1: { fontSize: 15.5, fontWeight: '900', color: CK.text },

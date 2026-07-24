@@ -4,6 +4,29 @@ export function formatRestaurantName(name: unknown): string {
   return trimmed.length ? trimmed : 'Unknown restaurant';
 }
 
+/** True when the label is missing or the Orders-screen fallback string. */
+export function isUnknownRestaurantName(name: unknown): boolean {
+  if (typeof name !== 'string') return true;
+  const trimmed = name.trim();
+  if (!trimmed) return true;
+  return trimmed.toLowerCase() === 'unknown restaurant';
+}
+
+/**
+ * First non-empty restaurant label from order / restaurant fields.
+ * Skips blank values and the "Unknown restaurant" fallback.
+ */
+export function pickRestaurantName(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const trimmed = candidate.trim();
+    if (!trimmed) continue;
+    if (trimmed.toLowerCase() === 'unknown restaurant') continue;
+    return trimmed;
+  }
+  return 'Unknown restaurant';
+}
+
 export function formatAddress(address: unknown): string {
   if (typeof address !== 'string') return 'Address unavailable';
   const trimmed = address.trim();

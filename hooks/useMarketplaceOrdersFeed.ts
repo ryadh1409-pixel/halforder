@@ -1,7 +1,8 @@
 import type { MarketplaceOrdersFeedRow } from '@/components/orders/MarketplaceOrderCard';
 import { getOrderListSection, type OrderListSection } from '@/constants/orderStatus';
 import { db } from '@/services/firebase';
-import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
+import { mapDocToRestaurantOrder } from '@/services/orderService';
+import { formatAddress } from '@/utils/orderFormatters';
 import { safeToMillis } from '@/utils/safeToMillis';
 import {
   collection,
@@ -88,23 +89,20 @@ function mapDocToFeedRow(
     ? Math.max(halfUsers.length, participants.length, 1)
     : Math.max(participants.length, 1);
 
-  const restaurantId =
-    typeof data.restaurantId === 'string'
-      ? data.restaurantId
-      : typeof data.venueId === 'string'
-        ? data.venueId
-        : '';
-  const restaurantName = formatRestaurantName(
-    typeof data.restaurantName === 'string' ? data.restaurantName : '',
-  );
+  // Same source as Track Order: mapDocToRestaurantOrder → restaurant.name
+  const mapped = mapDocToRestaurantOrder(d);
+  const restaurantId = mapped.restaurant.id || mapped.restaurantId || '';
+  const restaurantName = mapped.restaurant.name;
 
   return {
     id: d.id,
     restaurant: {
       id: restaurantId || null,
       name: restaurantName,
-      image: restaurantId ? restaurantImages[restaurantId] ?? null : null,
-      address: null,
+      image:
+        mapped.restaurant.image ??
+        (restaurantId ? restaurantImages[restaurantId] ?? null : null),
+      address: mapped.restaurant.address,
     },
     customer: {
       id: typeof data.userId === 'string' ? data.userId : null,

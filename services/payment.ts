@@ -1,5 +1,9 @@
 import { openPaymentSheet } from '@/services/stripe';
 
+/**
+ * Reusable order payment entry — opens Stripe PaymentSheet only
+ * (Apple Pay, Link, saved cards, new card). No custom payment UI.
+ */
 export async function payOrderWithStripe(params: {
   orderId: string;
   amount: number;

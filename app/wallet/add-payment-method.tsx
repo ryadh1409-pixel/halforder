@@ -1,8 +1,7 @@
 import { presentWalletAddPaymentMethod } from '@/services/walletAddPaymentMethod';
-import { resolveApplePayAvailable } from '@/services/walletPaymentMethods';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -15,49 +14,51 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const PAL = {
   bg: '#000000',
-  surface: '#171923',
-  surfaceMuted: '#1E2230',
   text: '#FFFFFF',
   textMuted: '#7D8493',
   border: 'rgba(255,255,255,0.08)',
   primary: '#A855F7',
 } as const;
 
+/**
+ * Opens Stripe PaymentSheet (SetupIntent) immediately — no custom Card / Apple Pay picker.
+ */
 export default function AddPaymentMethodScreen() {
   const router = useRouter();
-  const [applePayAvailable, setApplePayAvailable] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [checkingApple, setCheckingApple] = useState(true);
+  const [busy, setBusy] = useState(true);
+  const [message, setMessage] = useState('Opening Stripe…');
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     void (async () => {
-      const apple = await resolveApplePayAvailable();
-      setApplePayAvailable(apple);
-      setCheckingApple(false);
-    })();
-  }, []);
-
-  const onAddCard = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const result = await presentWalletAddPaymentMethod();
-      if (result.status === 'success') {
-        showSuccess('Payment method saved.');
-        router.back();
-      } else if (result.status === 'failed' || result.status === 'unsupported') {
-        showError(result.message);
+      setBusy(true);
+      setMessage('Opening Stripe…');
+      try {
+        const result = await presentWalletAddPaymentMethod();
+        if (result.status === 'success') {
+          showSuccess('Payment method saved.');
+          router.back();
+          return;
+        }
+        if (result.status === 'canceled') {
+          router.back();
+          return;
+        }
+        if (result.status === 'failed' || result.status === 'unsupported') {
+          showError(result.message);
+          setMessage(result.message);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Could not open Stripe.';
+        showError(msg);
+        setMessage(msg);
+      } finally {
+        setBusy(false);
       }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onApplePay = async () => {
-    // Stripe PaymentSheet setup already offers Apple Pay when supported;
-    // same flow as card so the user can choose Apple Pay in sheet.
-    await onAddCard();
-  };
+    })();
+  }, [router]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -70,45 +71,44 @@ export default function AddPaymentMethodScreen() {
       </View>
 
       <View style={styles.body}>
-        <TouchableOpacity
-          style={styles.optionRow}
-          onPress={() => void onAddCard()}
-          disabled={busy}
-          activeOpacity={0.85}
-        >
-          <View style={styles.iconWrap}>
-            <MaterialIcons name="credit-card" size={24} color={PAL.primary} />
-          </View>
-          <View style={styles.copy}>
-            <Text style={styles.optionTitle}>Credit or Debit Card</Text>
-            <Text style={styles.optionSub}>Visa, Mastercard, Amex, and more</Text>
-          </View>
-          {busy ? (
-            <ActivityIndicator color={PAL.primary} />
-          ) : (
-            <MaterialIcons name="chevron-right" size={22} color={PAL.textMuted} />
-          )}
-        </TouchableOpacity>
-
-        {checkingApple ? (
-          <View style={styles.optionRow}>
-            <ActivityIndicator color={PAL.primary} />
-          </View>
-        ) : applePayAvailable ? (
+        {busy ? <ActivityIndicator color={PAL.primary} size="large" /> : null}
+        <Text style={styles.hint}>{message}</Text>
+        {!busy ? (
           <TouchableOpacity
-            style={styles.optionRow}
-            onPress={() => void onApplePay()}
-            disabled={busy}
-            activeOpacity={0.85}
+            style={styles.retry}
+            onPress={() => {
+              started.current = false;
+              setBusy(true);
+              setMessage('Opening Stripe…');
+              // re-trigger by remounting logic
+              void (async () => {
+                started.current = true;
+                try {
+                  const result = await presentWalletAddPaymentMethod();
+                  if (result.status === 'success') {
+                    showSuccess('Payment method saved.');
+                    router.back();
+                    return;
+                  }
+                  if (result.status === 'canceled') {
+                    router.back();
+                    return;
+                  }
+                  if (result.status === 'failed' || result.status === 'unsupported') {
+                    showError(result.message);
+                    setMessage(result.message);
+                  }
+                } catch (e) {
+                  const msg = e instanceof Error ? e.message : 'Could not open Stripe.';
+                  showError(msg);
+                  setMessage(msg);
+                } finally {
+                  setBusy(false);
+                }
+              })();
+            }}
           >
-            <View style={styles.iconWrap}>
-              <MaterialIcons name="phone-iphone" size={24} color={PAL.text} />
-            </View>
-            <View style={styles.copy}>
-              <Text style={styles.optionTitle}>Apple Pay</Text>
-              <Text style={styles.optionSub}>Pay with cards in Apple Wallet</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color={PAL.textMuted} />
+            <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -133,37 +133,25 @@ const styles = StyleSheet.create({
     color: PAL.text,
     letterSpacing: -0.3,
   },
-  body: { padding: 20 },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: PAL.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PAL.border,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: PAL.surfaceMuted,
+  body: {
+    flex: 1,
+    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 16,
   },
-  copy: { flex: 1, minWidth: 0 },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: PAL.text,
-  },
-  optionSub: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '500',
+  hint: {
     color: PAL.textMuted,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 20,
   },
+  retry: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: PAL.primary,
+  },
+  retryText: { color: '#fff', fontWeight: '800' },
 });

@@ -1,9 +1,3 @@
-import {
-  initPaymentSheet,
-  presentPaymentSheet,
-  type InitPaymentSheetResult,
-  type PresentPaymentSheetResult,
-} from '@stripe/stripe-react-native';
 import { auth } from '@/services/firebase';
 import {
   invokeFoodSharePaymentConfirm,
@@ -14,8 +8,7 @@ import {
   parseCallableError,
   readPaymentDocsForMatch,
 } from '@/services/foodSharePaymentDocReads';
-import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
-import { logError } from '@/utils/errorLogger';
+import { presentConfiguredPaymentSheet } from '@/services/stripe';
 
 const SIGN_IN_REQUIRED_ERROR = 'Please sign in to complete payment';
 
@@ -114,48 +107,27 @@ export async function payFoodShareMatch(params: {
     data.paymentIntentId,
   );
 
-  console.log('[STRIPE STEP] init_payment_sheet');
-  const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
   const amountCents =
     typeof data.amountCents === 'number' && Number.isFinite(data.amountCents)
       ? Math.max(0, data.amountCents)
       : 0;
-  const initResult: InitPaymentSheetResult = await initPaymentSheet({
-    paymentIntentClientSecret: clientSecret,
-    ...(customerId && ephemeralKey
-      ? { customerId, customerEphemeralKeySecret: ephemeralKey }
-      : {}),
-    merchantDisplayName,
-    returnURL: 'halforder://stripe-redirect',
-    applePay: {
-      merchantCountryCode: 'CA',
-      cartItems: [
-        {
-          paymentType: 'Immediate',
-          label: merchantDisplayName,
-          amount: (amountCents / 100).toFixed(2),
-        },
-      ],
-    },
-  });
-  if (initResult.error) {
-    console.error('[STRIPE ERROR]', initResult.error);
-    logError(initResult.error);
-    throw new Error(getUserFriendlyError(initResult.error, { context: 'payment' }));
-  }
 
-  console.log('[STRIPE STEP] present_payment_sheet');
+  console.log('[STRIPE STEP] init_payment_sheet');
   console.log('[PAYMENT SHEET OPENED]', { matchId, paymentIntentId });
-  const presentResult: PresentPaymentSheetResult = await presentPaymentSheet();
-  if (presentResult.error) {
-    console.error('[STRIPE ERROR]', presentResult.error);
-    if (presentResult.error.code === 'Canceled') {
-      return { status: 'canceled' };
-    }
-    return {
-      status: 'failed',
-      message: getUserFriendlyError(presentResult.error, { context: 'payment' }),
-    };
+  const sheet = await presentConfiguredPaymentSheet({
+    clientSecret,
+    customerId,
+    ephemeralKey,
+    merchantDisplayName: params.merchantDisplayName ?? 'HalfOrder',
+    amountCents,
+  });
+
+  if (sheet.status === 'canceled') {
+    return { status: 'canceled' };
+  }
+  if (sheet.status === 'failed') {
+    console.error('[STRIPE ERROR]', sheet.message);
+    return { status: 'failed', message: sheet.message };
   }
 
   console.log('[STRIPE STEP] payment_success', { matchId, paymentIntentId });

@@ -6,7 +6,7 @@ import { getOrderListSection, type OrderListSection } from '@/constants/orderSta
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
-import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
+import { formatAddress, pickRestaurantName } from '@/utils/orderFormatters';
 import { safeToMillis } from '@/utils/safeToMillis';
 import { orderDetailHref } from '@/lib/orderRoutes';
 import { normalizeRoleForRouting } from '@/lib/authRole';
@@ -221,10 +221,46 @@ function mapDocToFeedRow(
     restaurantObj && typeof restaurantObj.name === 'string'
       ? restaurantObj.name
       : null;
-  const restaurantName = formatRestaurantName(
-    restaurantNameRaw ||
-      (typeof data.restaurantName === 'string' ? data.restaurantName : ''),
+  const candidates = {
+    'restaurant.name': restaurantNameRaw,
+    'restaurant.title':
+      restaurantObj && typeof restaurantObj.title === 'string'
+        ? restaurantObj.title
+        : null,
+    'restaurant.displayName':
+      restaurantObj && typeof restaurantObj.displayName === 'string'
+        ? restaurantObj.displayName
+        : null,
+    'restaurant.restaurantName':
+      restaurantObj && typeof restaurantObj.restaurantName === 'string'
+        ? restaurantObj.restaurantName
+        : null,
+    restaurantName:
+      typeof data.restaurantName === 'string' ? data.restaurantName : null,
+    merchantName:
+      typeof data.merchantName === 'string' ? data.merchantName : null,
+    venueName: typeof data.venueName === 'string' ? data.venueName : null,
+  };
+  const restaurantName = pickRestaurantName(
+    candidates['restaurant.name'],
+    candidates['restaurant.title'],
+    candidates['restaurant.displayName'],
+    candidates['restaurant.restaurantName'],
+    candidates.restaurantName,
+    candidates.merchantName,
+    candidates.venueName,
   );
+
+  // TEMP debug — remove after verifying restaurant name resolution
+  if (__DEV__) {
+    console.log('[ORDERS RESTAURANT NAME]', {
+      phase: 'mapDocToFeedRow',
+      orderId: d.id,
+      restaurantId: restaurantId || null,
+      candidates,
+      selectedBeforeFetch: restaurantName,
+    });
+  }
 
   const etaMinutes =
     typeof data.estimatedDeliveryTime === 'number' && Number.isFinite(data.estimatedDeliveryTime)
@@ -346,10 +382,19 @@ export default function MarketplaceOrdersScreen() {
           ? data.restaurantId
           : typeof data.venueId === 'string'
             ? data.venueId
-            : '';
-      if (rid && restaurantImagesRef.current[rid] === undefined) {
-        ids.add(rid);
-      }
+            : data.restaurant &&
+                typeof data.restaurant === 'object' &&
+                typeof (data.restaurant as { id?: unknown }).id === 'string'
+              ? String((data.restaurant as { id: string }).id)
+              : '';
+      if (!rid) return;
+      const cachedMeta = restaurantMetaRef.current[rid];
+      const needsFetch =
+        restaurantImagesRef.current[rid] === undefined ||
+        !cachedMeta ||
+        !cachedMeta.name ||
+        !String(cachedMeta.name).trim();
+      if (needsFetch) ids.add(rid);
     });
     await Promise.all(
       [...ids].map(async (rid) => {
@@ -365,13 +410,21 @@ export default function MarketplaceOrdersScreen() {
                   ? d.photoUrl
                   : null;
           restaurantImagesRef.current[rid] = img;
+          const nameLikeKeys = d
+            ? Object.keys(d).filter((k) =>
+                /name|title|merchant|venue|display/i.test(k),
+              )
+            : [];
+          const fetchedName = pickRestaurantName(
+            d?.name,
+            d?.restaurantName,
+            d?.merchantName,
+            d?.venueName,
+            d?.title,
+            d?.displayName,
+          );
           restaurantMetaRef.current[rid] = {
-            name:
-              typeof d?.name === 'string'
-                ? d.name
-                : typeof d?.restaurantName === 'string'
-                  ? d.restaurantName
-                  : null,
+            name: fetchedName === 'Unknown restaurant' ? null : fetchedName,
             address:
               typeof d?.address === 'string'
                 ? d.address
@@ -382,9 +435,38 @@ export default function MarketplaceOrdersScreen() {
                   : null,
             image: img,
           };
-        } catch {
+          // TEMP debug — remove after verifying restaurant name resolution
+          if (__DEV__) {
+            console.log('[ORDERS RESTAURANT NAME]', {
+              phase: 'fetchRestaurantDoc',
+              restaurantId: rid,
+              restaurantDocExists: snap.exists(),
+              fetchedCandidates: {
+                name: typeof d?.name === 'string' ? d.name : null,
+                restaurantName:
+                  typeof d?.restaurantName === 'string' ? d.restaurantName : null,
+                merchantName:
+                  typeof d?.merchantName === 'string' ? d.merchantName : null,
+                venueName: typeof d?.venueName === 'string' ? d.venueName : null,
+                title: typeof d?.title === 'string' ? d.title : null,
+                displayName:
+                  typeof d?.displayName === 'string' ? d.displayName : null,
+              },
+              nameLikeKeysOnDoc: nameLikeKeys,
+              selectedFetchedName: restaurantMetaRef.current[rid]?.name,
+            });
+          }
+        } catch (e) {
           restaurantImagesRef.current[rid] = null;
           restaurantMetaRef.current[rid] = { name: null, address: null, image: null };
+          if (__DEV__) {
+            console.log('[ORDERS RESTAURANT NAME]', {
+              phase: 'fetchRestaurantDoc_error',
+              restaurantId: rid,
+              restaurantDocExists: false,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
         }
       }),
     );
@@ -450,14 +532,59 @@ export default function MarketplaceOrdersScreen() {
 
       const nextRows = merged.map((docSnap) => {
         const row = mapDocToFeedRow(docSnap, restaurantImagesRef.current);
-        if (row.restaurant.id && restaurantMetaRef.current[row.restaurant.id]) {
-          const meta = restaurantMetaRef.current[row.restaurant.id]!;
+        const data = docSnap.data() as Record<string, unknown>;
+        const restaurantObj =
+          data.restaurant && typeof data.restaurant === 'object'
+            ? (data.restaurant as Record<string, unknown>)
+            : null;
+        const meta =
+          row.restaurant.id && restaurantMetaRef.current[row.restaurant.id]
+            ? restaurantMetaRef.current[row.restaurant.id]!
+            : null;
+        const mappedBeforeMerge = row.restaurant.name;
+        if (meta) {
           row.restaurant = {
             ...row.restaurant,
-            name: formatRestaurantName(row.restaurant.name || meta.name || ''),
+            name: pickRestaurantName(row.restaurant.name, meta.name),
             address: row.restaurant.address ?? (meta.address ? formatAddress(meta.address) : null),
             image: row.restaurant.image ?? meta.image ?? null,
           };
+        }
+        // TEMP debug — remove after verifying restaurant name resolution
+        if (__DEV__) {
+          console.log('[ORDERS RESTAURANT NAME]', {
+            phase: 'finalSelect',
+            orderId: docSnap.id,
+            restaurantId: row.restaurant.id,
+            candidates: {
+              'restaurant.name':
+                restaurantObj && typeof restaurantObj.name === 'string'
+                  ? restaurantObj.name
+                  : null,
+              restaurantName:
+                typeof data.restaurantName === 'string' ? data.restaurantName : null,
+              merchantName:
+                typeof data.merchantName === 'string' ? data.merchantName : null,
+              venueName: typeof data.venueName === 'string' ? data.venueName : null,
+              displayName:
+                restaurantObj && typeof restaurantObj.displayName === 'string'
+                  ? restaurantObj.displayName
+                  : null,
+              title:
+                restaurantObj && typeof restaurantObj.title === 'string'
+                  ? restaurantObj.title
+                  : null,
+              fetchedRestaurantDocName: meta?.name ?? null,
+              mappedBeforeMerge,
+            },
+            oldMergeWouldSelect:
+              mappedBeforeMerge === 'Unknown restaurant'
+                ? mappedBeforeMerge
+                : mappedBeforeMerge || meta?.name || 'Unknown restaurant',
+            oldBugWouldIgnoreFetchedName:
+              mappedBeforeMerge === 'Unknown restaurant' && !!meta?.name,
+            finalSelectedName: row.restaurant.name,
+          });
         }
         return row;
       });

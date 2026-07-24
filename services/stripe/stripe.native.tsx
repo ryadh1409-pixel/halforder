@@ -57,9 +57,105 @@ function amountDollarsLabel(cents: number): string {
   return (Math.max(0, cents) / 100).toFixed(2);
 }
 
-export async function initializePaymentSheet(
+const PAYMENT_SHEET_APPEARANCE = {
+  colors: {
+    primary: '#A855F7',
+    background: '#171923',
+    componentBackground: '#1C1F2E',
+    // Stripe PaymentSheet requires #RRGGBB or #AARRGGBB (no CSS rgba()).
+    componentBorder: '#47A855F7',
+    componentDivider: '#29A855F7',
+    primaryText: '#FFFFFF',
+    secondaryText: '#B7BDC9',
+    componentText: '#FFFFFF',
+    placeholderText: '#7D8493',
+    icon: '#FFFFFF',
+    error: '#EF4444',
+  },
+  shapes: {
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+} as const;
+
+export type PresentConfiguredPaymentSheetParams = {
+  clientSecret: string;
+  customerId?: string;
+  ephemeralKey?: string;
+  merchantDisplayName?: string;
+  /** Amount in cents for Apple Pay line item (optional). */
+  amountCents?: number;
+};
+
+/**
+ * Single reusable PaymentSheet presenter for the app.
+ * Call after your flow already has a PaymentIntent client secret.
+ * Does not create intents or write Firestore.
+ */
+export async function presentConfiguredPaymentSheet(
+  params: PresentConfiguredPaymentSheetParams,
+): Promise<
+  | { status: 'success' }
+  | { status: 'canceled' }
+  | { status: 'failed'; message: string }
+> {
+  const clientSecret = params.clientSecret.trim();
+  if (!clientSecret) {
+    return { status: 'failed', message: 'clientSecret missing' };
+  }
+
+  const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
+  const amountCents =
+    typeof params.amountCents === 'number' && Number.isFinite(params.amountCents)
+      ? Math.max(0, params.amountCents)
+      : 0;
+  const customerId = params.customerId?.trim() ?? '';
+  const ephemeralKey = params.ephemeralKey?.trim() ?? '';
+
+  const initResult: InitPaymentSheetResult = await initPaymentSheet({
+    paymentIntentClientSecret: clientSecret,
+    ...(customerId && ephemeralKey
+      ? { customerId, customerEphemeralKeySecret: ephemeralKey }
+      : {}),
+    merchantDisplayName,
+    returnURL: 'halforder://stripe-redirect',
+    allowsDelayedPaymentMethods: false,
+    applePay: {
+      merchantCountryCode: 'CA',
+      cartItems: [
+        {
+          paymentType: 'Immediate',
+          label: merchantDisplayName,
+          amount: amountDollarsLabel(amountCents),
+        },
+      ],
+    },
+    appearance: PAYMENT_SHEET_APPEARANCE,
+  });
+  if (initResult.error) {
+    logError(initResult.error);
+    return {
+      status: 'failed',
+      message: getUserFriendlyError(initResult.error, { context: 'payment' }),
+    };
+  }
+
+  const presentResult: PresentPaymentSheetResult = await presentPaymentSheet();
+  if (presentResult.error) {
+    if (presentResult.error.code === 'Canceled') {
+      return { status: 'canceled' };
+    }
+    return {
+      status: 'failed',
+      message: getUserFriendlyError(presentResult.error, { context: 'payment' }),
+    };
+  }
+  return { status: 'success' };
+}
+
+async function createPaymentIntentSecrets(
   params: InitSheetParams,
-): Promise<InitSheetResult> {
+): Promise<InitSheetResult & { customerId: string; ephemeralKey: string }> {
   const amount = Number(params.amount);
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error('Amount must be a positive integer (in cents).');
@@ -67,8 +163,6 @@ export async function initializePaymentSheet(
 
   assertNonAnonymousPaymentUser();
   await auth.currentUser?.getIdToken(true);
-
-  const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
 
   const fn = httpsCallable(functions, 'createPaymentIntent');
   const result = await fn({
@@ -90,11 +184,28 @@ export async function initializePaymentSheet(
     typeof data?.customerId === 'string' ? data.customerId.trim() : '';
   const ephemeralKey =
     typeof data?.ephemeralKey === 'string' ? data.ephemeralKey.trim() : '';
+  const paymentIntentId =
+    typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
+      ? data.paymentIntentId.trim()
+      : parsePaymentIntentId(clientSecret);
+
+  return { clientSecret, paymentIntentId, customerId, ephemeralKey };
+}
+
+/** Creates a PaymentIntent and initializes PaymentSheet (does not present). */
+export async function initializePaymentSheet(
+  params: InitSheetParams,
+): Promise<InitSheetResult> {
+  const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
+  const secrets = await createPaymentIntentSecrets(params);
 
   const initResult: InitPaymentSheetResult = await initPaymentSheet({
-    paymentIntentClientSecret: clientSecret,
-    ...(customerId && ephemeralKey
-      ? { customerId, customerEphemeralKeySecret: ephemeralKey }
+    paymentIntentClientSecret: secrets.clientSecret,
+    ...(secrets.customerId && secrets.ephemeralKey
+      ? {
+          customerId: secrets.customerId,
+          customerEphemeralKeySecret: secrets.ephemeralKey,
+        }
       : {}),
     merchantDisplayName,
     returnURL: 'halforder://stripe-redirect',
@@ -105,55 +216,35 @@ export async function initializePaymentSheet(
         {
           paymentType: 'Immediate',
           label: merchantDisplayName,
-          amount: amountDollarsLabel(amount),
+          amount: amountDollarsLabel(params.amount),
         },
       ],
     },
-    // Native sheet chrome aligned with HalfOrder dark UI (PaymentSheet only).
-    appearance: {
-      colors: {
-        primary: '#A855F7',
-        background: '#171923',
-        componentBackground: '#1C1F2E',
-        componentBorder: 'rgba(168, 85, 247, 0.28)',
-        componentDivider: 'rgba(168, 85, 247, 0.16)',
-        primaryText: '#FFFFFF',
-        secondaryText: '#B7BDC9',
-        componentText: '#FFFFFF',
-        placeholderText: '#7D8493',
-        icon: '#FFFFFF',
-        error: '#EF4444',
-      },
-      shapes: {
-        borderRadius: 12,
-        borderWidth: 1,
-      },
-    },
+    appearance: PAYMENT_SHEET_APPEARANCE,
   });
   if (initResult.error) {
     logError(initResult.error);
     throw new Error(getUserFriendlyError(initResult.error, { context: 'payment' }));
   }
 
-  const paymentIntentId =
-    typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
-      ? data.paymentIntentId.trim()
-      : parsePaymentIntentId(clientSecret);
-
   if (params.orderId && __DEV__) {
     console.log(
       JSON.stringify({
         msg: 'payment_flow_sheet_initialized',
         orderId: params.orderId,
-        paymentIntentId,
+        paymentIntentId: secrets.paymentIntentId,
         platform: Platform.OS,
       }),
     );
   }
 
-  return { clientSecret, paymentIntentId };
+  return {
+    clientSecret: secrets.clientSecret,
+    paymentIntentId: secrets.paymentIntentId,
+  };
 }
 
+/** Creates a PaymentIntent and immediately presents Stripe PaymentSheet. */
 export async function openPaymentSheet(
   params: InitSheetParams,
 ): Promise<OpenPaymentSheetResult> {
@@ -168,19 +259,26 @@ export async function openPaymentSheet(
 
   paymentSheetInFlight = true;
   try {
-    const init = await initializePaymentSheet(params);
+    const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
+    const secrets = await createPaymentIntentSecrets(params);
+    const init = {
+      clientSecret: secrets.clientSecret,
+      paymentIntentId: secrets.paymentIntentId,
+    };
 
-    // Present the native sheet as soon as init completes (Apple Pay / Face ID).
-    const presentResult: PresentPaymentSheetResult = await presentPaymentSheet();
-    if (presentResult.error) {
-      if (presentResult.error.code === 'Canceled') {
-        return { status: 'canceled', ...init };
-      }
-      return {
-        status: 'failed',
-        message: getUserFriendlyError(presentResult.error, { context: 'payment' }),
-        ...init,
-      };
+    const sheet = await presentConfiguredPaymentSheet({
+      clientSecret: secrets.clientSecret,
+      customerId: secrets.customerId,
+      ephemeralKey: secrets.ephemeralKey,
+      merchantDisplayName,
+      amountCents: params.amount,
+    });
+
+    if (sheet.status === 'canceled') {
+      return { status: 'canceled', ...init };
+    }
+    if (sheet.status === 'failed') {
+      return { status: 'failed', message: sheet.message, ...init };
     }
     return { status: 'success', ...init };
   } finally {

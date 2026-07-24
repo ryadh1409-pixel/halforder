@@ -172,8 +172,8 @@ export default function CheckoutScreen() {
             <ActivityIndicator size="large" color="#A855F7" />
             <Text style={styles.hint}>
               {phase === 'paying'
-                ? message || 'Opening Apple Pay…'
-                : 'Preparing Apple Pay…'}
+                ? message || 'Opening Stripe PaymentSheet…'
+                : 'Preparing Stripe PaymentSheet…'}
             </Text>
           </>
         )}
