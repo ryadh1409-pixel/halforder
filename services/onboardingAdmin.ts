@@ -1,4 +1,5 @@
-import { auth, db, storage } from '@/services/firebase';
+import { auth, db, ensureAuthReady, storage } from '@/services/firebase';
+import { blobFromPickerUri } from '@/lib/imageBlob';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import {
   doc,
@@ -195,10 +196,61 @@ export async function uploadOnboardingSlideImage(
   if (!uid) throw new Error('Sign in required.');
   if (!sid) throw new Error('Invalid slide.');
 
-  const res = await fetch(uri);
-  const blob = await res.blob();
+  await ensureAuthReady();
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid) {
+    throw new Error('Sign in required.');
+  }
+
   const storagePath = `onboarding/${sid}/${uid}_${Date.now()}.jpg`;
+  console.log('[onboardingUpload] start', {
+    slideId: sid,
+    uid,
+    storagePath,
+    uriScheme: uri.split(':')[0] ?? 'unknown',
+  });
+
+  let blob: Blob;
+  try {
+    blob = await blobFromPickerUri(uri);
+  } catch (e) {
+    console.error('[onboardingUpload] blobFromPickerUri failed', e);
+    throw new Error(
+      e instanceof Error
+        ? `Could not read image: ${e.message}`
+        : 'Could not read image from library.',
+    );
+  }
+
+  if (!blob || blob.size <= 0) {
+    console.error('[onboardingUpload] empty blob', { size: blob?.size ?? 0 });
+    throw new Error('Selected image is empty. Try another photo.');
+  }
+
+  const contentType =
+    blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
   const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-  return getDownloadURL(storageRef);
+
+  try {
+    await uploadBytes(storageRef, blob, { contentType });
+    const downloadUrl = await getDownloadURL(storageRef);
+    console.log('[onboardingUpload] success', {
+      storagePath,
+      contentType,
+      bytes: blob.size,
+    });
+    return downloadUrl;
+  } catch (e) {
+    const err = e as { code?: string; message?: string; name?: string };
+    console.error('[onboardingUpload] storage failed', {
+      code: err?.code ?? 'unknown',
+      message: err?.message ?? String(e),
+      name: err?.name ?? null,
+      storagePath,
+      contentType,
+      bytes: blob.size,
+      uid,
+    });
+    throw e;
+  }
 }

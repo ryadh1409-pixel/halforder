@@ -10,13 +10,18 @@ export async function payOrderWithStripe(params: {
 }): Promise<void> {
   const orderId = params.orderId.trim();
   if (!orderId) throw new Error('Missing order id');
-  const amount = Math.round(Number(params.amount) * 100);
-  if (!Number.isFinite(amount) || amount <= 0) {
+  const STRIPE_MIN_AMOUNT_CENTS = 50;
+  const amountCents = Math.round(Number(params.amount) * 100);
+  if (!Number.isFinite(amountCents) || amountCents < 0) {
     throw new Error('Invalid amount.');
   }
+  const chargeAmountCents =
+    amountCents === 0
+      ? 0
+      : Math.max(amountCents, STRIPE_MIN_AMOUNT_CENTS);
   const result = await openPaymentSheet({
     orderId,
-    amount,
+    amount: chargeAmountCents,
     merchantDisplayName: 'HalfOrder',
   });
   if (result.status !== 'success') {

@@ -405,7 +405,7 @@ export default function CheckoutPremiumScreen() {
     }
     rows.push({
       key: 'service',
-      label: autoHiEmooo ? 'Platform fee' : 'Fees & marketplace service',
+      label: autoHiEmooo ? 'Service fee' : 'Fees & marketplace service',
       value: waiveServiceFee || serviceFee <= 0 ? 'FREE' : `$${serviceFee.toFixed(2)}`,
     });
     rows.push({
@@ -567,8 +567,10 @@ export default function CheckoutPremiumScreen() {
 
         {autoHiEmooo && appliedPromoCode === HI_EMOOO_PROMO_CODE ? (
           <View style={styles.hiEmoooGiftCard}>
-            <Text style={styles.hiEmoooGiftTitle}>🎁 Hi emooo</Text>
-            <Text style={styles.hiEmoooGiftOff}>50% OFF</Text>
+            <Text style={styles.hiEmoooGiftTitle}>🎉 Hi emooo Gift</Text>
+            <Text style={styles.hiEmoooGiftOff}>
+              50% OFF your first shared meal
+            </Text>
             <Text style={styles.hiEmoooGiftHint}>Applied automatically</Text>
           </View>
         ) : (
@@ -591,14 +593,6 @@ export default function CheckoutPremiumScreen() {
 
         <View style={{ height: 6 }} />
 
-        <Text style={[styles.payEyebrow, { marginHorizontal: 16 }]}>Payment</Text>
-        <View style={styles.stripePayNote}>
-          <Text style={styles.stripePayTitle}>Stripe PaymentSheet</Text>
-          <Text style={styles.stripePayBody}>
-            After you tap Next, Stripe opens with Apple Pay, Link, saved cards, and new card entry.
-          </Text>
-        </View>
-
         <CheckoutPriceBreakdown lines={priceLines} />
 
         {/* Space for pinned footer */}
@@ -608,7 +602,23 @@ export default function CheckoutPremiumScreen() {
       <View style={styles.footerDock} pointerEvents="box-none">
         <SavingsRibbon
           savingsAmount={savingsRibbonAmount}
-          sublabel={savingsRibbonAmount > 0 ? 'HalfOrder+ perks stack with promos this order' : undefined}
+          headline={
+            autoHiEmooo && savingsRibbonAmount > 0
+              ? '🎉 Hi emooo gift applied'
+              : undefined
+          }
+          detail={
+            autoHiEmooo && savingsRibbonAmount > 0
+              ? `You saved $${savingsRibbonAmount.toFixed(2)} on your first shared meal.`
+              : undefined
+          }
+          sublabel={
+            autoHiEmooo
+              ? undefined
+              : savingsRibbonAmount > 0
+                ? 'HalfOrder+ perks stack with promos this order'
+                : undefined
+          }
         />
         <StickyCheckoutButton
           label="Next"
@@ -659,32 +669,6 @@ const styles = StyleSheet.create({
     color: CK.textSecondary,
     lineHeight: 19,
   },
-  payEyebrow: {
-    marginTop: 12,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: CK.textMuted,
-    marginBottom: 8,
-  },
-  stripePayNote: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: CK.border,
-    backgroundColor: CK.bg,
-  },
-  stripePayTitle: { fontSize: 15.5, fontWeight: '900', color: CK.text },
-  stripePayBody: {
-    marginTop: 6,
-    fontSize: 13,
-    fontWeight: '600',
-    color: CK.textSecondary,
-    lineHeight: 19,
-  },
   lineRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -711,9 +695,10 @@ const styles = StyleSheet.create({
   },
   hiEmoooGiftOff: {
     marginTop: 4,
-    fontSize: 22,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '800',
     color: CK.savingsGoldMid,
+    lineHeight: 21,
   },
   hiEmoooGiftHint: {
     marginTop: 6,

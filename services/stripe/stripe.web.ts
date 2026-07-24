@@ -41,10 +41,16 @@ export async function initializePaymentSheet(
 export async function openPaymentSheet(
   params: InitSheetParams,
 ): Promise<OpenPaymentSheetResult> {
-  const amount = Number(params.amount);
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error('Amount must be a positive integer (in cents).');
+  const STRIPE_MIN_AMOUNT_CENTS = 50;
+  const amountCents = Number(params.amount);
+  if (!Number.isInteger(amountCents) || amountCents < 0) {
+    throw new Error('Amount must be a non-negative integer (in cents).');
   }
+
+  const chargeAmountCents =
+    amountCents === 0
+      ? 0
+      : Math.max(amountCents, STRIPE_MIN_AMOUNT_CENTS);
 
   const orderId = params.orderId?.trim() ?? '';
   if (!orderId) {
@@ -56,11 +62,24 @@ export async function openPaymentSheet(
 
   const fn = httpsCallable(functions, 'createPaymentIntent');
   const result = await fn({
-    amount,
+    amount: chargeAmountCents,
     orderId,
     platform: 'web',
   });
   const data = result.data as Record<string, unknown> | undefined;
+
+  if (data?.zeroAmountPaid === true) {
+    const paymentIntentId =
+      typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
+        ? data.paymentIntentId.trim()
+        : `free_${orderId}`;
+    return {
+      status: 'success',
+      clientSecret: '',
+      paymentIntentId,
+    };
+  }
+
   const checkoutUrl = typeof data?.checkoutUrl === 'string' ? data.checkoutUrl.trim() : '';
   const checkoutSessionId =
     typeof data?.checkoutSessionId === 'string' ? data.checkoutSessionId.trim() : '';

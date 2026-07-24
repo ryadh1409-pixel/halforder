@@ -1,6 +1,7 @@
 import { AppTextInput } from '@/components/AppTextInput';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { adminRoutes } from '@/constants/adminRoutes';
+import { isAdminUser } from '@/constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
   DEFAULT_ONBOARDING_CONFIG,
@@ -11,15 +12,19 @@ import {
   type OnboardingDisplayMode,
   type OnboardingSlideAdmin,
 } from '@/services/onboardingAdmin';
+import { useAuth } from '@/services/AuthContext';
 import { auth } from '@/services/firebase';
 import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { showError, showSuccess } from '@/utils/toast';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -36,6 +41,9 @@ const MODES: { id: OnboardingDisplayMode; label: string }[] = [
 ];
 
 export default function OnboardingManagerScreen() {
+  const router = useRouter();
+  const { user, firestoreUserRole } = useAuth();
+  const isAdmin = isAdminUser(user, firestoreUserRole);
   const [cfg, setCfg] = useState<OnboardingConfig>(DEFAULT_ONBOARDING_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,7 +105,19 @@ export default function OnboardingManagerScreen() {
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      showError('Allow photo library access to upload.');
+      Alert.alert(
+        'Photo access needed',
+        'Allow photo library access in Settings to upload onboarding images.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: () => {
+              void Linking.openSettings();
+            },
+          },
+        ],
+      );
       return;
     }
 
@@ -106,6 +126,7 @@ export default function OnboardingManagerScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.88,
+      exif: false,
     });
 
     if (result.canceled || !result.assets[0]?.uri) return;
@@ -119,25 +140,45 @@ export default function OnboardingManagerScreen() {
         localUri,
         uid,
       );
-      const nextSlides = cfg.slides.map((s) =>
-        s.id === slide.id ? { ...s, imageUri: downloadUrl } : s,
-      );
-      setCfg((prev) => ({ ...prev, slides: nextSlides }));
+      const nextCfg = await new Promise<OnboardingConfig>((resolve) => {
+        setCfg((prev) => {
+          const next: OnboardingConfig = {
+            ...prev,
+            slides: prev.slides.map((s) =>
+              s.id === slide.id ? { ...s, imageUri: downloadUrl } : s,
+            ),
+          };
+          resolve(next);
+          return next;
+        });
+      });
       setLocalPreview((prev) => {
         const next = { ...prev };
         delete next[slide.id];
         return next;
       });
       await saveOnboardingConfig({
-        displayMode: cfg.displayMode,
-        slides: nextSlides,
+        displayMode: nextCfg.displayMode,
+        slides: nextCfg.slides,
       });
+      setPreviewId(slide.id);
       showSuccess('Slide image uploaded.');
     } catch (e) {
-      showError(getReadableErrorMessageOr(e, 'Image upload failed.'));
+      console.error('[OnboardingManager] image upload failed', e);
+      showError(
+        getReadableErrorMessageOr(e, 'Image upload failed.', 'upload'),
+      );
     } finally {
       setUploadingSlideId(null);
     }
+  };
+
+  const openTestOnboarding = () => {
+    if (!isAdmin) {
+      showError('Admins only.');
+      return;
+    }
+    router.push('/onboarding?adminPreview=1' as never);
   };
 
   const removeSlideImage = async (slideId: string) => {
@@ -193,6 +234,20 @@ export default function OnboardingManagerScreen() {
               </Pressable>
             ))}
           </View>
+
+          {isAdmin ? (
+            <Pressable
+              style={styles.testBtn}
+              onPress={openTestOnboarding}
+              accessibilityRole="button"
+              accessibilityLabel="Test Onboarding"
+            >
+              <Text style={styles.testBtnText}>Test Onboarding</Text>
+              <Text style={styles.testBtnHint}>
+                Preview slides as a brand-new user (admin only)
+              </Text>
+            </Pressable>
+          ) : null}
 
           <Text style={styles.heading}>Slides</Text>
           {cfg.slides
@@ -256,17 +311,15 @@ export default function OnboardingManagerScreen() {
                 <View style={styles.imageSection}>
                   <Text style={styles.imageLabel}>Slide image</Text>
                   {slideImageUri(slide) ? (
-                    <Image
-                      source={{ uri: slideImageUri(slide) }}
-                      style={styles.imagePreview}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.imagePlaceholder}>
-                      <Text style={styles.imagePlaceholderText}>
-                        No image selected
-                      </Text>
+                    <View style={styles.imageFrame}>
+                      <Image
+                        source={{ uri: slideImageUri(slide) }}
+                        style={styles.imagePreview}
+                        contentFit="cover"
+                      />
                     </View>
+                  ) : (
+                    <View style={styles.imagePlaceholder} />
                   )}
                   <View style={styles.imageActions}>
                     <Pressable
@@ -298,16 +351,16 @@ export default function OnboardingManagerScreen() {
                 </View>
                 {previewId === slide.id ? (
                   <View style={styles.preview}>
-                    <Text style={styles.previewTitle}>{slide.title}</Text>
-                    <Text style={styles.previewSub}>{slide.subtitle}</Text>
                     {slideImageUri(slide) ? (
-                      <Image
-                        source={{ uri: slideImageUri(slide) }}
-                        style={styles.previewImage}
-                        contentFit="cover"
-                      />
+                      <View style={styles.imageFrame}>
+                        <Image
+                          source={{ uri: slideImageUri(slide) }}
+                          style={styles.imagePreview}
+                          contentFit="cover"
+                        />
+                      </View>
                     ) : (
-                      <Text style={styles.meta}>No image — emoji/default UI</Text>
+                      <View style={styles.imagePlaceholder} />
                     )}
                   </View>
                 ) : null}
@@ -384,20 +437,10 @@ const styles = StyleSheet.create({
   },
   preview: {
     marginTop: 8,
-    padding: 12,
-    borderRadius: 12,
+    borderRadius: 20,
+    overflow: 'hidden',
     backgroundColor: '#000',
-    borderWidth: 1,
-    borderColor: COLORS.primary,
   },
-  previewTitle: {
-    color: COLORS.text,
-    fontWeight: '800',
-    fontSize: 20,
-    marginBottom: 8,
-  },
-  previewSub: { color: COLORS.textMuted, fontWeight: '600', lineHeight: 20 },
-  meta: { color: COLORS.textMuted, marginTop: 8, fontSize: 12 },
   imageSection: { marginBottom: 8 },
   imageLabel: {
     color: COLORS.textMuted,
@@ -407,25 +450,27 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  /** Matches real onboarding hero (~(screen−64)/200 ≈ 16:10; use 16:9 fill). */
+  imageFrame: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#171923',
+    marginBottom: 8,
+  },
   imagePreview: {
     width: '100%',
-    height: 180,
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
-    marginBottom: 8,
+    height: '100%',
   },
   imagePlaceholder: {
     width: '100%',
-    height: 120,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
+    aspectRatio: 16 / 9,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#171923',
     marginBottom: 8,
   },
-  imagePlaceholderText: { color: COLORS.textMuted, fontSize: 13 },
   imageActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   imageBtn: {
     paddingHorizontal: 14,
@@ -441,12 +486,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dangerBg,
   },
   imageBtnDangerText: { color: COLORS.error, fontWeight: '700', fontSize: 13 },
-  previewImage: {
-    width: '100%',
-    height: 160,
-    borderRadius: 10,
-    marginTop: 10,
-  },
   saveBtn: {
     marginTop: 8,
     backgroundColor: COLORS.primary,
@@ -455,4 +494,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  testBtn: {
+    marginBottom: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(168,85,247,0.12)',
+  },
+  testBtnText: {
+    color: COLORS.text,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  testBtnHint: {
+    marginTop: 4,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    fontSize: 12,
+  },
 });

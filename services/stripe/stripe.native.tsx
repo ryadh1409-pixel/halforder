@@ -155,22 +155,53 @@ export async function presentConfiguredPaymentSheet(
 
 async function createPaymentIntentSecrets(
   params: InitSheetParams,
-): Promise<InitSheetResult & { customerId: string; ephemeralKey: string }> {
-  const amount = Number(params.amount);
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error('Amount must be a positive integer (in cents).');
+): Promise<
+  InitSheetResult & {
+    customerId: string;
+    ephemeralKey: string;
+    /** Amount actually charged / shown on Apple Pay (cents). */
+    chargeAmountCents: number;
+    zeroAmountPaid?: boolean;
   }
+> {
+  const STRIPE_MIN_AMOUNT_CENTS = 50;
+  const amountCents = Number(params.amount);
+  if (!Number.isInteger(amountCents) || amountCents < 0) {
+    throw new Error('Amount must be a non-negative integer (in cents).');
+  }
+
+  // Use chargeAmountCents for Stripe; keep display total elsewhere.
+  const chargeAmountCents =
+    amountCents === 0
+      ? 0
+      : Math.max(amountCents, STRIPE_MIN_AMOUNT_CENTS);
 
   assertNonAnonymousPaymentUser();
   await auth.currentUser?.getIdToken(true);
 
   const fn = httpsCallable(functions, 'createPaymentIntent');
   const result = await fn({
-    amount,
+    amount: chargeAmountCents,
     orderId: params.orderId ?? null,
     platform: 'native',
   });
   const data = result.data as Record<string, unknown> | undefined;
+
+  if (data?.zeroAmountPaid === true) {
+    const paymentIntentId =
+      typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
+        ? data.paymentIntentId.trim()
+        : `free_${params.orderId ?? 'order'}`;
+    return {
+      clientSecret: '',
+      paymentIntentId,
+      customerId: '',
+      ephemeralKey: '',
+      chargeAmountCents: 0,
+      zeroAmountPaid: true,
+    };
+  }
+
   const clientSecret =
     typeof data?.clientSecret === 'string'
       ? data.clientSecret
@@ -189,7 +220,13 @@ async function createPaymentIntentSecrets(
       ? data.paymentIntentId.trim()
       : parsePaymentIntentId(clientSecret);
 
-  return { clientSecret, paymentIntentId, customerId, ephemeralKey };
+  return {
+    clientSecret,
+    paymentIntentId,
+    customerId,
+    ephemeralKey,
+    chargeAmountCents,
+  };
 }
 
 /** Creates a PaymentIntent and initializes PaymentSheet (does not present). */
@@ -198,6 +235,13 @@ export async function initializePaymentSheet(
 ): Promise<InitSheetResult> {
   const merchantDisplayName = params.merchantDisplayName ?? 'HalfOrder';
   const secrets = await createPaymentIntentSecrets(params);
+
+  if (secrets.zeroAmountPaid) {
+    return {
+      clientSecret: secrets.clientSecret,
+      paymentIntentId: secrets.paymentIntentId,
+    };
+  }
 
   const initResult: InitPaymentSheetResult = await initPaymentSheet({
     paymentIntentClientSecret: secrets.clientSecret,
@@ -216,7 +260,7 @@ export async function initializePaymentSheet(
         {
           paymentType: 'Immediate',
           label: merchantDisplayName,
-          amount: amountDollarsLabel(params.amount),
+          amount: amountDollarsLabel(secrets.chargeAmountCents),
         },
       ],
     },
@@ -266,12 +310,16 @@ export async function openPaymentSheet(
       paymentIntentId: secrets.paymentIntentId,
     };
 
+    if (secrets.zeroAmountPaid) {
+      return { status: 'success', ...init };
+    }
+
     const sheet = await presentConfiguredPaymentSheet({
       clientSecret: secrets.clientSecret,
       customerId: secrets.customerId,
       ephemeralKey: secrets.ephemeralKey,
       merchantDisplayName,
-      amountCents: params.amount,
+      amountCents: secrets.chargeAmountCents,
     });
 
     if (sheet.status === 'canceled') {

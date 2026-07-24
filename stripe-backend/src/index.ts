@@ -15,11 +15,16 @@ import {
   isFoodShareConfirmPayload,
   isFoodSharePaymentPayload,
 } from "./foodSharePaymentIntentCore.js";
+import {buildOrderPaidStatePatch} from "./orderPaidState.js";
+import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 import {
   createWalletSetupIntentCallable,
   detachWalletPaymentMethodCallable,
   listWalletPaymentMethodsCallable,
 } from "./walletPaymentMethods.js";
+
+/** Stripe CAD minimum charge (in cents). */
+const STRIPE_MIN_AMOUNT_CENTS = 50;
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -123,10 +128,10 @@ export const createPaymentIntent = functions
     const amount =
       typeof amountRaw === "number" ? amountRaw : Number(amountRaw);
 
-    if (!Number.isInteger(amount) || amount <= 0) {
+    if (!Number.isInteger(amount) || amount < 0) {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        "amount must be a positive integer in cents.",
+        "amount must be a non-negative integer in cents.",
       );
     }
 
@@ -224,6 +229,45 @@ export const createPaymentIntent = functions
     };
 
     try {
+      // $0.00 totals: skip Stripe entirely and mark the order paid.
+      if (amount === 0) {
+        const freePaymentId = `free_${orderId}`;
+        const basePatch = buildOrderPaidStatePatch(orderData, {
+          paymentIntentId: freePaymentId,
+        });
+        const patch: Record<string, unknown> = {
+          ...basePatch,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        const safe = prepareServerOrderPatch(
+          orderId,
+          orderData,
+          patch,
+          "createPaymentIntent:zeroAmount",
+        );
+        if (Object.keys(safe).length > 0) {
+          await orderSnap.ref.set(safe, {merge: true});
+        }
+        console.log(
+          JSON.stringify({
+            msg: "createPaymentIntent_zero_amount_marked_paid",
+            orderId,
+            userId: uid,
+            restaurantId,
+          }),
+        );
+        return {
+          zeroAmountPaid: true,
+          paymentIntentId: freePaymentId,
+          clientSecret: null,
+          customerId: null,
+          ephemeralKey: null,
+        };
+      }
+
+      const chargeAmountCents = Math.max(amount, STRIPE_MIN_AMOUNT_CENTS);
+
       const stripe = getStripe();
       const email =
         typeof context.auth.token.email === "string"
@@ -236,8 +280,12 @@ export const createPaymentIntent = functions
         const totalPriceRaw = orderData.totalPrice ?? orderData.total;
         const orderTotalCents =
           typeof totalPriceRaw === "number" && Number.isFinite(totalPriceRaw)
-            ? Math.max(1, Math.round(totalPriceRaw * 100))
+            ? Math.round(totalPriceRaw * 100)
             : amount;
+        const webChargeCents = Math.max(
+          orderTotalCents > 0 ? orderTotalCents : chargeAmountCents,
+          STRIPE_MIN_AMOUNT_CENTS,
+        );
         const restaurantName =
           typeof restaurantData.name === "string" && restaurantData.name.trim()
             ? restaurantData.name.trim()
@@ -257,7 +305,7 @@ export const createPaymentIntent = functions
                 product_data: {
                   name: restaurantName,
                 },
-                unit_amount: orderTotalCents,
+                unit_amount: webChargeCents,
               },
               quantity: 1,
             },
@@ -314,7 +362,7 @@ export const createPaymentIntent = functions
       }
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount,
+        amount: chargeAmountCents,
         currency: "cad",
         customer: customerId,
         automatic_payment_methods: {
@@ -343,6 +391,7 @@ export const createPaymentIntent = functions
           restaurantId,
           driverId: driverIdRaw || null,
           customerId,
+          chargeAmountCents,
           treasury: "halforder_platform",
         }),
       );
@@ -361,14 +410,47 @@ export const createPaymentIntent = functions
         message?: string;
         type?: string;
         code?: string;
+        decline_code?: string;
+        param?: string;
+        detail?: string;
+        rawType?: string;
+        statusCode?: number;
+        requestId?: string;
+        doc_url?: string;
+        headers?: unknown;
+        raw?: unknown;
+        payment_intent?: unknown;
+        charge?: unknown;
       };
+      // Full Stripe failure details for debugging (do not change create logic).
       console.error(
-        "[createPaymentIntent] Stripe error:",
-        stripeErr.message,
-        stripeErr.type,
-        stripeErr.code,
+        "[createPaymentIntent] Stripe error full response:",
+        JSON.stringify(
+          {
+            message: stripeErr.message ?? null,
+            type: stripeErr.type ?? null,
+            code: stripeErr.code ?? null,
+            decline_code: stripeErr.decline_code ?? null,
+            param: stripeErr.param ?? null,
+            detail: stripeErr.detail ?? null,
+            rawType: stripeErr.rawType ?? null,
+            statusCode: stripeErr.statusCode ?? null,
+            requestId: stripeErr.requestId ?? null,
+            doc_url: stripeErr.doc_url ?? null,
+            headers: stripeErr.headers ?? null,
+            raw: stripeErr.raw ?? null,
+            payment_intent: stripeErr.payment_intent ?? null,
+            charge: stripeErr.charge ?? null,
+            errorKeys:
+              err && typeof err === "object"
+                ? Object.keys(err as object)
+                : [],
+          },
+          null,
+          2,
+        ),
       );
-      console.error("[createPaymentIntent] Stripe raw error:", err);
+      console.error("[createPaymentIntent] Stripe error object:", err);
       throw new functions.https.HttpsError(
         "internal",
         stripeErr.message || "Failed to create payment intent.",

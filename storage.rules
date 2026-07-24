@@ -17,6 +17,14 @@ service firebase.storage {
           )
           || request.auth.uid == 'KT3LfXRsVgaH4LfRTQaexvj3CRn1'
           || request.auth.uid == 'Gjj6x4OU4OQmsnplollo9PLLpxt2'
+          || (
+            firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin'
+          )
+          || (
+            firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/admins/$(request.auth.uid)).data.get('active', false) == true
+          )
         );
     }
     function isValidImageUpload() {

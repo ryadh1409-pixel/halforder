@@ -17,8 +17,20 @@ function CheckoutPriceBreakdownInner({ lines }: Props) {
           <View key={row.key} style={[styles.row, isTotal && styles.totalGap]}>
             <View style={styles.labelWrap}>
               {row.badge ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeTxt}>{row.badge}</Text>
+                <View
+                  style={[
+                    styles.badge,
+                    row.badge === 'Hi emooo' && styles.badgeHiEmooo,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeTxt,
+                      row.badge === 'Hi emooo' && styles.badgeHiEmoooTxt,
+                    ]}
+                  >
+                    {row.badge}
+                  </Text>
                 </View>
               ) : null}
               <Text style={[styles.label, row.strikethrough && styles.strike]}>{row.label}</Text>
@@ -97,6 +109,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(229,57,53,0.22)',
   },
   badgeTxt: { fontSize: 10.5, fontWeight: '900', color: CK.offer },
+  badgeHiEmooo: {
+    borderRadius: 999,
+    backgroundColor: '#A855F7',
+    borderWidth: 0,
+    paddingHorizontal: 9,
+  },
+  badgeHiEmoooTxt: {
+    color: '#FFFFFF',
+  },
   val: {
     fontSize: 15,
     fontWeight: '800',

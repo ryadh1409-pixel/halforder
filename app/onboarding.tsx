@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
 import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppLogo from '../components/AppLogo';
+import { adminRoutes } from '../constants/adminRoutes';
 import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { goHome } from '../lib/navigation';
 import { useAuth } from '../services/AuthContext';
@@ -55,6 +57,10 @@ function toSlideView(s: OnboardingSlideAdmin, index: number): SlideView {
 }
 
 export default function OnboardingScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ adminPreview?: string }>();
+  const adminPreview =
+    params.adminPreview === '1' || params.adminPreview === 'true';
   const flatListRef = useRef<FlatList<SlideView>>(null);
   const [index, setIndex] = useState(0);
   const { user, role, loading: authLoading } = useAuth();
@@ -63,7 +69,10 @@ export default function OnboardingScreen() {
     DEFAULT_ONBOARDING_SLIDES.filter((s) => s.enabled).map(toSlideView),
   );
   const showRestaurantStripeCta =
-    !authLoading && !!user?.uid && (role === 'restaurant' || role === 'host' || role === 'admin');
+    !adminPreview &&
+    !authLoading &&
+    !!user?.uid &&
+    (role === 'restaurant' || role === 'host' || role === 'admin');
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +108,11 @@ export default function OnboardingScreen() {
   }, [user?.uid]);
 
   const completeOnboarding = useCallback(async () => {
+    // Admin test session: do not persist completion flags; return to manager.
+    if (adminPreview) {
+      router.replace(adminRoutes.onboardingManager as never);
+      return;
+    }
     await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
     if (user?.uid) {
       await AsyncStorage.setItem(
@@ -107,7 +121,7 @@ export default function OnboardingScreen() {
       );
     }
     goHome();
-  }, [user?.uid]);
+  }, [adminPreview, router, user?.uid]);
 
   const handleSkip = () => {
     void completeOnboarding();
