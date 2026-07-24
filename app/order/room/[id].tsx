@@ -1,9 +1,11 @@
 /**
  * Legacy thread: messages under `orders/{orderId}/messages`.
  * Primary order UI + HalfOrder flow: `/order/[id]` (sibling route).
+ * Support chatType uses OrderSupportChat (Emo AI intake → HalfOrder Team).
  */
 import AppHeader from '../../../components/AppHeader';
 import ReportUserModal from '../../../components/ReportUserModal';
+import { OrderSupportChat } from '@/components/support/OrderSupportChat';
 import type { OrderChatType } from '@/constants/orderChat';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { theme } from '../../../constants/theme';
@@ -121,6 +123,20 @@ export default function OrderChatScreen() {
     return ORDER_CHAT_TYPE.CUSTOMER_DRIVER;
   }, [params.chatType]);
 
+  if (chatType === ORDER_CHAT_TYPE.SUPPORT) {
+    return <OrderSupportChat orderId={orderId} />;
+  }
+
+  return <OrderParticipantChat orderId={orderId} chatType={chatType} />;
+}
+
+function OrderParticipantChat({
+  orderId,
+  chatType,
+}: {
+  orderId: string;
+  chatType: OrderChatType;
+}) {
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -199,8 +215,6 @@ export default function OrderChatScreen() {
 
   useEffect(() => {
     if (!listRef.current) return;
-    // Fire-and-forget scroll on every message update.
-    // The list updates are driven by Firestore snapshots.
     requestAnimationFrame(() => {
       listRef.current?.scrollToEnd({ animated: true });
     });
@@ -322,9 +336,7 @@ export default function OrderChatScreen() {
         title={
           chatType === ORDER_CHAT_TYPE.RESTAURANT_DRIVER
             ? 'Restaurant ↔ Driver'
-            : chatType === ORDER_CHAT_TYPE.SUPPORT
-              ? 'Support'
-              : 'Driver chat'
+            : 'Driver chat'
         }
       />
 
@@ -400,23 +412,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
     paddingHorizontal: 14,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  backBtn: {
-    padding: 8,
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  headerSpacer: {
-    width: 38,
   },
   chatBody: {
     flex: 1,
@@ -561,4 +556,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-
