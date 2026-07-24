@@ -2294,10 +2294,14 @@ service cloud.firestore {
         || marketplaceCustomerCheckoutPaidPatchOk();
     }
     function restaurantMustNotAssignDriver(before, after) {
+      // Use .get() — direct `before.driverId` / `after.driverId` throws when the field is
+      // absent and poisons restaurantKitchenPatchFastOk / marketplaceRestaurantPatchOk.
+      let beforeId = before.get('driverId', '');
+      let afterId = after.get('driverId', '');
       return !(
-        (!(before.driverId is string && before.driverId.size() > 0))
-        && after.driverId is string
-        && after.driverId.size() > 0
+        (!(beforeId is string && beforeId.size() > 0))
+        && afterId is string
+        && afterId.size() > 0
       );
     }
     function marketplaceRestaurantPatchOk() {
@@ -2924,20 +2928,29 @@ service cloud.firestore {
         );
       allow update: if isSignedIn()
         && (
-          // ULTRA-LIGHT: assigned driver may write ONLY driverLocation (live GPS).
+          // FAST PATH: restaurant kitchen accept / preparing / ready — must run before
+          // driverLocation / driver branches so missing driver fields cannot short-circuit
+          // the OR-chain with a rules error (and to stay under the 1000-expr budget).
           (
-            request.auth.uid == resource.data.assignedDriverId
+            !isCurrentUserRestricted()
+            && restaurantKitchenPatchFastOk()
+          )
+          // ULTRA-LIGHT: assigned driver may write ONLY driverLocation (live GPS).
+          // Use .get() — direct field access throws when driverId/assignedDriverId are absent
+          // and would deny restaurant updates that share this OR-chain.
+          || (
+            request.auth.uid == resource.data.get('assignedDriverId', '')
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['driverLocation'])
           )
           || (
-            request.auth.uid == resource.data.driverId
+            request.auth.uid == resource.data.get('driverId', '')
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['driverLocation'])
           )
-          // ULTRA-LIGHT: driver pickup (driver_assigned → picked_up) — evaluated first.
+          // ULTRA-LIGHT: driver pickup (driver_assigned → picked_up).
           || driverMarketplacePickupFastPathOk()
           // ULTRA-LIGHT: driver deliver (picked_up → delivered).
           || driverMarketplaceDeliveredFastPathOk()
-          // ULTRA-LIGHT: driver claim (pool courier → driver_assigned) — before restaurant/HalfOrder.
+          // ULTRA-LIGHT: driver claim (pool courier → driver_assigned) — before HalfOrder.
           || driverMarketplaceClaimFastPathOk()
           // Full claim fallback (immutable fields last inside driverMarketplaceClaimPatchOk).
           || (
@@ -2945,11 +2958,6 @@ service cloud.firestore {
             && marketplaceDriverUnassignedClaimOk()
           )
           || isAdmin()
-          // FAST PATH: restaurant kitchen accept / preparing / ready (before driver/HalfOrder evaluators).
-          || (
-            !isCurrentUserRestricted()
-            && restaurantKitchenPatchFastOk()
-          )
           // FAST PATH: customer profile cancel — minimal expressions.
           || (
             !isCurrentUserRestricted()
