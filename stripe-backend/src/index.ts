@@ -26,6 +26,51 @@ import {
 /** Stripe CAD minimum charge (in cents). */
 const STRIPE_MIN_AMOUNT_CENTS = 50;
 
+/**
+ * Final amount the customer owes after promos — prefer `customerTotal`, then
+ * reconstruct from receipt fields, then `totalPrice` / `total`. Returns cents.
+ */
+function orderCustomerChargeCents(orderData: Record<string, unknown>): number | null {
+  const customerTotal = orderData.customerTotal;
+  if (typeof customerTotal === "number" && Number.isFinite(customerTotal)) {
+    return Math.round(customerTotal * 100);
+  }
+
+  const subtotal =
+    typeof orderData.subtotal === "number" && Number.isFinite(orderData.subtotal)
+      ? orderData.subtotal
+      : null;
+  const promoDiscount =
+    typeof orderData.promoDiscount === "number" && Number.isFinite(orderData.promoDiscount)
+      ? orderData.promoDiscount
+      : 0;
+  const tax =
+    typeof orderData.tax === "number" && Number.isFinite(orderData.tax)
+      ? orderData.tax
+      : null;
+  const deliveryFee =
+    typeof orderData.deliveryFee === "number" && Number.isFinite(orderData.deliveryFee)
+      ? orderData.deliveryFee
+      : 0;
+  const serviceFee =
+    typeof orderData.serviceFee === "number" && Number.isFinite(orderData.serviceFee)
+      ? orderData.serviceFee
+      : 0;
+
+  // Prefer receipt math over totalPrice when promo fields exist (avoids stale pre-discount totals).
+  if (subtotal != null && tax != null) {
+    const dollars =
+      Math.max(0, subtotal - promoDiscount) + deliveryFee + serviceFee + tax;
+    return Math.round(dollars * 100);
+  }
+
+  const totalPrice = orderData.totalPrice ?? orderData.total;
+  if (typeof totalPrice === "number" && Number.isFinite(totalPrice)) {
+    return Math.round(totalPrice * 100);
+  }
+  return null;
+}
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -229,8 +274,15 @@ export const createPaymentIntent = functions
     };
 
     try {
+      // Charge from order.customerTotal (post-promo), never a stale client amount.
+      const orderAmountCents = orderCustomerChargeCents(orderData);
+      const amountCents =
+        orderAmountCents != null && orderAmountCents >= 0
+          ? orderAmountCents
+          : amount;
+
       // $0.00 totals: skip Stripe entirely and mark the order paid.
-      if (amount === 0) {
+      if (amountCents === 0) {
         const freePaymentId = `free_${orderId}`;
         const basePatch = buildOrderPaidStatePatch(orderData, {
           paymentIntentId: freePaymentId,
@@ -266,7 +318,18 @@ export const createPaymentIntent = functions
         };
       }
 
-      const chargeAmountCents = Math.max(amount, STRIPE_MIN_AMOUNT_CENTS);
+      const chargeAmountCents = Math.max(amountCents, STRIPE_MIN_AMOUNT_CENTS);
+      console.log(
+        JSON.stringify({
+          msg: "createPaymentIntent_amount_resolved",
+          orderId,
+          clientAmountCents: amount,
+          orderCustomerTotal: orderData.customerTotal ?? null,
+          orderTotalPrice: orderData.totalPrice ?? orderData.total ?? null,
+          amountCents,
+          chargeAmountCents,
+        }),
+      );
 
       const stripe = getStripe();
       const email =
@@ -277,15 +340,7 @@ export const createPaymentIntent = functions
       const customerId = await getOrCreateStripeCustomer(stripe, uid, email);
 
       if (platform === "web") {
-        const totalPriceRaw = orderData.totalPrice ?? orderData.total;
-        const orderTotalCents =
-          typeof totalPriceRaw === "number" && Number.isFinite(totalPriceRaw)
-            ? Math.round(totalPriceRaw * 100)
-            : amount;
-        const webChargeCents = Math.max(
-          orderTotalCents > 0 ? orderTotalCents : chargeAmountCents,
-          STRIPE_MIN_AMOUNT_CENTS,
-        );
+        const webChargeCents = chargeAmountCents;
         const restaurantName =
           typeof restaurantData.name === "string" && restaurantData.name.trim()
             ? restaurantData.name.trim()
