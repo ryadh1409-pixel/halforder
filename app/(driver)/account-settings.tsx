@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { updateProfile } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -57,15 +57,23 @@ export default function DriverAccountSettingsScreen() {
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
+  const phoneHydratedRef = useRef(false);
 
+  // Hydrate phone once when identity finishes loading — do not overwrite while editing.
   useEffect(() => {
-    if (identity.loading) return;
-    setDisplayName(identity.displayName);
-    setPhone(
-      identity.phoneRaw
-        ? displayFromStoredProfilePhone(identity.phoneRaw)
-        : '+1 ',
-    );
+    if (identity.loading) {
+      phoneHydratedRef.current = false;
+      return;
+    }
+    if (!phoneHydratedRef.current) {
+      setDisplayName(identity.displayName);
+      setPhone(
+        identity.phoneRaw
+          ? displayFromStoredProfilePhone(identity.phoneRaw)
+          : '+1 ',
+      );
+      phoneHydratedRef.current = true;
+    }
   }, [identity.loading, identity.displayName, identity.phoneRaw]);
 
   const handleSave = useCallback(async () => {
@@ -104,6 +112,7 @@ export default function DriverAccountSettingsScreen() {
       await updateProfile(currentUser, { displayName: nameMod.text });
       await currentUser.reload();
 
+      // Contact phone lives on Firestore (Auth phoneNumber requires SMS verification).
       await profileFirestoreOp(
         {
           file: 'app/(driver)/account-settings.tsx',
@@ -144,6 +153,10 @@ export default function DriverAccountSettingsScreen() {
           ),
       );
 
+      phoneHydratedRef.current = true;
+      setPhone(
+        phoneForFirestore ? displayFromStoredProfilePhone(phoneForFirestore) : '+1 ',
+      );
       showSuccess('Account settings saved.');
       router.back();
     } catch (error) {

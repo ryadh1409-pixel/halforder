@@ -54,7 +54,8 @@ export function useDriverLocationTracking(
             const coord = gpsReadingToDriverCoord(reading);
             setCurrent(coord);
             setSyncing(true);
-            void syncDriverLiveLocation(oid, did, coord)
+            // Write every GPS update to orders/{id}.driverLocation (user tracking field).
+            void syncDriverLiveLocation(oid, did, coord, { force: true })
               .then((written) => {
                 if (!mounted) return;
                 if (written) setLastSyncedAt(Date.now());
@@ -64,8 +65,8 @@ export function useDriverLocationTracking(
               });
           },
           {
-            timeIntervalMs: 5000,
-            distanceIntervalM: 10,
+            timeIntervalMs: 2000,
+            distanceIntervalM: 5,
           },
         );
         watchRef.current = subscription;

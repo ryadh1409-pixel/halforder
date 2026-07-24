@@ -162,11 +162,112 @@ export type ActiveDelivery = DeliveryQueueOrder & {
 };
 
 function parseLatLng(value: unknown): LatLng | null {
-  if (!value || typeof value !== 'object') return null;
-  const lat = Number((value as { lat?: unknown }).lat);
-  const lng = Number((value as { lng?: unknown }).lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const o = value as Record<string, unknown>;
+  const latCandidate = o.lat ?? o.latitude;
+  const lngCandidate = o.lng ?? o.longitude;
+  const latRaw = typeof latCandidate === 'number' ? latCandidate : Number(latCandidate);
+  const lngRaw = typeof lngCandidate === 'number' ? lngCandidate : Number(lngCandidate);
+  if (!Number.isFinite(latRaw) || !Number.isFinite(lngRaw)) return null;
+  if (Math.abs(latRaw) > 90 || Math.abs(lngRaw) > 180) return null;
+  return { lat: latRaw, lng: lngRaw };
+}
+
+function isPlainDataObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function pickNonEmptyString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function nestedRecord(
+  data: Record<string, unknown> | null | undefined,
+  key: string,
+): Record<string, unknown> | null {
+  if (!isPlainDataObject(data)) return null;
+  const value = data[key];
+  // Reject arrays / timestamps-as-unexpected-shapes; only plain maps.
+  if (!isPlainDataObject(value)) return null;
+  return value;
+}
+
+/** Prefer nested restaurant.name (same as Track Order); never fall back to doc ids. */
+function restaurantNameFromOrderData(data: Record<string, unknown> | null | undefined): string {
+  if (!isPlainDataObject(data)) return 'Restaurant';
+  const nested = nestedRecord(data, 'restaurant');
+  const fromNested = pickNonEmptyString(nested?.name);
+  if (fromNested) return fromNested;
+  const fromRoot = pickNonEmptyString(data.restaurantName);
+  return fromRoot ?? 'Restaurant';
+}
+
+/** customer.name → customerName → user.displayName */
+function customerNameFromOrderData(
+  data: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!isPlainDataObject(data)) return null;
+  const customer = nestedRecord(data, 'customer');
+  const user = nestedRecord(data, 'user');
+  return pickNonEmptyString(
+    customer?.name,
+    customer?.displayName,
+    data.customerName,
+    user?.displayName,
+    user?.name,
+    data.userName,
+  );
+}
+
+function customerPhoneFromOrderData(
+  data: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!isPlainDataObject(data)) return null;
+  const customer = nestedRecord(data, 'customer');
+  return pickNonEmptyString(
+    customer?.phone,
+    customer?.phoneNumber,
+    customer?.whatsapp,
+    data.customerPhone,
+    data.customerPhoneNumber,
+    data.userPhone,
+  );
+}
+
+function restaurantPhoneFromOrderData(
+  data: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!isPlainDataObject(data)) return null;
+  const restaurant = nestedRecord(data, 'restaurant');
+  return pickNonEmptyString(
+    restaurant?.phone,
+    restaurant?.phoneNumber,
+    restaurant?.whatsapp,
+    data.restaurantPhone,
+    data.restaurantContactPhone,
+    data.venuePhone,
+  );
+}
+
+function restaurantLocationFromOrderData(
+  data: Record<string, unknown> | null | undefined,
+): LatLng | null {
+  if (!isPlainDataObject(data)) return null;
+  const fromRoot = parseLatLng(data.restaurantLocation);
+  if (fromRoot) return fromRoot;
+  const nested = nestedRecord(data, 'restaurant');
+  if (!nested) return null;
+  return parseLatLng({
+    lat: nested.lat ?? nested.latitude,
+    lng: nested.lng ?? nested.longitude,
+    latitude: nested.latitude,
+    longitude: nested.longitude,
+  });
 }
 
 function distanceKm(a: LatLng | null, b: LatLng | null): number | null {
@@ -202,12 +303,15 @@ function mapQueueOrder(d: { id: string; data: () => Record<string, unknown> }): 
   const data = d.data() ?? {};
   const createdAtMs = safeToMillis(data.createdAt);
   warnDevIfUnparsableTimestamp(d.id, 'createdAt', data.createdAt);
-  const restaurantLocation = parseLatLng(data.restaurantLocation);
+  const restaurantLocation = restaurantLocationFromOrderData(data);
   const customerLocation =
     parseLatLng(data.userLocation) ??
     parseLatLng(
-      data.deliveryLocation && typeof data.deliveryLocation === 'object' ? data.deliveryLocation : null,
-    );
+      data.deliveryLocation && typeof data.deliveryLocation === 'object' && !Array.isArray(data.deliveryLocation)
+        ? data.deliveryLocation
+        : null,
+    ) ??
+    parseLatLng(data.customerLocation);
   const driverLocation = parseLatLng(data.driverLocation);
   const items = mapItems(data.items);
   const subtotal = typeof data.subtotal === 'number' ? data.subtotal : 0;
@@ -218,6 +322,28 @@ function mapQueueOrder(d: { id: string; data: () => Record<string, unknown> }): 
       : typeof data.total === 'number'
         ? data.total
         : subtotal + fees;
+
+  let restaurantName = 'Restaurant';
+  let restaurantPhone: string | null = null;
+  let customerName: string | null = null;
+  let customerPhone: string | null = null;
+  try {
+    restaurantName = restaurantNameFromOrderData(data);
+    restaurantPhone = restaurantPhoneFromOrderData(data);
+    customerName = customerNameFromOrderData(data);
+    customerPhone = customerPhoneFromOrderData(data);
+  } catch {
+    restaurantName =
+      typeof data.restaurantName === 'string' && data.restaurantName.trim()
+        ? data.restaurantName.trim()
+        : 'Restaurant';
+    restaurantPhone =
+      typeof data.restaurantPhone === 'string' ? data.restaurantPhone : null;
+    customerName = typeof data.customerName === 'string' ? data.customerName : null;
+    customerPhone =
+      typeof data.customerPhone === 'string' ? data.customerPhone : null;
+  }
+
   return {
     id: d.id,
     customerId:
@@ -226,26 +352,11 @@ function mapQueueOrder(d: { id: string; data: () => Record<string, unknown> }): 
         : typeof data.customerId === 'string'
           ? data.customerId
           : null,
-    restaurantName:
-      typeof data.restaurantName === 'string'
-        ? data.restaurantName
-        : typeof data.restaurantId === 'string'
-          ? data.restaurantId
-          : 'Restaurant',
+    restaurantName,
     restaurantImage: typeof data.restaurantImage === 'string' ? data.restaurantImage : null,
-    restaurantPhone:
-      typeof data.restaurantPhone === 'string'
-        ? data.restaurantPhone
-        : typeof data.restaurantContactPhone === 'string'
-          ? data.restaurantContactPhone
-          : null,
-    customerName: typeof data.customerName === 'string' ? data.customerName : null,
-    customerPhone:
-      typeof data.customerPhone === 'string'
-        ? data.customerPhone
-        : typeof data.customerPhoneNumber === 'string'
-          ? data.customerPhoneNumber
-          : null,
+    restaurantPhone,
+    customerName,
+    customerPhone,
     deliveryAddress:
       typeof data.deliveryAddress === 'string'
         ? data.deliveryAddress
@@ -335,29 +446,34 @@ function mapActiveDelivery(
         : typeof data.restaurantLocationAddress === 'string'
           ? data.restaurantLocationAddress
           : null,
-    restaurantLocation: parseLatLng(data.restaurantLocation),
+    restaurantLocation: restaurantLocationFromOrderData(data),
     customerLocation:
       parseLatLng(data.userLocation) ??
       parseLatLng(
         data.deliveryLocation && typeof data.deliveryLocation === 'object'
           ? data.deliveryLocation
           : null,
-      ),
-    driverLocation:
-      data.driverLocation && typeof data.driverLocation === 'object'
-        ? ({
-            ...parseLatLng(data.driverLocation),
-            heading:
-              typeof (data.driverLocation as { heading?: unknown }).heading === 'number'
-                ? Number((data.driverLocation as { heading: number }).heading)
-                : null,
-            speed:
-              typeof (data.driverLocation as { speed?: unknown }).speed === 'number'
-                ? Number((data.driverLocation as { speed: number }).speed)
-                : null,
-            updatedAt: safeToMillis((data.driverLocation as { updatedAt?: unknown }).updatedAt),
-          } as DeliveryLocation)
-        : null,
+      ) ??
+      parseLatLng(data.customerLocation),
+    driverLocation: (() => {
+      const parsed = parseLatLng(data.driverLocation);
+      if (!parsed || !data.driverLocation || typeof data.driverLocation !== 'object') {
+        return null;
+      }
+      const loc = data.driverLocation as Record<string, unknown>;
+      return {
+        ...parsed,
+        heading:
+          typeof loc.heading === 'number' && Number.isFinite(loc.heading)
+            ? Number(loc.heading)
+            : null,
+        speed:
+          typeof loc.speed === 'number' && Number.isFinite(loc.speed)
+            ? Number(loc.speed)
+            : null,
+        updatedAt: safeToMillis(loc.updatedAt),
+      } as DeliveryLocation;
+    })(),
     timeline: (() => {
       const timeline: ActiveDelivery['timeline'] = [];
       for (const event of timelineRaw) {

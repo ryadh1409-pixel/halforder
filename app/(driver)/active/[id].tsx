@@ -11,15 +11,18 @@ import {
   exitDriverActiveDeliveryAfterComplete,
   isActiveDeliveryComplete,
 } from '@/lib/driverDeliveryCompletion';
+import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
 import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
 import { useDriverActiveOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
+import { db } from '@/services/firebase';
 import { orderRoomHref } from '@/services/orderChat';
 import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { setDriverActiveRouteOrderId } from '@/lib/driverHubOrdersStore';
+import { doc, getDoc } from 'firebase/firestore';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -44,6 +47,15 @@ function elapsedLabel(acceptedAtMs: number | null): string {
   return `${mins}m`;
 }
 
+function phoneFromDocData(data: Record<string, unknown> | undefined): string | null {
+  if (!data) return null;
+  for (const key of ['phone', 'phoneNumber', 'whatsapp'] as const) {
+    const value = data[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 export default function DriverActiveDeliveryDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user } = useAuth();
@@ -53,6 +65,8 @@ export default function DriverActiveDeliveryDetailsScreen() {
   const { order, loading } = useActiveDelivery(id, user?.uid, { enabled: listenersEnabled });
   const [busy, setBusy] = useState(false);
   const mapRef = useRef<unknown>(null);
+  const [customerCallPhone, setCustomerCallPhone] = useState<string | null>(null);
+  const [restaurantCallPhone, setRestaurantCallPhone] = useState<string | null>(null);
 
   useDriverActiveOrderLifecycleAlert(order);
 
@@ -71,6 +85,85 @@ export default function DriverActiveDeliveryDetailsScreen() {
       reason: 'active_screen_exit',
     });
   }, [loading, isDeliveryComplete, id, order]);
+
+  // Fetch Call phones from users/{customerId} and restaurants/{restaurantId}.
+  useEffect(() => {
+    if (!id || !order) {
+      setCustomerCallPhone(null);
+      setRestaurantCallPhone(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const orderSnap = await getDoc(doc(db, 'orders', id));
+        const data = (orderSnap.exists() ? orderSnap.data() : {}) as Record<string, unknown>;
+        const restaurantObj =
+          data.restaurant && typeof data.restaurant === 'object'
+            ? (data.restaurant as Record<string, unknown>)
+            : null;
+
+        const customerId =
+          (typeof order.customerId === 'string' && order.customerId.trim()
+            ? order.customerId.trim()
+            : null) ||
+          (typeof data.userId === 'string' && data.userId.trim()
+            ? data.userId.trim()
+            : null) ||
+          (typeof data.customerId === 'string' && data.customerId.trim()
+            ? data.customerId.trim()
+            : null);
+
+        const restaurantId =
+          (typeof data.restaurantId === 'string' && data.restaurantId.trim()
+            ? data.restaurantId.trim()
+            : null) ||
+          (typeof data.venueId === 'string' && data.venueId.trim()
+            ? data.venueId.trim()
+            : null) ||
+          (restaurantObj &&
+          typeof restaurantObj.id === 'string' &&
+          restaurantObj.id.trim()
+            ? restaurantObj.id.trim()
+            : null);
+
+        const [userSnap, restaurantSnap] = await Promise.all([
+          customerId
+            ? getDoc(doc(db, 'users', customerId)).catch(() => null)
+            : Promise.resolve(null),
+          restaurantId
+            ? getDoc(doc(db, 'restaurants', restaurantId)).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        if (cancelled) return;
+
+        const fromUser = phoneFromDocData(
+          userSnap && 'exists' in userSnap && userSnap.exists()
+            ? (userSnap.data() as Record<string, unknown>)
+            : undefined,
+        );
+        const fromRestaurant = phoneFromDocData(
+          restaurantSnap && 'exists' in restaurantSnap && restaurantSnap.exists()
+            ? (restaurantSnap.data() as Record<string, unknown>)
+            : undefined,
+        );
+
+        setCustomerCallPhone(fromUser || order.customerPhone || null);
+        setRestaurantCallPhone(fromRestaurant || order.restaurantPhone || null);
+      } catch {
+        if (cancelled) return;
+        setCustomerCallPhone(order.customerPhone || null);
+        setRestaurantCallPhone(order.restaurantPhone || null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, order?.id, order?.customerId, order?.customerPhone, order?.restaurantPhone]);
 
   const { current: currentLocation, permissionGranted } = useDriverLocationTracking(
     id,
@@ -94,12 +187,17 @@ export default function DriverActiveDeliveryDetailsScreen() {
   const points = useMemo(() => {
     if (!order) return [];
     const driver = driverLocationForMap ?? order.driverLocation;
-    const restaurant = order.restaurantLocation;
-    const customer = order.customerLocation;
+    const leg = deliveryMapLegFromStatuses(
+      order.marketplaceCourierStatus ?? order.firestoreDeliveryStatus,
+      order.status,
+    );
+    const destination =
+      leg === 'to_customer' ? order.customerLocation : order.restaurantLocation;
     const list: { latitude: number; longitude: number }[] = [];
     if (driver) list.push({ latitude: driver.lat, longitude: driver.lng });
-    if (restaurant) list.push({ latitude: restaurant.lat, longitude: restaurant.lng });
-    if (customer) list.push({ latitude: customer.lat, longitude: customer.lng });
+    if (destination) {
+      list.push({ latitude: destination.lat, longitude: destination.lng });
+    }
     return list;
   }, [driverLocationForMap, order]);
 
@@ -299,7 +397,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
           <View style={styles.rowButtons}>
             <Pressable
               style={styles.smallBtn}
-              onPress={() => onCall(order.restaurantPhone, 'Restaurant')}
+              onPress={() => onCall(restaurantCallPhone, 'Restaurant')}
             >
               <Text style={styles.smallBtnText}>Call</Text>
             </Pressable>
@@ -317,7 +415,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
           <View style={styles.rowButtons}>
             <Pressable
               style={styles.smallBtn}
-              onPress={() => onCall(order.customerPhone, 'Customer')}
+              onPress={() => onCall(customerCallPhone, 'Customer')}
             >
               <Text style={styles.smallBtnText}>Call</Text>
             </Pressable>

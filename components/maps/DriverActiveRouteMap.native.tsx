@@ -1,8 +1,13 @@
 import type { ActiveDelivery, DeliveryLocation } from '@/services/delivery';
+import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
+import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
-import React, { useEffect } from 'react';
+import { parseLegacyLatLng } from '@/lib/location/coordinates';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+
+type LatLng = { latitude: number; longitude: number };
 
 export type DriverActiveRouteMapProps = {
   mapRef: React.RefObject<unknown>;
@@ -11,73 +16,172 @@ export type DriverActiveRouteMapProps = {
   points: { latitude: number; longitude: number }[];
 };
 
+function toLatLng(value: unknown): LatLng | null {
+  try {
+    const parsed = parseLegacyLatLng(value);
+    if (!parsed) return null;
+    if (!Number.isFinite(parsed.lat) || !Number.isFinite(parsed.lng)) return null;
+    return { latitude: parsed.lat, longitude: parsed.lng };
+  } catch {
+    return null;
+  }
+}
+
 export function DriverActiveRouteMap({
   mapRef,
   order,
   currentLocation,
   points,
 }: DriverActiveRouteMapProps) {
-  useEffect(() => {
-    const m = mapRef.current as MapView | null;
-    if (!m || points.length === 0) return;
-    m.fitToCoordinates(points, {
-      edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-      animated: true,
-    });
-  }, [mapRef, points]);
+  const localMapRef = useRef<MapView | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
-  if (points.length === 0) {
+  const routeLeg = useMemo(() => {
+    if (!order) return 'to_restaurant' as const;
+    return deliveryMapLegFromStatuses(
+      order.marketplaceCourierStatus ?? order.firestoreDeliveryStatus,
+      order.status,
+    );
+  }, [
+    order?.marketplaceCourierStatus,
+    order?.firestoreDeliveryStatus,
+    order?.status,
+  ]);
+
+  const driverCoord = useMemo(() => {
+    const live = currentLocation ?? order?.driverLocation ?? null;
+    return toLatLng(live);
+  }, [currentLocation, order?.driverLocation]);
+
+  const restaurantCoord = useMemo(
+    () => toLatLng(order?.restaurantLocation ?? null),
+    [order?.restaurantLocation],
+  );
+
+  const customerCoord = useMemo(
+    () => toLatLng(order?.customerLocation ?? null),
+    [order?.customerLocation],
+  );
+
+  const destinationCoord =
+    routeLeg === 'to_customer' ? customerCoord : restaurantCoord;
+
+  const routePoints = useMemo(() => {
+    const list: LatLng[] = [];
+    if (driverCoord) list.push(driverCoord);
+    if (destinationCoord) list.push(destinationCoord);
+    if (list.length >= 2) return list;
+    return (points ?? []).filter(
+      (p) =>
+        p != null &&
+        Number.isFinite(p.latitude) &&
+        Number.isFinite(p.longitude),
+    );
+  }, [driverCoord, destinationCoord, points]);
+
+  const fitPoints = useMemo(() => {
+    if (driverCoord && destinationCoord) return [driverCoord, destinationCoord];
+    if (routePoints.length > 0) return routePoints;
+    return driverCoord ? [driverCoord] : [];
+  }, [driverCoord, destinationCoord, routePoints]);
+
+  useEffect(() => {
+    const map = (mapRef?.current as MapView | null) ?? localMapRef.current;
+    if (!mapReady || !map || fitPoints.length === 0) return;
+    try {
+      if (fitPoints.length >= 2) {
+        fitMapToCoordinates(map, fitPoints, {
+          top: 48,
+          right: 48,
+          bottom: 48,
+          left: 48,
+        });
+        return;
+      }
+      if (driverCoord) {
+        map.animateToRegion(
+          {
+            latitude: driverCoord.latitude,
+            longitude: driverCoord.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          },
+          450,
+        );
+      }
+    } catch {
+      /* map not ready */
+    }
+  }, [mapReady, fitPoints, driverCoord, mapRef]);
+
+  const setMapRef = (instance: MapView | null) => {
+    localMapRef.current = instance;
+    if (mapRef && typeof mapRef === 'object' && 'current' in mapRef) {
+      (mapRef as React.MutableRefObject<unknown>).current = instance;
+    }
+  };
+
+  if (fitPoints.length === 0 && routePoints.length === 0) {
     return (
       <View style={styles.fallback}>
-        <Text style={styles.fallbackText}>Waiting for route coordinates…</Text>
+        <Text style={styles.fallbackText}>Waiting for live GPS…</Text>
+      </View>
+    );
+  }
+
+  const initial = fitPoints[0] ?? routePoints[0];
+  if (
+    !initial ||
+    !Number.isFinite(initial.latitude) ||
+    !Number.isFinite(initial.longitude)
+  ) {
+    return (
+      <View style={styles.fallback}>
+        <Text style={styles.fallbackText}>Waiting for live GPS…</Text>
       </View>
     );
   }
 
   return (
     <MapView
-      ref={mapRef as React.Ref<MapView>}
+      ref={setMapRef}
       style={styles.map}
       provider={getNativeMapProvider()}
       initialRegion={{
-        latitude: points[0].latitude,
-        longitude: points[0].longitude,
-        latitudeDelta: 0.08,
-        longitudeDelta: 0.08,
+        latitude: initial.latitude,
+        longitude: initial.longitude,
+        latitudeDelta: 0.04,
+        longitudeDelta: 0.04,
       }}
+      onMapReady={() => setMapReady(true)}
+      showsUserLocation={false}
+      showsMyLocationButton={false}
+      toolbarEnabled={false}
     >
-      {(currentLocation ?? order.driverLocation) ? (
-        <Marker
-          coordinate={{
-            latitude: (currentLocation ?? order.driverLocation)!.lat,
-            longitude: (currentLocation ?? order.driverLocation)!.lng,
-          }}
-          title="Driver"
-          pinColor="#22C55E"
-        />
+      {driverCoord ? (
+        <Marker coordinate={driverCoord} title="You" pinColor="#22C55E" />
       ) : null}
-      {order.restaurantLocation ? (
+
+      {routeLeg === 'to_restaurant' && restaurantCoord ? (
         <Marker
-          coordinate={{
-            latitude: order.restaurantLocation.lat,
-            longitude: order.restaurantLocation.lng,
-          }}
+          coordinate={restaurantCoord}
           title="Restaurant"
+          description="Pickup"
           pinColor="#F59E0B"
         />
       ) : null}
-      {order.customerLocation ? (
+
+      {routeLeg === 'to_customer' && customerCoord ? (
         <Marker
-          coordinate={{
-            latitude: order.customerLocation.lat,
-            longitude: order.customerLocation.lng,
-          }}
+          coordinate={customerCoord}
           title="Customer"
+          description="Dropoff"
           pinColor="#2563EB"
         />
       ) : null}
-      {points.length >= 2 ? (
-        <Polyline coordinates={points} strokeColor="#22C55E" strokeWidth={4} />
+
+      {routePoints.length >= 2 ? (
+        <Polyline coordinates={routePoints} strokeColor="#22C55E" strokeWidth={4} />
       ) : null}
     </MapView>
   );

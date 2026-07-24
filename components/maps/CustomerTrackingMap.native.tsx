@@ -7,6 +7,7 @@ import {
   regionFromCoordinates,
   toMapCoordinate,
 } from '@/lib/location/coordinates';
+import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
 import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import type { RestaurantOrder } from '@/services/orderService';
@@ -41,10 +42,12 @@ function TrackingMapInner({
   restaurant,
   dropoff,
   driver,
+  routeLeg,
 }: {
   restaurant: LatLng | null;
   dropoff: LatLng | null;
   driver: LatLng | null;
+  routeLeg: 'to_restaurant' | 'to_customer';
 }) {
   const mapRef = useRef<MapView | null>(null);
   const driverAnimRef = useRef<AnimatedRegion | null>(null);
@@ -91,13 +94,19 @@ function TrackingMapInner({
       .start();
   }, [driver?.latitude, driver?.longitude]);
 
+  // Uber Eats–style: draw the active leg only (pickup vs delivery).
   const polyline = useMemo(() => {
     const pts: LatLng[] = [];
-    if (restaurant) pts.push(restaurant);
-    if (driver) pts.push(driver);
-    if (dropoff) pts.push(dropoff);
+    if (routeLeg === 'to_customer') {
+      if (driver) pts.push(driver);
+      if (dropoff) pts.push(dropoff);
+    } else if (driver && restaurant) {
+      pts.push(driver, restaurant);
+    } else if (restaurant && dropoff) {
+      pts.push(restaurant, dropoff);
+    }
     return pts;
-  }, [restaurant, driver, dropoff]);
+  }, [restaurant, driver, dropoff, routeLeg]);
 
   useEffect(() => {
     if (!mapReady || markerPoints.length < 1) return;
@@ -176,6 +185,7 @@ export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
     toMapCoordinate(order.deliveryLocation) ??
     toMapCoordinate(order.userLocation);
   const driver = order.driverLocation ? toMapCoordinate(order.driverLocation) : null;
+  const routeLeg = deliveryMapLegFromStatuses(order.deliveryStatus, order.status);
   const pickupLabel =
     order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';
   const dropoffLabel =
@@ -185,7 +195,13 @@ export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
     <MapErrorBoundary
       fallback={<TrackingMapFallbackCard pickup={pickupLabel} dropoff={dropoffLabel} />}
     >
-      <TrackingMapInner key={order.id} restaurant={restaurant} dropoff={dropoff} driver={driver} />
+      <TrackingMapInner
+        key={order.id}
+        restaurant={restaurant}
+        dropoff={dropoff}
+        driver={driver}
+        routeLeg={routeLeg}
+      />
     </MapErrorBoundary>
   );
 }

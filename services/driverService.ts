@@ -98,6 +98,36 @@ export type DriverProfile = {
   isOnline: boolean;
 };
 
+/** Prefer caller phone; otherwise read saved contact phone from users/drivers docs. */
+async function resolveDriverContactPhone(
+  driver: DriverProfile,
+): Promise<string | null> {
+  const fromArg = typeof driver.phone === 'string' ? driver.phone.trim() : '';
+  if (fromArg) return fromArg;
+
+  try {
+    const [userSnap, driverSnap] = await Promise.all([
+      getDoc(doc(db, 'users', driver.id)),
+      getDoc(doc(db, 'drivers', driver.id)),
+    ]);
+    const user = userSnap.exists() ? userSnap.data() : undefined;
+    const driverDoc = driverSnap.exists() ? driverSnap.data() : undefined;
+    const candidates = [
+      user?.phone,
+      user?.phoneNumber,
+      user?.whatsapp,
+      driverDoc?.phone,
+      driverDoc?.phoneNumber,
+    ];
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+  } catch {
+    // Fall through — claim still proceeds with null phone.
+  }
+  return null;
+}
+
 export type DriverAssignment = {
   driverId: string;
   driverName: string;
@@ -1120,12 +1150,13 @@ export async function claimMarketplaceDriverOrder(
       reason: e instanceof Error ? e.message : 'suspended',
     };
   }
+  const resolvedPhone = await resolveDriverContactPhone(driver);
   const orderRef = doc(db, 'orders', orderId);
   const ruleSafePayload = {
     driverId: driver.id,
     assignedDriverId: driver.id,
     driverName: driver.name,
-    driverPhone: driver.phone ?? null,
+    driverPhone: resolvedPhone,
     ...(vehicle ? { driverVehicle: vehicle } : {}),
     deliveryStatus: 'driver_assigned',
     status: 'driver_assigned',
@@ -1199,7 +1230,7 @@ export async function claimMarketplaceDriverOrder(
       const driverBlob = {
         id: driver.id,
         name: driver.name,
-        phone: driver.phone ?? null,
+        phone: resolvedPhone,
         vehicle: vehicle ?? null,
         avatar: null as string | null,
       };
@@ -1310,10 +1341,11 @@ export async function acceptQueuedDeliveryOrder(
   if (mp.ok) return mp;
   if (mp.reason !== 'invalid_state' && mp.reason !== 'missing') return mp;
   try {
+    const phone = await resolveDriverContactPhone(driver);
     await acceptOrderWithLock(orderId, {
       id: driver.id,
       name: driver.name,
-      phone: driver.phone,
+      phone,
     });
     return { ok: true };
   } catch {

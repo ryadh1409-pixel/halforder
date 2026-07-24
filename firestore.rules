@@ -1203,7 +1203,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isAdmin()
         || (request.auth != null
-            && request.auth.uid == userId);
+            && request.auth.uid == userId)
+        // Assigned drivers need customer phone for Call on active delivery.
+        || (request.auth != null && hasDriverAccountDoc());
       allow list: if isAdmin();
       allow create: if isAdmin()
         || (request.auth != null && request.auth.uid == userId && request.resource.data.get('stripeOnboardingComplete', false) == false);
@@ -2908,8 +2910,17 @@ service cloud.firestore {
         );
       allow update: if isSignedIn()
         && (
+          // ULTRA-LIGHT: assigned driver may write ONLY driverLocation (live GPS).
+          (
+            request.auth.uid == resource.data.assignedDriverId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['driverLocation'])
+          )
+          || (
+            request.auth.uid == resource.data.driverId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['driverLocation'])
+          )
           // ULTRA-LIGHT: driver pickup (driver_assigned → picked_up) — evaluated first.
-          driverMarketplacePickupFastPathOk()
+          || driverMarketplacePickupFastPathOk()
           // ULTRA-LIGHT: driver deliver (picked_up → delivered).
           || driverMarketplaceDeliveredFastPathOk()
           // ULTRA-LIGHT: driver claim (pool courier → driver_assigned) — before restaurant/HalfOrder.
@@ -3246,6 +3257,13 @@ service cloud.firestore {
         && liveLocationDocKeysOk()
         && driverLocationOptionalNumber(request.resource.data, 'heading')
         && driverLocationOptionalNumber(request.resource.data, 'speed');
+      // Assigned driver live GPS mirror (orders/{id}.driverLocation batch companion).
+      allow create, update: if isSignedIn()
+        && request.auth.uid == liveLocOrderData().assignedDriverId
+        && request.resource.data.orderId == orderId
+        && request.resource.data.driverId == request.auth.uid
+        && liveLocationCoordsOk()
+        && liveLocationDocKeysOk();
       allow delete: if false;
     }
     /**

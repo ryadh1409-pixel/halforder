@@ -41,10 +41,17 @@ function orderCustomerUids(data: Record<string, unknown>): string[] {
 async function expoTokenFor(uid: string): Promise<string | null> {
   const userSnap = await db.doc(`users/${uid}`).get();
   const user = userSnap.data() ?? {};
-  const inlineToken = str(user.expoPushToken) || str(user.pushToken);
-  if (inlineToken) return inlineToken;
+  for (const key of ["expoPushToken", "pushToken", "fcmToken"]) {
+    const token = str(user[key]);
+    if (token) return token;
+  }
   const tokenSnap = await db.doc(`users/${uid}/pushToken/default`).get();
-  return tokenSnap.exists ? str(tokenSnap.data()?.token) || null : null;
+  if (tokenSnap.exists) {
+    const token = str(tokenSnap.data()?.token);
+    if (token) return token;
+  }
+  const fcmSnap = await db.doc(`users/${uid}/fcmToken/default`).get();
+  return fcmSnap.exists ? str(fcmSnap.data()?.token) || null : null;
 }
 
 async function sendExpoPush(
@@ -160,12 +167,14 @@ export const notifyOrderChatMessageCreated = onDocumentCreated(
     const tokens = (
       await Promise.all(recipients.map((uid) => expoTokenFor(uid)))
     ).filter((token): token is string => Boolean(token));
-    const body = str(message.text).slice(0, 120) || "New chat message";
     const senderRole = str(message.senderRole).toLowerCase();
-    const title = senderRole === "driver" ?
-      "Driver sent a message" :
-      "Customer sent a message";
-    await sendExpoPush(tokens, title, body, {
+    const senderName = str(message.senderName) ||
+      (senderRole === "driver" ? "Driver" :
+        senderRole === "restaurant" ? "Restaurant" :
+          "Customer");
+    const body = str(message.text).slice(0, 120) || "New chat message";
+    // Title = sender name; body = message preview (driver sees these immediately).
+    await sendExpoPush(tokens, senderName, body, {
       type: "order_chat_message",
       orderId,
       messageId: event.params.messageId,
