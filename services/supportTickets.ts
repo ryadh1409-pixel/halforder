@@ -39,6 +39,7 @@ export type SupportTicket = {
   message: string;
   status: SupportTicketStatus;
   createdAtMs: number | null;
+  updatedAtMs: number | null;
   /** When true, customer UI shows "HalfOrder Team is typing…" */
   teamTyping: boolean;
 };
@@ -73,6 +74,7 @@ function mapTicket(id: string, data: Record<string, unknown>): SupportTicket {
     message: typeof data.message === 'string' ? data.message : '',
     status: data.status === 'closed' ? 'closed' : 'open',
     createdAtMs: safeToMillis(data.createdAt),
+    updatedAtMs: safeToMillis(data.updatedAt) ?? safeToMillis(data.createdAt),
     teamTyping: data.teamTyping === true,
   };
 }
@@ -273,12 +275,12 @@ export async function createSupportTicket(input: {
   const typeLabel =
     input.type === 'food_complaint' ? 'Food complaint' : 'Delivery complaint';
 
-  const ticketRef = await addDoc(collection(db, TICKETS), {
+  const ticketPayload = {
     orderId: input.orderId,
     userId: uid,
     type: input.type,
     message: trimmed,
-    status: 'open',
+    status: 'open' as const,
     teamTyping: false,
     messages: input.transcript.map((m) => ({
       sender: m.sender,
@@ -287,6 +289,21 @@ export async function createSupportTicket(input: {
     })),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+  };
+
+  console.log('[supportTickets] createSupportTicket writing', {
+    collection: TICKETS,
+    orderId: input.orderId,
+    userId: uid,
+    type: input.type,
+    message: trimmed,
+  });
+
+  const ticketRef = await addDoc(collection(db, TICKETS), ticketPayload);
+
+  console.log('[supportTickets] createSupportTicket wrote', {
+    ticketId: ticketRef.id,
+    path: `${TICKETS}/${ticketRef.id}`,
   });
 
   // Sequential writes so orderBy('createdAt') matches the transcript.
@@ -345,4 +362,78 @@ export function supportMessageDisplayName(
   if (message.sender === 'user') return null;
   if (message.persona === 'emo') return 'Emo';
   return 'HalfOrder Team';
+}
+
+export function subscribeAdminSupportTickets(
+  onRows: (rows: SupportTicket[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, TICKETS), orderBy('createdAt', 'desc')),
+    (snap) => {
+      onRows(
+        snap.docs.map((d) =>
+          mapTicket(d.id, d.data() as Record<string, unknown>),
+        ),
+      );
+    },
+    (err) => {
+      console.warn('[supportTickets] subscribeAdminSupportTickets failed', err);
+      onRows([]);
+    },
+  );
+}
+
+export async function sendAdminSupportTicketReply(
+  ticketId: string,
+  text: string,
+): Promise<void> {
+  const trimmed = text.trim();
+  if (!ticketId.trim() || !trimmed) return;
+
+  await addDoc(collection(db, TICKETS, ticketId, 'messages'), {
+    sender: 'halforder_team',
+    text: trimmed,
+    persona: 'team',
+    createdAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, TICKETS, ticketId), {
+    updatedAt: serverTimestamp(),
+    message: trimmed,
+    teamTyping: false,
+    status: 'open',
+  });
+}
+
+export async function setSupportTicketTeamTyping(
+  ticketId: string,
+  typing: boolean,
+): Promise<void> {
+  if (!ticketId.trim()) return;
+  await updateDoc(doc(db, TICKETS, ticketId), {
+    teamTyping: typing === true,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function closeSupportTicket(ticketId: string): Promise<void> {
+  await updateDoc(doc(db, TICKETS, ticketId), {
+    status: 'closed',
+    teamTyping: false,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function reopenSupportTicket(ticketId: string): Promise<void> {
+  await updateDoc(doc(db, TICKETS, ticketId), {
+    status: 'open',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export function supportTicketTypeLabel(type: SupportTicketType): string {
+  return type === 'food_complaint' ? 'Food complaint' : 'Delivery complaint';
+}
+
+export function supportTicketStatusLabel(status: SupportTicketStatus): string {
+  return status === 'closed' ? 'Closed' : 'Open';
 }

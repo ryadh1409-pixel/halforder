@@ -3,18 +3,16 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
-  closeSupportConversation,
-  markSupportReadByAdmin,
-  reopenSupportConversation,
-  resolveSupportConversation,
-  statusLabel,
-  subscribeAdminSupportConversations,
-  type SupportConversation,
-  type SupportConversationStatus,
-} from '@/services/supportConversations';
+  closeSupportTicket,
+  reopenSupportTicket,
+  subscribeAdminSupportTickets,
+  supportTicketStatusLabel,
+  supportTicketTypeLabel,
+  type SupportTicket,
+  type SupportTicketStatus,
+} from '@/services/supportTickets';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { showError, showSuccess } from '@/utils/toast';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -26,7 +24,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type StatusFilter = 'all' | SupportConversationStatus;
+type StatusFilter = 'all' | SupportTicketStatus;
 
 function formatWhen(ms: number | null): string {
   if (ms == null) return '—';
@@ -34,54 +32,42 @@ function formatWhen(ms: number | null): string {
   return `${d.toLocaleDateString()} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function statusColor(status: SupportConversationStatus): string {
+function statusColor(status: SupportTicketStatus): string {
   if (status === 'open') return COLORS.primary;
-  if (status === 'waiting') return '#F59E0B';
-  if (status === 'resolved') return '#22C55E';
   return COLORS.textMuted;
 }
 
 export default function AdminSupportInboxScreen() {
   const router = useRouter();
-  const [rows, setRows] = useState<SupportConversation[]>([]);
+  const [rows, setRows] = useState<SupportTicket[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [filterUnread, setFilterUnread] = useState(false);
 
-  useEffect(() => subscribeAdminSupportConversations(setRows), []);
+  useEffect(() => subscribeAdminSupportTickets(setRows), []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      if (filterUnread && r.unreadAdmin <= 0) return false;
       if (!q) return true;
-      return [
-        r.userName,
-        r.userEmail,
-        r.userId,
-        r.lastMessage,
-        r.orderId,
-        r.paymentId,
-        r.complaintCategory,
-      ]
+      return [r.userId, r.orderId, r.message, r.type, r.id]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(q);
     });
-  }, [rows, search, statusFilter, filterUnread]);
+  }, [rows, search, statusFilter]);
 
-  const unreadTotal = rows.reduce((s, r) => s + (r.unreadAdmin > 0 ? 1 : 0), 0);
+  const openCount = rows.filter((r) => r.status === 'open').length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
         title="Support Inbox"
         subtitle={
-          unreadTotal > 0
-            ? `${unreadTotal} unread conversation${unreadTotal === 1 ? '' : 's'}`
-            : `${rows.length} conversation${rows.length === 1 ? '' : 's'}`
+          openCount > 0
+            ? `${openCount} open ticket${openCount === 1 ? '' : 's'}`
+            : `${rows.length} ticket${rows.length === 1 ? '' : 's'}`
         }
         fallbackRoute={adminRoutes.home}
       />
@@ -89,34 +75,24 @@ export default function AdminSupportInboxScreen() {
         <AppTextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search name, email, uid, order…"
+          placeholder="Search uid, order, message…"
           placeholderTextColor={COLORS.textMuted}
           style={styles.search}
         />
         <View style={styles.chipRow}>
-          {(['all', 'open', 'waiting', 'closed', 'resolved'] as StatusFilter[]).map(
-            (s) => (
-              <Pressable
-                key={s}
-                style={[styles.chip, statusFilter === s && styles.chipOn]}
-                onPress={() => setStatusFilter(s)}
+          {(['all', 'open', 'closed'] as StatusFilter[]).map((s) => (
+            <Pressable
+              key={s}
+              style={[styles.chip, statusFilter === s && styles.chipOn]}
+              onPress={() => setStatusFilter(s)}
+            >
+              <Text
+                style={[styles.chipText, statusFilter === s && styles.chipTextOn]}
               >
-                <Text
-                  style={[styles.chipText, statusFilter === s && styles.chipTextOn]}
-                >
-                  {s === 'all' ? 'All' : statusLabel(s)}
-                </Text>
-              </Pressable>
-            ),
-          )}
-          <Pressable
-            style={[styles.chip, filterUnread && styles.chipOn]}
-            onPress={() => setFilterUnread((v) => !v)}
-          >
-            <Text style={[styles.chipText, filterUnread && styles.chipTextOn]}>
-              Unread
-            </Text>
-          </Pressable>
+                {s === 'all' ? 'All' : supportTicketStatusLabel(s)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </View>
       <FlatList
@@ -125,60 +101,55 @@ export default function AdminSupportInboxScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            No support conversations yet. Customer messages and complaints
-            appear here in real time.
+            No support tickets yet. Customer order Support chats appear here in
+            real time.
           </Text>
         }
         renderItem={({ item }) => (
           <Pressable
-            style={[styles.card, item.unreadAdmin > 0 && styles.cardUnread]}
+            style={[styles.card, item.status === 'open' && styles.cardUnread]}
             onPress={() => {
-              void markSupportReadByAdmin(item.id).catch(() => {});
               router.push(adminRoutes.supportThread(item.id) as never);
             }}
           >
             <View style={styles.rowTop}>
-              {item.userPhotoURL ? (
-                <Image source={{ uri: item.userPhotoURL }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitial}>
-                    {(item.userName || 'U').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {(item.userId || 'U').charAt(0).toUpperCase()}
+                </Text>
+              </View>
               <View style={styles.cardMain}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name} numberOfLines={1}>
-                    {item.userName}
+                    {supportTicketTypeLabel(item.type)}
                   </Text>
-                  {item.unreadAdmin > 0 ? (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{item.unreadAdmin}</Text>
-                    </View>
-                  ) : null}
                 </View>
                 <Text style={styles.meta} numberOfLines={1}>
-                  {item.userEmail ?? item.userId}
+                  User: {item.userId}
+                </Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  Order: {item.orderId || '—'}
                 </Text>
                 <Text style={styles.preview} numberOfLines={2}>
-                  {item.lastMessage}
+                  {item.message}
                 </Text>
                 <View style={styles.footerRow}>
                   <Text
                     style={[styles.statusPill, { color: statusColor(item.status) }]}
                   >
-                    {statusLabel(item.status)}
+                    {supportTicketStatusLabel(item.status)}
                   </Text>
-                  <Text style={styles.meta}>{formatWhen(item.updatedAtMs)}</Text>
+                  <Text style={styles.meta}>
+                    {formatWhen(item.updatedAtMs ?? item.createdAtMs)}
+                  </Text>
                 </View>
               </View>
             </View>
-            {item.status !== 'closed' && item.status !== 'resolved' ? (
+            {item.status !== 'closed' ? (
               <Pressable
                 style={styles.archiveBtn}
                 onPress={() =>
-                  void closeSupportConversation(item.id)
+                  void closeSupportTicket(item.id)
                     .then(() => showSuccess('Closed.'))
                     .catch((e) =>
                       showError(getReadableErrorMessageOr(e, 'Close failed.')),
@@ -191,7 +162,7 @@ export default function AdminSupportInboxScreen() {
               <Pressable
                 style={styles.archiveBtn}
                 onPress={() =>
-                  void reopenSupportConversation(item.id)
+                  void reopenSupportTicket(item.id)
                     .then(() => showSuccess('Reopened.'))
                     .catch((e) =>
                       showError(getReadableErrorMessageOr(e, 'Reopen failed.')),
@@ -243,7 +214,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(168,85,247,0.10)',
   },
   rowTop: { flexDirection: 'row', gap: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 24 },
   avatarPlaceholder: {
     width: 48,
     height: 48,
@@ -256,16 +226,6 @@ const styles = StyleSheet.create({
   cardMain: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { flex: 1, color: COLORS.text, fontWeight: '800', fontSize: 16 },
-  badge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  badgeText: { color: '#fff', fontWeight: '800', fontSize: 11 },
   meta: { color: COLORS.textMuted, fontWeight: '600', marginTop: 4, fontSize: 12 },
   preview: { color: COLORS.text, fontWeight: '600', marginTop: 8, lineHeight: 20 },
   footerRow: {

@@ -261,6 +261,7 @@ export function OrderSupportChat({ orderId }: Props) {
           message: mod.text,
           status: 'open',
           createdAtMs: Date.now(),
+          updatedAtMs: Date.now(),
           teamTyping: false,
         });
         bootstrappedRef.current = true;

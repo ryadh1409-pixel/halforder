@@ -3,18 +3,17 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
-  closeSupportConversation,
-  markSupportReadByAdmin,
-  reopenSupportConversation,
-  resolveSupportConversation,
-  sendAdminSupportReply,
-  setSupportTyping,
-  statusLabel,
-  subscribeSupportConversation,
-  subscribeSupportConversationMessages,
-  type SupportConversation,
-  type SupportConversationMessage,
-} from '@/services/supportConversations';
+  closeSupportTicket,
+  reopenSupportTicket,
+  sendAdminSupportTicketReply,
+  setSupportTicketTeamTyping,
+  subscribeSupportTicket,
+  subscribeSupportTicketMessages,
+  supportTicketStatusLabel,
+  supportTicketTypeLabel,
+  type SupportTicket,
+  type SupportTicketMessage,
+} from '@/services/supportTickets';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -38,31 +37,30 @@ function formatWhen(ms: number | null): string {
 export default function AdminSupportThreadScreen() {
   const router = useRouter();
   const { threadId: threadParam } = useLocalSearchParams<{ threadId?: string }>();
-  const conversationId = typeof threadParam === 'string' ? threadParam : '';
-  const [conversation, setConversation] = useState<SupportConversation | null>(null);
-  const [messages, setMessages] = useState<SupportConversationMessage[]>([]);
+  const ticketId = typeof threadParam === 'string' ? threadParam : '';
+  const [ticket, setTicket] = useState<SupportTicket | null>(null);
+  const [messages, setMessages] = useState<SupportTicketMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!conversationId) return undefined;
-    void markSupportReadByAdmin(conversationId).catch(() => {});
-    const unsubMeta = subscribeSupportConversation(conversationId, setConversation);
-    const unsubMsg = subscribeSupportConversationMessages(conversationId, setMessages);
+    if (!ticketId) return undefined;
+    const unsubMeta = subscribeSupportTicket(ticketId, setTicket);
+    const unsubMsg = subscribeSupportTicketMessages(ticketId, setMessages);
     return () => {
       unsubMeta();
       unsubMsg();
     };
-  }, [conversationId]);
+  }, [ticketId]);
 
   const send = async () => {
-    if (!conversationId || !draft.trim()) return;
+    if (!ticketId || !draft.trim()) return;
     setSending(true);
     try {
-      await sendAdminSupportReply(conversationId, draft);
+      await sendAdminSupportTicketReply(ticketId, draft);
       setDraft('');
-      void setSupportTyping(conversationId, 'admin', false);
+      void setSupportTicketTeamTyping(ticketId, false);
       showSuccess('Reply sent.');
     } catch (e) {
       showError(getReadableErrorMessageOr(e, 'Could not send reply.'));
@@ -73,21 +71,19 @@ export default function AdminSupportThreadScreen() {
 
   const onDraftChange = (text: string) => {
     setDraft(text);
-    if (!conversationId) return;
-    void setSupportTyping(conversationId, 'admin', true);
+    if (!ticketId) return;
+    void setSupportTicketTeamTyping(ticketId, true);
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {
-      void setSupportTyping(conversationId, 'admin', false);
+      void setSupportTicketTeamTyping(ticketId, false);
     }, 2000);
   };
-
-  const complaintMessage = messages.find((m) => m.kind === 'complaint');
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
-        title={conversation?.userName ?? 'Conversation'}
-        subtitle={statusLabel(conversation?.status ?? 'open')}
+        title={ticket ? supportTicketTypeLabel(ticket.type) : 'Support ticket'}
+        subtitle={supportTicketStatusLabel(ticket?.status ?? 'open')}
         fallbackRoute={adminRoutes.supportInbox}
       />
 
@@ -95,8 +91,8 @@ export default function AdminSupportThreadScreen() {
         <Pressable
           style={styles.actionChip}
           onPress={() =>
-            void closeSupportConversation(conversationId)
-              .then(() => showSuccess('Conversation closed.'))
+            void closeSupportTicket(ticketId)
+              .then(() => showSuccess('Ticket closed.'))
               .catch((e) => showError(getReadableErrorMessageOr(e, 'Failed.')))
           }
         >
@@ -105,67 +101,32 @@ export default function AdminSupportThreadScreen() {
         <Pressable
           style={styles.actionChip}
           onPress={() =>
-            void reopenSupportConversation(conversationId)
-              .then(() => showSuccess('Conversation reopened.'))
+            void reopenSupportTicket(ticketId)
+              .then(() => showSuccess('Ticket reopened.'))
               .catch((e) => showError(getReadableErrorMessageOr(e, 'Failed.')))
           }
         >
           <Text style={styles.actionChipText}>Reopen</Text>
         </Pressable>
-        <Pressable
-          style={styles.actionChip}
-          onPress={() =>
-            void resolveSupportConversation(conversationId)
-              .then(() => showSuccess('Marked resolved.'))
-              .catch((e) => showError(getReadableErrorMessageOr(e, 'Failed.')))
-          }
-        >
-          <Text style={styles.actionChipText}>Mark resolved</Text>
-        </Pressable>
       </ScrollView>
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Customer information</Text>
-        <Text style={styles.infoLine}>Name: {conversation?.userName ?? '—'}</Text>
-        <Text style={styles.infoLine}>Email: {conversation?.userEmail ?? '—'}</Text>
-        <Text style={styles.infoLine}>UID: {conversation?.userId ?? conversationId}</Text>
-        {conversation?.orderId ? (
-          <Pressable onPress={() => router.push(adminRoutes.order(conversation.orderId!) as never)}>
-            <Text style={styles.infoLink}>Order: {conversation.orderId}</Text>
+        <Text style={styles.infoTitle}>Ticket information</Text>
+        <Text style={styles.infoLine}>UID: {ticket?.userId ?? '—'}</Text>
+        {ticket?.orderId ? (
+          <Pressable onPress={() => router.push(adminRoutes.order(ticket.orderId) as never)}>
+            <Text style={styles.infoLink}>Order: {ticket.orderId}</Text>
           </Pressable>
         ) : (
           <Text style={styles.infoLine}>Order: —</Text>
         )}
-        {conversation?.paymentId ? (
-          <Pressable
-            onPress={() =>
-              router.push(adminRoutes.payment(conversation.paymentId!) as never)
-            }
-          >
-            <Text style={styles.infoLink}>Payment: {conversation.paymentId}</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.infoLine}>Payment: —</Text>
-        )}
         <Text style={styles.infoLine}>
-          Created: {formatWhen(conversation?.createdAtMs ?? null)}
+          Type: {ticket ? supportTicketTypeLabel(ticket.type) : '—'}
+        </Text>
+        <Text style={styles.infoLine}>
+          Created: {formatWhen(ticket?.createdAtMs ?? null)}
         </Text>
       </View>
-
-      {complaintMessage || conversation?.complaintCategory ? (
-        <View style={styles.complaintCard}>
-          <Text style={styles.infoTitle}>Complaint details</Text>
-          <Text style={styles.infoLine}>
-            Category: {conversation?.complaintCategory ?? '—'}
-          </Text>
-          <Text style={styles.infoLine}>
-            Status: {statusLabel(conversation?.status ?? 'open')}
-          </Text>
-          {complaintMessage ? (
-            <Text style={styles.complaintBody}>{complaintMessage.body}</Text>
-          ) : null}
-        </View>
-      ) : null}
 
       <FlatList
         data={messages}
@@ -178,29 +139,29 @@ export default function AdminSupportThreadScreen() {
           <View
             style={[
               styles.bubble,
-              item.sender === 'admin' ? styles.bubbleAdmin : styles.bubbleCustomer,
+              item.sender === 'halforder_team'
+                ? styles.bubbleAdmin
+                : styles.bubbleCustomer,
             ]}
           >
             <Text style={styles.bubbleMeta}>
-              {item.sender === 'admin' ? 'Admin' : 'Customer'}
-              {item.readByAdmin && item.sender === 'customer' ? ' · Read' : ''}
-              {!item.readByCustomer && item.sender === 'admin' ? ' · Unread' : ''}
+              {item.sender === 'halforder_team'
+                ? item.persona === 'emo'
+                  ? 'Emo'
+                  : 'HalfOrder Team'
+                : 'Customer'}
             </Text>
-            <Text style={styles.bubbleText}>{item.body}</Text>
+            <Text style={styles.bubbleText}>{item.text}</Text>
             <Text style={styles.bubbleTime}>{formatWhen(item.createdAtMs)}</Text>
           </View>
         )}
       />
 
-      {conversation?.customerTyping ? (
-        <Text style={styles.typingHint}>Customer is typing…</Text>
-      ) : null}
-
       <View style={styles.composer}>
         <AppTextInput
           value={draft}
           onChangeText={onDraftChange}
-          placeholder="Reply to customer…"
+          placeholder="Reply as HalfOrder Team…"
           placeholderTextColor={COLORS.textMuted}
           style={styles.input}
           multiline
@@ -232,12 +193,6 @@ const styles = StyleSheet.create({
   },
   actionChipText: { color: COLORS.text, fontWeight: '700', fontSize: 12 },
   infoCard: { ...adminCardShell, marginHorizontal: 16, marginBottom: 8 },
-  complaintCard: {
-    ...adminCardShell,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderColor: COLORS.primary,
-  },
   infoTitle: {
     fontSize: 13,
     fontWeight: '800',
@@ -246,13 +201,6 @@ const styles = StyleSheet.create({
   },
   infoLine: { color: COLORS.textMuted, fontSize: 13, marginBottom: 4, fontWeight: '600' },
   infoLink: { color: COLORS.primary, fontSize: 13, marginBottom: 4, fontWeight: '700' },
-  complaintBody: {
-    color: COLORS.text,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 8,
-    fontWeight: '500',
-  },
   historyTitle: {
     color: COLORS.textMuted,
     fontWeight: '800',
@@ -287,13 +235,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 6,
-  },
-  typingHint: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 16,
-    paddingBottom: 4,
   },
   composer: {
     flexDirection: 'row',

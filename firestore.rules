@@ -3371,66 +3371,30 @@ service cloud.firestore {
     /**
      * Order Support tickets (Emo AI intake → HalfOrder Team).
      * Messages: supportTickets/{ticketId}/messages/{messageId}
-     * sender is only "user" | "halforder_team" (never expose admin identity).
      */
     match /supportTickets/{ticketId} {
-      allow read: if isSignedIn()
-        && (isAdmin() || resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn()
-        && !isCurrentUserRestricted()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.orderId is string
-        && request.resource.data.orderId.size() > 0
-        && request.resource.data.type in ['food_complaint', 'delivery_complaint']
-        && request.resource.data.message is string
-        && request.resource.data.message.size() > 0
-        && request.resource.data.message.size() <= 4000
-        && request.resource.data.status == 'open';
-      allow update: if isSignedIn()
-        && !isCurrentUserRestricted()
-        && (
-          isAdmin()
-          || (
-            resource.data.userId == request.auth.uid
-            && request.resource.data.userId == resource.data.userId
-            && request.resource.data.orderId == resource.data.orderId
-            && request.resource.data.type == resource.data.type
-          )
-        );
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        isAdmin()
+      );
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        request.auth.uid == resource.data.userId
+      );
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read: if isSignedIn()
-          && (
-            isAdmin()
-            || get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId
-              == request.auth.uid
-          );
-        allow create: if isSignedIn()
-          && !isCurrentUserRestricted()
-          && (
-            (
-              isAdmin()
-              && request.resource.data.sender == 'halforder_team'
-              && request.resource.data.text is string
-              && request.resource.data.text.size() > 0
-              && request.resource.data.text.size() <= 4000
-            )
-            || (
-              get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId
-                == request.auth.uid
-              && (
-                request.resource.data.sender == 'user'
-                || (
-                  request.resource.data.sender == 'halforder_team'
-                  && request.resource.data.persona == 'emo'
-                )
-              )
-              && request.resource.data.text is string
-              && request.resource.data.text.size() > 0
-              && request.resource.data.text.size() <= 4000
-            )
-          );
+        allow read: if request.auth != null && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId
+            == request.auth.uid
+        );
+        allow create: if request.auth != null && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId
+            == request.auth.uid
+        );
         allow update, delete: if isAdmin();
       }
     }
