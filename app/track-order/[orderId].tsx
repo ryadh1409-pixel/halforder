@@ -299,12 +299,6 @@ function TrackOrderScreen() {
 
           <CustomerMarketplaceTimeline order={order} variant="light" />
 
-          {delivered ? (
-            <Pressable style={styles.rateBtn} onPress={() => setRatePromptVisible(true)}>
-              <Text style={styles.rateBtnText}>Rate your experience</Text>
-            </Pressable>
-          ) : null}
-
           {!delivered ? (
             <View style={styles.etaCard}>
               <Text style={styles.etaLabel}>Estimated arrival</Text>
@@ -399,11 +393,6 @@ function TrackOrderScreen() {
           </View>
         </ScrollView>
       </View>
-      <OrderRatingPrompt
-        orderId={order.id}
-        visible={ratePromptVisible}
-        onDismiss={() => setRatePromptVisible(false)}
-      />
     </View>
   );
 }

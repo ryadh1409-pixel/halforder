@@ -73,7 +73,10 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     image: string | null;
     address: string | null;
   }>({ name: 'Unknown restaurant', image: null, address: null });
-  const [driverMeta, setDriverMeta] = useState<{ avatar: string | null }>({ avatar: null });
+  const [driverMeta, setDriverMeta] = useState<{
+    avatar: string | null;
+    phone: string | null;
+  }>({ avatar: null, phone: null });
   const [cancelling, setCancelling] = useState(false);
   const [ratePromptVisible, setRatePromptVisible] = useState(false);
 
@@ -91,11 +94,24 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     let cancelled = false;
     const restName = formatRestaurantName(order.restaurant?.name);
     const orderRestaurantId = order.restaurantId;
-    const orderDriverId = order.driverId;
+    const orderDriverId =
+      (typeof order.driverId === 'string' && order.driverId.trim()
+        ? order.driverId.trim()
+        : null) ||
+      (typeof order.assignedDriverId === 'string' && order.assignedDriverId.trim()
+        ? order.assignedDriverId.trim()
+        : null);
     const rName = order.restaurant?.name;
     const rImage = order.restaurant?.image;
     const rAddr = order.restaurant?.address;
     const dAvatar = order.driver?.avatar;
+    const orderDriverPhone =
+      (typeof order.driver?.phone === 'string' && order.driver.phone.trim()
+        ? order.driver.phone.trim()
+        : null) ||
+      (typeof order.driverPhone === 'string' && order.driverPhone.trim()
+        ? order.driverPhone.trim()
+        : null);
 
     void (async () => {
       const nextRestaurant = {
@@ -128,21 +144,65 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
       }
       if (!cancelled) setRestaurantMeta(nextRestaurant);
 
-      const nextDriver = { avatar: null as string | null };
+      const nextDriver = {
+        avatar: null as string | null,
+        phone: orderDriverPhone,
+      };
       if (dAvatar) {
         nextDriver.avatar = dAvatar;
-      } else if (orderDriverId) {
+      }
+      if (orderDriverId) {
         try {
-          const driverSnap = await getDoc(doc(db, 'drivers', orderDriverId));
-          const dr = driverSnap.data() as Record<string, unknown> | undefined;
-          nextDriver.avatar =
-            typeof dr?.avatar === 'string'
-              ? dr.avatar
-              : typeof dr?.photoURL === 'string'
-                ? dr.photoURL
-                : null;
+          if (!nextDriver.avatar) {
+            const driverSnap = await getDoc(doc(db, 'drivers', orderDriverId));
+            const dr = driverSnap.data() as Record<string, unknown> | undefined;
+            nextDriver.avatar =
+              typeof dr?.avatar === 'string'
+                ? dr.avatar
+                : typeof dr?.photoURL === 'string'
+                  ? dr.photoURL
+                  : null;
+            if (!nextDriver.phone) {
+              const fromDriver =
+                (typeof dr?.phone === 'string' && dr.phone.trim()
+                  ? dr.phone.trim()
+                  : null) ||
+                (typeof dr?.phoneNumber === 'string' && dr.phoneNumber.trim()
+                  ? dr.phoneNumber.trim()
+                  : null);
+              if (fromDriver) nextDriver.phone = fromDriver;
+            }
+          } else if (!nextDriver.phone) {
+            const driverSnap = await getDoc(doc(db, 'drivers', orderDriverId));
+            const dr = driverSnap.data() as Record<string, unknown> | undefined;
+            const fromDriver =
+              (typeof dr?.phone === 'string' && dr.phone.trim()
+                ? dr.phone.trim()
+                : null) ||
+              (typeof dr?.phoneNumber === 'string' && dr.phoneNumber.trim()
+                ? dr.phoneNumber.trim()
+                : null);
+            if (fromDriver) nextDriver.phone = fromDriver;
+          }
         } catch {
           // keep fallback
+        }
+        if (!nextDriver.phone) {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', orderDriverId));
+            const u = userSnap.data() as Record<string, unknown> | undefined;
+            const fromUser =
+              (typeof u?.phone === 'string' && u.phone.trim() ? u.phone.trim() : null) ||
+              (typeof u?.phoneNumber === 'string' && u.phoneNumber.trim()
+                ? u.phoneNumber.trim()
+                : null) ||
+              (typeof u?.whatsapp === 'string' && u.whatsapp.trim()
+                ? u.whatsapp.trim()
+                : null);
+            if (fromUser) nextDriver.phone = fromUser;
+          } catch {
+            // keep fallback
+          }
         }
       }
       if (!cancelled) setDriverMeta(nextDriver);
@@ -155,10 +215,13 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     order.id,
     order.restaurantId,
     order.driverId,
+    order.assignedDriverId,
+    order.driverPhone,
     order.restaurant?.name,
     order.restaurant?.image,
     order.restaurant?.address,
     order.driver?.avatar,
+    order.driver?.phone,
   ]);
 
   const trackingUi = useMemo(() => resolveCustomerTrackingUi(order), [
@@ -430,15 +493,19 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
                   ? order.driver?.name?.trim() || order.driverName
                   : 'Matching a driver…'}
               </Text>
-              {(order.driver?.phone || order.driverPhone) ? (
+              {(driverMeta.phone || order.driver?.phone || order.driverPhone) ? (
                 <Text
                   style={styles.link}
                   onPress={() =>
-                    void Linking.openURL(`tel:${order.driver?.phone || order.driverPhone}`)
+                    void Linking.openURL(
+                      `tel:${driverMeta.phone || order.driver?.phone || order.driverPhone}`,
+                    )
                   }
                 >
-                  Call driver
+                  {driverMeta.phone || order.driver?.phone || order.driverPhone}
                 </Text>
+              ) : order.driverId || order.assignedDriverId ? (
+                <Text style={styles.muted}>Phone unavailable</Text>
               ) : (
                 <Text style={styles.muted}>Phone unavailable until assigned</Text>
               )}
@@ -508,12 +575,6 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
         </View>
 
         <CustomerMarketplaceTimeline order={order} variant="dark" />
-
-        {delivered ? (
-          <Pressable style={styles.rateBtn} onPress={() => setRatePromptVisible(true)}>
-            <Text style={styles.rateBtnText}>Rate your experience</Text>
-          </Pressable>
-        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Items</Text>
@@ -619,11 +680,6 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           ) : null}
         </View>
       </ScrollView>
-      <OrderRatingPrompt
-        orderId={order.id}
-        visible={ratePromptVisible}
-        onDismiss={() => setRatePromptVisible(false)}
-      />
     </SafeAreaView>
   );
 }
