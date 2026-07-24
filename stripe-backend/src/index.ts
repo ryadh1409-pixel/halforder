@@ -25,47 +25,55 @@ import {
 
 /** Stripe CAD minimum charge (in cents). */
 const STRIPE_MIN_AMOUNT_CENTS = 50;
+const DEFAULT_TAX_RATE = 0.13;
+
+function roundMoney(n: number): number {
+  return Math.round(Math.max(0, n) * 100) / 100;
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 /**
- * Final amount the customer owes after promos — prefer `customerTotal`, then
- * reconstruct from receipt fields, then `totalPrice` / `total`. Returns cents.
+ * Same formula as `lib/orderPricing.ts` `computeOrderPricing` — receipt source of truth.
+ * Tax applies after promo; waived delivery/service are stored as 0 on the order.
  */
-function orderCustomerChargeCents(orderData: Record<string, unknown>): number | null {
-  const customerTotal = orderData.customerTotal;
-  if (typeof customerTotal === "number" && Number.isFinite(customerTotal)) {
-    return Math.round(customerTotal * 100);
+function computeOrderPricingTotalPaid(orderData: Record<string, unknown>): number | null {
+  const foodSubtotal = readFiniteNumber(orderData.subtotal);
+  if (foodSubtotal == null) return null;
+
+  const deliveryFee = readFiniteNumber(orderData.deliveryFee) ?? 0;
+  const serviceFee = readFiniteNumber(orderData.serviceFee) ?? 0;
+  const promoDiscount = readFiniteNumber(orderData.promoDiscount) ?? 0;
+  const taxRateRaw = readFiniteNumber(orderData.taxRate);
+  const taxRate =
+    taxRateRaw != null && taxRateRaw >= 0 ? taxRateRaw : DEFAULT_TAX_RATE;
+
+  const taxable = Math.max(
+    0,
+    roundMoney(foodSubtotal) +
+      roundMoney(deliveryFee) +
+      roundMoney(serviceFee) -
+      roundMoney(promoDiscount),
+  );
+  const hst = roundMoney(taxable * taxRate);
+  return roundMoney(taxable + hst);
+}
+
+/**
+ * PaymentIntent cents must equal the checkout receipt total.
+ * Uses the same computeOrderPricing math as the receipt (promo, free delivery, free service).
+ * Falls back to saved `totalPrice` / `total` when pricing inputs are incomplete.
+ */
+function orderReceiptChargeCents(orderData: Record<string, unknown>): number | null {
+  const priced = computeOrderPricingTotalPaid(orderData);
+  if (priced != null) {
+    return Math.round(priced * 100);
   }
-
-  const subtotal =
-    typeof orderData.subtotal === "number" && Number.isFinite(orderData.subtotal)
-      ? orderData.subtotal
-      : null;
-  const promoDiscount =
-    typeof orderData.promoDiscount === "number" && Number.isFinite(orderData.promoDiscount)
-      ? orderData.promoDiscount
-      : 0;
-  const tax =
-    typeof orderData.tax === "number" && Number.isFinite(orderData.tax)
-      ? orderData.tax
-      : null;
-  const deliveryFee =
-    typeof orderData.deliveryFee === "number" && Number.isFinite(orderData.deliveryFee)
-      ? orderData.deliveryFee
-      : 0;
-  const serviceFee =
-    typeof orderData.serviceFee === "number" && Number.isFinite(orderData.serviceFee)
-      ? orderData.serviceFee
-      : 0;
-
-  // Prefer receipt math over totalPrice when promo fields exist (avoids stale pre-discount totals).
-  if (subtotal != null && tax != null) {
-    const dollars =
-      Math.max(0, subtotal - promoDiscount) + deliveryFee + serviceFee + tax;
-    return Math.round(dollars * 100);
-  }
-
-  const totalPrice = orderData.totalPrice ?? orderData.total;
-  if (typeof totalPrice === "number" && Number.isFinite(totalPrice)) {
+  const totalPrice =
+    readFiniteNumber(orderData.totalPrice) ?? readFiniteNumber(orderData.total);
+  if (totalPrice != null) {
     return Math.round(totalPrice * 100);
   }
   return null;
@@ -274,8 +282,8 @@ export const createPaymentIntent = functions
     };
 
     try {
-      // Charge from order.customerTotal (post-promo), never a stale client amount.
-      const orderAmountCents = orderCustomerChargeCents(orderData);
+      // Charge = checkout receipt total (same computeOrderPricing math), never a stale client amount.
+      const orderAmountCents = orderReceiptChargeCents(orderData);
       const amountCents =
         orderAmountCents != null && orderAmountCents >= 0
           ? orderAmountCents
@@ -324,8 +332,11 @@ export const createPaymentIntent = functions
           msg: "createPaymentIntent_amount_resolved",
           orderId,
           clientAmountCents: amount,
-          orderCustomerTotal: orderData.customerTotal ?? null,
+          receiptTotalPaid: computeOrderPricingTotalPaid(orderData),
           orderTotalPrice: orderData.totalPrice ?? orderData.total ?? null,
+          orderPromoDiscount: orderData.promoDiscount ?? null,
+          orderDeliveryFee: orderData.deliveryFee ?? null,
+          orderServiceFee: orderData.serviceFee ?? null,
           amountCents,
           chargeAmountCents,
         }),
@@ -338,6 +349,53 @@ export const createPaymentIntent = functions
           : null;
       // Admin platform Customer only — no Connect destination / transfer_data.
       const customerId = await getOrCreateStripeCustomer(stripe, uid, email);
+
+      // Reuse existing PaymentIntent only when its amount matches the receipt total.
+      // If the amount is stale (e.g. pre-discount $5.94), cancel and create a new PI.
+      const priorPiRaw =
+        orderData.stripePaymentIntentId ?? orderData.paymentIntentId;
+      const priorPiId =
+        typeof priorPiRaw === "string" && priorPiRaw.startsWith("pi_")
+          ? priorPiRaw.trim()
+          : "";
+
+      let reusedPaymentIntent: Stripe.PaymentIntent | null = null;
+      if (priorPiId) {
+        try {
+          const prior = await stripe.paymentIntents.retrieve(priorPiId);
+          const reusable =
+            prior.status === "requires_payment_method" ||
+            prior.status === "requires_confirmation" ||
+            prior.status === "requires_action";
+          if (reusable && prior.amount === chargeAmountCents && prior.client_secret) {
+            reusedPaymentIntent = prior;
+            console.log(
+              JSON.stringify({
+                msg: "createPaymentIntent_reused_matching_pi",
+                orderId,
+                paymentIntentId: prior.id,
+                amount: prior.amount,
+              }),
+            );
+          } else if (reusable && prior.amount !== chargeAmountCents) {
+            await stripe.paymentIntents.cancel(priorPiId);
+            console.log(
+              JSON.stringify({
+                msg: "createPaymentIntent_canceled_stale_pi",
+                orderId,
+                priorPiId,
+                priorAmount: prior.amount,
+                chargeAmountCents,
+              }),
+            );
+          }
+        } catch (priorErr) {
+          console.warn(
+            "[createPaymentIntent] prior PaymentIntent retrieve/cancel skipped:",
+            priorErr,
+          );
+        }
+      }
 
       if (platform === "web") {
         const webChargeCents = chargeAmountCents;
@@ -416,26 +474,47 @@ export const createPaymentIntent = functions
         };
       }
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: chargeAmountCents,
-        currency: "cad",
-        customer: customerId,
-        automatic_payment_methods: {
-          enabled: true,
-        },
-        metadata: {
-          orderId,
-          userId: uid,
-          restaurantId,
-          driverId: driverIdRaw,
-          uid,
-          treasury: "halforder_platform",
-          restaurantStripeAccountId: restaurantStripeAccountId ?? "",
-        },
-      });
+      const paymentIntent =
+        reusedPaymentIntent ??
+        (await stripe.paymentIntents.create({
+          amount: chargeAmountCents,
+          currency: "cad",
+          customer: customerId,
+          automatic_payment_methods: {
+            enabled: true,
+          },
+          metadata: {
+            orderId,
+            userId: uid,
+            restaurantId,
+            driverId: driverIdRaw,
+            uid,
+            treasury: "halforder_platform",
+            restaurantStripeAccountId: restaurantStripeAccountId ?? "",
+          },
+        }));
+      if (!reusedPaymentIntent) {
+        console.log(
+          JSON.stringify({
+            msg: "createPaymentIntent_created_new_pi",
+            orderId,
+            paymentIntentId: paymentIntent.id,
+            chargeAmountCents,
+          }),
+        );
+      }
       const ephemeralKey = await stripe.ephemeralKeys.create(
         {customer: customerId},
         {apiVersion: "2025-02-24.acacia"},
+      );
+      // Persist intent id so a later retry can cancel this PI if the receipt total changes.
+      await orderSnap.ref.set(
+        {
+          paymentIntentId: paymentIntent.id,
+          stripePaymentIntentId: paymentIntent.id,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
       );
       console.log(
         JSON.stringify({
@@ -447,6 +526,7 @@ export const createPaymentIntent = functions
           driverId: driverIdRaw || null,
           customerId,
           chargeAmountCents,
+          reused: Boolean(reusedPaymentIntent),
           treasury: "halforder_platform",
         }),
       );
