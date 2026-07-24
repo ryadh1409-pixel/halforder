@@ -154,7 +154,7 @@ export type EmoAiUserMemory = {
   foodAllergies?: string[];
   dietaryPreferences?: string[];
   displayName?: string | null;
-  /** Whether the user already claimed the Hi emooo shout gift. */
+  /** Whether the user already claimed the Hi emooo gift. */
   hiEmoooClaimed?: boolean;
   previousGifts?: string[];
 };

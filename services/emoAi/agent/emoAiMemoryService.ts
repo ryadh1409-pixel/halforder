@@ -231,7 +231,7 @@ export function formatMemoryForPrompt(memory: EmoAiUserMemory | null): string {
     lines.push(`Preferred fulfillment: ${memory.preferredFulfillment}`);
   }
   if (memory.hiEmoooClaimed) {
-    lines.push('Already claimed Hi emooo shout gift: yes');
+    lines.push('Already claimed Hi emooo gift: yes');
   }
   if (memory.previousGifts?.length) {
     lines.push(`Previous gifts: ${memory.previousGifts.join(', ')}`);

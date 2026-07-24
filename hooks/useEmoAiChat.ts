@@ -6,6 +6,12 @@ import {
   saveEmoAiMemory,
 } from '@/services/emoAi/agent/emoAiMemoryService';
 import { syncEmoAiConversationToFirestore } from '@/services/emoAi/emoAiConversations';
+import {
+  claimEmoHiEmoooReward,
+  HI_EMOOO_ALREADY_CLAIMED_REPLY,
+  HI_EMOOO_SUCCESS_REPLY,
+  isHiEmoChatTrigger,
+} from '@/services/emoAi/emoAiHiEmoooReward';
 import { streamEmoAiReply } from '@/services/emoAi/emoAiOpenAi';
 import {
   loadEmoAiChatStarted,
@@ -20,6 +26,7 @@ import {
 } from '@/types/emoAi';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 
 function newId(): string {
   return `emo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -159,50 +166,6 @@ export function useEmoAiChat(uid: string | null) {
     await persist(starters);
   }, [persist, storageUid, uid]);
 
-  const appendLocalExchange = useCallback(
-    async (userText: string, assistantText: string) => {
-      if (!started) {
-        setStarted(true);
-        await saveEmoAiChatStarted(storageUid);
-      }
-      const userMsg: EmoAiMessage = {
-        id: newId(),
-        role: 'user',
-        content: userText,
-        createdAtMs: Date.now(),
-      };
-      const assistantMsg: EmoAiMessage = {
-        id: newId(),
-        role: 'assistant',
-        content: assistantText,
-        createdAtMs: Date.now() + 1,
-      };
-      const next = [...messagesRef.current, userMsg, assistantMsg];
-      await persist(next);
-      return next;
-    },
-    [persist, started, storageUid],
-  );
-
-  /** Wake animation + gift reply path for the loud “Hi Emo” Easter Egg. */
-  const applyEasterEggResult = useCallback(
-    async (input: {
-      userHeard: string;
-      assistantReply: string;
-      wake?: boolean;
-    }) => {
-      if (input.wake) setWakeNonce((n) => n + 1);
-      await appendLocalExchange(input.userHeard, input.assistantReply);
-      if (uid?.trim() && /gift|claimed|already/i.test(input.assistantReply)) {
-        void saveEmoAiMemory(uid, {
-          hiEmoooClaimed: true,
-          previousGifts: ['Hi emooo'],
-        });
-      }
-    },
-    [appendLocalExchange, uid],
-  );
-
   const sendMessage = useCallback(
     async (raw: string) => {
       const text = raw.trim();
@@ -225,6 +188,67 @@ export function useEmoAiChat(uid: string | null) {
       };
       const withUser = [...messagesRef.current, userMsg];
       await persist(withUser);
+
+      // Chat Easter Egg: exact "Hi Emo" (case-insensitive).
+      if (isHiEmoChatTrigger(text)) {
+        setWakeNonce((n) => n + 1);
+        let assistantReply = HI_EMOOO_SUCCESS_REPLY;
+        let markClaimed = false;
+        let showGiftAlert = false;
+
+        if (!uid?.trim()) {
+          assistantReply = 'Sign in to unlock your Hi emooo gift.';
+        } else {
+          try {
+            const claim = await claimEmoHiEmoooReward(text);
+            if (claim.ok) {
+              assistantReply = claim.message || HI_EMOOO_SUCCESS_REPLY;
+              markClaimed = true;
+              showGiftAlert = true;
+            } else if (
+              claim.alreadyClaimed ||
+              claim.reason === 'already_claimed'
+            ) {
+              assistantReply =
+                claim.message || HI_EMOOO_ALREADY_CLAIMED_REPLY;
+              markClaimed = true;
+            } else {
+              assistantReply =
+                claim.message ||
+                'Type “Hi Emo” in our chat to unlock my hidden gift.';
+            }
+          } catch (e) {
+            assistantReply =
+              e instanceof Error
+                ? e.message
+                : 'Could not unlock the gift right now. Try again.';
+          }
+        }
+
+        if (uid?.trim() && markClaimed) {
+          void saveEmoAiMemory(uid, {
+            hiEmoooClaimed: true,
+            previousGifts: ['Hi emooo'],
+          });
+        }
+
+        const assistantMsg: EmoAiMessage = {
+          id: newId(),
+          role: 'assistant',
+          content: assistantReply,
+          createdAtMs: Date.now(),
+        };
+        await persist([...withUser, assistantMsg]);
+        sendingRef.current = false;
+
+        if (showGiftAlert) {
+          Alert.alert(
+            'Gift unlocked!',
+            'Your one-time Hi emooo 50% gift is ready and will apply automatically on your next eligible checkout.',
+          );
+        }
+        return;
+      }
 
       setTyping(true);
       setStreamingText('');
@@ -278,6 +302,5 @@ export function useEmoAiChat(uid: string | null) {
     wakeNonce,
     startChatting,
     sendMessage,
-    applyEasterEggResult,
   };
 }

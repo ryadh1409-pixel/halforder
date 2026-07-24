@@ -49,7 +49,6 @@ import {
   computeHiEmoooDiscountAmount,
   HI_EMOOO_PROMO_CODE,
   loadEmoHiEmoooDiscount,
-  redeemEmoHiEmoooDiscount,
 } from '@/services/emoAi/emoAiHiEmoooReward';
 import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
@@ -131,8 +130,10 @@ export default function CheckoutPremiumScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!user?.uid || autoHiEmooo || appliedPromoCode) return;
+      if (!user?.uid || autoHiEmooo) return;
       if (!(subtotal > 0)) return;
+      // Don't override a different manually applied promo.
+      if (appliedPromoCode && appliedPromoCode !== HI_EMOOO_PROMO_CODE) return;
       const giftDiscount = await loadEmoHiEmoooDiscount(user.uid);
       if (cancelled || !giftDiscount || giftDiscount.status !== 'available') {
         return;
@@ -143,6 +144,7 @@ export default function CheckoutPremiumScreen() {
       setAppliedPromoCode(HI_EMOOO_PROMO_CODE);
       setPromo(HI_EMOOO_PROMO_CODE);
       setAutoHiEmooo(true);
+      setPromoError(null);
       showSuccess('Hi emooo 50% gift applied');
     })();
     return () => {
@@ -344,16 +346,7 @@ export default function CheckoutPremiumScreen() {
         deliveryLocation,
         customerLocation,
       });
-      if (
-        appliedPromoCode === HI_EMOOO_PROMO_CODE &&
-        promoDiscount > 0
-      ) {
-        try {
-          await redeemEmoHiEmoooDiscount(orderId);
-        } catch {
-          /* order already placed; redeem is best-effort server-side */
-        }
-      }
+      // Hi emooo is redeemed after successful Stripe payment (not at place-order).
       clearCartForRestaurant(restaurantId);
       router.replace({
         pathname: '/checkout',
@@ -371,14 +364,18 @@ export default function CheckoutPremiumScreen() {
 
   const priceLines: CheckoutPriceLine[] = useMemo(() => {
     const rows: CheckoutPriceLine[] = [
-      { key: 'subtotal', label: 'Item subtotal', value: `$${subtotal.toFixed(2)}` },
+      {
+        key: 'subtotal',
+        label: autoHiEmooo ? 'Food subtotal' : 'Item subtotal',
+        value: `$${subtotal.toFixed(2)}`,
+      },
     ];
     if (promoDiscount > 0) {
       rows.push({
         key: 'promo',
         label:
           appliedPromoCode === HI_EMOOO_PROMO_CODE
-            ? 'Hi emooo gift (50%)'
+            ? 'Hi emooo discount (-50%)'
             : 'Promotions',
         value: `-$${promoDiscount.toFixed(2)}`,
         emphasizeDiscount: true,
@@ -388,7 +385,7 @@ export default function CheckoutPremiumScreen() {
     }
     rows.push({
       key: 'delivery',
-      label: 'Delivery fee',
+      label: 'Delivery',
       value:
         fulfillmentMode === 'pickup'
           ? '$0.00'
@@ -408,17 +405,17 @@ export default function CheckoutPremiumScreen() {
     }
     rows.push({
       key: 'service',
-      label: 'Fees & marketplace service',
+      label: autoHiEmooo ? 'Platform fee' : 'Fees & marketplace service',
       value: waiveServiceFee || serviceFee <= 0 ? 'FREE' : `$${serviceFee.toFixed(2)}`,
     });
     rows.push({
       key: 'tax',
-      label: `HST (${Math.round(taxRate * 1000) / 10}%)`,
+      label: `Tax (HST ${Math.round(taxRate * 1000) / 10}%)`,
       value: `$${taxes.toFixed(2)}`,
     });
     rows.push({
       key: 'total',
-      label: 'Total',
+      label: 'Final total',
       value: totalFmt,
     });
     rows.push({
@@ -430,6 +427,7 @@ export default function CheckoutPremiumScreen() {
     return rows;
   }, [
     appliedPromoCode,
+    autoHiEmooo,
     deliveryFee,
     fulfillmentMode,
     priorityFee,
@@ -567,20 +565,29 @@ export default function CheckoutPremiumScreen() {
 
         <GiftToggleRow checked={gift} onToggle={setGift} />
 
-        <PromoCodeRow
-          value={promo}
-          onChange={(next) => {
-            setPromo(next);
-            setPromoDiscount(0);
-            setAppliedPromoCode(null);
-            setPromoError(null);
-          }}
-          onApply={() => void onApplyPromo()}
-          applying={promoBusy}
-          appliedLabel={appliedPromoCode}
-          error={promoError}
-          hint="Enter a promo code from HalfOrder and tap Apply."
-        />
+        {autoHiEmooo && appliedPromoCode === HI_EMOOO_PROMO_CODE ? (
+          <View style={styles.hiEmoooGiftCard}>
+            <Text style={styles.hiEmoooGiftTitle}>🎁 Hi emooo</Text>
+            <Text style={styles.hiEmoooGiftOff}>50% OFF</Text>
+            <Text style={styles.hiEmoooGiftHint}>Applied automatically</Text>
+          </View>
+        ) : (
+          <PromoCodeRow
+            value={promo}
+            onChange={(next) => {
+              setPromo(next);
+              setPromoDiscount(0);
+              setAppliedPromoCode(null);
+              setAutoHiEmooo(false);
+              setPromoError(null);
+            }}
+            onApply={() => void onApplyPromo()}
+            applying={promoBusy}
+            appliedLabel={appliedPromoCode}
+            error={promoError}
+            hint="Enter a promo code from HalfOrder and tap Apply."
+          />
+        )}
 
         <View style={{ height: 6 }} />
 
@@ -686,6 +693,34 @@ const styles = StyleSheet.create({
   },
   lineLeft: { flex: 1, fontSize: 14, fontWeight: '600', color: CK.textSecondary, lineHeight: 19 },
   lineRight: { fontSize: 14, fontWeight: '800', color: CK.text },
+  hiEmoooGiftCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: CK.savingsGoldMid,
+    backgroundColor: CK.surface,
+  },
+  hiEmoooGiftTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: CK.text,
+  },
+  hiEmoooGiftOff: {
+    marginTop: 4,
+    fontSize: 22,
+    fontWeight: '900',
+    color: CK.savingsGoldMid,
+  },
+  hiEmoooGiftHint: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: CK.textSecondary,
+  },
   locationLoading: {
     marginHorizontal: 16,
     marginVertical: 8,

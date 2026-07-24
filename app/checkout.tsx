@@ -118,6 +118,16 @@ export default function CheckoutScreen() {
       setPhase('confirming');
       setMessage('Confirming your order…');
       // Remain locked until this screen is replaced after webhook navigation.
+
+      // Redeem one-time Hi emooo after successful payment (idempotent if not available).
+      try {
+        const { redeemEmoHiEmoooDiscount } = await import(
+          '@/services/emoAi/emoAiHiEmoooReward'
+        );
+        await redeemEmoHiEmoooDiscount(id);
+      } catch {
+        /* webhook also redeems; best-effort on client */
+      }
     } catch (e) {
       console.warn('[checkout]', e);
       if (e instanceof Error && e.message === 'Please sign in to complete payment') {

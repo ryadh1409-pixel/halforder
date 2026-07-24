@@ -1,27 +1,22 @@
 /**
  * Secure one-time "Hi Emo" / "Hi emooo" Easter Egg reward.
- * Client must prove a loud shout + phrase; claim is atomic per uid.
+ * Triggered by the exact chat phrase "Hi Emo" (case-insensitive). Claim is atomic per uid.
  */
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
 import type {CallableContext} from "firebase-functions/v1/https";
-import {defineSecret} from "firebase-functions/params";
-import OpenAI from "openai";
-import {toFile} from "openai";
-
-const openAiKeySecret = defineSecret("OPENAI_API_KEY");
 
 /** Promo display name (exact product copy). */
 export const HI_EMOOO_PROMO_NAME = "Hi emooo";
 /** Normalized promo code stored on user + promoCodes. */
 export const HI_EMOOO_PROMO_CODE = "HI EMOOO";
 export const HI_EMOOO_PERCENT = 50;
+export const HI_EMOOO_REWARD_DOC_ID = "hi-emooo";
 
-/**
- * expo-av metering is typically -160 (silence) … 0 (max).
- * Require a very loud peak so normal speaking does not qualify.
- */
-export const HI_EMOOO_SHOUT_THRESHOLD_DB = -18;
+export const HI_EMOOO_SUCCESS_REPLY =
+  "🎉 You found my secret! Here's your 50% gift!";
+export const HI_EMOOO_ALREADY_CLAIMED_REPLY =
+  "❤️ You've already claimed your Hi emooo gift.";
 
 function requireAuth(context: CallableContext): string {
   if (!context.auth?.uid) {
@@ -36,35 +31,15 @@ function asObject(data: unknown): Record<string, unknown> {
     : {};
 }
 
-function requireOpenAiKey(): string {
-  const key = (openAiKeySecret.value() || process.env.OPENAI_API_KEY || "").trim();
-  if (!key) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "OpenAI is not configured on the server.",
-    );
-  }
-  return key;
-}
-
-export function matchesHiEmoPhrase(raw: string): boolean {
-  const cleaned = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!cleaned) return false;
-  // hi emo / hi emooo / hey emo / high emo (common STT miss)
-  return (
-    /\b(hi|hey|high)\s*emo+\b/.test(cleaned) ||
-    /\bhiemo+\b/.test(cleaned.replace(/\s/g, ""))
-  );
+/** Exact chat trigger: "Hi Emo" (case-insensitive, trimmed). */
+export function isHiEmoChatTrigger(raw: string): boolean {
+  return raw.trim().toLowerCase() === "hi emo";
 }
 
 async function ensureHiEmoooPromoDoc(
   db: admin.firestore.Firestore,
 ): Promise<string> {
-  const id = "hi-emooo";
+  const id = HI_EMOOO_REWARD_DOC_ID;
   const ref = db.collection("promoCodes").doc(id);
   const snap = await ref.get();
   if (!snap.exists) {
@@ -101,42 +76,11 @@ async function ensureHiEmoooPromoDoc(
   return id;
 }
 
-async function transcribeAudioBase64(
-  audioBase64: string,
-  mimeType: string,
-): Promise<string> {
-  const openai = new OpenAI({apiKey: requireOpenAiKey()});
-  const buf = Buffer.from(audioBase64, "base64");
-  if (buf.length < 200 || buf.length > 4_500_000) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Audio clip is invalid.",
-    );
-  }
-  const ext = mimeType.includes("mp4") || mimeType.includes("m4a")
-    ? "m4a"
-    : mimeType.includes("webm")
-      ? "webm"
-      : mimeType.includes("wav")
-        ? "wav"
-        : "m4a";
-  const file = await toFile(buf, `emo-voice.${ext}`, {
-    type: mimeType || `audio/${ext}`,
-  });
-  const result = await openai.audio.transcriptions.create({
-    file,
-    model: "whisper-1",
-    language: "en",
-  });
-  return (result.text || "").trim();
-}
-
 type ClaimResult = {
   ok: boolean;
   alreadyClaimed?: boolean;
   reason?: string;
   message: string;
-  transcript?: string;
   discount?: {
     code: string;
     name: string;
@@ -146,89 +90,52 @@ type ClaimResult = {
   };
 };
 
+function readStatus(raw: unknown): "available" | "redeemed" | null {
+  if (!raw || typeof raw !== "object") return null;
+  const status = (raw as {status?: unknown}).status;
+  if (status === "available" || status === "redeemed") return status;
+  return null;
+}
+
 /**
- * Claim the one-time Hi emooo 50% reward after a loud "Hi Emo" shout.
- * Accepts either a client transcript (web STT) or audioBase64 (Whisper).
+ * Claim the one-time Hi emooo 50% reward after the exact chat phrase "Hi Emo".
  */
 export const claimEmoHiEmoooReward = functions
-  .runWith({secrets: ["OPENAI_API_KEY"], timeoutSeconds: 60, memory: "512MB"})
   .region("us-central1")
   .https.onCall(async (data: unknown, context: CallableContext): Promise<ClaimResult> => {
     const uid = requireAuth(context);
     const payload = asObject(data);
-    const peakVolumeDb = Number(payload.peakVolumeDb);
-    if (
-      !Number.isFinite(peakVolumeDb) ||
-      peakVolumeDb < HI_EMOOO_SHOUT_THRESHOLD_DB
-    ) {
-      return {
-        ok: false,
-        reason: "too_quiet",
-        message:
-          "That was too quiet — shout “Hi Emo” nice and loud to wake me up!",
-      };
-    }
-
-    let transcript =
+    const transcript =
       typeof payload.transcript === "string" ? payload.transcript.trim() : "";
-    const audioBase64 =
-      typeof payload.audioBase64 === "string" ? payload.audioBase64.trim() : "";
-    const mimeType =
-      typeof payload.mimeType === "string" && payload.mimeType.trim()
-        ? payload.mimeType.trim()
-        : "audio/m4a";
 
-    if (!transcript && audioBase64) {
-      try {
-        transcript = await transcribeAudioBase64(audioBase64, mimeType);
-      } catch (e) {
-        if (e instanceof functions.https.HttpsError) throw e;
-        console.error("[claimEmoHiEmoooReward] whisper failed", e);
-        throw new functions.https.HttpsError(
-          "internal",
-          "Could not hear that clearly — try shouting again.",
-        );
-      }
-    }
-
-    if (!matchesHiEmoPhrase(transcript)) {
+    if (!isHiEmoChatTrigger(transcript)) {
       return {
         ok: false,
         reason: "phrase_mismatch",
-        transcript,
-        message:
-          "I heard you, but I need a loud “Hi Emo!” to wake up. Try again!",
+        message: "Type “Hi Emo” in our chat to unlock my hidden gift.",
       };
     }
 
     const db = admin.firestore();
     const promoId = await ensureHiEmoooPromoDoc(db);
     const userRef = db.collection("users").doc(uid);
+    const rewardRef = userRef.collection("emoRewards").doc(HI_EMOOO_REWARD_DOC_ID);
+    const nowMs = Date.now();
 
     const result = await db.runTransaction(async (tx) => {
       const snap = await tx.get(userRef);
+      const rewardSnap = await tx.get(rewardRef);
       const existing = snap.data() ?? {};
-      if (existing.emoHiEmoooClaimed === true) {
+      const userStatus = readStatus(existing.emoHiEmoooDiscount);
+      const rewardStatus = readStatus(rewardSnap.data());
+      const status = rewardStatus ?? userStatus;
+
+      if (status === "available" || status === "redeemed") {
         return {
           ok: false,
           alreadyClaimed: true,
           reason: "already_claimed",
-          message:
-            "You already claimed your Hi emooo gift — one shout, one gift forever!",
-        } satisfies ClaimResult;
-      }
-      const discountStatus =
-        existing?.emoHiEmoooDiscount &&
-        typeof existing.emoHiEmoooDiscount === "object"
-          ? (existing.emoHiEmoooDiscount as {status?: string}).status
-          : null;
-      if (discountStatus === "available" || discountStatus === "redeemed") {
-        return {
-          ok: false,
-          alreadyClaimed: true,
-          reason: "already_claimed",
-          message:
-            "You already claimed your Hi emooo gift — one shout, one gift forever!",
+          message: HI_EMOOO_ALREADY_CLAIMED_REPLY,
         } satisfies ClaimResult;
       }
 
@@ -239,7 +146,9 @@ export const claimEmoHiEmoooReward = functions
         discountType: "percent" as const,
         discountValue: HI_EMOOO_PERCENT,
         status: "available" as const,
-        claimedAtMs: Date.now(),
+        claimedAtMs: nowMs,
+        createdAtMs: nowMs,
+        expiresAtMs: null as null,
       };
 
       tx.set(
@@ -253,13 +162,25 @@ export const claimEmoHiEmoooReward = functions
         {merge: true},
       );
 
-      // Persist long-term memory flag under emoAiMemory/profile
+      tx.set(
+        rewardRef,
+        {
+          id: HI_EMOOO_REWARD_DOC_ID,
+          ...discount,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+
       const memRef = userRef.collection("emoAiMemory").doc("profile");
       tx.set(
         memRef,
         {
           hiEmoooClaimed: true,
-          updatedAtMs: Date.now(),
+          previousGifts: [HI_EMOOO_PROMO_NAME],
+          updatedAtMs: nowMs,
         },
         {merge: true},
       );
@@ -267,8 +188,7 @@ export const claimEmoHiEmoooReward = functions
       return {
         ok: true,
         alreadyClaimed: false,
-        transcript,
-        message: "🎉 You woke me up! Here's your gift!",
+        message: HI_EMOOO_SUCCESS_REPLY,
         discount: {
           code: discount.code,
           name: discount.name,
@@ -282,8 +202,70 @@ export const claimEmoHiEmoooReward = functions
     return result;
   });
 
+/** Mark Hi emooo as redeemed for a uid (callable + webhook). */
+export async function markEmoHiEmoooRedeemed(
+  uid: string,
+  orderId: string,
+): Promise<void> {
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(uid);
+  const rewardRef = userRef.collection("emoRewards").doc(HI_EMOOO_REWARD_DOC_ID);
+  const promoRef = db.collection("promoCodes").doc(HI_EMOOO_REWARD_DOC_ID);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    const rewardSnap = await tx.get(rewardRef);
+    const promoSnap = await tx.get(promoRef);
+    const existing = snap.data() ?? {};
+    const disc = (existing.emoHiEmoooDiscount ?? rewardSnap.data()) as
+      | {status?: string}
+      | undefined;
+    if (!disc || disc.status !== "available") {
+      return;
+    }
+    const redeemed = {
+      ...disc,
+      status: "redeemed",
+      redeemedAtMs: Date.now(),
+      redeemedOrderId: orderId,
+    };
+    tx.set(
+      userRef,
+      {
+        emoHiEmoooDiscount: redeemed,
+        emoHiEmoooRedeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+    tx.set(
+      rewardRef,
+      {
+        id: HI_EMOOO_REWARD_DOC_ID,
+        ...redeemed,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+    if (promoSnap.exists) {
+      const used =
+        typeof promoSnap.data()?.usedCount === "number"
+          ? promoSnap.data()!.usedCount
+          : 0;
+      tx.set(
+        promoRef,
+        {
+          usedCount: used + 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
+  });
+}
+
 /**
- * Mark the Hi emooo discount as permanently redeemed after first eligible order.
+ * Mark the Hi emooo discount as permanently redeemed after first successful payment.
  */
 export const redeemEmoHiEmoooDiscount = functions
   .region("us-central1")
@@ -295,50 +277,6 @@ export const redeemEmoHiEmoooDiscount = functions
     if (!orderId) {
       throw new functions.https.HttpsError("invalid-argument", "orderId required");
     }
-
-    const db = admin.firestore();
-    const userRef = db.collection("users").doc(uid);
-    const promoRef = db.collection("promoCodes").doc("hi-emooo");
-
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(userRef);
-      const existing = snap.data() ?? {};
-      const disc = existing.emoHiEmoooDiscount as
-        | {status?: string; code?: string}
-        | undefined;
-      if (!disc || disc.status !== "available") {
-        return;
-      }
-      tx.set(
-        userRef,
-        {
-          emoHiEmoooDiscount: {
-            ...disc,
-            status: "redeemed",
-            redeemedAtMs: Date.now(),
-            redeemedOrderId: orderId,
-          },
-          emoHiEmoooRedeemedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        {merge: true},
-      );
-      const promoSnap = await tx.get(promoRef);
-      if (promoSnap.exists) {
-        const used =
-          typeof promoSnap.data()?.usedCount === "number"
-            ? promoSnap.data()!.usedCount
-            : 0;
-        tx.set(
-          promoRef,
-          {
-            usedCount: used + 1,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          {merge: true},
-        );
-      }
-    });
-
+    await markEmoHiEmoooRedeemed(uid, orderId);
     return {ok: true};
   });

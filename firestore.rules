@@ -1239,6 +1239,20 @@ service cloud.firestore {
         allow read, write: if request.auth != null
           && (request.auth.uid == userId || isAdmin());
       }
+      /** One-time Emo AI gifts (e.g. Hi emooo). */
+      match /emoRewards/{rewardId} {
+        allow read: if request.auth != null
+          && (request.auth.uid == userId || isAdmin());
+        allow create, update: if request.auth != null
+          && request.auth.uid == userId
+          && rewardId is string
+          && rewardId.size() > 0
+          && request.resource.data.keys().hasAll(['status', 'code', 'discountType', 'discountValue'])
+          && request.resource.data.status in ['available', 'redeemed']
+          && request.resource.data.discountType == 'percent'
+          && request.resource.data.discountValue is number;
+        allow delete: if false;
+      }
       match /pushToken/{docId} {
         allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
         allow create, update, delete: if request.auth != null && request.auth.uid == userId;

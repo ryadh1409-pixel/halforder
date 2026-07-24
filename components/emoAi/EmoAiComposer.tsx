@@ -2,7 +2,6 @@ import { EMO_AI_PURPLE, EMO_AI_SURFACE } from '@/types/emoAi';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -11,18 +10,10 @@ import {
 
 type Props = {
   onSend: (text: string) => void;
-  /** Microphone / shout Easter Egg. */
-  onMicPress?: () => void;
-  micListening?: boolean;
   disabled?: boolean;
 };
 
-export function EmoAiComposer({
-  onSend,
-  onMicPress,
-  micListening = false,
-  disabled,
-}: Props) {
+export function EmoAiComposer({ onSend, disabled }: Props) {
   const [text, setText] = useState('');
 
   const submit = () => {
@@ -34,25 +25,6 @@ export function EmoAiComposer({
 
   return (
     <View style={styles.row}>
-      {onMicPress ? (
-        <TouchableOpacity
-          style={[
-            styles.mic,
-            micListening && styles.micListening,
-            disabled && styles.sendDisabled,
-          ]}
-          onPress={onMicPress}
-          disabled={disabled || micListening}
-          activeOpacity={0.9}
-          accessibilityLabel="Shout Hi Emo"
-        >
-          {micListening ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <MaterialIcons name="mic" size={22} color="#FFFFFF" />
-          )}
-        </TouchableOpacity>
-      ) : null}
       <TextInput
         style={styles.input}
         value={text}
@@ -107,17 +79,6 @@ const styles = StyleSheet.create({
     backgroundColor: EMO_AI_PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  mic: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#334155',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micListening: {
-    backgroundColor: '#EF4444',
   },
   sendDisabled: {
     opacity: 0.45,

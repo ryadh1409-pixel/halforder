@@ -24,6 +24,10 @@ import {
 } from './emoAiMemoryService';
 import { detectEmoAiAgentIntents } from './emoAiAgentIntents';
 import type { EmoAiPlatformContextSnapshot } from '@/types/emoAiAgent';
+import {
+  formatHiEmoooStatusForPrompt,
+  loadEmoHiEmoooDiscount,
+} from '@/services/emoAi/emoAiHiEmoooReward';
 
 function readNum(...vals: unknown[]): number | null {
   for (const v of vals) {
@@ -150,10 +154,11 @@ export async function buildEmoAiPlatformContext(args: {
     void learnFromUserMessage(uid, latest);
   }
 
-  const [restaurants, memory, promotions] = await Promise.all([
+  const [restaurants, memory, promotions, hiEmoooDiscount] = await Promise.all([
     fetchPublicRestaurants().catch(() => []),
     loadEmoAiMemory(uid),
     fetchPromoLabels(),
+    uid ? loadEmoHiEmoooDiscount(uid).catch(() => null) : Promise.resolve(null),
   ]);
 
   const venueRows = restaurants.map((r) => ({
@@ -186,7 +191,13 @@ export async function buildEmoAiPlatformContext(args: {
   );
 
   const intents = detectEmoAiAgentIntents(latest);
-  const agentHints: string[] = [...intents.hints];
+  const agentHints: string[] = [
+    formatHiEmoooStatusForPrompt(
+      hiEmoooDiscount,
+      memory.hiEmoooClaimed === true,
+    ),
+    ...intents.hints,
+  ];
   if (intents.wantsCheapest && intents.foodQuery) {
     agentHints.push(
       `Cheapest matches for "${intents.foodQuery}":\n` +
@@ -269,10 +280,11 @@ export function formatPlatformContextForPrompt(
     formatMemoryForPrompt(ctx.memory),
     '',
     'Agent action hints for this turn:',
-    ctx.agentHints.slice(0, 8).join('\n') || '- none',
+    ctx.agentHints.slice(0, 10).join('\n') || '- none',
     '',
     'When recommending, cite real names and prices from this data.',
     'If asked to create an order, invite people, apply a coupon, or start matching: explain the exact in-app next step (Orders / Swipe / Wallet vouchers) using live data — do not pretend a write succeeded unless an agent hint confirms it.',
+    'If asked about gifts/rewards/discounts/secrets: follow HI EMOOO GIFT STATUS in the hints above.',
   ]
     .filter(Boolean)
     .join('\n');

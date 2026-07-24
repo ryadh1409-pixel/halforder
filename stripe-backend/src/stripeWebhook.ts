@@ -38,6 +38,10 @@ import {
   updatePaymentTransactionStatus,
 } from "./paymentTransactions.js";
 import {upsertStripePayoutRecord} from "./stripePayoutRecords.js";
+import {
+  HI_EMOOO_PROMO_CODE,
+  markEmoHiEmoooRedeemed,
+} from "./emoAiHiEmoooReward.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -121,6 +125,27 @@ async function withEventIdempotency(
   });
 
   return duplicate ? "duplicate" : "applied";
+}
+
+async function redeemHiEmoooIfNeeded(orderId: string): Promise<void> {
+  try {
+    const orderSnap = await admin.firestore().collection("orders").doc(orderId).get();
+    if (!orderSnap.exists) return;
+    const data = orderSnap.data() ?? {};
+    const promoCode =
+      typeof data.promoCode === "string" ? data.promoCode.trim().toUpperCase() : "";
+    if (promoCode !== HI_EMOOO_PROMO_CODE) return;
+    const uid =
+      typeof data.userId === "string" && data.userId.trim()
+        ? data.userId.trim()
+        : typeof data.customerId === "string"
+          ? data.customerId.trim()
+          : "";
+    if (!uid) return;
+    await markEmoHiEmoooRedeemed(uid, orderId);
+  } catch (err) {
+    console.error("[stripeWebhook] hi emooo redeem failed", orderId, err);
+  }
 }
 
 function mergeOrderPaidSync(
@@ -404,6 +429,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
             message: err instanceof Error ? err.message : String(err),
           });
         }
+        await redeemHiEmoooIfNeeded(orderId);
       }
       return;
     }
@@ -450,6 +476,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         paymentIntentId,
         stripeEventId: event.id,
       });
+      if (outcome === "applied") {
+        await redeemHiEmoooIfNeeded(orderId);
+      }
       return;
     }
 
@@ -496,6 +525,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         sessionId: session.id,
         stripeEventId: event.id,
       });
+      if (outcome === "applied") {
+        await redeemHiEmoooIfNeeded(orderId);
+      }
       return;
     }
 

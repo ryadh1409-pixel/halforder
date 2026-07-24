@@ -7,10 +7,9 @@ import { EmoAiQuickReplies } from '@/components/emoAi/EmoAiQuickReplies';
 import { UE } from '@/constants/uberEatsTheme';
 import { useEmoAiChat } from '@/hooks/useEmoAiChat';
 import { isRegisteredAuthUser } from '@/lib/authSession';
-import { listenForHiEmoShout } from '@/services/emoAi/emoAiVoiceListen';
 import { useAuth } from '@/services/AuthContext';
 import { EMO_AI_BG } from '@/types/emoAi';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,7 +30,6 @@ export default function EmoAiScreen() {
   const { user } = useAuth();
   const uid = isRegisteredAuthUser(user) ? user!.uid : null;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [micListening, setMicListening] = useState(false);
 
   const {
     ready,
@@ -43,15 +41,10 @@ export default function EmoAiScreen() {
     wakeNonce,
     startChatting,
     sendMessage,
-    applyEasterEggResult,
   } = useEmoAiChat(uid);
 
-  const busy = typing || Boolean(streamingText) || micListening;
+  const busy = typing || Boolean(streamingText);
 
-  /**
-   * Floating CustomTabBar footprint (pinned to screen bottom).
-   * Composer sits immediately above this spacer — never under the tabs.
-   */
   const tabBarBottomOffset = Math.max(14, insets.bottom + 4);
   const tabBarReserve = keyboardOpen
     ? 0
@@ -77,66 +70,6 @@ export default function EmoAiScreen() {
     }
     return null;
   }, [messages]);
-
-  const onMicPress = useCallback(async () => {
-    if (!uid) {
-      Alert.alert('Sign in required', 'Sign in to unlock the Hi Emo gift.');
-      return;
-    }
-    if (micListening || busy) return;
-    setMicListening(true);
-    try {
-      if (!started) await startChatting();
-      const result = await listenForHiEmoShout({ maxMs: 4000 });
-      if (result.kind === 'denied' || result.kind === 'error') {
-        await applyEasterEggResult({
-          userHeard: '🎤 (mic)',
-          assistantReply: result.message,
-          wake: false,
-        });
-        return;
-      }
-      const claim = result.claim;
-      const heard =
-        claim.transcript && claim.transcript.trim()
-          ? claim.transcript.trim()
-          : 'Hi Emo';
-      if (claim.ok) {
-        await applyEasterEggResult({
-          userHeard: heard,
-          assistantReply: claim.message || "🎉 You woke me up! Here's your gift!",
-          wake: true,
-        });
-        return;
-      }
-      if (claim.alreadyClaimed || claim.reason === 'already_claimed') {
-        await applyEasterEggResult({
-          userHeard: heard,
-          assistantReply:
-            claim.message ||
-            'You already claimed your Hi emooo gift — one shout, one gift forever!',
-          wake: true,
-        });
-        return;
-      }
-      await applyEasterEggResult({
-        userHeard: heard,
-        assistantReply:
-          claim.message ||
-          'That was close! Shout “Hi Emo” loud enough to wake me.',
-        wake: false,
-      });
-    } finally {
-      setMicListening(false);
-    }
-  }, [
-    applyEasterEggResult,
-    busy,
-    micListening,
-    startChatting,
-    started,
-    uid,
-  ]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -165,26 +98,28 @@ export default function EmoAiScreen() {
           <View style={styles.loading}>
             <ActivityIndicator color="#A855F7" />
           </View>
-        ) : !started ? (
-          <EmoAiEmptyState onStart={() => void startChatting()} />
         ) : (
           <>
-            <View style={styles.chat}>
-              <EmoAiMessageList
-                messages={messages}
-                streamingText={streamingText}
-                typing={typing && !streamingText}
-              />
-            </View>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <EmoAiQuickReplies
-              disabled={busy}
-              onSelect={(t) => void sendMessage(t)}
-            />
+            {!started ? (
+              <EmoAiEmptyState onStart={() => void startChatting()} />
+            ) : (
+              <>
+                <View style={styles.chat}>
+                  <EmoAiMessageList
+                    messages={messages}
+                    streamingText={streamingText}
+                    typing={typing && !streamingText}
+                  />
+                </View>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+                <EmoAiQuickReplies
+                  disabled={busy}
+                  onSelect={(t) => void sendMessage(t)}
+                />
+              </>
+            )}
             <EmoAiComposer
-              disabled={busy}
-              micListening={micListening}
-              onMicPress={() => void onMicPress()}
+              disabled={busy && started}
               onSend={(t) => void sendMessage(t)}
             />
           </>
