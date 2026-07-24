@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#111',
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },
