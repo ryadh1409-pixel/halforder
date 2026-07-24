@@ -61,24 +61,6 @@ function computeOrderPricingTotalPaid(orderData: Record<string, unknown>): numbe
   return roundMoney(taxable + hst);
 }
 
-/**
- * PaymentIntent cents must equal the checkout receipt total.
- * Uses the same computeOrderPricing math as the receipt (promo, free delivery, free service).
- * Falls back to saved `totalPrice` / `total` when pricing inputs are incomplete.
- */
-function orderReceiptChargeCents(orderData: Record<string, unknown>): number | null {
-  const priced = computeOrderPricingTotalPaid(orderData);
-  if (priced != null) {
-    return Math.round(priced * 100);
-  }
-  const totalPrice =
-    readFiniteNumber(orderData.totalPrice) ?? readFiniteNumber(orderData.total);
-  if (totalPrice != null) {
-    return Math.round(totalPrice * 100);
-  }
-  return null;
-}
-
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -282,12 +264,12 @@ export const createPaymentIntent = functions
     };
 
     try {
-      // Charge = checkout receipt total (same computeOrderPricing math), never a stale client amount.
-      const orderAmountCents = orderReceiptChargeCents(orderData);
-      const amountCents =
-        orderAmountCents != null && orderAmountCents >= 0
-          ? orderAmountCents
-          : amount;
+      // Charge = customerTotal (post-discount); fall back to total if missing. Min $0.50 CAD.
+      const amountCents = Math.round(
+        (readFiniteNumber(orderData.customerTotal) ??
+          readFiniteNumber(orderData.total) ??
+          0) * 100,
+      );
 
       // $0.00 totals: skip Stripe entirely and mark the order paid.
       if (amountCents === 0) {
