@@ -3283,6 +3283,16 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    /** Emo AI chat archive — users write own thread; admins read all. */
+    match /emoAiConversations/{userId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && request.auth.uid == userId);
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
     match /adminSupportThreads/{userId} {
       allow read: if isSignedIn()
         && (isAdmin() || request.auth.uid == userId);

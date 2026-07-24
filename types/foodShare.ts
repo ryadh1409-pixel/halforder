@@ -1,4 +1,7 @@
-import type { PromotionBadgeValue } from '@/lib/promotionBadge';
+import type {
+  PromotionBadgeValue,
+  PromotionDestinations,
+} from '@/lib/promotionBadge';
 
 /** Admin-controlled swipe catalog card (`adminFoodShares/{1..10}`). */
 export type AdminFoodShareDoc = {
@@ -12,8 +15,11 @@ export type AdminFoodShareDoc = {
   description: string;
   active: boolean;
   createdAtMs: number | null;
-  /** Admin promotion badge: none | most_ordered | great_price */
+  /** Admin promotion badge: primary / legacy. */
   promotionBadge: PromotionBadgeValue;
+  /** Active campaign badges (may include free_delivery, etc.). */
+  promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
+  promotionDestinations: PromotionDestinations;
 };
 
 export type FoodSharePaymentStatus =

@@ -3,7 +3,12 @@ import {
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
-import { parsePromotionBadge } from '@/lib/promotionBadge';
+import {
+  parsePromotionBadge,
+  promotionBadgesFromData,
+  promotionDestinationsFromData,
+  promotionVisibleOn,
+} from '@/lib/promotionBadge';
 import { getHeroImageUrlForType, mockOrders } from '@/constants/mockSwipeFood';
 import type { FoodOrderType } from '@/constants/mockSwipeFood';
 import { db } from '@/services/firebase';
@@ -50,6 +55,7 @@ export function mapAdminFoodShareDoc(
   id: string,
   data: Record<string, unknown>,
 ): AdminFoodShareDoc {
+  const promotionBadges = promotionBadgesFromData(data);
   return {
     id,
     foodName: normStr(data.foodName, normStr(data.title, 'Shared meal')),
@@ -64,7 +70,9 @@ export function mapAdminFoodShareDoc(
     description: normStr(data.description, normStr(data.aiDescription)),
     active: normBool(data.active),
     createdAtMs: safeToMillis(data.createdAt),
-    promotionBadge: parsePromotionBadge(data.promotionBadge),
+    promotionBadge: promotionBadges[0] ?? parsePromotionBadge(data.promotionBadge),
+    promotionBadges,
+    promotionDestinations: promotionDestinationsFromData(data),
   };
 }
 
@@ -75,6 +83,14 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     share.deliveryShare,
   );
   const type = inferFoodType(share.foodName);
+  const showSwipePromo = promotionVisibleOn(
+    {
+      promotionBadges: share.promotionBadges,
+      promotionBadge: share.promotionBadge,
+      promotionDestinations: share.promotionDestinations,
+    },
+    'swipe',
+  );
 
   return {
     id: share.id,
@@ -97,7 +113,8 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     orderStatus: null,
     deliveryStatus: null,
     lifecycle: 'WAITING_FOR_PARTNER',
-    promotionBadge: share.promotionBadge,
+    promotionBadge: showSwipePromo ? share.promotionBadge : 'none',
+    promotionBadges: showSwipePromo ? share.promotionBadges : [],
   };
 }
 

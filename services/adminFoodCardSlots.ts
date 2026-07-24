@@ -146,8 +146,7 @@ export async function saveAdminFoodCardSlot(
   console.log('[SAVE] document exists', existing.exists());
 
   const promotionBadge: PromotionBadgeValue =
-    input.promotionBadge === 'most_ordered' ||
-    input.promotionBadge === 'great_price'
+    input.promotionBadge && input.promotionBadge !== 'none'
       ? input.promotionBadge
       : 'none';
 
@@ -164,6 +163,7 @@ export async function saveAdminFoodCardSlot(
     description,
     active: input.active === true,
     promotionBadge,
+    promotionBadges: promotionBadge === 'none' ? [] : [promotionBadge],
     updatedAt: serverTimestamp(),
     ...(venueLocation
       ? {

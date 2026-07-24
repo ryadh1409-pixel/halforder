@@ -215,6 +215,37 @@ export default function EmoAiReportDetailScreen() {
           </Text>
         ))}
 
+        {report.userConversations ? (
+          <>
+            <Text style={styles.h2}>User Conversations</Text>
+            <Text style={styles.body}>
+              Conversations in period:{' '}
+              {report.userConversations.conversationCountInPeriod}
+            </Text>
+            <Text style={styles.body}>
+              Active users: {report.userConversations.analytics.activeUsers} ·
+              Avg messages:{' '}
+              {report.userConversations.analytics.averageMessagesPerConversation}{' '}
+              · High priority:{' '}
+              {report.userConversations.analytics.highPriorityCount}
+            </Text>
+            <Text style={styles.body}>
+              Trending:{' '}
+              {report.userConversations.insights.trendingKeywords
+                .map((k) => k.name)
+                .slice(0, 8)
+                .join(', ') || '—'}
+            </Text>
+            {report.userConversations.highPriorityConversations
+              .slice(0, 12)
+              .map((h) => (
+                <Text key={`${h.userId}-${h.lastActivityMs}`} style={styles.body}>
+                  • {h.userName}: {h.title}
+                </Text>
+              ))}
+          </>
+        ) : null}
+
         <Text style={styles.h2}>Full export preview</Text>
         <Text style={styles.mono}>{renderEmoAiReportPlainText(report).slice(0, 2500)}</Text>
       </ScrollView>

@@ -40,6 +40,43 @@ export type EmoAiHighPriorityConversation = {
   recommendedAction: string;
 };
 
+/** Optional additive conversation analytics embedded in executive reports. */
+export type EmoAiUserConversationReportBlock = {
+  analytics: {
+    totalConversations: number;
+    activeUsers: number;
+    averageMessagesPerConversation: number;
+    averageConversationLength: number;
+    averageResponseTimeMs: number | null;
+    mostActiveUsers: { userId: string; userName: string; messages: number }[];
+    dailyConversationCount: number;
+    weeklyConversationCount: number;
+    monthlyConversationCount: number;
+    highPriorityCount: number;
+  };
+  insights: {
+    mostRequestedRestaurants: { name: string; count: number }[];
+    mostRequestedMeals: { name: string; count: number }[];
+    mostSearchedFood: { name: string; count: number }[];
+    mostCommonComplaints: { name: string; count: number }[];
+    mostRequestedFeatures: { name: string; count: number }[];
+    mostCommonBugs: { name: string; count: number }[];
+    mostCommonPaymentIssues: { name: string; count: number }[];
+    mostCommonDeliveryIssues: { name: string; count: number }[];
+    mostCommonAppQuestions: { name: string; count: number }[];
+    mostCommonAiQuestions: { name: string; count: number }[];
+    trendingKeywords: { name: string; count: number }[];
+    frequentlyRepeatedQuestions: { name: string; count: number }[];
+  };
+  highPriorityConversations: {
+    userId: string;
+    userName: string;
+    title: string;
+    lastActivityMs: number;
+  }[];
+  conversationCountInPeriod: number;
+};
+
 export type EmoAiExecutiveReport = {
   id: string;
   period: EmoAiReportPeriod;
@@ -99,6 +136,8 @@ export type EmoAiExecutiveReport = {
   highPriorityConversations: EmoAiHighPriorityConversation[];
   insights: string[];
   recommendations: string[];
+  /** Additive: User Conversations analytics for this report period. */
+  userConversations?: EmoAiUserConversationReportBlock;
 };
 
 export type EmoAiUserMemory = {
@@ -110,6 +149,14 @@ export type EmoAiUserMemory = {
   notes: string[];
   lastOrderIds: string[];
   updatedAtMs: number;
+  /** Long-term compact summary of prior chats (not full transcript). */
+  conversationSummary?: string;
+  foodAllergies?: string[];
+  dietaryPreferences?: string[];
+  displayName?: string | null;
+  /** Whether the user already claimed the Hi emooo shout gift. */
+  hiEmoooClaimed?: boolean;
+  previousGifts?: string[];
 };
 
 export type EmoAiPlatformContextSnapshot = {

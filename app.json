@@ -32,6 +32,7 @@
         "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
         "NSPhotoLibraryAddUsageDescription": "HalfOrder may save images you share only when you choose to save them.",
         "NSCameraUsageDescription": "We need access to your camera to take a profile photo.",
+        "NSMicrophoneUsageDescription": "HalfOrder uses the microphone so you can shout “Hi Emo” to wake Emo AI.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {

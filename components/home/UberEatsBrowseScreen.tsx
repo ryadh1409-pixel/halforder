@@ -61,6 +61,7 @@ export function UberEatsBrowseScreen() {
               <RestaurantCard
                 restaurant={item}
                 width={CARD_W}
+                promotionDestination="listing"
                 onPress={() => openRestaurant(item.id)}
               />
             </View>

@@ -398,6 +398,10 @@ export {
   generateMatchSuggestion,
   generateFoodCardDescription,
 } from "./openAiCallables.js";
+export {
+  claimEmoHiEmoooReward,
+  redeemEmoHiEmoooDiscount,
+} from "./emoAiHiEmoooReward.js";
 export {getAdminStripePayouts} from "./adminStripePayouts.js";
 export {
   getStripeTreasurySummary,

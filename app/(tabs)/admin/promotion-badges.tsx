@@ -3,15 +3,15 @@ import { PromotionBadgeEditModal } from '@/components/admin/PromotionBadgeEditMo
 import { AppTextInput } from '@/components/AppTextInput';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
-import type { PromotionBadgeValue } from '@/lib/promotionBadge';
 import {
-  formatPromotionBadgeCurrent,
+  formatPromotionCampaignCurrent,
   isMenuItemPromotionTarget,
   isRestaurantPromotionTarget,
   savePromotionBadgeTarget,
   subscribePromotionBadgeTargets,
   type PromotionBadgeTarget,
 } from '@/services/adminPromotionBadges';
+import type { PromotionCampaignDraft } from '@/components/admin/PromotionBadgeEditModal';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { requireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
@@ -36,7 +36,7 @@ function matchesQuery(row: PromotionBadgeTarget, q: string): boolean {
   return (
     row.restaurantName.toLowerCase().includes(q) ||
     row.foodName.toLowerCase().includes(q) ||
-    formatPromotionBadgeCurrent(row.promotionBadge).toLowerCase().includes(q)
+    formatPromotionCampaignCurrent(row).toLowerCase().includes(q)
   );
 }
 
@@ -74,12 +74,12 @@ export default function AdminPromotionBadgesScreen() {
     ];
   }, [rows, queryText]);
 
-  const onSave = async (next: PromotionBadgeValue) => {
+  const onSave = async (next: PromotionCampaignDraft) => {
     if (!editing) return;
     setSaving(true);
     try {
       await savePromotionBadgeTarget(editing, next);
-      showSuccess('Promotion badge saved.');
+      showSuccess('Promotion campaign saved.');
       setEditing(null);
     } catch (e) {
       showError(getUserFriendlyError(e));
@@ -99,8 +99,8 @@ export default function AdminPromotionBadgesScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
-        title="Promotion Badges"
-        subtitle="Restaurants and menu items"
+        title="Promotion Campaigns"
+        subtitle="Types, destinations, and fee waivers"
         fallbackRoute={adminRoutes.home}
       />
 
@@ -143,7 +143,10 @@ export default function AdminPromotionBadgesScreen() {
             ) : null
           }
           renderItem={({ item }) => {
-            const current = formatPromotionBadgeCurrent(item.promotionBadge);
+            const current = formatPromotionCampaignCurrent(item);
+            const destCount = Object.values(item.promotionDestinations).filter(
+              Boolean,
+            ).length;
             return (
               <View style={styles.card}>
                 <Text style={styles.restaurant} numberOfLines={1}>
@@ -154,6 +157,11 @@ export default function AdminPromotionBadgesScreen() {
                 </Text>
                 <Text style={styles.currentLabel}>Current:</Text>
                 <Text style={styles.currentValue}>{current}</Text>
+                {item.promotionBadges.length > 0 ? (
+                  <Text style={styles.destLine}>
+                    {destCount} display location{destCount === 1 ? '' : 's'}
+                  </Text>
+                ) : null}
                 <Text style={styles.kind}>
                   {item.kind === 'foodShare'
                     ? `Food share · slot ${item.id}`
@@ -182,6 +190,8 @@ export default function AdminPromotionBadgesScreen() {
           editing?.kind === 'menuItem' ? 'Menu Item' : 'Food'
         }
         value={editing?.promotionBadge ?? 'none'}
+        badges={editing?.promotionBadges}
+        destinations={editing?.promotionDestinations}
         saving={saving}
         onCancel={() => {
           if (!saving) setEditing(null);
@@ -259,6 +269,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  destLine: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textMuted,
   },
   kind: {
     marginTop: 8,

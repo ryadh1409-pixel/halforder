@@ -13,6 +13,16 @@ import {
   pickFirestoreServiceFee,
   resolvePromoTags,
 } from '@/lib/restaurantStoreMetrics';
+import {
+  promotionBadgeLabel,
+  promotionBadgesFromData,
+  promotionDestinationsFromData,
+  restaurantPromoWaivesDeliveryFee,
+  restaurantPromoWaivesServiceFee,
+  type PromotionBadgeValue,
+  type PromotionDestinations,
+  type PromotionDestinationKey,
+} from '@/lib/promotionBadge';
 
 /** Normalized restaurant card for Uber Eats–style home feed (Firestore `restaurants`). */
 export type HomeRestaurant = {
@@ -27,6 +37,10 @@ export type HomeRestaurant = {
   /** Service fee label when restaurant has a configured serviceFee. */
   serviceFeeLabel: string | null;
   promoLabel: string | null;
+  /** Destination-aware admin + approved promo labels for home cards. */
+  promoLabels: string[];
+  promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
+  promotionDestinations: PromotionDestinations;
   cuisine: string | null;
   isOpen: boolean;
   /** Pre-formatted e.g. `2.4 km`; null when user location unavailable */
@@ -39,10 +53,30 @@ export type HomeRestaurant = {
   normalizedCoords: { lat: number; lng: number } | null;
 };
 
+/** Admin campaign badge labels visible on a destination surface. */
+export function campaignLabelsForDestination(
+  restaurant: Pick<HomeRestaurant, 'promotionBadges' | 'promotionDestinations'>,
+  destination: PromotionDestinationKey | ReadonlyArray<PromotionDestinationKey>,
+): string[] {
+  const destinations: PromotionDestinationKey[] = Array.isArray(destination)
+    ? [...destination]
+    : [destination];
+  const labels: string[] = [];
+  for (const dest of destinations) {
+    if (!restaurant.promotionDestinations[dest]) continue;
+    for (const badge of restaurant.promotionBadges) {
+      const label = promotionBadgeLabel(badge);
+      if (label && !labels.includes(label)) labels.push(label);
+    }
+  }
+  return labels;
+}
+
 export function mapFirestoreRestaurant(
   id: string,
   data: Record<string, unknown>,
   userCoords?: { lat: number; lng: number } | null,
+  options?: { destination?: PromotionDestinationKey },
 ): HomeRestaurant {
   const name =
     typeof data.name === 'string' && data.name.trim()
@@ -74,17 +108,31 @@ export function mapFirestoreRestaurant(
     eligibility.distanceKm != null &&
     eligibility.distanceKm <= 3;
 
+  const waiveDelivery = restaurantPromoWaivesDeliveryFee(data);
+  const waiveService = restaurantPromoWaivesServiceFee(data);
+  const deliveryFeeAmount = waiveDelivery
+    ? 0
+    : eligibility.deliveryFee.amount;
+  const deliveryFeeLabel = waiveDelivery
+    ? 'Free Delivery'
+    : eligibility.deliveryFee.label;
+
+  const destination = options?.destination ?? 'home';
   const promoTags = resolvePromoTags({
     data,
     menuPromotions: [],
     reviewCount,
-    deliveryFeeAmount: eligibility.deliveryFee.amount,
+    deliveryFeeAmount,
     isPopularNearby,
+    destination,
   });
 
-  const serviceFeeAmt = pickFirestoreServiceFee(data);
-  const serviceFeeLabel =
-    serviceFeeAmt != null ? `Service ${formatCad(serviceFeeAmt)}` : null;
+  const serviceFeeAmt = waiveService ? 0 : pickFirestoreServiceFee(data);
+  const serviceFeeLabel = waiveService
+    ? 'Service FREE'
+    : serviceFeeAmt != null
+      ? `Service ${formatCad(serviceFeeAmt)}`
+      : null;
 
   return {
     id,
@@ -94,9 +142,12 @@ export function mapFirestoreRestaurant(
     rating,
     reviewCount,
     etaLabel: eligibility.etaLabel,
-    deliveryFeeLabel: eligibility.deliveryFee.label,
+    deliveryFeeLabel,
     serviceFeeLabel,
     promoLabel: promoTags[0] ?? null,
+    promoLabels: promoTags,
+    promotionBadges: promotionBadgesFromData(data),
+    promotionDestinations: promotionDestinationsFromData(data),
     cuisine: typeof data.cuisine === 'string' ? data.cuisine : null,
     isOpen: data.isOpen !== false,
     distanceKmLabel: eligibility.distanceLabel,

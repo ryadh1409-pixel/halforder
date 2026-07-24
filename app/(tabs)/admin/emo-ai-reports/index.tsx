@@ -162,11 +162,31 @@ export default function EmoAiReportsScreen() {
                 {r.period.toUpperCase()} ·{' '}
                 {new Date(r.generatedAtMs).toLocaleString()} ·{' '}
                 {r.paymentExceptions?.length ?? 0} payment exceptions
+                {r.userConversations
+                  ? ` · ${r.userConversations.conversationCountInPeriod} Emo chats`
+                  : ''}
               </Text>
               <Text style={styles.cardCta}>View / Download</Text>
             </TouchableOpacity>
           ))
         )}
+
+        <Text style={styles.section}>User Conversations</Text>
+        <Text style={styles.lead}>
+          Browse every Emo AI conversation, search, filters, insights, and high
+          priority threads — admin only.
+        </Text>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push(adminRoutes.emoAiChat as never)}
+        >
+          <Text style={styles.cardTitle}>Open User Conversations</Text>
+          <Text style={styles.cardMeta}>
+            Full transcripts · analytics · AI insights · export via Daily /
+            Weekly / Monthly reports
+          </Text>
+          <Text style={styles.cardCta}>Open Emo Chat</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

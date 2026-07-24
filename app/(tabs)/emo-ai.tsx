@@ -7,9 +7,10 @@ import { EmoAiQuickReplies } from '@/components/emoAi/EmoAiQuickReplies';
 import { UE } from '@/constants/uberEatsTheme';
 import { useEmoAiChat } from '@/hooks/useEmoAiChat';
 import { isRegisteredAuthUser } from '@/lib/authSession';
+import { listenForHiEmoShout } from '@/services/emoAi/emoAiVoiceListen';
 import { useAuth } from '@/services/AuthContext';
 import { EMO_AI_BG } from '@/types/emoAi';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +31,7 @@ export default function EmoAiScreen() {
   const { user } = useAuth();
   const uid = isRegisteredAuthUser(user) ? user!.uid : null;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [micListening, setMicListening] = useState(false);
 
   const {
     ready,
@@ -38,11 +40,13 @@ export default function EmoAiScreen() {
     streamingText,
     typing,
     error,
+    wakeNonce,
     startChatting,
     sendMessage,
+    applyEasterEggResult,
   } = useEmoAiChat(uid);
 
-  const busy = typing || Boolean(streamingText);
+  const busy = typing || Boolean(streamingText) || micListening;
 
   /**
    * Floating CustomTabBar footprint (pinned to screen bottom).
@@ -74,6 +78,66 @@ export default function EmoAiScreen() {
     return null;
   }, [messages]);
 
+  const onMicPress = useCallback(async () => {
+    if (!uid) {
+      Alert.alert('Sign in required', 'Sign in to unlock the Hi Emo gift.');
+      return;
+    }
+    if (micListening || busy) return;
+    setMicListening(true);
+    try {
+      if (!started) await startChatting();
+      const result = await listenForHiEmoShout({ maxMs: 4000 });
+      if (result.kind === 'denied' || result.kind === 'error') {
+        await applyEasterEggResult({
+          userHeard: '🎤 (mic)',
+          assistantReply: result.message,
+          wake: false,
+        });
+        return;
+      }
+      const claim = result.claim;
+      const heard =
+        claim.transcript && claim.transcript.trim()
+          ? claim.transcript.trim()
+          : 'Hi Emo';
+      if (claim.ok) {
+        await applyEasterEggResult({
+          userHeard: heard,
+          assistantReply: claim.message || "🎉 You woke me up! Here's your gift!",
+          wake: true,
+        });
+        return;
+      }
+      if (claim.alreadyClaimed || claim.reason === 'already_claimed') {
+        await applyEasterEggResult({
+          userHeard: heard,
+          assistantReply:
+            claim.message ||
+            'You already claimed your Hi emooo gift — one shout, one gift forever!',
+          wake: true,
+        });
+        return;
+      }
+      await applyEasterEggResult({
+        userHeard: heard,
+        assistantReply:
+          claim.message ||
+          'That was close! Shout “Hi Emo” loud enough to wake me.',
+        wake: false,
+      });
+    } finally {
+      setMicListening(false);
+    }
+  }, [
+    applyEasterEggResult,
+    busy,
+    micListening,
+    startChatting,
+    started,
+    uid,
+  ]);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <KeyboardAvoidingView
@@ -94,6 +158,7 @@ export default function EmoAiScreen() {
           streaming={Boolean(streamingText)}
           streamingTick={streamingText.length}
           lastUserMessage={lastUserMessage}
+          wakeNonce={wakeNonce}
         />
 
         {!ready ? (
@@ -116,9 +181,10 @@ export default function EmoAiScreen() {
               disabled={busy}
               onSelect={(t) => void sendMessage(t)}
             />
-            {/* Messages → composer → tab-bar reserve (tabs float in this space) */}
             <EmoAiComposer
               disabled={busy}
+              micListening={micListening}
+              onMicPress={() => void onMicPress()}
               onSend={(t) => void sendMessage(t)}
             />
           </>

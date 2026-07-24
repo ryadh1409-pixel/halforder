@@ -326,7 +326,9 @@ function docCreatedAtMs(data: Record<string, unknown>): number | null {
 
 import {
   isLegacyNewOnHalfOrderLabel,
-  promotionBadgeDisplayFromData,
+  promotionBadgeLabelsFromData,
+  promotionVisibleOn,
+  type PromotionDestinationKey,
 } from '@/lib/promotionBadge';
 
 function normalizePromoText(raw: string): string | null {
@@ -348,18 +350,31 @@ export type PromoContext = {
   isPopularNearby?: boolean;
   menuPromotions: (string | null | undefined)[];
   data: Record<string, unknown>;
+  /** When set, only include admin campaign badges if enabled for this surface. */
+  destination?: PromotionDestinationKey;
 };
 
 /** Only approved promo/status tags — no invented offers. */
 export function resolvePromoTags(ctx: PromoContext): string[] {
   const tags: string[] = [];
 
-  // Admin-controlled promotion badge takes priority.
-  const adminBadge = promotionBadgeDisplayFromData(ctx.data);
-  if (adminBadge) tags.push(adminBadge);
+  // Admin-controlled promotion campaign badges take priority.
+  const destination = ctx.destination ?? 'home';
+  if (promotionVisibleOn(ctx.data, destination)) {
+    for (const label of promotionBadgeLabelsFromData(ctx.data)) {
+      if (!tags.includes(label)) tags.push(label);
+    }
+  }
 
-  if (ctx.deliveryFeeAmount != null && ctx.deliveryFeeAmount <= 0) {
-    if (!tags.includes('Free delivery')) tags.push('Free delivery');
+  const hasFreeDeliveryBadge = tags.some((t) =>
+    t.toLowerCase().includes('free delivery'),
+  );
+  if (
+    ctx.deliveryFeeAmount != null &&
+    ctx.deliveryFeeAmount <= 0 &&
+    !hasFreeDeliveryBadge
+  ) {
+    tags.push('Free delivery');
   }
 
   const docPromo =
@@ -384,7 +399,7 @@ export function resolvePromoTags(ctx: PromoContext): string[] {
     tags.push('Popular nearby');
   }
 
-  return tags.slice(0, 3);
+  return tags.slice(0, 4);
 }
 
 /** First promo tag for compact badge UI. */
@@ -399,8 +414,25 @@ export function pickActivePromotion(
     reviewCount: options?.reviewCount ?? pickReviewCount(data),
     deliveryFeeAmount: options?.deliveryFeeAmount ?? null,
     isPopularNearby: options?.isPopularNearby,
+    destination: options?.destination ?? 'menu',
   });
   return tags[0] ?? null;
+}
+
+/** All destination-filtered promo tags (admin badges + approved tags). */
+export function pickActivePromotions(
+  data: Record<string, unknown>,
+  menuPromotions: (string | null | undefined)[],
+  options?: Partial<PromoContext>,
+): string[] {
+  return resolvePromoTags({
+    data,
+    menuPromotions,
+    reviewCount: options?.reviewCount ?? pickReviewCount(data),
+    deliveryFeeAmount: options?.deliveryFeeAmount ?? null,
+    isPopularNearby: options?.isPopularNearby,
+    destination: options?.destination ?? 'menu',
+  });
 }
 
 export function resolveStoreStatusLabel(

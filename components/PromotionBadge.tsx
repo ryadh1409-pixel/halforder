@@ -5,7 +5,13 @@ import {
   type PromotionBadgeValue,
 } from '@/lib/promotionBadge';
 import React, { memo } from 'react';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 import { platformElevation } from '@/utils/platformElevation';
 
@@ -19,13 +25,8 @@ function resolveValue(
   value: Props['value'],
 ): Exclude<PromotionBadgeValue, 'none'> | null {
   if (value == null || value === '' || value === 'none') return null;
-  if (value === 'most_ordered' || value === 'great_price') return value;
   const parsed = parsePromotionBadge(value);
-  if (parsed !== 'none') return parsed;
-  const lower = String(value).toLowerCase();
-  if (lower.includes('most ordered')) return 'most_ordered';
-  if (lower.includes('great price')) return 'great_price';
-  return null;
+  return parsed === 'none' ? null : parsed;
 }
 
 function PromotionBadgeInner({ value, style }: Props) {
@@ -42,7 +43,34 @@ function PromotionBadgeInner({ value, style }: Props) {
   );
 }
 
+type RowProps = {
+  values?: ReadonlyArray<PromotionBadgeValue | string | null | undefined>;
+  style?: StyleProp<ViewStyle>;
+  badgeStyle?: StyleProp<ViewStyle>;
+};
+
+/** Renders multiple campaign badges with shared PromotionBadge styling. */
+function PromotionBadgesRowInner({ values, style, badgeStyle }: RowProps) {
+  const resolved = (values ?? [])
+    .map((v) => resolveValue(v))
+    .filter((v): v is Exclude<PromotionBadgeValue, 'none'> => v != null);
+  const unique: Exclude<PromotionBadgeValue, 'none'>[] = [];
+  for (const v of resolved) {
+    if (!unique.includes(v)) unique.push(v);
+  }
+  if (unique.length === 0) return null;
+
+  return (
+    <View style={[styles.row, style]}>
+      {unique.map((v) => (
+        <PromotionBadge key={v} value={v} style={badgeStyle} />
+      ))}
+    </View>
+  );
+}
+
 export const PromotionBadge = memo(PromotionBadgeInner);
+export const PromotionBadgesRow = memo(PromotionBadgesRowInner);
 
 const styles = StyleSheet.create({
   pill: {
@@ -66,5 +94,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 0.2,
+  },
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'flex-start',
   },
 });

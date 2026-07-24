@@ -38,6 +38,7 @@ export function renderEmoAiReportPlainText(
     | 'highPriorityConversations'
     | 'insights'
     | 'recommendations'
+    | 'userConversations'
   >,
 ): string {
   const e = report.executiveSummary;
@@ -124,6 +125,23 @@ export function renderEmoAiReportPlainText(
     '',
     '10. AI RECOMMENDATIONS',
     ...report.recommendations.map((r) => `  → ${r}`),
+    '',
+    '11. USER CONVERSATIONS (Emo AI Chat)',
+    ...(report.userConversations
+      ? [
+          `Conversations in period: ${report.userConversations.conversationCountInPeriod}`,
+          `Active users: ${report.userConversations.analytics.activeUsers}`,
+          `Avg messages/conversation: ${report.userConversations.analytics.averageMessagesPerConversation}`,
+          `Daily / Weekly / Monthly: ${report.userConversations.analytics.dailyConversationCount} / ${report.userConversations.analytics.weeklyConversationCount} / ${report.userConversations.analytics.monthlyConversationCount}`,
+          `High priority: ${report.userConversations.analytics.highPriorityCount}`,
+          `Trending keywords: ${report.userConversations.insights.trendingKeywords.map((k) => k.name).join(', ') || 'n/a'}`,
+          `Most requested restaurants: ${report.userConversations.insights.mostRequestedRestaurants.map((x) => `${x.name}(${x.count})`).join(', ') || 'n/a'}`,
+          `Most requested meals: ${report.userConversations.insights.mostRequestedMeals.map((x) => `${x.name}(${x.count})`).join(', ') || 'n/a'}`,
+          ...report.userConversations.highPriorityConversations
+            .slice(0, 20)
+            .map((h) => `  - ${h.userName}: ${h.title}`),
+        ]
+      : ['(no conversation data for this period)']),
     '',
     '— End of report — HalfOrder Emo AI',
   ];

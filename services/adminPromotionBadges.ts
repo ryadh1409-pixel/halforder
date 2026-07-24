@@ -3,9 +3,15 @@ import {
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
 import {
+  DEFAULT_PROMOTION_DESTINATIONS,
+  normalizePromotionBadges,
   parsePromotionBadge,
+  parsePromotionDestinations,
   promotionBadgeLabel,
+  promotionBadgesFromData,
+  promotionDestinationsFromData,
   type PromotionBadgeValue,
+  type PromotionDestinations,
 } from '@/lib/promotionBadge';
 import { auth, db } from '@/services/firebase';
 import {
@@ -34,11 +40,17 @@ export type PromotionBadgeTarget = {
   restaurantId?: string;
   restaurantName: string;
   foodName: string;
+  /** Legacy primary badge (first active). */
   promotionBadge: PromotionBadgeValue;
+  /** All active campaign badges. */
+  promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
+  promotionDestinations: PromotionDestinations;
 };
 
-function badgeFromData(data: Record<string, unknown>): PromotionBadgeValue {
-  return parsePromotionBadge(data.promotionBadge);
+function badgesFromData(
+  data: Record<string, unknown>,
+): Exclude<PromotionBadgeValue, 'none'>[] {
+  return promotionBadgesFromData(data);
 }
 
 function mapRestaurant(
@@ -54,13 +66,16 @@ function mapRestaurant(
     (typeof data.cuisine === 'string' && data.cuisine.trim()) ||
     (typeof data.type === 'string' && data.type.trim()) ||
     'Restaurant card';
+  const promotionBadges = badgesFromData(data);
   return {
     key: `restaurant:${id}`,
     kind: 'restaurant',
     id,
     restaurantName,
     foodName,
-    promotionBadge: badgeFromData(data),
+    promotionBadge: promotionBadges[0] ?? 'none',
+    promotionBadges,
+    promotionDestinations: promotionDestinationsFromData(data),
   };
 }
 
@@ -75,13 +90,18 @@ function mapFoodShare(
     (typeof data?.foodName === 'string' && data.foodName.trim()) ||
     (typeof data?.title === 'string' && data.title.trim()) ||
     `Food card ${id}`;
+  const promotionBadges = data ? badgesFromData(data) : [];
   return {
     key: `foodShare:${id}`,
     kind: 'foodShare',
     id,
     restaurantName,
     foodName,
-    promotionBadge: data ? badgeFromData(data) : 'none',
+    promotionBadge: promotionBadges[0] ?? 'none',
+    promotionBadges,
+    promotionDestinations: data
+      ? promotionDestinationsFromData(data)
+      : { ...DEFAULT_PROMOTION_DESTINATIONS },
   };
 }
 
@@ -93,6 +113,7 @@ function mapMenuItem(
 ): PromotionBadgeTarget {
   const foodName =
     (typeof data.name === 'string' && data.name.trim()) || 'Menu item';
+  const promotionBadges = badgesFromData(data);
   return {
     key: `menuItem:${restaurantId}:${itemId}`,
     kind: 'menuItem',
@@ -100,7 +121,9 @@ function mapMenuItem(
     restaurantId,
     restaurantName,
     foodName,
-    promotionBadge: badgeFromData(data),
+    promotionBadge: promotionBadges[0] ?? 'none',
+    promotionBadges,
+    promotionDestinations: promotionDestinationsFromData(data),
   };
 }
 
@@ -234,50 +257,69 @@ export function subscribePromotionBadgeTargets(
   };
 }
 
-function normalizeBadge(
-  value: PromotionBadgeValue | string | null | undefined,
-): PromotionBadgeValue {
-  const parsed = parsePromotionBadge(value);
-  return parsed === 'most_ordered' || parsed === 'great_price'
-    ? parsed
-    : 'none';
+function normalizeBadgeList(
+  values: ReadonlyArray<PromotionBadgeValue | string | null | undefined>,
+): Exclude<PromotionBadgeValue, 'none'>[] {
+  return normalizePromotionBadges(values);
 }
 
-/** Persist badge on a restaurant doc only. */
+function campaignPayload(
+  promotionBadges: ReadonlyArray<PromotionBadgeValue | string | null | undefined>,
+  destinations?: PromotionDestinations | null,
+): Record<string, unknown> {
+  const list = normalizeBadgeList(promotionBadges);
+  const dest = parsePromotionDestinations(
+    destinations ?? DEFAULT_PROMOTION_DESTINATIONS,
+  );
+  return {
+    promotionBadges: list,
+    promotionBadge: list[0] ?? 'none',
+    promotionDestinations: dest,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+/** Persist campaign fields on a restaurant doc only. */
 export async function saveRestaurantPromotionBadge(
   restaurantId: string,
-  promotionBadge: PromotionBadgeValue,
+  promotionBadge: PromotionBadgeValue | ReadonlyArray<PromotionBadgeValue>,
+  destinations?: PromotionDestinations | null,
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid) throw new Error('Sign in required');
   const id = restaurantId.trim();
   if (!id) throw new Error('Restaurant id required');
 
-  await updateDoc(doc(db, 'restaurants', id), {
-    promotionBadge: normalizeBadge(promotionBadge),
-    updatedAt: serverTimestamp(),
-  });
+  const list = Array.isArray(promotionBadge)
+    ? promotionBadge
+    : [promotionBadge];
+  await updateDoc(doc(db, 'restaurants', id), campaignPayload(list, destinations));
 }
 
-/** Persist badge on an admin food-share slot only. */
+/** Persist campaign fields on an admin food-share slot only. */
 export async function saveFoodSharePromotionBadge(
   slotDocId: AdminFoodCardSlotId,
-  promotionBadge: PromotionBadgeValue,
+  promotionBadge: PromotionBadgeValue | ReadonlyArray<PromotionBadgeValue>,
+  destinations?: PromotionDestinations | null,
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid) throw new Error('Sign in required');
 
-  await updateDoc(doc(db, 'adminFoodShares', slotDocId), {
-    promotionBadge: normalizeBadge(promotionBadge),
-    updatedAt: serverTimestamp(),
-  });
+  const list = Array.isArray(promotionBadge)
+    ? promotionBadge
+    : [promotionBadge];
+  await updateDoc(
+    doc(db, 'adminFoodShares', slotDocId),
+    campaignPayload(list, destinations),
+  );
 }
 
-/** Persist badge on a single menu item only. */
+/** Persist campaign fields on a single menu item only. */
 export async function saveMenuItemPromotionBadge(
   restaurantId: string,
   itemId: string,
-  promotionBadge: PromotionBadgeValue,
+  promotionBadge: PromotionBadgeValue | ReadonlyArray<PromotionBadgeValue>,
+  destinations?: PromotionDestinations | null,
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid) throw new Error('Sign in required');
@@ -286,36 +328,74 @@ export async function saveMenuItemPromotionBadge(
   if (!rid) throw new Error('Restaurant id required');
   if (!iid) throw new Error('Menu item id required');
 
-  await updateDoc(doc(db, 'restaurants', rid, 'menuItems', iid), {
-    promotionBadge: normalizeBadge(promotionBadge),
-    updatedAt: serverTimestamp(),
-  });
+  const list = Array.isArray(promotionBadge)
+    ? promotionBadge
+    : [promotionBadge];
+  await updateDoc(
+    doc(db, 'restaurants', rid, 'menuItems', iid),
+    campaignPayload(list, destinations),
+  );
 }
+
+export type SavePromotionCampaignInput = {
+  promotionBadges: ReadonlyArray<PromotionBadgeValue>;
+  promotionDestinations: PromotionDestinations;
+};
 
 export async function savePromotionBadgeTarget(
   target: Pick<PromotionBadgeTarget, 'kind' | 'id' | 'restaurantId'>,
-  promotionBadge: PromotionBadgeValue,
+  promotionBadgeOrCampaign:
+    | PromotionBadgeValue
+    | SavePromotionCampaignInput,
 ): Promise<void> {
+  const badges =
+    typeof promotionBadgeOrCampaign === 'string'
+      ? [promotionBadgeOrCampaign]
+      : promotionBadgeOrCampaign.promotionBadges;
+  const destinations =
+    typeof promotionBadgeOrCampaign === 'string'
+      ? undefined
+      : promotionBadgeOrCampaign.promotionDestinations;
+
   if (target.kind === 'restaurant') {
-    await saveRestaurantPromotionBadge(target.id, promotionBadge);
+    await saveRestaurantPromotionBadge(target.id, badges, destinations);
     return;
   }
   if (target.kind === 'menuItem') {
     const rid = target.restaurantId?.trim() ?? '';
     if (!rid) throw new Error('Restaurant id required');
-    await saveMenuItemPromotionBadge(rid, target.id, promotionBadge);
+    await saveMenuItemPromotionBadge(rid, target.id, badges, destinations);
     return;
   }
   await saveFoodSharePromotionBadge(
     target.id as AdminFoodCardSlotId,
-    promotionBadge,
+    badges,
+    destinations,
   );
 }
 
 export function formatPromotionBadgeCurrent(
-  value: PromotionBadgeValue,
+  value: PromotionBadgeValue | ReadonlyArray<PromotionBadgeValue>,
 ): string {
-  return promotionBadgeLabel(value) ?? 'None';
+  if (Array.isArray(value)) {
+    const labels = value
+      .map((v) => promotionBadgeLabel(parsePromotionBadge(v)))
+      .filter((v): v is string => Boolean(v));
+    return labels.length > 0 ? labels.join(' · ') : 'None';
+  }
+  return promotionBadgeLabel(value as PromotionBadgeValue) ?? 'None';
+}
+
+export function formatPromotionCampaignCurrent(
+  target: Pick<PromotionBadgeTarget, 'promotionBadges' | 'promotionDestinations'>,
+): string {
+  const badgePart = formatPromotionBadgeCurrent(target.promotionBadges);
+  const destKeys = (
+    Object.keys(target.promotionDestinations) as (keyof PromotionDestinations)[]
+  ).filter((k) => target.promotionDestinations[k]);
+  if (badgePart === 'None') return 'None';
+  if (destKeys.length === 0) return `${badgePart} · (no locations)`;
+  return badgePart;
 }
 
 export function isRestaurantPromotionTarget(

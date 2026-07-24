@@ -1,4 +1,5 @@
 import {
+  feeOrFreeLabel,
   formatHstLabel,
   moneyLabel,
   receiptNumberFromId,
@@ -104,12 +105,12 @@ export function OrderReceiptBreakdown({
       <Row
         tone={tone}
         label="Delivery fee"
-        value={moneyLabel(pricing.deliveryFee)}
+        value={feeOrFreeLabel(pricing.deliveryFee)}
       />
       <Row
         tone={tone}
         label="Service fee"
-        value={moneyLabel(pricing.serviceFee)}
+        value={feeOrFreeLabel(pricing.serviceFee)}
       />
       {pricing.promoDiscount > 0 ? (
         <Row

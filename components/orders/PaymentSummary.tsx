@@ -1,4 +1,5 @@
 import {
+  feeOrFreeLabel,
   formatHstLabel,
   moneyLabel,
   type OrderPricingBreakdown,
@@ -28,11 +29,11 @@ export default function PaymentSummary({
       </View>
       <View style={styles.row}>
         <Text style={styles.label}>Delivery fee</Text>
-        <Text style={styles.value}>{moneyLabel(pricing.deliveryFee)}</Text>
+        <Text style={styles.value}>{feeOrFreeLabel(pricing.deliveryFee)}</Text>
       </View>
       <View style={styles.row}>
         <Text style={styles.label}>Service fee</Text>
-        <Text style={styles.value}>{moneyLabel(pricing.serviceFee)}</Text>
+        <Text style={styles.value}>{feeOrFreeLabel(pricing.serviceFee)}</Text>
       </View>
       {pricing.promoDiscount > 0 ? (
         <View style={styles.row}>

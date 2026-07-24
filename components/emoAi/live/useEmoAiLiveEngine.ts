@@ -21,6 +21,8 @@ type Args = {
   typing: boolean;
   streaming: boolean;
   lastUserMessage: string | null;
+  /** Increment to force a fun wake-from-sleep burst. */
+  wakeNonce?: number;
 };
 
 /**
@@ -31,6 +33,7 @@ export function useEmoAiLiveEngine({
   typing,
   streaming,
   lastUserMessage,
+  wakeNonce = 0,
 }: Args): EmoCompanionSnapshot & { alive: boolean } {
   const focused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
@@ -81,6 +84,23 @@ export function useEmoAiLiveEngine({
     }
     return undefined;
   }, [lastUserMessage]);
+
+  useEffect(() => {
+    if (!wakeNonce) return undefined;
+    lastInteractRef.current = Date.now();
+    setCatSleeping(false);
+    setCalmLights(false);
+    setEmotion('excited');
+    setHeartEyes(true);
+    setEatingBurst(true);
+    setIdleAction(null);
+    const t = setTimeout(() => {
+      setEatingBurst(false);
+      setHeartEyes(false);
+      setEmotion('happy');
+    }, 4200);
+    return () => clearTimeout(t);
+  }, [wakeNonce]);
 
   useEffect(() => {
     if (!alive || typing || streaming || idleAction) return undefined;

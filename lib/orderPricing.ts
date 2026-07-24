@@ -65,6 +65,12 @@ export function moneyLabel(amount: number): string {
   return formatCad(amount);
 }
 
+/** Delivery / service fee display — FREE when waived (promo or zero). */
+export function feeOrFreeLabel(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return 'FREE';
+  return formatCad(amount);
+}
+
 /** Stable receipt number from order/payment id (display only). */
 export function receiptNumberFromId(id: string | null | undefined): string {
   const raw = (id ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();

@@ -1,7 +1,13 @@
 import { UE } from '@/constants/uberEatsTheme';
-import { PromotionBadge } from '@/components/PromotionBadge';
-import { isAdminPromotionBadgeLabel } from '@/lib/promotionBadge';
-import type { HomeRestaurant } from '@/types/homeRestaurant';
+import { PromotionBadge, PromotionBadgesRow } from '@/components/PromotionBadge';
+import {
+  isAdminPromotionBadgeLabel,
+  type PromotionDestinationKey,
+} from '@/lib/promotionBadge';
+import {
+  campaignLabelsForDestination,
+  type HomeRestaurant,
+} from '@/types/homeRestaurant';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
@@ -22,9 +28,16 @@ type Props = {
   restaurant: HomeRestaurant;
   width: number;
   onPress: () => void;
+  /** Which campaign destination(s) control badge visibility. */
+  promotionDestination?: PromotionDestinationKey | ReadonlyArray<PromotionDestinationKey>;
 };
 
-function RestaurantCardInner({ restaurant, width, onPress }: Props) {
+function RestaurantCardInner({
+  restaurant,
+  width,
+  onPress,
+  promotionDestination = 'home',
+}: Props) {
   const [fav, setFav] = useState(false);
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({
@@ -39,8 +52,16 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
   const distanceLabel = restaurant.distanceKmLabel;
   const deliveryUnavailable =
     restaurant.isOpen && restaurant.deliverable === false;
-  const promo = restaurant.promoLabel;
-  const adminPromo = isAdminPromotionBadgeLabel(promo);
+
+  const campaignLabels = campaignLabelsForDestination(
+    restaurant,
+    promotionDestination,
+  );
+  const legacyPromo =
+    campaignLabels.length === 0
+      ? restaurant.promoLabels.find((l) => !isAdminPromotionBadgeLabel(l)) ??
+        null
+      : null;
 
   return (
     <AnimatedPressable
@@ -74,12 +95,17 @@ function RestaurantCardInner({ restaurant, width, onPress }: Props) {
           colors={['transparent', 'rgba(0,0,0,0.55)']}
           style={styles.imageGradient}
         />
-        {promo ? (
-          adminPromo ? (
-            <PromotionBadge value={promo} style={styles.promoBadge} />
+        {campaignLabels.length > 0 ? (
+          <PromotionBadgesRow
+            values={campaignLabels}
+            style={styles.promoBadge}
+          />
+        ) : legacyPromo ? (
+          isAdminPromotionBadgeLabel(legacyPromo) ? (
+            <PromotionBadge value={legacyPromo} style={styles.promoBadge} />
           ) : (
             <View style={styles.promoBadgeLegacy}>
-              <Text style={styles.promoTxt}>{promo}</Text>
+              <Text style={styles.promoTxt}>{legacyPromo}</Text>
             </View>
           )
         ) : null}
@@ -188,6 +214,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
+    right: 52,
     zIndex: 2,
   },
   promoBadgeLegacy: {

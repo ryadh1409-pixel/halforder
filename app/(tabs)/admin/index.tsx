@@ -582,6 +582,11 @@ export default function AdminScreen() {
                   label="Emo AI Reports"
                   onPress={() => router.push(adminRoutes.emoAiReports as never)}
                 />
+                <ActionCard
+                  icon="chatbubbles-outline"
+                  label="Emo Chat"
+                  onPress={() => router.push(adminRoutes.emoAiChat as never)}
+                />
               </View>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>

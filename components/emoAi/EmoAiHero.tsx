@@ -10,6 +10,7 @@ type Props = {
   /** Bumps while tokens stream so mouth stays in sync. */
   streamingTick?: number;
   lastUserMessage?: string | null;
+  wakeNonce?: number;
 };
 
 /** Hero slot — same layout chrome; character is a live companion. */
@@ -18,11 +19,13 @@ export function EmoAiHero({
   streaming = false,
   streamingTick = 0,
   lastUserMessage = null,
+  wakeNonce = 0,
 }: Props) {
   const engine = useEmoAiLiveEngine({
     typing,
     streaming,
     lastUserMessage,
+    wakeNonce,
   });
 
   return (

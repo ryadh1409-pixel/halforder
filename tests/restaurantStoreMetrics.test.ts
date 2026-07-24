@@ -86,6 +86,45 @@ describe('restaurantStoreMetrics (Ontario)', () => {
     expect(tags).not.toContain('New on HalfOrder');
   });
 
+  it('surfaces multiple campaign badges and destinations', () => {
+    const tags = resolvePromoTags({
+      data: {
+        promotionBadges: ['free_delivery', 'free_service_fee'],
+        promotionDestinations: {
+          home: true,
+          menu: true,
+          swipe: false,
+          listing: true,
+          featured: true,
+        },
+      },
+      menuPromotions: [],
+      reviewCount: 0,
+      deliveryFeeAmount: 4.99,
+      destination: 'home',
+    });
+    expect(tags).toContain('🚚 Free Delivery');
+    expect(tags).toContain('💸 Free Service Fee');
+
+    const swipeHidden = resolvePromoTags({
+      data: {
+        promotionBadges: ['free_delivery'],
+        promotionDestinations: {
+          home: true,
+          menu: true,
+          swipe: false,
+          listing: true,
+          featured: true,
+        },
+      },
+      menuPromotions: [],
+      reviewCount: 0,
+      deliveryFeeAmount: 4.99,
+      destination: 'swipe',
+    });
+    expect(swipeHidden).not.toContain('🚚 Free Delivery');
+  });
+
   it('never auto-adds New on HalfOrder for zero reviews', () => {
     const tags = resolvePromoTags({
       data: {},

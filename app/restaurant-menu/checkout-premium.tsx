@@ -40,11 +40,21 @@ import {
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
+import {
+  restaurantPromoWaivesDeliveryFee,
+  restaurantPromoWaivesServiceFee,
+} from '@/lib/promotionBadge';
 import { calculateServiceFee } from '@/lib/restaurantStoreMetrics';
+import {
+  computeHiEmoooDiscountAmount,
+  HI_EMOOO_PROMO_CODE,
+  loadEmoHiEmoooDiscount,
+  redeemEmoHiEmoooDiscount,
+} from '@/services/emoAi/emoAiHiEmoooReward';
 import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -93,6 +103,7 @@ export default function CheckoutPremiumScreen() {
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [autoHiEmooo, setAutoHiEmooo] = useState(false);
 
   const cartItems = useMemo(
     () =>
@@ -116,6 +127,35 @@ export default function CheckoutPremiumScreen() {
     [cartItems],
   );
 
+  // Auto-apply one-time Hi emooo gift (no manual code entry).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user?.uid || autoHiEmooo || appliedPromoCode) return;
+      if (!(subtotal > 0)) return;
+      const giftDiscount = await loadEmoHiEmoooDiscount(user.uid);
+      if (cancelled || !giftDiscount || giftDiscount.status !== 'available') {
+        return;
+      }
+      const amount = computeHiEmoooDiscountAmount(subtotal);
+      if (!(amount > 0)) return;
+      setPromoDiscount(amount);
+      setAppliedPromoCode(HI_EMOOO_PROMO_CODE);
+      setPromo(HI_EMOOO_PROMO_CODE);
+      setAutoHiEmooo(true);
+      showSuccess('Hi emooo 50% gift applied');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, subtotal, autoHiEmooo, appliedPromoCode, setPromo]);
+
+  // Keep Hi emooo amount in sync when cart subtotal changes.
+  useEffect(() => {
+    if (!autoHiEmooo || appliedPromoCode !== HI_EMOOO_PROMO_CODE) return;
+    setPromoDiscount(computeHiEmoooDiscountAmount(subtotal));
+  }, [autoHiEmooo, appliedPromoCode, subtotal]);
+
   const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
     customerEntity: userCoords,
     restaurantEntity: profile?.raw,
@@ -125,19 +165,28 @@ export default function CheckoutPremiumScreen() {
     locationReady,
   });
 
+  const waiveDeliveryFee = restaurantPromoWaivesDeliveryFee(profile?.raw);
+  const waiveServiceFee = restaurantPromoWaivesServiceFee(profile?.raw);
+
   const deliveryFee =
-    fulfillmentMode === 'pickup' ? 0 : (eligibility.deliveryFee.amount ?? 0);
+    fulfillmentMode === 'pickup'
+      ? 0
+      : waiveDeliveryFee
+        ? 0
+        : (eligibility.deliveryFee.amount ?? 0);
 
   const priorityFee =
     fulfillmentMode === 'pickup' ? 0 : timing === 'priority' ? 2.49 : 0;
 
   const serviceFee = useMemo(
     () =>
-      calculateServiceFee({
-        subtotal,
-        firestoreFee: profile?.serviceFee ?? null,
-      }).amount ?? 0,
-    [subtotal, profile?.serviceFee],
+      waiveServiceFee
+        ? 0
+        : (calculateServiceFee({
+            subtotal,
+            firestoreFee: profile?.serviceFee ?? null,
+          }).amount ?? 0),
+    [subtotal, profile?.serviceFee, waiveServiceFee],
   );
 
   const taxRate = useMemo(
@@ -295,6 +344,16 @@ export default function CheckoutPremiumScreen() {
         deliveryLocation,
         customerLocation,
       });
+      if (
+        appliedPromoCode === HI_EMOOO_PROMO_CODE &&
+        promoDiscount > 0
+      ) {
+        try {
+          await redeemEmoHiEmoooDiscount(orderId);
+        } catch {
+          /* order already placed; redeem is best-effort server-side */
+        }
+      }
       clearCartForRestaurant(restaurantId);
       router.replace({
         pathname: '/checkout',
@@ -317,17 +376,28 @@ export default function CheckoutPremiumScreen() {
     if (promoDiscount > 0) {
       rows.push({
         key: 'promo',
-        label: 'Promotions',
+        label:
+          appliedPromoCode === HI_EMOOO_PROMO_CODE
+            ? 'Hi emooo gift (50%)'
+            : 'Promotions',
         value: `-$${promoDiscount.toFixed(2)}`,
         emphasizeDiscount: true,
-        badge: 'Promo',
+        badge:
+          appliedPromoCode === HI_EMOOO_PROMO_CODE ? 'Hi emooo' : 'Promo',
       });
     }
     rows.push({
       key: 'delivery',
       label: 'Delivery fee',
-      value: fulfillmentMode === 'pickup' ? '$0.00' : `$${deliveryFee.toFixed(2)}`,
-      emphasizeSave: fulfillmentMode === 'delivery' && subtotal >= 25,
+      value:
+        fulfillmentMode === 'pickup'
+          ? '$0.00'
+          : waiveDeliveryFee || deliveryFee <= 0
+            ? 'FREE'
+            : `$${deliveryFee.toFixed(2)}`,
+      emphasizeSave:
+        fulfillmentMode === 'delivery' &&
+        (waiveDeliveryFee || subtotal >= 25),
     });
     if (priorityFee > 0) {
       rows.push({
@@ -339,7 +409,7 @@ export default function CheckoutPremiumScreen() {
     rows.push({
       key: 'service',
       label: 'Fees & marketplace service',
-      value: `$${serviceFee.toFixed(2)}`,
+      value: waiveServiceFee || serviceFee <= 0 ? 'FREE' : `$${serviceFee.toFixed(2)}`,
     });
     rows.push({
       key: 'tax',
@@ -359,6 +429,7 @@ export default function CheckoutPremiumScreen() {
     });
     return rows;
   }, [
+    appliedPromoCode,
     deliveryFee,
     fulfillmentMode,
     priorityFee,
@@ -369,6 +440,8 @@ export default function CheckoutPremiumScreen() {
     taxes,
     taxRate,
     totalFmt,
+    waiveDeliveryFee,
+    waiveServiceFee,
   ]);
 
   const handleTimingChange = useCallback((v: CheckoutDeliveryTiming) => {

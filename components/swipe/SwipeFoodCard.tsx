@@ -1,4 +1,4 @@
-import { PromotionBadge } from '@/components/PromotionBadge';
+import { PromotionBadgesRow } from '@/components/PromotionBadge';
 import {
   formatShareCurrency,
 } from '@/lib/foodSharePricing';
@@ -17,8 +17,13 @@ function SwipeFoodCardInner({ card }: Props) {
     card.spotsLeft <= 0
       ? 'Full'
       : `${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} left`;
-  const hasPromo =
-    card.promotionBadge != null && card.promotionBadge !== 'none';
+  const promoValues =
+    card.promotionBadges && card.promotionBadges.length > 0
+      ? card.promotionBadges
+      : card.promotionBadge != null && card.promotionBadge !== 'none'
+        ? [card.promotionBadge]
+        : [];
+  const hasPromo = promoValues.length > 0;
 
   return (
     <View style={styles.face}>
@@ -40,7 +45,7 @@ function SwipeFoodCardInner({ card }: Props) {
       />
 
       {hasPromo ? (
-        <PromotionBadge value={card.promotionBadge} style={styles.promoBadge} />
+        <PromotionBadgesRow values={promoValues} style={styles.promoBadge} />
       ) : (
         <View style={styles.livePill}>
           <View style={styles.liveDot} />
@@ -99,6 +104,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     left: 16,
+    right: 16,
     zIndex: 2,
   },
   livePill: {

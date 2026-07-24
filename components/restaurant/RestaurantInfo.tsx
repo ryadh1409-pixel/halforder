@@ -1,4 +1,4 @@
-import { PromotionBadge } from '@/components/PromotionBadge';
+import { PromotionBadgesRow } from '@/components/PromotionBadge';
 import { RP } from '@/constants/restaurantPremiumTheme';
 import { RESTAURANT_INFO_OVERLAP } from '@/constants/restaurantLayout';
 import { isAdminPromotionBadgeLabel } from '@/lib/promotionBadge';
@@ -21,6 +21,7 @@ type Props = {
   statusLabel: string | null;
   statusSubtext: string | null;
   promoLabel: string | null;
+  promoLabels?: string[];
 };
 
 export function RestaurantInfo({
@@ -33,8 +34,16 @@ export function RestaurantInfo({
   statusLabel,
   statusSubtext,
   promoLabel,
+  promoLabels,
 }: Props) {
-  const adminPromo = isAdminPromotionBadgeLabel(promoLabel);
+  const labels =
+    promoLabels && promoLabels.length > 0
+      ? promoLabels
+      : promoLabel
+        ? [promoLabel]
+        : [];
+  const adminLabels = labels.filter((l) => isAdminPromotionBadgeLabel(l));
+  const legacyLabels = labels.filter((l) => !isAdminPromotionBadgeLabel(l));
 
   return (
     <View style={styles.card}>
@@ -62,15 +71,16 @@ export function RestaurantInfo({
               <Text style={styles.newLabel}>New</Text>
             )}
           </View>
-          {promoLabel ? (
+          {adminLabels.length > 0 || legacyLabels.length > 0 ? (
             <View style={styles.badgeRow}>
-              {adminPromo ? (
-                <PromotionBadge value={promoLabel} />
-              ) : (
-                <View style={styles.badgePromo}>
-                  <Text style={styles.badgePromoText}>{promoLabel}</Text>
+              {adminLabels.length > 0 ? (
+                <PromotionBadgesRow values={adminLabels} />
+              ) : null}
+              {legacyLabels.map((label) => (
+                <View key={label} style={styles.badgePromo}>
+                  <Text style={styles.badgePromoText}>{label}</Text>
                 </View>
-              )}
+              ))}
             </View>
           ) : null}
         </View>

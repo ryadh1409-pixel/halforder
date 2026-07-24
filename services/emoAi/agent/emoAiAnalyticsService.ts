@@ -5,6 +5,11 @@ import {
   fetchAdminPaymentTransactions,
   summarizeAdminPayments,
 } from '@/services/adminPaymentCenter';
+import { listEmoAiConversations } from '@/services/emoAi/emoAiConversations';
+import {
+  buildEmoConversationAnalytics,
+  buildEmoConversationInsights,
+} from '@/services/emoAi/emoAiConversationInsights';
 import { safeToMillis } from '@/utils/safeToMillis';
 import type {
   EmoAiCustomerIssueBucket,
@@ -272,6 +277,27 @@ export async function buildEmoAiAnalyticsReport(
       conversationSummary,
     });
 
+  const emoConversations = await listEmoAiConversations().catch(() => []);
+  const periodConversations = emoConversations.filter(
+    (c) => c.lastActivityMs >= start && c.lastActivityMs <= end,
+  );
+  const convoAnalytics = buildEmoConversationAnalytics(periodConversations);
+  const convoInsights = buildEmoConversationInsights(periodConversations);
+  const userConversations = {
+    analytics: convoAnalytics,
+    insights: convoInsights,
+    highPriorityConversations: periodConversations
+      .filter((c) => c.highPriority || c.flagged)
+      .slice(0, 40)
+      .map((c) => ({
+        userId: c.userId,
+        userName: c.userName,
+        title: c.title,
+        lastActivityMs: c.lastActivityMs,
+      })),
+    conversationCountInPeriod: periodConversations.length,
+  };
+
   const returningUsers = Math.max(0, activeUserIds.size - newUsers);
 
   const searchText = [
@@ -281,6 +307,7 @@ export async function buildEmoAiAnalyticsReport(
     mostPopularMeal,
     ...topLocations,
     ...paymentExceptions.map((e) => e.orderId),
+    `conversations:${userConversations.conversationCountInPeriod}`,
   ]
     .join(' ')
     .toLowerCase();
@@ -360,5 +387,6 @@ export async function buildEmoAiAnalyticsReport(
     highPriorityConversations,
     insights,
     recommendations,
+    userConversations,
   };
 }

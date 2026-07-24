@@ -5,6 +5,9 @@ import type { EmoAiMessage } from '@/types/emoAi';
 const KEY_PREFIX = 'emoAi.messages.v1.';
 const STARTED_PREFIX = 'emoAi.started.v1.';
 
+/** Visible chat history window (24 hours). */
+export const EMO_AI_VISIBLE_HISTORY_MS = 24 * 60 * 60 * 1000;
+
 function messagesKey(uid: string): string {
   return `${KEY_PREFIX}${uid.trim() || 'guest'}`;
 }
@@ -13,13 +16,21 @@ function startedKey(uid: string): string {
   return `${STARTED_PREFIX}${uid.trim() || 'guest'}`;
 }
 
+export function filterEmoAiMessagesLast24h(
+  messages: EmoAiMessage[],
+  now = Date.now(),
+): EmoAiMessage[] {
+  const cutoff = now - EMO_AI_VISIBLE_HISTORY_MS;
+  return messages.filter((m) => m.createdAtMs >= cutoff);
+}
+
 export async function loadEmoAiMessages(uid: string): Promise<EmoAiMessage[]> {
   try {
     const raw = await AsyncStorage.getItem(messagesKey(uid));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((row) => {
+    const all = parsed.flatMap((row) => {
       if (!row || typeof row !== 'object') return [];
       const r = row as Record<string, unknown>;
       const id = typeof r.id === 'string' ? r.id : '';
@@ -32,6 +43,12 @@ export async function loadEmoAiMessages(uid: string): Promise<EmoAiMessage[]> {
       if (!id || !role || !content.trim()) return [];
       return [{ id, role, content, createdAtMs } satisfies EmoAiMessage];
     });
+    const visible = filterEmoAiMessagesLast24h(all);
+    // Persist pruned visible window so expired bubbles disappear permanently from device.
+    if (visible.length !== all.length) {
+      await saveEmoAiMessages(uid, visible);
+    }
+    return visible;
   } catch {
     return [];
   }

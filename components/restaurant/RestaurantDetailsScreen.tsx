@@ -38,11 +38,15 @@ import {
 import {
   calculateDeliveryFee,
   calculateServiceFee,
-  pickActivePromotion,
+  pickActivePromotions,
   resolveRatingDisplay,
   resolveStoreStatusLabel,
   resolveStoreStatusSubtext,
 } from '@/lib/restaurantStoreMetrics';
+import {
+  restaurantPromoWaivesDeliveryFee,
+  restaurantPromoWaivesServiceFee,
+} from '@/lib/promotionBadge';
 import { showError } from '@/utils/toast';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
@@ -153,17 +157,25 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     [resolvedProfile.rating, resolvedProfile.reviewCount],
   );
 
-  const deliveryFeeEstimate = useMemo(
-    () =>
-      deliveryMode === 'pickup'
-        ? calculateDeliveryFee({
-            mode: 'pickup',
-            distanceKm,
-            firestoreFee: resolvedProfile.deliveryFee,
-          })
-        : eligibility.deliveryFee,
-    [deliveryMode, distanceKm, resolvedProfile.deliveryFee, eligibility.deliveryFee],
-  );
+  const deliveryFeeEstimate = useMemo(() => {
+    if (deliveryMode === 'pickup') {
+      return calculateDeliveryFee({
+        mode: 'pickup',
+        distanceKm,
+        firestoreFee: resolvedProfile.deliveryFee,
+      });
+    }
+    if (restaurantPromoWaivesDeliveryFee(resolvedProfile.raw)) {
+      return { amount: 0, label: 'Free Delivery' };
+    }
+    return eligibility.deliveryFee;
+  }, [
+    deliveryMode,
+    distanceKm,
+    resolvedProfile.deliveryFee,
+    resolvedProfile.raw,
+    eligibility.deliveryFee,
+  ]);
 
   const deliveryFeeLabel = deliveryFeeEstimate.label;
   const etaLabel = eligibility.etaLabel;
@@ -187,18 +199,17 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     [cartForRestaurant],
   );
 
-  const serviceFeeLabel = useMemo(
-    () =>
-      calculateServiceFee({
-        subtotal,
-        firestoreFee: resolvedProfile.serviceFee,
-      }).label,
-    [subtotal, resolvedProfile.serviceFee],
-  );
+  const serviceFeeLabel = useMemo(() => {
+    if (restaurantPromoWaivesServiceFee(resolvedProfile.raw)) return 'FREE';
+    return calculateServiceFee({
+      subtotal,
+      firestoreFee: resolvedProfile.serviceFee,
+    }).label;
+  }, [subtotal, resolvedProfile.serviceFee, resolvedProfile.raw]);
 
-  const promoLabel = useMemo(
+  const promoLabels = useMemo(
     () =>
-      pickActivePromotion(
+      pickActivePromotions(
         resolvedProfile.raw,
         displayItems.map((i) => i.promotion),
         {
@@ -208,6 +219,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
             resolvedProfile.raw.popular === true &&
             distanceKm != null &&
             distanceKm <= 3,
+          destination: 'menu',
         },
       ),
     [
@@ -218,6 +230,8 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
       distanceKm,
     ],
   );
+
+  const promoLabel = promoLabels[0] ?? null;
 
   const statusLabel = useMemo(
     () => resolveStoreStatusLabel(resolvedProfile.raw, resolvedProfile.reviewCount),
@@ -418,6 +432,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                 statusLabel={statusLabel}
                 statusSubtext={statusSubtext}
                 promoLabel={promoLabel}
+                promoLabels={promoLabels}
               />
               <DeliveryOptions
                 mode={deliveryMode}

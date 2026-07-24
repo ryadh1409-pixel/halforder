@@ -25,6 +25,7 @@ export type SwipeFoodCard = {
   deliveryStatus: string | null;
   lifecycle: FoodShareMatchLifecycle;
   promotionBadge?: PromotionBadgeValue;
+  promotionBadges?: Exclude<PromotionBadgeValue, 'none'>[];
 };
 
 export type SwipeDeckLoadingCard = {

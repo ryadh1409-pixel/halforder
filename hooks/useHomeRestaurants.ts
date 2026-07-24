@@ -42,11 +42,14 @@ export function useHomeRestaurants(): State {
       (snap) => {
         const rows = snap.docs
           .map((d) => {
-          const raw = d.data() as Record<string, unknown>;
-          if (raw.adminEnabled === false) return null;
-          const normalized = normalizeRestaurantFirestoreDoc(d.id, raw);
-          return mapFirestoreRestaurant(d.id, normalized, userCoords);
-        })
+            const raw = d.data() as Record<string, unknown>;
+            if (raw.adminEnabled === false) return null;
+            const normalized = normalizeRestaurantFirestoreDoc(d.id, raw);
+            const mapped = mapFirestoreRestaurant(d.id, normalized, userCoords);
+            // Hide restaurants without valid coordinates (no broken placeholder cards).
+            if (!mapped.normalizedCoords) return null;
+            return mapped;
+          })
           .filter((r): r is HomeRestaurant => r != null);
         rows.sort((a, b) => a.name.localeCompare(b.name));
         setRestaurants(rows);

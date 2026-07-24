@@ -81,6 +81,7 @@ export default function AdminLayout() {
         name="emo-ai-reports/[reportId]"
         options={{ title: 'Emo AI Report' }}
       />
+      <Stack.Screen name="emo-ai-chat" options={{ title: 'Emo Chat' }} />
       <Stack.Screen
         name="inbox-messages"
         options={{ title: 'Inbox Messages' }}
