@@ -611,7 +611,7 @@ export default function AdminScreen() {
                 />
               </View>
 
-              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+              <Text style={[styles.sectionHeading, styles.homeBannersSection]}>
                 Home banners
               </Text>
               <View style={styles.panel}>
@@ -727,6 +727,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   sectionSpacer: { marginTop: 28 },
+  homeBannersSection: { marginTop: 44 },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -737,7 +738,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   panel: {
     backgroundColor: COLORS.card,

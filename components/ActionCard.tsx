@@ -6,9 +6,15 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+
+/** Matches Command Center `scrollContent` padding and `actionsGrid` gap. */
+const GRID_HORIZONTAL_PAD = 20;
+const GRID_GAP = 12;
+const GRID_COLS = 3;
 
 export type ActionCardProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -18,15 +24,29 @@ export type ActionCardProps = {
 };
 
 export function ActionCard({ icon, label, onPress, style }: ActionCardProps) {
+  const { width: winW } = useWindowDimensions();
+  const cellW =
+    (winW - GRID_HORIZONTAL_PAD * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+
   return (
     <Pressable
-      style={({ pressed }) => [styles.wrap, style, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.wrap,
+        { width: cellW },
+        style,
+        pressed && styles.pressed,
+      ]}
       onPress={onPress}
     >
       <View style={styles.iconCircle}>
         <Ionicons name={icon} size={20} color={COLORS.primary} />
       </View>
-      <Text style={styles.label} numberOfLines={2}>
+      <Text
+        style={styles.label}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+      >
         {label}
       </Text>
     </Pressable>
@@ -35,13 +55,10 @@ export function ActionCard({ icon, label, onPress, style }: ActionCardProps) {
 
 const styles = StyleSheet.create({
   wrap: {
-    width: '22%',
-    minWidth: 72,
-    maxWidth: 96,
     aspectRatio: 1,
     backgroundColor: COLORS.card,
     borderRadius: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -70,5 +87,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
     lineHeight: 14,
+    width: '100%',
   },
 });
