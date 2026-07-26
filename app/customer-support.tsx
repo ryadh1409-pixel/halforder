@@ -12,6 +12,7 @@ import {
   type SupportConversationMessage,
   type SupportMessageAttachment,
 } from '@/services/supportConversations';
+import { refreshAppBadgeNow } from '@/services/appBadgeManager';
 import {
   pickSupportImagesFromLibrary,
   takeSupportPhoto,
@@ -151,6 +152,7 @@ export default function CustomerSupportScreen() {
       setLoading(false);
     });
     void markSupportReadByCustomer(uid).catch(() => {});
+    void refreshAppBadgeNow();
     return () => {
       unsubMeta();
       unsubMsg();

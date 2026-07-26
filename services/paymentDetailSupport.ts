@@ -418,7 +418,7 @@ export async function sendPaymentCustomerSupportMessage(input: {
         deepLink: '/customer-support',
         paymentId: input.payment.id,
       },
-      { priority: 'high', channelId: 'halforder', badge: 1 },
+      { priority: 'high', channelId: 'halforder' },
     );
   }
 

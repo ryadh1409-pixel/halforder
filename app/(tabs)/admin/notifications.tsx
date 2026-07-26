@@ -3,6 +3,7 @@ import { adminRoutes } from '../../../constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '../../../constants/adminTheme';
 import { isAdminUser } from '../../../constants/adminUid';
 import { useAuth } from '../../../services/AuthContext';
+import { refreshAppBadgeNow } from '../../../services/appBadgeManager';
 import { db } from '../../../services/firebase';
 import { getReadableErrorMessageOr } from '../../../utils/errorMessages';
 import {
@@ -162,6 +163,7 @@ export default function AdminNotificationsCenterScreen() {
       readBy: arrayUnion(user.uid),
       readAt: serverTimestamp(),
     });
+    void refreshAppBadgeNow();
   };
 
   const openRelated = async (item: AdminNotificationItem) => {

@@ -137,7 +137,7 @@
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/app-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true,

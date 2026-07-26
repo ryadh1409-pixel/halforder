@@ -6,22 +6,13 @@ import {
   type AdminSupportInboundKind,
   type SupportConversation,
 } from '@/services/supportConversations';
-import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import React, { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 
 function inboundKind(row: SupportConversation): AdminSupportInboundKind {
   if (row.complaintId || row.complaintCategory) return 'complaint';
   return 'new_message';
-}
-
-function syncBadge(rows: SupportConversation[]): void {
-  if (Platform.OS === 'web' || isExpoGo) return;
-  const count = rows.filter((r) => r.unreadAdmin > 0).length;
-  void Notifications.setBadgeCountAsync(count).catch(() => undefined);
 }
 
 function showInAppBanner(
@@ -54,8 +45,6 @@ export function AdminSupportInboundListener() {
   useEffect(() => {
     if (!isAdmin || !user?.uid) return;
     return subscribeAdminSupportConversations((rows) => {
-      syncBadge(rows);
-
       if (!seededRef.current) {
         seededRef.current = true;
         rows.forEach((r) => {

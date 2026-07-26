@@ -22,6 +22,7 @@ import {
   type SupportConversationPriority,
   type SupportConversationStatus,
 } from '@/services/supportConversations';
+import { refreshAppBadgeNow } from '@/services/appBadgeManager';
 import {
   closeSupportTicket,
   reopenSupportTicket,
@@ -89,7 +90,9 @@ export default function AdminSupportThreadScreen() {
     const unsubConv = subscribeSupportConversation(threadId, (row) => {
       setConversation(row);
       if (row && row.unreadAdmin > 0) {
-        void markSupportReadByAdmin(threadId).catch(() => undefined);
+        void markSupportReadByAdmin(threadId)
+          .then(() => refreshAppBadgeNow())
+          .catch(() => undefined);
       }
     });
     const unsubConvMsg = subscribeSupportConversationMessages(threadId, setConvMessages);

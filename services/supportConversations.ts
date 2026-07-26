@@ -311,21 +311,10 @@ async function pushToCustomer(
       title,
       body,
       { type: 'support_reply', deepLink, conversationId: customerId },
-      { priority: 'high', channelId: 'halforder', badge: 1 },
+      { priority: 'high', channelId: 'halforder' },
     );
   } catch {
     /* best-effort */
-  }
-}
-
-async function countAdminUnreadBadge(): Promise<number> {
-  try {
-    const snap = await getDocs(
-      query(collection(db, COL), where('unreadAdmin', '>', 0)),
-    );
-    return snap.size;
-  } catch {
-    return 1;
   }
 }
 
@@ -338,7 +327,6 @@ async function pushToAdmins(
     const tokens = await collectAdminPushTokens();
     if (tokens.length === 0) return;
     const { title, body } = buildAdminSupportInboundPush({ kind, userName });
-    const badge = await countAdminUnreadBadge();
     await sendExpoPush(
       tokens,
       title,
@@ -349,7 +337,7 @@ async function pushToAdmins(
         conversationId,
         kind,
       },
-      { priority: 'high', channelId: 'halforder', badge },
+      { priority: 'high', channelId: 'halforder' },
     );
   } catch {
     /* best-effort */
@@ -434,7 +422,14 @@ export function subscribeAdminSupportUnreadCount(
 ): Unsubscribe {
   return onSnapshot(
     query(collection(db, COL), where('unreadAdmin', '>', 0)),
-    (snap) => onCount(snap.size),
+    (snap) => {
+      let total = 0;
+      for (const d of snap.docs) {
+        const raw = (d.data() as Record<string, unknown>).unreadAdmin;
+        total += typeof raw === 'number' && raw > 0 ? raw : 1;
+      }
+      onCount(total);
+    },
     () => onCount(0),
   );
 }

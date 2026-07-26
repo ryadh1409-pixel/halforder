@@ -12,6 +12,7 @@ import {
   subscribeInboxNotifications,
   type InboxNotification,
 } from '@/services/foodShareInbox';
+import { refreshAppBadgeNow } from '@/services/appBadgeManager';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -142,6 +143,7 @@ export default function InboxScreen() {
       if (!uid) return undefined;
       void markAllInboxNotificationsRead(uid).catch(() => {});
       void markSupportReadByCustomer(uid).catch(() => {});
+      void refreshAppBadgeNow();
       return undefined;
     }, [uid]),
   );

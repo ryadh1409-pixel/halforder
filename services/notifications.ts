@@ -74,11 +74,12 @@ export function configureForegroundNotificationHandler(): void {
         | Record<string, unknown>
         | undefined;
       /** Pair-join uses an in-app toast in `_layout`; hide OS banner to avoid duplicates. */
+      // Badge is owned by `services/appBadgeManager` — never apply push payload badges.
       if (data?.type === HALF_ORDER_PAIR_JOIN_PUSH_TYPE) {
         return {
           shouldShowAlert: false,
           shouldPlaySound: true,
-          shouldSetBadge: true,
+          shouldSetBadge: false,
           shouldShowBanner: false,
           shouldShowList: false,
         };
@@ -88,7 +89,7 @@ export function configureForegroundNotificationHandler(): void {
         return {
           shouldShowAlert: false,
           shouldPlaySound: true,
-          shouldSetBadge: true,
+          shouldSetBadge: false,
           shouldShowBanner: false,
           shouldShowList: true,
         };
@@ -96,7 +97,7 @@ export function configureForegroundNotificationHandler(): void {
       return {
         shouldShowAlert: true,
         shouldPlaySound: true,
-        shouldSetBadge: true,
+        shouldSetBadge: false,
         shouldShowBanner: true,
         shouldShowList: true,
       };

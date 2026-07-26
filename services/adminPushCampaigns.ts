@@ -220,7 +220,6 @@ export async function sendProfessionalPush(input: {
   }, {
     priority: 'high',
     channelId: 'halforder',
-    badge: 1,
     mutableContent: Boolean(input.imageUrl?.trim()),
   });
 

@@ -168,7 +168,7 @@ async function notifyAdminsOfSupportTicket(input: {
         orderId: input.orderId,
         deepLink: `/(tabs)/admin/support-inbox`,
       },
-      { priority: 'high', channelId: 'halforder', badge: 1 },
+      { priority: 'high', channelId: 'halforder' },
     );
   } catch {
     /* best-effort */
