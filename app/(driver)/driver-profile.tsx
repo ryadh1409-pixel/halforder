@@ -1,22 +1,35 @@
 import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
 import { LOCATION_PALETTE_DARK } from '@/components/location/locationPalette';
+import { AppTextInput } from '@/components/AppTextInput';
 import { useDriverProfileIdentity } from '@/hooks/useDriverProfileIdentity';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { uploadAndPersistDriverProfilePhoto } from '@/lib/driverProfilePhoto';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
+import {
+  displayFromStoredProfilePhone,
+  formatProfileWhatsAppDisplay,
+  isCompleteNaProfilePhone,
+  isProfilePhoneStorageEmpty,
+  profilePhoneForFirestore,
+  profileWhatsAppOnChangeText,
+} from '@/lib/profileWhatsAppPhone';
 import { useAuth } from '@/services/AuthContext';
-import { ensureAuthReady } from '@/services/firebase';
+import { auth, db, ensureAuthReady } from '@/services/firebase';
 import {
   ImagePickerPermissionError,
   pickImageFromLibrary,
 } from '@/services/imagePicker';
+import { profileFirestoreOp } from '@/services/profileFirestoreLog';
 import { getUserFriendlyError, showUserError } from '@/services/errors';
+import { moderateUserContent } from '@/utils/contentModeration';
 import { logError } from '@/utils/errorLogger';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { updateProfile } from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -35,6 +48,50 @@ export default function DriverProfileTab() {
   const uid = user?.uid ?? null;
   const identity = useDriverProfileIdentity(uid);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [phoneDraft, setPhoneDraft] = useState('+1 ');
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (identity.loading) {
+      hydratedRef.current = false;
+      return;
+    }
+    if (!hydratedRef.current) {
+      setNameDraft(
+        identity.displayName !== 'Driver' ? identity.displayName : '',
+      );
+      setPhoneDraft(
+        identity.phoneRaw
+          ? displayFromStoredProfilePhone(identity.phoneRaw)
+          : '+1 ',
+      );
+      hydratedRef.current = true;
+    }
+  }, [identity.loading, identity.displayName, identity.phoneRaw]);
+
+  const profileDirty = useMemo(() => {
+    if (identity.loading || !hydratedRef.current) return false;
+    const savedName =
+      identity.displayName && identity.displayName !== 'Driver'
+        ? identity.displayName.trim()
+        : '';
+    const nameChanged = nameDraft.trim() !== savedName;
+    const savedPhone = identity.phoneRaw
+      ? profilePhoneForFirestore(identity.phoneRaw)
+      : '';
+    const phoneChanged =
+      profilePhoneForFirestore(phoneDraft) !== savedPhone &&
+      !(isProfilePhoneStorageEmpty(phoneDraft) && savedPhone === '');
+    return nameChanged || phoneChanged;
+  }, [
+    identity.loading,
+    identity.displayName,
+    identity.phoneRaw,
+    nameDraft,
+    phoneDraft,
+  ]);
 
   const handleSignOut = useCallback(async () => {
     await logoutAndResetSession(signOutUser);
@@ -75,6 +132,99 @@ export default function DriverProfileTab() {
     }
   }, [reloadAuthUser, uid, uploadingPhoto]);
 
+  const handleSave = useCallback(async () => {
+    if (!uid || saving || !profileDirty) return;
+    const trimmedName = nameDraft.trim();
+    if (!trimmedName) {
+      showError('Enter your name.');
+      return;
+    }
+
+    const nameMod = moderateUserContent(trimmedName, { maxLength: 80 });
+    if (!nameMod.ok) {
+      showError(nameMod.reason);
+      return;
+    }
+
+    const phoneTreatEmpty = isProfilePhoneStorageEmpty(phoneDraft);
+    if (!phoneTreatEmpty && !isCompleteNaProfilePhone(phoneDraft)) {
+      showError('Enter a complete phone number (10 digits after +1).');
+      return;
+    }
+    const phoneForFirestore = phoneTreatEmpty
+      ? ''
+      : formatProfileWhatsAppDisplay(profilePhoneForFirestore(phoneDraft));
+
+    await ensureAuthReady();
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.uid !== uid) {
+      showError('Please sign in again.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateProfile(currentUser, { displayName: nameMod.text });
+      try {
+        await currentUser.reload();
+      } catch (reloadError) {
+        logError(reloadError);
+      }
+
+      await profileFirestoreOp(
+        {
+          file: 'app/(driver)/driver-profile.tsx',
+          operation: 'setDoc(merge)',
+          path: `users/${uid}`,
+        },
+        () =>
+          setDoc(
+            doc(db, 'users', uid),
+            {
+              displayName: nameMod.text,
+              name: nameMod.text,
+              phone: phoneForFirestore,
+              phoneNumber: phoneForFirestore || null,
+              whatsapp: phoneForFirestore,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+      );
+
+      await profileFirestoreOp(
+        {
+          file: 'app/(driver)/driver-profile.tsx',
+          operation: 'setDoc(merge)',
+          path: `drivers/${uid}`,
+        },
+        () =>
+          setDoc(
+            doc(db, 'drivers', uid),
+            {
+              name: nameMod.text,
+              phone: phoneForFirestore || null,
+              phoneNumber: phoneForFirestore || null,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+      );
+
+      setNameDraft(nameMod.text);
+      setPhoneDraft(
+        phoneForFirestore ? displayFromStoredProfilePhone(phoneForFirestore) : '+1 ',
+      );
+      hydratedRef.current = true;
+      showSuccess('Profile saved.');
+    } catch (error) {
+      logError(error);
+      showError(getUserFriendlyError(error));
+    } finally {
+      setSaving(false);
+    }
+  }, [nameDraft, phoneDraft, profileDirty, saving, uid]);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView
@@ -106,12 +256,42 @@ export default function DriverProfileTab() {
               </View>
             )}
           </Pressable>
-          <Text style={styles.driverName}>
-            {identity.loading ? '…' : identity.displayName}
-          </Text>
-          <Text style={styles.driverPhone}>
-            {identity.loading ? '…' : identity.phoneDisplay}
-          </Text>
+
+          <Text style={styles.fieldLabel}>Driver Name</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : nameDraft}
+            onChangeText={setNameDraft}
+            placeholder="Your name"
+            placeholderTextColor="#7D8493"
+            autoCapitalize="words"
+            editable={!identity.loading && !saving}
+          />
+
+          <Text style={styles.fieldLabel}>Phone Number</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : phoneDraft}
+            onChangeText={(text) => setPhoneDraft(profileWhatsAppOnChangeText(text))}
+            placeholder="+1 (555) 555-5555"
+            placeholderTextColor="#7D8493"
+            keyboardType="phone-pad"
+            editable={!identity.loading && !saving}
+          />
+
+          {profileDirty ? (
+            <Pressable
+              style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+              disabled={saving}
+              onPress={() => void handleSave()}
+            >
+              {saving ? (
+                <ActivityIndicator color="#052e1b" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save</Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
 
         <AccountLocationPicker
@@ -142,6 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     paddingTop: 8,
+    width: '100%',
   },
   avatarButton: {
     width: AVATAR_SIZE,
@@ -165,20 +346,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#132B1E',
   },
-  driverName: {
+  fieldLabel: {
     marginTop: 14,
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  driverPhone: {
-    marginTop: 6,
+    alignSelf: 'stretch',
     color: '#7D8493',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
+  },
+  profileInput: {
+    marginTop: 6,
+    alignSelf: 'stretch',
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3A3A5A',
+    backgroundColor: '#22223A',
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
     textAlign: 'center',
   },
+  saveBtn: {
+    marginTop: 16,
+    alignSelf: 'stretch',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#00C853',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: '#052e1b', fontWeight: '800', fontSize: 15 },
   btn: {
     marginTop: 20,
     height: 48,

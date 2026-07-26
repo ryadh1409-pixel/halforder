@@ -5,6 +5,14 @@ import {
   resolveRestaurantProfilePhone,
 } from '@/lib/restaurantDashboardProfile';
 import {
+  displayFromStoredProfilePhone,
+  formatProfileWhatsAppDisplay,
+  isCompleteNaProfilePhone,
+  isProfilePhoneStorageEmpty,
+  profilePhoneForFirestore,
+  profileWhatsAppOnChangeText,
+} from '@/lib/profileWhatsAppPhone';
+import {
   RestaurantOrdersPanel,
   type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
@@ -69,6 +77,7 @@ export default function HostDashboardScreen() {
   const [nameDraft, setNameDraft] = useState('');
   const [phoneDraft, setPhoneDraft] = useState('');
   const [locationDraft, setLocationDraft] = useState('');
+  const [pendingLogoUrl, setPendingLogoUrl] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -82,14 +91,21 @@ export default function HostDashboardScreen() {
   });
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const pendingIsOpenRef = useRef<boolean | null>(null);
+  /** Prevent live snapshots from wiping in-progress edits. */
+  const profileHydratedRef = useRef(false);
   const [toggleBusy, setToggleBusy] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const isVenueOpen = restaurant?.isOpen ?? true;
 
   useEffect(() => {
+    profileHydratedRef.current = false;
+    setPendingLogoUrl(null);
     if (!uid) {
       setRestaurant(null);
+      setNameDraft('');
+      setPhoneDraft('');
+      setLocationDraft('');
       setRestaurantLoading(false);
       return;
     }
@@ -99,9 +115,12 @@ export default function HostDashboardScreen() {
       (snap) => {
         if (!snap.exists()) {
           setRestaurant(null);
-          setNameDraft('');
-          setPhoneDraft('');
-          setLocationDraft('');
+          if (!profileHydratedRef.current) {
+            setNameDraft('');
+            setPhoneDraft('+1 ');
+            setLocationDraft('');
+            profileHydratedRef.current = true;
+          }
           setRestaurantLoading(false);
           return;
         }
@@ -143,9 +162,15 @@ export default function HostDashboardScreen() {
                 : null,
         };
         setRestaurant(row);
-        setNameDraft(row.name);
-        setPhoneDraft(row.phoneNumber ?? row.phone ?? '');
-        setLocationDraft(row.location);
+        // Hydrate editable drafts once so live snapshots cannot wipe typing.
+        if (!profileHydratedRef.current) {
+          setNameDraft(row.name);
+          setPhoneDraft(
+            displayFromStoredProfilePhone(row.phoneNumber ?? row.phone),
+          );
+          setLocationDraft(row.location);
+          profileHydratedRef.current = true;
+        }
         setRestaurantLoading(false);
       },
       (error) => {
@@ -213,26 +238,43 @@ export default function HostDashboardScreen() {
       showError('Enter your restaurant or truck name.');
       return;
     }
+    const phoneTreatEmpty = isProfilePhoneStorageEmpty(phoneDraft);
+    if (!phoneTreatEmpty && !isCompleteNaProfilePhone(phoneDraft)) {
+      showError('Enter a complete phone number (10 digits after +1).');
+      return;
+    }
+    const phoneForStore = phoneTreatEmpty
+      ? null
+      : formatProfileWhatsAppDisplay(profilePhoneForFirestore(phoneDraft));
     setSavingProfile(true);
     try {
-      const phoneTrimmed = phoneDraft.trim();
+      const logoUrl =
+        (typeof pendingLogoUrl === 'string' && pendingLogoUrl.trim()
+          ? pendingLogoUrl.trim()
+          : null) ??
+        (typeof restaurant?.logoUrl === 'string' && restaurant.logoUrl.trim()
+          ? restaurant.logoUrl.trim()
+          : null);
       await saveRestaurantVenueMain({
         uid,
         name,
-        phoneNumber: phoneTrimmed || null,
+        phoneNumber: phoneForStore,
         location: locationDraft.trim(),
-        logoUrl:
-          typeof restaurant?.logoUrl === 'string' && restaurant.logoUrl.trim()
-            ? restaurant.logoUrl.trim()
-            : null,
+        logoUrl,
       });
+      setPendingLogoUrl(null);
+      setNameDraft(name);
+      setPhoneDraft(
+        phoneForStore ? displayFromStoredProfilePhone(phoneForStore) : '+1 ',
+      );
+      profileHydratedRef.current = true;
       showSuccess('Restaurant profile saved');
     } catch (e) {
       showUserError(e, { role: 'restaurant', context: 'restaurant' });
     } finally {
       setSavingProfile(false);
     }
-  }, [uid, nameDraft, phoneDraft, locationDraft, restaurant?.logoUrl]);
+  }, [uid, nameDraft, phoneDraft, locationDraft, pendingLogoUrl, restaurant?.logoUrl]);
 
   const profilePhoneDisplay = useMemo(() => {
     const authPhoneNumber = auth.currentUser?.phoneNumber ?? user?.phoneNumber ?? null;
@@ -245,8 +287,36 @@ export default function HostDashboardScreen() {
     return formatRestaurantPhoneDisplay(resolvedPhone);
   }, [restaurant, user?.phoneNumber]);
 
+  const savedPhoneNormalized = useMemo(() => {
+    const raw = restaurant?.phoneNumber ?? restaurant?.phone ?? null;
+    if (!raw) return '';
+    return profilePhoneForFirestore(raw);
+  }, [restaurant?.phoneNumber, restaurant?.phone]);
+
+  const profileDirty = useMemo(() => {
+    const savedName = (restaurant?.name ?? '').trim();
+    const nameChanged = nameDraft.trim() !== savedName;
+    const phoneChanged =
+      profilePhoneForFirestore(phoneDraft) !== savedPhoneNormalized &&
+      !(isProfilePhoneStorageEmpty(phoneDraft) && savedPhoneNormalized === '');
+    const locationChanged =
+      locationDraft.trim() !== (restaurant?.location ?? '').trim();
+    const logoChanged = Boolean(pendingLogoUrl);
+    return nameChanged || phoneChanged || locationChanged || logoChanged;
+  }, [
+    nameDraft,
+    phoneDraft,
+    locationDraft,
+    pendingLogoUrl,
+    restaurant?.name,
+    restaurant?.location,
+    savedPhoneNormalized,
+  ]);
+
+  const displayLogoUrl = pendingLogoUrl ?? restaurant?.logoUrl;
+
   const onPickLogo = async () => {
-    if (!uid) return;
+    if (!uid || uploadingLogo) return;
     setUploadingLogo(true);
     try {
       const picked = await pickMenuImageFromLibrary(0.88);
@@ -255,8 +325,8 @@ export default function HostDashboardScreen() {
         restaurantId: uid,
         localUri: picked.localUri,
       });
-      await mergeHostRestaurantProfile(uid, { logo: url, logoUrl: url });
-      showSuccess('Logo updated.');
+      setPendingLogoUrl(url);
+      showSuccess('Photo ready — tap Save to update your profile.');
     } catch (e) {
       showUserError(e, { role: 'restaurant', context: 'upload' });
     } finally {
@@ -452,8 +522,8 @@ export default function HostDashboardScreen() {
                 <View style={styles.profileAvatarPlaceholder}>
                   <ActivityIndicator color={PRIMARY} />
                 </View>
-              ) : restaurant?.logoUrl ? (
-                <Image source={{ uri: restaurant.logoUrl }} style={styles.profileAvatarImage} />
+              ) : displayLogoUrl ? (
+                <Image source={{ uri: displayLogoUrl }} style={styles.profileAvatarImage} />
               ) : (
                 <View style={styles.profileAvatarPlaceholder}>
                   <Ionicons name="storefront-outline" size={40} color="#7D8493" />
@@ -470,17 +540,33 @@ export default function HostDashboardScreen() {
                 placeholder="Restaurant"
                 placeholderTextColor="#7D8493"
                 autoCapitalize="words"
+                editable={!savingProfile && !restaurantLoading}
               />
 
               <Text style={styles.profileFieldLabel}>Phone Number</Text>
               <AppTextInput
                 style={styles.profileInput}
                 value={phoneDraft}
-                onChangeText={setPhoneDraft}
+                onChangeText={(text) => setPhoneDraft(profileWhatsAppOnChangeText(text))}
                 placeholder="+1 (613) 123-4567"
                 placeholderTextColor="#7D8493"
                 keyboardType="phone-pad"
+                editable={!savingProfile && !restaurantLoading}
               />
+
+              {profileDirty ? (
+                <TouchableOpacity
+                  style={[styles.primaryBtn, styles.saveVenueBtn]}
+                  onPress={() => void saveProfileFields()}
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
 
@@ -525,9 +611,13 @@ export default function HostDashboardScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.primaryBtn, styles.saveVenueBtn]}
+                  style={[
+                    styles.primaryBtn,
+                    styles.saveVenueBtn,
+                    (!profileDirty || savingProfile) && styles.saveVenueBtnDisabled,
+                  ]}
                   onPress={() => void saveProfileFields()}
-                  disabled={savingProfile}
+                  disabled={!profileDirty || savingProfile}
                 >
                   {savingProfile ? (
                     <ActivityIndicator color="#fff" />
@@ -763,6 +853,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     minHeight: 48,
     justifyContent: 'center',
+  },
+  saveVenueBtnDisabled: {
+    opacity: 0.45,
   },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   stripeConnectBtn: {
