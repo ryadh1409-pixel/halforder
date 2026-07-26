@@ -13,6 +13,10 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "297728229596-5cuof99b7tu5k357uk3qd5pr5dj9qoni.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "297728229596-romffk4k60l1pi6vhvrusopa8l3pvhhd.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -20,6 +24,10 @@
       "channel": "preview",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "297728229596-5cuof99b7tu5k357uk3qd5pr5dj9qoni.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "297728229596-romffk4k60l1pi6vhvrusopa8l3pvhhd.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -28,7 +36,9 @@
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51TRZ1LJvTJtrqs6njFhqpXXPyeW7Y5cgV1502eolYXivuOo6a2SFaTlJPYbRf5uHR9kd4KfjWnns2SA9vX9n12wu00p8CkESIX",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDEIyDNTl3-f2juVsGaIV1AwhuJ-vru6sU"
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDEIyDNTl3-f2juVsGaIV1AwhuJ-vru6sU",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "297728229596-5cuof99b7tu5k357uk3qd5pr5dj9qoni.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "297728229596-romffk4k60l1pi6vhvrusopa8l3pvhhd.apps.googleusercontent.com"
       }
     }
   },

@@ -101,6 +101,7 @@ export default function LoginScreen() {
       await signInWithGoogle();
       await finishSignedIn();
     } catch (err: unknown) {
+      console.error('[Login] Google Sign-In ORIGINAL ERROR', err);
       errorHaptic();
       showFriendlyError(err);
     } finally {
@@ -114,6 +115,7 @@ export default function LoginScreen() {
       await signInWithApple();
       await finishSignedIn();
     } catch (err: unknown) {
+      console.error('[Login] Apple Sign-In ORIGINAL ERROR', err);
       errorHaptic();
       showFriendlyError(err);
     } finally {

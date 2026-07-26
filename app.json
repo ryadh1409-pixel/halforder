@@ -18,7 +18,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.halforder.app",
       "buildNumber": "3",
+      "usesAppleSignIn": true,
       "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ],
         "com.apple.developer.in-app-payments": [
           "merchant.com.halforder.app"
         ]
@@ -42,19 +46,9 @@
           },
           {
             "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.1087129301998-fpbmk5onqteqmgjsf91hq7cl7knobukf"
-            ]
-          },
-          {
-            "CFBundleURLSchemes": [
-              "halforder"
+              "com.googleusercontent.apps.297728229596-5cuof99b7tu5k357uk3qd5pr5dj9qoni"
             ],
-            "CFBundleURLName": "HalfOrder Deep Link"
-          },
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.1087129301998-fpbmk5onqteqmgjsf91hq7cl7knobukf"
-            ]
+            "CFBundleURLName": "Google OAuth REVERSED_CLIENT_ID"
           }
         ]
       }
@@ -162,6 +156,7 @@
     },
     "plugins": [
       "expo-dev-client",
+      "expo-apple-authentication",
       [
         "expo-notifications",
         {

@@ -3,6 +3,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, signInWithCredential, type User } from 'firebase/auth';
 import { useCallback, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { getReadableErrorMessage } from '../utils/errorMessages';
 import { auth } from './firebase';
@@ -19,21 +20,59 @@ type GoogleLoginResult = {
   user: GoogleLoginUser;
 };
 
+function iosReversedClientId(iosClientId: string): string | null {
+  const id = iosClientId.trim();
+  if (!id.endsWith('.apps.googleusercontent.com')) return null;
+  const prefix = id.replace(/\.apps\.googleusercontent\.com$/, '');
+  if (!prefix) return null;
+  return `com.googleusercontent.apps.${prefix}`;
+}
+
+function logGoogleAuthError(stage: string, error: unknown): void {
+  const e = error as {
+    code?: string;
+    message?: string;
+    stack?: string;
+  };
+  console.error('[Google Sign-In] ORIGINAL ERROR', {
+    stage,
+    code: e?.code ?? null,
+    message: e?.message ?? String(error),
+    stack: e?.stack ?? null,
+    raw: error,
+  });
+}
+
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const redirectUri = useMemo(
-    () =>
-      AuthSession.makeRedirectUri({
-        scheme: 'halforder',
-      }),
-    [],
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ?? '';
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() ?? '';
+  const reversedClientId = useMemo(
+    () => iosReversedClientId(iosClientId),
+    [iosClientId],
   );
 
+  /**
+   * Google iOS OAuth clients require:
+   *   com.googleusercontent.apps.{IOS_CLIENT_PREFIX}:/oauthredirect
+   * That scheme MUST also be in CFBundleURLTypes (app.json).
+   */
+  const redirectUri = useMemo(() => {
+    if (Platform.OS === 'ios' && reversedClientId) {
+      return AuthSession.makeRedirectUri({
+        native: `${reversedClientId}:/oauthredirect`,
+      });
+    }
+    return AuthSession.makeRedirectUri({
+      scheme: 'halforder',
+    });
+  }, [reversedClientId]);
+
   const [request, , promptAsync] = Google.useAuthRequest({
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: iosClientId || undefined,
+    webClientId: webClientId || undefined,
     scopes: ['openid', 'profile', 'email'],
     redirectUri,
   });
@@ -42,12 +81,56 @@ export function useGoogleAuth() {
     setLoading(true);
     setError(null);
     try {
+      if (!iosClientId || !webClientId) {
+        throw new Error(
+          'Missing EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID or EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID',
+        );
+      }
+      if (Platform.OS === 'ios' && !reversedClientId) {
+        throw new Error(
+          'Invalid EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID — cannot derive REVERSED_CLIENT_ID',
+        );
+      }
       if (!request) {
         throw new Error('Google sign-in is not ready yet.');
       }
+
+      console.log('[Google Sign-In] starting', {
+        iosClientId,
+        webClientId,
+        reversedClientId,
+        redirectUri,
+      });
+
+      // Exact native/OAuth failure point for redirect_uri_mismatch / scheme errors:
+      // promptAsync() — Google rejects redirect or app cannot open reversed client URL scheme.
       const result = await promptAsync();
+      console.log('[Google Sign-In] promptAsync result', {
+        type: result.type,
+        params:
+          result.type === 'success'
+            ? {
+                hasIdToken: Boolean(
+                  result.authentication?.idToken ?? result.params?.id_token,
+                ),
+                hasCode: Boolean(result.params?.code),
+                error: result.params?.error ?? null,
+                errorDescription: result.params?.error_description ?? null,
+              }
+            : result,
+      });
+
       if (result.type !== 'success') {
-        throw new Error('Google sign-in was cancelled.');
+        const googleError =
+          result.type === 'error'
+            ? result.error ?? result
+            : result;
+        logGoogleAuthError('promptAsync', googleError);
+        throw new Error(
+          result.type === 'dismiss' || result.type === 'cancel'
+            ? 'Google sign-in was cancelled.'
+            : `Google sign-in failed: ${result.type}`,
+        );
       }
 
       const idToken =
@@ -56,20 +139,24 @@ export function useGoogleAuth() {
           ? result.params.id_token
           : null);
       if (!idToken) {
+        logGoogleAuthError('missing_id_token', result);
         throw new Error('Google sign-in failed: missing id_token');
       }
 
       const credential = GoogleAuthProvider.credential(idToken);
+      // Exact Firebase failure point:
+      // signInWithCredential → FirebaseError (e.g. auth/invalid-credential).
       const userCredential = await signInWithCredential(auth, credential);
       return { user: mapUser(userCredential.user) };
     } catch (e) {
+      logGoogleAuthError('signInWithGoogle', e);
       const message = getReadableErrorMessage(e);
       setError(message);
-      throw new Error(message);
+      throw e instanceof Error ? e : new Error(message);
     } finally {
       setLoading(false);
     }
-  }, [promptAsync, request]);
+  }, [promptAsync, request, iosClientId, webClientId, reversedClientId, redirectUri]);
 
   return {
     signInWithGoogle,
