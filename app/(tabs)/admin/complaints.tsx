@@ -147,7 +147,7 @@ export default function AdminComplaintsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <AdminHeader title="Complaints" subtitle="User messages" />
+      <AdminHeader title="Complaints" subtitle="Customer messages" />
       <FlatList
         data={complaints}
         keyExtractor={(item) => item.id}
@@ -159,7 +159,7 @@ export default function AdminComplaintsScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>User:</Text>
+            <Text style={styles.cardLabel}>Customer:</Text>
             <Text style={styles.cardEmail}>{item.userEmail || '—'}</Text>
             {item.referenceNumber ? (
               <>

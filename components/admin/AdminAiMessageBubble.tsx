@@ -1,14 +1,21 @@
-import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
+import { adminCardShell, adminColors as COLORS, adminFontFamily } from '@/constants/adminTheme';
 import type { AdminAiEntityCard, AdminAiMessage } from '@/types/adminAiAssistant';
 import { Image } from 'expo-image';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 function EntityCard({
   item,
@@ -19,7 +26,7 @@ function EntityCard({
 }) {
   return (
     <Pressable
-      style={styles.entity}
+      style={({ pressed }) => [styles.entity, pressed && { opacity: 0.88 }]}
       onPress={() => {
         if (item.href) onPress(item.href);
       }}
@@ -67,7 +74,15 @@ export function AdminAiMessageBubble({
 }) {
   const isUser = message.role === 'user';
   return (
-    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}>
+    <Animated.View
+      entering={FadeInDown.duration(280)}
+      style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}
+    >
+      {!isUser ? (
+        <View style={styles.assistantAvatar}>
+          <Text style={styles.assistantAvatarText}>AI</Text>
+        </View>
+      ) : null}
       <View
         style={[
           styles.bubble,
@@ -75,7 +90,7 @@ export function AdminAiMessageBubble({
         ]}
       >
         {!isUser ? <Text style={styles.brand}>Admin AI</Text> : null}
-        <Text style={styles.body}>{message.content}</Text>
+        <Text style={[styles.body, isUser && styles.bodyUser]}>{message.content}</Text>
         {message.entities?.length ? (
           <View style={styles.entityList}>
             {message.entities.map((e) => (
@@ -105,6 +120,50 @@ export function AdminAiMessageBubble({
           </View>
         ) : null}
       </View>
+    </Animated.View>
+  );
+}
+
+function TypingDots() {
+  const a = useSharedValue(0.35);
+  const b = useSharedValue(0.35);
+  const c = useSharedValue(0.35);
+
+  useEffect(() => {
+    a.value = withRepeat(
+      withSequence(withTiming(1, { duration: 320 }), withTiming(0.35, { duration: 320 })),
+      -1,
+      false,
+    );
+    const t1 = setTimeout(() => {
+      b.value = withRepeat(
+        withSequence(withTiming(1, { duration: 320 }), withTiming(0.35, { duration: 320 })),
+        -1,
+        false,
+      );
+    }, 120);
+    const t2 = setTimeout(() => {
+      c.value = withRepeat(
+        withSequence(withTiming(1, { duration: 320 }), withTiming(0.35, { duration: 320 })),
+        -1,
+        false,
+      );
+    }, 240);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [a, b, c]);
+
+  const sa = useAnimatedStyle(() => ({ opacity: a.value }));
+  const sb = useAnimatedStyle(() => ({ opacity: b.value }));
+  const sc = useAnimatedStyle(() => ({ opacity: c.value }));
+
+  return (
+    <View style={styles.dots}>
+      <Animated.View style={[styles.dot, sa]} />
+      <Animated.View style={[styles.dot, sb]} />
+      <Animated.View style={[styles.dot, sc]} />
     </View>
   );
 }
@@ -112,13 +171,16 @@ export function AdminAiMessageBubble({
 export function AdminAiTypingBubble({ text }: { text: string }) {
   return (
     <View style={[styles.row, styles.rowAssistant]}>
+      <View style={styles.assistantAvatar}>
+        <Text style={styles.assistantAvatarText}>AI</Text>
+      </View>
       <View style={[styles.bubble, styles.bubbleAssistant]}>
         <Text style={styles.brand}>Admin AI</Text>
         {text ? (
           <Text style={styles.body}>{text}</Text>
         ) : (
           <View style={styles.typingRow}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
+            <TypingDots />
             <Text style={styles.typingText}>Thinking…</Text>
           </View>
         )}
@@ -128,36 +190,64 @@ export function AdminAiTypingBubble({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  row: { marginBottom: 12, maxWidth: '94%' },
+  row: {
+    marginBottom: 16,
+    maxWidth: '92%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   rowUser: { alignSelf: 'flex-end' },
   rowAssistant: { alignSelf: 'flex-start' },
+  assistantAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  assistantAvatarText: {
+    fontFamily: adminFontFamily,
+    color: COLORS.primary,
+    fontWeight: '900',
+    fontSize: 10,
+  },
   bubble: {
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexShrink: 1,
   },
   bubbleUser: {
     backgroundColor: COLORS.primary,
+    borderBottomRightRadius: 6,
   },
   bubbleAssistant: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderBottomLeftRadius: 6,
   },
   brand: {
+    fontFamily: adminFontFamily,
     color: COLORS.primary,
     fontWeight: '800',
     fontSize: 11,
     marginBottom: 6,
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   body: {
+    fontFamily: adminFontFamily,
     color: COLORS.text,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 23,
     fontWeight: '500',
   },
-  entityList: { marginTop: 10, gap: 8 },
+  bodyUser: { color: '#FFFFFF', fontWeight: '600' },
+  entityList: { marginTop: 12, gap: 8 },
   entity: {
     ...adminCardShell,
     flexDirection: 'row',
@@ -165,26 +255,51 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 0,
   },
-  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatar: { width: 44, height: 44, borderRadius: 14 },
   avatarFallback: {
-    backgroundColor: 'rgba(168,85,247,0.2)',
+    backgroundColor: COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarLetter: { color: COLORS.primary, fontWeight: '800', fontSize: 16 },
+  avatarLetter: {
+    fontFamily: adminFontFamily,
+    color: COLORS.primary,
+    fontWeight: '800',
+    fontSize: 16,
+  },
   entityBody: { flex: 1, minWidth: 0 },
-  entityTitle: { color: COLORS.text, fontWeight: '800', fontSize: 15 },
-  entitySub: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
-  entityMeta: { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
+  entityTitle: {
+    fontFamily: adminFontFamily,
+    color: COLORS.text,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  entitySub: {
+    fontFamily: adminFontFamily,
+    color: COLORS.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  entityMeta: {
+    fontFamily: adminFontFamily,
+    color: COLORS.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
   navBtn: {
-    marginTop: 10,
+    marginTop: 12,
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(168,85,247,0.18)',
+    backgroundColor: COLORS.primarySoft,
   },
-  navBtnText: { color: COLORS.primary, fontWeight: '800', fontSize: 13 },
+  navBtnText: {
+    fontFamily: adminFontFamily,
+    color: COLORS.primary,
+    fontWeight: '800',
+    fontSize: 13,
+  },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -199,7 +314,24 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  chipText: { color: COLORS.text, fontWeight: '700', fontSize: 12 },
-  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  typingText: { color: COLORS.textMuted, fontWeight: '600' },
+  chipText: {
+    fontFamily: adminFontFamily,
+    color: COLORS.text,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  typingText: {
+    fontFamily: adminFontFamily,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  dots: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
 });
+

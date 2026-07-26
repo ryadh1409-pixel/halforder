@@ -173,13 +173,8 @@ const TabBarItem = memo(function TabBarItem({
       onPress={onPress}
       style={styles.tab}
     >
-      <View
-        style={[
-          styles.iconSlot,
-          focused && !isEmoAi && styles.iconSlotActive,
-        ]}
-      >
-        <Animated.View style={iconAnim}>
+      <View style={[styles.iconSlot, focused && styles.iconSlotActive]}>
+        <Animated.View style={[iconAnim, styles.iconCenter]}>
           {isEmoAi ? (
             <View
               style={[
@@ -324,20 +319,24 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
     minWidth: 0,
-    paddingVertical: 2,
+    height: FLOATING_TAB_BAR.height - 4,
+    paddingTop: 2,
   },
   iconSlot: {
     position: 'relative',
-    width: 48,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconSlotActive: {
     backgroundColor: 'rgba(168, 85, 247, 0.16)',
+  },
+  iconCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emoAvatarGlow: {
     width: ICON_SIZE,
@@ -381,12 +380,18 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   label: {
+    marginTop: 4,
+    height: 14,
+    lineHeight: 14,
     fontSize: 11,
     fontWeight: '700',
     color: INACTIVE,
     letterSpacing: -0.1,
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
-  labelActive: { color: ACTIVE, fontWeight: '900' },
+  labelActive: { color: ACTIVE, fontWeight: '800' },
   badge: {
     position: 'absolute',
     right: 2,

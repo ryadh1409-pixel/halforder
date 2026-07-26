@@ -266,7 +266,7 @@ export default function AdminSupportInboxScreen() {
                     <Text style={styles.sourceTag}>Order</Text>
                   </View>
                   <Text style={styles.meta} numberOfLines={1}>
-                    User: {t.userId}
+                    Customer: {t.userId}
                   </Text>
                   <Text style={styles.meta} numberOfLines={1}>
                     Order: {t.orderId || '—'}

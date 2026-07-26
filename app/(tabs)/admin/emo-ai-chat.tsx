@@ -106,7 +106,7 @@ export default function AdminEmoAiChatScreen() {
         <Text style={styles.section}>Conversation Analytics</Text>
         <View style={styles.card}>
           <Text style={styles.stat}>Total conversations: {analytics.totalConversations}</Text>
-          <Text style={styles.stat}>Active users: {analytics.activeUsers}</Text>
+          <Text style={styles.stat}>Active customers: {analytics.activeUsers}</Text>
           <Text style={styles.stat}>
             Avg messages / conversation: {analytics.averageMessagesPerConversation}
           </Text>

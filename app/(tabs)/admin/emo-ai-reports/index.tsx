@@ -176,7 +176,7 @@ export default function EmoAiReportsScreen() {
           ))
         )}
 
-        <Text style={styles.section}>User Conversations</Text>
+        <Text style={styles.section}>Customer Conversations</Text>
         <Text style={styles.lead}>
           Browse every Emo AI conversation, search, filters, insights, and high
           priority threads — admin only.
@@ -185,7 +185,7 @@ export default function EmoAiReportsScreen() {
           style={styles.card}
           onPress={() => router.push(adminRoutes.emoAiChat as never)}
         >
-          <Text style={styles.cardTitle}>Open User Conversations</Text>
+          <Text style={styles.cardTitle}>Open Customer Conversations</Text>
           <Text style={styles.cardMeta}>
             Full transcripts · analytics · AI insights · export via Daily /
             Weekly / Monthly reports

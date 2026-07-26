@@ -54,7 +54,7 @@ export default function AdminUsersScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
-        title="Users & roles"
+        title="Customers & roles"
         subtitle="Change marketplace access in real time"
       />
       {loading ? (

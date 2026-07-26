@@ -245,7 +245,7 @@ export default function AdminDashboardScreen() {
               activeOpacity={0.85}
               onPress={() => router.push(adminRoutes.users as never)}
             >
-              <Text style={styles.cardLabel}>Total Users</Text>
+              <Text style={styles.cardLabel}>Customers</Text>
               <Text style={styles.cardValue}>{stats.totalUsers}</Text>
               <Text style={styles.cardCta}>Open list →</Text>
             </TouchableOpacity>
@@ -277,7 +277,7 @@ export default function AdminDashboardScreen() {
               <Text style={styles.cardLabel}>Reports & moderation</Text>
               <Text style={styles.cardValue}>{stats.reports}</Text>
               <Text style={styles.cardSub}>
-                Reported users: {stats.reportedUsers}
+                Reported customers: {stats.reportedUsers}
               </Text>
               <Text style={styles.cardCta}>Open reports →</Text>
             </TouchableOpacity>

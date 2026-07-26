@@ -98,8 +98,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(15, 23, 42, 0.1)',
-    backgroundColor: '#000000',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#09090B',
   },
   toolbar: {
     flexDirection: 'row',
@@ -129,6 +129,17 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.72 },
   backText: { fontSize: 16, color: C.primary, fontWeight: '600' },
   homeLabel: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-  title: { fontSize: 22, fontWeight: '700', color: C.text },
-  sub: { fontSize: 14, fontWeight: '500', color: C.textMuted, marginTop: 4 },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FAFAFA',
+    letterSpacing: -0.3,
+  },
+  sub: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#A1A1AA',
+    marginTop: 4,
+    lineHeight: 18,
+  },
 });

@@ -248,7 +248,7 @@ export default function AdminSendNotificationScreen() {
           editable={!sending}
         />
         <Text style={styles.microHint}>
-          Uses this device&apos;s location. Users need `latitude` / `longitude`
+          Uses this device&apos;s location. Customers need `latitude` / `longitude`
           (or `location`) saved on their profile.
         </Text>
 

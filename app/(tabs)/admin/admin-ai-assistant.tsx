@@ -4,7 +4,7 @@ import {
   AdminAiTypingBubble,
 } from '@/components/admin/AdminAiMessageBubble';
 import { adminRoutes } from '@/constants/adminRoutes';
-import { adminColors as COLORS } from '@/constants/adminTheme';
+import { adminColors as COLORS, adminFontFamily } from '@/constants/adminTheme';
 import { useAdminAiAssistant } from '@/hooks/useAdminAiAssistant';
 import { useAuth } from '@/services/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,8 +60,8 @@ export default function AdminAiAssistantScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
-        title="Admin AI Assistant"
-        subtitle="Executive operations helper"
+        title="Admin AI"
+        subtitle="Enterprise operations assistant"
         fallbackRoute={adminRoutes.home}
       />
 
@@ -86,21 +86,27 @@ export default function AdminAiAssistantScreen() {
             typing ? <AdminAiTypingBubble text={streamingText} /> : null
           }
           ListHeaderComponent={
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}
-            >
-              {chips.map((c) => (
-                <Pressable
-                  key={c.id}
-                  style={styles.chip}
-                  onPress={() => void send(c.prompt)}
-                >
-                  <Text style={styles.chipText}>{c.label}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <View style={styles.headerBlock}>
+              <Text style={styles.headerHint}>Suggested prompts</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+              >
+                {chips.map((c) => (
+                  <Pressable
+                    key={c.id}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      pressed && { opacity: 0.85 },
+                    ]}
+                    onPress={() => void send(c.prompt)}
+                  >
+                    <Text style={styles.chipText}>{c.label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
           }
         />
 
@@ -108,7 +114,7 @@ export default function AdminAiAssistantScreen() {
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            placeholder="Ask Admin AI…"
+            placeholder="Message Admin AI…"
             placeholderTextColor={COLORS.textMuted}
             style={styles.input}
             multiline
@@ -120,7 +126,7 @@ export default function AdminAiAssistantScreen() {
             onPress={() => void send()}
             disabled={!draft.trim() || typing}
           >
-            <Ionicons name="send" size={18} color="#FFF" />
+            <Ionicons name="arrow-up" size={20} color="#FFF" />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -132,41 +138,60 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
   flex: { flex: 1 },
   list: { padding: 16, paddingBottom: 12 },
+  headerBlock: { marginBottom: 8 },
+  headerHint: {
+    fontFamily: adminFontFamily,
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
   chipRow: { gap: 8, paddingBottom: 12 },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
   },
-  chipText: { color: COLORS.text, fontWeight: '700', fontSize: 12 },
+  chipText: {
+    fontFamily: adminFontFamily,
+    color: COLORS.text,
+    fontWeight: '700',
+    fontSize: 12,
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
-    padding: 12,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: COLORS.border,
+    backgroundColor: 'rgba(9,9,11,0.96)',
   },
   input: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    borderRadius: 14,
+    minHeight: 48,
+    maxHeight: 140,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     color: COLORS.text,
+    fontFamily: adminFontFamily,
     fontSize: 15,
+    lineHeight: 21,
   },
   send: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',

@@ -226,7 +226,7 @@ export default function AdminAiInsightsScreen() {
               />
               <MetricCard
                 icon="🔔"
-                label="Users w/ push token"
+                label="Customers w/ push token"
                 value={insights.usersWithPushTokenCount}
                 hint="All profiles"
               />

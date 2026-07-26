@@ -513,15 +513,15 @@ export default function AdminFoodCardDetailScreen() {
           />
         </Section>
 
-        <Section title="Waiting users">
+        <Section title="Waiting customers">
           {detail.waitingUsers.length === 0 ? (
-            <Row label="Status" value="No users waiting" />
+            <Row label="Status" value="No customers waiting" />
           ) : (
             detail.waitingUsers.map((user) => (
               <View key={user.userId} style={styles.waitingUserBlock}>
                 <Row label="Name" value={user.userFirstName} />
                 <Row
-                  label="User ID"
+                  label="Customer ID"
                   value={user.userId}
                   mono
                   onPress={() =>
@@ -535,10 +535,10 @@ export default function AdminFoodCardDetailScreen() {
           )}
         </Section>
 
-        <Section title="User">
-          <Row label="Creator user name" value={detail.creatorName ?? '—'} />
+        <Section title="Customer">
+          <Row label="Creator name" value={detail.creatorName ?? '—'} />
           <Row
-            label="User ID"
+            label="Customer ID"
             value={detail.creatorUserId ?? '—'}
             mono
             onPress={
@@ -555,9 +555,9 @@ export default function AdminFoodCardDetailScreen() {
         <Section title="Match">
           <Row label="Hub status" value={detail.hubStatusLabel} />
           <Row label="Chat status" value={detail.chatStatusLabel} />
-          <Row label="Matched user name" value={detail.matchedUserName ?? '—'} />
+          <Row label="Matched customer name" value={detail.matchedUserName ?? '—'} />
           <Row
-            label="Matched user ID"
+            label="Matched customer ID"
             value={detail.matchedUserId ?? '—'}
             mono
             onPress={

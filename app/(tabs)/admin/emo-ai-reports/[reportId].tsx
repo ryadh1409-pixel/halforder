@@ -123,8 +123,8 @@ export default function EmoAiReportDetailScreen() {
 
         <Text style={styles.h2}>Executive Summary</Text>
         <View style={styles.grid}>
-          <Kpi label="New Users" value={String(e.newUsers)} />
-          <Kpi label="Active Users" value={String(e.activeUsers)} />
+          <Kpi label="New Customers" value={String(e.newUsers)} />
+          <Kpi label="Active Customers" value={String(e.activeUsers)} />
           <Kpi label="Returning" value={String(e.returningUsers)} />
           <Kpi label="New Orders" value={String(e.newOrders)} />
           <Kpi label="Completed" value={String(e.completedOrders)} />
@@ -220,13 +220,13 @@ export default function EmoAiReportDetailScreen() {
 
         {report.userConversations ? (
           <>
-            <Text style={styles.h2}>User Conversations</Text>
+            <Text style={styles.h2}>Customer Conversations</Text>
             <Text style={styles.body}>
               Conversations in period:{' '}
               {report.userConversations.conversationCountInPeriod}
             </Text>
             <Text style={styles.body}>
-              Active users: {report.userConversations.analytics.activeUsers} ·
+              Active customers: {report.userConversations.analytics.activeUsers} ·
               Avg messages:{' '}
               {report.userConversations.analytics.averageMessagesPerConversation}{' '}
               · High priority:{' '}

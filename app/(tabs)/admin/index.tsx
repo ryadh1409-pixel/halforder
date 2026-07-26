@@ -305,7 +305,7 @@ export default function AdminScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.mainCol}>
-            <AdminHeader title="Admin Panel" />
+            <AdminHeader title="Command Center" subtitle="HalfOrder operations" />
             <ScrollView
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
@@ -318,7 +318,10 @@ export default function AdminScreen() {
                 />
               }
             >
-              <Text style={styles.title}>Admin Dashboard</Text>
+              <Text style={styles.title}>Dashboard</Text>
+              <Text style={styles.subtitle}>
+                Live metrics, finance, and quick actions
+              </Text>
 
               <AdminAiAssistantPanel displayName={user?.displayName} />
 
@@ -333,9 +336,10 @@ export default function AdminScreen() {
                   <Text style={styles.sectionHeading}>Overview</Text>
                   <View style={styles.statsGrid}>
                     <AdminStatCard
-                      label="Total Users"
+                      label="Customers"
                       value={String(metrics.totalUsers)}
                       hint="View directory"
+                      icon="people-outline"
                       onPress={() => router.push(adminRoutes.users as never)}
                       style={{ width: statCellW }}
                     />
@@ -343,6 +347,7 @@ export default function AdminScreen() {
                       label="Total Orders"
                       value={String(metrics.totalOrders)}
                       hint="Open orders"
+                      icon="receipt-outline"
                       onPress={() => router.push(adminRoutes.orders() as never)}
                       style={{ width: statCellW }}
                     />
@@ -350,6 +355,7 @@ export default function AdminScreen() {
                       label="Orders Today"
                       value={String(metrics.ordersToday)}
                       hint="Today filter"
+                      icon="today-outline"
                       onPress={() =>
                         router.push(
                           adminRoutes.orders({ filter: 'today' }) as never,
@@ -361,13 +367,14 @@ export default function AdminScreen() {
                       label="Revenue"
                       value={`$${metrics.totalRevenue.toFixed(0)}`}
                       hint="Stripe treasury"
+                      icon="cash-outline"
                       onPress={() => router.push(adminRoutes.payments as never)}
                       style={{ width: statCellW }}
                     />
                   </View>
 
                   <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
-                    Finance · Stripe Payments Center
+                    Finance
                   </Text>
                   <View style={styles.statsGrid}>
                     <AdminStatCard
@@ -453,7 +460,7 @@ export default function AdminScreen() {
               ) : null}
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
-                Actions
+                Quick actions
               </Text>
               <View style={styles.actionsGrid}>
                 <ActionCard
@@ -464,8 +471,13 @@ export default function AdminScreen() {
                   }
                 />
                 <ActionCard
+                  icon="map-outline"
+                  label="Live Map"
+                  onPress={() => router.push('/(tabs)/admin/map' as never)}
+                />
+                <ActionCard
                   icon="people-outline"
-                  label="Users"
+                  label="Customers"
                   onPress={() => router.push(adminRoutes.users as never)}
                 />
                 <ActionCard
@@ -487,21 +499,21 @@ export default function AdminScreen() {
                 />
                 <ActionCard
                   icon="mail-outline"
-                  label="Inbox Messages"
+                  label="Inbox"
                   onPress={() =>
                     router.push(adminRoutes.inboxMessages as never)
                   }
                 />
                 <ActionCard
                   icon="chatbubbles-outline"
-                  label="Support Inbox"
+                  label="Support"
                   onPress={() =>
                     router.push(adminRoutes.supportInbox as never)
                   }
                 />
                 <ActionCard
                   icon="notifications-circle-outline"
-                  label="Admin alerts"
+                  label="Alerts"
                   onPress={() => router.push(adminRoutes.notifications as never)}
                 />
                 <ActionCard
@@ -691,20 +703,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  scrollContent: { padding: 16, paddingBottom: 24 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: COLORS.text,
-    marginBottom: 16,
+    letterSpacing: -0.6,
+  },
+  subtitle: {
+    marginTop: 6,
+    marginBottom: 20,
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+    lineHeight: 20,
   },
   sectionHeading: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 10,
+    color: COLORS.textMuted,
+    marginBottom: 12,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
   },
-  sectionSpacer: { marginTop: 20 },
+  sectionSpacer: { marginTop: 28 },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -773,9 +795,11 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 12, fontSize: 14, color: COLORS.textMuted },
   errorBox: {
     backgroundColor: COLORS.dangerBg,
-    padding: 12,
+    padding: 14,
     borderRadius: 14,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.28)',
   },
-  errorText: { color: COLORS.error, fontSize: 14, fontWeight: '500' },
+  errorText: { color: COLORS.error, fontSize: 14, fontWeight: '600' },
 });

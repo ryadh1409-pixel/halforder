@@ -109,7 +109,7 @@ export default function AdminAnalyticsScreen() {
                 activeOpacity={0.88}
                 onPress={() => router.push(adminRoutes.users as never)}
               >
-                <Text style={styles.label}>Users</Text>
+                <Text style={styles.label}>Customers</Text>
                 <Text style={styles.value}>{data.users}</Text>
                 <Text style={styles.cta}>Open directory →</Text>
               </TouchableOpacity>

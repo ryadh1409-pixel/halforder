@@ -76,7 +76,7 @@ export default function AdminChatModerationScreen() {
             >
               <Text style={styles.time}>{item.createdAt}</Text>
               <Text style={styles.cat}>{item.category}</Text>
-              <Text style={styles.line}>User: {item.userId}</Text>
+              <Text style={styles.line}>Customer: {item.userId}</Text>
               <Text style={styles.line}>Match: {item.matchId}</Text>
               {item.preview ? (
                 <Text style={styles.preview} numberOfLines={2}>

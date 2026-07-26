@@ -1,17 +1,14 @@
+import { adminColors as COLORS, adminFontFamily } from '@/constants/adminTheme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-
-const CARD = '#171923';
-const TEXT = '#FFFFFF';
-const PRIMARY = '#A855F7';
 
 export type ActionCardProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -22,18 +19,17 @@ export type ActionCardProps = {
 
 export function ActionCard({ icon, label, onPress, style }: ActionCardProps) {
   return (
-    <TouchableOpacity
-      style={[styles.wrap, style]}
+    <Pressable
+      style={({ pressed }) => [styles.wrap, style, pressed && styles.pressed]}
       onPress={onPress}
-      activeOpacity={0.88}
     >
       <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={22} color={PRIMARY} />
+        <Ionicons name={icon} size={20} color={COLORS.primary} />
       </View>
       <Text style={styles.label} numberOfLines={2}>
         {label}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -43,32 +39,35 @@ const styles = StyleSheet.create({
     minWidth: 72,
     maxWidth: 96,
     aspectRatio: 1,
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 10,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.28)',
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 3,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 4,
   },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.97 }] },
   iconCircle: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: 'rgba(168, 85, 247, 0.16)',
+    backgroundColor: COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   label: {
+    fontFamily: adminFontFamily,
     fontSize: 11,
-    fontWeight: '600',
-    color: TEXT,
+    fontWeight: '700',
+    color: COLORS.text,
     textAlign: 'center',
     lineHeight: 14,
   },

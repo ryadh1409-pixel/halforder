@@ -117,7 +117,7 @@ export default function AdminUserDetailScreen() {
             id: d.id,
             title,
             status: typeof data.status === 'string' ? data.status : '—',
-            role: creator === userId ? 'Host' : 'Participant',
+            role: creator === userId ? 'Restaurant' : 'Participant',
             createdAt: formatFirestoreTime(data.createdAt),
           });
         });
@@ -238,7 +238,7 @@ export default function AdminUserDetailScreen() {
       setActing(true);
       try {
         await promoteUserToAdmin(actor, firestoreUserRole, userId);
-        showSuccess('User promoted to admin.');
+        showSuccess('Customer promoted to admin.');
       } catch (e) {
         showError(getUserFriendlyError(e));
       } finally {
@@ -283,7 +283,7 @@ export default function AdminUserDetailScreen() {
       setActing(true);
       try {
         await deleteUserDocumentAsAdmin(actor, firestoreUserRole, userId);
-        showSuccess('User document removed.');
+        showSuccess('Customer document removed.');
         router.replace(adminRoutes.users as never);
       } catch (e) {
         showError(getUserFriendlyError(e));
@@ -303,7 +303,7 @@ export default function AdminUserDetailScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <AdminHeader title="User profile" fallbackRoute={adminRoutes.users} />
+      <AdminHeader title="Customer profile" fallbackRoute={adminRoutes.users} />
       {profileLoading && !profile ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -321,7 +321,7 @@ export default function AdminUserDetailScreen() {
                 <Text style={styles.v}>{phone}</Text>
               </>
             ) : null}
-            <Text style={styles.k}>User id</Text>
+            <Text style={styles.k}>Customer id</Text>
             <Text style={styles.mono}>{userId}</Text>
             <Text style={styles.k}>Member since</Text>
             <Text style={styles.v}>{formatFirestoreTime(profile?.createdAt)}</Text>
