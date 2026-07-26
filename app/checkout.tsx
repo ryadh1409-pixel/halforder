@@ -99,7 +99,12 @@ export default function CheckoutScreen() {
       }
       if (result.status === 'failed') {
         setPhase('error');
-        setMessage(result.message || 'Payment failed. Please try again.');
+        setMessage(
+          getUserFriendlyError(result.message || result, {
+            context: 'payment',
+            fallback: 'Payment failed. Please try again.',
+          }),
+        );
         unlock();
         return;
       }

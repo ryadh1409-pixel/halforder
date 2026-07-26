@@ -51,6 +51,7 @@ import {
   loadEmoHiEmoooDiscount,
 } from '@/services/emoAi/emoAiHiEmoooReward';
 import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -234,7 +235,12 @@ export default function CheckoutPremiumScreen() {
     } catch (e) {
       setPromoDiscount(0);
       setAppliedPromoCode(null);
-      setPromoError(e instanceof Error ? e.message : 'Invalid promo code');
+      setPromoError(
+        getUserFriendlyError(e, {
+          context: 'order',
+          fallback: 'Invalid promo code',
+        }),
+      );
     } finally {
       setPromoBusy(false);
     }

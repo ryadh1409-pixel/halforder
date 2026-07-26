@@ -2,6 +2,7 @@
  * Ensures alerts never show raw Firebase / SDK / stack strings.
  */
 import { JOIN_ORDER_USER_FACING_MESSAGES } from './joinOrderFirestore';
+import { sanitizeUserFacingMessage } from '@/utils/errorMessages';
 
 /** Safe copy for generic failures. */
 export const USER_ERROR_GENERIC = 'Something went wrong. Please try again.';
@@ -18,5 +19,5 @@ export function safeAlertBody(
   const m = typeof message === 'string' ? message.trim() : '';
   if (!m) return fallback;
   if (JOIN_ORDER_USER_FACING_MESSAGES.has(m)) return m;
-  return fallback;
+  return sanitizeUserFacingMessage(m, fallback);
 }

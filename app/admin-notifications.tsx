@@ -16,7 +16,7 @@ import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAdminUser } from '../constants/adminUid';
 import { adminCardShell, adminColors as COLORS } from '../constants/adminTheme';
-import { getReadableErrorMessage } from '../utils/errorMessages';
+import { getReadableErrorMessage, sanitizeUserFacingMessage } from '../utils/errorMessages';
 import { showError } from '../utils/toast';
 
 function getToken(data: {
@@ -94,9 +94,20 @@ export default function AdminNotificationsScreen() {
         notificationId: notifRef.id,
       });
       showFeedback(
-        `Sent: ${result.sent}, Failed: ${result.failed}${result.error ? ` (${result.error})` : ''}`,
+        `Sent: ${result.sent}, Failed: ${result.failed}${
+          result.error
+            ? ` (${sanitizeUserFacingMessage(result.error, 'some notifications failed')})`
+            : ''
+        }`,
       );
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(
+          sanitizeUserFacingMessage(
+            result.error,
+            'Some notifications could not be sent.',
+          ),
+        );
+      }
     } catch (e) {
       const msg = getReadableErrorMessage(e);
       setError(msg);
@@ -145,9 +156,19 @@ export default function AdminNotificationsScreen() {
       showFeedback(
         result.sent > 0
           ? 'Notification sent.'
-          : `Failed: ${result.error ?? 'unknown'}`,
+          : `Failed: ${sanitizeUserFacingMessage(
+              result.error ?? 'unknown',
+              'Could not send notification.',
+            )}`,
       );
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(
+          sanitizeUserFacingMessage(
+            result.error,
+            'Could not send notification.',
+          ),
+        );
+      }
     } catch (e) {
       const msg = getReadableErrorMessage(e);
       setError(msg);
@@ -202,9 +223,20 @@ export default function AdminNotificationsScreen() {
         notificationId: notifRef.id,
       });
       showFeedback(
-        `Sent to ${result.sent} active users, Failed: ${result.failed}${result.error ? ` (${result.error})` : ''}`,
+        `Sent to ${result.sent} active users, Failed: ${result.failed}${
+          result.error
+            ? ` (${sanitizeUserFacingMessage(result.error, 'some notifications failed')})`
+            : ''
+        }`,
       );
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(
+          sanitizeUserFacingMessage(
+            result.error,
+            'Some notifications could not be sent.',
+          ),
+        );
+      }
     } catch (e) {
       const msg = getReadableErrorMessage(e);
       setError(msg);

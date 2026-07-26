@@ -87,7 +87,7 @@ function TestOrderFlowScreenDev() {
     } catch (e) {
       const message = getReadableErrorMessage(e, 'order');
       setResult('Order flow test failed');
-      setErrorDetail(__DEV__ && e instanceof Error ? e.message : null);
+      setErrorDetail(null);
       showError(message);
     } finally {
       setRunning(false);

@@ -15,6 +15,7 @@ import {
   subscribeUserProfileLocation,
   type ProfileLocationFields,
 } from '@/services/signupProfileLocation';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
@@ -188,9 +189,9 @@ export default function LocationScreen() {
                       showSuccess('Location updated.');
                     } catch (e) {
                       showError(
-                        e instanceof Error
-                          ? e.message
-                          : 'Could not update location.',
+                        getUserFriendlyError(e, {
+                          fallback: 'Could not update location.',
+                        }),
                       );
                     } finally {
                       setChangingLocation(false);

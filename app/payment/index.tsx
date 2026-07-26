@@ -1,5 +1,6 @@
 import { openPaymentSheet } from '@/services/stripe';
 import { useAuth } from '@/services/auth/useAuth';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { alertFriendly } from '@/utils/friendlyAlert';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -48,9 +49,10 @@ export default function PaymentScreen() {
 
       if (result.status === 'failed') {
         showError(
-          result.message && !/firebase|auth\/|stripe/i.test(result.message)
-            ? result.message
-            : 'Payment failed. Please try again.',
+          getUserFriendlyError(result.message || result, {
+            context: 'payment',
+            fallback: 'Payment failed. Please try again.',
+          }),
         );
         return;
       }

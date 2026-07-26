@@ -6,6 +6,7 @@ import {
   listEmoAiReports,
 } from '@/services/emoAi/agent/emoAiReportingService';
 import type { EmoAiExecutiveReport, EmoAiReportPeriod } from '@/types/emoAiAgent';
+import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -47,7 +48,9 @@ export default function EmoAiReportsScreen() {
       });
       setRows(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load reports');
+      setError(
+        getReadableErrorMessageOr(e, 'Failed to load reports'),
+      );
       setRows([]);
     } finally {
       setLoading(false);
@@ -68,7 +71,9 @@ export default function EmoAiReportsScreen() {
       await load();
       router.push(adminRoutes.emoAiReport(report.id) as never);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to generate report');
+      setError(
+        getReadableErrorMessageOr(e, 'Failed to generate report'),
+      );
     } finally {
       setGenerating(null);
     }

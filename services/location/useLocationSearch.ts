@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import { isGoogleMapsApiKeyConfigured } from '@/lib/maps/googleMapsApiKey';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import {
   fetchPlaceAutocompleteSuggestions,
   fetchPlaceDetailsAsSavedLocation,
@@ -38,21 +39,13 @@ function locationErrorMessage(error: unknown): string {
     if (error.status === 'REQUEST_DENIED' || error.status === 'MISSING_KEY') {
       return PLACES_DENIED_MESSAGE;
     }
-    return error.message;
   }
   if (error instanceof LocationPermissionError || error instanceof LocationUnavailableError) {
     return LIVE_GPS_PRECISE_ERROR;
   }
-  if (error instanceof Error) {
-    if (
-      error.message.toLowerCase().includes('permission') ||
-      error.message.toLowerCase().includes('location')
-    ) {
-      return LIVE_GPS_PRECISE_ERROR;
-    }
-    return error.message;
-  }
-  return 'Could not resolve that address.';
+  return getUserFriendlyError(error, {
+    fallback: 'Could not resolve that address.',
+  });
 }
 
 export type LocationSearchGpsState = {

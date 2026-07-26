@@ -5,7 +5,9 @@ import {
   formatPlatformContextForPrompt,
 } from '@/services/emoAi/agent/emoAiContextService';
 import { buildEmoAiSystemPrompt } from '@/services/emoAi/emoAiPrompt';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { functions, syncAuthForFirestoreReads } from '@/services/firebase';
+import { logError } from '@/utils/errorLogger';
 import type { EmoAiMessage } from '@/types/emoAi';
 
 export type EmoAiStreamHandlers = {
@@ -72,24 +74,11 @@ export async function streamEmoAiReply(
     await animateReply(reply, handlers.onToken);
     handlers.onDone(reply);
   } catch (e) {
-    const msg =
-      e && typeof e === 'object' && 'message' in e
-        ? String((e as { message?: unknown }).message)
-        : 'Could not reach Emo AI right now.';
-    const code =
-      e && typeof e === 'object' && 'code' in e
-        ? String((e as { code?: unknown }).code)
-        : '';
-    if (
-      code.includes('not-found') ||
-      code.includes('unimplemented') ||
-      /not found|does not exist/i.test(msg)
-    ) {
-      handlers.onError(
-        'Emo AI backend is not deployed yet. Deploy Firebase function emoAiChat, then try again.',
-      );
-      return;
-    }
-    handlers.onError(msg || 'Could not reach Emo AI right now.');
+    logError(e);
+    handlers.onError(
+      getUserFriendlyError(e, {
+        fallback: 'Could not reach Emo AI right now.',
+      }),
+    );
   }
 }

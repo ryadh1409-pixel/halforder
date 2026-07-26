@@ -10,6 +10,7 @@ import {
 } from '@/services/location/savedLocationFirestore';
 import { readSavedLocationLabelFromUserDoc } from '@/lib/location/userLocationLabel';
 import { db } from '@/services/firebase';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
 import type { SavedAddressLabel } from '@/types/userLocation';
 
@@ -139,8 +140,9 @@ export function useAccountSavedLocation(
         }
         return payload;
       } catch (e) {
-        const msg =
-          e instanceof Error ? e.message : 'Could not save your location. Please try again.';
+        const msg = getUserFriendlyError(e, {
+          fallback: 'Could not save your location. Please try again.',
+        });
         setError(msg);
         throw e;
       } finally {

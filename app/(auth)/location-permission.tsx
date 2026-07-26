@@ -2,6 +2,7 @@ import { navigateForRole } from '@/lib/navigation';
 import { useAuth } from '@/services/AuthContext';
 import { captureAndSaveCurrentProfileLocation } from '@/services/signupProfileLocation';
 import { getUserRole } from '@/services/userService';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useState } from 'react';
@@ -41,7 +42,11 @@ export default function LocationPermissionScreen() {
       showSuccess('Location saved.');
       await finish();
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Could not enable location.');
+      showError(
+        getUserFriendlyError(e, {
+          fallback: 'Could not enable location.',
+        }),
+      );
     } finally {
       setBusy(false);
     }

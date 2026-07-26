@@ -28,6 +28,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showError, showSuccess } from '@/utils/toast';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
+import { sanitizeUserFacingMessage } from '@/utils/errorMessages';
 
 const c = theme.colors;
 
@@ -174,7 +176,10 @@ export default function FoodSharePayScreen() {
       }
       if (result.status === 'failed') {
         setPhase('ready');
-        const message = result.message || FOOD_SHARE_ERRORS.paymentFailed;
+        const message = getUserFriendlyError(result.message || result, {
+          context: 'payment',
+          fallback: FOOD_SHARE_ERRORS.paymentFailed,
+        });
         showError(message);
         Alert.alert('Payment Error', message);
         return;

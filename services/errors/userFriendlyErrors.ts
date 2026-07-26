@@ -81,3 +81,14 @@ export function getUserFriendlyError(
   if (mapped) return mapped;
   return opts.fallback ?? 'Something went wrong. Please try again.';
 }
+
+/**
+ * Canonical mapper for any UI surface (toast, alert, inline text, chat bubble).
+ * Prefer this over reading `error.message` directly.
+ */
+export function toUserFacingErrorMessage(
+  error: unknown,
+  options?: UserFriendlyErrorOptions | ReadableErrorContext,
+): string {
+  return getUserFriendlyError(error, options);
+}

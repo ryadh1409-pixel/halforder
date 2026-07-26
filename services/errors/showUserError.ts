@@ -11,6 +11,7 @@ import type { ReadableErrorContext } from '@/utils/errorMessages';
 
 /**
  * Logs the full error for developers, then shows friendly copy to users.
+ * Central entry point for catch blocks that need a toast or alert.
  */
 export function showUserError(
   error: unknown,

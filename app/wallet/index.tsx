@@ -138,7 +138,7 @@ export default function WalletScreen() {
       setRedeemCode('');
       setRedeemOpen(false);
     } catch (e) {
-      showError(e instanceof Error ? e.message : getUserFriendlyError(e));
+      showError(getUserFriendlyError(e));
     } finally {
       setRedeemBusy(false);
     }

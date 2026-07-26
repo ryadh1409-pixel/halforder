@@ -8,6 +8,7 @@ import {
 } from '@/services/emoAi/agent/emoAiReportingService';
 import { renderEmoAiReportPlainText } from '@/services/emoAi/agent/emoAiPdfGenerator';
 import type { EmoAiExecutiveReport } from '@/types/emoAiAgent';
+import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -41,7 +42,9 @@ export default function EmoAiReportDetailScreen() {
         if (!cancelled) setReport(row);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load report');
+          setError(
+            getReadableErrorMessageOr(e, 'Failed to load report'),
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -70,7 +73,7 @@ export default function EmoAiReportDetailScreen() {
       if (docId) await archiveEmoAiReport(docId);
       router.back();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Archive failed');
+      setError(getReadableErrorMessageOr(e, 'Archive failed'));
     } finally {
       setBusy(false);
     }

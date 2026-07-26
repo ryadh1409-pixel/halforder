@@ -1,4 +1,6 @@
 import { presentWalletAddPaymentMethod } from '@/services/walletAddPaymentMethod';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
+import { sanitizeUserFacingMessage } from '@/utils/errorMessages';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -47,11 +49,18 @@ export default function AddPaymentMethodScreen() {
           return;
         }
         if (result.status === 'failed' || result.status === 'unsupported') {
-          showError(result.message);
-          setMessage(result.message);
+          const msg = sanitizeUserFacingMessage(
+            result.message,
+            'Could not open Stripe.',
+          );
+          showError(msg);
+          setMessage(msg);
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Could not open Stripe.';
+        const msg = getUserFriendlyError(e, {
+          context: 'payment',
+          fallback: 'Could not open Stripe.',
+        });
         showError(msg);
         setMessage(msg);
       } finally {
@@ -95,11 +104,18 @@ export default function AddPaymentMethodScreen() {
                     return;
                   }
                   if (result.status === 'failed' || result.status === 'unsupported') {
-                    showError(result.message);
-                    setMessage(result.message);
+                    const msg = sanitizeUserFacingMessage(
+                      result.message,
+                      'Could not open Stripe.',
+                    );
+                    showError(msg);
+                    setMessage(msg);
                   }
                 } catch (e) {
-                  const msg = e instanceof Error ? e.message : 'Could not open Stripe.';
+                  const msg = getUserFriendlyError(e, {
+                    context: 'payment',
+                    fallback: 'Could not open Stripe.',
+                  });
                   showError(msg);
                   setMessage(msg);
                 } finally {

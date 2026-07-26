@@ -20,6 +20,7 @@ import {
   saveEmoAiMessages,
 } from '@/services/emoAi/emoAiStorage';
 import { auth, db } from '@/services/firebase';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import {
   buildEmoAiStarterMessages,
   type EmoAiMessage,
@@ -218,10 +219,9 @@ export function useEmoAiChat(uid: string | null) {
                 'Type “Hi Emo” in our chat to unlock my hidden gift.';
             }
           } catch (e) {
-            assistantReply =
-              e instanceof Error
-                ? e.message
-                : 'Could not unlock the gift right now. Try again.';
+            assistantReply = getUserFriendlyError(e, {
+              fallback: 'Could not unlock the gift right now. Try again.',
+            });
           }
         }
 

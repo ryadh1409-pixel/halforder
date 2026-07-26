@@ -1,5 +1,6 @@
 export {
   getUserFriendlyError,
+  toUserFacingErrorMessage,
   ROLE_ORDER_UPDATE_ERROR,
   type UserFriendlyErrorOptions,
   type UserRole,

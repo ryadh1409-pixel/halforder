@@ -374,7 +374,7 @@ export async function getSmartMatches(user: GrowthMatchUser): Promise<SmartMatch
     if (err === 'permission-denied') {
       return {
         aiText:
-          'Could not read the public match directory. Deploy Firestore rules with `public_matchable_orders` read for signed-in users, deploy indexes, and ensure `syncPublicMatchableOrder` is live. Then tap Retry.',
+          'Matches are temporarily unavailable. Try again in a moment.',
         nearbyOrders: [],
         error: 'permission-denied',
       };

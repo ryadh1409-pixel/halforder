@@ -13,12 +13,15 @@ export {
 
 export {
   getUserFriendlyError,
+  toUserFacingErrorMessage,
   ROLE_ORDER_UPDATE_ERROR,
   type UserFriendlyErrorOptions,
   type UserRole,
 } from '@/services/errors/userFriendlyErrors';
 
 export { showUserError } from '@/services/errors/showUserError';
+
+export { sanitizeUserFacingMessage } from './errorMessages';
 
 /**
  * True when the server rejected the current session (deleted user, revoked token, etc.).

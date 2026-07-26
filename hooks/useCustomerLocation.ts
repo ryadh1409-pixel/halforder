@@ -8,6 +8,7 @@ import {
   resolveProductionGpsSavedLocation,
 } from '@/services/location/productionGps';
 import { LIVE_GPS_PRECISE_ERROR } from '@/services/location/gps';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import {
   claimGpsRefreshSession,
   getSessionGpsReading,
@@ -106,8 +107,9 @@ export function useCustomerLocation(options?: { autoFetch?: boolean }) {
           });
           return reading;
         } catch (e) {
-          const msg =
-            e instanceof Error ? e.message : LIVE_GPS_PRECISE_ERROR;
+          const msg = getUserFriendlyError(e, {
+            fallback: LIVE_GPS_PRECISE_ERROR,
+          });
           setState({
             reading: null,
             address: null,

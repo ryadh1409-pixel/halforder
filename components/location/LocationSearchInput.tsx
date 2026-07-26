@@ -16,7 +16,7 @@ import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { useLocationPickerMount } from '@/hooks/useLocationPickerMount';
 import { logRoleGps, type AccountLocationRole } from '@/services/location/accountLocationRole';
 import { useLocationSearch } from '@/services/location/useLocationSearch';
-import { PlacesApiError } from '@/services/places/googlePlacesClient';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
 import {
   SAVED_ADDRESS_LABELS,
@@ -253,12 +253,9 @@ export function LocationSearchInput({
         settleAfterSave();
         showSuccess(saveSuccessMessage);
       } catch (e) {
-        const msg =
-          e instanceof PlacesApiError
-            ? e.message
-            : e instanceof Error
-              ? e.message
-              : 'Could not save your location.';
+        const msg = getUserFriendlyError(e, {
+          fallback: 'Could not save your location.',
+        });
         setSearchError(msg);
         showError(msg);
       } finally {
@@ -295,12 +292,9 @@ export function LocationSearchInput({
       settleAfterSave();
       showSuccess(saveSuccessMessage);
     } catch (e) {
-      const msg =
-        e instanceof PlacesApiError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : 'Could not save your location.';
+      const msg = getUserFriendlyError(e, {
+        fallback: 'Could not save your location.',
+      });
       setSearchError(msg);
       showError(msg);
     } finally {

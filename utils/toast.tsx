@@ -4,7 +4,7 @@ import Toast, { type ToastConfig } from 'react-native-toast-message';
 
 import { palette } from '../constants/theme';
 import {
-  getReadableErrorMessage,
+  sanitizeUserFacingMessage,
   type ReadableErrorContext,
 } from './errorMessages';
 import { logError } from './errorLogger';
@@ -86,7 +86,7 @@ export const toastConfig: ToastConfig = {
 export function showError(message: string): void {
   Toast.show({
     type: 'error',
-    text2: message,
+    text2: sanitizeUserFacingMessage(message),
     position: 'bottom',
     visibilityTime: VISIBILITY_MS,
     autoHide: true,

@@ -1,4 +1,5 @@
 import { auth } from '@/services/firebase';
+import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { fetchSignInMethodsForEmail } from 'firebase/auth';
 
 export type AuthEmailAccountStatus = 'exists' | 'available';
@@ -137,12 +138,9 @@ export function getAuthFlowFriendlyMessage(err: unknown): string {
         if (/network-request-failed/i.test(msg)) {
           return 'Connection problem. Check your internet and try again.';
         }
-        // Avoid flashing raw Firebase codes / stacks.
-        if (!/^auth\//i.test(msg) && !/FirebaseError/i.test(msg)) {
-          return msg;
-        }
       }
-      return 'Something went wrong. Please try again.';
+      // Never pass through raw SDK / network / native exception text.
+      return getUserFriendlyError(err);
     }
   }
 }

@@ -82,14 +82,19 @@ export function useGoogleAuth() {
     setError(null);
     try {
       if (!iosClientId || !webClientId) {
-        throw new Error(
-          'Missing EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID or EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID',
-        );
+        console.error('[Google Sign-In] ORIGINAL ERROR', {
+          stage: 'missing_client_ids',
+          hasIosClientId: Boolean(iosClientId),
+          hasWebClientId: Boolean(webClientId),
+        });
+        throw new Error('Unable to sign in with Google. Please try again.');
       }
       if (Platform.OS === 'ios' && !reversedClientId) {
-        throw new Error(
-          'Invalid EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID — cannot derive REVERSED_CLIENT_ID',
-        );
+        console.error('[Google Sign-In] ORIGINAL ERROR', {
+          stage: 'invalid_reversed_client_id',
+          iosClientId,
+        });
+        throw new Error('Unable to sign in with Google. Please try again.');
       }
       if (!request) {
         throw new Error('Google sign-in is not ready yet.');
@@ -129,7 +134,7 @@ export function useGoogleAuth() {
         throw new Error(
           result.type === 'dismiss' || result.type === 'cancel'
             ? 'Google sign-in was cancelled.'
-            : `Google sign-in failed: ${result.type}`,
+            : 'Unable to sign in with Google. Please try again.',
         );
       }
 
@@ -140,7 +145,7 @@ export function useGoogleAuth() {
           : null);
       if (!idToken) {
         logGoogleAuthError('missing_id_token', result);
-        throw new Error('Google sign-in failed: missing id_token');
+        throw new Error('Unable to sign in with Google. Please try again.');
       }
 
       const credential = GoogleAuthProvider.credential(idToken);

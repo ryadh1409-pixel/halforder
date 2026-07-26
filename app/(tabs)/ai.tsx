@@ -485,7 +485,7 @@ export default function ChatScreen() {
               ...prev,
               {
                 id: `${Date.now()}-ai-err`,
-                text: `Assistant unavailable: ${aiResult.error}`,
+                text: 'Assistant unavailable. Please try again.',
                 sender: 'bot',
                 createdAt: Date.now(),
                 action: 'none',
@@ -751,10 +751,8 @@ export default function ChatScreen() {
                     <View style={[styles.growthCard, styles.growthErrorCard]}>
                       <Text style={styles.growthTitle}>Could not load matches</Text>
                       <Text style={styles.growthAi}>
-                        Firestore blocked reads on `public_matchable_orders`. In Firebase Console →
-                        Firestore → Rules, ensure signed-in users can read that collection, then run
-                        `firebase deploy --only firestore:rules`. Deploy the
-                        `syncPublicMatchableOrder` function so documents exist.
+                        Matches are temporarily unavailable. Please try again in a
+                        moment.
                       </Text>
                       <TouchableOpacity
                         style={styles.growthRetryBtn}
@@ -767,11 +765,10 @@ export default function ChatScreen() {
                   ) : null}
                   {smartMatchesState.error === 'invalid-argument' ? (
                     <View style={[styles.growthCard, styles.growthErrorCard]}>
-                      <Text style={styles.growthTitle}>Index or query required</Text>
+                      <Text style={styles.growthTitle}>Could not load matches</Text>
                       <Text style={styles.growthAi}>
-                        Deploy Firestore indexes (`firebase deploy --only firestore:indexes`) or use
-                        the index link from the browser / device log. The directory query uses
-                        `status` plus limits on `public_matchable_orders`.
+                        Matches are temporarily unavailable. Please try again in a
+                        moment.
                       </Text>
                       <TouchableOpacity
                         style={styles.growthRetryBtn}

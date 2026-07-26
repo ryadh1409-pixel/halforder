@@ -31,7 +31,7 @@ export async function pickAndUploadImage(
 
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    return { url: null, error: 'Photo library permission denied' };
+    return { url: null, error: 'Please enable photo access in Settings.' };
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({

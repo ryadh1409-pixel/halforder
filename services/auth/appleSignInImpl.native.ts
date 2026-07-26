@@ -37,9 +37,11 @@ export async function signInWithApple(): Promise<void> {
   try {
     const available = await AppleAuthentication.isAvailableAsync();
     if (!available) {
-      throw new Error(
-        'Apple Sign-In is not available on this device. Ensure ios.usesAppleSignIn is true and rebuild the iOS app.',
-      );
+      console.error('[Apple Sign-In] ORIGINAL ERROR', {
+        stage: 'unavailable',
+        note: 'Ensure ios.usesAppleSignIn is true and rebuild the iOS app.',
+      });
+      throw new Error('Apple Sign-In is not available on this device.');
     }
 
     // Firebase requires rawNonce; Apple requires the SHA-256 of that nonce.
@@ -60,7 +62,11 @@ export async function signInWithApple(): Promise<void> {
     });
 
     if (!appleCredential.identityToken) {
-      throw new Error('Apple sign-in failed: missing identity token.');
+      console.error('[Apple Sign-In] ORIGINAL ERROR', {
+        stage: 'missing_identity_token',
+        credential: appleCredential,
+      });
+      throw new Error('Unable to sign in with Apple. Please try again.');
     }
 
     const provider = new OAuthProvider('apple.com');
