@@ -43,6 +43,90 @@ function logGoogleAuthError(stage: string, error: unknown): void {
   });
 }
 
+type GoogleAuthSuccessResult = {
+  type: 'success';
+  params: Record<string, string>;
+  authentication: AuthSession.TokenResponse | null;
+};
+
+function pickIdToken(result: {
+  authentication?: AuthSession.TokenResponse | null;
+  params?: Record<string, string>;
+}): string | null {
+  const fromAuth = result.authentication?.idToken;
+  if (typeof fromAuth === 'string' && fromAuth.trim()) return fromAuth.trim();
+  const fromParams = result.params?.id_token;
+  if (typeof fromParams === 'string' && fromParams.trim()) return fromParams.trim();
+  return null;
+}
+
+/**
+ * On native, Google.useAuthRequest defaults to response_type=code.
+ * promptAsync resolves with the authorization code before the provider hook's
+ * auto-exchange updates React state — so we exchange the code for tokens here.
+ */
+async function resolveGoogleIdToken(params: {
+  result: GoogleAuthSuccessResult;
+  request: AuthSession.AuthRequest;
+  clientId: string;
+  redirectUri: string;
+}): Promise<string> {
+  const { result, request, clientId, redirectUri } = params;
+
+  const existing = pickIdToken(result);
+  if (existing) return existing;
+
+  const code =
+    typeof result.params?.code === 'string' ? result.params.code.trim() : '';
+  if (!code) {
+    logGoogleAuthError('missing_authorization_code', result);
+    throw new Error('Unable to sign in with Google. Please try again.');
+  }
+
+  console.log('[Google Sign-In] exchanging authorization code for tokens', {
+    hasCode: true,
+    hasCodeVerifier: Boolean(request.codeVerifier),
+    clientId,
+    redirectUri,
+  });
+
+  try {
+    const tokenResponse = await AuthSession.exchangeCodeAsync(
+      {
+        clientId,
+        code,
+        redirectUri,
+        extraParams: {
+          code_verifier: request.codeVerifier ?? '',
+        },
+      },
+      Google.discovery,
+    );
+
+    const idToken =
+      typeof tokenResponse.idToken === 'string' && tokenResponse.idToken.trim()
+        ? tokenResponse.idToken.trim()
+        : null;
+
+    console.log('[Google Sign-In] code exchange result', {
+      hasIdToken: Boolean(idToken),
+      hasAccessToken: Boolean(tokenResponse.accessToken),
+    });
+
+    if (!idToken) {
+      logGoogleAuthError('missing_id_token_after_code_exchange', tokenResponse);
+      throw new Error('Unable to sign in with Google. Please try again.');
+    }
+
+    return idToken;
+  } catch (error) {
+    logGoogleAuthError('exchangeCodeAsync', error);
+    throw error instanceof Error
+      ? error
+      : new Error('Unable to sign in with Google. Please try again.');
+  }
+}
+
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,11 +154,20 @@ export function useGoogleAuth() {
     });
   }, [reversedClientId]);
 
+  /** Platform OAuth client used for the auth request + code exchange. */
+  const oauthClientId = useMemo(() => {
+    if (Platform.OS === 'ios') return iosClientId;
+    if (Platform.OS === 'android') return webClientId;
+    return webClientId;
+  }, [iosClientId, webClientId]);
+
   const [request, , promptAsync] = Google.useAuthRequest({
     iosClientId: iosClientId || undefined,
     webClientId: webClientId || undefined,
     scopes: ['openid', 'profile', 'email'],
     redirectUri,
+    // We exchange the code ourselves right after promptAsync (see resolveGoogleIdToken).
+    shouldAutoExchangeCode: false,
   });
 
   const signInWithGoogle = useCallback(async (): Promise<GoogleLoginResult> => {
@@ -99,12 +192,20 @@ export function useGoogleAuth() {
       if (!request) {
         throw new Error('Google sign-in is not ready yet.');
       }
+      if (!oauthClientId) {
+        console.error('[Google Sign-In] ORIGINAL ERROR', {
+          stage: 'missing_oauth_client_id',
+          platform: Platform.OS,
+        });
+        throw new Error('Unable to sign in with Google. Please try again.');
+      }
 
       console.log('[Google Sign-In] starting', {
         iosClientId,
         webClientId,
         reversedClientId,
         redirectUri,
+        oauthClientId,
       });
 
       // Exact native/OAuth failure point for redirect_uri_mismatch / scheme errors:
@@ -115,9 +216,7 @@ export function useGoogleAuth() {
         params:
           result.type === 'success'
             ? {
-                hasIdToken: Boolean(
-                  result.authentication?.idToken ?? result.params?.id_token,
-                ),
+                hasIdToken: Boolean(pickIdToken(result)),
                 hasCode: Boolean(result.params?.code),
                 error: result.params?.error ?? null,
                 errorDescription: result.params?.error_description ?? null,
@@ -138,15 +237,16 @@ export function useGoogleAuth() {
         );
       }
 
-      const idToken =
-        result.authentication?.idToken ??
-        (typeof result.params?.id_token === 'string'
-          ? result.params.id_token
-          : null);
-      if (!idToken) {
-        logGoogleAuthError('missing_id_token', result);
-        throw new Error('Unable to sign in with Google. Please try again.');
-      }
+      const idToken = await resolveGoogleIdToken({
+        result: {
+          type: 'success',
+          params: result.params,
+          authentication: result.authentication,
+        },
+        request,
+        clientId: oauthClientId,
+        redirectUri,
+      });
 
       const credential = GoogleAuthProvider.credential(idToken);
       // Exact Firebase failure point:
@@ -161,7 +261,15 @@ export function useGoogleAuth() {
     } finally {
       setLoading(false);
     }
-  }, [promptAsync, request, iosClientId, webClientId, reversedClientId, redirectUri]);
+  }, [
+    promptAsync,
+    request,
+    iosClientId,
+    webClientId,
+    reversedClientId,
+    redirectUri,
+    oauthClientId,
+  ]);
 
   return {
     signInWithGoogle,
