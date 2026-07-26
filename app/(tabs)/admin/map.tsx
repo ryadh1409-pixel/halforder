@@ -1,15 +1,22 @@
 import { LiveDeliveryMap } from '@/components/logistics/LiveDeliveryMap';
 import type { MapCoord } from '@/components/logistics/liveDeliveryMapTypes';
 import { AdminHeader } from '@/components/admin/AdminHeader';
+import { DriverVehicleInfoCard } from '@/components/delivery/DriverVehicleInfoCard';
 import { adminCardShell, adminColors as COLORS, adminFontFamily } from '@/constants/adminTheme';
 import { isAdminUser } from '@/constants/adminUid';
 import { haversineDistanceKm } from '@/lib/haversine';
+import {
+  EMPTY_DRIVER_VEHICLE,
+  pickDriverVehicleFromDocs,
+  type DriverVehicleInfo,
+} from '@/lib/driverVehicle';
+import { isTrustedDriverProfilePhotoUrl } from '@/lib/driverProfileIdentity';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -27,7 +34,11 @@ type LiveAdminOrder = {
   id: string;
   restaurantName: string;
   customerName: string;
+  driverId: string | null;
   driverName: string;
+  driverPhone: string | null;
+  driverPhotoURL: string | null;
+  vehicle: DriverVehicleInfo;
   status: string;
   deliveryStatus: string;
   paymentStatus: string;
@@ -142,6 +153,32 @@ function mapLiveOrder(id: string, data: Record<string, unknown>): LiveAdminOrder
       nest(data, 'driver')?.displayName,
     ) ?? (driver ? 'Driver' : 'Unassigned');
 
+  const driverId =
+    pickString(data.driverId, data.assignedDriverId, nest(data, 'driver')?.id) ??
+    null;
+
+  const driverPhone =
+    pickString(data.driverPhone, nest(data, 'driver')?.phone) ?? null;
+
+  const driverPhotoURL = (() => {
+    const url = pickString(
+      nest(data, 'driver')?.avatar,
+      nest(data, 'driver')?.photoURL,
+      data.driverPhotoURL,
+    );
+    return url && isTrustedDriverProfilePhotoUrl(url) ? url : null;
+  })();
+
+  const driverNest = nest(data, 'driver');
+  const vehicle: DriverVehicleInfo = {
+    vehiclePhoto: pickString(driverNest?.vehiclePhoto, data.vehiclePhoto),
+    vehicleMake: pickString(driverNest?.vehicleMake, data.vehicleMake),
+    vehicleModel: pickString(driverNest?.vehicleModel, data.vehicleModel),
+    vehicleYear: pickString(driverNest?.vehicleYear, data.vehicleYear),
+    vehicleColor: pickString(driverNest?.vehicleColor, data.vehicleColor),
+    licensePlate: pickString(driverNest?.licensePlate, data.licensePlate),
+  };
+
   const paymentStatus =
     pickString(
       data.paymentStatus,
@@ -192,7 +229,11 @@ function mapLiveOrder(id: string, data: Record<string, unknown>): LiveAdminOrder
     id,
     restaurantName,
     customerName,
+    driverId,
     driverName,
+    driverPhone,
+    driverPhotoURL,
+    vehicle,
     status,
     deliveryStatus,
     paymentStatus,
@@ -243,6 +284,12 @@ export default function AdminLiveOrderMapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [liveDriverName, setLiveDriverName] = useState<string | null>(null);
+  const [liveDriverPhone, setLiveDriverPhone] = useState<string | null>(null);
+  const [liveDriverPhoto, setLiveDriverPhoto] = useState<string | null>(null);
+  const [liveVehicle, setLiveVehicle] = useState<DriverVehicleInfo>({
+    ...EMPTY_DRIVER_VEHICLE,
+  });
 
   const isAdmin = isAdminUser(user, firestoreUserRole);
 
@@ -281,6 +328,44 @@ export default function AdminLiveOrderMapScreen() {
     () => (selectedId ? orders.find((o) => o.id === selectedId) ?? null : null),
     [orders, selectedId],
   );
+
+  useEffect(() => {
+    const driverId = selected?.driverId ?? null;
+    if (!driverId || !selected) {
+      setLiveDriverName(null);
+      setLiveDriverPhone(null);
+      setLiveDriverPhoto(null);
+      setLiveVehicle({ ...EMPTY_DRIVER_VEHICLE });
+      return;
+    }
+
+    // Seed from order snapshot, then prefer live drivers/{uid} profile.
+    setLiveDriverName(selected.driverName);
+    setLiveDriverPhone(selected.driverPhone);
+    setLiveDriverPhoto(selected.driverPhotoURL);
+    setLiveVehicle(selected.vehicle);
+
+    const unsub = onSnapshot(
+      doc(db, 'drivers', driverId),
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as Record<string, unknown>;
+        const name = pickString(data.name, data.displayName);
+        if (name) setLiveDriverName(name);
+        const phone = pickString(data.phone, data.phoneNumber);
+        if (phone) setLiveDriverPhone(phone);
+        const photo = pickString(data.photoURL, data.avatar, data.photo);
+        if (photo && isTrustedDriverProfilePhotoUrl(photo)) {
+          setLiveDriverPhoto(photo);
+        }
+        setLiveVehicle(pickDriverVehicleFromDocs(null, data));
+      },
+      () => {
+        // Keep order-stamped vehicle if live read fails.
+      },
+    );
+    return unsub;
+  }, [selectedId, selected?.driverId]);
 
   function formatOrderTime(ms: number): string {
     if (!Number.isFinite(ms)) return '—';
@@ -440,10 +525,25 @@ export default function AdminLiveOrderMapScreen() {
 
         <MetaRow icon="restaurant-outline" label="Restaurant" value={selected.restaurantName} />
         <MetaRow icon="person-outline" label="Customer" value={selected.customerName} />
-        <MetaRow icon="car-outline" label="Driver" value={selected.driverName} />
         <MetaRow icon="cash-outline" label="Order total" value={selected.totalLabel} />
         <MetaRow icon="card-outline" label="Payment" value={selected.paymentStatus} />
         <MetaRow icon="bicycle-outline" label="Type" value={selected.deliveryType} />
+
+        {selected.driverId ? (
+          <View style={styles.driverVehicleWrap}>
+            <DriverVehicleInfoCard
+              heading="Driver & vehicle"
+              driverName={liveDriverName || selected.driverName}
+              driverPhotoURL={liveDriverPhoto || selected.driverPhotoURL}
+              driverPhone={liveDriverPhone || selected.driverPhone}
+              vehicle={liveVehicle}
+              showPhone
+              dark
+            />
+          </View>
+        ) : (
+          <MetaRow icon="car-outline" label="Driver" value={selected.driverName} />
+        )}
 
         <View style={styles.metricsRow}>
           <View style={styles.metricPill}>
@@ -626,6 +726,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 12,
     paddingBottom: 14,
+  },
+  driverVehicleWrap: {
+    marginTop: 12,
+    marginBottom: 4,
   },
   cardHeader: {
     flexDirection: 'row',

@@ -3,7 +3,9 @@
  * Route: /track-order/[orderId]
  */
 import { PaymentNavigationBoundary } from '@/components/payment/PaymentNavigationBoundary';
+import { DriverVehicleInfoCard } from '@/components/delivery/DriverVehicleInfoCard';
 import { USER_ROUTES } from '@/lib/navigationPaths';
+import { EMPTY_DRIVER_VEHICLE, type DriverVehicleInfo } from '@/lib/driverVehicle';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
@@ -29,7 +31,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -40,6 +41,23 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const WINDOW_H = Dimensions.get('window').height;
 const MAP_HEIGHT = Math.round(WINDOW_H * 0.45);
+
+function vehicleFromOrder(order: RestaurantOrder): DriverVehicleInfo {
+  const d = order.driver;
+  const info: DriverVehicleInfo = {
+    vehiclePhoto: d?.vehiclePhoto ?? null,
+    vehicleMake: d?.vehicleMake ?? null,
+    vehicleModel: d?.vehicleModel ?? null,
+    vehicleYear: d?.vehicleYear ?? null,
+    vehicleColor: d?.vehicleColor ?? null,
+    licensePlate: d?.licensePlate ?? null,
+  };
+  if (!info.vehicleMake && !info.vehicleModel) {
+    const legacy = (d?.vehicle || order.driverVehicle || '').trim();
+    if (legacy) info.vehicleMake = legacy;
+  }
+  return info;
+}
 
 function TrackingMap({ order }: { order: RestaurantOrder }) {
   return <CustomerTrackingMap order={order} />;
@@ -307,52 +325,59 @@ function TrackOrderScreen() {
           ) : null}
 
           {!delivered ? (
-          <View style={styles.card}>
-            <Text style={styles.cardHeading}>Your courier</Text>
-            <View style={styles.driverRow}>
-              <View style={styles.driverAvatar}>
-                {order.driver?.avatar ? (
-                  <Image source={{ uri: order.driver.avatar }} style={styles.driverAvatarImg} />
-                ) : (
-                  <Text style={styles.driverAvatarPlaceholder}>🙂</Text>
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.driverName}>
-                  {order.driver?.name?.trim() || order.driverName || 'Matching a driver…'}
-                </Text>
-                <Text style={styles.driverMeta}>
-                  {(order.driver?.vehicle || order.driverVehicle || 'Delivery vehicle').toString()}
-                </Text>
-                <Text style={styles.driverRating}>★ 5.0 · On-time delivery</Text>
-              </View>
-            </View>
-            <View style={styles.actionRow}>
-              <Pressable
-                style={[styles.outlineBtn, !driverChatEnabled && styles.outlineBtnDisabled]}
-                disabled={!driverChatEnabled}
-                onPress={() =>
-                  router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)
+            <>
+              <DriverVehicleInfoCard
+                driverName={
+                  order.driver?.name?.trim() ||
+                  order.driverName ||
+                  'Matching a driver…'
                 }
-              >
-                <Text style={styles.outlineBtnText}>Chat</Text>
-              </Pressable>
-              {order.driverPhone || order.driver?.phone ? (
-                <Pressable
-                  style={styles.outlineBtn}
-                  onPress={() =>
-                    void Linking.openURL(`tel:${order.driver?.phone || order.driverPhone}`)
-                  }
-                >
-                  <Text style={styles.outlineBtnText}>Call</Text>
-                </Pressable>
-              ) : (
-                <View style={[styles.outlineBtn, styles.outlineBtnDisabled]}>
-                  <Text style={styles.outlineBtnMuted}>Call</Text>
+                driverPhotoURL={order.driver?.avatar}
+                vehicle={
+                  order.driverId || order.assignedDriverId
+                    ? vehicleFromOrder(order)
+                    : { ...EMPTY_DRIVER_VEHICLE }
+                }
+                dark
+              />
+              <View style={[styles.card, { marginTop: -4 }]}>
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={[
+                      styles.outlineBtn,
+                      !driverChatEnabled && styles.outlineBtnDisabled,
+                    ]}
+                    disabled={!driverChatEnabled}
+                    onPress={() =>
+                      router.push(
+                        orderRoomHref(
+                          order.id,
+                          ORDER_CHAT_TYPE.CUSTOMER_DRIVER,
+                        ) as never,
+                      )
+                    }
+                  >
+                    <Text style={styles.outlineBtnText}>Chat</Text>
+                  </Pressable>
+                  {order.driverPhone || order.driver?.phone ? (
+                    <Pressable
+                      style={styles.outlineBtn}
+                      onPress={() =>
+                        void Linking.openURL(
+                          `tel:${order.driver?.phone || order.driverPhone}`,
+                        )
+                      }
+                    >
+                      <Text style={styles.outlineBtnText}>Call</Text>
+                    </Pressable>
+                  ) : (
+                    <View style={[styles.outlineBtn, styles.outlineBtnDisabled]}>
+                      <Text style={styles.outlineBtnMuted}>Call</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            </View>
-          </View>
+              </View>
+            </>
           ) : null}
 
           {order.deliveryPin && !delivered && order.paymentStatus === 'paid' ? (

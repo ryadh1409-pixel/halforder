@@ -1,4 +1,10 @@
 import {
+  formatVehicleSummary,
+  pickDriverVehicleFromDocs,
+  type DriverVehicleInfo,
+} from '@/lib/driverVehicle';
+import { isTrustedDriverProfilePhotoUrl } from '@/lib/driverProfileIdentity';
+import {
   collection,
   doc,
   getDoc,
@@ -126,6 +132,76 @@ async function resolveDriverContactPhone(
     // Fall through — claim still proceeds with null phone.
   }
   return null;
+}
+
+type DriverClaimExtras = {
+  phone: string | null;
+  photoURL: string | null;
+  vehicle: DriverVehicleInfo;
+  vehicleLabel: string;
+};
+
+/** Load phone, avatar, and vehicle for claim stamp (additive; claim still works if missing). */
+async function resolveDriverClaimExtras(
+  driver: DriverProfile,
+): Promise<DriverClaimExtras> {
+  let phone =
+    typeof driver.phone === 'string' && driver.phone.trim()
+      ? driver.phone.trim()
+      : null;
+  let photoURL: string | null = null;
+  let vehicle: DriverVehicleInfo = pickDriverVehicleFromDocs(null, null);
+
+  try {
+    const [userSnap, driverSnap] = await Promise.all([
+      getDoc(doc(db, 'users', driver.id)),
+      getDoc(doc(db, 'drivers', driver.id)),
+    ]);
+    const user = userSnap.exists()
+      ? (userSnap.data() as Record<string, unknown>)
+      : undefined;
+    const driverDoc = driverSnap.exists()
+      ? (driverSnap.data() as Record<string, unknown>)
+      : undefined;
+
+    if (!phone) {
+      const candidates = [
+        user?.phone,
+        user?.phoneNumber,
+        user?.whatsapp,
+        driverDoc?.phone,
+        driverDoc?.phoneNumber,
+      ];
+      for (const value of candidates) {
+        if (typeof value === 'string' && value.trim()) {
+          phone = value.trim();
+          break;
+        }
+      }
+    }
+
+    const photoCandidates = [
+      user?.photo,
+      user?.photoURL,
+      user?.avatar,
+      driverDoc?.photoURL,
+      driverDoc?.avatar,
+      driverDoc?.photo,
+    ];
+    for (const candidate of photoCandidates) {
+      if (typeof candidate === 'string' && isTrustedDriverProfilePhotoUrl(candidate)) {
+        photoURL = candidate.trim();
+        break;
+      }
+    }
+
+    vehicle = pickDriverVehicleFromDocs(user, driverDoc);
+  } catch {
+    // Claim proceeds with whatever we already have.
+  }
+
+  const vehicleLabel = formatVehicleSummary(vehicle);
+  return { phone, photoURL, vehicle, vehicleLabel };
 }
 
 export type DriverAssignment = {
@@ -1150,14 +1226,17 @@ export async function claimMarketplaceDriverOrder(
       reason: e instanceof Error ? e.message : 'suspended',
     };
   }
-  const resolvedPhone = await resolveDriverContactPhone(driver);
+  const extras = await resolveDriverClaimExtras(driver);
+  const resolvedPhone = extras.phone;
+  const resolvedVehicleLabel =
+    (typeof vehicle === 'string' && vehicle.trim()) || extras.vehicleLabel || null;
   const orderRef = doc(db, 'orders', orderId);
   const ruleSafePayload = {
     driverId: driver.id,
     assignedDriverId: driver.id,
     driverName: driver.name,
     driverPhone: resolvedPhone,
-    ...(vehicle ? { driverVehicle: vehicle } : {}),
+    ...(resolvedVehicleLabel ? { driverVehicle: resolvedVehicleLabel } : {}),
     deliveryStatus: 'driver_assigned',
     status: 'driver_assigned',
   };
@@ -1231,8 +1310,14 @@ export async function claimMarketplaceDriverOrder(
         id: driver.id,
         name: driver.name,
         phone: resolvedPhone,
-        vehicle: vehicle ?? null,
-        avatar: null as string | null,
+        vehicle: resolvedVehicleLabel,
+        avatar: extras.photoURL,
+        vehiclePhoto: extras.vehicle.vehiclePhoto,
+        vehicleMake: extras.vehicle.vehicleMake,
+        vehicleModel: extras.vehicle.vehicleModel,
+        vehicleYear: extras.vehicle.vehicleYear,
+        vehicleColor: extras.vehicle.vehicleColor,
+        licensePlate: extras.vehicle.licensePlate,
       };
 
       marketplaceLog.acceptStart(orderId, {

@@ -585,6 +585,47 @@ function mapDocToRestaurantOrderFromData(
               driverObj && typeof driverObj.avatar === 'string'
                 ? driverObj.avatar
                 : null,
+            vehiclePhoto:
+              driverObj && typeof driverObj.vehiclePhoto === 'string'
+                ? driverObj.vehiclePhoto
+                : typeof data.vehiclePhoto === 'string'
+                  ? data.vehiclePhoto
+                  : null,
+            vehicleMake:
+              driverObj && typeof driverObj.vehicleMake === 'string'
+                ? driverObj.vehicleMake
+                : typeof data.vehicleMake === 'string'
+                  ? data.vehicleMake
+                  : null,
+            vehicleModel:
+              driverObj && typeof driverObj.vehicleModel === 'string'
+                ? driverObj.vehicleModel
+                : typeof data.vehicleModel === 'string'
+                  ? data.vehicleModel
+                  : null,
+            vehicleYear: (() => {
+              if (driverObj && typeof driverObj.vehicleYear === 'string') {
+                return driverObj.vehicleYear;
+              }
+              if (driverObj && typeof driverObj.vehicleYear === 'number') {
+                return String(driverObj.vehicleYear);
+              }
+              if (typeof data.vehicleYear === 'string') return data.vehicleYear;
+              if (typeof data.vehicleYear === 'number') return String(data.vehicleYear);
+              return null;
+            })(),
+            vehicleColor:
+              driverObj && typeof driverObj.vehicleColor === 'string'
+                ? driverObj.vehicleColor
+                : typeof data.vehicleColor === 'string'
+                  ? data.vehicleColor
+                  : null,
+            licensePlate:
+              driverObj && typeof driverObj.licensePlate === 'string'
+                ? driverObj.licensePlate
+                : typeof data.licensePlate === 'string'
+                  ? data.licensePlate
+                  : null,
           }
         : null,
     acceptedAtMs: safeToMillis(data.acceptedAt),

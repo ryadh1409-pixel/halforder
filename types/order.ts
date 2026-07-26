@@ -20,6 +20,12 @@ export type DriverSnapshot = {
   phone?: string | null;
   vehicle?: string | null;
   avatar?: string | null;
+  vehiclePhoto?: string | null;
+  vehicleMake?: string | null;
+  vehicleModel?: string | null;
+  vehicleYear?: string | null;
+  vehicleColor?: string | null;
+  licensePlate?: string | null;
 };
 
 export type OrderDocument = {

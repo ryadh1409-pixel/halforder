@@ -2,6 +2,10 @@ import {
   displayFromStoredProfilePhone,
   formatProfileWhatsAppDisplay,
 } from '@/lib/profileWhatsAppPhone';
+import {
+  pickDriverVehicleFromDocs,
+  type DriverVehicleInfo,
+} from '@/lib/driverVehicle';
 import type { User } from 'firebase/auth';
 import type { DocumentData } from 'firebase/firestore';
 
@@ -16,6 +20,7 @@ export type ResolvedDriverProfileIdentity = {
   phoneRaw: string | null;
   phoneDisplay: string;
   photoURL: string | null;
+  vehicle: DriverVehicleInfo;
 };
 
 function pickString(...values: unknown[]): string | null {
@@ -99,5 +104,9 @@ export function resolveDriverProfileIdentity(
     phoneRaw,
     phoneDisplay: formatDriverProfilePhoneDisplay(phoneRaw),
     photoURL: resolvePhotoFromSources(sources),
+    vehicle: pickDriverVehicleFromDocs(
+      userDoc as Record<string, unknown> | undefined,
+      driverDoc as Record<string, unknown> | undefined,
+    ),
   };
 }

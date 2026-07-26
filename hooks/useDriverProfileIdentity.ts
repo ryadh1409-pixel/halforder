@@ -2,6 +2,7 @@ import {
   resolveDriverProfileIdentity,
   type ResolvedDriverProfileIdentity,
 } from '@/lib/driverProfileIdentity';
+import { EMPTY_DRIVER_VEHICLE } from '@/lib/driverVehicle';
 import { auth, db } from '@/services/firebase';
 import { doc, onSnapshot, type DocumentData } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
@@ -15,6 +16,7 @@ const EMPTY_IDENTITY: DriverProfileIdentityState = {
   phoneRaw: null,
   phoneDisplay: 'Add phone number',
   photoURL: null,
+  vehicle: { ...EMPTY_DRIVER_VEHICLE },
   loading: true,
 };
 

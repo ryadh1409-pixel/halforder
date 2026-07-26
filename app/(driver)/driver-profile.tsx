@@ -4,6 +4,14 @@ import { AppTextInput } from '@/components/AppTextInput';
 import { useDriverProfileIdentity } from '@/hooks/useDriverProfileIdentity';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { uploadAndPersistDriverProfilePhoto } from '@/lib/driverProfilePhoto';
+import {
+  formatVehicleMakeModel,
+  normalizeVehicleForSave,
+} from '@/lib/driverVehicle';
+import {
+  persistDriverVehicleInfo,
+  uploadAndPersistDriverVehiclePhoto,
+} from '@/lib/driverVehiclePhoto';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import {
   displayFromStoredProfilePhone,
@@ -41,6 +49,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const AVATAR_SIZE = 96;
+const VEHICLE_PHOTO_H = 140;
 
 /** Driver profile tab — unique route name avoids collision with `app/(tabs)/profile.tsx`. */
 export default function DriverProfileTab() {
@@ -48,14 +57,24 @@ export default function DriverProfileTab() {
   const uid = user?.uid ?? null;
   const identity = useDriverProfileIdentity(uid);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingVehicle, setSavingVehicle] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [phoneDraft, setPhoneDraft] = useState('+1 ');
+  const [makeDraft, setMakeDraft] = useState('');
+  const [modelDraft, setModelDraft] = useState('');
+  const [yearDraft, setYearDraft] = useState('');
+  const [colorDraft, setColorDraft] = useState('');
+  const [plateDraft, setPlateDraft] = useState('');
+  const [vehiclePhotoDraft, setVehiclePhotoDraft] = useState<string | null>(null);
   const hydratedRef = useRef(false);
+  const vehicleHydratedRef = useRef(false);
 
   useEffect(() => {
     if (identity.loading) {
       hydratedRef.current = false;
+      vehicleHydratedRef.current = false;
       return;
     }
     if (!hydratedRef.current) {
@@ -69,7 +88,21 @@ export default function DriverProfileTab() {
       );
       hydratedRef.current = true;
     }
-  }, [identity.loading, identity.displayName, identity.phoneRaw]);
+    if (!vehicleHydratedRef.current) {
+      setMakeDraft(identity.vehicle.vehicleMake ?? '');
+      setModelDraft(identity.vehicle.vehicleModel ?? '');
+      setYearDraft(identity.vehicle.vehicleYear ?? '');
+      setColorDraft(identity.vehicle.vehicleColor ?? '');
+      setPlateDraft(identity.vehicle.licensePlate ?? '');
+      setVehiclePhotoDraft(identity.vehicle.vehiclePhoto);
+      vehicleHydratedRef.current = true;
+    }
+  }, [
+    identity.loading,
+    identity.displayName,
+    identity.phoneRaw,
+    identity.vehicle,
+  ]);
 
   const profileDirty = useMemo(() => {
     if (identity.loading || !hydratedRef.current) return false;
@@ -92,6 +125,39 @@ export default function DriverProfileTab() {
     nameDraft,
     phoneDraft,
   ]);
+
+  const vehicleDirty = useMemo(() => {
+    if (identity.loading || !vehicleHydratedRef.current) return false;
+    const v = identity.vehicle;
+    return (
+      makeDraft.trim() !== (v.vehicleMake ?? '') ||
+      modelDraft.trim() !== (v.vehicleModel ?? '') ||
+      yearDraft.trim() !== (v.vehicleYear ?? '') ||
+      colorDraft.trim() !== (v.vehicleColor ?? '') ||
+      plateDraft.trim().toUpperCase() !== (v.licensePlate ?? '') ||
+      (vehiclePhotoDraft ?? null) !== (v.vehiclePhoto ?? null)
+    );
+  }, [
+    identity.loading,
+    identity.vehicle,
+    makeDraft,
+    modelDraft,
+    yearDraft,
+    colorDraft,
+    plateDraft,
+    vehiclePhotoDraft,
+  ]);
+
+  const vehiclePreviewLabel = useMemo(() => {
+    return formatVehicleMakeModel({
+      vehiclePhoto: vehiclePhotoDraft,
+      vehicleMake: makeDraft.trim() || null,
+      vehicleModel: modelDraft.trim() || null,
+      vehicleYear: yearDraft.trim() || null,
+      vehicleColor: colorDraft.trim() || null,
+      licensePlate: plateDraft.trim() || null,
+    });
+  }, [vehiclePhotoDraft, makeDraft, modelDraft, yearDraft, colorDraft, plateDraft]);
 
   const handleSignOut = useCallback(async () => {
     await logoutAndResetSession(signOutUser);
@@ -131,6 +197,36 @@ export default function DriverProfileTab() {
       setUploadingPhoto(false);
     }
   }, [reloadAuthUser, uid, uploadingPhoto]);
+
+  const handleVehiclePhotoPress = useCallback(async () => {
+    if (!uid || uploadingVehiclePhoto) return;
+    await ensureAuthReady();
+    let imageUri: string | null;
+    try {
+      imageUri = await pickImageFromLibrary({ quality: 0.8 });
+    } catch (error) {
+      if (error instanceof ImagePickerPermissionError) {
+        showUserError(error);
+        return;
+      }
+      logError(error);
+      showError('Could not open your photo library.');
+      return;
+    }
+    if (!imageUri) return;
+
+    setUploadingVehiclePhoto(true);
+    try {
+      const url = await uploadAndPersistDriverVehiclePhoto(uid, imageUri);
+      setVehiclePhotoDraft(url);
+      showSuccess('Vehicle photo updated.');
+    } catch (error) {
+      logError(error);
+      showError(getUserFriendlyError(error));
+    } finally {
+      setUploadingVehiclePhoto(false);
+    }
+  }, [uid, uploadingVehiclePhoto]);
 
   const handleSave = useCallback(async () => {
     if (!uid || saving || !profileDirty) return;
@@ -225,6 +321,57 @@ export default function DriverProfileTab() {
     }
   }, [nameDraft, phoneDraft, profileDirty, saving, uid]);
 
+  const handleSaveVehicle = useCallback(async () => {
+    if (!uid || savingVehicle || !vehicleDirty) return;
+    if (yearDraft.trim() && !/^\d{4}$/.test(yearDraft.trim())) {
+      showError('Enter a 4-digit vehicle year.');
+      return;
+    }
+
+    await ensureAuthReady();
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.uid !== uid) {
+      showError('Please sign in again.');
+      return;
+    }
+
+    setSavingVehicle(true);
+    try {
+      const payload = normalizeVehicleForSave({
+        vehiclePhoto: vehiclePhotoDraft,
+        vehicleMake: makeDraft,
+        vehicleModel: modelDraft,
+        vehicleYear: yearDraft,
+        vehicleColor: colorDraft,
+        licensePlate: plateDraft,
+      });
+      await persistDriverVehicleInfo(uid, payload);
+      setMakeDraft(payload.vehicleMake ?? '');
+      setModelDraft(payload.vehicleModel ?? '');
+      setYearDraft(payload.vehicleYear ?? '');
+      setColorDraft(payload.vehicleColor ?? '');
+      setPlateDraft(payload.licensePlate ?? '');
+      setVehiclePhotoDraft(payload.vehiclePhoto);
+      vehicleHydratedRef.current = true;
+      showSuccess('Vehicle information saved.');
+    } catch (error) {
+      logError(error);
+      showError(getUserFriendlyError(error));
+    } finally {
+      setSavingVehicle(false);
+    }
+  }, [
+    uid,
+    savingVehicle,
+    vehicleDirty,
+    vehiclePhotoDraft,
+    makeDraft,
+    modelDraft,
+    yearDraft,
+    colorDraft,
+    plateDraft,
+  ]);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView
@@ -292,6 +439,132 @@ export default function DriverProfileTab() {
               )}
             </Pressable>
           ) : null}
+        </View>
+
+        <View style={styles.vehicleCard}>
+          <Text style={styles.vehicleCardTitle}>Vehicle Information</Text>
+          <Text style={styles.vehicleCardSub}>
+            Customers and admins see this while tracking your deliveries
+          </Text>
+
+          <Pressable
+            style={styles.vehiclePhotoBtn}
+            onPress={() => void handleVehiclePhotoPress()}
+            accessibilityRole="button"
+            accessibilityLabel="Upload vehicle photo"
+          >
+            {uploadingVehiclePhoto ? (
+              <View style={styles.vehiclePhotoFallback}>
+                <ActivityIndicator color="#00C853" />
+              </View>
+            ) : vehiclePhotoDraft ? (
+              <Image
+                source={{ uri: vehiclePhotoDraft }}
+                style={styles.vehiclePhoto}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <View style={styles.vehiclePhotoFallback}>
+                <Ionicons name="car-sport-outline" size={40} color="#86EFAC" />
+                <Text style={styles.vehiclePhotoHint}>Add vehicle photo</Text>
+              </View>
+            )}
+            <View style={styles.vehiclePhotoBadge}>
+              <Ionicons name="camera" size={14} color="#052e1b" />
+              <Text style={styles.vehiclePhotoBadgeText}>
+                {vehiclePhotoDraft ? 'Change' : 'Upload'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {(vehiclePreviewLabel || colorDraft.trim() || plateDraft.trim()) ? (
+            <View style={styles.previewBox}>
+              <Text style={styles.previewLabel}>Preview</Text>
+              {vehiclePreviewLabel ? (
+                <Text style={styles.previewTitle}>{vehiclePreviewLabel}</Text>
+              ) : null}
+              {colorDraft.trim() ? (
+                <Text style={styles.previewMeta}>{colorDraft.trim()}</Text>
+              ) : null}
+              {plateDraft.trim() ? (
+                <Text style={styles.previewPlate}>
+                  {plateDraft.trim().toUpperCase()}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Text style={styles.fieldLabel}>Vehicle Make</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : makeDraft}
+            onChangeText={setMakeDraft}
+            placeholder="Toyota, Honda, Ford…"
+            placeholderTextColor="#7D8493"
+            autoCapitalize="words"
+            editable={!identity.loading && !savingVehicle}
+          />
+
+          <Text style={styles.fieldLabel}>Vehicle Model</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : modelDraft}
+            onChangeText={setModelDraft}
+            placeholder="Corolla, Civic…"
+            placeholderTextColor="#7D8493"
+            autoCapitalize="words"
+            editable={!identity.loading && !savingVehicle}
+          />
+
+          <Text style={styles.fieldLabel}>Vehicle Year</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : yearDraft}
+            onChangeText={setYearDraft}
+            placeholder="2022"
+            placeholderTextColor="#7D8493"
+            keyboardType="number-pad"
+            maxLength={4}
+            editable={!identity.loading && !savingVehicle}
+          />
+
+          <Text style={styles.fieldLabel}>Vehicle Color</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : colorDraft}
+            onChangeText={setColorDraft}
+            placeholder="White"
+            placeholderTextColor="#7D8493"
+            autoCapitalize="words"
+            editable={!identity.loading && !savingVehicle}
+          />
+
+          <Text style={styles.fieldLabel}>License Plate Number</Text>
+          <AppTextInput
+            style={styles.profileInput}
+            value={identity.loading ? '' : plateDraft}
+            onChangeText={setPlateDraft}
+            placeholder="ABCD-123"
+            placeholderTextColor="#7D8493"
+            autoCapitalize="characters"
+            editable={!identity.loading && !savingVehicle}
+          />
+
+          <Pressable
+            style={[
+              styles.saveBtn,
+              (!vehicleDirty || savingVehicle) && styles.saveBtnDisabled,
+            ]}
+            disabled={!vehicleDirty || savingVehicle}
+            onPress={() => void handleSaveVehicle()}
+          >
+            {savingVehicle ? (
+              <ActivityIndicator color="#052e1b" />
+            ) : (
+              <Text style={styles.saveBtnText}>Save vehicle</Text>
+            )}
+          </Pressable>
         </View>
 
         <AccountLocationPicker
@@ -366,6 +639,110 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
+  },
+  vehicleCard: {
+    alignSelf: 'stretch',
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#22223A',
+  },
+  vehicleCardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  vehicleCardSub: {
+    marginTop: 4,
+    marginBottom: 14,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#7D8493',
+    lineHeight: 18,
+  },
+  vehiclePhotoBtn: {
+    alignSelf: 'stretch',
+    height: VEHICLE_PHOTO_H,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 200, 83, 0.35)',
+    backgroundColor: '#132B1E',
+  },
+  vehiclePhoto: {
+    width: '100%',
+    height: VEHICLE_PHOTO_H,
+  },
+  vehiclePhotoFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  vehiclePhotoHint: {
+    color: '#86EFAC',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  vehiclePhotoBadge: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#00C853',
+  },
+  vehiclePhotoBadgeText: {
+    color: '#052e1b',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  previewBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  previewLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#00C853',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  previewMeta: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#B7BDC9',
+  },
+  previewPlate: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#111827',
+    color: '#F9FAFB',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
   saveBtn: {
     marginTop: 16,
