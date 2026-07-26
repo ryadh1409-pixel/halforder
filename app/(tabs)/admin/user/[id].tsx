@@ -1,4 +1,5 @@
 import { AdminHeader } from '../../../../components/admin/AdminHeader';
+import { AdminBankingInfoCard } from '../../../../components/admin/AdminBankingInfoCard';
 import { adminRoutes } from '../../../../constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '../../../../constants/adminTheme';
 import { theme } from '../../../../constants/theme';
@@ -16,6 +17,7 @@ import {
   deleteUserDocumentAsAdmin,
   promoteUserToAdmin,
 } from '../../../../services/adminUserActions';
+import { extractAdminUserBankingInfo } from '../../../../services/adminUserBankingInfo';
 import { useAuth } from '../../../../services/AuthContext';
 import {
   collection,
@@ -176,6 +178,11 @@ export default function AdminUserDetailScreen() {
     });
     return { active, completed, total: orderList.length };
   }, [orderList]);
+
+  const bankingInfo = useMemo(
+    () => extractAdminUserBankingInfo(profile),
+    [profile],
+  );
 
   const email = typeof profile?.email === 'string' ? profile.email : null;
   const targetRole =
@@ -370,6 +377,9 @@ export default function AdminUserDetailScreen() {
               <Text style={styles.btnDangerText}>Delete user doc</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.section}>Bank &amp; Payout Information</Text>
+          <AdminBankingInfoCard info={bankingInfo} />
 
           <Text style={styles.section}>Orders</Text>
           {orderList.length === 0 ? (
