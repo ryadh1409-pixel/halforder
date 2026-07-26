@@ -66,7 +66,7 @@ function SwipeFoodCardInner({ card }: Props) {
           </Text>
         ) : null}
         <Text style={styles.original}>
-          Full meal {formatShareCurrency(card.originalPrice)}
+          HalfOrder price {formatShareCurrency(card.originalPrice)}
         </Text>
         <Text style={styles.split}>
           Delivery fee {formatShareCurrency(card.deliveryShare)}

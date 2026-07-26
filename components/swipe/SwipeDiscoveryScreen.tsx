@@ -166,7 +166,7 @@ export function SwipeDiscoveryScreen() {
           <Text style={styles.headerTitle}>Swipe</Text>
           <FoodShareNotificationBell />
           <Text style={styles.headerSub}>
-            Join admin meal shares and match with someone nearby
+            Share half the food. Save half the money.
           </Text>
         </View>
 

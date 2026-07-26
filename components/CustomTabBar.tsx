@@ -103,9 +103,9 @@ function iconGlyph(
 function tabLabel(routeName: string): string {
   switch (routeName) {
     case 'index':
-      return 'Home';
+      return 'FullOrder';
     case 'swipe':
-      return 'Swipe';
+      return 'HalfOrder';
     case 'explore':
       return 'Browse';
     case 'search':
