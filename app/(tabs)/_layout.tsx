@@ -39,6 +39,7 @@ export default function TabLayout() {
       <EmoAiDeliveredNudgeHost />
       <Tabs
         {...({ id: 'main' } as object)}
+        initialRouteName="swipe"
         screenOptions={{
           headerShown: false,
           lazy: true,
@@ -46,15 +47,15 @@ export default function TabLayout() {
         tabBar={(props) => <CustomTabBar {...props} />}
       >
         <Tabs.Screen
-          name="index"
-          options={{
-            href: tabHrefForRole(role, TABS_ROUTES.hub, customerTabs),
-          }}
-        />
-        <Tabs.Screen
           name="swipe"
           options={{
             href: tabHrefForRole(role, TABS_ROUTES.swipe, customerTabs),
+          }}
+        />
+        <Tabs.Screen
+          name="index"
+          options={{
+            href: tabHrefForRole(role, TABS_ROUTES.hub, customerTabs),
           }}
         />
         <Tabs.Screen name="explore" options={HIDDEN_TAB} />

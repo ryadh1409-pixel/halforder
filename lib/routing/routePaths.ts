@@ -37,6 +37,6 @@ export function roleDefaultPath(role: UserRole | null | undefined): Href {
       return '/(tabs)/admin' as Href;
     case 'user':
     default:
-      return TABS_ROUTES.hub as Href;
+      return TABS_ROUTES.swipe as Href;
   }
 }

@@ -101,7 +101,7 @@ export default function Index() {
       return;
     }
     if (isRegisteredAuthUser(user)) return;
-    router.replace('/(tabs)' as never);
+    router.replace('/(tabs)/swipe' as never);
   }, [
     loading,
     gateReady,

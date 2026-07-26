@@ -25,8 +25,8 @@ export function tabHrefForRole(
 }
 
 export const CUSTOMER_TAB_NAMES = [
-  'index',
   'swipe',
+  'index',
   'search',
   'emo-ai',
   'profile',
