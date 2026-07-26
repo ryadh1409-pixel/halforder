@@ -39,6 +39,8 @@ export const adminRoutes = {
     `/(tabs)/admin/emo-ai-reports/${encodeURIComponent(id)}`,
   /** All Emo AI user conversations (admin only). */
   emoAiChat: '/(tabs)/admin/emo-ai-chat',
+  /** HalfOrder Admin AI Assistant (executive ops helper). */
+  adminAiAssistant: '/(tabs)/admin/admin-ai-assistant',
   /** Compose messages that appear in each user's Profile Inbox. */
   inboxMessages: '/(tabs)/admin/inbox-messages',
   /** Investor-ready Finance Dashboard (additive). */

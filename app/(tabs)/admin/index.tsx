@@ -2,6 +2,7 @@ import { AdminCardsDashboard } from './components/AdminCardsDashboard';
 import { ActionCard } from '../../../components/ActionCard';
 import { AdminStatCard } from '../../../components/AdminStatCard';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
+import { AdminAiAssistantPanel } from '../../../components/admin/AdminAiAssistantPanel';
 import { adminRoutes } from '../../../constants/adminRoutes';
 import { ADMIN_PANEL_EMAIL, isAdminUser } from '../../../constants/adminUid';
 import { goHome } from '../../../lib/navigation';
@@ -319,6 +320,8 @@ export default function AdminScreen() {
             >
               <Text style={styles.title}>Admin Dashboard</Text>
 
+              <AdminAiAssistantPanel displayName={user?.displayName} />
+
               {error ? (
                 <View style={styles.errorBox}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -453,6 +456,13 @@ export default function AdminScreen() {
                 Actions
               </Text>
               <View style={styles.actionsGrid}>
+                <ActionCard
+                  icon="sparkles-outline"
+                  label="Admin AI"
+                  onPress={() =>
+                    router.push(adminRoutes.adminAiAssistant as never)
+                  }
+                />
                 <ActionCard
                   icon="people-outline"
                   label="Users"

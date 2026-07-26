@@ -83,6 +83,10 @@ export default function AdminLayout() {
       />
       <Stack.Screen name="emo-ai-chat" options={{ title: 'Emo Chat' }} />
       <Stack.Screen
+        name="admin-ai-assistant"
+        options={{ title: 'Admin AI Assistant' }}
+      />
+      <Stack.Screen
         name="inbox-messages"
         options={{ title: 'Inbox Messages' }}
       />
