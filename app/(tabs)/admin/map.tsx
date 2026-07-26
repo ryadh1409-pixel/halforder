@@ -262,10 +262,9 @@ export default function AdminLiveOrderMapScreen() {
         });
         next.sort((a, b) => b.updatedAtMs - a.updatedAtMs);
         setOrders(next);
-        setSelectedId((prev) => {
-          if (prev && next.some((o) => o.id === prev)) return prev;
-          return next[0]?.id ?? null;
-        });
+        setSelectedId((prev) =>
+          prev && next.some((o) => o.id === prev) ? prev : null,
+        );
         setError(null);
         setLoading(false);
       },
@@ -279,9 +278,19 @@ export default function AdminLiveOrderMapScreen() {
   }, [user, firestoreUserRole]);
 
   const selected = useMemo(
-    () => orders.find((o) => o.id === selectedId) ?? orders[0] ?? null,
+    () => (selectedId ? orders.find((o) => o.id === selectedId) ?? null : null),
     [orders, selectedId],
   );
+
+  function formatOrderTime(ms: number): string {
+    if (!Number.isFinite(ms)) return '—';
+    return new Date(ms).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
 
   if (!user || !isAdmin) {
     return (
@@ -308,39 +317,79 @@ export default function AdminLiveOrderMapScreen() {
     );
   }
 
+  if (!selected) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <AdminHeader
+          title="Live Map"
+          subtitle={`${orders.length} active ${orders.length === 1 ? 'delivery' : 'deliveries'} · tap to track`}
+        />
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+        <ScrollView
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {orders.length === 0 ? (
+            <View style={styles.emptyList}>
+              <Ionicons name="navigate-outline" size={36} color={COLORS.textMuted} />
+              <Text style={styles.emptyListText}>
+                No active deliveries with live locations right now.
+              </Text>
+            </View>
+          ) : (
+            orders.map((o) => (
+              <Pressable
+                key={o.id}
+                style={({ pressed }) => [styles.orderCard, pressed && styles.orderCardPressed]}
+                onPress={() => setSelectedId(o.id)}
+              >
+                <View style={styles.orderCardHeader}>
+                  <Text style={styles.orderId}>#{o.id.slice(0, 12)}</Text>
+                  <View style={styles.statusChip}>
+                    <Text style={styles.statusChipText} numberOfLines={1}>
+                      {o.deliveryStatus}
+                    </Text>
+                  </View>
+                </View>
+                <MetaRow icon="person-outline" label="Customer" value={o.customerName} />
+                <MetaRow icon="restaurant-outline" label="Restaurant" value={o.restaurantName} />
+                <MetaRow icon="car-outline" label="Driver" value={o.driverName} />
+                <MetaRow icon="flag-outline" label="Status" value={o.status} />
+                <MetaRow
+                  icon="time-outline"
+                  label="Time"
+                  value={formatOrderTime(o.updatedAtMs)}
+                />
+                <View style={styles.openTrackRow}>
+                  <Text style={styles.openTrackText}>Open live tracking</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+                </View>
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <AdminHeader
-        title="Live Map"
-        subtitle={`${orders.length} active · real-time`}
+        title="Live tracking"
+        subtitle={`Order #${selected.id.slice(0, 12)}`}
       />
+      <Pressable style={styles.backToList} onPress={() => setSelectedId(null)}>
+        <Ionicons name="list-outline" size={16} color={COLORS.primary} />
+        <Text style={styles.backToListText}>All active deliveries</Text>
+      </Pressable>
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
-      ) : null}
-
-      {orders.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-        >
-          {orders.map((o) => {
-            const on = o.id === selected?.id;
-            return (
-              <Pressable
-                key={o.id}
-                style={[styles.chip, on && styles.chipOn]}
-                onPress={() => setSelectedId(o.id)}
-              >
-                <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>
-                  #{o.id.slice(0, 8)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
       ) : null}
 
       <View style={styles.mapShell}>
@@ -351,7 +400,7 @@ export default function AdminLiveOrderMapScreen() {
               Live delivery map is available on iOS and Android.
             </Text>
           </View>
-        ) : selected ? (
+        ) : (
           <LiveDeliveryMap
             polylineCoords={selected.polyline}
             restaurant={selected.restaurant}
@@ -360,13 +409,6 @@ export default function AdminLiveOrderMapScreen() {
             driverHeading={selected.driverHeading}
             dark
           />
-        ) : (
-          <View style={styles.webPlaceholder}>
-            <Ionicons name="navigate-outline" size={36} color={COLORS.textMuted} />
-            <Text style={styles.webPlaceholderText}>
-              No active deliveries with live locations right now.
-            </Text>
-          </View>
         )}
 
         <View style={styles.legend}>
@@ -385,43 +427,41 @@ export default function AdminLiveOrderMapScreen() {
         </View>
       </View>
 
-      {selected ? (
-        <View style={styles.floatingCard}>
-          <View style={styles.cardHeader}>
-            <View>
-              <Text style={styles.cardKicker}>Active delivery</Text>
-              <Text style={styles.cardOrderId}>#{selected.id.slice(0, 12)}</Text>
-            </View>
-            <View style={styles.statusChip}>
-              <Text style={styles.statusChipText}>{selected.deliveryStatus}</Text>
-            </View>
+      <View style={styles.floatingCard}>
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={styles.cardKicker}>Active delivery</Text>
+            <Text style={styles.cardOrderId}>#{selected.id.slice(0, 12)}</Text>
           </View>
-
-          <MetaRow icon="restaurant-outline" label="Restaurant" value={selected.restaurantName} />
-          <MetaRow icon="person-outline" label="Customer" value={selected.customerName} />
-          <MetaRow icon="car-outline" label="Driver" value={selected.driverName} />
-          <MetaRow icon="cash-outline" label="Order total" value={selected.totalLabel} />
-          <MetaRow icon="card-outline" label="Payment" value={selected.paymentStatus} />
-          <MetaRow icon="bicycle-outline" label="Type" value={selected.deliveryType} />
-
-          <View style={styles.metricsRow}>
-            <View style={styles.metricPill}>
-              <Text style={styles.metricLabel}>ETA</Text>
-              <Text style={styles.metricValue}>{selected.etaLabel}</Text>
-            </View>
-            <View style={styles.metricPill}>
-              <Text style={styles.metricLabel}>Distance</Text>
-              <Text style={styles.metricValue}>{selected.distanceLabel}</Text>
-            </View>
-            <View style={styles.metricPill}>
-              <Text style={styles.metricLabel}>Status</Text>
-              <Text style={styles.metricValue} numberOfLines={1}>
-                {selected.status}
-              </Text>
-            </View>
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>{selected.deliveryStatus}</Text>
           </View>
         </View>
-      ) : null}
+
+        <MetaRow icon="restaurant-outline" label="Restaurant" value={selected.restaurantName} />
+        <MetaRow icon="person-outline" label="Customer" value={selected.customerName} />
+        <MetaRow icon="car-outline" label="Driver" value={selected.driverName} />
+        <MetaRow icon="cash-outline" label="Order total" value={selected.totalLabel} />
+        <MetaRow icon="card-outline" label="Payment" value={selected.paymentStatus} />
+        <MetaRow icon="bicycle-outline" label="Type" value={selected.deliveryType} />
+
+        <View style={styles.metricsRow}>
+          <View style={styles.metricPill}>
+            <Text style={styles.metricLabel}>ETA</Text>
+            <Text style={styles.metricValue}>{selected.etaLabel}</Text>
+          </View>
+          <View style={styles.metricPill}>
+            <Text style={styles.metricLabel}>Distance</Text>
+            <Text style={styles.metricValue}>{selected.distanceLabel}</Text>
+          </View>
+          <View style={styles.metricPill}>
+            <Text style={styles.metricLabel}>Status</Text>
+            <Text style={styles.metricValue} numberOfLines={1}>
+              {selected.status}
+            </Text>
+          </View>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -464,27 +504,74 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239,68,68,0.3)',
   },
   errorText: { color: COLORS.error, fontWeight: '700', fontSize: 13 },
-  chips: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  listContent: { padding: 16, paddingBottom: 32, gap: 12 },
+  emptyList: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+    gap: 12,
+  },
+  emptyListText: {
+    fontFamily: adminFontFamily,
+    fontSize: 15,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '600',
+    paddingHorizontal: 24,
+  },
+  orderCard: {
+    ...adminCardShell,
+    paddingBottom: 12,
+  },
+  orderCardPressed: { opacity: 0.88 },
+  orderCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 12,
+  },
+  orderId: {
+    fontFamily: adminFontFamily,
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+  openTrackRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  openTrackText: {
+    fontFamily: adminFontFamily,
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  backToList: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
-    marginRight: 8,
   },
-  chipOn: {
-    backgroundColor: COLORS.primarySoft,
-    borderColor: COLORS.primary,
-  },
-  chipText: {
+  backToListText: {
     fontFamily: adminFontFamily,
-    color: COLORS.textMuted,
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 12,
+    color: COLORS.primary,
   },
-  chipTextOn: { color: COLORS.primary },
   mapShell: {
     flex: 1,
     marginHorizontal: 12,

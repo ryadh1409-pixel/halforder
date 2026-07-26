@@ -30,6 +30,9 @@ export type UserProfileDoc = {
   email: string | null;
   role: UserRole;
   restaurantId?: string;
+  photoURL: string | null;
+  phone: string | null;
+  lastActiveMs: number | null;
 };
 
 function normalizeRole(value: unknown): UserRole {
@@ -47,6 +50,40 @@ function normalizeRole(value: unknown): UserRole {
   }
   if (value === 'admin') return 'admin';
   return 'user';
+}
+
+function pickPhone(data: Record<string, unknown>): string | null {
+  for (const key of ['phone', 'phoneNumber', 'mobile', 'tel']) {
+    const v = data[key];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function pickPhoto(data: Record<string, unknown>): string | null {
+  for (const key of ['photoURL', 'photoUrl', 'avatarUrl', 'profilePhotoUrl']) {
+    const v = data[key];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function pickLastActiveMs(data: Record<string, unknown>): number | null {
+  for (const key of [
+    'lastActiveAt',
+    'lastSeenAt',
+    'lastLoginAt',
+    'updatedAt',
+    'createdAt',
+  ]) {
+    const v = data[key];
+    if (v && typeof v === 'object' && v !== null && 'toMillis' in v) {
+      const ms = (v as { toMillis: () => number }).toMillis();
+      if (Number.isFinite(ms)) return ms;
+    }
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+  }
+  return null;
 }
 
 export async function getUserRole(uid: string): Promise<UserRole> {
@@ -91,7 +128,7 @@ export function subscribeUsersForAdmin(
     query(collection(db, 'users'), orderBy('createdAt', 'desc')),
     (snap) => {
       const rows: UserProfileDoc[] = snap.docs.map((d) => {
-        const data = d.data();
+        const data = d.data() as Record<string, unknown>;
         return {
           id: d.id,
           name:
@@ -102,6 +139,9 @@ export function subscribeUsersForAdmin(
           role: normalizeRole(data.role),
           restaurantId:
             typeof data.restaurantId === 'string' ? data.restaurantId : undefined,
+          photoURL: pickPhoto(data),
+          phone: pickPhone(data),
+          lastActiveMs: pickLastActiveMs(data),
         };
       });
       onRows(rows);
@@ -124,7 +164,7 @@ export async function updateUserRoleByAdmin(
 export async function getUsers(): Promise<UserProfileDoc[]> {
   const snap = await getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc')));
   return snap.docs.map((d) => {
-    const data = d.data();
+    const data = d.data() as Record<string, unknown>;
     return {
       id: d.id,
       name:
@@ -134,6 +174,9 @@ export async function getUsers(): Promise<UserProfileDoc[]> {
       email: typeof data.email === 'string' ? data.email : null,
       role: normalizeRole(data.role),
       restaurantId: typeof data.restaurantId === 'string' ? data.restaurantId : undefined,
+      photoURL: pickPhoto(data),
+      phone: pickPhone(data),
+      lastActiveMs: pickLastActiveMs(data),
     };
   });
 }

@@ -1,4 +1,3 @@
-import { AppTextInput } from '@/components/AppTextInput';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { isAdminUser } from '@/constants/adminUid';
@@ -208,7 +207,7 @@ export default function OnboardingManagerScreen() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
         title="Onboarding Manager"
-        subtitle="Slides, copy, and display mode"
+        subtitle="Slide images and display mode"
         fallbackRoute={adminRoutes.home}
       />
       {loading ? (
@@ -292,24 +291,8 @@ export default function OnboardingManagerScreen() {
                     </Pressable>
                   </View>
                 </View>
-                <AppTextInput
-                  value={slide.title}
-                  onChangeText={(t) => updateSlide(slide.id, { title: t })}
-                  placeholder="Title"
-                  placeholderTextColor={COLORS.textMuted}
-                  style={styles.input}
-                  multiline
-                />
-                <AppTextInput
-                  value={slide.subtitle}
-                  onChangeText={(t) => updateSlide(slide.id, { subtitle: t })}
-                  placeholder="Subtitle"
-                  placeholderTextColor={COLORS.textMuted}
-                  style={styles.input}
-                  multiline
-                />
                 <View style={styles.imageSection}>
-                  <Text style={styles.imageLabel}>Slide image</Text>
+                  <Text style={styles.imageLabel}>Slide image (shown full-bleed)</Text>
                   {slideImageUri(slide) ? (
                     <View style={styles.imageFrame}>
                       <Image

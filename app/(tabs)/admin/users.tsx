@@ -1,15 +1,62 @@
 import { AdminHeader } from '../../../components/admin/AdminHeader';
 import {
-    subscribeUsersForAdmin,
-    updateUserRole,
-    type UserProfileDoc,
-    type UserRole,
+  subscribeUsersForAdmin,
+  updateUserRole,
+  type UserProfileDoc,
+  type UserRole,
 } from '../../../services/userService';
 import { requireRole } from '../../../utils/requireRole';
 import { showNotice } from '../../../utils/toast';
+import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const ROLE_OPTIONS: UserRole[] = ['user', 'driver', 'restaurant', 'admin'];
+
+function editableRole(role: UserRole): UserRole {
+  if (role === 'host') return 'restaurant';
+  if (role === 'customer') return 'user';
+  return role;
+}
+
+function roleLabel(role: UserRole): string {
+  switch (role) {
+    case 'user':
+      return 'User';
+    case 'driver':
+      return 'Driver';
+    case 'restaurant':
+      return 'Restaurant';
+    case 'admin':
+      return 'Admin';
+    case 'host':
+      return 'Restaurant';
+    case 'customer':
+      return 'User';
+    default:
+      return role;
+  }
+}
+
+function formatLastActive(ms: number | null): string {
+  if (ms == null || !Number.isFinite(ms)) return '—';
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return 'Just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return new Date(ms).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
 export default function AdminUsersScreen() {
   const { authorized, loading: roleLoading } = requireRole(['admin']);
@@ -28,8 +75,6 @@ export default function AdminUsersScreen() {
     );
     return () => unsub();
   }, []);
-
-  const roleOptions: UserRole[] = ['user', 'customer', 'driver', 'restaurant', 'host', 'admin'];
 
   async function saveRole(uid: string) {
     const nextRole = draftRoles[uid];
@@ -67,45 +112,78 @@ export default function AdminUsersScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.empty}>No users found.</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.name} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Text style={styles.email} numberOfLines={1}>
-                {item.email ?? 'No email'}
-              </Text>
-              <Text style={styles.currentRole}>Current role: {item.role}</Text>
-              <View style={styles.row}>
-                {roleOptions.map((option) => {
-                  const draft = draftRoles[item.id] ?? item.role;
-                  const active = draft === option;
-                  return (
-                    <Pressable
-                      key={option}
-                      style={[styles.roleChip, active ? styles.roleChipActive : null]}
-                      onPress={() =>
-                        setDraftRoles((prev) => ({ ...prev, [item.id]: option }))
-                      }
-                    >
-                      <Text style={[styles.roleChipText, active ? styles.roleChipTextActive : null]}>
-                        {option}
+          renderItem={({ item }) => {
+            const currentEditable = editableRole(item.role);
+            const draft = draftRoles[item.id] ?? currentEditable;
+            return (
+              <View style={styles.card}>
+                <View style={styles.topRow}>
+                  {item.photoURL ? (
+                    <Image
+                      source={{ uri: item.photoURL }}
+                      style={styles.avatar}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarLetter}>
+                        {(item.name || 'U').charAt(0).toUpperCase()}
                       </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Pressable
-                style={styles.saveButton}
-                onPress={() => saveRole(item.id)}
-                disabled={savingUserId === item.id}
-              >
-                <Text style={styles.saveButtonText}>
-                  {savingUserId === item.id ? 'Saving...' : 'Save role'}
+                    </View>
+                  )}
+                  <View style={styles.identity}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.email} numberOfLines={1}>
+                      {item.email ?? 'No email'}
+                    </Text>
+                    <Text style={styles.meta} numberOfLines={1}>
+                      Phone: {item.phone ?? '—'}
+                    </Text>
+                    <Text style={styles.meta} numberOfLines={1}>
+                      Last active: {formatLastActive(item.lastActiveMs)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.currentRole}>
+                  Current role: {roleLabel(item.role)}
                 </Text>
-              </Pressable>
-            </View>
-          )}
+                <View style={styles.row}>
+                  {ROLE_OPTIONS.map((option) => {
+                    const active = draft === option;
+                    return (
+                      <Pressable
+                        key={option}
+                        style={[styles.roleChip, active ? styles.roleChipActive : null]}
+                        onPress={() =>
+                          setDraftRoles((prev) => ({ ...prev, [item.id]: option }))
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.roleChipText,
+                            active ? styles.roleChipTextActive : null,
+                          ]}
+                        >
+                          {roleLabel(option)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable
+                  style={styles.saveButton}
+                  onPress={() => saveRole(item.id)}
+                  disabled={savingUserId === item.id}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {savingUserId === item.id ? 'Saving...' : 'Save role'}
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -125,9 +203,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 14,
   },
+  topRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  avatar: { width: 52, height: 52, borderRadius: 16 },
+  avatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(168,85,247,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLetter: { color: '#A855F7', fontWeight: '900', fontSize: 18 },
+  identity: { flex: 1, minWidth: 0 },
   name: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
-  email: { fontSize: 14, color: '#7D8493', marginTop: 4 },
-  currentRole: { marginTop: 8, color: '#B7BDC9', fontWeight: '700' },
+  email: { fontSize: 14, color: '#7D8493', marginTop: 2 },
+  meta: { fontSize: 12, color: '#B7BDC9', marginTop: 3, fontWeight: '600' },
+  currentRole: { marginTop: 10, color: '#B7BDC9', fontWeight: '700' },
   row: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 8 },
   roleChip: {
     borderRadius: 999,
@@ -138,7 +229,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   roleChipActive: { backgroundColor: '#DCFCE7', borderColor: '#22C55E' },
-  roleChipText: { color: '#B7BDC9', fontWeight: '700', textTransform: 'capitalize' },
+  roleChipText: { color: '#B7BDC9', fontWeight: '700' },
   roleChipTextActive: { color: '#166534' },
   saveButton: {
     marginTop: 12,

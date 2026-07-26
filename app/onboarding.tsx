@@ -24,7 +24,7 @@ import { goHome } from '../lib/navigation';
 import { useAuth } from '../services/AuthContext';
 import {
   DEFAULT_ONBOARDING_SLIDES,
-  fetchOnboardingConfig,
+  subscribeOnboardingConfig,
   type OnboardingSlideAdmin,
 } from '../services/onboardingAdmin';
 import { startOnboarding } from '../services/stripeConnect';
@@ -32,27 +32,21 @@ import { alertFriendly } from '../utils/friendlyAlert';
 
 const BG = '#000000';
 const { width } = Dimensions.get('window');
+const IMAGE_CARD_WIDTH = width - 48;
+const IMAGE_CARD_HEIGHT = Math.min(width * 1.15, 480);
 
 const GREEN_GRADIENT = ['#1B5E20', '#2E7D32', '#4CAF50'] as const;
 const GREEN_GRADIENT_END = ['#2E7D32', '#43A047', '#66BB6A'] as const;
 
-const FALLBACK_ICONS = ['🍽️', '⚡', '✨'] as const;
-
 type SlideView = {
   id: string;
-  title: string;
-  description: string;
   imageUri: string;
-  icon: string;
 };
 
-function toSlideView(s: OnboardingSlideAdmin, index: number): SlideView {
+function toSlideView(s: OnboardingSlideAdmin): SlideView {
   return {
     id: s.id,
-    title: s.title,
-    description: s.subtitle,
     imageUri: s.imageUri,
-    icon: FALLBACK_ICONS[index % FALLBACK_ICONS.length] ?? '✨',
   };
 }
 
@@ -75,21 +69,11 @@ export default function OnboardingScreen() {
     (role === 'restaurant' || role === 'host' || role === 'admin');
 
   useEffect(() => {
-    let cancelled = false;
-    void fetchOnboardingConfig()
-      .then((cfg) => {
-        if (cancelled) return;
-        const enabled = cfg.slides.filter((s) => s.enabled);
-        setSlides(
-          (enabled.length ? enabled : DEFAULT_ONBOARDING_SLIDES).map(toSlideView),
-        );
-      })
-      .catch(() => {
-        /* keep DEFAULT_ONBOARDING_SLIDES — appConfig may be unavailable offline */
-      });
-    return () => {
-      cancelled = true;
-    };
+    return subscribeOnboardingConfig((cfg) => {
+      const enabled = cfg.slides.filter((s) => s.enabled && s.imageUri.trim());
+      const fallback = DEFAULT_ONBOARDING_SLIDES.filter((s) => s.enabled);
+      setSlides((enabled.length ? enabled : fallback).map(toSlideView));
+    });
   }, []);
 
   const handleCompleteStripeSetup = useCallback(async () => {
@@ -170,19 +154,18 @@ export default function OnboardingScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={[styles.slide, { width }]}>
-            {item.imageUri ? (
-              <Image
-                source={{ uri: item.imageUri }}
-                style={styles.heroImage}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.iconBubble}>
-                <Text style={styles.iconEmoji}>{item.icon}</Text>
-              </View>
-            )}
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.description}>{item.description}</Text>
+            <View style={styles.imageCard}>
+              {item.imageUri ? (
+                <Image
+                  source={{ uri: item.imageUri }}
+                  style={styles.heroImage}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <View style={styles.imageFallback} />
+              )}
+            </View>
           </View>
         )}
       />
@@ -260,48 +243,27 @@ const styles = StyleSheet.create({
   },
   slide: {
     flex: 1,
-    paddingHorizontal: 32,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBubble: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: 'rgba(76, 175, 80, 0.12)',
+  imageCard: {
+    width: IMAGE_CARD_WIDTH,
+    height: IMAGE_CARD_HEIGHT,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#171923',
     borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   heroImage: {
-    width: width - 64,
-    height: 200,
-    borderRadius: 20,
-    marginBottom: 28,
+    width: '100%',
+    height: '100%',
+  },
+  imageFallback: {
+    flex: 1,
     backgroundColor: '#171923',
-  },
-  iconEmoji: {
-    fontSize: 52,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 16,
-    letterSpacing: -0.5,
-    lineHeight: 34,
-  },
-  description: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: 'rgba(255,255,255,0.68)',
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: 320,
   },
   footer: {
     paddingHorizontal: 24,

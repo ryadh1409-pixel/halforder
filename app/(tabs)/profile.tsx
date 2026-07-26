@@ -814,7 +814,14 @@ export default function ProfileScreen() {
               <View style={dynamicStyles.quickGridIconWrap}>
                 <MaterialIcons name="place" size={26} color={pal.primary} />
               </View>
-              <Text style={dynamicStyles.quickGridTitle}>Location</Text>
+              <Text
+                style={dynamicStyles.quickGridTitle}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                Location
+              </Text>
               <MaterialIcons
                 name="chevron-right"
                 size={22}
@@ -1319,11 +1326,13 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       letterSpacing: -0.2,
     },
     quickGridTitle: {
-      flex: 1,
-      fontSize: 18,
+      flexShrink: 1,
+      flexGrow: 1,
+      minWidth: 0,
+      fontSize: 15,
       fontWeight: '800',
       color: pal.text,
-      letterSpacing: -0.3,
+      letterSpacing: -0.2,
     },
     quickAction: {
       flexDirection: 'row',
