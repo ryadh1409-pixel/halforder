@@ -3458,6 +3458,15 @@ service cloud.firestore {
               && request.resource.data.body.size() > 0
               && request.resource.data.body.size() <= 4000
             )
+            || (
+              request.auth.uid == conversationId
+              && request.resource.data.sender == 'system'
+              && request.resource.data.kind == 'system'
+              && request.resource.data.senderUid == request.auth.uid
+              && request.resource.data.body is string
+              && request.resource.data.body.size() > 0
+              && request.resource.data.body.size() <= 4000
+            )
           );
         allow update, delete: if isAdmin();
       }

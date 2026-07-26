@@ -36,7 +36,11 @@ export async function listRecentSupportThreadsForUser(
       userName: typeof data.userName === 'string' ? data.userName : 'User',
       userEmail: typeof data.userEmail === 'string' ? data.userEmail : null,
       userPhotoURL:
-        typeof data.userPhotoURL === 'string' ? data.userPhotoURL : null,
+        typeof data.photoURL === 'string'
+          ? data.photoURL
+          : typeof data.userPhotoURL === 'string'
+            ? data.userPhotoURL
+            : null,
       lastMessage: typeof data.lastMessage === 'string' ? data.lastMessage : '',
       lastSender: data.lastSender === 'admin' ? 'admin' : 'customer',
       status: 'open' as const,
@@ -48,6 +52,13 @@ export async function listRecentSupportThreadsForUser(
       complaintCategory:
         typeof data.complaintCategory === 'string' ? data.complaintCategory : null,
       complaintId: typeof data.complaintId === 'string' ? data.complaintId : null,
+      referenceNumber:
+        typeof data.referenceNumber === 'string' ? data.referenceNumber : null,
+      priority: 'normal' as const,
+      assignedAgent: null,
+      attachmentUrls: [],
+      platform: null,
+      deviceInfo: null,
       adminTyping: false,
       customerTyping: false,
       createdAtMs: null,

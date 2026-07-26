@@ -1,6 +1,8 @@
 import { AdminHeader } from '../../../components/admin/AdminHeader';
+import { SupportImageGallery } from '../../../components/support/SupportImageGallery';
 import { useAuth } from '../../../services/AuthContext';
 import { db } from '../../../services/firebase';
+import { adminRoutes } from '../../../constants/adminRoutes';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -22,7 +24,10 @@ type Complaint = {
   userEmail: string;
   message: string;
   createdAt: number;
-  status: 'new' | 'read';
+  status: 'new' | 'read' | string;
+  referenceNumber: string | null;
+  category: string | null;
+  attachmentUrls: string[];
 };
 
 function formatDate(ms: number): string {
@@ -61,6 +66,12 @@ export default function AdminComplaintsScreen() {
           const data = doc.data();
           const createdAt =
             data?.createdAt?.toMillis?.() ?? data?.createdAt ?? 0;
+          const attachmentUrls = Array.isArray(data?.attachmentUrls)
+            ? data.attachmentUrls.filter(
+                (u: unknown): u is string =>
+                  typeof u === 'string' && u.trim().length > 0,
+              )
+            : [];
           return {
             id: doc.id,
             userId: typeof data?.userId === 'string' ? data.userId : '',
@@ -68,7 +79,14 @@ export default function AdminComplaintsScreen() {
               typeof data?.userEmail === 'string' ? data.userEmail : '',
             message: typeof data?.message === 'string' ? data.message : '',
             createdAt: Number(createdAt),
-            status: data?.status === 'read' ? 'read' : 'new',
+            status: typeof data?.status === 'string' ? data.status : 'new',
+            referenceNumber:
+              typeof data?.referenceNumber === 'string'
+                ? data.referenceNumber
+                : null,
+            category:
+              typeof data?.category === 'string' ? data.category : null,
+            attachmentUrls,
           };
         });
         setComplaints(list);
@@ -143,20 +161,59 @@ export default function AdminComplaintsScreen() {
           <View style={styles.card}>
             <Text style={styles.cardLabel}>User:</Text>
             <Text style={styles.cardEmail}>{item.userEmail || '—'}</Text>
+            {item.referenceNumber ? (
+              <>
+                <Text style={styles.cardLabel}>Reference:</Text>
+                <Text style={styles.cardEmail}>{item.referenceNumber}</Text>
+              </>
+            ) : null}
+            {item.category ? (
+              <>
+                <Text style={styles.cardLabel}>Category:</Text>
+                <Text style={styles.cardEmail}>{item.category}</Text>
+              </>
+            ) : null}
             <Text style={styles.cardLabel}>Message:</Text>
             <Text style={styles.cardMessage}>{item.message}</Text>
+            {item.attachmentUrls.length > 0 ? (
+              <>
+                <Text style={styles.cardLabel}>Screenshots:</Text>
+                <SupportImageGallery
+                  urls={item.attachmentUrls}
+                  allowDownload
+                  compact
+                />
+              </>
+            ) : null}
             <Text style={styles.cardLabel}>Date:</Text>
             <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
             <View style={styles.badgeRow}>
               <Text style={styles.cardLabel}>Status:</Text>
               <View
-                style={[styles.badge, item.status === 'new' && styles.badgeNew]}
+                style={[
+                  styles.badge,
+                  (item.status === 'new' || item.status === 'open') &&
+                    styles.badgeNew,
+                ]}
               >
                 <Text style={styles.badgeText}>
-                  {item.status === 'new' ? 'NEW' : 'READ'}
+                  {(item.status === 'new' || item.status === 'open'
+                    ? 'NEW'
+                    : item.status
+                  ).toUpperCase()}
                 </Text>
               </View>
             </View>
+            {item.userId ? (
+              <TouchableOpacity
+                style={styles.openChatBtn}
+                onPress={() =>
+                  router.push(adminRoutes.supportThread(item.userId) as never)
+                }
+              >
+                <Text style={styles.openChatText}>Open support chat</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       />
@@ -272,5 +329,15 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     color: COLORS.textMuted,
+  },
+  openChatBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+  },
+  openChatText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

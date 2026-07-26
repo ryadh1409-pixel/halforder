@@ -3,6 +3,14 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
+  closeSupportConversation,
+  reopenSupportConversation,
+  statusLabel,
+  subscribeAdminSupportConversations,
+  type SupportConversation,
+  type SupportConversationStatus,
+} from '@/services/supportConversations';
+import {
   closeSupportTicket,
   reopenSupportTicket,
   subscribeAdminSupportTickets,
@@ -24,7 +32,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type StatusFilter = 'all' | SupportTicketStatus;
+type InboxRow =
+  | {
+      key: string;
+      source: 'conversation';
+      updatedAtMs: number;
+      conversation: SupportConversation;
+    }
+  | {
+      key: string;
+      source: 'ticket';
+      updatedAtMs: number;
+      ticket: SupportTicket;
+    };
+
+type StatusFilter = 'all' | 'open' | 'closed';
 
 function formatWhen(ms: number | null): string {
   if (ms == null) return '—';
@@ -32,25 +54,67 @@ function formatWhen(ms: number | null): string {
   return `${d.toLocaleDateString()} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function statusColor(status: SupportTicketStatus): string {
-  if (status === 'open') return COLORS.primary;
-  return COLORS.textMuted;
+function convNeedsAttention(status: SupportConversationStatus): boolean {
+  return status === 'open' || status === 'reviewing' || status === 'waiting';
 }
 
 export default function AdminSupportInboxScreen() {
   const router = useRouter();
-  const [rows, setRows] = useState<SupportTicket[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [conversations, setConversations] = useState<SupportConversation[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  useEffect(() => subscribeAdminSupportTickets(setRows), []);
+  useEffect(() => subscribeAdminSupportTickets(setTickets), []);
+  useEffect(() => subscribeAdminSupportConversations(setConversations), []);
+
+  const rows: InboxRow[] = useMemo(() => {
+    const convRows: InboxRow[] = conversations.map((c) => ({
+      key: `c:${c.id}`,
+      source: 'conversation',
+      updatedAtMs: c.updatedAtMs ?? c.createdAtMs ?? 0,
+      conversation: c,
+    }));
+    const ticketRows: InboxRow[] = tickets.map((t) => ({
+      key: `t:${t.id}`,
+      source: 'ticket',
+      updatedAtMs: t.updatedAtMs ?? t.createdAtMs ?? 0,
+      ticket: t,
+    }));
+    return [...convRows, ...ticketRows].sort(
+      (a, b) => b.updatedAtMs - a.updatedAtMs,
+    );
+  }, [conversations, tickets]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (r.source === 'conversation') {
+        const c = r.conversation;
+        if (statusFilter === 'open' && !convNeedsAttention(c.status)) return false;
+        if (statusFilter === 'closed' && c.status !== 'closed' && c.status !== 'resolved') {
+          return false;
+        }
+        if (!q) return true;
+        return [
+          c.userId,
+          c.userName,
+          c.orderId,
+          c.lastMessage,
+          c.complaintCategory,
+          c.referenceNumber,
+          c.id,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
+      }
+      const t = r.ticket;
+      if (statusFilter === 'open' && t.status !== 'open') return false;
+      if (statusFilter === 'closed' && t.status !== 'closed') return false;
       if (!q) return true;
-      return [r.userId, r.orderId, r.message, r.type, r.id]
+      return [t.userId, t.orderId, t.message, t.type, t.id]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -58,7 +122,9 @@ export default function AdminSupportInboxScreen() {
     });
   }, [rows, search, statusFilter]);
 
-  const openCount = rows.filter((r) => r.status === 'open').length;
+  const openCount =
+    conversations.filter((c) => convNeedsAttention(c.status)).length +
+    tickets.filter((t) => t.status === 'open').length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -66,8 +132,8 @@ export default function AdminSupportInboxScreen() {
         title="Support Inbox"
         subtitle={
           openCount > 0
-            ? `${openCount} open ticket${openCount === 1 ? '' : 's'}`
-            : `${rows.length} ticket${rows.length === 1 ? '' : 's'}`
+            ? `${openCount} open thread${openCount === 1 ? '' : 's'}`
+            : `${rows.length} thread${rows.length === 1 ? '' : 's'}`
         }
         fallbackRoute={adminRoutes.home}
       />
@@ -75,7 +141,7 @@ export default function AdminSupportInboxScreen() {
         <AppTextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search uid, order, message…"
+          placeholder="Search name, uid, order, ref…"
           placeholderTextColor={COLORS.textMuted}
           style={styles.search}
         />
@@ -89,7 +155,7 @@ export default function AdminSupportInboxScreen() {
               <Text
                 style={[styles.chipText, statusFilter === s && styles.chipTextOn]}
               >
-                {s === 'all' ? 'All' : supportTicketStatusLabel(s)}
+                {s === 'all' ? 'All' : s === 'open' ? 'Open' : 'Closed'}
               </Text>
             </Pressable>
           ))}
@@ -97,83 +163,167 @@ export default function AdminSupportInboxScreen() {
       </View>
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            No support tickets yet. Customer order Support chats appear here in
-            real time.
+            No support threads yet. Customer Support chats and order Support
+            tickets appear here in real time.
           </Text>
         }
-        renderItem={({ item }) => (
-          <Pressable
-            style={[styles.card, item.status === 'open' && styles.cardUnread]}
-            onPress={() => {
-              router.push(adminRoutes.supportThread(item.id) as never);
-            }}
-          >
-            <View style={styles.rowTop}>
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitial}>
-                  {(item.userId || 'U').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.cardMain}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {supportTicketTypeLabel(item.type)}
-                  </Text>
+        renderItem={({ item }) => {
+          if (item.source === 'conversation') {
+            const c = item.conversation;
+            const unread = c.unreadAdmin > 0;
+            return (
+              <Pressable
+                style={[styles.card, unread && styles.cardUnread]}
+                onPress={() => {
+                  router.push(adminRoutes.supportThread(c.id) as never);
+                }}
+              >
+                <View style={styles.rowTop}>
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitial}>
+                      {(c.userName || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.cardMain}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {c.userName || 'Customer'}
+                      </Text>
+                      <Text style={styles.sourceTag}>Chat</Text>
+                    </View>
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {c.referenceNumber
+                        ? `Ref ${c.referenceNumber}`
+                        : c.complaintCategory || 'Customer support'}
+                    </Text>
+                    <Text style={styles.preview} numberOfLines={2}>
+                      {c.lastMessage}
+                    </Text>
+                    <View style={styles.footerRow}>
+                      <Text style={[styles.statusPill, { color: COLORS.primary }]}>
+                        {statusLabel(c.status)}
+                      </Text>
+                      <Text style={styles.meta}>
+                        {formatWhen(c.updatedAtMs ?? c.createdAtMs)}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <Text style={styles.meta} numberOfLines={1}>
-                  User: {item.userId}
-                </Text>
-                <Text style={styles.meta} numberOfLines={1}>
-                  Order: {item.orderId || '—'}
-                </Text>
-                <Text style={styles.preview} numberOfLines={2}>
-                  {item.message}
-                </Text>
-                <View style={styles.footerRow}>
-                  <Text
-                    style={[styles.statusPill, { color: statusColor(item.status) }]}
+                {c.status !== 'closed' && c.status !== 'resolved' ? (
+                  <Pressable
+                    style={styles.archiveBtn}
+                    onPress={() =>
+                      void closeSupportConversation(c.id)
+                        .then(() => showSuccess('Closed.'))
+                        .catch((e) =>
+                          showError(getReadableErrorMessageOr(e, 'Close failed.')),
+                        )
+                    }
                   >
-                    {supportTicketStatusLabel(item.status)}
-                  </Text>
-                  <Text style={styles.meta}>
-                    {formatWhen(item.updatedAtMs ?? item.createdAtMs)}
+                    <Text style={styles.archiveText}>Close</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={styles.archiveBtn}
+                    onPress={() =>
+                      void reopenSupportConversation(c.id)
+                        .then(() => showSuccess('Reopened.'))
+                        .catch((e) =>
+                          showError(getReadableErrorMessageOr(e, 'Reopen failed.')),
+                        )
+                    }
+                  >
+                    <Text style={styles.archiveText}>Reopen</Text>
+                  </Pressable>
+                )}
+              </Pressable>
+            );
+          }
+
+          const t = item.ticket;
+          return (
+            <Pressable
+              style={[styles.card, t.status === 'open' && styles.cardUnread]}
+              onPress={() => {
+                router.push(adminRoutes.supportThread(t.id) as never);
+              }}
+            >
+              <View style={styles.rowTop}>
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitial}>
+                    {(t.userId || 'U').charAt(0).toUpperCase()}
                   </Text>
                 </View>
+                <View style={styles.cardMain}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {supportTicketTypeLabel(t.type)}
+                    </Text>
+                    <Text style={styles.sourceTag}>Order</Text>
+                  </View>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    User: {t.userId}
+                  </Text>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    Order: {t.orderId || '—'}
+                  </Text>
+                  <Text style={styles.preview} numberOfLines={2}>
+                    {t.message}
+                  </Text>
+                  <View style={styles.footerRow}>
+                    <Text
+                      style={[
+                        styles.statusPill,
+                        {
+                          color:
+                            t.status === 'open'
+                              ? COLORS.primary
+                              : COLORS.textMuted,
+                        },
+                      ]}
+                    >
+                      {supportTicketStatusLabel(t.status as SupportTicketStatus)}
+                    </Text>
+                    <Text style={styles.meta}>
+                      {formatWhen(t.updatedAtMs ?? t.createdAtMs)}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-            {item.status !== 'closed' ? (
-              <Pressable
-                style={styles.archiveBtn}
-                onPress={() =>
-                  void closeSupportTicket(item.id)
-                    .then(() => showSuccess('Closed.'))
-                    .catch((e) =>
-                      showError(getReadableErrorMessageOr(e, 'Close failed.')),
-                    )
-                }
-              >
-                <Text style={styles.archiveText}>Close</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={styles.archiveBtn}
-                onPress={() =>
-                  void reopenSupportTicket(item.id)
-                    .then(() => showSuccess('Reopened.'))
-                    .catch((e) =>
-                      showError(getReadableErrorMessageOr(e, 'Reopen failed.')),
-                    )
-                }
-              >
-                <Text style={styles.archiveText}>Reopen</Text>
-              </Pressable>
-            )}
-          </Pressable>
-        )}
+              {t.status !== 'closed' ? (
+                <Pressable
+                  style={styles.archiveBtn}
+                  onPress={() =>
+                    void closeSupportTicket(t.id)
+                      .then(() => showSuccess('Closed.'))
+                      .catch((e) =>
+                        showError(getReadableErrorMessageOr(e, 'Close failed.')),
+                      )
+                  }
+                >
+                  <Text style={styles.archiveText}>Close</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={styles.archiveBtn}
+                  onPress={() =>
+                    void reopenSupportTicket(t.id)
+                      .then(() => showSuccess('Reopened.'))
+                      .catch((e) =>
+                        showError(getReadableErrorMessageOr(e, 'Reopen failed.')),
+                      )
+                  }
+                >
+                  <Text style={styles.archiveText}>Reopen</Text>
+                </Pressable>
+              )}
+            </Pressable>
+          );
+        }}
       />
     </SafeAreaView>
   );
@@ -226,6 +376,12 @@ const styles = StyleSheet.create({
   cardMain: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { flex: 1, color: COLORS.text, fontWeight: '800', fontSize: 16 },
+  sourceTag: {
+    color: COLORS.primary,
+    fontWeight: '800',
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
   meta: { color: COLORS.textMuted, fontWeight: '600', marginTop: 4, fontSize: 12 },
   preview: { color: COLORS.text, fontWeight: '600', marginTop: 8, lineHeight: 20 },
   footerRow: {

@@ -1,7 +1,27 @@
 import { AppTextInput } from '@/components/AppTextInput';
 import { AdminHeader } from '@/components/admin/AdminHeader';
+import { SupportImageGallery } from '@/components/support/SupportImageGallery';
+import { SupportStatusChip } from '@/components/support/SupportStatusChip';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
+import {
+  assignSupportConversationAgent,
+  closeSupportConversation,
+  markSupportReadByAdmin,
+  reopenSupportConversation,
+  resolveSupportConversation,
+  sendAdminSupportReply,
+  setSupportConversationPriority,
+  setSupportConversationStatus,
+  setSupportTyping,
+  statusLabel,
+  subscribeSupportConversation,
+  subscribeSupportConversationMessages,
+  type SupportConversation,
+  type SupportConversationMessage,
+  type SupportConversationPriority,
+  type SupportConversationStatus,
+} from '@/services/supportConversations';
 import {
   closeSupportTicket,
   reopenSupportTicket,
@@ -34,33 +54,72 @@ function formatWhen(ms: number | null): string {
   return `${d.toLocaleDateString()} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+const PRIORITIES: SupportConversationPriority[] = [
+  'low',
+  'normal',
+  'high',
+  'urgent',
+];
+
+const STATUSES: SupportConversationStatus[] = [
+  'open',
+  'reviewing',
+  'waiting',
+  'resolved',
+  'closed',
+];
+
 export default function AdminSupportThreadScreen() {
   const router = useRouter();
   const { threadId: threadParam } = useLocalSearchParams<{ threadId?: string }>();
-  const ticketId = typeof threadParam === 'string' ? threadParam : '';
+  const threadId = typeof threadParam === 'string' ? threadParam : '';
+
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
-  const [messages, setMessages] = useState<SupportTicketMessage[]>([]);
+  const [ticketMessages, setTicketMessages] = useState<SupportTicketMessage[]>([]);
+  const [conversation, setConversation] = useState<SupportConversation | null>(null);
+  const [convMessages, setConvMessages] = useState<SupportConversationMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!ticketId) return undefined;
-    const unsubMeta = subscribeSupportTicket(ticketId, setTicket);
-    const unsubMsg = subscribeSupportTicketMessages(ticketId, setMessages);
+    if (!threadId) return undefined;
+    const unsubTicket = subscribeSupportTicket(threadId, setTicket);
+    const unsubTicketMsg = subscribeSupportTicketMessages(threadId, setTicketMessages);
+    const unsubConv = subscribeSupportConversation(threadId, (row) => {
+      setConversation(row);
+      if (row && row.unreadAdmin > 0) {
+        void markSupportReadByAdmin(threadId).catch(() => undefined);
+      }
+    });
+    const unsubConvMsg = subscribeSupportConversationMessages(threadId, setConvMessages);
     return () => {
-      unsubMeta();
-      unsubMsg();
+      unsubTicket();
+      unsubTicketMsg();
+      unsubConv();
+      unsubConvMsg();
     };
-  }, [ticketId]);
+  }, [threadId]);
+
+  const isConversation = !!conversation;
+  const mode: 'conversation' | 'ticket' | 'loading' = conversation
+    ? 'conversation'
+    : ticket
+      ? 'ticket'
+      : 'loading';
 
   const send = async () => {
-    if (!ticketId || !draft.trim()) return;
+    if (!threadId || !draft.trim()) return;
     setSending(true);
     try {
-      await sendAdminSupportTicketReply(ticketId, draft);
+      if (isConversation) {
+        await sendAdminSupportReply(threadId, draft);
+        void setSupportTyping(threadId, 'admin', false);
+      } else {
+        await sendAdminSupportTicketReply(threadId, draft);
+        void setSupportTicketTeamTyping(threadId, false);
+      }
       setDraft('');
-      void setSupportTicketTeamTyping(ticketId, false);
       showSuccess('Reply sent.');
     } catch (e) {
       showError(getReadableErrorMessageOr(e, 'Could not send reply.'));
@@ -71,91 +130,292 @@ export default function AdminSupportThreadScreen() {
 
   const onDraftChange = (text: string) => {
     setDraft(text);
-    if (!ticketId) return;
-    void setSupportTicketTeamTyping(ticketId, true);
+    if (!threadId) return;
+    if (isConversation) {
+      void setSupportTyping(threadId, 'admin', true);
+    } else {
+      void setSupportTicketTeamTyping(threadId, true);
+    }
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {
-      void setSupportTicketTeamTyping(ticketId, false);
+      if (isConversation) void setSupportTyping(threadId, 'admin', false);
+      else void setSupportTicketTeamTyping(threadId, false);
     }, 2000);
   };
+
+  const title = isConversation
+    ? conversation.userName || 'Customer support'
+    : ticket
+      ? supportTicketTypeLabel(ticket.type)
+      : 'Support thread';
+
+  const subtitle = isConversation
+    ? statusLabel(conversation.status)
+    : supportTicketStatusLabel(ticket?.status ?? 'open');
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
-        title={ticket ? supportTicketTypeLabel(ticket.type) : 'Support ticket'}
-        subtitle={supportTicketStatusLabel(ticket?.status ?? 'open')}
+        title={title}
+        subtitle={subtitle}
         fallbackRoute={adminRoutes.supportInbox}
       />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionBar}>
-        <Pressable
-          style={styles.actionChip}
-          onPress={() =>
-            void closeSupportTicket(ticketId)
-              .then(() => showSuccess('Ticket closed.'))
-              .catch((e) => showError(getReadableErrorMessageOr(e, 'Failed.')))
-          }
-        >
-          <Text style={styles.actionChipText}>Close</Text>
-        </Pressable>
-        <Pressable
-          style={styles.actionChip}
-          onPress={() =>
-            void reopenSupportTicket(ticketId)
-              .then(() => showSuccess('Ticket reopened.'))
-              .catch((e) => showError(getReadableErrorMessageOr(e, 'Failed.')))
-          }
-        >
-          <Text style={styles.actionChipText}>Reopen</Text>
-        </Pressable>
+        {isConversation ? (
+          <>
+            {STATUSES.map((s) => (
+              <Pressable
+                key={s}
+                style={styles.actionChip}
+                onPress={() =>
+                  void setSupportConversationStatus(threadId, s)
+                    .then(() => showSuccess(`Status → ${statusLabel(s)}`))
+                    .catch((e) =>
+                      showError(getReadableErrorMessageOr(e, 'Failed.')),
+                    )
+                }
+              >
+                <Text style={styles.actionChipText}>{statusLabel(s)}</Text>
+              </Pressable>
+            ))}
+            {PRIORITIES.map((p) => (
+              <Pressable
+                key={p}
+                style={styles.actionChip}
+                onPress={() =>
+                  void setSupportConversationPriority(threadId, p)
+                    .then(() => showSuccess(`Priority → ${p}`))
+                    .catch((e) =>
+                      showError(getReadableErrorMessageOr(e, 'Failed.')),
+                    )
+                }
+              >
+                <Text style={styles.actionChipText}>P: {p}</Text>
+              </Pressable>
+            ))}
+            <Pressable
+              style={styles.actionChip}
+              onPress={() =>
+                void assignSupportConversationAgent(threadId, 'HalfOrder Support')
+                  .then(() => showSuccess('Assigned to HalfOrder Support'))
+                  .catch((e) =>
+                    showError(getReadableErrorMessageOr(e, 'Failed.')),
+                  )
+              }
+            >
+              <Text style={styles.actionChipText}>Assign me</Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionChip}
+              onPress={() =>
+                void resolveSupportConversation(threadId)
+                  .then(() => showSuccess('Resolved.'))
+                  .catch((e) =>
+                    showError(getReadableErrorMessageOr(e, 'Failed.')),
+                  )
+              }
+            >
+              <Text style={styles.actionChipText}>Resolve</Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionChip}
+              onPress={() =>
+                void closeSupportConversation(threadId)
+                  .then(() => showSuccess('Closed.'))
+                  .catch((e) =>
+                    showError(getReadableErrorMessageOr(e, 'Failed.')),
+                  )
+              }
+            >
+              <Text style={styles.actionChipText}>Close</Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionChip}
+              onPress={() =>
+                void reopenSupportConversation(threadId)
+                  .then(() => showSuccess('Reopened.'))
+                  .catch((e) =>
+                    showError(getReadableErrorMessageOr(e, 'Failed.')),
+                  )
+              }
+            >
+              <Text style={styles.actionChipText}>Reopen</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              style={styles.actionChip}
+              onPress={() =>
+                void closeSupportTicket(threadId)
+                  .then(() => showSuccess('Ticket closed.'))
+                  .catch((e) =>
+                    showError(getReadableErrorMessageOr(e, 'Failed.')),
+                  )
+              }
+            >
+              <Text style={styles.actionChipText}>Close</Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionChip}
+              onPress={() =>
+                void reopenSupportTicket(threadId)
+                  .then(() => showSuccess('Ticket reopened.'))
+                  .catch((e) =>
+                    showError(getReadableErrorMessageOr(e, 'Failed.')),
+                  )
+              }
+            >
+              <Text style={styles.actionChipText}>Reopen</Text>
+            </Pressable>
+          </>
+        )}
       </ScrollView>
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Ticket information</Text>
-        <Text style={styles.infoLine}>UID: {ticket?.userId ?? '—'}</Text>
-        {ticket?.orderId ? (
-          <Pressable onPress={() => router.push(adminRoutes.order(ticket.orderId) as never)}>
-            <Text style={styles.infoLink}>Order: {ticket.orderId}</Text>
-          </Pressable>
+        <Text style={styles.infoTitle}>
+          {isConversation ? 'Support conversation' : 'Ticket information'}
+        </Text>
+        {isConversation ? (
+          <>
+            <SupportStatusChip status={conversation.status} />
+            <Text style={styles.infoLine}>
+              Ref: {conversation.referenceNumber ?? '—'}
+            </Text>
+            <Text style={styles.infoLine}>Customer: {conversation.userName}</Text>
+            <Text style={styles.infoLine}>UID: {conversation.userId}</Text>
+            <Text style={styles.infoLine}>
+              Category: {conversation.complaintCategory ?? '—'}
+            </Text>
+            <Text style={styles.infoLine}>
+              Priority: {conversation.priority}
+            </Text>
+            <Text style={styles.infoLine}>
+              Agent: {conversation.assignedAgent ?? 'Unassigned'}
+            </Text>
+            <Text style={styles.infoLine}>
+              Platform: {conversation.platform ?? '—'}
+            </Text>
+            {conversation.orderId ? (
+              <Pressable
+                onPress={() =>
+                  router.push(adminRoutes.order(conversation.orderId!) as never)
+                }
+              >
+                <Text style={styles.infoLink}>Order: {conversation.orderId}</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.infoLine}>Order: —</Text>
+            )}
+            {conversation.attachmentUrls.length > 0 ? (
+              <View style={{ marginTop: 8 }}>
+                <Text style={styles.infoLine}>Attachments</Text>
+                <SupportImageGallery
+                  urls={conversation.attachmentUrls}
+                  allowDownload
+                  compact
+                />
+              </View>
+            ) : null}
+          </>
         ) : (
-          <Text style={styles.infoLine}>Order: —</Text>
+          <>
+            <Text style={styles.infoLine}>UID: {ticket?.userId ?? '—'}</Text>
+            {ticket?.orderId ? (
+              <Pressable
+                onPress={() => router.push(adminRoutes.order(ticket.orderId) as never)}
+              >
+                <Text style={styles.infoLink}>Order: {ticket.orderId}</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.infoLine}>Order: —</Text>
+            )}
+            <Text style={styles.infoLine}>
+              Type: {ticket ? supportTicketTypeLabel(ticket.type) : '—'}
+            </Text>
+            <Text style={styles.infoLine}>
+              Created: {formatWhen(ticket?.createdAtMs ?? null)}
+            </Text>
+          </>
         )}
-        <Text style={styles.infoLine}>
-          Type: {ticket ? supportTicketTypeLabel(ticket.type) : '—'}
-        </Text>
-        <Text style={styles.infoLine}>
-          Created: {formatWhen(ticket?.createdAtMs ?? null)}
-        </Text>
       </View>
 
-      <FlatList
-        data={messages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          <Text style={styles.historyTitle}>Conversation history</Text>
-        }
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.bubble,
-              item.sender === 'halforder_team'
-                ? styles.bubbleAdmin
-                : styles.bubbleCustomer,
-            ]}
-          >
-            <Text style={styles.bubbleMeta}>
-              {item.sender === 'halforder_team'
-                ? item.persona === 'emo'
-                  ? 'Emo'
-                  : 'HalfOrder Team'
-                : 'Customer'}
-            </Text>
-            <Text style={styles.bubbleText}>{item.text}</Text>
-            <Text style={styles.bubbleTime}>{formatWhen(item.createdAtMs)}</Text>
-          </View>
-        )}
-      />
+      {mode === 'conversation' ? (
+        <FlatList
+          data={convMessages}
+          keyExtractor={(m) => m.id}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            <Text style={styles.historyTitle}>Conversation history</Text>
+          }
+          renderItem={({ item }) => (
+            <View
+              style={[
+                styles.bubble,
+                item.sender === 'admin'
+                  ? styles.bubbleAdmin
+                  : item.sender === 'system'
+                    ? styles.bubbleSystem
+                    : styles.bubbleCustomer,
+              ]}
+            >
+              <Text style={styles.bubbleMeta}>
+                {item.sender === 'admin'
+                  ? 'HalfOrder Team'
+                  : item.sender === 'system'
+                    ? 'Emo AI'
+                    : item.kind === 'complaint'
+                      ? 'Customer · Request'
+                      : 'Customer'}
+              </Text>
+              <Text style={styles.bubbleText}>{item.body}</Text>
+              {item.attachments.length > 0 ? (
+                <SupportImageGallery
+                  urls={item.attachments.map((a) => a.url)}
+                  allowDownload
+                  compact
+                />
+              ) : null}
+              <Text style={styles.bubbleTime}>{formatWhen(item.createdAtMs)}</Text>
+            </View>
+          )}
+        />
+      ) : (
+        <FlatList
+          data={ticketMessages}
+          keyExtractor={(m) => m.id}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            <Text style={styles.historyTitle}>Conversation history</Text>
+          }
+          ListEmptyComponent={
+            mode === 'loading' ? (
+              <Text style={styles.bubbleText}>Loading thread…</Text>
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <View
+              style={[
+                styles.bubble,
+                item.sender === 'halforder_team'
+                  ? styles.bubbleAdmin
+                  : styles.bubbleCustomer,
+              ]}
+            >
+              <Text style={styles.bubbleMeta}>
+                {item.sender === 'halforder_team'
+                  ? item.persona === 'emo'
+                    ? 'Emo'
+                    : 'HalfOrder Team'
+                  : 'Customer'}
+              </Text>
+              <Text style={styles.bubbleText}>{item.text}</Text>
+              <Text style={styles.bubbleTime}>{formatWhen(item.createdAtMs)}</Text>
+            </View>
+          )}
+        />
+      )}
 
       <View style={styles.composer}>
         <AppTextInput
@@ -227,6 +487,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(168,85,247,0.22)',
     borderWidth: 1,
     borderColor: COLORS.primary,
+  },
+  bubbleSystem: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.4)',
   },
   bubbleMeta: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 4 },
   bubbleText: { color: COLORS.text, fontWeight: '600', lineHeight: 20 },
