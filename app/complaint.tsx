@@ -39,7 +39,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ChatRole = 'emo' | 'user' | 'system';
 
@@ -64,8 +64,10 @@ function stepPromptFor(
 export default function ComplaintScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
   const scaleAnims = useRef<Record<string, Animated.Value>>({}).current;
+  const advancingImagesRef = useRef(false);
 
   const firstName = firstNameFromDisplayName(user?.displayName);
 
@@ -84,6 +86,7 @@ export default function ComplaintScreen() {
   const [draft, setDraft] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [imageSendBusy, setImageSendBusy] = useState(false);
   const [awaitingText, setAwaitingText] = useState<
     null | 'payment_amount' | 'payment_date' | 'order_number_optional' | 'description'
   >(null);
@@ -245,12 +248,23 @@ export default function ComplaintScreen() {
   };
 
   const continueFromImages = () => {
-    pushUser(
-      localImages.length
-        ? `${localImages.length} photo${localImages.length === 1 ? '' : 's'} attached`
-        : 'No photos',
-    );
-    void goNextAfter('upload_images');
+    if (advancingImagesRef.current || imageSendBusy) return;
+    advancingImagesRef.current = true;
+    setImageSendBusy(true);
+    try {
+      pushUser(
+        localImages.length
+          ? `${localImages.length} photo${localImages.length === 1 ? '' : 's'} attached`
+          : 'No photos',
+      );
+      void goNextAfter('upload_images');
+    } finally {
+      // Keep button disabled briefly to prevent double-advance; step change clears UI.
+      setTimeout(() => {
+        advancingImagesRef.current = false;
+        setImageSendBusy(false);
+      }, 400);
+    }
   };
 
   const submitTextStep = () => {
@@ -315,7 +329,7 @@ export default function ComplaintScreen() {
   ]);
 
   const handleSubmit = async () => {
-    if (!user || !category) return;
+    if (!user || !category || submitting) return;
     const desc = description.trim();
     if (!desc) {
       showError('Please add a short description before submitting.');
@@ -366,10 +380,15 @@ export default function ComplaintScreen() {
         },
       );
 
+      setLocalImages([]);
+      setUploadProgress({});
       showSuccess(`Request ${result.referenceNumber} submitted`);
       router.replace('/customer-support' as never);
     } catch (e) {
-      showError(getUserFriendlyError(e));
+      showError(
+        getUserFriendlyError(e) ||
+          'Upload failed. Please check your connection and try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -492,30 +511,9 @@ export default function ComplaintScreen() {
               ) : null}
 
               {item.imageStep ? (
-                <View style={styles.imageStep}>
-                  <SupportImageGallery
-                    urls={[]}
-                    localUris={localImages}
-                    onRemoveLocal={(i) =>
-                      setLocalImages((prev) => prev.filter((_, idx) => idx !== i))
-                    }
-                    uploadProgressByIndex={uploadProgress}
-                  />
-                  <View style={styles.imageActions}>
-                    <Pressable
-                      style={styles.secondaryBtn}
-                      onPress={() => setSheetOpen(true)}
-                    >
-                      <Ionicons name="attach" size={18} color="#FFF" />
-                      <Text style={styles.secondaryBtnText}>Add photos</Text>
-                    </Pressable>
-                    <Pressable style={styles.primaryBtn} onPress={continueFromImages}>
-                      <Text style={styles.primaryBtnText}>
-                        {localImages.length ? 'Continue' : 'Continue without photos'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
+                <Text style={styles.imageStepHint}>
+                  Attach photos below, then tap Send.
+                </Text>
               ) : null}
             </View>
           )}
@@ -542,8 +540,76 @@ export default function ComplaintScreen() {
           </View>
         ) : null}
 
+        {currentStep === 'upload_images' ? (
+          <View
+            style={[
+              styles.attachComposer,
+              { paddingBottom: Math.max(insets.bottom, 10) },
+            ]}
+          >
+            {localImages.length > 0 ? (
+              <View style={styles.pendingDock}>
+                <Text style={styles.pendingLabel}>
+                  {localImages.length} photo{localImages.length === 1 ? '' : 's'} ready
+                </Text>
+                <SupportImageGallery
+                  urls={[]}
+                  localUris={localImages}
+                  onRemoveLocal={(i) =>
+                    setLocalImages((prev) => prev.filter((_, idx) => idx !== i))
+                  }
+                  uploadProgressByIndex={uploadProgress}
+                  compact
+                />
+              </View>
+            ) : (
+              <Text style={styles.pendingEmpty}>
+                No photos yet — add screenshots, then Send
+              </Text>
+            )}
+            <View style={styles.composerRow}>
+              <Pressable
+                style={styles.attachBtn}
+                onPress={() => setSheetOpen(true)}
+                disabled={imageSendBusy}
+                accessibilityLabel="Add photos"
+              >
+                <Ionicons name="add" size={24} color="#FFF" />
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.sendPill,
+                  imageSendBusy && { opacity: 0.55 },
+                ]}
+                onPress={continueFromImages}
+                disabled={imageSendBusy}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  localImages.length > 0 ? 'Send photos' : 'Continue without photos'
+                }
+              >
+                {imageSendBusy ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Text style={styles.sendPillText}>
+                      {localImages.length > 0 ? 'Send' : 'Skip photos'}
+                    </Text>
+                    <Ionicons name="send" size={16} color="#FFF" />
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {awaitingText ? (
-          <View style={styles.composer}>
+          <View
+            style={[
+              styles.composer,
+              { paddingBottom: Math.max(insets.bottom, 10) },
+            ]}
+          >
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -560,15 +626,20 @@ export default function ComplaintScreen() {
               maxLength={2000}
             />
             <Pressable
-              style={[styles.sendBtn, !draft.trim() && awaitingText !== 'order_number_optional' && { opacity: 0.45 }]}
+              style={[
+                styles.sendBtn,
+                !draft.trim() &&
+                  awaitingText !== 'order_number_optional' && { opacity: 0.45 },
+              ]}
               onPress={submitTextStep}
+              accessibilityLabel="Send"
             >
               <Ionicons name="send" size={18} color="#FFF" />
             </Pressable>
           </View>
         ) : null}
 
-        {!showComposer ? <View style={{ height: 8 }} /> : null}
+        {!showComposer ? <View style={{ height: Math.max(insets.bottom, 8) }} /> : null}
       </KeyboardAvoidingView>
 
       <SupportAttachmentSheet
@@ -641,6 +712,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   bubbleBody: { color: '#FFF', fontSize: 15, lineHeight: 22, fontWeight: '500' },
+  imageStepHint: {
+    marginTop: 10,
+    color: '#C4B5FD',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
   cards: { marginTop: 12, gap: 8 },
   card: {
     flexDirection: 'row',
@@ -677,25 +755,53 @@ const styles = StyleSheet.create({
   },
   orderSkip: { borderStyle: 'dashed' },
   orderChipText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  imageStep: { marginTop: 10, gap: 10 },
-  imageActions: { gap: 8 },
-  secondaryBtn: {
+  attachComposer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#0A0A0C',
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  pendingDock: { gap: 6 },
+  pendingLabel: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  pendingEmpty: {
+    color: '#7D8493',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 4,
+    paddingBottom: 2,
+  },
+  attachBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendPill: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 22,
+    backgroundColor: EMO_AVATAR_COLOR,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 16,
   },
-  secondaryBtnText: { color: '#FFF', fontWeight: '700' },
-  primaryBtn: {
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: EMO_AVATAR_COLOR,
+  sendPillText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
+  composerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  primaryBtnText: { color: '#FFF', fontWeight: '800' },
   reviewCard: {
     marginHorizontal: 12,
     marginBottom: 8,

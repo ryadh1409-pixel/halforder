@@ -36,7 +36,7 @@ export function SupportImageGallery({
   allowDownload,
 }: Props) {
   const [zoomUri, setZoomUri] = useState<string | null>(null);
-  const size = compact ? 64 : 88;
+  const size = compact ? 72 : 168;
 
   const items: { uri: string; kind: 'remote' | 'local'; index: number }[] = [
     ...urls.map((uri, index) => ({ uri, kind: 'remote' as const, index })),
@@ -66,7 +66,13 @@ export function SupportImageGallery({
               <Pressable onPress={() => setZoomUri(item.uri)}>
                 <Image
                   source={{ uri: item.uri }}
-                  style={{ width: size, height: size, borderRadius: 12 }}
+                  style={{
+                    width: size,
+                    height: size,
+                    borderRadius: compact ? 14 : 18,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.12)',
+                  }}
                   contentFit="cover"
                   recyclingKey={item.uri}
                   cachePolicy="memory-disk"

@@ -2,6 +2,11 @@ import { AppTextInput } from '@/components/AppTextInput';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { SupportImageGallery } from '@/components/support/SupportImageGallery';
 import { SupportStatusChip } from '@/components/support/SupportStatusChip';
+import {
+  formatSupportCategory,
+  formatTicketNumber,
+  priorityLabel,
+} from '@/components/support/supportDisplay';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
@@ -277,43 +282,64 @@ export default function AdminSupportThreadScreen() {
       </ScrollView>
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>
-          {isConversation ? 'Support conversation' : 'Ticket information'}
-        </Text>
+        <Text style={styles.infoKicker}>Ticket details</Text>
         {isConversation ? (
           <>
-            <SupportStatusChip status={conversation.status} />
-            <Text style={styles.infoLine}>
-              Ref: {conversation.referenceNumber ?? '—'}
-            </Text>
-            <Text style={styles.infoLine}>Customer: {conversation.userName}</Text>
-            <Text style={styles.infoLine}>UID: {conversation.userId}</Text>
-            <Text style={styles.infoLine}>
-              Category: {conversation.complaintCategory ?? '—'}
-            </Text>
-            <Text style={styles.infoLine}>
-              Priority: {conversation.priority}
-            </Text>
-            <Text style={styles.infoLine}>
-              Agent: {conversation.assignedAgent ?? 'Unassigned'}
-            </Text>
-            <Text style={styles.infoLine}>
-              Platform: {conversation.platform ?? '—'}
-            </Text>
-            {conversation.orderId ? (
-              <Pressable
-                onPress={() =>
-                  router.push(adminRoutes.order(conversation.orderId!) as never)
-                }
-              >
-                <Text style={styles.infoLink}>Order: {conversation.orderId}</Text>
-              </Pressable>
-            ) : (
-              <Text style={styles.infoLine}>Order: —</Text>
-            )}
+            <View style={styles.infoHeaderRow}>
+              <Text style={styles.infoTitle}>
+                {formatTicketNumber(conversation.referenceNumber, conversation.id)}
+              </Text>
+              <SupportStatusChip status={conversation.status} />
+            </View>
+            <View style={styles.infoGrid}>
+              <Text style={styles.infoLine}>
+                Customer: {conversation.userName || '—'}
+              </Text>
+              <Text style={styles.infoLine}>
+                Email: {conversation.userEmail || '—'}
+              </Text>
+              <Text style={styles.infoLine}>
+                Customer ID: {conversation.userId}
+              </Text>
+              <Text style={styles.infoLine}>
+                Category: {formatSupportCategory(conversation.complaintCategory)}
+              </Text>
+              <Text style={styles.infoLine}>
+                Priority: {priorityLabel(conversation.priority)}
+              </Text>
+              <Text style={styles.infoLine}>
+                Agent: {conversation.assignedAgent ?? 'Unassigned'}
+              </Text>
+              <Text style={styles.infoLine}>
+                Platform: {conversation.platform ?? '—'}
+              </Text>
+              <Text style={styles.infoLine}>
+                Payment: {conversation.paymentId ?? '—'}
+              </Text>
+              <Text style={styles.infoLine}>Restaurant: —</Text>
+              <Text style={styles.infoLine}>Driver: —</Text>
+              {conversation.orderId ? (
+                <Pressable
+                  onPress={() =>
+                    router.push(adminRoutes.order(conversation.orderId!) as never)
+                  }
+                >
+                  <Text style={styles.infoLink}>
+                    Order: {conversation.orderId}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.infoLine}>Order: —</Text>
+              )}
+              <Text style={styles.infoLine}>
+                Created: {formatWhen(conversation.createdAtMs)}
+              </Text>
+              <Text style={styles.infoLine}>
+                Attachments: {conversation.attachmentUrls.length}
+              </Text>
+            </View>
             {conversation.attachmentUrls.length > 0 ? (
               <View style={{ marginTop: 8 }}>
-                <Text style={styles.infoLine}>Attachments</Text>
                 <SupportImageGallery
                   urls={conversation.attachmentUrls}
                   allowDownload
@@ -324,22 +350,32 @@ export default function AdminSupportThreadScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.infoLine}>UID: {ticket?.userId ?? '—'}</Text>
-            {ticket?.orderId ? (
-              <Pressable
-                onPress={() => router.push(adminRoutes.order(ticket.orderId) as never)}
-              >
-                <Text style={styles.infoLink}>Order: {ticket.orderId}</Text>
-              </Pressable>
-            ) : (
-              <Text style={styles.infoLine}>Order: —</Text>
-            )}
-            <Text style={styles.infoLine}>
-              Type: {ticket ? supportTicketTypeLabel(ticket.type) : '—'}
+            <Text style={styles.infoTitle}>
+              {formatTicketNumber(null, ticket?.id ?? threadId)}
             </Text>
-            <Text style={styles.infoLine}>
-              Created: {formatWhen(ticket?.createdAtMs ?? null)}
-            </Text>
+            <View style={styles.infoGrid}>
+              <Text style={styles.infoLine}>
+                Customer ID: {ticket?.userId ?? '—'}
+              </Text>
+              {ticket?.orderId ? (
+                <Pressable
+                  onPress={() => router.push(adminRoutes.order(ticket.orderId) as never)}
+                >
+                  <Text style={styles.infoLink}>Order: {ticket.orderId}</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.infoLine}>Order: —</Text>
+              )}
+              <Text style={styles.infoLine}>
+                Category:{' '}
+                {ticket ? supportTicketTypeLabel(ticket.type) : '—'}
+              </Text>
+              <Text style={styles.infoLine}>Restaurant: —</Text>
+              <Text style={styles.infoLine}>Driver: —</Text>
+              <Text style={styles.infoLine}>
+                Created: {formatWhen(ticket?.createdAtMs ?? null)}
+              </Text>
+            </View>
           </>
         )}
       </View>
@@ -456,14 +492,30 @@ const styles = StyleSheet.create({
   },
   actionChipText: { color: COLORS.text, fontWeight: '700', fontSize: 12 },
   infoCard: { ...adminCardShell, marginHorizontal: 16, marginBottom: 8 },
-  infoTitle: {
-    fontSize: 13,
+  infoKicker: {
+    fontSize: 11,
     fontWeight: '800',
-    color: COLORS.text,
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
     marginBottom: 8,
   },
-  infoLine: { color: COLORS.textMuted, fontSize: 13, marginBottom: 4, fontWeight: '600' },
-  infoLink: { color: COLORS.primary, fontSize: 13, marginBottom: 4, fontWeight: '700' },
+  infoHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 10,
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+  infoGrid: { gap: 4 },
+  infoLine: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
+  infoLink: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
   historyTitle: {
     color: COLORS.textMuted,
     fontWeight: '800',
@@ -475,21 +527,24 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 12 },
   bubble: {
     maxWidth: '88%',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
   bubbleCustomer: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderBottomLeftRadius: 6,
   },
   bubbleAdmin: {
     alignSelf: 'flex-end',
     backgroundColor: 'rgba(168,85,247,0.22)',
     borderWidth: 1,
     borderColor: COLORS.primary,
+    borderBottomRightRadius: 6,
   },
   bubbleSystem: {
     alignSelf: 'center',
@@ -519,14 +574,14 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 16,
+    padding: 12,
     color: COLORS.text,
     backgroundColor: COLORS.card,
   },
   send: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },

@@ -67,10 +67,27 @@ export function AdminSupportInboundListener() {
         }
 
         const kind = inboundKind(row);
-        const { title, body } = buildAdminSupportInboundPush({
+        const { title } = buildAdminSupportInboundPush({
           kind,
           userName: row.userName,
         });
+        const ticket =
+          row.referenceNumber?.replace(/\D/g, '').slice(-6) ||
+          row.id.slice(0, 6).toUpperCase();
+        const parts = [
+          `Ticket #${ticket}`,
+          row.userName || 'Customer',
+          row.complaintCategory || null,
+          row.orderId ? `Order ${row.orderId.slice(0, 8)}` : null,
+          row.priority === 'high' || row.priority === 'urgent'
+            ? `${row.priority} priority`
+            : null,
+          row.attachmentUrls?.length
+            ? `${row.attachmentUrls.length} photo${row.attachmentUrls.length === 1 ? '' : 's'}`
+            : null,
+          row.lastMessage ? row.lastMessage.slice(0, 80) : null,
+        ].filter(Boolean);
+        const body = parts.join(' · ');
         const href = `/(tabs)/admin/support-inbox/${encodeURIComponent(row.id)}`;
 
         showInAppBanner(title, body, () => {

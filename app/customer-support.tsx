@@ -1,3 +1,10 @@
+import {
+  formatCreatedShort,
+  formatDaySeparator,
+  formatMessageClock,
+  formatSupportCategory,
+  formatTicketNumber,
+} from '@/components/support/supportDisplay';
 import { SupportAttachmentSheet } from '@/components/support/SupportAttachmentSheet';
 import { SupportImageGallery } from '@/components/support/SupportImageGallery';
 import { SupportStatusChip } from '@/components/support/SupportStatusChip';
@@ -29,7 +36,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -42,81 +49,107 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
 const HALFORDER_AVATAR =
   'https://ui-avatars.com/api/?name=HalfOrder&background=A855F7&color=fff&size=128';
 
-function formatMessageTime(ms: number | null): string {
-  if (ms == null) return '';
-  const d = new Date(ms);
-  return `${d.toLocaleDateString()} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+function sameDay(a: number | null, b: number | null): boolean {
+  if (a == null || b == null) return false;
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
 }
 
 function MessageBubble({
   item,
+  prev,
   onRetry,
 }: {
   item: SupportConversationMessage;
+  prev: SupportConversationMessage | null;
   onRetry?: () => void;
 }) {
   const isCustomer = item.sender === 'customer';
   const isSystem = item.sender === 'system' || item.kind === 'system';
   const isComplaint = item.kind === 'complaint';
   const urls = item.attachments.map((a) => a.url);
+  const showDay = !prev || !sameDay(prev.createdAtMs, item.createdAtMs);
 
-  if (isComplaint) {
+  const bubble = (() => {
+    if (isComplaint) {
+      return (
+        <View style={styles.complaintBubble}>
+          <Text style={styles.complaintLabel}>Your request</Text>
+          <Text style={styles.bubbleBody}>{item.body}</Text>
+          {urls.length > 0 ? <SupportImageGallery urls={urls} /> : null}
+          <Text style={styles.bubbleTime}>{formatMessageClock(item.createdAtMs)}</Text>
+        </View>
+      );
+    }
+    if (isSystem) {
+      return (
+        <View style={styles.systemBubble}>
+          <Text style={styles.emoLabel}>Emo</Text>
+          <Text style={styles.bubbleBody}>{item.body}</Text>
+          <Text style={styles.bubbleTime}>{formatMessageClock(item.createdAtMs)}</Text>
+        </View>
+      );
+    }
     return (
-      <View style={styles.complaintBubble}>
-        <Text style={styles.complaintLabel}>Support request</Text>
-        <Text style={styles.bubbleBody}>{item.body}</Text>
-        {urls.length > 0 ? (
-          <SupportImageGallery urls={urls} compact allowDownload={false} />
+      <View
+        style={[
+          styles.bubble,
+          isCustomer ? styles.bubbleCustomer : styles.bubbleSupport,
+        ]}
+      >
+        {!isCustomer ? (
+          <Text style={styles.supportLabel}>HalfOrder Support</Text>
         ) : null}
-        <Text style={styles.bubbleTime}>{formatMessageTime(item.createdAtMs)}</Text>
+        {item.body ? <Text style={styles.bubbleBody}>{item.body}</Text> : null}
+        {urls.length > 0 ? (
+          <View style={styles.attachBlock}>
+            <SupportImageGallery urls={urls} />
+          </View>
+        ) : null}
+        {item.uploadFailed ? (
+          <Pressable onPress={onRetry} style={styles.retryRow}>
+            <Ionicons name="refresh" size={14} color="#FBBF24" />
+            <Text style={styles.retryText}>Couldn’t upload · Tap to retry</Text>
+          </Pressable>
+        ) : null}
+        <View style={styles.metaRow}>
+          <Text
+            style={[
+              styles.bubbleTime,
+              isCustomer && styles.bubbleTimeOnPrimary,
+            ]}
+          >
+            {formatMessageClock(item.createdAtMs)}
+          </Text>
+          {isCustomer ? (
+            <Text style={styles.readStatus}>
+              {item.readByAdmin ? 'Read' : 'Sent'}
+            </Text>
+          ) : null}
+        </View>
       </View>
     );
-  }
-
-  if (isSystem) {
-    return (
-      <View style={styles.systemBubble}>
-        <Text style={styles.emoLabel}>Emo AI</Text>
-        <Text style={styles.bubbleBody}>{item.body}</Text>
-        <Text style={styles.bubbleTime}>{formatMessageTime(item.createdAtMs)}</Text>
-      </View>
-    );
-  }
+  })();
 
   return (
-    <View
-      style={[
-        styles.bubble,
-        isCustomer ? styles.bubbleCustomer : styles.bubbleSupport,
-      ]}
-    >
-      {!isCustomer ? (
-        <Text style={styles.supportLabel}>HalfOrder Support</Text>
+    <View>
+      {showDay ? (
+        <View style={styles.daySep}>
+          <Text style={styles.daySepText}>{formatDaySeparator(item.createdAtMs)}</Text>
+        </View>
       ) : null}
-      {item.body ? <Text style={styles.bubbleBody}>{item.body}</Text> : null}
-      {urls.length > 0 ? (
-        <SupportImageGallery urls={urls} compact />
-      ) : null}
-      {item.uploadFailed ? (
-        <Pressable onPress={onRetry} style={styles.retryRow}>
-          <Ionicons name="refresh" size={14} color="#FBBF24" />
-          <Text style={styles.retryText}>Upload failed · Tap to retry</Text>
-        </Pressable>
-      ) : null}
-      <View style={styles.metaRow}>
-        <Text style={styles.bubbleTime}>{formatMessageTime(item.createdAtMs)}</Text>
-        {isCustomer ? (
-          <Text style={styles.readStatus}>
-            {item.readByAdmin ? 'Read' : 'Sent'}
-          </Text>
-        ) : null}
-      </View>
+      {bubble}
     </View>
   );
 }
@@ -124,6 +157,7 @@ function MessageBubble({
 export default function CustomerSupportScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const uid = user?.uid ?? '';
   const [conversation, setConversation] = useState<SupportConversation | null>(null);
   const [messages, setMessages] = useState<SupportConversationMessage[]>([]);
@@ -137,6 +171,7 @@ export default function CustomerSupportScreen() {
   const [greeted, setGreeted] = useState(false);
   const listRef = useRef<FlatList>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendingLock = useRef(false);
 
   useEffect(() => {
     if (!uid) {
@@ -214,11 +249,12 @@ export default function CustomerSupportScreen() {
   };
 
   const send = async (retryUris?: string[]) => {
-    if (!uid) return;
+    if (!uid || sendingLock.current) return;
     const uris = retryUris ?? pendingUris;
     const text = draft.trim();
     if (!text && uris.length === 0) return;
 
+    sendingLock.current = true;
     setSending(true);
     setFailedIndexes([]);
     try {
@@ -240,15 +276,29 @@ export default function CustomerSupportScreen() {
       setDraft('');
       setPendingUris([]);
       setUploadProgress({});
+      setFailedIndexes([]);
       void setSupportTyping(uid, 'customer', false);
       showSuccess('Message sent');
     } catch (e) {
       setFailedIndexes(uris.map((_, i) => i));
-      showError(getReadableErrorMessageOr(e, 'Could not send message'));
+      showError(
+        getReadableErrorMessageOr(
+          e,
+          'Could not send. Check your connection and tap retry on a photo, or Send again.',
+        ),
+      );
     } finally {
       setSending(false);
+      sendingLock.current = false;
     }
   };
+
+  const canSend = draft.trim().length > 0 || pendingUris.length > 0;
+
+  const ticketLabel = useMemo(() => {
+    if (!conversation) return null;
+    return formatTicketNumber(conversation.referenceNumber, conversation.id);
+  }, [conversation]);
 
   if (!uid) {
     return (
@@ -257,7 +307,7 @@ export default function CustomerSupportScreen() {
           <Pressable onPress={() => goBackFromProfileScreen(router)} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={22} color="#FFF" />
           </Pressable>
-          <Text style={styles.headerTitle}>Customer Support</Text>
+          <Text style={styles.headerTitle}>Support</Text>
         </View>
         <View style={styles.center}>
           <Text style={styles.muted}>Sign in to chat with HalfOrder Support.</Text>
@@ -280,25 +330,27 @@ export default function CustomerSupportScreen() {
         <View style={styles.headerMeta}>
           <View style={styles.headerNameRow}>
             <Text style={styles.headerTitle}>HalfOrder Support</Text>
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={14} color="#A855F7" />
-              <Text style={styles.verifiedText}>Verified</Text>
-            </View>
+            <Ionicons name="checkmark-circle" size={16} color="#A855F7" />
           </View>
-          <Text style={styles.headerSub}>
-            {conversation?.referenceNumber
-              ? `Ref ${conversation.referenceNumber}`
-              : 'We typically reply within a few hours'}
-          </Text>
+          {conversation && ticketLabel ? (
+            <Text style={styles.headerSub}>
+              Ticket {ticketLabel}
+              {conversation.createdAtMs
+                ? ` · ${formatCreatedShort(conversation.createdAtMs)}`
+                : ''}
+            </Text>
+          ) : (
+            <Text style={styles.headerSub}>Usually replies within a few hours</Text>
+          )}
         </View>
       </View>
 
       {conversation ? (
         <View style={styles.statusBar}>
-          <SupportStatusChip status={conversation.status} />
-          {conversation.complaintCategory ? (
-            <Text style={styles.categoryPill}>{conversation.complaintCategory}</Text>
-          ) : null}
+          <SupportStatusChip status={conversation.status} customerFacing />
+          <Text style={styles.categoryPill}>
+            {formatSupportCategory(conversation.complaintCategory)}
+          </Text>
         </View>
       ) : null}
 
@@ -313,9 +365,12 @@ export default function CustomerSupportScreen() {
           </View>
         ) : messages.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <View style={styles.greetBubble}>
-              <Text style={styles.emoLabel}>Emo AI</Text>
-              <Text style={styles.bubbleBody}>{emptyGreeting}</Text>
+            <View style={styles.emptyHero}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="chatbubbles" size={28} color="#A855F7" />
+              </View>
+              <Text style={styles.emptyTitle}>We’re here to help</Text>
+              <Text style={styles.emptyBody}>{emptyGreeting}</Text>
             </View>
             <Pressable
               style={styles.startComplaint}
@@ -330,17 +385,22 @@ export default function CustomerSupportScreen() {
             data={messages}
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <MessageBubble
                 item={item}
+                prev={index > 0 ? messages[index - 1] : null}
                 onRetry={() => void send(pendingUris)}
               />
             )}
             ListFooterComponent={
               showTyping ? (
                 <View style={styles.typingRow}>
-                  <ActivityIndicator size="small" color="#A855F7" />
-                  <Text style={styles.typingText}>HalfOrder Support is typing…</Text>
+                  <View style={styles.typingBubble}>
+                    <View style={styles.typingDot} />
+                    <View style={[styles.typingDot, styles.typingDotMid]} />
+                    <View style={styles.typingDot} />
+                  </View>
+                  <Text style={styles.typingText}>Support is typing…</Text>
                 </View>
               ) : null
             }
@@ -349,6 +409,9 @@ export default function CustomerSupportScreen() {
 
         {pendingUris.length > 0 ? (
           <View style={styles.pendingWrap}>
+            <Text style={styles.pendingLabel}>
+              {pendingUris.length} photo{pendingUris.length === 1 ? '' : 's'} ready to send
+            </Text>
             <SupportImageGallery
               urls={[]}
               localUris={pendingUris}
@@ -363,43 +426,51 @@ export default function CustomerSupportScreen() {
           </View>
         ) : null}
 
-        <View style={styles.composer}>
-          <Pressable style={styles.attachBtn} onPress={() => setSheetOpen(true)}>
-            <Ionicons name="add" size={24} color="#FFF" />
-          </Pressable>
-          <TextInput
-            value={draft}
-            onChangeText={onDraftChange}
-            placeholder="Type your message…"
-            placeholderTextColor="#7D8493"
-            style={styles.input}
-            multiline
-            maxLength={4000}
-          />
+        <View
+          style={[
+            styles.composerDock,
+            { paddingBottom: Math.max(insets.bottom, 10) },
+          ]}
+        >
+          <View style={styles.composer}>
+            <Pressable
+              style={styles.attachBtn}
+              onPress={() => setSheetOpen(true)}
+              disabled={sending}
+              accessibilityLabel="Add photos"
+            >
+              <Ionicons name="add" size={24} color="#FFF" />
+            </Pressable>
+            <TextInput
+              value={draft}
+              onChangeText={onDraftChange}
+              placeholder="Message…"
+              placeholderTextColor="#7D8493"
+              style={styles.input}
+              multiline
+              maxLength={4000}
+            />
+            <Pressable
+              style={[styles.sendBtn, (!canSend || sending) && styles.sendBtnDisabled]}
+              onPress={() => void send()}
+              disabled={!canSend || sending}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Ionicons name="arrow-up" size={20} color="#FFF" />
+              )}
+            </Pressable>
+          </View>
           <Pressable
-            style={[
-              styles.sendBtn,
-              (sending || (!draft.trim() && pendingUris.length === 0)) && { opacity: 0.5 },
-            ]}
-            onPress={() => void send()}
-            disabled={sending || (!draft.trim() && pendingUris.length === 0)}
+            style={styles.emailFooter}
+            onPress={() => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Ionicons name="send" size={20} color="#FFF" />
-            )}
+            <Text style={styles.emailFooterText}>Email {SUPPORT_EMAIL}</Text>
           </Pressable>
         </View>
-
-        <Pressable
-          style={styles.emailFooter}
-          onPress={() => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
-        >
-          <Text style={styles.emailFooterText}>
-            Additional contact: {SUPPORT_EMAIL}
-          </Text>
-        </Pressable>
       </KeyboardAvoidingView>
 
       <SupportAttachmentSheet
@@ -413,16 +484,17 @@ export default function CustomerSupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  screen: { flex: 1, backgroundColor: '#09090B' },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#09090B',
   },
   backBtn: {
     width: 40,
@@ -430,26 +502,30 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  headerAvatar: { width: 44, height: 44, borderRadius: 22 },
+  headerAvatar: { width: 42, height: 42, borderRadius: 14 },
   headerMeta: { flex: 1, minWidth: 0 },
-  headerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  headerTitle: { color: '#FFF', fontWeight: '800', fontSize: 17 },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  verifiedText: { color: '#A855F7', fontWeight: '700', fontSize: 12 },
-  headerSub: { color: '#B7BDC9', fontSize: 12, marginTop: 2, fontWeight: '600' },
+  headerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerTitle: {
+    color: '#FAFAFA',
+    fontWeight: '800',
+    fontSize: 17,
+    letterSpacing: -0.2,
+  },
+  headerSub: { color: '#A1A1AA', fontSize: 12, marginTop: 3, fontWeight: '600' },
   statusBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   categoryPill: {
-    color: '#D1D5DB',
+    color: '#E4E4E7',
     fontSize: 12,
     fontWeight: '700',
     paddingHorizontal: 10,
@@ -458,81 +534,112 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  muted: { color: '#B7BDC9', textAlign: 'center', fontSize: 15 },
-  emptyWrap: {
+  center: {
     flex: 1,
-    padding: 20,
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    padding: 24,
   },
-  greetBubble: {
-    backgroundColor: '#171923',
+  muted: { color: '#A1A1AA', textAlign: 'center', fontSize: 15 },
+  emptyWrap: { flex: 1, padding: 24, justifyContent: 'center', gap: 20 },
+  emptyHero: { gap: 10 },
+  emptyIcon: {
+    width: 56,
+    height: 56,
     borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(168,85,247,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    color: '#FAFAFA',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  emptyBody: {
+    color: '#A1A1AA',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   startComplaint: {
     alignSelf: 'flex-start',
     backgroundColor: '#A855F7',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
     borderRadius: 14,
   },
   startComplaintText: { color: '#FFF', fontWeight: '800' },
-  list: { padding: 16, paddingBottom: 8 },
+  list: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 16 },
+  daySep: { alignItems: 'center', marginVertical: 12 },
+  daySepText: {
+    color: '#71717A',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
   bubble: {
-    maxWidth: '82%',
-    borderRadius: 18,
-    padding: 12,
-    marginBottom: 10,
+    maxWidth: '84%',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 6,
   },
   bubbleCustomer: {
     alignSelf: 'flex-end',
     backgroundColor: '#A855F7',
+    borderBottomRightRadius: 6,
   },
   bubbleSupport: {
     alignSelf: 'flex-start',
-    backgroundColor: '#171923',
+    backgroundColor: '#18181B',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderBottomLeftRadius: 6,
   },
   systemBubble: {
     alignSelf: 'flex-start',
     maxWidth: '90%',
-    backgroundColor: '#171923',
+    backgroundColor: '#18181B',
     borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.35)',
-    borderRadius: 18,
+    borderColor: 'rgba(168,85,247,0.28)',
+    borderRadius: 22,
+    borderBottomLeftRadius: 6,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   complaintBubble: {
-    alignSelf: 'center',
-    maxWidth: '95%',
-    backgroundColor: 'rgba(168,85,247,0.12)',
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(168,85,247,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.35)',
-    borderRadius: 14,
+    borderColor: 'rgba(168,85,247,0.28)',
+    borderRadius: 18,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   complaintLabel: {
-    color: '#A855F7',
+    color: '#C4B5FD',
     fontWeight: '800',
-    fontSize: 12,
+    fontSize: 11,
     marginBottom: 8,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   emoLabel: {
     color: '#A855F7',
     fontWeight: '800',
     fontSize: 11,
     marginBottom: 6,
-    textTransform: 'uppercase',
     letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   supportLabel: {
     color: '#C4B5FD',
@@ -540,22 +647,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 4,
   },
-  bubbleBody: { color: '#FFF', fontSize: 15, lineHeight: 21, fontWeight: '500' },
+  bubbleBody: {
+    color: '#FAFAFA',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  attachBlock: { marginTop: 8 },
   metaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 6,
     gap: 8,
   },
   bubbleTime: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 10,
     fontWeight: '600',
   },
+  bubbleTimeOnPrimary: { color: 'rgba(255,255,255,0.72)' },
   readStatus: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 10,
     fontWeight: '700',
   },
   retryRow: {
@@ -568,26 +682,62 @@ const styles = StyleSheet.create({
   typingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
-  typingText: { color: '#B7BDC9', fontSize: 13, fontWeight: '600' },
-  pendingWrap: { paddingHorizontal: 12 },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#18181B',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#A855F7',
+    opacity: 0.45,
+  },
+  typingDotMid: { opacity: 0.85 },
+  typingText: { color: '#A1A1AA', fontSize: 13, fontWeight: '600' },
+  pendingWrap: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#0A0A0C',
+    gap: 4,
+  },
+  pendingLabel: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  composerDock: {
+    backgroundColor: '#0A0A0C',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   attachBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -597,11 +747,11 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: '#171923',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#18181B',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    color: '#FFF',
+    color: '#FAFAFA',
     fontSize: 15,
   },
   sendBtn: {
@@ -612,15 +762,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sendBtnDisabled: { opacity: 0.4 },
   emailFooter: {
-    paddingVertical: 10,
+    paddingTop: 4,
+    paddingBottom: 6,
     paddingHorizontal: 16,
     alignItems: 'center',
   },
   emailFooterText: {
-    color: '#7D8493',
-    fontSize: 12,
+    color: '#52525B',
+    fontSize: 11,
     fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 });
