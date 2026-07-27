@@ -4,6 +4,7 @@ import { EmoAiHeader } from '@/components/emoAi/EmoAiHeader';
 import { EmoAiHero } from '@/components/emoAi/EmoAiHero';
 import { EmoAiMessageList } from '@/components/emoAi/EmoAiMessageList';
 import { EmoAiQuickReplies } from '@/components/emoAi/EmoAiQuickReplies';
+import { IWantComposerCta } from '@/components/iWant/IWantComposerCta';
 import { UE } from '@/constants/uberEatsTheme';
 import { useEmoAiChat } from '@/hooks/useEmoAiChat';
 import { isRegisteredAuthUser } from '@/lib/authSession';
@@ -11,7 +12,7 @@ import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { EMO_AI_BG } from '@/types/emoAi';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -47,6 +48,10 @@ export default function EmoAiScreen() {
   } = useEmoAiChat(uid);
 
   const busy = typing || Boolean(streamingText);
+
+  const openIWant = useCallback(() => {
+    router.push(USER_ROUTES.iWant as never);
+  }, [router]);
 
   const tabBarBottomOffset = Math.max(14, insets.bottom + 4);
   const tabBarReserve = keyboardOpen
@@ -106,7 +111,7 @@ export default function EmoAiScreen() {
             {!started ? (
               <EmoAiEmptyState
                 onStart={() => void startChatting()}
-                onIWant={() => router.push(USER_ROUTES.iWant as never)}
+                onIWant={openIWant}
               />
             ) : (
               <>
@@ -124,6 +129,7 @@ export default function EmoAiScreen() {
                 />
               </>
             )}
+            {started ? <IWantComposerCta onPress={openIWant} /> : null}
             <EmoAiComposer
               disabled={busy && started}
               onSend={(t) => void sendMessage(t)}
