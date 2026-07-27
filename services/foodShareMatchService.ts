@@ -1,4 +1,4 @@
-import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
+import { buildAdminShareCostBreakdown, normalizeFoodShareCostBreakdown } from '@/lib/foodSharePricing';
 import { FOOD_SHARE_ERRORS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import {
@@ -346,6 +346,10 @@ export async function joinAdminFoodShare(
     share.originalPrice,
     share.sharedPrice,
     share.deliveryShare,
+    {
+      promotionBadges: share.promotionBadges,
+      shareRaw: shareSnap.data() as Record<string, unknown>,
+    },
   );
 
   const partnerUid = txResult.partnerUid;
@@ -627,28 +631,10 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
     assignedDriverId:
       typeof data.assignedDriverId === 'string' ? data.assignedDriverId : null,
-    costBreakdown: {
-      originalPrice:
-        typeof breakdown.originalPrice === 'number'
-          ? breakdown.originalPrice
-          : typeof breakdown.originalFoodPrice === 'number'
-            ? breakdown.originalFoodPrice
-            : 0,
-      sharedPrice:
-        typeof breakdown.sharedPrice === 'number'
-          ? breakdown.sharedPrice
-          : typeof breakdown.userFoodShare === 'number'
-            ? breakdown.userFoodShare
-            : 0,
-      deliveryShare:
-        typeof breakdown.deliveryShare === 'number'
-          ? breakdown.deliveryShare
-          : typeof breakdown.userDeliveryShare === 'number'
-            ? breakdown.userDeliveryShare
-            : 0,
-      totalPerUser:
-        typeof breakdown.totalPerUser === 'number' ? breakdown.totalPerUser : 0,
-    },
+    costBreakdown: normalizeFoodShareCostBreakdown(
+      breakdown,
+      typeof data.adminFoodShareId === 'string' ? { adminFoodShareId: data.adminFoodShareId } : null,
+    ),
     matchChatId:
       typeof data.matchChatId === 'string' ? data.matchChatId : id,
     userPayments,

@@ -202,6 +202,32 @@ export default function AdminOrderDetailScreen() {
           <Text style={styles.v}>{title}</Text>
           <Text style={styles.k}>Price</Text>
           <Text style={styles.v}>{price}</Text>
+          {typeof data.originalDeliveryFee === 'number' ? (
+            <>
+              <Text style={styles.k}>Original Delivery Fee</Text>
+              <Text style={styles.v}>${data.originalDeliveryFee.toFixed(2)}</Text>
+              <Text style={styles.k}>Shared Delivery Fee</Text>
+              <Text style={styles.v}>
+                ${Number(data.sharedDeliveryFee ?? data.deliveryFee ?? 0).toFixed(2)}
+              </Text>
+            </>
+          ) : null}
+          {typeof data.originalServiceFee === 'number' ? (
+            <>
+              <Text style={styles.k}>Original Service Fee</Text>
+              <Text style={styles.v}>${data.originalServiceFee.toFixed(2)}</Text>
+              <Text style={styles.k}>Shared Service Fee</Text>
+              <Text style={styles.v}>
+                ${Number(data.sharedServiceFee ?? data.serviceFee ?? 0).toFixed(2)}
+              </Text>
+            </>
+          ) : null}
+          {typeof data.totalSaving === 'number' && data.totalSaving > 0 ? (
+            <>
+              <Text style={styles.k}>Savings</Text>
+              <Text style={styles.v}>${data.totalSaving.toFixed(2)}</Text>
+            </>
+          ) : null}
           <Text style={styles.k}>Order id</Text>
           <Text style={styles.mono}>{orderId}</Text>
           <Text style={styles.k}>Status</Text>

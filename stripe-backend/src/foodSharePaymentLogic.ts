@@ -6,11 +6,23 @@ export type FoodSharePaymentQuote = {
   deliveryShareCents: number;
   platformFeeCents: number;
   serviceFeeCents: number;
+  /** Full service fee before split (cents). */
+  originalServiceFeeCents: number;
+  /** User's half of service fee (cents). */
+  sharedServiceFeeCents: number;
+  originalDeliveryFeeCents: number;
   taxCents: number;
   promoDiscountCents: number;
   totalCents: number;
   taxRate: number;
   currency: "cad";
+  freeDelivery: boolean;
+  freeServiceFee: boolean;
+  foodSavingCents: number;
+  deliverySavingCents: number;
+  serviceFeeSavingCents: number;
+  promotionSavingCents: number;
+  totalSavingCents: number;
 };
 
 export type FoodSharePaymentStatus =
@@ -43,6 +55,27 @@ function parseTaxRate(raw: unknown): number {
   return DEFAULT_TAX_RATE;
 }
 
+function promotionBadgesFromData(
+  data: Record<string, unknown> | null | undefined,
+): string[] {
+  if (!data) return [];
+  if (Array.isArray(data.promotionBadges)) {
+    return data.promotionBadges.filter((x): x is string => typeof x === "string");
+  }
+  if (typeof data.promotionBadge === "string" && data.promotionBadge.trim()) {
+    return [data.promotionBadge.trim()];
+  }
+  return [];
+}
+
+function promoWaivesDelivery(data: Record<string, unknown> | null | undefined): boolean {
+  return promotionBadgesFromData(data).includes("free_delivery");
+}
+
+function promoWaivesServiceFee(data: Record<string, unknown> | null | undefined): boolean {
+  return promotionBadgesFromData(data).includes("free_service_fee");
+}
+
 export function quoteFoodSharePayment(input: {
   sharedPrice: number;
   deliveryShare: number;
@@ -50,17 +83,27 @@ export function quoteFoodSharePayment(input: {
   serviceFee?: number | null;
   taxRate?: number | null;
   promoDiscount?: number | null;
+  originalFoodPrice?: number | null;
+  shareRaw?: Record<string, unknown> | null;
 }): FoodSharePaymentQuote {
   const food = Math.max(0, input.sharedPrice);
-  const delivery = Math.max(0, input.deliveryShare);
+  const userDeliveryShare = Math.max(0, input.deliveryShare);
+  const originalDeliveryFee = Math.round(userDeliveryShare * 2 * 100) / 100;
   const foodShareCents = Math.round(food * 100);
-  const deliveryShareCents = Math.round(delivery * 100);
+  const freeDelivery = promoWaivesDelivery(input.shareRaw ?? null);
+  const freeServiceFee = promoWaivesServiceFee(input.shareRaw ?? null);
+  const deliveryShareCents = freeDelivery ? 0 : Math.round(userDeliveryShare * 100);
 
   const platformFeeCents = resolvePlatformFeeCents();
-  const serviceFeeCents =
+  const originalServiceFeeDollars =
     input.serviceFee != null && Number.isFinite(input.serviceFee)
-      ? Math.round(Math.max(0, input.serviceFee) * 100)
-      : platformFeeCents;
+      ? Math.max(0, input.serviceFee)
+      : platformFeeCents / 100;
+  const originalServiceFeeCents = Math.round(originalServiceFeeDollars * 100);
+  const sharedServiceFeeCents = freeServiceFee
+    ? 0
+    : Math.round(originalServiceFeeCents / 2);
+  const serviceFeeCents = sharedServiceFeeCents;
 
   const promoDiscountCents = Math.round(
     Math.max(0, input.promoDiscount ?? 0) * 100,
@@ -76,16 +119,51 @@ export function quoteFoodSharePayment(input: {
   if (totalCents <= 0) {
     throw new Error("Invalid food share payment amount.");
   }
+
+  const originalFoodPrice = Math.max(0, input.originalFoodPrice ?? food * 2);
+  const foodSavingCents = Math.round(
+    Math.max(0, originalFoodPrice - food) * 100,
+  );
+  const sharedDeliverySavingCents = freeDelivery
+    ? 0
+    : Math.round(Math.max(0, originalDeliveryFee - userDeliveryShare) * 100);
+  const freeDeliverySavingCents = freeDelivery
+    ? Math.round(originalDeliveryFee * 100)
+    : 0;
+  const deliverySavingCents = sharedDeliverySavingCents + freeDeliverySavingCents;
+  const sharedServiceSavingCents = freeServiceFee
+    ? 0
+    : Math.round(originalServiceFeeCents / 2);
+  const freeServiceSavingCents = freeServiceFee ? originalServiceFeeCents : 0;
+  const serviceFeeSavingCents =
+    sharedServiceSavingCents + freeServiceSavingCents;
+  const promotionSavingCents = promoDiscountCents;
+  const totalSavingCents =
+    foodSavingCents +
+    deliverySavingCents +
+    serviceFeeSavingCents +
+    promotionSavingCents;
+
   return {
     foodShareCents,
     deliveryShareCents,
     platformFeeCents,
     serviceFeeCents,
+    originalServiceFeeCents,
+    sharedServiceFeeCents,
+    originalDeliveryFeeCents: Math.round(originalDeliveryFee * 100),
     taxCents,
     promoDiscountCents,
     totalCents,
     taxRate,
     currency: "cad",
+    freeDelivery,
+    freeServiceFee,
+    foodSavingCents,
+    deliverySavingCents,
+    serviceFeeSavingCents,
+    promotionSavingCents,
+    totalSavingCents,
   };
 }
 

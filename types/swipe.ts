@@ -1,5 +1,6 @@
 import type { FoodShareCostBreakdown, FoodShareMatchLifecycle } from '@/types/foodShare';
 import type { PromotionBadgeValue } from '@/lib/promotionBadge';
+import type { FoodShareUserPricing } from '@/lib/foodShareUserPricing';
 
 export type SwipeDirection = 'like' | 'pass';
 
@@ -14,6 +15,7 @@ export type SwipeFoodCard = {
   sharedPrice: number;
   deliveryShare: number;
   totalPerUser: number;
+  pricing: FoodShareUserPricing;
   price: number;
   description: string;
   splitPriceLabel: string;

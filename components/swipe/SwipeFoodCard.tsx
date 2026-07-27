@@ -1,7 +1,6 @@
+import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
 import { PromotionBadgesRow } from '@/components/PromotionBadge';
-import {
-  formatShareCurrency,
-} from '@/lib/foodSharePricing';
+import { formatShareCurrency } from '@/lib/foodSharePricing';
 import type { SwipeFoodCard as SwipeFoodCardType } from '@/types/swipe';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,17 +64,16 @@ function SwipeFoodCardInner({ card }: Props) {
             {card.description}
           </Text>
         ) : null}
-        <Text style={styles.original}>
-          HalfOrder price {formatShareCurrency(card.originalPrice)}
-        </Text>
-        <Text style={styles.split}>
-          Delivery fee {formatShareCurrency(card.deliveryShare)}
-        </Text>
-        <Text style={styles.split}>
-          Food {formatShareCurrency(card.sharedPrice)}
-        </Text>
-        <Text style={styles.total}>
-          {formatShareCurrency(card.totalPerUser)} total
+
+        <FoodSharePricingCard
+          pricing={card.pricing}
+          variant="card"
+          showTax={false}
+          style={styles.pricingCard}
+        />
+
+        <Text style={styles.savingsHint}>
+          Save up to {formatShareCurrency(card.pricing.totalSaving)} vs full price
         </Text>
 
         <View style={styles.social}>
@@ -150,36 +148,31 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: -0.5,
     lineHeight: 32,
+    marginBottom: 10,
   },
   description: {
-    marginTop: 6,
+    marginBottom: 8,
     fontSize: 14,
     fontWeight: '600',
     color: '#B7BDC9',
     lineHeight: 18,
   },
-  original: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  split: {
+  pricingCard: {
     marginTop: 4,
-    fontSize: 16,
-    fontWeight: '800',
+    marginBottom: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  savingsHint: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#7DFFB8',
-  },
-  total: {
-    marginTop: 4,
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
+    marginBottom: 8,
   },
   social: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 10,
     gap: 12,
     paddingTop: 14,
     borderTopWidth: StyleSheet.hairlineWidth,

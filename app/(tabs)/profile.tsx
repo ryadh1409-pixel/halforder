@@ -11,8 +11,10 @@ import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
+import { UserSavingsSection } from '../../components/profile/UserSavingsSection';
 import { ReferralProgramCard } from '../../components/profile/ReferralProgramCard';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
+import { useUserSavings } from '../../hooks/useUserSavings';
 import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
@@ -273,6 +275,7 @@ export default function ProfileScreen() {
     refresh: refreshProfileOrders,
     indexBuilding: profileOrdersIndexBuilding,
   } = useProfileOrders(uid);
+  const userSavings = useUserSavings(uid);
   const visibleActiveProfileOrders = useMemo(() => {
     const staleUnpaidMs = 30 * 60 * 1000;
     return profileActiveOrders.filter((order) => {
@@ -890,6 +893,20 @@ export default function ProfileScreen() {
               />
             </View>
           </View>
+
+          <Text style={dynamicStyles.sectionHeading}>Your Savings</Text>
+          <UserSavingsSection
+            savings={userSavings}
+            isDark={isDark}
+            pal={{
+              surface: pal.surface,
+              border: pal.border,
+              text: pal.text,
+              textSecondary: pal.textSecondary,
+              primary: pal.primary,
+              success: pal.success,
+            }}
+          />
 
           <ProfileOrdersSection
             pal={{

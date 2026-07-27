@@ -1,5 +1,5 @@
 import type { FoodShareMatchDoc, MatchRequestDoc } from '@/types/foodShare';
-import { formatTimeRemaining } from '@/lib/foodSharePricing';
+import { buildAdminShareCostBreakdown, formatTimeRemaining } from '@/lib/foodSharePricing';
 import { resolvePickupOrDeliveryLabel } from '@/lib/foodShareInvite';
 import { safeToMillis } from '@/utils/safeToMillis';
 
@@ -167,7 +167,15 @@ export function hubItemFromWaiting(input: {
         : 0;
   const deliveryShare =
     typeof share.deliveryShare === 'number' ? share.deliveryShare : 0;
-  const totalPerUser = Math.round((sharedPrice + deliveryShare) * 100) / 100;
+  const originalPrice =
+    typeof share.originalPrice === 'number' ? share.originalPrice : sharedPrice * 2;
+  const breakdown = buildAdminShareCostBreakdown(
+    originalPrice,
+    sharedPrice,
+    deliveryShare,
+    { shareRaw: share },
+  );
+  const totalPerUser = breakdown.displaySubtotal;
   const expiresAtMs = safeToMillis(share.expiresAt ?? share.expirationAt);
   const joinedAtMs = input.request.createdAtMs;
   const status: FoodShareHubStatus = 'waiting_partner';
@@ -220,7 +228,7 @@ export function hubItemFromMatch(input: {
     myPayment?.paymentStatus === 'PAID' && typeof myPayment.amount === 'number'
       ? myPayment.amount / 100
       : myPayment?.paymentStatus === 'PAID'
-        ? match.costBreakdown.totalPerUser
+        ? match.costBreakdown.grandTotal
         : null;
   const orderIdRaw = (match as unknown as Record<string, unknown>).orderId;
 
@@ -241,7 +249,7 @@ export function hubItemFromMatch(input: {
         : 'Pickup / Delivery',
     sharedPrice: match.costBreakdown.sharedPrice,
     deliveryShare: match.costBreakdown.deliveryShare,
-    totalPerUser: match.costBreakdown.totalPerUser,
+    totalPerUser: match.costBreakdown.displaySubtotal ?? match.costBreakdown.totalPerUser,
     totalPaid,
     countdownLabel: buildCountdownLabel({ status, joinedAtMs, expiresAtMs }),
     partnerFirstName: partner.firstName,

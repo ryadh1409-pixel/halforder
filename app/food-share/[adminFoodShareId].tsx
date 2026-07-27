@@ -6,6 +6,7 @@ import {
   FOOD_SHARE_SUCCESS,
   foodShareErrorMessage,
 } from '@/lib/foodShareUx';
+import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
 import { formatShareCurrency, buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
 import {
   resolvePickupOrDeliveryLabel,
@@ -127,8 +128,12 @@ export default function FoodShareDetailScreen() {
       share.originalPrice,
       share.sharedPrice,
       share.deliveryShare,
+      {
+        promotionBadges: share.promotionBadges,
+        shareRaw: shareRaw ?? undefined,
+      },
     );
-  }, [share]);
+  }, [share, shareRaw]);
 
   const schedule = useMemo(() => {
     if (!shareRaw) {
@@ -243,17 +248,12 @@ export default function FoodShareDetailScreen() {
           <Text style={styles.description}>{share.description}</Text>
         ) : null}
 
-        <View style={styles.glass}>
-          <Text style={styles.section}>Pricing</Text>
-          <CostRow label="Food share" value={formatShareCurrency(breakdown.sharedPrice)} />
-          <CostRow label="Delivery share" value={formatShareCurrency(breakdown.deliveryShare)} />
-          <View style={styles.divider} />
-          <CostRow
-            label="Total per person"
-            value={formatShareCurrency(breakdown.totalPerUser)}
-            bold
-          />
-        </View>
+        <FoodSharePricingCard
+          pricing={breakdown}
+          variant="checkout"
+          showTax={false}
+          style={styles.glass}
+        />
 
         <View style={styles.glass}>
           <Text style={styles.section}>Schedule</Text>

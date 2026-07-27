@@ -9,7 +9,7 @@ describe('foodSharePricing', () => {
     const breakdown = buildAdminShareCostBreakdown(24, 12, 3);
     expect(breakdown.sharedPrice).toBe(12);
     expect(breakdown.deliveryShare).toBe(3);
-    expect(breakdown.totalPerUser).toBe(15);
+    expect(breakdown.totalPerUser).toBe(16);
   });
 
   it('formats time remaining', () => {

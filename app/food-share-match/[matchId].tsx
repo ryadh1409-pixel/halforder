@@ -11,6 +11,7 @@ import {
   foodShareLifecycleLabel,
   FOOD_SHARE_LIFECYCLE_STEPS,
 } from '@/lib/foodShareLifecycle';
+import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
 import { FOOD_SHARE_ERRORS, FOOD_SHARE_SUCCESS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
@@ -279,14 +280,13 @@ export default function FoodShareMatchScreen() {
         </Glass>
 
         <Glass>
-          <Text style={styles.section}>Shared cost breakdown</Text>
-          <CostRow label="Original meal price" value={formatShareCurrency(breakdown.originalPrice)} />
-          <CostRow label="Your shared food cost" value={formatShareCurrency(breakdown.sharedPrice)} />
-          <CostRow label="Your shared delivery cost" value={formatShareCurrency(breakdown.deliveryShare)} />
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>You pay</Text>
-            <Text style={styles.totalValue}>{formatShareCurrency(breakdown.totalPerUser)}</Text>
-          </View>
+          <Text style={styles.section}>Checkout summary</Text>
+          <FoodSharePricingCard
+            pricing={breakdown}
+            variant="checkout"
+            showTax
+            style={styles.pricingCard}
+          />
         </Glass>
 
         <Pressable
@@ -303,7 +303,7 @@ export default function FoodShareMatchScreen() {
               ? `Partner Chat · ${partner?.firstName ?? 'partner'}`
               : myPaymentStatus === 'PAID'
                 ? 'Waiting for partner payment'
-                : `Pay ${formatShareCurrency(breakdown.totalPerUser)}`}
+                : `Pay ${formatShareCurrency(breakdown.grandTotal)}`}
           </Text>
         </Pressable>
         {canDriverChat ? (
@@ -447,6 +447,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 12,
     letterSpacing: 0.4,
+  },
+  pricingCard: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
   },
   userRow: {
     flexDirection: 'row',

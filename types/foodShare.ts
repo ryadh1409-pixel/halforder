@@ -2,8 +2,9 @@ import type {
   PromotionBadgeValue,
   PromotionDestinations,
 } from '@/lib/promotionBadge';
+import type { FoodShareCostBreakdown } from '@/lib/foodSharePricing';
 
-/** Admin-controlled swipe catalog card (`adminFoodShares/{1..10}`). */
+export type { FoodShareCostBreakdown };
 export type AdminFoodShareDoc = {
   id: string;
   foodName: string;
@@ -59,13 +60,6 @@ export type MatchRequestDoc = {
   status: MatchRequestStatus;
   matchId: string | null;
   createdAtMs: number | null;
-};
-
-export type FoodShareCostBreakdown = {
-  originalPrice: number;
-  sharedPrice: number;
-  deliveryShare: number;
-  totalPerUser: number;
 };
 
 export type FoodShareMatchDoc = {

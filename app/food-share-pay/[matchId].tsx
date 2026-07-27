@@ -1,5 +1,6 @@
 import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
 import { confirmCancelMatch } from '@/hooks/useFoodShareUx';
+import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
 import {
   FOOD_SHARE_ERRORS,
@@ -293,15 +294,12 @@ export default function FoodSharePayScreen() {
           <View style={[styles.hero, styles.heroPh]} />
         )}
 
-        <View style={styles.glass}>
-          <Text style={styles.section}>Your share</Text>
-          <CostRow label="Food share cost" value={formatShareCurrency(breakdown.sharedPrice)} />
-          <CostRow label="Delivery share cost" value={formatShareCurrency(breakdown.deliveryShare)} />
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total amount</Text>
-            <Text style={styles.totalValue}>{formatShareCurrency(breakdown.totalPerUser)}</Text>
-          </View>
-        </View>
+        <FoodSharePricingCard
+          pricing={breakdown}
+          variant="payment"
+          showTax
+          style={styles.glass}
+        />
 
         {partner ? (
           <View style={styles.partnerBanner}>
@@ -338,7 +336,7 @@ export default function FoodSharePayScreen() {
               <>
                 <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
                 <Text style={styles.payBtnTxt}>
-                  Pay {formatShareCurrency(breakdown.totalPerUser)} with Stripe
+                  Pay {formatShareCurrency(breakdown.grandTotal)} with Stripe
                 </Text>
               </>
             )}

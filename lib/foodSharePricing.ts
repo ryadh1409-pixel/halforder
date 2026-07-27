@@ -1,19 +1,97 @@
-import type { FoodShareCostBreakdown } from '@/types/foodShare';
+import type { FoodShareUserPricing } from '@/lib/foodShareUserPricing';
+import { pricingFromShareDoc } from '@/lib/foodShareUserPricing';
+import type { PromotionBadgeValue } from '@/lib/promotionBadge';
+
+export type FoodShareCostBreakdown = FoodShareUserPricing & {
+  /** @deprecated use sharedFoodPrice */
+  sharedPrice: number;
+  /** @deprecated use sharedDeliveryFee */
+  deliveryShare: number;
+  /** @deprecated use displaySubtotal */
+  totalPerUser: number;
+  originalPrice: number;
+};
 
 export function buildAdminShareCostBreakdown(
   originalPrice: number,
   sharedPrice: number,
   deliveryShare: number,
+  options?: {
+    originalServiceFee?: number | null;
+    promoDiscount?: number | null;
+    taxRate?: number | null;
+    promotionBadges?: ReadonlyArray<PromotionBadgeValue | string>;
+    shareRaw?: Record<string, unknown> | null;
+  },
 ): FoodShareCostBreakdown {
-  const original = Math.max(0, originalPrice);
-  const food = Math.max(0, sharedPrice);
-  const delivery = Math.max(0, deliveryShare);
+  const pricing = pricingFromShareDoc(
+    {
+      originalPrice,
+      sharedPrice,
+      deliveryShare,
+      promotionBadges: options?.promotionBadges,
+    },
+    options?.shareRaw,
+    {
+      originalServiceFee: options?.originalServiceFee,
+      promoDiscount: options?.promoDiscount,
+      taxRate: options?.taxRate,
+    },
+  );
   return {
-    originalPrice: original,
-    sharedPrice: food,
-    deliveryShare: delivery,
-    totalPerUser: Math.round((food + delivery) * 100) / 100,
+    ...pricing,
+    originalPrice: pricing.originalFoodPrice,
+    sharedPrice: pricing.sharedFoodPrice,
+    deliveryShare: pricing.sharedDeliveryFee,
+    totalPerUser: pricing.displaySubtotal,
   };
+}
+
+export function normalizeFoodShareCostBreakdown(
+  breakdown: Record<string, unknown>,
+  shareRaw?: Record<string, unknown> | null,
+): FoodShareCostBreakdown {
+  if (
+    typeof breakdown.grandTotal === 'number' &&
+    typeof breakdown.sharedFoodPrice === 'number'
+  ) {
+    return breakdown as unknown as FoodShareCostBreakdown;
+  }
+
+  const originalPrice =
+    typeof breakdown.originalPrice === 'number'
+      ? breakdown.originalPrice
+      : typeof breakdown.originalFoodPrice === 'number'
+        ? breakdown.originalFoodPrice
+        : 0;
+  const sharedPrice =
+    typeof breakdown.sharedPrice === 'number'
+      ? breakdown.sharedPrice
+      : typeof breakdown.sharedFoodPrice === 'number'
+        ? breakdown.sharedFoodPrice
+        : typeof breakdown.userFoodShare === 'number'
+          ? breakdown.userFoodShare
+          : 0;
+  const deliveryShare =
+    typeof breakdown.deliveryShare === 'number'
+      ? breakdown.deliveryShare
+      : typeof breakdown.sharedDeliveryFee === 'number'
+        ? breakdown.sharedDeliveryFee
+        : typeof breakdown.userDeliveryShare === 'number'
+          ? breakdown.userDeliveryShare
+          : 0;
+
+  return buildAdminShareCostBreakdown(
+    originalPrice,
+    sharedPrice,
+    deliveryShare,
+    {
+      shareRaw,
+      promotionBadges: Array.isArray(shareRaw?.promotionBadges)
+        ? (shareRaw!.promotionBadges as PromotionBadgeValue[])
+        : undefined,
+    },
+  );
 }
 
 export function formatShareCurrency(amount: number): string {

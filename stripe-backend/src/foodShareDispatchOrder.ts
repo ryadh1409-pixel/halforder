@@ -347,7 +347,13 @@ export function buildFoodShareDispatchOrderPayload(
     typeof match.matchChatId === "string" ? match.matchChatId : matchId;
   const catalog = resolveShareCatalogFields(match, context.share);
   const {sharedPrice, deliveryShare} = pricing;
-  const totalPrice = Math.round((sharedPrice + deliveryShare) * 100) / 100;
+  const breakdown = (match.costBreakdown ?? {}) as Record<string, unknown>;
+  const serviceFee =
+    typeof breakdown.sharedServiceFee === "number"
+      ? breakdown.sharedServiceFee
+      : 0;
+  const totalPrice =
+    Math.round((sharedPrice + deliveryShare + serviceFee) * 100) / 100;
 
   const pickup = resolveUserDispatchProfile(
     context.pickupUserId,
@@ -411,6 +417,30 @@ export function buildFoodShareDispatchOrderPayload(
     total: totalPrice,
     subtotal: sharedPrice,
     deliveryFee: deliveryShare,
+    serviceFee,
+    originalDeliveryFee:
+      typeof breakdown.originalDeliveryFee === "number"
+        ? breakdown.originalDeliveryFee
+        : deliveryShare * 2,
+    sharedDeliveryFee:
+      typeof breakdown.sharedDeliveryFee === "number"
+        ? breakdown.sharedDeliveryFee
+        : deliveryShare,
+    originalServiceFee:
+      typeof breakdown.originalServiceFee === "number"
+        ? breakdown.originalServiceFee
+        : serviceFee * 2,
+    sharedServiceFee:
+      typeof breakdown.sharedServiceFee === "number"
+        ? breakdown.sharedServiceFee
+        : serviceFee,
+    deliverySaving: breakdown.deliverySaving ?? 0,
+    serviceFeeSaving: breakdown.serviceFeeSaving ?? 0,
+    promotionSaving: breakdown.promotionSaving ?? 0,
+    foodSaving: breakdown.foodSaving ?? 0,
+    totalSaving: breakdown.totalSaving ?? 0,
+    freeDelivery: breakdown.freeDelivery === true,
+    freeServiceFee: breakdown.freeServiceFee === true,
     items: [
       {
         name: catalog.foodName,

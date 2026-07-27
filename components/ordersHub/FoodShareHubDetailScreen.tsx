@@ -1,6 +1,8 @@
 import { FoodShareInviteButton } from '@/components/foodShare/FoodShareInviteButton';
 import { FoodShareHubCard } from '@/components/ordersHub/FoodShareHubCard';
-import { OrderReceiptBreakdown } from '@/components/orders/OrderReceiptBreakdown';
+import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
+import { formatPaidAtLabel } from '@/lib/orderReceipt';
+import { receiptNumberFromId } from '@/lib/orderPricing';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import {
   HUB_STATUS_META,
@@ -13,7 +15,6 @@ import {
   resolveShareDateLabel,
   resolveShareTimeLabel,
 } from '@/lib/foodShareInvite';
-import { computeOrderPricing, DEFAULT_TAX_RATE } from '@/lib/orderPricing';
 import { foodShareLifecycleLabel } from '@/lib/foodShareLifecycle';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
@@ -227,49 +228,10 @@ export function FoodShareHubDetailScreen({
     };
   }, [shareRaw]);
 
-  const receiptPricing = useMemo(() => {
-    const food =
-      typeof paymentRaw?.foodShareCostCents === 'number'
-        ? paymentRaw.foodShareCostCents / 100
-        : hubItem?.sharedPrice ?? 0;
-    const delivery =
-      typeof paymentRaw?.deliveryShareCostCents === 'number'
-        ? paymentRaw.deliveryShareCostCents / 100
-        : hubItem?.deliveryShare ?? 0;
-    const service =
-      typeof paymentRaw?.serviceFeeCents === 'number'
-        ? paymentRaw.serviceFeeCents / 100
-        : typeof paymentRaw?.platformFeeCents === 'number'
-          ? paymentRaw.platformFeeCents / 100
-          : typeof shareRaw?.serviceFee === 'number'
-            ? shareRaw.serviceFee
-            : 0;
-    const promo =
-      typeof paymentRaw?.promoDiscountCents === 'number'
-        ? paymentRaw.promoDiscountCents / 100
-        : 0;
-    const taxRate =
-      typeof paymentRaw?.taxRate === 'number'
-        ? paymentRaw.taxRate
-        : typeof shareRaw?.taxRate === 'number'
-          ? shareRaw.taxRate
-          : DEFAULT_TAX_RATE;
-    const computed = computeOrderPricing({
-      foodSubtotal: food,
-      deliveryFee: delivery,
-      serviceFee: service,
-      promoDiscount: promo,
-      taxRate,
-    });
-    // Prefer server-stored tax/total when present (matches Stripe charge).
-    if (typeof paymentRaw?.taxCents === 'number') {
-      computed.hst = paymentRaw.taxCents / 100;
-    }
-    if (typeof paymentRaw?.amount === 'number') {
-      computed.totalPaid = paymentRaw.amount / 100;
-    }
-    return computed;
-  }, [hubItem?.deliveryShare, hubItem?.sharedPrice, paymentRaw, shareRaw]);
+  const sharePricing = useMemo(
+    () => matchRaw?.costBreakdown ?? null,
+    [matchRaw?.costBreakdown],
+  );
 
   const paidAtRaw = paymentRaw?.paidAt ?? null;
 
@@ -354,18 +316,32 @@ export function FoodShareHubDetailScreen({
           <Text style={styles.description}>{shareRaw.description.trim()}</Text>
         ) : null}
 
-        <OrderReceiptBreakdown
-          pricing={receiptPricing}
-          tone="dark"
-          title="Order Summary"
-          meta={{
-            idForReceipt: hubItem.matchId ?? hubItem.hubId,
-            paymentMethod: paymentMethodLabel,
-            paymentStatus: String(paymentStatusLabel),
-            stripeTransactionId: stripeTxnId,
-            paidAt: paidAtRaw,
-          }}
-        />
+        {sharePricing ? (
+          <FoodSharePricingCard
+            pricing={sharePricing}
+            variant="receipt"
+            showTax
+            showSavings
+            style={styles.receiptCard}
+          />
+        ) : (
+          <View style={styles.receiptCard}>
+            <Text style={styles.receiptFallback}>Receipt will appear after payment.</Text>
+          </View>
+        )}
+
+        {sharePricing ? (
+          <Section title="Receipt">
+            <Row
+              label="Receipt Number"
+              value={receiptNumberFromId(hubItem.matchId ?? hubItem.hubId)}
+            />
+            <Row label="Payment Method" value={paymentMethodLabel} />
+            <Row label="Payment Status" value={String(paymentStatusLabel)} />
+            <Row label="Stripe Transaction ID" value={stripeTxnId ?? '—'} />
+            <Row label="Paid At" value={formatPaidAtLabel(paidAtRaw)} />
+          </Section>
+        ) : null}
 
         {match ? (
           <Section title="Participants">
@@ -525,6 +501,15 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: 'rgba(255,255,255,0.7)',
     marginBottom: 14,
+  },
+  receiptCard: {
+    marginBottom: 12,
+  },
+  receiptFallback: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    padding: 16,
+    textAlign: 'center',
   },
   section: {
     borderRadius: 18,

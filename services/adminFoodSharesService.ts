@@ -81,6 +81,13 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     share.originalPrice,
     share.sharedPrice,
     share.deliveryShare,
+    {
+      promotionBadges: share.promotionBadges,
+      shareRaw: {
+        promotionBadges: share.promotionBadges,
+        promotionBadge: share.promotionBadge,
+      },
+    },
   );
   const type = inferFoodType(share.foodName);
   const showSwipePromo = promotionVisibleOn(
@@ -102,8 +109,9 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     originalPrice: breakdown.originalPrice,
     sharedPrice: breakdown.sharedPrice,
     deliveryShare: breakdown.deliveryShare,
-    totalPerUser: breakdown.totalPerUser,
-    price: breakdown.totalPerUser,
+    totalPerUser: breakdown.displaySubtotal,
+    pricing: breakdown,
+    price: breakdown.displaySubtotal,
     description: share.description,
     splitPriceLabel: `${breakdown.sharedPrice.toFixed(2)} food + ${breakdown.deliveryShare.toFixed(2)} delivery`,
     distance: 'Admin meal share',
