@@ -2,6 +2,7 @@ import {
   ADMIN_FOOD_CARD_SLOT_IDS,
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
+import { resolveFoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
 import {
   parsePromotionBadge,
@@ -56,6 +57,7 @@ export function mapAdminFoodShareDoc(
   data: Record<string, unknown>,
 ): AdminFoodShareDoc {
   const promotionBadges = promotionBadgesFromData(data);
+  const fulfillmentMode = resolveFoodShareFulfillmentMode(data);
   return {
     id,
     foodName: normStr(data.foodName, normStr(data.title, 'Shared meal')),
@@ -66,10 +68,14 @@ export function mapAdminFoodShareDoc(
       data.sharedPrice,
       normNum(data.sharingPrice, normNum(data.splitPrice, 0)),
     ),
-    deliveryShare: normNum(data.deliveryShare, normNum(data.deliveryCost, 0)),
+    deliveryShare:
+      fulfillmentMode === 'pickup'
+        ? 0
+        : normNum(data.deliveryShare, normNum(data.deliveryCost, 0)),
     description: normStr(data.description, normStr(data.aiDescription)),
     active: normBool(data.active),
     createdAtMs: safeToMillis(data.createdAt),
+    fulfillmentMode,
     promotionBadge: promotionBadges[0] ?? parsePromotionBadge(data.promotionBadge),
     promotionBadges,
     promotionDestinations: promotionDestinationsFromData(data),
@@ -82,10 +88,12 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     share.sharedPrice,
     share.deliveryShare,
     {
+      fulfillmentMode: share.fulfillmentMode,
       promotionBadges: share.promotionBadges,
       shareRaw: {
         promotionBadges: share.promotionBadges,
         promotionBadge: share.promotionBadge,
+        fulfillmentMode: share.fulfillmentMode,
       },
     },
   );
@@ -98,6 +106,7 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     },
     'swipe',
   );
+  const isPickup = share.fulfillmentMode === 'pickup';
 
   return {
     id: share.id,
@@ -113,14 +122,17 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     pricing: breakdown,
     price: breakdown.displaySubtotal,
     description: share.description,
-    splitPriceLabel: `${breakdown.sharedPrice.toFixed(2)} food + ${breakdown.deliveryShare.toFixed(2)} delivery`,
-    distance: 'Admin meal share',
+    splitPriceLabel: isPickup
+      ? `${breakdown.sharedPrice.toFixed(2)} food + free pickup`
+      : `${breakdown.sharedPrice.toFixed(2)} food + ${breakdown.deliveryShare.toFixed(2)} delivery`,
+    distance: isPickup ? 'Admin pickup share' : 'Admin meal share',
     spotsLeft: 1,
     peopleJoined: 0,
     heroImageUri: share.image || getHeroImageUrlForType(type),
     orderStatus: null,
     deliveryStatus: null,
     lifecycle: 'WAITING_FOR_PARTNER',
+    fulfillmentMode: share.fulfillmentMode,
     promotionBadge: showSwipePromo ? share.promotionBadge : 'none',
     promotionBadges: showSwipePromo ? share.promotionBadges : [],
   };

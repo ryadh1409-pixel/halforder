@@ -24,6 +24,8 @@ export type FoodSlotDraft = {
   aiDescription: string;
   restaurantName: string;
   promotionBadge: PromotionBadgeValue;
+  /** Additive — defaults to delivery. */
+  fulfillmentMode: 'delivery' | 'pickup';
 };
 
 export type FoodSlotEditModalProps = {
@@ -90,6 +92,47 @@ export function FoodSlotEditModal({
                 }}
                 thumbColor={draft.active ? PRIMARY : '#f1f5f9'}
               />
+            </View>
+
+            <Text style={styles.fieldLabel}>Fulfillment</Text>
+            <View style={styles.promoGroup}>
+              {(
+                [
+                  { value: 'delivery' as const, label: '🚚 Delivery' },
+                  { value: 'pickup' as const, label: '🛍️ Pickup' },
+                ] as const
+              ).map((opt) => {
+                const selected = draft.fulfillmentMode === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    onPress={() => onChange({ fulfillmentMode: opt.value })}
+                    style={[
+                      styles.promoOption,
+                      selected && styles.promoOptionSelected,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        selected && styles.radioOuterSelected,
+                      ]}
+                    >
+                      {selected ? <View style={styles.radioInner} /> : null}
+                    </View>
+                    <Text
+                      style={[
+                        styles.promoOptionText,
+                        selected && styles.promoOptionTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Text style={styles.fieldLabel}>Promotion Badge</Text>

@@ -16,6 +16,7 @@ import {
 import {
   backfillFoodShareDispatchOrderIfNeeded,
   createFoodShareDispatchOrderInTxn,
+  isFoodSharePaymentSatisfied,
   isPaidStatus,
 } from "./foodShareDispatchOrder.js";
 import {
@@ -98,11 +99,11 @@ async function activateMatchIfFullyPaid(
     : [];
   if (users.length !== 2) return;
 
-  const allPaid = users.every(
-    (u) => isPaidStatus(userPayments[u]?.paymentStatus),
+  const allPaid = users.every((u) =>
+    isFoodSharePaymentSatisfied(userPayments[u]?.paymentStatus, match),
   );
-  const anyPaid = users.some(
-    (u) => isPaidStatus(userPayments[u]?.paymentStatus),
+  const anyPaid = users.some((u) =>
+    isFoodSharePaymentSatisfied(userPayments[u]?.paymentStatus, match),
   );
 
   if (!allPaid) {

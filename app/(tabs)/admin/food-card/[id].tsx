@@ -60,6 +60,7 @@ function emptyDraft(): FoodSlotDraft {
     aiDescription: '',
     restaurantName: 'HalfOrder',
     promotionBadge: 'none',
+    fulfillmentMode: 'delivery',
   };
 }
 
@@ -144,6 +145,7 @@ export default function AdminFoodCardDetailScreen() {
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
       promotionBadge: detail.promotionBadge,
+      fulfillmentMode: detail.fulfillmentMode,
     };
   }, [detail]);
 
@@ -182,6 +184,7 @@ export default function AdminFoodCardDetailScreen() {
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
       promotionBadge: detail.promotionBadge,
+      fulfillmentMode: detail.fulfillmentMode,
     });
     setEditOpen(true);
   }, [detail]);
@@ -261,6 +264,7 @@ export default function AdminFoodCardDetailScreen() {
         aiDescription: draft.aiDescription,
         restaurantName: draft.restaurantName,
         promotionBadge: parsePromotionBadge(draft.promotionBadge),
+        fulfillmentMode: draft.fulfillmentMode,
       });
       console.log('[SAVE] completed successfully');
       setEditOpen(false);

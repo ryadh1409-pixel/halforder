@@ -30,6 +30,7 @@ export type AdminFoodCardSlot = {
   aiDescription: string;
   restaurantName: string;
   promotionBadge: PromotionBadgeValue;
+  fulfillmentMode: 'delivery' | 'pickup';
 };
 
 const COLLECTION = 'adminFoodShares';
@@ -65,6 +66,7 @@ function slotFromShare(
     aiDescription: share.description,
     restaurantName: share.restaurantName,
     promotionBadge: share.promotionBadge,
+    fulfillmentMode: share.fulfillmentMode,
   };
 }
 
@@ -107,6 +109,7 @@ export async function saveAdminFoodCardSlot(
     aiDescription?: string;
     restaurantName?: string;
     promotionBadge?: PromotionBadgeValue;
+    fulfillmentMode?: 'delivery' | 'pickup';
   },
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
@@ -150,6 +153,10 @@ export async function saveAdminFoodCardSlot(
       ? input.promotionBadge
       : 'none';
 
+  const fulfillmentMode =
+    input.fulfillmentMode === 'pickup' ? 'pickup' : 'delivery';
+  const isPickup = fulfillmentMode === 'pickup';
+
   const payload: Record<string, unknown> = {
     foodName,
     restaurantName:
@@ -159,9 +166,12 @@ export async function saveAdminFoodCardSlot(
     image,
     originalPrice: Number(originalPrice.toFixed(2)),
     sharedPrice: Number(sharedPrice.toFixed(2)),
-    deliveryShare: Number(deliveryShare.toFixed(2)),
+    deliveryShare: isPickup ? 0 : Number(deliveryShare.toFixed(2)),
     description,
     active: input.active === true,
+    fulfillmentMode,
+    pickupOnly: isPickup,
+    deliveryEnabled: !isPickup,
     promotionBadge,
     promotionBadges: promotionBadge === 'none' ? [] : [promotionBadge],
     updatedAt: serverTimestamp(),

@@ -22,6 +22,7 @@ export function buildAdminShareCostBreakdown(
     taxRate?: number | null;
     promotionBadges?: ReadonlyArray<PromotionBadgeValue | string>;
     shareRaw?: Record<string, unknown> | null;
+    fulfillmentMode?: 'delivery' | 'pickup';
   },
 ): FoodShareCostBreakdown {
   const pricing = pricingFromShareDoc(
@@ -30,6 +31,7 @@ export function buildAdminShareCostBreakdown(
       sharedPrice,
       deliveryShare,
       promotionBadges: options?.promotionBadges,
+      fulfillmentMode: options?.fulfillmentMode,
     },
     options?.shareRaw,
     {

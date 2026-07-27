@@ -12,6 +12,8 @@ type Props = {
   style?: ViewStyle;
   showTax?: boolean;
   showSavings?: boolean;
+  /** Additive — omit or `delivery` keeps the existing Delivery fee UI. */
+  fulfillmentMode?: 'delivery' | 'pickup';
 };
 
 const SUCCESS = '#22C55E';
@@ -71,8 +73,10 @@ function FoodSharePricingCardInner({
   style,
   showTax = true,
   showSavings = false,
+  fulfillmentMode = 'delivery',
 }: Props) {
   const dark = variant === 'card' || variant === 'payment';
+  const isPickup = fulfillmentMode === 'pickup';
   const totalLabel =
     variant === 'payment' || variant === 'receipt'
       ? variant === 'payment'
@@ -110,15 +114,22 @@ function FoodSharePricingCardInner({
         </Text>
       </View>
 
-      <FeeBlock
-        title="Delivery"
-        original={pricing.originalDeliveryFee}
-        share={pricing.sharedDeliveryFee}
-        free={pricing.freeDelivery}
-        freeLabel="FREE DELIVERY"
-        variant={variant}
-        dark={dark}
-      />
+      {isPickup ? (
+        <View style={styles.row}>
+          <Text style={[styles.rowLabel, dark && styles.textMuted]}>Pickup</Text>
+          <Text style={styles.freeBadgeInline}>Free</Text>
+        </View>
+      ) : (
+        <FeeBlock
+          title="Delivery"
+          original={pricing.originalDeliveryFee}
+          share={pricing.sharedDeliveryFee}
+          free={pricing.freeDelivery}
+          freeLabel="FREE DELIVERY"
+          variant={variant}
+          dark={dark}
+        />
+      )}
 
       <FeeBlock
         title="Service Fee"
@@ -263,6 +274,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: SUCCESS,
     letterSpacing: 0.4,
+  },
+  freeBadgeInline: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: SUCCESS,
+    letterSpacing: 0.3,
   },
   promoValue: {
     fontSize: 15,

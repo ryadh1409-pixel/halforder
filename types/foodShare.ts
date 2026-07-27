@@ -1,3 +1,4 @@
+import type { FoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import type {
   PromotionBadgeValue,
   PromotionDestinations,
@@ -16,6 +17,8 @@ export type AdminFoodShareDoc = {
   description: string;
   active: boolean;
   createdAtMs: number | null;
+  /** Defaults to delivery when missing. */
+  fulfillmentMode: FoodShareFulfillmentMode;
   /** Admin promotion badge: primary / legacy. */
   promotionBadge: PromotionBadgeValue;
   /** Active campaign badges (may include free_delivery, etc.). */
@@ -27,8 +30,11 @@ export type FoodSharePaymentStatus =
   | 'PENDING'
   | 'AUTHORIZED'
   | 'PAID'
+  | 'NOT_REQUIRED'
   | 'REFUNDED'
   | 'FAILED';
+
+export type PickupReimbursementStatus = 'HELD' | 'RELEASED' | 'NONE';
 
 export type FoodShareMatchLifecycle =
   | 'CREATED'
@@ -82,6 +88,14 @@ export type FoodShareMatchDoc = {
   userPayments: Record<string, FoodShareUserPaymentState>;
   matchChatId: string;
   createdAtMs: number | null;
+  /** Additive — missing means delivery (legacy matches). */
+  fulfillmentMode?: FoodShareFulfillmentMode;
+  /** Pickup host who pays the restaurant in person (User A). */
+  pickupHostUid?: string | null;
+  /** Pickup joiner whose in-app payment is held then released to the host. */
+  pickupJoinerUid?: string | null;
+  pickupReimbursementStatus?: PickupReimbursementStatus;
+  pickupConfirmedAtMs?: number | null;
 };
 
 export type MatchChatMessage = {

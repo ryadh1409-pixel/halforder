@@ -87,11 +87,16 @@ export function quoteFoodSharePayment(input: {
   shareRaw?: Record<string, unknown> | null;
 }): FoodSharePaymentQuote {
   const food = Math.max(0, input.sharedPrice);
-  const userDeliveryShare = Math.max(0, input.deliveryShare);
+  const shareRaw = input.shareRaw ?? null;
+  const isPickup =
+    shareRaw?.fulfillmentMode === "pickup" ||
+    shareRaw?.pickupOnly === true ||
+    shareRaw?.pickupOnly === "true";
+  const userDeliveryShare = isPickup ? 0 : Math.max(0, input.deliveryShare);
   const originalDeliveryFee = Math.round(userDeliveryShare * 2 * 100) / 100;
   const foodShareCents = Math.round(food * 100);
-  const freeDelivery = promoWaivesDelivery(input.shareRaw ?? null);
-  const freeServiceFee = promoWaivesServiceFee(input.shareRaw ?? null);
+  const freeDelivery = isPickup ? true : promoWaivesDelivery(shareRaw);
+  const freeServiceFee = promoWaivesServiceFee(shareRaw);
   const deliveryShareCents = freeDelivery ? 0 : Math.round(userDeliveryShare * 100);
 
   const platformFeeCents = resolvePlatformFeeCents();

@@ -1,4 +1,5 @@
 import { buildAdminShareCostBreakdown, normalizeFoodShareCostBreakdown } from '@/lib/foodSharePricing';
+import { resolveFoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import { FOOD_SHARE_ERRORS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import {
@@ -342,18 +343,25 @@ export async function joinAdminFoodShare(
     adminFoodShareId,
     shareSnap.data() as Record<string, unknown>,
   );
+  const shareRaw = shareSnap.data() as Record<string, unknown>;
+  const fulfillmentMode = resolveFoodShareFulfillmentMode(shareRaw);
+  const isPickup = fulfillmentMode === 'pickup';
   const costBreakdown = buildAdminShareCostBreakdown(
     share.originalPrice,
     share.sharedPrice,
     share.deliveryShare,
     {
+      fulfillmentMode,
       promotionBadges: share.promotionBadges,
-      shareRaw: shareSnap.data() as Record<string, unknown>,
+      shareRaw,
     },
   );
 
   const partnerUid = txResult.partnerUid;
   const partnerFirstNameFromQueue = txResult.partnerFirstName;
+  /** Waiting user created the share seat → pickup host (User A). Joiner pays in-app. */
+  const pickupHostUid = partnerUid;
+  const pickupJoinerUid = uid;
   const [u0, u1] = sortedPair(partnerUid, uid);
   const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
   const matchChatId = matchId;
@@ -414,7 +422,18 @@ export async function joinAdminFoodShare(
         status: 'pending_payment',
         lifecycle: 'WAITING_FOR_PAYMENT',
         paymentStatus: 'pending',
-        userPayments: {},
+        userPayments: isPickup
+          ? {
+              [pickupHostUid]: {
+                paymentStatus: 'NOT_REQUIRED',
+                role: 'pickup_host',
+              },
+            }
+          : {},
+        fulfillmentMode,
+        pickupHostUid: isPickup ? pickupHostUid : null,
+        pickupJoinerUid: isPickup ? pickupJoinerUid : null,
+        pickupReimbursementStatus: isPickup ? 'HELD' : 'NONE',
         orderStatus: null,
         deliveryStatus: null,
         costBreakdown,
@@ -456,7 +475,9 @@ export async function joinAdminFoodShare(
       senderUid: 'system',
       senderRole: 'system',
       senderFirstName: 'HalfOrder',
-      text: `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
+      text: isPickup
+        ? `You're matched for pickup: ${share.foodName}. Your partner pays their share in the app — the host pays the restaurant, then HalfOrder reimburses them after pickup.`
+        : `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
       createdAt: serverTimestamp(),
       sentAt: serverTimestamp(),
       deliveredAt: null,
@@ -469,6 +490,7 @@ export async function joinAdminFoodShare(
       lifecycle: 'WAITING_FOR_PAYMENT',
       matchChatId,
       path: matchPath,
+      fulfillmentMode,
     });
   } else {
     await setDoc(doc(db, 'matchChats', matchChatId), {
@@ -639,6 +661,21 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
       typeof data.matchChatId === 'string' ? data.matchChatId : id,
     userPayments,
     createdAtMs: null,
+    fulfillmentMode: resolveFoodShareFulfillmentMode(data),
+    pickupHostUid:
+      typeof data.pickupHostUid === 'string' ? data.pickupHostUid : null,
+    pickupJoinerUid:
+      typeof data.pickupJoinerUid === 'string' ? data.pickupJoinerUid : null,
+    pickupReimbursementStatus:
+      data.pickupReimbursementStatus === 'HELD' ||
+      data.pickupReimbursementStatus === 'RELEASED' ||
+      data.pickupReimbursementStatus === 'NONE'
+        ? data.pickupReimbursementStatus
+        : undefined,
+    pickupConfirmedAtMs:
+      typeof data.pickupConfirmedAtMs === 'number'
+        ? data.pickupConfirmedAtMs
+        : null,
   };
 }
 

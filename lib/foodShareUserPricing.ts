@@ -3,6 +3,7 @@ import {
   restaurantPromoWaivesServiceFee,
   type PromotionBadgeValue,
 } from '@/lib/promotionBadge';
+import { isPickupFulfillmentMode } from '@/lib/foodShareFulfillment';
 import { computeOrderPricing, DEFAULT_TAX_RATE } from '@/lib/orderPricing';
 
 export const DEFAULT_FOOD_SHARE_SERVICE_FEE = 2;
@@ -48,6 +49,8 @@ export type BuildFoodShareUserPricingInput = {
   taxRate?: number | null;
   promotionBadges?: ReadonlyArray<PromotionBadgeValue | string>;
   shareRaw?: Record<string, unknown> | null;
+  /** When pickup, delivery fee is always $0 (Delivery pricing unchanged). */
+  fulfillmentMode?: 'delivery' | 'pickup';
 };
 
 function roundMoney(n: number): number {
@@ -83,14 +86,21 @@ export function buildFoodShareUserPricing(
 ): FoodShareUserPricing {
   const originalFoodPrice = roundMoney(input.originalFoodPrice);
   const sharedFoodPrice = roundMoney(input.sharedFoodPrice);
-  const userDeliveryShare = roundMoney(input.userDeliveryShare);
+  const isPickup =
+    input.fulfillmentMode === 'pickup' ||
+    isPickupFulfillmentMode(input.shareRaw ?? null);
+  const userDeliveryShare = isPickup
+    ? 0
+    : roundMoney(input.userDeliveryShare);
   const originalDeliveryFee = roundMoney(userDeliveryShare * 2);
   const originalServiceFee = resolveFoodShareServiceFee(input);
   const promoSource = input.shareRaw ?? {
     promotionBadges: input.promotionBadges,
     promotionBadge: input.promotionBadges?.[0],
   };
-  const freeDelivery = restaurantPromoWaivesDeliveryFee(promoSource);
+  const freeDelivery = isPickup
+    ? true
+    : restaurantPromoWaivesDeliveryFee(promoSource);
   const freeServiceFee = restaurantPromoWaivesServiceFee(promoSource);
   const promoDiscount = roundMoney(input.promoDiscount ?? 0);
   const taxRate =
@@ -182,6 +192,7 @@ export function pricingFromShareDoc(
     deliveryShare: number;
     promotionBadges?: ReadonlyArray<PromotionBadgeValue | string>;
     promotionBadge?: PromotionBadgeValue;
+    fulfillmentMode?: 'delivery' | 'pickup';
   },
   shareRaw?: Record<string, unknown> | null,
   extras?: {
@@ -195,10 +206,12 @@ export function pricingFromShareDoc(
     sharedFoodPrice: share.sharedPrice,
     userDeliveryShare: share.deliveryShare,
     promotionBadges: share.promotionBadges,
+    fulfillmentMode: share.fulfillmentMode,
     shareRaw: shareRaw ?? {
       promotionBadges: share.promotionBadges,
       promotionBadge: share.promotionBadge,
       serviceFee: extras?.originalServiceFee,
+      fulfillmentMode: share.fulfillmentMode,
     },
     originalServiceFee: extras?.originalServiceFee,
     promoDiscount: extras?.promoDiscount,

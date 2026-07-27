@@ -242,6 +242,12 @@ export async function runCreateFoodSharePaymentIntent(input: {
     typeof share.sharedPrice === "number" ? share.sharedPrice : 0;
   const deliveryShare =
     typeof share.deliveryShare === "number" ? share.deliveryShare : 0;
+  const shareRawForQuote = {
+    ...share,
+    fulfillmentMode:
+      match.fulfillmentMode ?? share.fulfillmentMode ?? "delivery",
+    pickupOnly: match.fulfillmentMode === "pickup" || share.pickupOnly,
+  };
 
   // Prefer fees configured on the admin food share; else restaurant doc; else defaults.
   let serviceFee: number | null =
@@ -277,7 +283,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
     taxRate,
     originalFoodPrice:
       typeof share.originalPrice === "number" ? share.originalPrice : null,
-    shareRaw: share,
+    shareRaw: shareRawForQuote,
   });
 
   const paymentId = foodSharePaymentDocId(matchId, uid);

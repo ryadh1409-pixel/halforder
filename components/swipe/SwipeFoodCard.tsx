@@ -1,5 +1,6 @@
 import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
 import { PromotionBadgesRow } from '@/components/PromotionBadge';
+import { isPickupFulfillment } from '@/lib/foodShareFulfillment';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
 import type { SwipeFoodCard as SwipeFoodCardType } from '@/types/swipe';
 import { Image } from 'expo-image';
@@ -12,6 +13,7 @@ type Props = {
 };
 
 function SwipeFoodCardInner({ card }: Props) {
+  const isPickup = isPickupFulfillment(card.fulfillmentMode);
   const spotsLabel =
     card.spotsLeft <= 0
       ? 'Full'
@@ -22,7 +24,7 @@ function SwipeFoodCardInner({ card }: Props) {
       : card.promotionBadge != null && card.promotionBadge !== 'none'
         ? [card.promotionBadge]
         : [];
-  const hasPromo = promoValues.length > 0;
+  const hasPromo = !isPickup && promoValues.length > 0;
 
   return (
     <View style={styles.face}>
@@ -43,7 +45,11 @@ function SwipeFoodCardInner({ card }: Props) {
         style={styles.gradient}
       />
 
-      {hasPromo ? (
+      {isPickup ? (
+        <View style={styles.pickupBadge}>
+          <Text style={styles.pickupBadgeTxt}>🛍️ Free Pickup</Text>
+        </View>
+      ) : hasPromo ? (
         <PromotionBadgesRow values={promoValues} style={styles.promoBadge} />
       ) : (
         <View style={styles.livePill}>
@@ -69,6 +75,7 @@ function SwipeFoodCardInner({ card }: Props) {
           pricing={card.pricing}
           variant="card"
           showTax={false}
+          fulfillmentMode={card.fulfillmentMode}
           style={styles.pricingCard}
         />
 
@@ -78,7 +85,11 @@ function SwipeFoodCardInner({ card }: Props) {
 
         <View style={styles.social}>
           <View style={styles.socialCopy}>
-            <Text style={styles.activity}>Swipe right to join this share</Text>
+            <Text style={styles.activity}>
+              {isPickup
+                ? 'Swipe right to join this pickup'
+                : 'Swipe right to join this share'}
+            </Text>
             <Text style={styles.spots}>{spotsLabel}</Text>
           </View>
         </View>
@@ -104,6 +115,22 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 2,
+  },
+  pickupBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#0EA5E9',
+    alignSelf: 'flex-start',
+  },
+  pickupBadgeTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   livePill: {
     position: 'absolute',

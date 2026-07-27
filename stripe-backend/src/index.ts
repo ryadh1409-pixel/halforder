@@ -581,6 +581,7 @@ export { ensureFoodShareDispatchOrder } from "./ensureFoodShareDispatchOrder.js"
 export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
 export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
 export { cancelFoodShareMatch } from "./cancelFoodShareMatch.js";
+export { confirmFoodSharePickup } from "./confirmFoodSharePickup.js";
 export {
   syncFoodShareMatchLifecycleFromOrder,
   syncFoodShareMatchLifecycleFromOrderUpdated,

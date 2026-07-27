@@ -1,5 +1,6 @@
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
+import type { FoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import {
   FOOD_SHARE_ERRORS,
   FOOD_SHARE_SUCCESS,
@@ -25,7 +26,13 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import {
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -43,9 +50,12 @@ async function resolveMyFirstName(): Promise<string> {
 
 /**
  * Admin-controlled meal-share matching — 10 active cards from `adminFoodShares`.
+ * Delivery deck is unchanged; Pickup is an additive filtered section.
  */
 export function SwipeDiscoveryScreen() {
   const router = useRouter();
+  const [fulfillmentMode, setFulfillmentMode] =
+    useState<FoodShareFulfillmentMode>('delivery');
   const [actionSignal, setActionSignal] = useState<{
     id: number;
     direction: 'like' | 'pass';
@@ -56,6 +66,7 @@ export function SwipeDiscoveryScreen() {
   const joiningOrderId = useSwipeStore((s) => s.joiningOrderId);
   const lastMatch = useSwipeStore((s) => s.lastMatch);
   const setCards = useSwipeStore((s) => s.setCards);
+  const setDeckIndex = useSwipeStore((s) => s.setDeckIndex);
   const advanceDeck = useSwipeStore((s) => s.advanceDeck);
   const setJoining = useSwipeStore((s) => s.setJoining);
   const setLastMatch = useSwipeStore((s) => s.setLastMatch);
@@ -70,9 +81,24 @@ export function SwipeDiscoveryScreen() {
     return unsub;
   }, [setCards]);
 
-  const current = cards[deckIndex];
-  const next = cards[deckIndex + 1];
+  const filteredCards = useMemo(
+    () => cards.filter((card) => card.fulfillmentMode === fulfillmentMode),
+    [cards, fulfillmentMode],
+  );
+
+  const current = filteredCards[deckIndex];
+  const next = filteredCards[deckIndex + 1];
   const cardMaxH = useMemo(() => Math.min(SCREEN_H * 0.52, 500), []);
+
+  const selectMode = useCallback(
+    (mode: FoodShareFulfillmentMode) => {
+      if (mode === fulfillmentMode) return;
+      setFulfillmentMode(mode);
+      setDeckIndex(0);
+      setActionSignal(null);
+    },
+    [fulfillmentMode, setDeckIndex],
+  );
 
   const handlePass = useCallback(async () => {
     if (!current) return;
@@ -156,6 +182,13 @@ export function SwipeDiscoveryScreen() {
     }
   }, [advanceDeck, current, joiningOrderId, router, setJoining, setLastMatch]);
 
+  const isPickup = fulfillmentMode === 'pickup';
+  const splitLabel = lastMatch
+    ? isPickup
+      ? `${formatShareCurrency(lastMatch.costBreakdown.totalPerUser)} each (${formatShareCurrency(lastMatch.costBreakdown.sharedPrice)} food + free pickup)`
+      : `${formatShareCurrency(lastMatch.costBreakdown.totalPerUser)} each (${formatShareCurrency(lastMatch.costBreakdown.sharedPrice)} food + ${formatShareCurrency(lastMatch.costBreakdown.deliveryShare)} delivery)`
+    : '';
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <SwipeCinematicBackground />
@@ -170,6 +203,45 @@ export function SwipeDiscoveryScreen() {
           </Text>
         </View>
 
+        <View style={styles.modeRow}>
+          <Pressable
+            style={[
+              styles.modeChip,
+              fulfillmentMode === 'delivery' && styles.modeChipActive,
+            ]}
+            onPress={() => selectMode('delivery')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: fulfillmentMode === 'delivery' }}
+          >
+            <Text
+              style={[
+                styles.modeChipTxt,
+                fulfillmentMode === 'delivery' && styles.modeChipTxtActive,
+              ]}
+            >
+              🚚 Delivery
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.modeChip,
+              fulfillmentMode === 'pickup' && styles.modeChipActive,
+            ]}
+            onPress={() => selectMode('pickup')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: fulfillmentMode === 'pickup' }}
+          >
+            <Text
+              style={[
+                styles.modeChipTxt,
+                fulfillmentMode === 'pickup' && styles.modeChipTxtActive,
+              ]}
+            >
+              🛍️ Pickup
+            </Text>
+          </Pressable>
+        </View>
+
         <SwipeDeck
           current={current}
           next={next}
@@ -180,9 +252,11 @@ export function SwipeDiscoveryScreen() {
           onLike={() => void handleLike()}
         />
 
-        {!loadingDeck && cards.length === 0 ? (
+        {!loadingDeck && filteredCards.length === 0 ? (
           <Text style={styles.empty}>
-            No active meal shares yet. An admin must activate cards first.
+            {isPickup
+              ? 'No active pickup shares yet. An admin must activate pickup cards first.'
+              : 'No active meal shares yet. An admin must activate cards first.'}
           </Text>
         ) : null}
 
@@ -200,11 +274,7 @@ export function SwipeDiscoveryScreen() {
         restaurantName={lastMatch?.restaurantName ?? ''}
         partnerFirstName={lastMatch?.partnerFirstName ?? 'Partner'}
         myFirstName={lastMatch?.myFirstName ?? 'You'}
-        splitLabel={
-          lastMatch
-            ? `${formatShareCurrency(lastMatch.costBreakdown.totalPerUser)} each (${formatShareCurrency(lastMatch.costBreakdown.sharedPrice)} food + ${formatShareCurrency(lastMatch.costBreakdown.deliveryShare)} delivery)`
-            : ''
-        }
+        splitLabel={splitLabel}
         onChat={() => {
           if (lastMatch) {
             router.push(USER_ROUTES.foodSharePay(lastMatch.matchId) as never);
@@ -248,14 +318,41 @@ const styles = StyleSheet.create({
     color: '#B7BDC9',
     flexBasis: '100%',
     marginLeft: 30,
-    marginTop: -4,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  modeChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modeChipActive: {
+    backgroundColor: 'rgba(168,85,247,0.22)',
+    borderColor: 'rgba(168,85,247,0.55)',
+  },
+  modeChipTxt: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#B7BDC9',
+  },
+  modeChipTxtActive: {
+    color: '#FFFFFF',
   },
   empty: {
     textAlign: 'center',
     color: '#B7BDC9',
-    fontWeight: '600',
+    paddingHorizontal: 28,
+    marginTop: 12,
     fontSize: 14,
-    paddingHorizontal: 24,
-    marginBottom: 8,
+    fontWeight: '600',
   },
 });

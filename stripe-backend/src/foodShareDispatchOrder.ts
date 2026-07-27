@@ -32,6 +32,23 @@ export function isPaidStatus(value: unknown): boolean {
   return String(value ?? "").trim().toUpperCase() === "PAID";
 }
 
+/** Pickup hosts are marked NOT_REQUIRED — only treat that as paid when mode is pickup. */
+export function isFoodSharePaymentSatisfied(
+  value: unknown,
+  match?: Record<string, unknown> | null,
+): boolean {
+  const status = String(value ?? "").trim().toUpperCase();
+  if (status === "PAID" || status === "AUTHORIZED") return true;
+  if (
+    match &&
+    match.fulfillmentMode === "pickup" &&
+    status === "NOT_REQUIRED"
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function resolveFoodShareOrderId(
   matchId: string,
   match: Record<string, unknown>,
@@ -409,7 +426,7 @@ export function buildFoodShareDispatchOrderPayload(
     venueId: adminFoodShareId,
     restaurantName: catalog.restaurantName,
     restaurantImage: catalog.foodImageUrl,
-    deliveryType: "delivery",
+    deliveryType: match.fulfillmentMode === "pickup" ? "pickup" : "delivery",
     paymentStatus: "paid",
     status: "payment_confirmed",
     deliveryStatus: "pending",
@@ -816,7 +833,9 @@ function matchUsersFullyPaid(
   const payments =
     userPayments ??
     ((match.userPayments ?? {}) as Record<string, {paymentStatus?: string}>);
-  const allPaid = users.every((u) => isPaidStatus(payments[u]?.paymentStatus));
+  const allPaid = users.every((u) =>
+    isFoodSharePaymentSatisfied(payments[u]?.paymentStatus, match),
+  );
   return allPaid ? users : [];
 }
 

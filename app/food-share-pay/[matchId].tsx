@@ -2,6 +2,7 @@ import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
 import { confirmCancelMatch } from '@/hooks/useFoodShareUx';
 import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
+import { isPickupFulfillment } from '@/lib/foodShareFulfillment';
 import {
   FOOD_SHARE_ERRORS,
   FOOD_SHARE_SUCCESS,
@@ -9,6 +10,7 @@ import {
 } from '@/lib/foodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import { cancelFoodShareMatch, mapMatchDoc } from '@/services/foodShareMatchService';
+import { confirmFoodSharePickup } from '@/services/foodSharePickup';
 import { payFoodShareMatch, confirmFoodSharePaymentAfterRedirect } from '@/services/foodSharePayment';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { theme } from '@/constants/theme';
@@ -56,6 +58,7 @@ export default function FoodSharePayScreen() {
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [cancelling, setCancelling] = useState(false);
+  const [confirmingPickup, setConfirmingPickup] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<ReturnType<typeof mapMatchDoc> | null>(null);
   const started = useRef(false);
@@ -88,6 +91,7 @@ export default function FoodSharePayScreen() {
         if (
           mapped.lifecycle === 'MATCHED' ||
           mapped.lifecycle === 'ORDER_PLACED' ||
+          mapped.lifecycle === 'PICKED_UP' ||
           mapped.status === 'MATCHED'
         ) {
           console.log('[MATCH FLOW STEP]', {
@@ -103,7 +107,13 @@ export default function FoodSharePayScreen() {
           setError('This match was cancelled.');
           return;
         }
-        const myPaid = mapped.userPayments[myUid]?.paymentStatus === 'PAID';
+        const myStatus = mapped.userPayments[myUid]?.paymentStatus;
+        const myPaid = myStatus === 'PAID';
+        const myHostNotRequired = myStatus === 'NOT_REQUIRED';
+        if (myHostNotRequired) {
+          setPhase('ready');
+          return;
+        }
         if (
           myPaid &&
           (mapped.lifecycle === 'PAYMENT_CONFIRMED' ||
@@ -133,8 +143,15 @@ export default function FoodSharePayScreen() {
     return match.userA;
   }, [match, myUid]);
 
+  const isPickup = isPickupFulfillment(match?.fulfillmentMode);
+  const isPickupHost =
+    isPickup && !!myUid && match?.pickupHostUid === myUid;
+  const joinerPaid = match?.pickupJoinerUid
+    ? match.userPayments[match.pickupJoinerUid]?.paymentStatus === 'PAID'
+    : false;
   const partnerPaid = partner
-    ? match?.userPayments[partner.uid]?.paymentStatus === 'PAID'
+    ? match?.userPayments[partner.uid]?.paymentStatus === 'PAID' ||
+      match?.userPayments[partner.uid]?.paymentStatus === 'NOT_REQUIRED'
     : false;
   const anyPaymentCompleted = match
     ? Object.values(match.userPayments).some((payment) => payment.paymentStatus === 'PAID')
@@ -148,7 +165,7 @@ export default function FoodSharePayScreen() {
     );
 
   const runPayment = useCallback(async () => {
-    if (!id || cancelling) return;
+    if (!id || cancelling || isPickupHost) return;
     console.log('[STRIPE STEP] pay_button_pressed', {
       matchId: id,
       rawMatchId: matchId,
@@ -199,7 +216,21 @@ export default function FoodSharePayScreen() {
       showError(message);
       Alert.alert('Payment Error', message);
     }
-  }, [cancelling, id, router]);
+  }, [cancelling, id, isPickupHost, matchId, router]);
+
+  const handleConfirmPickup = useCallback(async () => {
+    if (!id || confirmingPickup) return;
+    setConfirmingPickup(true);
+    try {
+      await confirmFoodSharePickup(id);
+      showSuccess('Pickup confirmed. Your partner\'s payment was released to reimburse you.');
+      router.replace(USER_ROUTES.foodShareChat(id) as never);
+    } catch (e) {
+      showError(foodShareErrorMessage(e, 'Could not confirm pickup.'));
+    } finally {
+      setConfirmingPickup(false);
+    }
+  }, [confirmingPickup, id, router]);
 
   const handleCancelShare = useCallback(async () => {
     if (!id || !match || cancelling) return;
@@ -219,17 +250,17 @@ export default function FoodSharePayScreen() {
         foodName: match.foodName,
         adminFoodShareId: match.adminFoodShareId,
       });
-      showSuccess('Share cancelled');
+      showSuccess(isPickup ? 'Pickup cancelled' : 'Share cancelled');
       router.replace(TABS_ROUTES.swipe as never);
     } catch (e) {
       showError(foodShareErrorMessage(e, FOOD_SHARE_ERRORS.cancelFailed));
     } finally {
       setCancelling(false);
     }
-  }, [anyPaymentCompleted, cancelling, id, match, myUid, partner?.uid, router]);
+  }, [anyPaymentCompleted, cancelling, id, isPickup, match, myUid, partner?.uid, router]);
 
   useEffect(() => {
-    if (paid === '1' && !started.current && phase === 'ready') {
+    if (paid === '1' && !started.current && phase === 'ready' && !isPickupHost) {
       started.current = true;
       setPhase('confirming');
       void (async () => {
@@ -249,7 +280,7 @@ export default function FoodSharePayScreen() {
       started.current = true;
       showError(FOOD_SHARE_ERRORS.paymentCanceled);
     }
-  }, [paid, canceled, phase, id]);
+  }, [paid, canceled, phase, id, isPickupHost]);
 
   if (phase === 'loading' || !match) {
     return (
@@ -284,7 +315,9 @@ export default function FoodSharePayScreen() {
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </Pressable>
 
-        <Text style={styles.kicker}>Secure checkout</Text>
+        <Text style={styles.kicker}>
+          {isPickup ? 'Secure pickup checkout' : 'Secure checkout'}
+        </Text>
         <Text style={styles.foodName}>{match.foodName}</Text>
         <Text style={styles.restaurant}>{match.restaurantName}</Text>
 
@@ -298,8 +331,20 @@ export default function FoodSharePayScreen() {
           pricing={breakdown}
           variant="payment"
           showTax
+          fulfillmentMode={match.fulfillmentMode ?? 'delivery'}
           style={styles.glass}
         />
+
+        {isPickup ? (
+          <View style={styles.pickupInfo}>
+            <Ionicons name="bag-handle-outline" size={20} color="#C084FC" />
+            <Text style={styles.pickupInfoTxt}>
+              {isPickupHost
+                ? "You're the pickup host. Pay the full restaurant bill with your own card. HalfOrder holds your partner's share and releases it to reimburse you after pickup is confirmed."
+                : "Pay your share securely. HalfOrder holds your payment and releases it to reimburse your partner after they pay the restaurant and confirm pickup."}
+            </Text>
+          </View>
+        ) : null}
 
         {partner ? (
           <View style={styles.partnerBanner}>
@@ -309,19 +354,53 @@ export default function FoodSharePayScreen() {
               color={partnerPaid ? '#C084FC' : '#F59E0B'}
             />
             <Text style={styles.partnerBannerTxt}>
-              {partnerPaid
-                ? `${partner.firstName} paid — waiting for match activation`
-                : `Waiting for ${partner.firstName} to pay their share`}
+              {isPickup
+                ? isPickupHost
+                  ? joinerPaid
+                    ? `${partner.firstName} paid — confirm pickup after you pay the restaurant`
+                    : `Waiting for ${partner.firstName} to pay their share`
+                  : partnerPaid
+                    ? `${partner.firstName} is the host — they'll pay at the restaurant`
+                    : `Waiting for ${partner.firstName}`
+                : partnerPaid
+                  ? `${partner.firstName} paid — waiting for match activation`
+                  : `Waiting for ${partner.firstName} to pay their share`}
             </Text>
           </View>
         ) : null}
 
-        {phase === 'confirming' ? (
+        {isPickupHost ? (
+          joinerPaid ? (
+            <Pressable
+              style={[styles.payBtn, confirmingPickup && styles.payBtnDisabled]}
+              disabled={confirmingPickup || cancelling}
+              onPress={() => void handleConfirmPickup()}
+            >
+              {confirmingPickup ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                  <Text style={styles.payBtnTxt}>Confirm pickup & release funds</Text>
+                </>
+              )}
+            </Pressable>
+          ) : (
+            <View style={styles.confirmBox}>
+              <Text style={styles.confirmTitle}>Waiting for partner payment</Text>
+              <Text style={styles.confirmBody}>
+                Once your partner pays, go to the restaurant, pay the full bill, then confirm pickup here to receive reimbursement.
+              </Text>
+            </View>
+          )
+        ) : phase === 'confirming' ? (
           <View style={styles.confirmBox}>
             <ActivityIndicator color={c.primary} />
             <Text style={styles.confirmTitle}>Confirming payment…</Text>
             <Text style={styles.confirmBody}>
-              We will open chat once both payments are confirmed.
+              {isPickup
+                ? 'We will open chat once your payment is held securely.'
+                : 'We will open chat once both payments are confirmed.'}
             </Text>
           </View>
         ) : (
@@ -346,7 +425,7 @@ export default function FoodSharePayScreen() {
         {canShowCancel ? (
           <Pressable
             style={[styles.cancelLink, cancelling && styles.payBtnDisabled]}
-            disabled={cancelling || phase === 'paying'}
+            disabled={cancelling || phase === 'paying' || confirmingPickup}
             onPress={() => void handleCancelShare()}
           >
             {cancelling ? (
@@ -358,7 +437,9 @@ export default function FoodSharePayScreen() {
         ) : null}
 
         <Text style={styles.secureNote}>
-          Amounts are calculated securely on our servers. {Platform.OS === 'web' ? 'You will be redirected to Stripe Checkout.' : 'Payments are processed by Stripe.'}
+          {isPickup
+            ? 'Pickup payments are held securely by HalfOrder and released to reimburse the host after pickup confirmation.'
+            : `Amounts are calculated securely on our servers. ${Platform.OS === 'web' ? 'You will be redirected to Stripe Checkout.' : 'Payments are processed by Stripe.'}`}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -419,6 +500,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(23,25,35,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+  },
+  pickupInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(168,85,247,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.28)',
+    marginBottom: 14,
+  },
+  pickupInfoTxt: {
+    flex: 1,
+    color: '#E9D5FF',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 19,
   },
   section: {
     fontSize: 12,

@@ -51,6 +51,7 @@ export type AdminFoodCardDetail = {
   /** Admin promotion badge stored on the food card. */
   promotionBadge: PromotionBadgeValue;
   promotionBadgeLabel: string;
+  fulfillmentMode: 'delivery' | 'pickup';
   portionsLabel: string;
   pickupAddress: string;
   city: string;
@@ -320,6 +321,7 @@ function buildDetail(input: {
     sharedPrice: share.sharedPrice,
     promotionBadge: share.promotionBadge,
     promotionBadgeLabel: promotionBadgeLabel(share.promotionBadge) ?? 'None',
+    fulfillmentMode: share.fulfillmentMode,
     portionsLabel: portions != null ? String(portions) : '—',
     pickupAddress: pickupAddress || '—',
     city,

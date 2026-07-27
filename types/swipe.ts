@@ -1,4 +1,8 @@
-import type { FoodShareCostBreakdown, FoodShareMatchLifecycle } from '@/types/foodShare';
+import type {
+  FoodShareCostBreakdown,
+  FoodShareMatchLifecycle,
+} from '@/types/foodShare';
+import type { FoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import type { PromotionBadgeValue } from '@/lib/promotionBadge';
 import type { FoodShareUserPricing } from '@/lib/foodShareUserPricing';
 
@@ -26,6 +30,8 @@ export type SwipeFoodCard = {
   orderStatus: string | null;
   deliveryStatus: string | null;
   lifecycle: FoodShareMatchLifecycle;
+  /** Defaults to delivery when omitted. */
+  fulfillmentMode: FoodShareFulfillmentMode;
   promotionBadge?: PromotionBadgeValue;
   promotionBadges?: Exclude<PromotionBadgeValue, 'none'>[];
 };
