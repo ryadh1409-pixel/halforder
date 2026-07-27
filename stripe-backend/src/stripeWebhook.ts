@@ -33,6 +33,7 @@ import {
   handleFoodShareChargeRefunded,
   handleFoodSharePaymentIntentEvent,
 } from "./foodShareWebhookHandlers.js";
+import { handleCompleteMealPaymentIntentEvent } from "./completeMealCore.js";
 import {
   upsertMarketplacePaymentTransaction,
   updatePaymentTransactionStatus,
@@ -371,6 +372,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
+      if (await handleCompleteMealPaymentIntentEvent(event, pi)) {
+        return;
+      }
       if (await handleFoodSharePaymentIntentEvent(event, pi, getStripe())) {
         return;
       }
@@ -533,6 +537,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case "payment_intent.payment_failed": {
       const pi = event.data.object as Stripe.PaymentIntent;
+      if (await handleCompleteMealPaymentIntentEvent(event, pi)) {
+        return;
+      }
       if (await handleFoodSharePaymentIntentEvent(event, pi, getStripe())) {
         return;
       }

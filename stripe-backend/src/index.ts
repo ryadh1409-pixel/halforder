@@ -577,6 +577,14 @@ export const createPaymentIntent = functions
 
 export { stripeWebhook } from "./stripeWebhook.js";
 export { createFoodSharePaymentIntent } from "./createFoodSharePaymentIntent.js";
+export {
+  createCompleteMealCampaign,
+  getCompleteMealCampaign,
+  cancelCompleteMealCampaign,
+  createCompleteMealPaymentIntent,
+  confirmCompleteMealPayment,
+} from "./completeMealCallables.js";
+
 export { ensureFoodShareDispatchOrder } from "./ensureFoodShareDispatchOrder.js";
 export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
 export { refundFoodShareMatch } from "./refundFoodShareMatch.js";

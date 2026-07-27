@@ -130,6 +130,10 @@ export const linking = {
       'food-share-hub/waiting/[adminFoodShareId]':
         'food-share-hub/waiting/:adminFoodShareId',
       'food-share-hub/match/[matchId]': 'food-share-hub/match/:matchId',
+      'complete-meal/setup': 'complete-meal/setup',
+      'complete-meal/[campaignId]': 'complete-meal/:campaignId',
+      'complete-meal/contribute/[shareToken]':
+        'complete-meal/contribute/:shareToken',
       'join/[orderId]': 'join/:orderId',
       'join/index': 'join',
       'chat/[id]': 'chat/:id',

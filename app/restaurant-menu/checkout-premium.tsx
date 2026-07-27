@@ -17,7 +17,12 @@ import {
   SavingsRibbon,
   StickyCheckoutButton,
 } from '@/components/checkout';
+import {
+  CheckoutFundingModeCard,
+  type CheckoutFundingMode,
+} from '@/components/completeMeal/CheckoutFundingModeCard';
 import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
+import { setPendingCompleteMealDraft } from '@/services/completeMeal/pendingDraft';
 import { CK } from '@/constants/checkoutUi';
 import type {
   CheckoutDeliveryTiming,
@@ -99,6 +104,7 @@ export default function CheckoutPremiumScreen() {
   const gift = useCheckoutStore((s) => s.gift);
   const setGift = useCheckoutStore((s) => s.setGift);
   const [placing, setPlacing] = useState(false);
+  const [fundingMode, setFundingMode] = useState<CheckoutFundingMode>('full');
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
@@ -289,21 +295,28 @@ export default function CheckoutPremiumScreen() {
       return;
     }
 
-    const confirmMessage = `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
+    const confirmMessage =
+      fundingMode === 'complete_meal'
+        ? `Start Complete My Meal for ${totalFmt}? You’ll choose how much to pay now, then invite friends.`
+        : `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
         await placeOrder();
       }
       return;
     }
-    Alert.alert('Confirm checkout', confirmMessage, [
-      { text: 'Review', style: 'cancel' },
-      {
-        text: 'Continue',
-        style: 'default',
-        onPress: () => void placeOrder(),
-      },
-    ]);
+    Alert.alert(
+      fundingMode === 'complete_meal' ? 'Complete My Meal' : 'Confirm checkout',
+      confirmMessage,
+      [
+        { text: 'Review', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'default',
+          onPress: () => void placeOrder(),
+        },
+      ],
+    );
   }
 
   async function placeOrder() {
@@ -334,6 +347,42 @@ export default function CheckoutPremiumScreen() {
           address: delivery.address,
         };
         customerLocation = delivery.customerLocation;
+      }
+
+      if (fundingMode === 'complete_meal') {
+        setPendingCompleteMealDraft({
+          restaurantId,
+          restaurantName: profile?.name ?? 'Restaurant',
+          items: cartItems.map((i) => ({
+            id: i.id,
+            name: i.name,
+            price: i.price,
+            qty: i.qty,
+            image: i.image ?? null,
+          })),
+          totalPrice: total,
+          foodSubtotal: subtotal,
+          tax: taxes,
+          taxRate,
+          deliveryFee,
+          serviceFee: serviceFee + priorityFee,
+          promoDiscount,
+          promoCode: appliedPromoCode,
+          deliveryType: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
+          deliveryLocation,
+          customerLocation: customerLocation
+            ? {
+                latitude: customerLocation.latitude,
+                longitude: customerLocation.longitude,
+                timestamp:
+                  typeof customerLocation.timestamp === 'number'
+                    ? customerLocation.timestamp
+                    : Date.now(),
+              }
+            : null,
+        });
+        router.replace('/complete-meal/setup' as never);
+        return;
       }
 
       const orderId = await createOrder({
@@ -601,6 +650,8 @@ export default function CheckoutPremiumScreen() {
 
         <CheckoutPriceBreakdown lines={priceLines} />
 
+        <CheckoutFundingModeCard mode={fundingMode} onChange={setFundingMode} />
+
         {/* Space for pinned footer */}
         <View style={{ height: 190 }} />
       </Animated.ScrollView>
@@ -627,7 +678,7 @@ export default function CheckoutPremiumScreen() {
           }
         />
         <StickyCheckoutButton
-          label="Next"
+          label={fundingMode === 'complete_meal' ? 'Complete My Meal' : 'Next'}
           sublabel={`Total ${totalFmt}`}
           onPress={() => void submitOrder()}
           disabled={blocked}
