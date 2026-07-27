@@ -40,7 +40,7 @@ export default function OrderSuccessScreen() {
   const totalLabel = totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : '—';
   const savedLabel = saved > 0 ? `$${saved.toFixed(2)}` : '$0.00';
 
-  const shareMessage = `I saved ${savedLabel} with HalfOrder! 🍔 Coordinate shared meals nearby. Try it: https://halforder.app`;
+  const shareMessage = `I saved ${savedLabel} with HalfOrder! 🍔 Coordinate shared meals nearby. Try it: https://apps.apple.com/ca/app/halforder/id6760587041`;
 
   const handleShare = async () => {
     setSharing(true);

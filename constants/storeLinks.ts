@@ -11,16 +11,15 @@ function readExtra(): StoreExtra {
   return (Constants.expoConfig?.extra ?? {}) as StoreExtra;
 }
 
+/** Shared App Store URL for referral, invite, download, and share-app actions. */
+export const HALFORDER_APP_STORE_URL =
+  'https://apps.apple.com/ca/app/halforder/id6760587041';
+
 /**
- * App Store URL: uses configured numeric ID when present, otherwise App Store search (always valid).
+ * App Store URL used throughout the app for referral/download sharing.
  */
 export function getIosAppStoreUrl(): string {
-  const raw = readExtra().iosAppStoreId?.trim() ?? '';
-  const id = raw.replace(/\D/g, '');
-  if (id.length >= 9) {
-    return `https://apps.apple.com/app/id${id}`;
-  }
-  return 'https://apps.apple.com/search?term=HalfOrder';
+  return HALFORDER_APP_STORE_URL;
 }
 
 /**

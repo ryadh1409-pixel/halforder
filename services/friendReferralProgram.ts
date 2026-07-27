@@ -1,3 +1,4 @@
+import { HALFORDER_APP_STORE_URL } from '@/constants/storeLinks';
 import { REFERRAL_STORAGE_KEY } from '@/lib/invite-link';
 import { db } from '@/services/firebase';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -59,8 +60,8 @@ function codeFromUid(uid: string): string {
   return (clean.slice(-8) || uid.slice(0, 8)).toUpperCase();
 }
 
-export function buildReferralInviteLink(code: string): string {
-  return `https://halforder.app/invite/${encodeURIComponent(code.trim())}`;
+export function buildReferralInviteLink(_code: string): string {
+  return HALFORDER_APP_STORE_URL;
 }
 
 export function buildReferralQrUrl(link: string): string {

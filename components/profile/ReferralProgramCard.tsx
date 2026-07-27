@@ -57,7 +57,7 @@ Save money by sharing meals with people nearby.
 ${stats.referralCode}
 
 📲 Download the app:
-https://halforder.app/download/
+https://apps.apple.com/ca/app/halforder/id6760587041
 
 After installing HalfOrder, enter my referral code during sign up to receive the referral benefits.
 
