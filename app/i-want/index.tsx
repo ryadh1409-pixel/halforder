@@ -1,15 +1,15 @@
-import { LOCATION_PALETTE_DARK } from '@/components/location/locationPalette';
 import { feeOrFreeLabel, formatHstLabel, moneyLabel } from '@/lib/orderPricing';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
 import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
-import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
+import { IWantAddressStep } from '@/components/iWant/IWantAddressStep';
 import { IWantRestaurantStep } from '@/components/iWant/IWantRestaurantStep';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import {
   createIWantOrder,
   quoteIWantPricing,
 } from '@/services/iWant/createIWantOrder';
+import { reverseGeocodeCoordinatesSafe } from '@/services/places/googlePlacesClient';
 import {
   EMO_AI_BG,
   EMO_AI_PURPLE,
@@ -23,7 +23,7 @@ import type {
 } from '@/types/iWant';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -48,10 +48,20 @@ const STEPS: { id: Step; title: string }[] = [
   { id: 4, title: 'Summary' },
 ];
 
-const LOCATION_PALETTE = {
-  ...LOCATION_PALETTE_DARK,
-  primary: EMO_AI_PURPLE,
-};
+function cityFromAddressLine(address: string | null | undefined): string | null {
+  if (!address?.trim()) return null;
+  const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  // "Street, City, Province …" or "Street, City Province Postal, Country"
+  const candidate = parts.length >= 3 ? parts[1]! : parts[parts.length - 1]!;
+  const cleaned = candidate
+    .replace(/\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/gi, '')
+    .replace(/\b[A-Z]{2}\b/g, '')
+    .replace(/\d+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length >= 2 ? cleaned : null;
+}
 
 export default function IWantWizardScreen() {
   const router = useRouter();
@@ -62,6 +72,7 @@ export default function IWantWizardScreen() {
 
   const [step, setStep] = useState<Step>(1);
   const [restaurant, setRestaurant] = useState<IWantRestaurantDraft | null>(null);
+  const [searchCity, setSearchCity] = useState<string | null>(null);
 
   const [mealName, setMealName] = useState('');
   const [estimatedPrice, setEstimatedPrice] = useState('');
@@ -69,8 +80,11 @@ export default function IWantWizardScreen() {
   const [notes, setNotes] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [confirmedAddress, setConfirmedAddress] =
+    useState<IWantAddressDraft | null>(null);
 
   const address: IWantAddressDraft | null = useMemo(() => {
+    if (confirmedAddress) return confirmedAddress;
     if (
       saved &&
       typeof saved.latitude === 'number' &&
@@ -84,7 +98,7 @@ export default function IWantWizardScreen() {
       };
     }
     return null;
-  }, [saved]);
+  }, [confirmedAddress, saved]);
 
   const meal: IWantMealDraft | null = useMemo(() => {
     const price = Number.parseFloat(estimatedPrice);
@@ -127,6 +141,39 @@ export default function IWantWizardScreen() {
     return null;
   }, [address, userCoords]);
 
+  const fallbackMapCoords = useMemo(() => {
+    if (searchOrigin) return searchOrigin;
+    return null;
+  }, [searchOrigin]);
+
+  useEffect(() => {
+    const fromSaved = saved?.city?.trim() || cityFromAddressLine(saved?.address);
+    if (fromSaved) {
+      setSearchCity(fromSaved);
+      return;
+    }
+
+    if (!searchOrigin) {
+      setSearchCity(null);
+      return;
+    }
+
+    let cancelled = false;
+    void reverseGeocodeCoordinatesSafe(
+      searchOrigin.latitude,
+      searchOrigin.longitude,
+    ).then((result) => {
+      if (cancelled || !result.ok) return;
+      const city =
+        result.city?.trim() || cityFromAddressLine(result.address);
+      if (city) setSearchCity(city);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [saved?.address, saved?.city, searchOrigin]);
+
   const goBack = useCallback(() => {
     if (step === 1) {
       router.back();
@@ -148,13 +195,10 @@ export default function IWantWizardScreen() {
     setStep(3);
   }, [meal]);
 
-  const continueFromAddress = useCallback(() => {
-    if (!address) {
-      showError('Set a delivery address to continue.');
-      return;
-    }
+  const continueFromAddress = useCallback((draft: IWantAddressDraft) => {
+    setConfirmedAddress(draft);
     setStep(4);
-  }, [address]);
+  }, []);
 
   const placeOrder = useCallback(async () => {
     if (!uid) {
@@ -220,6 +264,7 @@ export default function IWantWizardScreen() {
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          scrollEnabled={step !== 3}
         >
           <Animated.View
             key={step}
@@ -229,6 +274,7 @@ export default function IWantWizardScreen() {
             {step === 1 ? (
               <IWantRestaurantStep
                 origin={searchOrigin}
+                city={searchCity}
                 onSelect={selectRestaurant}
               />
             ) : null}
@@ -286,36 +332,12 @@ export default function IWantWizardScreen() {
             ) : null}
 
             {step === 3 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Delivery address</Text>
-                <Text style={styles.sectionSub}>
-                  Uses your HalfOrder delivery address.
-                </Text>
-                {address ? (
-                  <View style={styles.addressCard}>
-                    <Ionicons name="location" size={18} color={EMO_AI_PURPLE} />
-                    <Text style={styles.addressTxt}>{address.address}</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.sectionSub}>
-                    Save an address below to continue.
-                  </Text>
-                )}
-                <AccountLocationPicker
-                  role="user"
-                  accountId={uid}
-                  palette={LOCATION_PALETTE}
-                  title="Update delivery address"
-                  hint="Search or use GPS — same address system as checkout."
-                />
-                <Pressable
-                  style={[styles.primaryBtn, !address && styles.btnDisabled]}
-                  disabled={!address}
-                  onPress={continueFromAddress}
-                >
-                  <Text style={styles.primaryBtnTxt}>Continue</Text>
-                </Pressable>
-              </View>
+              <IWantAddressStep
+                uid={uid}
+                saved={saved}
+                fallbackCoords={fallbackMapCoords}
+                onConfirmed={continueFromAddress}
+              />
             ) : null}
 
             {step === 4 && restaurant && meal && address && pricing ? (
@@ -457,13 +479,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 4,
   },
-  sectionSub: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#B7BDC9',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
   label: {
     marginTop: 10,
     marginBottom: 6,
@@ -511,24 +526,6 @@ const styles = StyleSheet.create({
     color: '#E9D5FF',
     fontWeight: '800',
     overflow: 'hidden',
-  },
-  addressCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: EMO_AI_SURFACE,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.28)',
-    marginBottom: 14,
-  },
-  addressTxt: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-    lineHeight: 20,
   },
   summaryCard: {
     borderRadius: 18,

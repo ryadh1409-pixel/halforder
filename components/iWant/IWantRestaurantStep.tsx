@@ -23,6 +23,7 @@ import {
 
 type Props = {
   origin: RestaurantSearchOrigin | null;
+  city: string | null;
   onSelect: (restaurant: IWantRestaurantDraft) => void;
 };
 
@@ -38,7 +39,7 @@ function shortAddress(address: string | null | undefined): string {
   return parts.slice(0, 2).join(', ');
 }
 
-export function IWantRestaurantStep({ origin, onSelect }: Props) {
+export function IWantRestaurantStep({ origin, city, onSelect }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<IWantRestaurantDraft[]>([]);
   const [searching, setSearching] = useState(false);
@@ -57,6 +58,8 @@ export function IWantRestaurantStep({ origin, onSelect }: Props) {
     return origin;
   }, [origin]);
 
+  const cityStable = useMemo(() => city?.trim() || null, [city]);
+
   useEffect(() => {
     const q = searchQuery.trim();
     if (q.length < 2) {
@@ -68,7 +71,7 @@ export function IWantRestaurantStep({ origin, onSelect }: Props) {
     let cancelled = false;
     setSearching(true);
     const t = setTimeout(() => {
-      void searchRestaurants(q, originStable)
+      void searchRestaurants(q, { origin: originStable, city: cityStable })
         .then((rows) => {
           if (!cancelled) setSearchResults(rows);
         })
@@ -84,7 +87,7 @@ export function IWantRestaurantStep({ origin, onSelect }: Props) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [originStable, searchQuery]);
+  }, [cityStable, originStable, searchQuery]);
 
   const handleResolveLink = useCallback(async () => {
     if (!mapsLink.trim()) {
@@ -107,7 +110,11 @@ export function IWantRestaurantStep({ origin, onSelect }: Props) {
     <View style={styles.section}>
       <Text style={styles.greeting}>Hi 👋</Text>
       <Text style={styles.title}>🍽️ Where would you like to order from?</Text>
-      <Text style={styles.subtitle}>Search any restaurant near you.</Text>
+      <Text style={styles.subtitle}>
+        {cityStable
+          ? `Search restaurants in ${cityStable}.`
+          : 'Search any restaurant near you.'}
+      </Text>
 
       <View style={styles.searchShell}>
         <Ionicons name="search" size={20} color="#C084FC" />
@@ -135,7 +142,9 @@ export function IWantRestaurantStep({ origin, onSelect }: Props) {
       </View>
 
       {searchQuery.trim().length >= 2 && !searching && searchResults.length === 0 ? (
-        <Text style={styles.emptyHint}>No restaurants found. Try another name.</Text>
+        <Text style={styles.emptyHint}>
+          No restaurants found in your current city.
+        </Text>
       ) : null}
 
       <View style={styles.results}>
