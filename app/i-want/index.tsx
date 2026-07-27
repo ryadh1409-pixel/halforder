@@ -3,14 +3,13 @@ import { feeOrFreeLabel, formatHstLabel, moneyLabel } from '@/lib/orderPricing';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
 import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
+import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
+import { IWantRestaurantStep } from '@/components/iWant/IWantRestaurantStep';
+import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import {
   createIWantOrder,
   quoteIWantPricing,
 } from '@/services/iWant/createIWantOrder';
-import {
-  resolveRestaurantFromMapsLink,
-  searchRestaurants,
-} from '@/services/iWant/resolveRestaurant';
 import {
   EMO_AI_BG,
   EMO_AI_PURPLE,
@@ -24,7 +23,7 @@ import type {
 } from '@/types/iWant';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -39,7 +38,6 @@ import {
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showError, showSuccess } from '@/utils/toast';
-import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -60,13 +58,9 @@ export default function IWantWizardScreen() {
   const { user } = useAuth();
   const uid = isRegisteredAuthUser(user) ? user!.uid : null;
   const { saved } = useAccountSavedLocation('users', uid);
+  const { userCoords } = useHomeMarketplaceLocation();
 
   const [step, setStep] = useState<Step>(1);
-  const [mapsLink, setMapsLink] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<IWantRestaurantDraft[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [resolvingLink, setResolvingLink] = useState(false);
   const [restaurant, setRestaurant] = useState<IWantRestaurantDraft | null>(null);
 
   const [mealName, setMealName] = useState('');
@@ -115,31 +109,23 @@ export default function IWantWizardScreen() {
     [meal],
   );
 
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 2) {
-      setSearchResults([]);
-      return undefined;
+  const searchOrigin = useMemo(() => {
+    if (
+      address &&
+      Number.isFinite(address.lat) &&
+      Number.isFinite(address.lng)
+    ) {
+      return { latitude: address.lat, longitude: address.lng };
     }
-    let cancelled = false;
-    const t = setTimeout(() => {
-      setSearching(true);
-      void searchRestaurants(q)
-        .then((rows) => {
-          if (!cancelled) setSearchResults(rows);
-        })
-        .catch(() => {
-          if (!cancelled) setSearchResults([]);
-        })
-        .finally(() => {
-          if (!cancelled) setSearching(false);
-        });
-    }, 350);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [searchQuery]);
+    if (
+      userCoords &&
+      Number.isFinite(userCoords.lat) &&
+      Number.isFinite(userCoords.lng)
+    ) {
+      return { latitude: userCoords.lat, longitude: userCoords.lng };
+    }
+    return null;
+  }, [address, userCoords]);
 
   const goBack = useCallback(() => {
     if (step === 1) {
@@ -148,24 +134,6 @@ export default function IWantWizardScreen() {
     }
     setStep((s) => (s - 1) as Step);
   }, [router, step]);
-
-  const handleResolveLink = useCallback(async () => {
-    if (!mapsLink.trim()) {
-      showError('Paste a Google Maps link first.');
-      return;
-    }
-    setResolvingLink(true);
-    try {
-      const resolved = await resolveRestaurantFromMapsLink(mapsLink);
-      setRestaurant(resolved);
-      showSuccess('Restaurant found');
-      setStep(2);
-    } catch (e) {
-      showError(e instanceof Error ? e.message : 'Could not resolve Maps link.');
-    } finally {
-      setResolvingLink(false);
-    }
-  }, [mapsLink]);
 
   const selectRestaurant = useCallback((row: IWantRestaurantDraft) => {
     setRestaurant(row);
@@ -259,70 +227,10 @@ export default function IWantWizardScreen() {
             exiting={FadeOutLeft.duration(180)}
           >
             {step === 1 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Restaurant</Text>
-                <Text style={styles.sectionSub}>
-                  Paste a Google Maps link or search any restaurant.
-                </Text>
-
-                <Text style={styles.label}>Google Maps link</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="https://maps.google.com/…"
-                  placeholderTextColor="#64748B"
-                  value={mapsLink}
-                  onChangeText={setMapsLink}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Pressable
-                  style={[styles.primaryBtn, resolvingLink && styles.btnDisabled]}
-                  disabled={resolvingLink}
-                  onPress={() => void handleResolveLink()}
-                >
-                  {resolvingLink ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.primaryBtnTxt}>Use Maps link</Text>
-                  )}
-                </Pressable>
-
-                <View style={styles.orRow}>
-                  <View style={styles.orLine} />
-                  <Text style={styles.orTxt}>or search</Text>
-                  <View style={styles.orLine} />
-                </View>
-
-                <Text style={styles.label}>Search restaurant</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Restaurant name"
-                  placeholderTextColor="#64748B"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searching ? (
-                  <ActivityIndicator color={EMO_AI_PURPLE} style={{ marginTop: 12 }} />
-                ) : null}
-                {searchResults.map((row) => (
-                  <Pressable
-                    key={`${row.placeId ?? row.name}-${row.address}`}
-                    style={styles.resultRow}
-                    onPress={() => selectRestaurant(row)}
-                  >
-                    <Ionicons name="restaurant-outline" size={18} color={EMO_AI_PURPLE} />
-                    <View style={styles.resultCopy}>
-                      <Text style={styles.resultTitle}>{row.name}</Text>
-                      {row.address ? (
-                        <Text style={styles.resultSub} numberOfLines={2}>
-                          {row.address}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color="#64748B" />
-                  </Pressable>
-                ))}
-              </View>
+              <IWantRestaurantStep
+                origin={searchOrigin}
+                onSelect={selectRestaurant}
+              />
             ) : null}
 
             {step === 2 ? (
@@ -593,28 +501,6 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.55 },
   primaryBtnTxt: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  orRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginVertical: 18,
-  },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)' },
-  orTxt: { color: '#64748B', fontWeight: '700', fontSize: 12 },
-  resultRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: EMO_AI_SURFACE,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  resultCopy: { flex: 1, minWidth: 0 },
-  resultTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  resultSub: { marginTop: 2, color: '#B7BDC9', fontSize: 12, fontWeight: '600' },
   restaurantChip: {
     alignSelf: 'flex-start',
     marginBottom: 12,

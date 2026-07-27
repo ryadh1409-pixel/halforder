@@ -12,6 +12,11 @@ export type IWantRestaurantDraft = {
   address: string | null;
   lat: number | null;
   lng: number | null;
+  /** Display-only enrichment from Place Details (optional). */
+  rating?: number | null;
+  placeType?: string | null;
+  distanceMeters?: number | null;
+  distanceLabel?: string | null;
 };
 
 export type IWantMealDraft = {
