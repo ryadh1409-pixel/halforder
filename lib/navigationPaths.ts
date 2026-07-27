@@ -51,6 +51,7 @@ export const USER_ROUTES = {
     `/food-share-waiting/${encodeURIComponent(adminFoodShareId)}` as const,
   foodShareChat: (matchId: string) =>
     `/food-share-chat/${encodeURIComponent(matchId)}` as const,
+  moneySaved: '/money-saved' as const,
 } as const;
 
 /** Canonical customer tab shell hrefs. */

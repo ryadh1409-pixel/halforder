@@ -10,11 +10,12 @@ import { isAdminUser } from '../../constants/adminUid';
 import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
+import { MoneySavedProfileTeaser } from '../../components/moneySaved/MoneySavedProfileTeaser';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
-import { UserSavingsSection } from '../../components/profile/UserSavingsSection';
 import { ReferralProgramCard } from '../../components/profile/ReferralProgramCard';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
-import { useUserSavings } from '../../hooks/useUserSavings';
+import { useMoneySavedDetail } from '../../hooks/useMoneySavedDetail';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
@@ -22,7 +23,6 @@ import { showRestaurantAcceptedCancelAlert } from '@/lib/customerOrderCancelAler
 import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
 import { navigateForRole } from '@/lib/navigation';
 import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
-import { USER_ROUTES } from '@/lib/navigationPaths';
 import { applySignupRole } from '@/services/authRoleAssignment';
 import { subscribeUnreadInboxCount } from '@/services/foodShareInbox';
 import { useAuth } from '../../services/AuthContext';
@@ -275,7 +275,7 @@ export default function ProfileScreen() {
     refresh: refreshProfileOrders,
     indexBuilding: profileOrdersIndexBuilding,
   } = useProfileOrders(uid);
-  const userSavings = useUserSavings(uid);
+  const moneySaved = useMoneySavedDetail(uid);
   const visibleActiveProfileOrders = useMemo(() => {
     const staleUnpaidMs = 30 * 60 * 1000;
     return profileActiveOrders.filter((order) => {
@@ -895,8 +895,8 @@ export default function ProfileScreen() {
           </View>
 
           <Text style={dynamicStyles.sectionHeading}>Your Savings</Text>
-          <UserSavingsSection
-            savings={userSavings}
+          <MoneySavedProfileTeaser
+            data={moneySaved}
             isDark={isDark}
             pal={{
               surface: pal.surface,
@@ -906,6 +906,7 @@ export default function ProfileScreen() {
               primary: pal.primary,
               success: pal.success,
             }}
+            onPress={() => router.push(USER_ROUTES.moneySaved as never)}
           />
 
           <ProfileOrdersSection
