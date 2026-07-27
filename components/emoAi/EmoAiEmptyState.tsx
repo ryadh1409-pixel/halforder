@@ -1,34 +1,44 @@
+import { IWantEntryCard } from '@/components/iWant/IWantEntryCard';
 import { EMO_AI_PURPLE, EMO_AI_SURFACE } from '@/types/emoAi';
 import { Image } from 'expo-image';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const MASCOT = require('../../assets/emo-ai/tab-avatar.png');
 
 type Props = {
   onStart: () => void;
+  onIWant: () => void;
 };
 
-export function EmoAiEmptyState({ onStart }: Props) {
+export function EmoAiEmptyState({ onStart, onIWant }: Props) {
   return (
-    <View style={styles.wrap}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.wrap}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
       <Image source={MASCOT} style={styles.mascot} contentFit="cover" />
       <Text style={styles.title}>No meals together yet.</Text>
       <Text style={styles.sub}>Let's change that 🍕</Text>
       <TouchableOpacity style={styles.btn} onPress={onStart} activeOpacity={0.9}>
         <Text style={styles.btnText}>Start Chatting</Text>
       </TouchableOpacity>
-    </View>
+      <IWantEntryCard onOrder={onIWant} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
   wrap: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
     paddingBottom: 40,
+    paddingTop: 12,
   },
   mascot: {
     width: 72,

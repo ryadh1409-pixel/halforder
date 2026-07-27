@@ -10,6 +10,8 @@ import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { logPaidStatusRepairIfNeeded } from '@/services/paymentFlowFirestore';
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
+import { IWantTimeline } from '@/components/iWant/IWantTimeline';
+import { isIWantOrder } from '@/lib/iWantTimeline';
 import { OrderRatingPrompt } from '@/components/order-rating-prompt';
 import { logCustomerRawDoc } from '@/lib/customerOrderSnapshotLog';
 import {
@@ -315,7 +317,11 @@ function TrackOrderScreen() {
             )}
           </View>
 
-          <CustomerMarketplaceTimeline order={order} variant="light" />
+          {isIWantOrder(order) ? (
+            <IWantTimeline order={order} variant="light" />
+          ) : (
+            <CustomerMarketplaceTimeline order={order} variant="light" />
+          )}
 
           {!delivered ? (
             <View style={styles.etaCard}>

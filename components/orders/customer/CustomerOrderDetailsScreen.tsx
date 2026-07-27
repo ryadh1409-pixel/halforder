@@ -1,5 +1,7 @@
 import AppHeader from '@/components/AppHeader';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
+import { IWantTimeline } from '@/components/iWant/IWantTimeline';
+import { isIWantOrder } from '@/lib/iWantTimeline';
 import { OrderRatingPrompt } from '@/components/order-rating-prompt';
 import { DeliveryProgressBar } from '@/components/order/DeliveryProgressBar';
 import { OrderPaymentTimeline } from '@/components/order/OrderPaymentTimeline';
@@ -574,7 +576,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           )}
         </View>
 
-        <CustomerMarketplaceTimeline order={order} variant="dark" />
+        {isIWantOrder(order) ? (
+          <IWantTimeline order={order} variant="dark" />
+        ) : (
+          <CustomerMarketplaceTimeline order={order} variant="dark" />
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Items</Text>

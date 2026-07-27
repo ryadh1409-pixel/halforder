@@ -7,8 +7,10 @@ import { EmoAiQuickReplies } from '@/components/emoAi/EmoAiQuickReplies';
 import { UE } from '@/constants/uberEatsTheme';
 import { useEmoAiChat } from '@/hooks/useEmoAiChat';
 import { isRegisteredAuthUser } from '@/lib/authSession';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
 import { EMO_AI_BG } from '@/types/emoAi';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -26,6 +28,7 @@ import {
 } from 'react-native-safe-area-context';
 
 export default function EmoAiScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const uid = isRegisteredAuthUser(user) ? user!.uid : null;
@@ -101,7 +104,10 @@ export default function EmoAiScreen() {
         ) : (
           <>
             {!started ? (
-              <EmoAiEmptyState onStart={() => void startChatting()} />
+              <EmoAiEmptyState
+                onStart={() => void startChatting()}
+                onIWant={() => router.push(USER_ROUTES.iWant as never)}
+              />
             ) : (
               <>
                 <View style={styles.chat}>
