@@ -1,76 +1,73 @@
 import SwipeWrapper from '@/components/SwipeWrapper';
 import {
-  ProfileMenuItem,
-  PROFILE_MENU_COLORS,
+    PROFILE_MENU_COLORS,
+    ProfileMenuItem,
 } from '@/components/profile/ProfileMenuItem';
-import { ScreenHeader } from '../../components/ScreenHeader';
-import { DeleteAccountModal } from '../../components/DeleteAccountModal';
-import { adminRoutes } from '../../constants/adminRoutes';
-import { isAdminUser } from '../../constants/adminUid';
-import { LEGAL_URLS } from '../../constants/legalLinks';
-import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
-import { MoneySavedProfileTeaser } from '../../components/moneySaved/MoneySavedProfileTeaser';
-import { MemberSinceCard } from '../../components/profile/MemberSinceCard';
-import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
-import { ReferralProgramCard } from '../../components/profile/ReferralProgramCard';
-import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
-import { useMoneySavedDetail } from '../../hooks/useMoneySavedDetail';
-import { USER_ROUTES } from '@/lib/navigationPaths';
-import { useTrustScore } from '../../hooks/useTrustScore';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { showRestaurantAcceptedCancelAlert } from '@/lib/customerOrderCancelAlert';
 import { resolveCustomerCancelOrderError } from '@/lib/customerOrderCancelUx';
-import { navigateForRole } from '@/lib/navigation';
 import { customerOrderDetailHref } from '@/lib/customerOrderNavigation';
+import { navigateForRole } from '@/lib/navigation';
+import { USER_ROUTES } from '@/lib/navigationPaths';
 import { applySignupRole } from '@/services/authRoleAssignment';
-import { subscribeUnreadInboxCount } from '@/services/foodShareInbox';
-import { useAuth } from '../../services/AuthContext';
-import { auth, db } from '../../services/firebase';
-import {
-  logProfileFsFail,
-  logProfileFsStart,
-  logProfileFsSuccess,
-  profileFirestoreOp,
-} from '../../services/profileFirestoreLog';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
-import { logError } from '../../utils/errorLogger';
-import { showError, showNotice, showSuccess } from '../../utils/toast';
+import { subscribeUnreadInboxCount } from '@/services/foodShareInbox';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { type User } from '@firebase/auth';
+import { useIsFocused } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useIsFocused } from '@react-navigation/native';
 import {
-  doc,
-  getDoc,
-  getDocFromServer,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  type DocumentData,
+    doc,
+    getDoc,
+    getDocFromServer,
+    onSnapshot,
+    serverTimestamp,
+    setDoc,
+    type DocumentData
 } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Linking,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import {
-  SafeAreaView,
-  useSafeAreaInsets,
+    SafeAreaView,
+    useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import { DeleteAccountModal } from '../../components/DeleteAccountModal';
+import { ScreenHeader } from '../../components/ScreenHeader';
+import { MoneySavedProfileTeaser } from '../../components/moneySaved/MoneySavedProfileTeaser';
+import { MemberSinceCard } from '../../components/profile/MemberSinceCard';
+import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
+import { adminRoutes } from '../../constants/adminRoutes';
+import { isAdminUser } from '../../constants/adminUid';
+import { theme } from '../../constants/theme';
+import { useMoneySavedDetail } from '../../hooks/useMoneySavedDetail';
+import { useProfileOrders, type ProfileOrderRow } from '../../hooks/useProfileOrders';
+import { useTrustScore } from '../../hooks/useTrustScore';
+import { useAuth } from '../../services/AuthContext';
+import { auth, db } from '../../services/firebase';
+import {
+    logProfileFsFail,
+    logProfileFsStart,
+    logProfileFsSuccess,
+    profileFirestoreOp,
+} from '../../services/profileFirestoreLog';
+import { logError } from '../../utils/errorLogger';
+import { showError, showNotice, showSuccess } from '../../utils/toast';
 
 const SUPPORT_EMAIL = 'support@halforder.app';
 
@@ -566,40 +563,12 @@ export default function ProfileScreen() {
   }, []);
 
   const handleAddRestaurant = useCallback(() => {
-    if (!user?.uid) {
-      router.push('/(auth)/register?intent=restaurant' as never);
-      return;
-    }
-    void (async () => {
-      try {
-        const role = await applySignupRole(user.uid, 'restaurant', {
-          displayName: user.displayName,
-        });
-        navigateForRole(role);
-      } catch (e) {
-        logError(e);
-        showError('Could not set up restaurant account. Try again.');
-      }
-    })();
-  }, [router, user?.displayName, user?.uid]);
+    router.push('/restaurant-account-onboarding' as never);
+  }, [router]);
 
   const handleDriverSignup = useCallback(() => {
-    if (!user?.uid) {
-      router.push('/(auth)/register?intent=driver' as never);
-      return;
-    }
-    void (async () => {
-      try {
-        const role = await applySignupRole(user.uid, 'driver', {
-          displayName: user.displayName,
-        });
-        navigateForRole(role);
-      } catch (e) {
-        logError(e);
-        showError('Could not set up driver account. Try again.');
-      }
-    })();
-  }, [router, user?.displayName, user?.uid]);
+    router.push('/driver-onboarding' as never);
+  }, [router]);
 
   const openSupportEmail = async () => {
     const url = `mailto:${SUPPORT_EMAIL}`;
@@ -955,21 +924,32 @@ export default function ProfileScreen() {
             onRetry={() => void refreshProfileOrders()}
           />
 
-          <Text style={dynamicStyles.sectionHeading}>Referral Program</Text>
-          <ReferralProgramCard
-            uid={uid}
-            pal={{
-              surface: pal.surface,
-              border: pal.border,
-              text: pal.text,
-              textSecondary: pal.textSecondary,
-              textTertiary: pal.textTertiary,
-              primary: pal.primary,
-              onPrimary: pal.onPrimary,
-            }}
-          />
+          <Text style={dynamicStyles.sectionHeading}>Quick Access</Text>
+          <View style={dynamicStyles.supportListCard}>
+            <TouchableOpacity
+              style={dynamicStyles.supportRow}
+              onPress={() => router.push('/referral-program' as never)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Referral Program"
+            >
+              <View style={dynamicStyles.supportIconWrap}>
+                <MaterialIcons
+                  name="card-giftcard"
+                  size={22}
+                  color={pal.primary}
+                />
+              </View>
+              <Text style={dynamicStyles.supportRowLabel}>Referral Program</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={22}
+                color={pal.textTertiary}
+              />
+            </TouchableOpacity>
+          </View>
 
-          <Text style={dynamicStyles.sectionHeading}>Support & legal</Text>
+          <Text style={dynamicStyles.sectionHeading}>Help</Text>
           <View style={dynamicStyles.supportListCard}>
             {(
               [
@@ -987,33 +967,15 @@ export default function ProfileScreen() {
                 },
                 {
                   key: 'terms',
-                  label: 'Terms',
+                  label: 'Terms of Service',
                   icon: 'description' as const,
                   onPress: () => router.push('/terms'),
                 },
                 {
                   key: 'privacy',
-                  label: 'Privacy',
+                  label: 'Privacy Policy',
                   icon: 'shield' as const,
                   onPress: () => router.push('/privacy'),
-                },
-                {
-                  key: 'guidelines',
-                  label: 'Community Guidelines',
-                  icon: 'groups' as const,
-                  onPress: () => router.push('/safety'),
-                },
-                {
-                  key: 'report',
-                  label: 'Report User',
-                  icon: 'warning-amber' as const,
-                  onPress: () => router.push('/report-user' as never),
-                },
-                {
-                  key: 'block',
-                  label: 'Block Users',
-                  icon: 'block' as const,
-                  onPress: () => router.push('/blocked-users' as never),
                 },
               ] as const
             ).map((item, index, arr) => (
@@ -1050,8 +1012,8 @@ export default function ProfileScreen() {
           </Text>
           <View style={dynamicStyles.menuGroupCard}>
             <ProfileMenuItem
-              title="Create a business account"
-              subtitle="Manage team and business orders"
+              title="Create a restaurant account"
+              subtitle="Manage team and restaurant orders"
               iconKind="business"
               onPress={handleBusinessAccount}
             />
