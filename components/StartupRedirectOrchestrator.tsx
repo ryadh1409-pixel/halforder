@@ -1,4 +1,5 @@
 import { useBootstrap } from '@/contexts/BootstrapContext';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useStableRouteContext } from '@/hooks/useStableRouteContext';
 import { logAuthRoleDetected, logAuthRoleRouted, type AuthRoleRoute } from '@/lib/authRole';
 import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
@@ -14,6 +15,7 @@ import {
   markRedirectCompleted,
 } from '@/lib/startup/state';
 import { useAuth } from '@/services/AuthContext';
+import type { UserRole } from '@/services/userService';
 import {
   logGuard,
   logRedirect,
@@ -32,7 +34,15 @@ const EMERGENCY_STUCK_MS = __DEV__ ? 8000 : 12000;
 export function StartupRedirectOrchestrator() {
   const router = useRouter();
   const { shouldRedirect, routerReady, redirectSettled } = useBootstrap();
-  const { firestoreUserRole: role, user, authReady, loading, roleResolved } = useAuth();
+  const { firestoreUserRole, user, authReady, loading, roleResolved } = useAuth();
+  const { ready: workspaceReady, routingWorkspace } = useActiveWorkspace();
+  /** Active workspace for shells — does not demote Firestore roles. */
+  const role: UserRole | null =
+    workspaceReady && firestoreUserRole
+      ? firestoreUserRole === 'admin'
+        ? 'admin'
+        : routingWorkspace
+      : firestoreUserRole;
   const [redirectInFlight, setRedirectInFlight] = useState(false);
 
   const redirectInFlightRef = useRef(false);
@@ -106,7 +116,17 @@ export function StartupRedirectOrchestrator() {
   ]);
 
   useEffect(() => {
-    if (!routerReady || !role || !user?.uid || !authReady || loading || !roleResolved) return;
+    if (
+      !routerReady ||
+      !role ||
+      !user?.uid ||
+      !authReady ||
+      loading ||
+      !roleResolved ||
+      !workspaceReady
+    ) {
+      return;
+    }
 
     if (redirectInFlightRef.current || !stableRoute.settled || stableRoute.redirectInFlight) return;
     const segmentList = stableRoute.stableSegments;
@@ -154,10 +174,11 @@ export function StartupRedirectOrchestrator() {
     stableRoute.settled,
     stableRoute.stableSegments,
     user?.uid,
+    workspaceReady,
   ]);
 
   useEffect(() => {
-    if (!shouldRedirect || !role || !user?.uid || !routerReady) return;
+    if (!shouldRedirect || !role || !user?.uid || !routerReady || !workspaceReady) return;
 
     if (stuckTimerRef.current) return;
     stuckTimerRef.current = setTimeout(() => {
@@ -184,11 +205,20 @@ export function StartupRedirectOrchestrator() {
         stuckTimerRef.current = null;
       }
     };
-  }, [shouldRedirect, role, user?.uid, routerReady, stableRoute.pathname, redirectSettled, router]);
+  }, [
+    shouldRedirect,
+    role,
+    user?.uid,
+    routerReady,
+    stableRoute.pathname,
+    redirectSettled,
+    router,
+    workspaceReady,
+  ]);
 
   useEffect(() => {
     if (!shouldRedirect || !role || !user?.uid || !routerReady) return;
-    if (!authReady || loading || !roleResolved) return;
+    if (!authReady || loading || !roleResolved || !workspaceReady) return;
 
     if (!stableRoute.settled || stableRoute.redirectInFlight) return;
     const segmentList = stableRoute.stableSegments;
@@ -271,6 +301,7 @@ export function StartupRedirectOrchestrator() {
     stableRoute.stableSegments,
     user?.uid,
     redirectInFlight,
+    workspaceReady,
   ]);
 
   return null;

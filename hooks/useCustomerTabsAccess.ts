@@ -1,4 +1,5 @@
-import { isCustomerTabsRole, normalizeRoleForRouting } from '@/lib/routing/roleTypes';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
+import { normalizeRoleForRouting, type RoutingRole } from '@/lib/routing/roleTypes';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
 import { useMemo } from 'react';
@@ -11,21 +12,27 @@ export type CustomerTabsBlockReason =
 
 /**
  * Whether the `(tabs)` layout may mount its navigator.
- * False while role is unknown — prevents restaurant/driver tab tree flash.
+ * Uses active workspace (not Firestore demotion) so drivers/restaurants can browse as customers.
  */
 export function useCustomerTabsAccess() {
   const { user, loading, authReady, roleResolved, firestoreUserRole } = useAuth();
+  const { ready: workspaceReady, routingWorkspace } = useActiveWorkspace();
 
   return useMemo(() => {
     const signedIn = isRegisteredAuthUser(user);
-    const role = normalizeRoleForRouting(firestoreUserRole);
     const authSettled = authReady && !loading;
-    const customerWorkspace = isCustomerTabsRole(firestoreUserRole);
+    const customerWorkspace =
+      workspaceReady &&
+      (routingWorkspace === 'user' || firestoreUserRole === 'admin');
+    const role: RoutingRole =
+      firestoreUserRole === 'admin'
+        ? 'admin'
+        : normalizeRoleForRouting(routingWorkspace);
 
     let blockReason: CustomerTabsBlockReason = 'ready';
     if (!authSettled) {
       blockReason = 'auth-loading';
-    } else if (signedIn && !roleResolved) {
+    } else if (signedIn && (!roleResolved || !workspaceReady)) {
       blockReason = 'role-pending';
     } else if (signedIn && !customerWorkspace) {
       blockReason = 'wrong-role-not-customer';
@@ -34,7 +41,8 @@ export function useCustomerTabsAccess() {
     const canMountTabs =
       blockReason === 'ready' &&
       authSettled &&
-      (!signedIn || (roleResolved && signedIn && customerWorkspace));
+      (!signedIn ||
+        (roleResolved && workspaceReady && signedIn && customerWorkspace));
 
     return {
       canMountTabs,
@@ -46,5 +54,13 @@ export function useCustomerTabsAccess() {
       role,
       firestoreRole: firestoreUserRole,
     };
-  }, [authReady, firestoreUserRole, loading, roleResolved, user]);
+  }, [
+    authReady,
+    firestoreUserRole,
+    loading,
+    roleResolved,
+    routingWorkspace,
+    user,
+    workspaceReady,
+  ]);
 }

@@ -1,6 +1,8 @@
 import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { navigateForRole } from '@/lib/navigation';
 import { applySignupRole } from '@/services/authRoleAssignment';
+import { setActiveWorkspace } from '@/services/activeWorkspace';
+import { useActiveWorkspaceStore } from '@/store/activeWorkspaceStore';
 import { useAuth } from '@/services/AuthContext';
 import { logError } from '@/utils/errorLogger';
 import { showError } from '@/utils/toast';
@@ -62,6 +64,8 @@ export default function DriverOnboardingScreen() {
       const role = await applySignupRole(user.uid, 'driver', {
         displayName: user.displayName,
       });
+      await setActiveWorkspace(user.uid, 'driver');
+      await useActiveWorkspaceStore.getState().hydrate(user.uid, 'driver');
       navigateForRole(role);
     } catch (e) {
       logError(e);

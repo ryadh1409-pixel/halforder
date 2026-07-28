@@ -1,5 +1,6 @@
 import { PostPaymentLoadingShell } from '@/components/payment/PaymentNavigationBoundary';
 import { DriverStackGate } from '@/components/driver/DriverStackGate';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useDriverShellAccess } from '@/hooks/useDriverShellAccess';
 import { isInDriverGroup } from '@/lib/routing/routeConstants';
 import { usePathname, useRouter, useSegments } from 'expo-router';
@@ -14,6 +15,7 @@ export const unstable_settings = {
  */
 export default function DriverLayout() {
   const access = useDriverShellAccess();
+  const { ready: workspaceReady, routingWorkspace } = useActiveWorkspace();
   const pathname = usePathname();
   const segments = useSegments();
   const segmentList = segments as string[];
@@ -26,7 +28,8 @@ export default function DriverLayout() {
     inDriverGroup &&
     authSettled &&
     roleResolved &&
-    firestoreRole !== 'driver';
+    workspaceReady &&
+    routingWorkspace !== 'driver';
 
   console.log('[DriverLayout]', {
     pathname,
@@ -34,6 +37,7 @@ export default function DriverLayout() {
     routeGroup: inDriverGroup ? '(driver)' : 'not-driver',
     inDriverGroup,
     firestoreRole,
+    routingWorkspace,
     shouldEject,
     blockReason: access.blockReason,
   });
@@ -48,10 +52,19 @@ export default function DriverLayout() {
       redirectSource: pathname,
       redirectTarget: target,
       firestoreRole,
+      routingWorkspace,
     });
 
     router.replace(target);
-  }, [authSettled, roleResolved, firestoreRole, pathname, router, shouldEject]);
+  }, [
+    authSettled,
+    firestoreRole,
+    pathname,
+    roleResolved,
+    router,
+    routingWorkspace,
+    shouldEject,
+  ]);
 
   useEffect(() => {
     if (!hasEjected.current) return;

@@ -2,6 +2,8 @@ import { AccountLocationPicker } from '@/components/location/AccountLocationPick
 import { LOCATION_PALETTE_DARK } from '@/components/location/locationPalette';
 import { AppTextInput } from '@/components/AppTextInput';
 import { DriverWalletCard } from '@/components/driver/DriverWalletCard';
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useDriverProfileIdentity } from '@/hooks/useDriverProfileIdentity';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { uploadAndPersistDriverProfilePhoto } from '@/lib/driverProfilePhoto';
@@ -57,6 +59,13 @@ export default function DriverProfileTab() {
   const { user, signOutUser, reloadAuthUser } = useAuth();
   const uid = user?.uid ?? null;
   const identity = useDriverProfileIdentity(uid);
+  const {
+    ready: workspaceReady,
+    activeWorkspace,
+    availableWorkspaces,
+    switchWorkspace,
+  } = useActiveWorkspace();
+  const currentWorkspace = activeWorkspace ?? 'driver';
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -439,6 +448,15 @@ export default function DriverProfileTab() {
                 <Text style={styles.saveBtnText}>Save</Text>
               )}
             </Pressable>
+          ) : null}
+
+          {workspaceReady ? (
+            <WorkspaceSwitcher
+              availableWorkspaces={availableWorkspaces}
+              activeWorkspace={currentWorkspace}
+              onSwitch={switchWorkspace}
+              variant="driver"
+            />
           ) : null}
         </View>
 

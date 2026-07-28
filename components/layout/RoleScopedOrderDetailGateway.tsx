@@ -1,6 +1,7 @@
 import { PostPaymentLoadingShell } from '@/components/payment/PaymentNavigationBoundary';
 import { resolveOrderDetailGate } from '@/lib/orderDetailGate';
 import { normalizeOrderRouteId } from '@/lib/orderRouteParams';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useAuth } from '@/services/AuthContext';
 import { Redirect, useLocalSearchParams, usePathname, useSegments } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -16,6 +17,7 @@ type Props = {
  */
 export function RoleScopedOrderDetailGateway({ children }: Props) {
   const { authReady, roleResolved, loading, firestoreUserRole, user } = useAuth();
+  const { ready: workspaceReady, routingWorkspace } = useActiveWorkspace();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const pathname = usePathname();
   const segments = useSegments();
@@ -28,8 +30,9 @@ export function RoleScopedOrderDetailGateway({ children }: Props) {
       resolveOrderDetailGate({
         authReady,
         loading,
-        roleResolved,
+        roleResolved: roleResolved && workspaceReady,
         firestoreUserRole,
+        activeWorkspace: workspaceReady ? routingWorkspace : null,
         userUid: user?.uid,
         orderId,
         pathname,
@@ -42,8 +45,10 @@ export function RoleScopedOrderDetailGateway({ children }: Props) {
       orderId,
       pathname,
       roleResolved,
+      routingWorkspace,
       segmentKey,
       user?.uid,
+      workspaceReady,
     ],
   );
 

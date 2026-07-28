@@ -1,6 +1,7 @@
 import { orderDetailHref } from '@/lib/orderRoutes';
 import { isInHostGroup } from '@/lib/routing/routeConstants';
 import { isCustomerTabsRole, normalizeRoleForRouting } from '@/lib/routing/roleTypes';
+import type { ActiveWorkspace } from '@/services/activeWorkspace';
 import type { UserRole } from '@/services/userService';
 import type { Href } from 'expo-router';
 
@@ -9,6 +10,8 @@ export type OrderDetailGateInput = {
   loading: boolean;
   roleResolved: boolean;
   firestoreUserRole: UserRole | null;
+  /** Local active workspace — when set, overrides Firestore role for shell routing. */
+  activeWorkspace?: ActiveWorkspace | null;
   userUid: string | null | undefined;
   orderId: string;
   pathname: string;
@@ -44,9 +47,23 @@ export type OrderDetailGateDecision =
 
 /** Pure gate for `/order/[id]` — customer accounts never enter driver workspace. */
 export function resolveOrderDetailGate(input: OrderDetailGateInput): OrderDetailGateDecision {
-  const role = normalizeRoleForRouting(input.firestoreUserRole);
-  const customerWorkspace = isCustomerTabsRole(input.firestoreUserRole);
-  const driverWorkspace = input.firestoreUserRole === 'driver' && role === 'driver';
+  const workspace = input.activeWorkspace ?? null;
+  const role = normalizeRoleForRouting(
+    workspace ?? input.firestoreUserRole,
+  );
+  const customerWorkspace =
+    workspace === 'user' ||
+    (workspace == null && isCustomerTabsRole(input.firestoreUserRole));
+  const driverWorkspace =
+    workspace === 'driver' ||
+    (workspace == null &&
+      input.firestoreUserRole === 'driver' &&
+      role === 'driver');
+  const restaurantWorkspace =
+    workspace === 'restaurant' ||
+    (workspace == null &&
+      input.firestoreUserRole === 'restaurant' &&
+      role === 'restaurant');
   const base = {
     role,
     firestoreRole: input.firestoreUserRole,
@@ -73,8 +90,7 @@ export function resolveOrderDetailGate(input: OrderDetailGateInput): OrderDetail
   // All roles use root `app/order/[id].tsx` — never redirect into `(driver)/order` (duplicate URL).
 
   if (
-    input.firestoreUserRole === 'restaurant' &&
-    role === 'restaurant' &&
+    restaurantWorkspace &&
     !isInHostGroup(input.segments, input.pathname)
   ) {
     return {

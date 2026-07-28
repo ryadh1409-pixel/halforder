@@ -16,10 +16,12 @@ import {
   RestaurantOrdersPanel,
   type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import {
   mergeHostRestaurantProfile,
   saveRestaurantVenueMain,
 } from '@/services/hostRestaurant';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useAuth } from '@/services/AuthContext';
 import { auth, db } from '@/services/firebase';
 import {
@@ -69,6 +71,13 @@ const AVATAR_SIZE = 90;
 export default function HostDashboardScreen() {
   const router = useRouter();
   const { user, loading: authLoading, signOutUser } = useAuth();
+  const {
+    ready: workspaceReady,
+    activeWorkspace,
+    availableWorkspaces,
+    switchWorkspace,
+  } = useActiveWorkspace();
+  const currentWorkspace = activeWorkspace ?? 'restaurant';
   const { authorized, loading: roleLoading } = requireRole(['restaurant', 'host']);
   const uid = user?.uid ?? '';
 
@@ -566,6 +575,15 @@ export default function HostDashboardScreen() {
                     <Text style={styles.primaryBtnText}>Save</Text>
                   )}
                 </TouchableOpacity>
+              ) : null}
+
+              {workspaceReady ? (
+                <WorkspaceSwitcher
+                  availableWorkspaces={availableWorkspaces}
+                  activeWorkspace={currentWorkspace}
+                  onSwitch={switchWorkspace}
+                  variant="restaurant"
+                />
               ) : null}
             </View>
           </View>

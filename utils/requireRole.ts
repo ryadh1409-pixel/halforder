@@ -1,3 +1,4 @@
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '../services/AuthContext';
@@ -15,10 +16,15 @@ function isRoleAllowed(allowedRoles: UserRole[], role: UserRole | null | undefin
 
 export function useRequireRole(allowedRoles: UserRole[]) {
   const { user, role, loading, roleResolved } = useAuth();
+  const { ready: workspaceReady, routingWorkspace } = useActiveWorkspace();
 
-  const rolePending = isRegisteredAuthUser(user) && !roleResolved;
+  const rolePending =
+    isRegisteredAuthUser(user) && (!roleResolved || !workspaceReady);
   const gateLoading = loading || rolePending;
-  const authorized = !!user && isRoleAllowed(allowedRoles, role);
+  /** Prefer active workspace for shell gates — never demotes Firestore roles. */
+  const effectiveRole: UserRole | null | undefined =
+    role === 'admin' ? 'admin' : workspaceReady ? routingWorkspace : role;
+  const authorized = !!user && isRoleAllowed(allowedRoles, effectiveRole);
 
   return useMemo(
     () => ({

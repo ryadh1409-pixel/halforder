@@ -4,10 +4,10 @@ import DriverTabsNavigator from '@/components/driver/DriverTabsNavigator';
 import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
 import { DriverRealtimeProvider } from '@/contexts/DriverRealtimeContext';
 import { DriverShellProvider } from '@/contexts/DriverShellContext';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useAuthUid } from '@/hooks/useAuthUid';
 import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { markDriverStackMounted } from '@/lib/driverStack';
-import { isInDriverGroup } from '@/lib/driverRouteUtils';
 import { useAuth } from '@/services/AuthContext';
 import { logDriverLayoutState } from '@/utils/driverLifecycleLog';
 import { useDriverMountLog } from '@/utils/driverMountLog';
@@ -23,12 +23,11 @@ function DriverStackGateInner() {
   const segments = useSegments();
   const segmentList = segments as string[];
   const uid = useAuthUid();
-  const { authReady, roleResolved, loading, firestoreUserRole } = useAuth();
-  const role = normalizeRoleForRouting(firestoreUserRole);
+  const { authReady, roleResolved, loading } = useAuth();
+  const { routingWorkspace } = useActiveWorkspace();
+  const role = normalizeRoleForRouting(routingWorkspace);
 
   useDriverMountLog('DriverLayout', uid || null);
-
-  const inDriverGroup = isInDriverGroup(segmentList, pathname);
 
   const providerReadyNow = useMemo(
     () =>
@@ -36,24 +35,24 @@ function DriverStackGateInner() {
       roleResolved &&
       !loading &&
       Boolean(uid) &&
-      role === 'driver' &&
-      inDriverGroup,
-    [authReady, roleResolved, loading, uid, role, inDriverGroup],
+      role === 'driver',
+    [authReady, roleResolved, loading, uid, role],
   );
 
-  const [providersLatched, setProvidersLatched] = useState(false);
+  const [latchedUid, setLatchedUid] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!inDriverGroup || !uid) {
-      setProvidersLatched(false);
+    if (!uid) {
+      setLatchedUid(null);
       return;
     }
+    // Latch once — never clear on transient routing/segment flaps.
     if (providerReadyNow) {
-      setProvidersLatched(true);
+      setLatchedUid(uid);
     }
-  }, [inDriverGroup, providerReadyNow, uid]);
+  }, [uid, providerReadyNow]);
 
-  const providerActive = providersLatched && inDriverGroup;
+  const providerActive = Boolean(uid) && latchedUid === uid;
 
   useEffect(() => {
     markDriverStackMounted();

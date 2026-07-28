@@ -5,6 +5,7 @@ import {
 } from '@/constants/chromeLayout';
 import { UE } from '@/constants/uberEatsTheme';
 import { adminRoutes } from '@/constants/adminRoutes';
+import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { TABS_ROUTES } from '@/lib/navigationPaths';
 import {
   resolveTabsShellRole,
@@ -211,15 +212,19 @@ export type CustomTabBarProps = BottomTabBarProps;
 function CustomTabBar(props: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { loading, firestoreUserRole } = useAuth();
+  const { ready: workspaceReady, routingWorkspace } = useActiveWorkspace();
   const cartQty = useCartStore((s) => selectCartTotals(s.items).qty);
 
-  const role = useMemo(
-    () => resolveTabsShellRole(firestoreUserRole, loading),
-    [loading, firestoreUserRole],
-  );
+  const role = useMemo(() => {
+    if (loading || !workspaceReady) return null;
+    if (firestoreUserRole === 'admin') {
+      return resolveTabsShellRole('admin', false);
+    }
+    return resolveTabsShellRole(routingWorkspace, false);
+  }, [firestoreUserRole, loading, routingWorkspace, workspaceReady]);
 
   if (!props?.state?.routes?.length) return null;
-  if (role === 'driver' || !role) return null;
+  if (role === 'driver' || role === 'restaurant' || !role) return null;
 
   const { state } = props;
   const tabIndex = typeof state.index === 'number' ? state.index : 0;
