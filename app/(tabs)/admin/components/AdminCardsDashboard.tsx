@@ -4,6 +4,7 @@ import { adminColors as COLORS } from '../../../../constants/adminTheme';
 import {
   ADMIN_FOOD_CARD_SLOT_COUNT,
 } from '../../../../constants/adminFoodCards';
+import { formatWaitingElapsed } from '../../../../lib/swipeMarketplaceStatus';
 import { auth } from '../../../../services/firebase';
 import {
   subscribeAdminFoodCardWaitingQueues,
@@ -136,6 +137,11 @@ export function AdminCardsDashboard() {
               : undefined;
           const waiting = waitingQueues[slot.docId];
           const waitingUserName = waiting?.waitingUserFirstName ?? null;
+          const staleWaiting = waiting?.isStale === true;
+          const waitingElapsedLabel =
+            waiting?.waitingSinceMs != null
+              ? formatWaitingElapsed(Date.now() - waiting.waitingSinceMs)
+              : null;
           return (
             <View style={{ width: cellW }}>
               <AdminFoodCardTile
@@ -148,6 +154,8 @@ export function AdminCardsDashboard() {
                 active={slot.active}
                 configured={configured}
                 waitingUserName={waitingUserName}
+                staleWaiting={staleWaiting}
+                waitingElapsedLabel={waitingElapsedLabel}
                 onPress={() => openDetail(slot.docId)}
               />
             </View>

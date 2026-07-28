@@ -115,11 +115,33 @@ export async function joinAdminFoodShare(
     typeof queuePreview.data()?.waitingUserId === 'string'
       ? (queuePreview.data()?.waitingUserId as string)
       : null;
+  const previewStatus =
+    typeof queuePreview.data()?.marketplaceStatus === 'string'
+      ? String(queuePreview.data()?.marketplaceStatus)
+      : '';
+  const previewMatchId =
+    typeof queuePreview.data()?.activeMatchId === 'string'
+      ? String(queuePreview.data()?.activeMatchId).trim()
+      : '';
   console.log('[SHARE FILTER]', {
     adminFoodShareId,
     waitingUserId: waitingPreview,
     selfIsWaiting: waitingPreview === uid,
+    marketplaceStatus: previewStatus,
   });
+  if (
+    previewStatus === 'matched' ||
+    previewStatus === 'ready' ||
+    (previewMatchId.length > 0 && !waitingPreview)
+  ) {
+    return {
+      ok: false,
+      error:
+        previewStatus === 'ready'
+          ? 'This share is ready for the restaurant.'
+          : 'This share is already matched.',
+    };
+  }
   if (waitingPreview && waitingPreview !== uid) {
     if (await hasBlockBetween(uid, waitingPreview)) {
       console.log('[MATCH FAILURE]', {
@@ -154,15 +176,36 @@ export async function joinAdminFoodShare(
       }
 
       const queueSnap = await tx.get(queueRef);
+      const queueData = queueSnap.exists()
+        ? (queueSnap.data() as Record<string, unknown>)
+        : {};
+      const queueMarket =
+        typeof queueData.marketplaceStatus === 'string'
+          ? queueData.marketplaceStatus
+          : '';
+      const queueActiveMatch =
+        typeof queueData.activeMatchId === 'string'
+          ? queueData.activeMatchId.trim()
+          : '';
+      if (
+        queueMarket === 'matched' ||
+        queueMarket === 'ready' ||
+        (queueActiveMatch.length > 0 && !queueData.waitingUserId)
+      ) {
+        throw new Error(
+          queueMarket === 'ready'
+            ? 'This share is ready for the restaurant.'
+            : 'This share is already matched.',
+        );
+      }
       const waitingUserId =
-        queueSnap.exists() &&
-        typeof queueSnap.data()?.waitingUserId === 'string'
-          ? (queueSnap.data()?.waitingUserId as string)
+        typeof queueData.waitingUserId === 'string'
+          ? queueData.waitingUserId
           : null;
       const waitingFirstName =
-        queueSnap.exists() &&
-        typeof queueSnap.data()?.waitingUserFirstName === 'string'
-          ? (queueSnap.data()?.waitingUserFirstName as string)
+        typeof queueData.waitingUserFirstName === 'string' &&
+        queueData.waitingUserFirstName.trim()
+          ? queueData.waitingUserFirstName.trim()
           : 'Partner';
 
       const existingReq = await tx.get(requestRef);
@@ -191,6 +234,9 @@ export async function joinAdminFoodShare(
                 adminFoodShareId,
                 waitingUserId: uid,
                 waitingUserFirstName: myFirstName,
+                waitingSince: serverTimestamp(),
+                marketplaceStatus: 'waiting_for_member',
+                activeMatchId: null,
                 updatedAt: serverTimestamp(),
               },
               { merge: true },
@@ -213,6 +259,9 @@ export async function joinAdminFoodShare(
             adminFoodShareId,
             waitingUserId: uid,
             waitingUserFirstName: myFirstName,
+            waitingSince: serverTimestamp(),
+            marketplaceStatus: 'waiting_for_member',
+            activeMatchId: null,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -254,6 +303,9 @@ export async function joinAdminFoodShare(
       tx.update(queueRef, {
         waitingUserId: null,
         waitingUserFirstName: null,
+        waitingSince: null,
+        activeMatchId: matchId,
+        marketplaceStatus: 'matched',
         updatedAt: serverTimestamp(),
       });
       tx.set(
@@ -680,6 +732,7 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
 }
 
 export {
+  adminCancelWaitingMember,
   blockFoodShareUser,
   cancelFoodShareMatch,
   cancelWaitingFoodShare,

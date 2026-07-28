@@ -5,6 +5,7 @@ import {
 } from '@/constants/adminFoodCards';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { foodShareLifecycleLabel } from '@/lib/foodShareLifecycle';
+import { SWIPE_STALE_WAITING_MS } from '@/lib/swipeMarketplaceStatus';
 import {
   promotionBadgeLabel,
   type PromotionBadgeValue,
@@ -34,6 +35,7 @@ export type AdminFoodCardWaitingUser = {
   userId: string;
   userFirstName: string;
   joinedAtLabel: string;
+  joinedAtMs: number | null;
   status: MatchRequestDoc['status'];
 };
 
@@ -303,6 +305,7 @@ function buildDetail(input: {
       userId: r.userId,
       userFirstName: r.userFirstName,
       joinedAtLabel: r.createdAtMs ? formatFirestoreTime(r.createdAtMs) : '—',
+      joinedAtMs: r.createdAtMs ?? null,
       status: r.status,
     }));
 
@@ -645,6 +648,9 @@ export type AdminFoodCardWaitingQueue = {
   adminFoodShareId: string;
   waitingUserId: string | null;
   waitingUserFirstName: string | null;
+  waitingSinceMs: number | null;
+  /** True when waiting alone for more than 30 minutes. */
+  isStale: boolean;
 };
 
 /** Live waiting-user snapshot per food card slot (from `matchQueues`). */
@@ -661,10 +667,22 @@ export function subscribeAdminFoodCardWaitingQueues(
       doc(db, 'matchQueues', slotId),
       (snap) => {
         const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+        const waitingUserId = normStr(data?.waitingUserId);
+        const waitingSinceMs =
+          waitingUserId != null
+            ? safeToMillis(data?.waitingSince) ??
+              safeToMillis(data?.updatedAt)
+            : null;
+        const isStale =
+          waitingUserId != null &&
+          waitingSinceMs != null &&
+          Date.now() - waitingSinceMs >= SWIPE_STALE_WAITING_MS;
         state[slotId] = {
           adminFoodShareId: slotId,
-          waitingUserId: normStr(data?.waitingUserId),
+          waitingUserId,
           waitingUserFirstName: normStr(data?.waitingUserFirstName),
+          waitingSinceMs,
+          isStale,
         };
         emit();
       },

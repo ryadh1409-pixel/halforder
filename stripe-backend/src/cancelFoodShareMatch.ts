@@ -3,6 +3,7 @@ import * as functions from "firebase-functions/v1";
 import type {CallableContext} from "firebase-functions/v1/https";
 import {defineSecret} from "firebase-functions/params";
 import {refundFoodSharePaymentsForMatch} from "./foodShareWebhookHandlers.js";
+import {writeFoodShareInbox} from "./foodShareServerNotify.js";
 
 defineSecret("STRIPE_SECRET_KEY");
 
@@ -13,6 +14,12 @@ const DRIVER_ACTIVE_LIFECYCLES = new Set([
   "COMPLETED",
 ]);
 
+const WAITING_CANCEL_APOLOGY_TITLE = "We're sorry about the wait";
+const WAITING_CANCEL_APOLOGY_BODY =
+  "We're sorry — we couldn't find another member to complete your shared order in time.\n\n" +
+  "Your participation has been cancelled automatically.\n\n" +
+  "Feel free to join another available order or create a new one.\n\n" +
+  "Thank you for using HalfOrder 💜";
 function hasAssignedDriver(data: Record<string, unknown>): boolean {
   const driverId =
     typeof data.driverId === "string" ? data.driverId.trim() : "";
@@ -120,6 +127,9 @@ async function cancelWaitingShare(
         {
           waitingUserId: null,
           waitingUserFirstName: null,
+          waitingSince: null,
+          marketplaceStatus: null,
+          activeMatchId: null,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         {merge: true},
@@ -135,6 +145,102 @@ async function cancelWaitingShare(
   });
 
   return {ok: true};
+}
+
+async function adminCancelWaitingShare(
+  actorUid: string,
+  adminFoodShareId: string,
+): Promise<{ok: true; cancelledUserId: string | null}> {
+  const db = admin.firestore();
+  const queueRef = db.doc(`matchQueues/${adminFoodShareId}`);
+  const queueSnap = await queueRef.get();
+  const waitingUserId =
+    queueSnap.exists &&
+    typeof queueSnap.data()?.waitingUserId === "string"
+      ? String(queueSnap.data()?.waitingUserId).trim()
+      : "";
+
+  if (!waitingUserId) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "No waiting member on this card.",
+    );
+  }
+
+  const requestRef = db.doc(
+    `matchRequests/${adminFoodShareId}_${waitingUserId}`,
+  );
+
+  await db.runTransaction(async (tx) => {
+    const [qSnap, requestSnap] = await Promise.all([
+      tx.get(queueRef),
+      tx.get(requestRef),
+    ]);
+    const currentWaiting =
+      qSnap.exists && typeof qSnap.data()?.waitingUserId === "string"
+        ? String(qSnap.data()?.waitingUserId).trim()
+        : "";
+    if (currentWaiting !== waitingUserId) {
+      throw new functions.https.HttpsError(
+        "aborted",
+        "Waiting member changed. Refresh and try again.",
+      );
+    }
+
+    if (requestSnap.exists) {
+      const req = requestSnap.data() ?? {};
+      if (req.status === "MATCHED") {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Member already matched — cancel the match instead.",
+        );
+      }
+      tx.set(
+        requestRef,
+        {
+          status: "CANCELLED",
+          lifecycle: "CANCELLED",
+          cancelReason: "CANCELLED_BY_ADMIN",
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
+
+    tx.set(
+      queueRef,
+      {
+        waitingUserId: null,
+        waitingUserFirstName: null,
+        waitingSince: null,
+        activeMatchId: null,
+        marketplaceStatus: "available",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+  });
+
+  await writeServerAudit({
+    action: "admin_cancelled_waiting_member",
+    actorUid,
+    targetUid: waitingUserId,
+    adminFoodShareId,
+    cancelReason: "CANCELLED_BY_ADMIN",
+  });
+
+  await writeFoodShareInbox({
+    recipientUid: waitingUserId,
+    type: "match_cancelled",
+    title: WAITING_CANCEL_APOLOGY_TITLE,
+    body: WAITING_CANCEL_APOLOGY_BODY,
+    deepLink: "/(tabs)/swipe",
+    adminFoodShareId,
+    pushType: "food_share_match_cancelled",
+  });
+
+  return {ok: true, cancelledUserId: waitingUserId};
 }
 
 async function cancelActiveMatch(
@@ -249,6 +355,9 @@ async function cancelActiveMatch(
       {
         waitingUserId: null,
         waitingUserFirstName: null,
+        waitingSince: null,
+        activeMatchId: null,
+        marketplaceStatus: null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       {merge: true},
@@ -341,6 +450,12 @@ export const cancelFoodShareMatch = functions
           "invalid-argument",
           "adminFoodShareId is required for waiting cancel.",
         );
+      }
+      const isAdmin =
+        context.auth.token?.admin === true ||
+        context.auth.token?.role === "admin";
+      if (isAdmin && payload.asAdmin === true) {
+        return adminCancelWaitingShare(uid, adminFoodShareId);
       }
       return cancelWaitingShare(uid, adminFoodShareId);
     }

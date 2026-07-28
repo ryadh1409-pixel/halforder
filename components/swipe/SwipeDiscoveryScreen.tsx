@@ -17,6 +17,7 @@ import { SwipeMatchSheet } from '@/components/swipe/SwipeMatchSheet';
 import {
   adminFoodSharesToSwipeCards,
   subscribeActiveAdminFoodShares,
+  subscribeSwipeMatchQueues,
 } from '@/services/adminFoodSharesService';
 import { joinAdminFoodShare } from '@/services/foodShareMatchService';
 import { auth } from '@/services/firebase';
@@ -27,10 +28,13 @@ import {
 import { recordSwipe } from '@/services/swipeService';
 import { useSwipeStore } from '@/store/swipeStore';
 import type { SwipeReferralPromotion } from '@/types/swipeReferralPromotion';
+import type { AdminFoodShareDoc } from '@/types/foodShare';
+import type { SwipeQueueMarketplaceState } from '@/lib/swipeMarketplaceStatus';
+import { isSwipeMarketplaceJoinLocked } from '@/lib/swipeMarketplaceStatus';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Pressable,
@@ -78,16 +82,32 @@ export function SwipeDiscoveryScreen() {
   const advanceDeck = useSwipeStore((s) => s.advanceDeck);
   const setJoining = useSwipeStore((s) => s.setJoining);
   const setLastMatch = useSwipeStore((s) => s.setLastMatch);
+  const sharesRef = useRef<AdminFoodShareDoc[]>([]);
+  const queuesRef = useRef<Record<string, SwipeQueueMarketplaceState>>({});
+
+  const rebuildDeck = useCallback(() => {
+    const result = adminFoodSharesToSwipeCards(
+      sharesRef.current,
+      queuesRef.current,
+    );
+    setCards(result);
+    setLoadingDeck(false);
+  }, [setCards]);
 
   useEffect(() => {
-    const unsub = subscribeActiveAdminFoodShares((shares) => {
-      const result = adminFoodSharesToSwipeCards(shares);
-      console.log('[SWIPE QUERY RESULT]', { shares, swipeCards: result });
-      setCards(result);
-      setLoadingDeck(false);
+    const unsubShares = subscribeActiveAdminFoodShares((shares) => {
+      sharesRef.current = shares;
+      rebuildDeck();
     });
-    return unsub;
-  }, [setCards]);
+    const unsubQueues = subscribeSwipeMatchQueues((queues) => {
+      queuesRef.current = queues;
+      rebuildDeck();
+    });
+    return () => {
+      unsubShares();
+      unsubQueues();
+    };
+  }, [rebuildDeck]);
 
   useEffect(() => {
     return subscribeLiveSwipeReferralPromotions(setLiveReferralPromos);
@@ -151,6 +171,14 @@ export function SwipeDiscoveryScreen() {
       return;
     }
     if (!current || joiningOrderId) return;
+    if (isSwipeMarketplaceJoinLocked(current.marketplaceStatus)) {
+      showSuccess(
+        current.marketplaceStatus === 'ready'
+          ? 'Ready for Restaurant'
+          : 'Matched',
+      );
+      return;
+    }
 
     setJoining(current.id);
     void recordSwipe({
@@ -294,6 +322,10 @@ export function SwipeDiscoveryScreen() {
 
         <SwipeActionButtons
           disabled={!current}
+          likeDisabled={
+            current != null &&
+            isSwipeMarketplaceJoinLocked(current.marketplaceStatus)
+          }
           loading={!!joiningOrderId}
           onPass={() => setActionSignal({ id: Date.now(), direction: 'pass' })}
           onLike={() => setActionSignal({ id: Date.now(), direction: 'like' })}

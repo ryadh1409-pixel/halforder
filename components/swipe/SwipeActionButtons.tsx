@@ -12,6 +12,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Props = {
   disabled?: boolean;
+  /** When true, only the join/like control is disabled (pass still works). */
+  likeDisabled?: boolean;
   loading?: boolean;
   onPass: () => void;
   onLike: () => void;
@@ -65,7 +67,13 @@ function ActionBtn({
   );
 }
 
-function SwipeActionButtonsInner({ disabled, loading, onPass, onLike }: Props) {
+function SwipeActionButtonsInner({
+  disabled,
+  likeDisabled,
+  loading,
+  onPass,
+  onLike,
+}: Props) {
   return (
     <View style={styles.row}>
       <ActionBtn
@@ -75,7 +83,7 @@ function SwipeActionButtonsInner({ disabled, loading, onPass, onLike }: Props) {
       />
       <ActionBtn
         variant="like"
-        disabled={disabled || loading}
+        disabled={disabled || likeDisabled || loading}
         onPress={onLike}
       />
     </View>

@@ -2,6 +2,10 @@ import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCar
 import { PromotionBadgesRow } from '@/components/PromotionBadge';
 import { isPickupFulfillment } from '@/lib/foodShareFulfillment';
 import { formatShareCurrency } from '@/lib/foodSharePricing';
+import {
+  isSwipeMarketplaceJoinLocked,
+  SWIPE_MARKETPLACE_STATUS_LABEL,
+} from '@/lib/swipeMarketplaceStatus';
 import type { SwipeFoodCard as SwipeFoodCardType } from '@/types/swipe';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,10 +18,22 @@ type Props = {
 
 function SwipeFoodCardInner({ card }: Props) {
   const isPickup = isPickupFulfillment(card.fulfillmentMode);
-  const spotsLabel =
-    card.spotsLeft <= 0
-      ? 'Full'
-      : `${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} left`;
+  const status = card.marketplaceStatus ?? 'available';
+  const joinLocked = isSwipeMarketplaceJoinLocked(status);
+  const statusLabel = SWIPE_MARKETPLACE_STATUS_LABEL[status];
+  const waitingCopy =
+    status === 'waiting_for_member'
+      ? '✔ 1 of 2 members joined'
+      : null;
+  const spotsLabel = joinLocked
+    ? status === 'ready'
+      ? 'Both members joined successfully'
+      : 'Both members matched'
+    : status === 'waiting_for_member'
+      ? 'Waiting for 1 more member'
+      : card.spotsLeft <= 0
+        ? 'Full'
+        : `${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} left`;
   const promoValues =
     card.promotionBadges && card.promotionBadges.length > 0
       ? card.promotionBadges
@@ -93,17 +109,42 @@ function SwipeFoodCardInner({ card }: Props) {
         />
 
         <Text style={styles.savingsHint}>
-          Save up to {formatShareCurrency(card.pricing.totalSaving)} vs full price
+          Save up to {formatShareCurrency(card.pricing.totalSaving)} vs full
+          price
         </Text>
 
         <View style={styles.social}>
           <View style={styles.socialCopy}>
-            <Text style={styles.activity}>
-              {isPickup
-                ? 'Swipe right to join this pickup'
-                : 'Swipe right to join this share'}
-            </Text>
-            <Text style={styles.spots}>{spotsLabel}</Text>
+            {joinLocked ? (
+              <>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    status === 'ready'
+                      ? styles.statusBadgeReady
+                      : styles.statusBadgeMatched,
+                  ]}
+                >
+                  <Text style={styles.statusBadgeTxt}>{statusLabel}</Text>
+                </View>
+                <Text style={styles.activity}>{spotsLabel}</Text>
+              </>
+            ) : waitingCopy ? (
+              <>
+                <Text style={styles.waitingAccent}>{waitingCopy}</Text>
+                <Text style={styles.activity}>{statusLabel}</Text>
+                <Text style={styles.spots}>{spotsLabel}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.activity}>
+                  {isPickup
+                    ? 'Swipe right to join this pickup'
+                    : 'Swipe right to join this share'}
+                </Text>
+                <Text style={styles.spots}>{spotsLabel}</Text>
+              </>
+            )}
           </View>
         </View>
       </View>
@@ -247,5 +288,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#B7BDC9',
+  },
+  waitingAccent: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#4ADE80',
+    marginBottom: 2,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginBottom: 6,
+  },
+  statusBadgeMatched: {
+    backgroundColor: 'rgba(168, 85, 247, 0.92)',
+  },
+  statusBadgeReady: {
+    backgroundColor: 'rgba(34, 197, 94, 0.92)',
+  },
+  statusBadgeTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
 });

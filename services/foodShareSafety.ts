@@ -63,6 +63,23 @@ export async function cancelWaitingFoodShare(
   return { ok: true };
 }
 
+/** Admin: remove the waiting member and reset the catalog seat to 0/2. */
+export async function adminCancelWaitingMember(
+  adminFoodShareId: string,
+): Promise<CancelFoodShareResult & { cancelledUserId?: string | null }> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error(FOOD_SHARE_ERRORS.signInRequired);
+
+  const fn = httpsCallable(functions, 'cancelFoodShareMatch');
+  const result = await fn({
+    scope: 'waiting',
+    adminFoodShareId,
+    asAdmin: true,
+  });
+  const data = (result.data ?? {}) as { cancelledUserId?: string | null };
+  return { ok: true, cancelledUserId: data.cancelledUserId ?? null };
+}
+
 export async function cancelFoodShareMatch(input: {
   matchId: string;
   partnerUid?: string;

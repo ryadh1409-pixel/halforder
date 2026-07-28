@@ -3,6 +3,7 @@ import type {
   FoodShareMatchLifecycle,
 } from '@/types/foodShare';
 import type { FoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
+import type { SwipeMarketplaceStatus } from '@/lib/swipeMarketplaceStatus';
 import type { PromotionBadgeValue } from '@/lib/promotionBadge';
 import type { FoodShareUserPricing } from '@/lib/foodShareUserPricing';
 
@@ -26,6 +27,8 @@ export type SwipeFoodCard = {
   distance: string;
   peopleJoined: number;
   spotsLeft: number;
+  /** Live seat / match status for Swipe marketplace. */
+  marketplaceStatus: SwipeMarketplaceStatus;
   heroImageUri: string;
   orderStatus: string | null;
   deliveryStatus: string | null;

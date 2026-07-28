@@ -5,6 +5,13 @@ import {
 import { resolveFoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
 import {
+  emptySwipeQueueMarketplaceState,
+  resolveSwipeMarketplaceStatus,
+  swipeMarketplacePeopleJoined,
+  swipeMarketplaceSpotsLeft,
+  type SwipeQueueMarketplaceState,
+} from '@/lib/swipeMarketplaceStatus';
+import {
   parsePromotionBadge,
   promotionBadgesFromData,
   promotionDestinationsFromData,
@@ -18,6 +25,7 @@ import type { SwipeFoodCard } from '@/types/swipe';
 import { safeToMillis } from '@/utils/safeToMillis';
 import {
   collection,
+  doc,
   documentId,
   limit,
   onSnapshot,
@@ -82,7 +90,10 @@ export function mapAdminFoodShareDoc(
   };
 }
 
-export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCard {
+export function adminFoodShareToSwipeCard(
+  share: AdminFoodShareDoc,
+  queue?: SwipeQueueMarketplaceState | null,
+): SwipeFoodCard {
   const breakdown = buildAdminShareCostBreakdown(
     share.originalPrice,
     share.sharedPrice,
@@ -107,6 +118,11 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
     'swipe',
   );
   const isPickup = share.fulfillmentMode === 'pickup';
+  const marketplaceStatus = resolveSwipeMarketplaceStatus(
+    queue ?? emptySwipeQueueMarketplaceState(),
+  );
+  const peopleJoined = swipeMarketplacePeopleJoined(marketplaceStatus);
+  const spotsLeft = swipeMarketplaceSpotsLeft(marketplaceStatus);
 
   return {
     id: share.id,
@@ -126,16 +142,103 @@ export function adminFoodShareToSwipeCard(share: AdminFoodShareDoc): SwipeFoodCa
       ? `${breakdown.sharedPrice.toFixed(2)} food + free pickup`
       : `${breakdown.sharedPrice.toFixed(2)} food + ${breakdown.deliveryShare.toFixed(2)} delivery`,
     distance: isPickup ? 'Admin pickup share' : 'Admin meal share',
-    spotsLeft: 1,
-    peopleJoined: 0,
+    spotsLeft,
+    peopleJoined,
+    marketplaceStatus,
     heroImageUri: share.image || getHeroImageUrlForType(type),
     orderStatus: null,
     deliveryStatus: null,
-    lifecycle: 'WAITING_FOR_PARTNER',
+    lifecycle:
+      marketplaceStatus === 'matched' || marketplaceStatus === 'ready'
+        ? 'MATCHED'
+        : 'WAITING_FOR_PARTNER',
     fulfillmentMode: share.fulfillmentMode,
     promotionBadge: showSwipePromo ? share.promotionBadge : 'none',
     promotionBadges: showSwipePromo ? share.promotionBadges : [],
   };
+}
+
+function parseQueueMarketplace(
+  data: Record<string, unknown> | null | undefined,
+): SwipeQueueMarketplaceState {
+  if (!data) return emptySwipeQueueMarketplaceState();
+  const waitingUserId =
+    typeof data.waitingUserId === 'string' && data.waitingUserId.trim()
+      ? data.waitingUserId.trim()
+      : null;
+  const waitingUserFirstName =
+    typeof data.waitingUserFirstName === 'string' &&
+    data.waitingUserFirstName.trim()
+      ? data.waitingUserFirstName.trim()
+      : null;
+  const activeMatchId =
+    typeof data.activeMatchId === 'string' && data.activeMatchId.trim()
+      ? data.activeMatchId.trim()
+      : null;
+  const rawStatus =
+    typeof data.marketplaceStatus === 'string'
+      ? data.marketplaceStatus.trim()
+      : '';
+  const marketplaceStatus =
+    rawStatus === 'available' ||
+    rawStatus === 'waiting_for_member' ||
+    rawStatus === 'matched' ||
+    rawStatus === 'ready' ||
+    rawStatus === 'cancelled_by_admin'
+      ? rawStatus
+      : null;
+  const waitingSinceMs =
+    safeToMillis(data.waitingSince) ??
+    (waitingUserId ? safeToMillis(data.updatedAt) : null);
+  return {
+    waitingUserId,
+    waitingUserFirstName,
+    waitingSinceMs,
+    activeMatchId,
+    marketplaceStatus,
+  };
+}
+
+/** Live `matchQueues/{1..10}` for Swipe seat / match status. */
+export function subscribeSwipeMatchQueues(
+  onData: (queues: Record<string, SwipeQueueMarketplaceState>) => void,
+): Unsubscribe {
+  const state: Record<string, SwipeQueueMarketplaceState> = {};
+  for (const id of ADMIN_FOOD_CARD_SLOT_IDS) {
+    state[id] = emptySwipeQueueMarketplaceState();
+  }
+  const emit = () => onData({ ...state });
+  const unsubs = ADMIN_FOOD_CARD_SLOT_IDS.map((slotId) =>
+    onSnapshot(
+      doc(db, 'matchQueues', slotId),
+      (snap) => {
+        state[slotId] = parseQueueMarketplace(
+          snap.exists() ? (snap.data() as Record<string, unknown>) : null,
+        );
+        emit();
+      },
+      () => {
+        state[slotId] = emptySwipeQueueMarketplaceState();
+        emit();
+      },
+    ),
+  );
+  return () => unsubs.forEach((u) => u());
+}
+
+/** Nearly-complete (1/2) seats first, then slot id. */
+export function sortSwipeCardsByMarketplacePriority(
+  cards: SwipeFoodCard[],
+): SwipeFoodCard[] {
+  return [...cards].sort((a, b) => {
+    const aWait = a.marketplaceStatus === 'waiting_for_member' ? 0 : 1;
+    const bWait = b.marketplaceStatus === 'waiting_for_member' ? 0 : 1;
+    if (aWait !== bWait) return aWait - bWait;
+    const ai = Number.parseInt(a.adminFoodShareId, 10);
+    const bi = Number.parseInt(b.adminFoodShareId, 10);
+    if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+    return a.adminFoodShareId.localeCompare(b.adminFoodShareId);
+  });
 }
 
 function sortSlotIds(rows: AdminFoodShareDoc[]): AdminFoodShareDoc[] {
@@ -237,8 +340,12 @@ export function subscribeAdminFoodShareSlots(
 
 export function adminFoodSharesToSwipeCards(
   shares: AdminFoodShareDoc[],
+  queues?: Record<string, SwipeQueueMarketplaceState>,
 ): SwipeFoodCard[] {
-  return shares.map(adminFoodShareToSwipeCard);
+  const cards = shares.map((share) =>
+    adminFoodShareToSwipeCard(share, queues?.[share.id] ?? null),
+  );
+  return sortSwipeCardsByMarketplacePriority(cards);
 }
 
 export type { AdminFoodCardSlotId };

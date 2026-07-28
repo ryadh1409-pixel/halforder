@@ -23,6 +23,10 @@ export type AdminFoodCardTileProps = {
   onPress: () => void;
   busy?: boolean;
   waitingUserName?: string | null;
+  /** Waiting alone longer than 30 minutes. */
+  staleWaiting?: boolean;
+  /** Human-readable wait duration, e.g. "32 min". */
+  waitingElapsedLabel?: string | null;
 };
 
 export function AdminFoodCardTile({
@@ -37,6 +41,8 @@ export function AdminFoodCardTile({
   onPress,
   busy,
   waitingUserName,
+  staleWaiting,
+  waitingElapsedLabel,
 }: AdminFoodCardTileProps) {
   const displayTitle = title.trim() || `Slot ${cardId}`;
   const hasImage = imageUri.trim().length > 0;
@@ -49,6 +55,7 @@ export function AdminFoodCardTile({
         styles.tile,
         pressed && styles.tilePressed,
         busy && styles.tileBusy,
+        staleWaiting && styles.tileStale,
       ]}
       accessibilityRole="button"
       accessibilityLabel={`Food card ${displayTitle}, slot ${cardId}`}
@@ -104,7 +111,15 @@ export function AdminFoodCardTile({
         {sharingPriceLabel ? (
           <Text style={styles.sharePrice}>{sharingPriceLabel}</Text>
         ) : null}
-        {waitingUserName ? (
+        {staleWaiting ? (
+          <View style={styles.staleBadge}>
+            <Ionicons name="warning-outline" size={12} color="#B45309" />
+            <Text style={styles.staleBadgeText} numberOfLines={2}>
+              Needs Attention
+              {waitingElapsedLabel ? ` · ${waitingElapsedLabel}` : ''}
+            </Text>
+          </View>
+        ) : waitingUserName ? (
           <View style={styles.waitingBadge}>
             <Ionicons name="time-outline" size={12} color="#B45309" />
             <Text style={styles.waitingBadgeText} numberOfLines={1}>
@@ -128,6 +143,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  tileStale: {
+    borderColor: 'rgba(245, 158, 11, 0.55)',
   },
   tilePressed: { opacity: 0.88 },
   tileBusy: { opacity: 0.7 },
@@ -215,6 +233,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#B45309',
     maxWidth: 140,
+  },
+  staleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(245,158,11,0.22)',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  staleBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+    flexShrink: 1,
   },
   footer: {
     flexDirection: 'row',

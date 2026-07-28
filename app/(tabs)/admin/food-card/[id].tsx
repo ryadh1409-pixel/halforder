@@ -25,7 +25,9 @@ import {
   saveAdminFoodCardSlot,
   type AdminFoodCardSlot,
 } from '@/services/adminFoodCardSlots';
+import { adminCancelWaitingMember } from '@/services/foodShareSafety';
 import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
+import { formatWaitingElapsed, SWIPE_STALE_WAITING_MS } from '@/lib/swipeMarketplaceStatus';
 import { auth, storage } from '@/services/firebase';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -415,6 +417,34 @@ export default function AdminFoodCardDetailScreen() {
     }
   };
 
+  const onCancelWaitingMember = async () => {
+    if (!detail || !isAdminFoodCardSlotId(detail.cardId)) return;
+    if (detail.waitingUsers.length === 0) return;
+    const waiter = detail.waitingUsers[0];
+    const waitedMs =
+      waiter.joinedAtMs != null ? Date.now() - waiter.joinedAtMs : null;
+    const elapsed =
+      waitedMs != null ? formatWaitingElapsed(waitedMs) : 'some time';
+    const ok = await systemConfirm({
+      title: 'Cancel Waiting Member',
+      message:
+        `Remove ${waiter.userFirstName} from this card and reset it to 0 participants? ` +
+        `They have been waiting ${elapsed}. An apology message will be sent automatically.`,
+      confirmLabel: 'Cancel Waiting Member',
+      destructive: true,
+    });
+    if (!ok) return;
+    setActing(true);
+    try {
+      await adminCancelWaitingMember(detail.cardId);
+      showSuccess('Waiting member cancelled. Card reset to available.');
+    } catch (e) {
+      showError(getUserFriendlyError(e));
+    } finally {
+      setActing(false);
+    }
+  };
+
   if (!isAdminFoodCardSlotId(cardId)) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -521,22 +551,51 @@ export default function AdminFoodCardDetailScreen() {
           {detail.waitingUsers.length === 0 ? (
             <Row label="Status" value="No customers waiting" />
           ) : (
-            detail.waitingUsers.map((user) => (
-              <View key={user.userId} style={styles.waitingUserBlock}>
-                <Row label="Name" value={user.userFirstName} />
-                <Row
-                  label="Customer ID"
-                  value={user.userId}
-                  mono
-                  onPress={() =>
-                    router.push(adminRoutes.user(user.userId) as never)
-                  }
-                />
-                <Row label="Joined" value={user.joinedAtLabel} />
-                <Row label="Status" value={user.status} />
-              </View>
-            ))
+            detail.waitingUsers.map((user) => {
+              const waitedMs =
+                user.joinedAtMs != null ? Date.now() - user.joinedAtMs : null;
+              const isStale =
+                waitedMs != null && waitedMs >= SWIPE_STALE_WAITING_MS;
+              return (
+                <View key={user.userId} style={styles.waitingUserBlock}>
+                  {isStale ? (
+                    <View style={styles.staleAlert}>
+                      <Text style={styles.staleAlertText}>
+                        ⚠ Needs Attention · Waiting{' '}
+                        {formatWaitingElapsed(waitedMs!)}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Row label="Name" value={user.userFirstName} />
+                  <Row
+                    label="Customer ID"
+                    value={user.userId}
+                    mono
+                    onPress={() =>
+                      router.push(adminRoutes.user(user.userId) as never)
+                    }
+                  />
+                  <Row label="Joined" value={user.joinedAtLabel} />
+                  <Row
+                    label="Elapsed waiting"
+                    value={
+                      waitedMs != null ? formatWaitingElapsed(waitedMs) : '—'
+                    }
+                  />
+                  <Row label="Status" value={user.status} />
+                </View>
+              );
+            })
           )}
+          {detail.waitingUsers.length > 0 ? (
+            <ActionBtn
+              label="Cancel Waiting Member"
+              icon="person-remove-outline"
+              onPress={() => void onCancelWaitingMember()}
+              disabled={acting}
+              destructive
+            />
+          ) : null}
         </Section>
 
         <Section title="Customer">
@@ -751,6 +810,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  staleAlert: {
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(245,158,11,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.35)',
+  },
+  staleAlertText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#B45309',
   },
   sectionTitle: {
     fontSize: 16,

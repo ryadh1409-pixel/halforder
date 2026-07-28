@@ -116,6 +116,24 @@ async function activateMatchIfFullyPaid(
       },
       {merge: true},
     );
+    const shareId =
+      typeof match.adminFoodShareId === "string"
+        ? match.adminFoodShareId.trim()
+        : "";
+    if (shareId) {
+      tx.set(
+        admin.firestore().doc(`matchQueues/${shareId}`),
+        {
+          activeMatchId: matchSnap.id,
+          marketplaceStatus: "matched",
+          waitingUserId: null,
+          waitingUserFirstName: null,
+          waitingSince: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
     return;
   }
 
@@ -169,6 +187,23 @@ async function activateMatchIfFullyPaid(
     },
     {merge: true},
   );
+
+  // Free the catalog seat after restaurant order placement; card stays active
+  // and returns to Available for the next pair.
+  if (adminFoodShareId) {
+    tx.set(
+      admin.firestore().doc(`matchQueues/${adminFoodShareId}`),
+      {
+        waitingUserId: null,
+        waitingUserFirstName: null,
+        waitingSince: null,
+        activeMatchId: null,
+        marketplaceStatus: null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+  }
 
   console.log("[FOOD SHARE ORDER_PLACED]", {
     matchId,
