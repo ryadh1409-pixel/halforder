@@ -636,8 +636,6 @@ export default function ProfileScreen() {
       : trustScore && trustScore.count > 0
         ? trustScore.average
         : null;
-  const showNewUserBadge =
-    reviewCount === 0 && !isAdminUser(user, firestoreUserRole);
 
   const dynamicStyles = useMemo(
     () => createDynamicStyles(pal, isDark),
@@ -722,18 +720,32 @@ export default function ProfileScreen() {
                 </Text>
               ) : null}
               <View style={dynamicStyles.profileBadgeRow}>
-                <View style={dynamicStyles.profileBadge}>
-                  <MaterialIcons name="star" size={14} color={pal.star} />
-                  {showNewUserBadge ? (
-                    <Text style={dynamicStyles.profileBadgeText}>New</Text>
-                  ) : (
+                {!(
+                  reviewCount === 0 && !isAdminUser(user, firestoreUserRole)
+                ) ? (
+                  <View style={dynamicStyles.profileBadge}>
+                    <MaterialIcons name="star" size={14} color={pal.star} />
                     <Text style={dynamicStyles.profileBadgeText}>
                       {ratingValue != null ? ratingValue.toFixed(1) : '—'}
                       {reviewCount > 0 ? ` · ${reviewCount}` : ''}
                     </Text>
-                  )}
-                </View>
-                {trustScore || isAdminUser(user, firestoreUserRole) ? (
+                  </View>
+                ) : null}
+                {isAdminUser(user, firestoreUserRole) ? (
+                  <View
+                    style={[
+                      dynamicStyles.profileBadge,
+                      dynamicStyles.profileBadgeVerified,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="verified"
+                      size={14}
+                      color={pal.primary}
+                    />
+                    <Text style={dynamicStyles.profileBadgeText}>Admin</Text>
+                  </View>
+                ) : trustScore && trustScore.label !== 'New User' ? (
                   <View
                     style={[
                       dynamicStyles.profileBadge,
@@ -746,12 +758,10 @@ export default function ProfileScreen() {
                       color={pal.primary}
                     />
                     <Text style={dynamicStyles.profileBadgeText}>
-                      {isAdminUser(user, firestoreUserRole)
-                        ? 'Admin'
-                        : (trustScore?.label ?? 'Verified')}
+                      {trustScore.label}
                     </Text>
                   </View>
-                ) : (
+                ) : !trustScore ? (
                   <View style={dynamicStyles.profileBadge}>
                     <MaterialIcons
                       name="shield"
@@ -762,7 +772,7 @@ export default function ProfileScreen() {
                       Member
                     </Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </View>
             <View style={dynamicStyles.profileAvatarWrap}>

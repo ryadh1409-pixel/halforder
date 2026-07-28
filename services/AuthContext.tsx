@@ -1,20 +1,20 @@
 import { USER_ROLE } from '@/constants/roles';
 import {
-  logAuthRoleDetected, normalizeRoleForRouting, roleForSignupIntent,
-  type SignupIntent
+    logAuthRoleDetected, normalizeRoleForRouting, roleForSignupIntent,
+    type SignupIntent
 } from '@/lib/authRole';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import {
-  markAuthSessionBootstrapComplete,
-  markAuthSessionBootstrapFailed,
-  markAuthSessionBootstrapStarted,
-  resetAuthSessionBootstrap,
-  shouldRunAuthSessionBootstrap,
+    markAuthSessionBootstrapComplete,
+    markAuthSessionBootstrapFailed,
+    markAuthSessionBootstrapStarted,
+    resetAuthSessionBootstrap,
+    shouldRunAuthSessionBootstrap,
 } from '@/lib/authSessionBootstrap';
 import {
-  applySignupRole,
-  assignUserRole,
-  migrateUserRoleIfNeeded,
+    applySignupRole,
+    assignUserRole,
+    migrateUserRoleIfNeeded,
 } from '@/services/authRoleAssignment';
 import { refreshAuthRoleClaims } from '@/services/authRoleClaims';
 import { resetForcedTokenRefreshUid } from '@/services/authTokenRefresh';
@@ -22,71 +22,71 @@ import { markDriverOffline } from '@/services/driverPresence';
 import { useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  ConfirmationResult,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  RecaptchaVerifier,
-  reload,
-  signInWithEmailAndPassword,
-  signInWithPhoneNumber,
-  updateProfile,
-  type User,
+    ConfirmationResult,
+    createUserWithEmailAndPassword,
+    signOut as firebaseSignOut,
+    onAuthStateChanged,
+    RecaptchaVerifier,
+    reload,
+    signInWithEmailAndPassword,
+    signInWithPhoneNumber,
+    updateProfile,
+    type User,
 } from 'firebase/auth';
 import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocFromServer,
-  increment,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
+    addDoc,
+    collection,
+    doc,
+    getDoc,
+    getDocFromServer,
+    increment,
+    serverTimestamp,
+    setDoc,
+    updateDoc,
 } from 'firebase/firestore';
 import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from 'react';
 import { Platform } from 'react-native';
 import { useUserRole } from '../hooks/useUserRole';
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../lib/invite-link';
 import {
-  formatProfileWhatsAppDisplay,
-  profilePhoneDigitsOnly,
+    formatProfileWhatsAppDisplay,
+    profilePhoneDigitsOnly,
 } from '../lib/profileWhatsAppPhone';
 import { syncUserRoleToFirestore } from '../utils/admin';
 import {
-  getUserFriendlyError,
-  isFirebaseAuthUserInvalidated,
+    getUserFriendlyError,
+    isFirebaseAuthUserInvalidated,
 } from '../utils/errorHandler';
 import { logError } from '../utils/errorLogger';
 import { createAlert } from './alerts';
+import {
+    isEmailAlreadyInUseError,
+    resolveAuthEmailAccountStatus,
+    throwAuthFlowError,
+} from './auth/emailAccountStatus';
 import { auth, db } from './firebase';
 import {
-  beginFirestoreQuery,
-  logFirestoreOpError,
-  logFirestoreQueryFailed,
+    beginFirestoreQuery,
+    logFirestoreOpError,
+    logFirestoreQueryFailed,
 } from './firestoreQueryDiagnostics';
 import { subscribeExpoPushTokenRefresh } from './notifications';
 import {
-  persistUserPushTokens,
-  registerExpoPushTokenAndSyncToFirestore,
+    persistUserPushTokens,
+    registerExpoPushTokenAndSyncToFirestore,
 } from './pushNotifications';
 import { claimReferralInboxRewards } from './referralRewards';
 import { createRestaurant } from './restaurantService';
 import { uploadImageAsync } from './uploadImage';
 import type { UserRole } from './userService';
-import {
-  isEmailAlreadyInUseError,
-  resolveAuthEmailAccountStatus,
-  throwAuthFlowError,
-} from './auth/emailAccountStatus';
 
 const REFERRAL_CREDIT = 2;
 
