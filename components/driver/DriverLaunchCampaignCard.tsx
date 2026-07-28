@@ -1,12 +1,12 @@
 import {
-  canEnrollInDriverLaunchCampaign,
   enrollInDriverLaunchCampaign,
   subscribeDriverLaunchCampaignSettings,
   subscribeMyDriverLaunchEnrollment,
 } from '@/services/driverLaunchCampaign';
-import type {
-  DriverLaunchCampaignSettings,
-  DriverLaunchEnrollment,
+import {
+  canEnrollInDriverLaunchCampaign,
+  type DriverLaunchCampaignSettings,
+  type DriverLaunchEnrollment,
 } from '@/types/driverLaunchCampaign';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { showError, showSuccess } from '@/utils/toast';

@@ -1,13 +1,20 @@
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
+import { DEFAULT_DRIVER_PAYOUT_PERCENT } from '@/lib/driverEarnings';
 import {
   setDriverAdminSuspended,
   subscribeAdminDrivers,
   type AdminDriverRow,
 } from '@/services/adminDriverManagement';
+import { auth, db } from '@/services/firebase';
+import {
+  saveDriverPayoutPercent,
+  subscribeDriverPayoutPercent,
+} from '@/services/driverPayoutSettings';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
 import { showError, showSuccess } from '@/utils/toast';
 import { Image } from 'expo-image';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,12 +32,53 @@ export default function DriverManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [payoutPercentDraft, setPayoutPercentDraft] = useState(
+    String(DEFAULT_DRIVER_PAYOUT_PERCENT),
+  );
+  const [savingPayout, setSavingPayout] = useState(false);
 
   useEffect(() => {
     return subscribeAdminDrivers((next) => {
       setRows(next);
       setLoading(false);
     });
+  }, []);
+
+  useEffect(() => {
+    return subscribeDriverPayoutPercent((percent) => {
+      setPayoutPercentDraft(String(percent));
+    });
+  }, []);
+
+  /** Ensure Firestore always has a default so the admin control stays functional. */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ref = doc(db, 'platformSettings', 'fees');
+        const snap = await getDoc(ref);
+        const raw = snap.data()?.driverPayoutPercent;
+        if (raw !== undefined && raw !== null) return;
+        if (cancelled) return;
+        await setDoc(
+          ref,
+          {
+            driverPayoutPercent: DEFAULT_DRIVER_PAYOUT_PERCENT,
+            updatedAt: serverTimestamp(),
+            updatedBy: auth.currentUser?.uid ?? null,
+          },
+          { merge: true },
+        );
+        if (!cancelled) {
+          setPayoutPercentDraft(String(DEFAULT_DRIVER_PAYOUT_PERCENT));
+        }
+      } catch {
+        /* UI already shows the local default (80). */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -56,6 +104,52 @@ export default function DriverManagementScreen() {
     }
   };
 
+  const savePayoutPercent = async () => {
+    const n = Number.parseFloat(payoutPercentDraft.trim());
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      showError('Enter a payout percentage between 0 and 100.');
+      return;
+    }
+    setSavingPayout(true);
+    try {
+      await saveDriverPayoutPercent(n);
+      showSuccess('Driver payout percentage saved.');
+    } catch (e) {
+      showError(getReadableErrorMessageOr(e, 'Could not save payout percentage.'));
+    } finally {
+      setSavingPayout(false);
+    }
+  };
+
+  const earningsHeader = (
+    <View style={styles.earningsSection}>
+      <Text style={styles.earningsTitle}>Driver Earnings</Text>
+      <Text style={styles.earningsHint}>
+        Global payout share of the delivery fee for all drivers.
+      </Text>
+      <Text style={styles.earningsLabel}>Driver payout percentage (%)</Text>
+      <TextInput
+        value={payoutPercentDraft}
+        onChangeText={setPayoutPercentDraft}
+        keyboardType="decimal-pad"
+        placeholder={String(DEFAULT_DRIVER_PAYOUT_PERCENT)}
+        placeholderTextColor={COLORS.textMuted}
+        style={styles.earningsInput}
+      />
+      <Pressable
+        style={[styles.earningsSave, savingPayout && styles.earningsSaveDisabled]}
+        disabled={savingPayout}
+        onPress={() => void savePayoutPercent()}
+      >
+        {savingPayout ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.earningsSaveTxt}>Save</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <AdminHeader
@@ -73,6 +167,10 @@ export default function DriverManagementScreen() {
           autoCorrect={false}
         />
       </View>
+
+      {/* Always mounted below search / above drivers list — not gated by loading. */}
+      <View style={styles.earningsWrap}>{earningsHeader}</View>
+
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -189,6 +287,54 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 15,
   },
+  earningsWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  earningsSection: {
+    ...adminCardShell,
+    padding: 14,
+  },
+  earningsTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  earningsHint: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  earningsLabel: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  earningsInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    color: COLORS.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  earningsSave: {
+    marginTop: 12,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  earningsSaveDisabled: { opacity: 0.6 },
+  earningsSaveTxt: { color: '#fff', fontWeight: '900', fontSize: 14 },
   list: { padding: 16, paddingBottom: 32 },
   empty: { textAlign: 'center', color: COLORS.textMuted, marginTop: 32 },
   card: {

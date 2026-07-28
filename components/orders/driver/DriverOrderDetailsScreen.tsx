@@ -1,5 +1,6 @@
 import AppHeader from '@/components/AppHeader';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
+import { calculateOrderPayout } from '@/lib/driverEarnings';
 import {
   applyDriverMarketplaceFulfillment,
   driverMarketplaceFulfillmentStatusHint,
@@ -11,6 +12,7 @@ import {
   acceptQueuedDeliveryOrder,
   type DriverProfile,
 } from '@/services/driverService';
+import { getCachedDriverPayoutPercent } from '@/lib/driverPayoutPercentCache';
 import { useAuth } from '@/services/AuthContext';
 import { formatAddress, formatRestaurantName } from '@/utils/orderFormatters';
 import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
@@ -98,7 +100,10 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
     : null;
   const statusLabel = marketplaceDeliveryStatusLabel(order.deliveryStatus);
 
-  const payoutEst = Math.max(0, order.deliveryFee) * 0.72;
+  const payoutEst = calculateOrderPayout(
+    { deliveryFee: order.deliveryFee },
+    getCachedDriverPayoutPercent(),
+  ).driverPayout;
 
   const navigateTarget =
     order.status === 'picked_up' ||

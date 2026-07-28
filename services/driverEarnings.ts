@@ -10,6 +10,10 @@ import {
 } from '@/lib/driverEarnings';
 import { QuerySnapshotFreshnessGate } from '@/lib/orderSnapshotFreshness';
 import { db } from '@/services/firebase';
+import {
+  getCachedDriverPayoutPercent,
+  subscribeDriverPayoutPercent,
+} from '@/services/driverPayoutSettings';
 import { safeToMillis } from '@/utils/safeToMillis';
 import {
   collection,
@@ -180,6 +184,7 @@ function attachEarningsListener(
 
 /**
  * Live earnings — sticky merge by orderId; empty snapshots never zero out completed orders.
+ * Uses the Admin-configured driver payout % (cached) for all aggregates.
  */
 export function subscribeDriverEarnings(
   driverUid: string,
@@ -192,6 +197,17 @@ export function subscribeDriverEarnings(
   }
 
   const completedById = new Map<string, MappedDoc>();
+  let payoutPercent = getCachedDriverPayoutPercent();
+
+  const emit = () => {
+    onStats(
+      buildDriverEarningsStats(
+        Array.from(completedById.values()),
+        Date.now(),
+        payoutPercent,
+      ),
+    );
+  };
 
   const ingest = (rows: MappedDoc[]) => {
     if (rows.length === 0) return;
@@ -200,10 +216,14 @@ export function subscribeDriverEarnings(
         completedById.set(row.id, row);
       }
     }
-    onStats(buildDriverEarningsStats(Array.from(completedById.values())));
+    emit();
   };
 
   const unsubs = [
+    subscribeDriverPayoutPercent((percent) => {
+      payoutPercent = percent;
+      if (completedById.size > 0) emit();
+    }),
     attachEarningsListener(uid, 'driverId', 'earningsRecorded', ingest),
     attachEarningsListener(uid, 'driverId', 'completedStatus', ingest),
     attachEarningsListener(uid, 'assignedDriverId', 'earningsRecorded', ingest),

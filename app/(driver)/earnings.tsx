@@ -1,5 +1,7 @@
 import { useDriverDeliveryStats } from '@/contexts/DriverRealtimeContext';
-import React from 'react';
+import { DEFAULT_DRIVER_PAYOUT_PERCENT } from '@/lib/driverEarnings';
+import { subscribeDriverPayoutPercent } from '@/services/driverPayoutSettings';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -32,6 +34,11 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 
 export default function DriverEarningsScreen() {
   const { stats, statsLoading } = useDriverDeliveryStats();
+  const [payoutPercent, setPayoutPercent] = useState(DEFAULT_DRIVER_PAYOUT_PERCENT);
+
+  useEffect(() => {
+    return subscribeDriverPayoutPercent(setPayoutPercent);
+  }, []);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -40,7 +47,9 @@ export default function DriverEarningsScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.heroTitle}>Earnings</Text>
-          <Text style={styles.heroSubtitle}>Uber-style delivery payouts · 80% of delivery fee</Text>
+          <Text style={styles.heroSubtitle}>
+            HalfOrder Driver Earnings • {payoutPercent}% of delivery fee
+          </Text>
 
           <View style={styles.heroCard}>
             <Text style={styles.heroCardLabel}>Today</Text>

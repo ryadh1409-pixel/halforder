@@ -185,7 +185,7 @@ export type RestaurantOrder = {
   deliveredAtMs: number | null;
   completedAtMs: number | null;
   cancelledAtMs: number | null;
-  /** Persisted driver payout (80% of delivery fee) — set on completion. */
+  /** Persisted driver payout (configured % of delivery fee) — set on completion. */
   driverPayout: number | null;
   platformFee: number | null;
   customerTotal: number | null;

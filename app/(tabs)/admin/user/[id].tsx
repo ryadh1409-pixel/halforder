@@ -17,7 +17,10 @@ import {
   deleteUserDocumentAsAdmin,
   promoteUserToAdmin,
 } from '../../../../services/adminUserActions';
-import { extractAdminUserBankingInfo } from '../../../../services/adminUserBankingInfo';
+import {
+  extractAdminDriverWalletInfo,
+  extractAdminUserBankingInfo,
+} from '../../../../services/adminUserBankingInfo';
 import { useAuth } from '../../../../services/AuthContext';
 import {
   collection,
@@ -67,6 +70,9 @@ export default function AdminUserDetailScreen() {
   const userId = typeof rawId === 'string' ? rawId.trim() : '';
 
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [driverDoc, setDriverDoc] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [profileLoading, setProfileLoading] = useState(true);
   const [ordersMap, setOrdersMap] = useState<Map<string, OrderRow>>(new Map());
   const [reports, setReports] = useState<ReportRow[]>([]);
@@ -91,6 +97,25 @@ export default function AdminUserDetailScreen() {
       (err) => {
         adminError('user-detail', 'user doc listener error', err);
         setProfileLoading(false);
+      },
+    );
+    return () => u();
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setDriverDoc(null);
+      return;
+    }
+    adminLog('user-detail', `subscribe driver doc: ${userId}`);
+    const u = onSnapshot(
+      doc(db, 'drivers', userId),
+      (snap) => {
+        setDriverDoc(snap.exists() ? snap.data() ?? {} : null);
+      },
+      (err) => {
+        adminError('user-detail', 'driver doc listener error', err);
+        setDriverDoc(null);
       },
     );
     return () => u();
@@ -179,10 +204,11 @@ export default function AdminUserDetailScreen() {
     return { active, completed, total: orderList.length };
   }, [orderList]);
 
-  const bankingInfo = useMemo(
-    () => extractAdminUserBankingInfo(profile),
-    [profile],
-  );
+  const bankingInfo = useMemo(() => {
+    const fromDriver = extractAdminDriverWalletInfo(driverDoc);
+    if (fromDriver) return fromDriver;
+    return extractAdminUserBankingInfo(profile);
+  }, [driverDoc, profile]);
 
   const email = typeof profile?.email === 'string' ? profile.email : null;
   const targetRole =

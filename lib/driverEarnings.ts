@@ -1,7 +1,13 @@
 import { isOrderCompleted } from '@/lib/orderCompletion';
 
-/** Driver share of delivery fee (Uber-style). */
-export const DRIVER_EARNING_PERCENT = 0.8;
+/** Default driver share of delivery fee (%) when Admin config is missing. */
+export const DEFAULT_DRIVER_PAYOUT_PERCENT = 80;
+
+/**
+ * @deprecated Use DEFAULT_DRIVER_PAYOUT_PERCENT (0–100) or getCachedDriverPayoutPercent().
+ * Kept as a fraction for older imports/tests.
+ */
+export const DRIVER_EARNING_PERCENT = DEFAULT_DRIVER_PAYOUT_PERCENT / 100;
 
 const DEFAULT_DELIVERY_FEE = 0.99;
 
@@ -11,6 +17,22 @@ export type OrderPayoutBreakdown = {
   driverPayout: number;
   platformFee: number;
 };
+
+export function clampDriverPayoutPercent(
+  raw: unknown,
+  fallback = DEFAULT_DRIVER_PAYOUT_PERCENT,
+): number {
+  let n: number | null = null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) n = raw;
+  else if (typeof raw === 'string' && raw.trim()) {
+    const parsed = Number.parseFloat(raw.trim());
+    if (Number.isFinite(parsed)) n = parsed;
+  }
+  if (n == null) return fallback;
+  // Accept legacy fraction storage (0–1 exclusive of 0 display edge).
+  if (n > 0 && n <= 1) n = n * 100;
+  return Math.max(0, Math.min(100, Math.round(n * 100) / 100));
+}
 
 export function resolveOrderDeliveryFee(data: {
   deliveryFee?: unknown;
@@ -29,28 +51,50 @@ export function resolveOrderDeliveryFee(data: {
   return DEFAULT_DELIVERY_FEE;
 }
 
-export function calculateOrderPayout(data: {
-  totalPrice?: unknown;
-  deliveryFee?: unknown;
-  fees?: unknown;
-}): OrderPayoutBreakdown {
+/**
+ * Driver payout = Delivery Fee × (percent / 100)
+ * Platform earnings = Delivery Fee − Driver payout
+ */
+export function calculateOrderPayout(
+  data: {
+    totalPrice?: unknown;
+    deliveryFee?: unknown;
+    fees?: unknown;
+  },
+  driverPayoutPercent: number = DEFAULT_DRIVER_PAYOUT_PERCENT,
+): OrderPayoutBreakdown {
   const customerTotal =
     typeof data.totalPrice === 'number' && Number.isFinite(data.totalPrice)
       ? data.totalPrice
       : 0;
   const deliveryFee = resolveOrderDeliveryFee(data);
-  const driverPayout = Math.round(deliveryFee * DRIVER_EARNING_PERCENT * 100) / 100;
-  const platformFee = Math.round(deliveryFee * (1 - DRIVER_EARNING_PERCENT) * 100) / 100;
+  const percent = clampDriverPayoutPercent(
+    driverPayoutPercent,
+    DEFAULT_DRIVER_PAYOUT_PERCENT,
+  );
+  const share = percent / 100;
+  const driverPayout = Math.round(deliveryFee * share * 100) / 100;
+  const platformFee = Math.round((deliveryFee - driverPayout) * 100) / 100;
   return { customerTotal, deliveryFee, driverPayout, platformFee };
 }
 
 /** @deprecated Use calculateOrderPayout().driverPayout */
-export function calculateDriverEarningForOrder(data: {
-  deliveryFee?: unknown;
-  fees?: unknown;
-  driverPayout?: unknown;
-  earningsRecorded?: unknown;
-}): number {
+export function calculateDriverEarningForOrder(
+  data: {
+    deliveryFee?: unknown;
+    fees?: unknown;
+    driverPayout?: unknown;
+    earningsRecorded?: unknown;
+  },
+  driverPayoutPercent: number = DEFAULT_DRIVER_PAYOUT_PERCENT,
+): number {
+  // Prefer live config × delivery fee when fee is known (admin % applies immediately).
+  if (
+    (typeof data.deliveryFee === 'number' && data.deliveryFee > 0) ||
+    (typeof data.fees === 'number' && data.fees > 0)
+  ) {
+    return calculateOrderPayout(data, driverPayoutPercent).driverPayout;
+  }
   if (
     data.earningsRecorded === true &&
     typeof data.driverPayout === 'number' &&
@@ -58,7 +102,7 @@ export function calculateDriverEarningForOrder(data: {
   ) {
     return data.driverPayout;
   }
-  return calculateOrderPayout(data).driverPayout;
+  return calculateOrderPayout(data, driverPayoutPercent).driverPayout;
 }
 
 export function isSameLocalDay(
@@ -124,13 +168,17 @@ export function isDriverCompletedEarningsOrder(data: Record<string, unknown>): b
   return isOrderCompleted(data);
 }
 
-export function resolveDriverPayoutFromOrder(data: Record<string, unknown>): number {
-  return calculateDriverEarningForOrder(data);
+export function resolveDriverPayoutFromOrder(
+  data: Record<string, unknown>,
+  driverPayoutPercent: number = DEFAULT_DRIVER_PAYOUT_PERCENT,
+): number {
+  return calculateDriverEarningForOrder(data, driverPayoutPercent);
 }
 
 export function buildDriverEarningsStats(
   docs: Array<{ id: string; data: () => Record<string, unknown> }>,
   nowMs: number = Date.now(),
+  driverPayoutPercent: number = DEFAULT_DRIVER_PAYOUT_PERCENT,
 ): DriverEarningsStats {
   const breakdown: DriverEarningsBreakdownItem[] = [];
   let earnings = 0;
@@ -139,14 +187,25 @@ export function buildDriverEarningsStats(
   let deliveriesToday = 0;
   let deliveriesWeek = 0;
   let platformFees = 0;
+  const percent = clampDriverPayoutPercent(
+    driverPayoutPercent,
+    DEFAULT_DRIVER_PAYOUT_PERCENT,
+  );
 
   for (const docSnap of docs) {
     const data = docSnap.data();
     if (!isDriverCompletedEarningsOrder(data)) continue;
 
-    const earning = resolveDriverPayoutFromOrder(data);
-    const fee =
-      typeof data.platformFee === 'number' && Number.isFinite(data.platformFee)
+    const payout = calculateOrderPayout(data, percent);
+    const hasFee =
+      (typeof data.deliveryFee === 'number' && data.deliveryFee > 0) ||
+      (typeof data.fees === 'number' && data.fees > 0);
+    const earning = hasFee
+      ? payout.driverPayout
+      : resolveDriverPayoutFromOrder(data, percent);
+    const fee = hasFee
+      ? payout.platformFee
+      : typeof data.platformFee === 'number' && Number.isFinite(data.platformFee)
         ? data.platformFee
         : 0;
     const deliveredAtMs = resolveCompletionMs(data);

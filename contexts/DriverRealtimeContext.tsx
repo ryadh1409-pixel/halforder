@@ -7,6 +7,7 @@ import {
   subscribeDriverDeliveryStats,
   type DriverDeliveryStats,
 } from '@/services/driverService';
+import { subscribeDriverPayoutPercent } from '@/services/driverPayoutSettings';
 import { useAuthUid } from '@/hooks/useAuthUid';
 import { logListenerSubscribe, logListenerUnsubscribe } from '@/utils/driverListenerLog';
 import { logDriverLayoutState } from '@/utils/driverLifecycleLog';
@@ -113,6 +114,11 @@ function DriverRealtimeProviderInner({ children, uid: uidProp }: DriverRealtimeP
       setCurrentDeliveryOrderId(null);
     }
   }, [pathname]);
+
+  useEffect(() => {
+    // Warm shared driver payout % cache for completion + earnings math.
+    return subscribeDriverPayoutPercent(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!uid) {

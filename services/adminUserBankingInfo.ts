@@ -9,9 +9,17 @@
  */
 import { firestoreTimeToMs } from '@/lib/admin/orderHelpers';
 
+export type AdminPreferredPayoutMethod = 'interac' | 'bank';
+
 export type AdminUserBankingInfo = {
+  /** Driver Wallet preferred method (`drivers/{uid}.wallet`). */
+  preferredPayoutMethod: AdminPreferredPayoutMethod | null;
+  interacEmail: string | null;
+  legalName: string | null;
   accountHolderName: string | null;
   bankName: string | null;
+  institutionNumber: string | null;
+  transitNumber: string | null;
   iban: string | null;
   accountNumber: string | null;
   routingNumber: string | null;
@@ -187,8 +195,13 @@ export function extractAdminUserBankingInfo(
   }
 
   const info: AdminUserBankingInfo = {
+    preferredPayoutMethod: null,
+    interacEmail: null,
+    legalName: null,
     accountHolderName: readField(sources, FIELD_ALIASES.accountHolderName),
     bankName: readField(sources, FIELD_ALIASES.bankName),
+    institutionNumber: null,
+    transitNumber: null,
     iban: readField(sources, FIELD_ALIASES.iban),
     accountNumber: readField(sources, FIELD_ALIASES.accountNumber),
     routingNumber: readField(sources, FIELD_ALIASES.routingNumber),
@@ -217,4 +230,48 @@ export function extractAdminUserBankingInfo(
   );
 
   return info;
+}
+
+/**
+ * Extract Canadian Driver Wallet payout details from `drivers/{uid}`.
+ * Defaults preferred method to Interac when the wallet exists but method is missing.
+ */
+export function extractAdminDriverWalletInfo(
+  driverDoc: Record<string, unknown> | null | undefined,
+): AdminUserBankingInfo | null {
+  if (!driverDoc) return null;
+  const raw = driverDoc.wallet;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const w = raw as Record<string, unknown>;
+
+  const preferredPayoutMethod: AdminPreferredPayoutMethod =
+    w.payoutMethod === 'bank' ? 'bank' : 'interac';
+
+  const legalName =
+    safeString(w.legalName) ?? safeString(w.fullLegalName);
+  const accountHolderName = safeString(w.accountHolderName);
+  const interacEmail = safeString(w.interacEmail);
+  const bankName = safeString(w.bankName);
+  const institutionNumber = safeString(w.institutionNumber);
+  const transitNumber = safeString(w.transitNumber);
+  const accountNumber = safeString(w.accountNumber);
+
+  // Always return when wallet object exists so preferred method is visible.
+  return {
+    preferredPayoutMethod,
+    interacEmail,
+    legalName,
+    accountHolderName,
+    bankName,
+    institutionNumber,
+    transitNumber,
+    iban: null,
+    accountNumber,
+    routingNumber: transitNumber,
+    swift: null,
+    cardBrand: null,
+    cardLast4: null,
+    verified: null,
+    addedAtMs: readTimestampMs([w], ADDED_AT_ALIASES),
+  };
 }

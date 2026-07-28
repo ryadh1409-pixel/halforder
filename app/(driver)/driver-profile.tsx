@@ -1,6 +1,7 @@
 import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
 import { LOCATION_PALETTE_DARK } from '@/components/location/locationPalette';
 import { AppTextInput } from '@/components/AppTextInput';
+import { DriverWalletCard } from '@/components/driver/DriverWalletCard';
 import { useDriverProfileIdentity } from '@/hooks/useDriverProfileIdentity';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { uploadAndPersistDriverProfilePhoto } from '@/lib/driverProfilePhoto';
@@ -566,6 +567,8 @@ export default function DriverProfileTab() {
             )}
           </Pressable>
         </View>
+
+        <DriverWalletCard driverId={uid} />
 
         <AccountLocationPicker
           role="driver"

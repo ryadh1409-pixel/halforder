@@ -5,6 +5,7 @@ import {
   protectedUpdateOrder,
   type OrderWriteSource,
 } from '@/services/orderFirestoreWrite';
+import { getCachedDriverPayoutPercent } from '@/lib/driverPayoutPercentCache';
 import { serverTimestamp } from 'firebase/firestore';
 
 export type MarketplaceDeliveryCompletionInput = {
@@ -19,11 +20,14 @@ export function buildMarketplaceDeliveryCompletionPatch(
   order: MarketplaceDeliveryCompletionInput,
   updatedBy: string,
 ): Record<string, unknown> {
-  const payout = calculateOrderPayout({
-    totalPrice: order.totalPrice ?? order.total,
-    deliveryFee: order.deliveryFee,
-    fees: order.fees,
-  });
+  const payout = calculateOrderPayout(
+    {
+      totalPrice: order.totalPrice ?? order.total,
+      deliveryFee: order.deliveryFee,
+      fees: order.fees,
+    },
+    getCachedDriverPayoutPercent(),
+  );
   return {
     status: 'completed',
     deliveryStatus: MARKETPLACE_DELIVERY_STATUS.DELIVERED,
@@ -34,6 +38,7 @@ export function buildMarketplaceDeliveryCompletionPatch(
     customerTotal: payout.customerTotal,
     driverPayout: payout.driverPayout,
     platformFee: payout.platformFee,
+    driverPayoutPercent: getCachedDriverPayoutPercent(),
     updatedAt: serverTimestamp(),
     updatedBy,
   };
