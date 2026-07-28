@@ -28,8 +28,27 @@ export const REPEAT_ORDER_MIN_CONFIDENCE = 0.42;
 export const REPEAT_ORDER_CARD_LEAD_MAX_MIN = 60;
 export const REPEAT_ORDER_CARD_LEAD_MIN_MIN = 0;
 
-/** Notify this many minutes before usual order time (within 30–60). */
-export const REPEAT_ORDER_NOTIFY_LEAD_MIN = 45;
+/** Notify lead window before usual order time (minutes). */
+export const REPEAT_ORDER_NOTIFY_LEAD_MIN = 30;
+export const REPEAT_ORDER_NOTIFY_LEAD_MAX = 60;
+
+/**
+ * Deterministic lead minutes in [30, 60] for a habit+day — stable across resyncs
+ * so the same scheduled fire time is reused (no duplicate jitter).
+ */
+export function pickRepeatNotifyLeadMinutes(
+  habitKey: string,
+  dayKey: string,
+): number {
+  const raw = `${habitKey}|${dayKey}`;
+  let hash = 0;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+  }
+  const span =
+    REPEAT_ORDER_NOTIFY_LEAD_MAX - REPEAT_ORDER_NOTIFY_LEAD_MIN + 1;
+  return REPEAT_ORDER_NOTIFY_LEAD_MIN + (hash % span);
+}
 
 function median(nums: number[]): number {
   if (nums.length === 0) return 0;
@@ -397,13 +416,57 @@ export function pickBestRepeatOrderCandidate(
   return best;
 }
 
-/** Build notification schedule plans for the next 24h (one per habit max). */
+/**
+ * Compute when to fire a habit notification for the next usual time.
+ * Lead is deterministic in 30–60 minutes; if the user is already inside that
+ * window and has not been notified, fire shortly (still before usual).
+ */
+export function computeRepeatNotificationFireAt(input: {
+  usualMinutesOfDay: number;
+  weekdays: number[];
+  habitKey: string;
+  nowMs?: number;
+}): { fireAtMs: number; nextAtMs: number; dayKey: string } | null {
+  const now = input.nowMs ?? Date.now();
+  const { nextAtMs, dayKey, minutesUntil } = minutesUntilNextUsual({
+    usualMinutesOfDay: input.usualMinutesOfDay,
+    weekdays: input.weekdays,
+    nowMs: now,
+    postGraceMin: 0,
+  });
+
+  if (nextAtMs <= now) return null;
+
+  const leadMin = pickRepeatNotifyLeadMinutes(input.habitKey, dayKey);
+  let fireAtMs = nextAtMs - leadMin * 60 * 1000;
+
+  // Already inside the 30–60 min notify window → ping soon (still before usual).
+  if (fireAtMs <= now) {
+    if (
+      minutesUntil >= REPEAT_ORDER_NOTIFY_LEAD_MIN &&
+      minutesUntil <= REPEAT_ORDER_NOTIFY_LEAD_MAX
+    ) {
+      fireAtMs = now + 25_000;
+    } else {
+      return null;
+    }
+  }
+
+  if (fireAtMs >= nextAtMs) return null;
+  if (fireAtMs - now > 48 * 60 * 60 * 1000) return null;
+
+  return { fireAtMs, nextAtMs, dayKey };
+}
+
+/** Build notification schedule plans for upcoming habits (one per habit max). */
 export function buildRepeatOrderSchedulePlans(
   candidates: RepeatOrderCandidate[],
   extras: {
     nowMs?: number;
     offerByRestaurant?: Record<string, boolean>;
     shareByRestaurant?: Record<string, boolean>;
+    /** Skip closed / ineligible restaurants when provided. */
+    eligibleByRestaurant?: Record<string, boolean>;
   } = {},
 ): RepeatOrderSchedulePlan[] {
   const now = extras.nowMs ?? Date.now();
@@ -411,16 +474,20 @@ export function buildRepeatOrderSchedulePlans(
 
   for (const candidate of candidates) {
     if (candidate.confidence < REPEAT_ORDER_MIN_CONFIDENCE) continue;
-    const { nextAtMs, dayKey } = minutesUntilNextUsual({
+    if (
+      extras.eligibleByRestaurant &&
+      extras.eligibleByRestaurant[candidate.restaurantId] !== true
+    ) {
+      continue;
+    }
+
+    const fire = computeRepeatNotificationFireAt({
       usualMinutesOfDay: candidate.usualMinutesOfDay,
       weekdays: candidate.weekdays,
+      habitKey: candidate.habitKey,
       nowMs: now,
-      postGraceMin: 0,
     });
-    const fireAtMs = nextAtMs - REPEAT_ORDER_NOTIFY_LEAD_MIN * 60 * 1000;
-    // Only schedule if fire time is still in the future and within ~36h
-    if (fireAtMs <= now) continue;
-    if (fireAtMs - now > 36 * 60 * 60 * 1000) continue;
+    if (!fire) continue;
 
     plans.push({
       habitKey: candidate.habitKey,
@@ -428,17 +495,19 @@ export function buildRepeatOrderSchedulePlans(
       restaurantName: candidate.restaurantName,
       itemSignature: candidate.itemSignature,
       habitKind: candidate.habitKind,
-      fireAtMs,
-      dayKey,
-      hasAvailableOffer: extras.offerByRestaurant?.[candidate.restaurantId] === true,
-      hasShareAndSave: extras.shareByRestaurant?.[candidate.restaurantId] === true,
+      fireAtMs: fire.fireAtMs,
+      dayKey: fire.dayKey,
+      hasAvailableOffer:
+        extras.offerByRestaurant?.[candidate.restaurantId] === true,
+      hasShareAndSave:
+        extras.shareByRestaurant?.[candidate.restaurantId] === true,
       usualMinutesOfDay: candidate.usualMinutesOfDay,
     });
   }
 
-  // Prefer highest-confidence upcoming; keep at most 3 scheduled
+  // Soonest first; keep a small set to limit OS schedules.
   plans.sort((a, b) => a.fireAtMs - b.fireAtMs);
-  return plans.slice(0, 3);
+  return plans.slice(0, 4);
 }
 
 export function userAlreadyOrderedHabitToday(input: {
@@ -529,46 +598,46 @@ export function pickRepeatNotificationCopy(plan: RepeatOrderSchedulePlan): {
 } {
   if (plan.hasAvailableOffer) {
     return {
-      title: '🎉 Offer on your usual',
-      body: `${plan.restaurantName} has an available offer today.`,
+      title: '🎉 Your favorite restaurant has an available offer today.',
+      body: `${plan.restaurantName} — reorder your usual in one tap.`,
     };
   }
   if (plan.hasShareAndSave) {
     return {
-      title: '🤝 Share & Save available',
+      title: '🤝 Share & Save is available for your usual restaurant.',
       body: `Share & Save is available for ${plan.restaurantName}.`,
     };
   }
   switch (plan.habitKind) {
-    case 'lunch':
-      return {
-        title: '🍔 Ready for your usual?',
-        body: 'Your favorite lunch order is waiting.',
-      };
     case 'dinner':
       return {
-        title: '🍕 Almost dinner time',
-        body: 'Reorder your favorite meal in one tap.',
+        title: "🍕 It's almost dinner time. Reorder your favorite meal in one tap.",
+        body: `Your usual from ${plan.restaurantName} is waiting.`,
       };
     case 'late_night':
       return {
-        title: '🌮 Hungry?',
-        body: 'Your usual order is ready whenever you are.',
+        title: '🌮 Hungry? Your usual order is ready whenever you are.',
+        body: `Reorder from ${plan.restaurantName} in one tap.`,
+      };
+    case 'lunch':
+      return {
+        title: '🍔 Ready for your usual? Your favorite order is waiting.',
+        body: `Lunch from ${plan.restaurantName} — reorder in one tap.`,
       };
     case 'weekend':
       return {
-        title: '🍔 Weekend usual?',
-        body: `Your favorite from ${plan.restaurantName} is ready whenever you are.`,
+        title: '🍔 Ready for your usual? Your favorite order is waiting.',
+        body: `Your weekend usual from ${plan.restaurantName} is ready.`,
       };
     case 'daily':
       return {
-        title: '🍔 Ready for your usual?',
-        body: 'Your favorite order is waiting.',
+        title: '🍔 Ready for your usual? Your favorite order is waiting.',
+        body: `Your favorite order from ${plan.restaurantName} is waiting.`,
       };
     default:
       return {
-        title: '🍔 Ready for your usual?',
-        body: `Your favorite order from ${plan.restaurantName} is ready whenever you are.`,
+        title: '🍔 Ready for your usual? Your favorite order is waiting.',
+        body: `Your usual from ${plan.restaurantName} is ready whenever you are.`,
       };
   }
 }

@@ -282,15 +282,17 @@ export async function computeRepeatOrderRecommendation(
   const candidates = buildRepeatOrderCandidates(history, nowMs);
   if (candidates.length === 0) return empty;
 
-  // Enrich offer / share flags for schedule copy (best-effort, limited reads).
+  // Enrich offer / share / open flags for schedule copy (best-effort, limited reads).
   const offerByRestaurant: Record<string, boolean> = {};
   const shareByRestaurant: Record<string, boolean> = {};
+  const eligibleByRestaurant: Record<string, boolean> = {};
   const uniqueRestaurants = [
     ...new Set(candidates.map((c) => c.restaurantId)),
   ].slice(0, 4);
   await Promise.all(
     uniqueRestaurants.map(async (rid) => {
       const venue = await restaurantIsEligible(rid);
+      eligibleByRestaurant[rid] = venue.ok;
       offerByRestaurant[rid] = venue.hasOffer;
       if (venue.ok && venue.name) {
         shareByRestaurant[rid] = await hasFoodShareForRestaurantName(venue.name);
@@ -302,6 +304,7 @@ export async function computeRepeatOrderRecommendation(
     nowMs,
     offerByRestaurant,
     shareByRestaurant,
+    eligibleByRestaurant,
   }).filter((plan) => {
     return !userAlreadyOrderedHabitToday({
       history,
@@ -415,11 +418,67 @@ export async function loadRepeatOrderRecommendation(input: {
       cached.historyFingerprint === fingerprint &&
       nowMs - cached.computedAtMs < REPEAT_ORDER_CACHE_TTL_MS
     ) {
-      // Always refresh notification schedule from cached plans when possible.
-      if (cached.schedulePlans && cached.schedulePlans.length > 0) {
+      const cachedPlans = (cached.schedulePlans ?? []).filter(
+        (p) => p.fireAtMs > nowMs + 10_000,
+      );
+
+      // If cached fire times are all past/stale, rebuild plans without dropping the card cache.
+      if (cachedPlans.length === 0 && history.length >= 2) {
+        const refreshed = await computeRepeatOrderRecommendation(uid, history);
+        await writeRepeatOrderCache({
+          uid,
+          computedAtMs: nowMs,
+          historyFingerprint: fingerprint,
+          recommendation: refreshed.recommendation ?? cached.recommendation,
+          schedulePlans: refreshed.schedulePlans,
+        });
         void syncRepeatOrderNotifications({
           uid,
-          plans: cached.schedulePlans,
+          plans: refreshed.schedulePlans,
+          history,
+          nowMs,
+        });
+        // Fall through to card timing checks using refreshed recommendation when present.
+        if (refreshed.recommendation) {
+          const timing = minutesUntilNextUsual({
+            usualMinutesOfDay: refreshed.recommendation.usualMinutesOfDay,
+            weekdays:
+              refreshed.recommendation.weekdays?.length > 0
+                ? refreshed.recommendation.weekdays
+                : [new Date(nowMs).getDay()],
+            nowMs,
+          });
+          if (!isInRepeatCardLeadWindow(timing.minutesUntil)) return null;
+          const venue = await restaurantIsEligible(
+            refreshed.recommendation.restaurantId,
+          );
+          if (!venue.ok) return null;
+          if (
+            userAlreadyOrderedHabitToday({
+              history,
+              restaurantId: refreshed.recommendation.restaurantId,
+              itemSignature: buildRepeatItemSignature(
+                refreshed.recommendation.availableItems,
+              ),
+              nowMs,
+            })
+          ) {
+            return null;
+          }
+          return {
+            ...refreshed.recommendation,
+            restaurantName:
+              venue.name || refreshed.recommendation.restaurantName,
+            hasAvailableOffer: venue.hasOffer,
+            estimatedDeliveryLabel:
+              venue.etaLabel || refreshed.recommendation.estimatedDeliveryLabel,
+            minutesUntilUsual: timing.minutesUntil,
+          };
+        }
+      } else if (cachedPlans.length > 0) {
+        void syncRepeatOrderNotifications({
+          uid,
+          plans: cachedPlans,
           history,
           nowMs,
         });
@@ -456,7 +515,7 @@ export async function loadRepeatOrderRecommendation(input: {
           computedAtMs: nowMs,
           historyFingerprint: fingerprint,
           recommendation: null,
-          schedulePlans: cached.schedulePlans ?? [],
+          schedulePlans: cachedPlans,
         });
         return null;
       }

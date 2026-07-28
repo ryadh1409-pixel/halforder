@@ -105,6 +105,12 @@ export type RepeatOrderCachePayload = {
 
 export type RepeatOrderNotifLog = {
   uid: string;
-  /** `${dayKey}:${habitKey}` → notification identifier */
-  sent: Record<string, string>;
+  /** `${dayKey}:${habitKey}` → scheduled notification metadata */
+  sent: Record<
+    string,
+    {
+      id: string;
+      fireAtMs: number;
+    }
+  >;
 };
