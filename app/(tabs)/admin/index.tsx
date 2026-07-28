@@ -607,6 +607,13 @@ export default function AdminScreen() {
                   }
                 />
                 <ActionCard
+                  icon="rocket-outline"
+                  label="Driver launch"
+                  onPress={() =>
+                    router.push(adminRoutes.driverLaunchCampaign as never)
+                  }
+                />
+                <ActionCard
                   icon="bulb-outline"
                   label="Emo AI Reports"
                   onPress={() => router.push(adminRoutes.emoAiReports as never)}

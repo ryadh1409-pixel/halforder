@@ -3478,6 +3478,18 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    /** Limited Driver Launch Campaign enrollments (Admin SDK writes). */
+    match /driverLaunchEnrollments/{driverId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && request.auth.uid == driverId);
+      allow create, update, delete: if false;
+    }
+    /** Idempotency markers for campaign delivery progress (Admin SDK writes). */
+    match /driverLaunchProgress/{orderId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     /** Admin push campaign history / delivery tracking. */
     match /pushCampaigns/{campaignId} {
       allow read, create, update, delete: if isAdmin();

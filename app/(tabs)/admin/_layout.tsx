@@ -137,6 +137,10 @@ export default function AdminLayout() {
           options={{ title: 'Driver Management' }}
         />
         <Stack.Screen
+          name="driver-launch-campaign"
+          options={{ title: 'Driver Launch Campaign' }}
+        />
+        <Stack.Screen
           name="test-order-flow"
           options={{ title: 'Order Flow Test' }}
         />

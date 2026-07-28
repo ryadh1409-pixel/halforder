@@ -22,6 +22,7 @@ import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
 import { DriverDeliveryHistorySection } from '@/components/driver/DriverDeliveryHistory';
+import { DriverLaunchCampaignCard } from '@/components/driver/DriverLaunchCampaignCard';
 import {
   useDriverActiveOrdersLifecycleAlerts,
   useDriverAvailableOrderAlerts,
@@ -413,6 +414,8 @@ export default function DriverHubScreen() {
             <Text style={styles.statLabel}>Rating</Text>
           </View>
         </View>
+
+        <DriverLaunchCampaignCard driverId={uid || null} />
 
         {hubActiveOrders.length > 0 ? (
           <View style={styles.activeSection}>

@@ -56,4 +56,6 @@ export const adminRoutes = {
   notificationHistory: '/(tabs)/admin/notification-history',
   restaurantManagement: '/(tabs)/admin/restaurant-management',
   driverManagement: '/(tabs)/admin/driver-management',
+  /** Limited first-N driver launch bonus campaign. */
+  driverLaunchCampaign: '/(tabs)/admin/driver-launch-campaign',
 } as const;
