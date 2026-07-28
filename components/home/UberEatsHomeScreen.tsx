@@ -2,12 +2,15 @@ import { FeaturedSection } from '@/components/home/FeaturedSection';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
 import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
+import { RepeatOrderCard } from '@/components/home/RepeatOrderCard';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useFoodShareUnreadCount } from '@/hooks/useFoodShareInbox';
 import { useHomeBanners } from '@/hooks/useHomeBanners';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
+import { useRepeatOrderRecommendation } from '@/hooks/useRepeatOrderRecommendation';
 import { auth } from '@/services/firebase';
+import { showError } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -28,6 +31,12 @@ export function UberEatsHomeScreen() {
   const { restaurants, loading, error } = useHomeRestaurants();
   const { banners, settings: bannerSettings, loading: bannersLoading } = useHomeBanners();
   const unreadNotifications = useFoodShareUnreadCount(auth.currentUser?.uid);
+  const {
+    recommendation: repeatOrder,
+    ordering: repeatOrdering,
+    refresh: refreshRepeatOrder,
+    orderAgain,
+  } = useRepeatOrderRecommendation(auth.currentUser?.uid);
   const [refreshing, setRefreshing] = useState(false);
 
   const showBanners = bannerSettings.visible && banners.length > 0;
@@ -52,12 +61,24 @@ export function UberEatsHomeScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    refreshRepeatOrder();
     void refreshLocation().finally(() => setRefreshing(false));
-  }, [refreshLocation]);
+  }, [refreshLocation, refreshRepeatOrder]);
 
   const onAddressPress = useCallback(() => {
     router.push('/(tabs)/profile' as never);
   }, [router]);
+
+  const onOrderAgain = useCallback(() => {
+    void (async () => {
+      const result = await orderAgain();
+      if (result.path) {
+        router.push(result.path as never);
+        return;
+      }
+      if (result.error) showError(result.error);
+    })();
+  }, [orderAgain, router]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -93,6 +114,14 @@ export function UberEatsHomeScreen() {
 
         {!loading || restaurants.length > 0 ? (
           <>
+            {repeatOrder ? (
+              <RepeatOrderCard
+                recommendation={repeatOrder}
+                ordering={repeatOrdering}
+                onOrderAgain={onOrderAgain}
+              />
+            ) : null}
+
             <FeaturedSection
               title="Featured near you"
               restaurants={featured}
