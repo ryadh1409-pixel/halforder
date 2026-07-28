@@ -2,9 +2,11 @@ import { FeaturedSection } from '@/components/home/FeaturedSection';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
 import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
+import { AbandonedCheckoutRecoveryCard } from '@/components/home/AbandonedCheckoutRecoveryCard';
 import { RepeatOrderCard } from '@/components/home/RepeatOrderCard';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
+import { useAbandonedCheckoutRecovery } from '@/hooks/useAbandonedCheckoutRecovery';
 import { useFoodShareUnreadCount } from '@/hooks/useFoodShareInbox';
 import { useHomeBanners } from '@/hooks/useHomeBanners';
 import { useHomeRestaurants } from '@/hooks/useHomeRestaurants';
@@ -37,6 +39,12 @@ export function UberEatsHomeScreen() {
     refresh: refreshRepeatOrder,
     orderAgain,
   } = useRepeatOrderRecommendation(auth.currentUser?.uid);
+  const {
+    card: abandonedCheckout,
+    completing: abandonedCompleting,
+    refresh: refreshAbandonedCheckout,
+    completeOrder: completeAbandonedCheckout,
+  } = useAbandonedCheckoutRecovery(auth.currentUser?.uid);
   const [refreshing, setRefreshing] = useState(false);
 
   const showBanners = bannerSettings.visible && banners.length > 0;
@@ -62,8 +70,9 @@ export function UberEatsHomeScreen() {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     refreshRepeatOrder();
+    refreshAbandonedCheckout();
     void refreshLocation().finally(() => setRefreshing(false));
-  }, [refreshLocation, refreshRepeatOrder]);
+  }, [refreshLocation, refreshRepeatOrder, refreshAbandonedCheckout]);
 
   const onAddressPress = useCallback(() => {
     router.push('/(tabs)/profile' as never);
@@ -79,6 +88,17 @@ export function UberEatsHomeScreen() {
       if (result.error) showError(result.error);
     })();
   }, [orderAgain, router]);
+
+  const onCompleteAbandoned = useCallback(() => {
+    void (async () => {
+      const result = await completeAbandonedCheckout();
+      if (result.path) {
+        router.push(result.path as never);
+        return;
+      }
+      if (result.error) showError(result.error);
+    })();
+  }, [completeAbandonedCheckout, router]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -114,6 +134,14 @@ export function UberEatsHomeScreen() {
 
         {!loading || restaurants.length > 0 ? (
           <>
+            {abandonedCheckout ? (
+              <AbandonedCheckoutRecoveryCard
+                card={abandonedCheckout}
+                completing={abandonedCompleting}
+                onCompleteOrder={onCompleteAbandoned}
+              />
+            ) : null}
+
             {repeatOrder ? (
               <RepeatOrderCard
                 recommendation={repeatOrder}

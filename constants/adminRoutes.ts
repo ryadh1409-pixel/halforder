@@ -33,6 +33,8 @@ export const adminRoutes = {
   promoCodes: '/(tabs)/admin/promo-codes',
   /** Swipe Delivery invite → friend pays → inviter % OFF. */
   referralRewardPromotions: '/(tabs)/admin/referral-reward-promotions',
+  /** Abandoned checkout reminders + recovery offers. */
+  abandonedCheckoutRecovery: '/(tabs)/admin/abandoned-checkout-recovery',
   balances: '/(tabs)/admin/balances',
   homeBanners: '/(tabs)/admin/home-banners',
   vouchers: '/(tabs)/admin/vouchers',

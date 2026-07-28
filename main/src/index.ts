@@ -36,3 +36,8 @@ export {
   markDriverLaunchBonusPaid,
   trackDriverLaunchCampaignProgress,
 } from "./driverLaunchCampaign.js";
+export {
+  applyAbandonedCheckoutRecoveryOffer,
+  processAbandonedCheckoutRecovery,
+  recordAbandonedCheckoutNotificationOpen,
+} from "./abandonedCheckoutRecovery.js";

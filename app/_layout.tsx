@@ -12,6 +12,7 @@ import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
 import { PushNotificationDeepLinkListener } from '@/components/PushNotificationDeepLinkListener';
+import { AbandonedCheckoutNotificationListener } from '@/components/AbandonedCheckoutNotificationListener';
 import { AdminSupportInboundListener } from '@/components/AdminSupportInboundListener';
 import { AppBadgeSync } from '@/components/AppBadgeSync';
 import { SwipeReferralRewardUnlockHost } from '@/components/SwipeReferralRewardUnlockHost';
@@ -168,6 +169,7 @@ export default function RootLayout() {
                 <CartProvider>
                   <BootstrapShell>
                     <PushNotificationDeepLinkListener />
+                    <AbandonedCheckoutNotificationListener />
                     <AdminSupportInboundListener />
                     <AppBadgeSync />
                     <Slot />

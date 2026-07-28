@@ -3184,6 +3184,30 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    /**
+     * Abandoned Checkout Recovery sessions (orderId-keyed).
+     * Customers manage only their own recovery sessions; pricing applies via Cloud Functions.
+     */
+    match /abandonedCheckoutSessions/{orderId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.orderId == orderId;
+      allow update: if isAdmin()
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+        );
+      allow delete: if isAdmin();
+    }
+    match /abandonedCheckoutUserStats/{uid} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow create, update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == uid);
+      allow delete: if isAdmin();
+    }
     match /homeBanners/{bannerId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
