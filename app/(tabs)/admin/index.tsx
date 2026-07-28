@@ -571,6 +571,13 @@ export default function AdminScreen() {
                   onPress={() => router.push(adminRoutes.promoCodes as never)}
                 />
                 <ActionCard
+                  icon="gift-outline"
+                  label="Referral rewards"
+                  onPress={() =>
+                    router.push(adminRoutes.referralRewardPromotions as never)
+                  }
+                />
+                <ActionCard
                   icon="wallet-outline"
                   label="Balances"
                   onPress={() => router.push(adminRoutes.balances as never)}
@@ -647,6 +654,24 @@ export default function AdminScreen() {
                     <Text style={styles.promoBadgesSub}>
                       Choose Most Ordered or Great Price for each restaurant /
                       food card
+                    </Text>
+                  </View>
+                  <Text style={styles.promoBadgesCta}>Open</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  onPress={() =>
+                    router.push(adminRoutes.referralRewardPromotions as never)
+                  }
+                  activeOpacity={0.88}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.promoBadgesTitle}>
+                      Referral Reward Promotions
+                    </Text>
+                    <Text style={styles.promoBadgesSub}>
+                      Swipe Delivery invite rewards — unlock % OFF after a friend
+                      pays
                     </Text>
                   </View>
                   <Text style={styles.promoBadgesCta}>Open</Text>

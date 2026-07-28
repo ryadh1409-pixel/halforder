@@ -31,6 +31,8 @@ export const adminRoutes = {
   promotionBadges: '/(tabs)/admin/promotion-badges',
   restaurantFees: '/(tabs)/admin/restaurant-fees',
   promoCodes: '/(tabs)/admin/promo-codes',
+  /** Swipe Delivery invite → friend pays → inviter % OFF. */
+  referralRewardPromotions: '/(tabs)/admin/referral-reward-promotions',
   balances: '/(tabs)/admin/balances',
   homeBanners: '/(tabs)/admin/home-banners',
   vouchers: '/(tabs)/admin/vouchers',

@@ -1,7 +1,7 @@
 import { sendFoodShareInvite } from '@/services/foodShareInvite';
-import { theme } from '@/constants/theme';
+import { loadLivePromoForCard } from '@/services/swipeReferralPromotion';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -41,6 +41,17 @@ export function FoodShareInviteButton({
   variant = 'card',
 }: FoodShareInviteButtonProps) {
   const [busy, setBusy] = useState(false);
+  const [referralBadge, setReferralBadge] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadLivePromoForCard(adminFoodShareId).then((promo) => {
+      if (!cancelled) setReferralBadge(promo?.badgeText ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminFoodShareId]);
 
   const handleInvite = useCallback(async () => {
     if (busy) return;
@@ -103,6 +114,13 @@ export function FoodShareInviteButton({
 
   return (
     <View style={styles.card}>
+      {referralBadge ? (
+        <View style={styles.referralPill}>
+          <Text style={styles.referralPillTxt} numberOfLines={2}>
+            {referralBadge}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.headerRow}>
         <View style={styles.iconWrap}>
           <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
@@ -113,8 +131,9 @@ export function FoodShareInviteButton({
         </View>
       </View>
       <Text style={styles.body}>
-        Know someone who would split this meal? Send them a professional invite on
-        WhatsApp with pricing and a direct link to join.
+        {referralBadge
+          ? 'Invite a friend to this Swipe Delivery card. When they complete payment on this same card, your reward unlocks.'
+          : 'Know someone who would split this meal? Send them a professional invite on WhatsApp with pricing and a direct link to join.'}
       </Text>
       <Pressable
         style={[styles.cta, busy && styles.btnDisabled]}
@@ -134,8 +153,6 @@ export function FoodShareInviteButton({
   );
 }
 
-const c = theme.colors;
-
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
@@ -144,6 +161,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(37, 211, 102, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(37, 211, 102, 0.22)',
+  },
+  referralPill: {
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+  },
+  referralPillTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#E9D5FF',
   },
   headerRow: {
     flexDirection: 'row',

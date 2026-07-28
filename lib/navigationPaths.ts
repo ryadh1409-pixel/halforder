@@ -54,6 +54,8 @@ export const USER_ROUTES = {
   moneySaved: '/money-saved' as const,
   /** Emo AI “I Want” concierge ordering wizard. */
   iWant: '/i-want' as const,
+  /** Emo Game hub (UNO / Flip Challenge placeholder). */
+  emoGame: '/emo-game' as const,
 } as const;
 
 /** Canonical customer tab shell hrefs. */

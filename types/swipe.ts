@@ -34,6 +34,8 @@ export type SwipeFoodCard = {
   fulfillmentMode: FoodShareFulfillmentMode;
   promotionBadge?: PromotionBadgeValue;
   promotionBadges?: Exclude<PromotionBadgeValue, 'none'>[];
+  /** Live admin Referral Reward badge copy (Swipe Delivery only). */
+  referralRewardLabel?: string | null;
 };
 
 export type SwipeDeckLoadingCard = {

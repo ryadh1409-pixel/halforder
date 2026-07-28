@@ -124,7 +124,6 @@ export default function CheckoutScreen() {
       setMessage('Confirming your order…');
       // Remain locked until this screen is replaced after webhook navigation.
 
-      // Redeem one-time Hi emooo after successful payment (idempotent if not available).
       try {
         const { redeemEmoHiEmoooDiscount } = await import(
           '@/services/emoAi/emoAiHiEmoooReward'

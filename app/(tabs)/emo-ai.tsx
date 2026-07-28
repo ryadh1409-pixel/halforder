@@ -53,6 +53,10 @@ export default function EmoAiScreen() {
     router.push(USER_ROUTES.iWant as never);
   }, [router]);
 
+  const openEmoGame = useCallback(() => {
+    router.push(USER_ROUTES.emoGame as never);
+  }, [router]);
+
   const tabBarBottomOffset = Math.max(14, insets.bottom + 4);
   const tabBarReserve = keyboardOpen
     ? 0
@@ -129,7 +133,9 @@ export default function EmoAiScreen() {
                 />
               </>
             )}
-            {started ? <IWantComposerCta onPress={openIWant} /> : null}
+            {started ? (
+              <IWantComposerCta onPress={openIWant} onEmoGamePress={openEmoGame} />
+            ) : null}
             <EmoAiComposer
               disabled={busy && started}
               onSend={(t) => void sendMessage(t)}

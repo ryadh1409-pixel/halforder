@@ -49,6 +49,12 @@ function SwipeFoodCardInner({ card }: Props) {
         <View style={styles.pickupBadge}>
           <Text style={styles.pickupBadgeTxt}>🛍️ Free Pickup</Text>
         </View>
+      ) : card.referralRewardLabel ? (
+        <View style={styles.referralBadge}>
+          <Text style={styles.referralBadgeTxt} numberOfLines={2}>
+            {card.referralRewardLabel}
+          </Text>
+        </View>
       ) : hasPromo ? (
         <PromotionBadgesRow values={promoValues} style={styles.promoBadge} />
       ) : (
@@ -57,6 +63,13 @@ function SwipeFoodCardInner({ card }: Props) {
           <Text style={styles.liveTxt}>Admin meal share</Text>
         </View>
       )}
+
+      {!isPickup && card.referralRewardLabel && hasPromo ? (
+        <PromotionBadgesRow
+          values={promoValues}
+          style={[styles.promoBadge, styles.promoBadgeBelowReferral]}
+        />
+      ) : null}
 
       <View style={styles.body}>
         <Text style={styles.restaurant} numberOfLines={1}>
@@ -115,6 +128,28 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 2,
+  },
+  promoBadgeBelowReferral: {
+    top: 58,
+  },
+  referralBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    zIndex: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(168, 85, 247, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  referralBadgeTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.1,
   },
   pickupBadge: {
     position: 'absolute',

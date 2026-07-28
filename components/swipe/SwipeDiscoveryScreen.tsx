@@ -20,8 +20,13 @@ import {
 } from '@/services/adminFoodSharesService';
 import { joinAdminFoodShare } from '@/services/foodShareMatchService';
 import { auth } from '@/services/firebase';
+import {
+  findLivePromoForCard,
+  subscribeLiveSwipeReferralPromotions,
+} from '@/services/swipeReferralPromotion';
 import { recordSwipe } from '@/services/swipeService';
 import { useSwipeStore } from '@/store/swipeStore';
+import type { SwipeReferralPromotion } from '@/types/swipeReferralPromotion';
 import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -61,6 +66,9 @@ export function SwipeDiscoveryScreen() {
     direction: 'like' | 'pass';
   } | null>(null);
   const [loadingDeck, setLoadingDeck] = useState(true);
+  const [liveReferralPromos, setLiveReferralPromos] = useState<
+    SwipeReferralPromotion[]
+  >([]);
   const deckIndex = useSwipeStore((s) => s.deckIndex);
   const cards = useSwipeStore((s) => s.cards);
   const joiningOrderId = useSwipeStore((s) => s.joiningOrderId);
@@ -81,9 +89,33 @@ export function SwipeDiscoveryScreen() {
     return unsub;
   }, [setCards]);
 
+  useEffect(() => {
+    return subscribeLiveSwipeReferralPromotions(setLiveReferralPromos);
+  }, []);
+
+  const cardsWithReferral = useMemo(() => {
+    if (liveReferralPromos.length === 0) return cards;
+    return cards.map((card) => {
+      if (card.fulfillmentMode !== 'delivery') {
+        return { ...card, referralRewardLabel: null };
+      }
+      const promo = findLivePromoForCard(
+        liveReferralPromos,
+        card.adminFoodShareId,
+      );
+      return {
+        ...card,
+        referralRewardLabel: promo?.badgeText ?? null,
+      };
+    });
+  }, [cards, liveReferralPromos]);
+
   const filteredCards = useMemo(
-    () => cards.filter((card) => card.fulfillmentMode === fulfillmentMode),
-    [cards, fulfillmentMode],
+    () =>
+      cardsWithReferral.filter(
+        (card) => card.fulfillmentMode === fulfillmentMode,
+      ),
+    [cardsWithReferral, fulfillmentMode],
   );
 
   const current = filteredCards[deckIndex];

@@ -29,6 +29,10 @@ export type PromoCodeDoc = {
   /** Empty = all restaurants. */
   restaurantIds: string[];
   description: string;
+  /** Personal reward — only this uid may apply the code. */
+  ownerUid: string | null;
+  /** Swipe Delivery referral campaign id (when personal reward). */
+  swipeReferralPromoId: string | null;
 };
 
 function normCode(raw: string): string {
@@ -69,6 +73,15 @@ function parsePromo(id: string, data: Record<string, unknown>): PromoCodeDoc {
     restaurantIds,
     description:
       typeof data.description === 'string' ? data.description.trim() : '',
+    ownerUid:
+      typeof data.ownerUid === 'string' && data.ownerUid.trim()
+        ? data.ownerUid.trim()
+        : null,
+    swipeReferralPromoId:
+      typeof data.swipeReferralPromoId === 'string' &&
+      data.swipeReferralPromoId.trim()
+        ? data.swipeReferralPromoId.trim()
+        : null,
   };
 }
 
@@ -181,6 +194,7 @@ export function computePromoDiscountAmount(
 export function isPromoCurrentlyValid(
   promo: PromoCodeDoc,
   restaurantId?: string | null,
+  opts?: { uid?: string | null },
 ): string | null {
   if (!promo.active) return 'This promo is inactive.';
   if (promo.expiresAtMs != null && promo.expiresAtMs <= Date.now()) {
@@ -191,6 +205,12 @@ export function isPromoCurrentlyValid(
     promo.usedCount >= promo.usageLimit
   ) {
     return 'This promo has reached its usage limit.';
+  }
+  if (promo.ownerUid) {
+    const uid = opts?.uid?.trim() || auth.currentUser?.uid || '';
+    if (!uid || uid !== promo.ownerUid) {
+      return 'This reward belongs to another account.';
+    }
   }
   if (
     promo.restaurantIds.length > 0 &&
@@ -210,6 +230,7 @@ export async function applyPromoCode(input: {
 }): Promise<AppliedPromo> {
   const code = normCode(input.code);
   if (!code) throw new Error('Enter a promo code');
+  const uid = auth.currentUser?.uid ?? null;
 
   const q = query(collection(db, 'promoCodes'), where('code', '==', code));
   const snap = await getDocs(q);
@@ -218,7 +239,7 @@ export async function applyPromoCode(input: {
     const byId = await getDoc(doc(db, 'promoCodes', code.toLowerCase()));
     if (!byId.exists()) throw new Error('Promo code not found');
     const promo = parsePromo(byId.id, byId.data() as Record<string, unknown>);
-    const err = isPromoCurrentlyValid(promo, input.restaurantId);
+    const err = isPromoCurrentlyValid(promo, input.restaurantId, { uid });
     if (err) throw new Error(err);
     return {
       code: promo.code,
@@ -228,7 +249,7 @@ export async function applyPromoCode(input: {
   }
   const d = snap.docs[0]!;
   const promo = parsePromo(d.id, d.data() as Record<string, unknown>);
-  const err = isPromoCurrentlyValid(promo, input.restaurantId);
+  const err = isPromoCurrentlyValid(promo, input.restaurantId, { uid });
   if (err) throw new Error(err);
   return {
     code: promo.code,

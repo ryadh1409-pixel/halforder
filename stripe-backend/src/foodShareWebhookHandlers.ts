@@ -7,6 +7,7 @@ import {
   notifyFoodSharePaymentFailed,
   notifyFoodShareRefundProcessed,
 } from "./foodShareServerNotify.js";
+import {tryGrantSwipeReferralReward} from "./swipeReferralRewardGrant.js";
 
 import {
   foodSharePaymentDocId,
@@ -433,6 +434,24 @@ export async function handleFoodSharePaymentIntentEvent(
             matchId,
           }),
         ]);
+      }
+
+      const userPayments = (match.userPayments ?? {}) as Record<
+        string,
+        {paymentStatus?: string}
+      >;
+      const allPaidNow =
+        users.length === 2 &&
+        users.every((u) => isPaidStatus(userPayments[u]?.paymentStatus));
+      if (allPaidNow) {
+        try {
+          await tryGrantSwipeReferralReward({matchId, match});
+        } catch (err) {
+          console.error("[swipeReferralReward] webhook_hook_failed", {
+            matchId,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     } else if (paymentStatus === "FAILED") {
       await notifyFoodSharePaymentFailed({userId, matchId, foodName});

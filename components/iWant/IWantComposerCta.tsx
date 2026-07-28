@@ -4,21 +4,34 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   onPress: () => void;
+  onEmoGamePress: () => void;
 };
 
 /**
- * Compact in-chat entry for the I Want wizard — sits above the composer.
+ * Compact in-chat actions above the composer — I Want + Emo Game.
  */
-function IWantComposerCtaInner({ onPress }: Props) {
+function IWantComposerCtaInner({ onPress, onEmoGamePress }: Props) {
   return (
     <View style={styles.wrap}>
       <Pressable
-        style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.chip, styles.chipFlex, pressed && styles.pressed]}
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel="I Want Something"
       >
-        <Text style={styles.label}>✨ I Want Something</Text>
+        <Text style={styles.label} numberOfLines={1}>
+          ✨ I Want Something
+        </Text>
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [styles.chip, styles.chipFlex, pressed && styles.pressed]}
+        onPress={onEmoGamePress}
+        accessibilityRole="button"
+        accessibilityLabel="Emo Game"
+      >
+        <Text style={styles.label} numberOfLines={1}>
+          🎮 Emo Game
+        </Text>
       </Pressable>
     </View>
   );
@@ -30,7 +43,9 @@ const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: 14,
     paddingBottom: 8,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
   },
   chip: {
     paddingHorizontal: 14,
@@ -39,6 +54,12 @@ const styles = StyleSheet.create({
     backgroundColor: EMO_AI_PURPLE_SOFT,
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipFlex: {
+    flex: 1,
+    minWidth: 0,
   },
   pressed: {
     opacity: 0.9,

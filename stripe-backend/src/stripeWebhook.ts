@@ -43,6 +43,7 @@ import {
   HI_EMOOO_PROMO_CODE,
   markEmoHiEmoooRedeemed,
 } from "./emoAiHiEmoooReward.js";
+import {markSwipeReferralRewardRedeemed} from "./swipeReferralRewardGrant.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -146,6 +147,31 @@ async function redeemHiEmoooIfNeeded(orderId: string): Promise<void> {
     await markEmoHiEmoooRedeemed(uid, orderId);
   } catch (err) {
     console.error("[stripeWebhook] hi emooo redeem failed", orderId, err);
+  }
+}
+
+async function redeemSwipeReferralIfNeeded(orderId: string): Promise<void> {
+  try {
+    const orderSnap = await admin.firestore().collection("orders").doc(orderId).get();
+    if (!orderSnap.exists) return;
+    const data = orderSnap.data() ?? {};
+    const promoCode =
+      typeof data.promoCode === "string" ? data.promoCode.trim() : "";
+    if (!promoCode) return;
+    const uid =
+      typeof data.userId === "string" && data.userId.trim()
+        ? data.userId.trim()
+        : typeof data.customerId === "string"
+          ? data.customerId.trim()
+          : "";
+    if (!uid) return;
+    await markSwipeReferralRewardRedeemed({
+      uid,
+      orderId,
+      promoCode,
+    });
+  } catch (err) {
+    console.error("[stripeWebhook] swipe referral redeem failed", orderId, err);
   }
 }
 
@@ -434,6 +460,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
           });
         }
         await redeemHiEmoooIfNeeded(orderId);
+        await redeemSwipeReferralIfNeeded(orderId);
       }
       return;
     }
@@ -482,6 +509,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       });
       if (outcome === "applied") {
         await redeemHiEmoooIfNeeded(orderId);
+        await redeemSwipeReferralIfNeeded(orderId);
       }
       return;
     }
@@ -531,6 +559,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       });
       if (outcome === "applied") {
         await redeemHiEmoooIfNeeded(orderId);
+        await redeemSwipeReferralIfNeeded(orderId);
       }
       return;
     }

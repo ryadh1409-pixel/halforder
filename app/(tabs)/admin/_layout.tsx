@@ -86,6 +86,10 @@ export default function AdminLayout() {
           options={{ title: 'Restaurant Fees' }}
         />
         <Stack.Screen name="promo-codes" options={{ title: 'Promo Codes' }} />
+        <Stack.Screen
+          name="referral-reward-promotions"
+          options={{ title: 'Referral Reward' }}
+        />
         <Stack.Screen name="balances" options={{ title: 'Balances' }} />
         <Stack.Screen name="home-banners" options={{ title: 'Home Banners' }} />
         <Stack.Screen name="vouchers" options={{ title: 'Voucher Management' }} />

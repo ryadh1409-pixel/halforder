@@ -8,6 +8,7 @@ import {
   type FoodShareInviteMessageInput,
 } from '@/lib/foodShareInvite';
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
+import { loadLivePromoForCard } from '@/services/swipeReferralPromotion';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import { auth, db } from '@/services/firebase';
 import {
@@ -109,6 +110,12 @@ export async function sendFoodShareInvite(
   const adminFoodShareId = input.adminFoodShareId.trim();
   if (!adminFoodShareId) throw new Error('Missing meal share.');
 
+  const share = mapAdminFoodShareDoc(adminFoodShareId, input.shareRaw ?? {});
+  const referralPromoId =
+    share.fulfillmentMode === 'delivery'
+      ? (await loadLivePromoForCard(adminFoodShareId))?.id ?? null
+      : null;
+
   const placeholderLink = buildFoodShareInviteLink(adminFoodShareId);
   const ref = await addDoc(collection(db, 'foodShareInvites'), {
     senderUid: uid,
@@ -120,6 +127,7 @@ export async function sendFoodShareInvite(
     openedByUid: null,
     convertedAt: null,
     convertedMatchId: null,
+    ...(referralPromoId ? { referralPromoId } : {}),
   });
 
   const inviteLink = buildFoodShareInviteLink(adminFoodShareId, ref.id);
