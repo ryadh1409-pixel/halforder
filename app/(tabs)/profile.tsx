@@ -11,6 +11,7 @@ import { LEGAL_URLS } from '../../constants/legalLinks';
 import { theme } from '../../constants/theme';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { MoneySavedProfileTeaser } from '../../components/moneySaved/MoneySavedProfileTeaser';
+import { MemberSinceCard } from '../../components/profile/MemberSinceCard';
 import { ProfileOrdersSection } from '../../components/profile/ProfileOrdersSection';
 import { ReferralProgramCard } from '../../components/profile/ReferralProgramCard';
 import { type ProfileOrderRow, useProfileOrders } from '../../hooks/useProfileOrders';
@@ -618,6 +619,15 @@ export default function ProfileScreen() {
     emailFromFirestore ?? user?.email ?? 'Not set';
   const displayName = displayNameInput.trim() || 'User';
 
+  const memberSinceYear = useMemo(() => {
+    const raw = user?.metadata?.creationTime;
+    if (typeof raw === 'string' && raw.trim()) {
+      const y = new Date(raw).getFullYear();
+      if (Number.isFinite(y) && y >= 2000) return y;
+    }
+    return new Date().getFullYear();
+  }, [user?.metadata?.creationTime]);
+
   const reviewCount =
     totalRatings > 0 ? totalRatings : trustScore?.count ?? 0;
   const ratingValue =
@@ -626,7 +636,8 @@ export default function ProfileScreen() {
       : trustScore && trustScore.count > 0
         ? trustScore.average
         : null;
-  const showNewUserBadge = reviewCount === 0;
+  const showNewUserBadge =
+    reviewCount === 0 && !isAdminUser(user, firestoreUserRole);
 
   const dynamicStyles = useMemo(
     () => createDynamicStyles(pal, isDark),
@@ -1089,6 +1100,8 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           ) : null}
+
+          <MemberSinceCard year={memberSinceYear} />
 
         </View>
       </ScrollView>
