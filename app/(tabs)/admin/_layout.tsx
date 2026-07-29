@@ -149,6 +149,10 @@ export default function AdminLayout() {
           options={{ title: 'Driver Referral Campaign' }}
         />
         <Stack.Screen
+          name="cashback-rewards"
+          options={{ title: 'Cashback Rewards' }}
+        />
+        <Stack.Screen
           name="test-order-flow"
           options={{ title: 'Order Flow Test' }}
         />

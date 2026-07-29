@@ -55,6 +55,8 @@ import {
   HI_EMOOO_PROMO_CODE,
   loadEmoHiEmoooDiscount,
 } from '@/services/emoAi/emoAiHiEmoooReward';
+import { getCashbackWallet } from '@/services/cashbackRewards';
+import type { CashbackWallet } from '@/types/cashbackRewards';
 import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { useFocusEffect } from '@react-navigation/native';
@@ -64,11 +66,22 @@ import {
   Alert,
   Platform,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+function isCashbackCampaignActive(wallet: CashbackWallet | null): boolean {
+  if (!wallet) return false;
+  const { enabled, paused, startAtMs, endAtMs } = wallet.settings;
+  if (!enabled || paused) return false;
+  const now = Date.now();
+  if (startAtMs != null && now < startAtMs) return false;
+  if (endAtMs != null && now > endAtMs) return false;
+  return true;
+}
 
 export default function CheckoutPremiumScreen() {
   const router = useRouter();
@@ -110,6 +123,10 @@ export default function CheckoutPremiumScreen() {
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [autoHiEmooo, setAutoHiEmooo] = useState(false);
+  const [cashbackWallet, setCashbackWallet] = useState<CashbackWallet | null>(
+    null,
+  );
+  const [useHalfOrderCash, setUseHalfOrderCash] = useState(false);
 
   const cartItems = useMemo(
     () =>
@@ -165,6 +182,28 @@ export default function CheckoutPremiumScreen() {
     setPromoDiscount(computeHiEmoooDiscountAmount(subtotal));
   }, [autoHiEmooo, appliedPromoCode, subtotal]);
 
+  // Fetch HalfOrder Cash wallet once for authenticated customers.
+  useEffect(() => {
+    let cancelled = false;
+    const uid = user?.uid;
+    if (!uid || user?.isAnonymous) {
+      setCashbackWallet(null);
+      setUseHalfOrderCash(false);
+      return undefined;
+    }
+    void (async () => {
+      try {
+        const wallet = await getCashbackWallet();
+        if (!cancelled) setCashbackWallet(wallet);
+      } catch {
+        if (!cancelled) setCashbackWallet(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, user?.isAnonymous]);
+
   const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
     customerEntity: userCoords,
     restaurantEntity: profile?.raw,
@@ -219,7 +258,31 @@ export default function CheckoutPremiumScreen() {
   const total = pricing.totalPaid;
   const strikeSubtotal = subtotal + deliveryFee + serviceFee + priorityFee;
 
+  const cashbackAvailableCad = Math.max(0, cashbackWallet?.availableCad ?? 0);
+  const canApplyHalfOrderCash =
+    cashbackAvailableCad > 0 &&
+    !!cashbackWallet?.settings.enabled &&
+    cashbackWallet.settings.visibleInUserApp !== false &&
+    isCashbackCampaignActive(cashbackWallet);
+
+  useEffect(() => {
+    if (!canApplyHalfOrderCash && useHalfOrderCash) {
+      setUseHalfOrderCash(false);
+    }
+  }, [canApplyHalfOrderCash, useHalfOrderCash]);
+
+  const appliedCashbackCad =
+    useHalfOrderCash && canApplyHalfOrderCash
+      ? Math.min(cashbackAvailableCad, total)
+      : 0;
+  const remainingCashBalanceCad = Math.max(
+    0,
+    cashbackAvailableCad - appliedCashbackCad,
+  );
+  const remainingAmountToPay = Math.max(0, total - appliedCashbackCad);
+
   const totalFmt = `$${total.toFixed(2)}`;
+  const payFmt = `$${remainingAmountToPay.toFixed(2)}`;
 
   const savingsRibbonAmount = useMemo(() => {
     return promoDiscount > 0 ? promoDiscount : 0;
@@ -298,7 +361,9 @@ export default function CheckoutPremiumScreen() {
     const confirmMessage =
       fundingMode === 'complete_meal'
         ? `Start Complete My Meal for ${totalFmt}? You’ll choose how much to pay now, then invite friends.`
-        : `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
+        : appliedCashbackCad > 0
+          ? `Pay ${payFmt} securely with Stripe PaymentSheet ($${appliedCashbackCad.toFixed(2)} HalfOrder Cash applied) and continue to confirmation?`
+          : `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
         await placeOrder();
@@ -405,7 +470,12 @@ export default function CheckoutPremiumScreen() {
       clearCartForRestaurant(restaurantId);
       router.replace({
         pathname: '/checkout',
-        params: { orderId },
+        params: {
+          orderId,
+          ...(useHalfOrderCash && appliedCashbackCad > 0
+            ? { useHalfOrderCash: 'true' }
+            : {}),
+        },
       } as never);
     } catch (error) {
       showFriendlyError(error, 'order');
@@ -650,6 +720,51 @@ export default function CheckoutPremiumScreen() {
 
         <CheckoutPriceBreakdown lines={priceLines} />
 
+        {canApplyHalfOrderCash ? (
+          <View style={styles.cashbackCard}>
+            <View style={styles.cashbackHeader}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.cashbackTitle}>Apply HalfOrder Cash</Text>
+                <Text style={styles.cashbackSub}>
+                  Applied after promos and tax · capped at order total
+                </Text>
+              </View>
+              <Switch
+                value={useHalfOrderCash}
+                onValueChange={setUseHalfOrderCash}
+                trackColor={{ false: CK.surface2, true: '#A855F7' }}
+                thumbColor="#FFF"
+              />
+            </View>
+            <View style={styles.cashbackRows}>
+              <View style={styles.cashbackRow}>
+                <Text style={styles.cashbackLabel}>Wallet Balance</Text>
+                <Text style={styles.cashbackValue}>
+                  ${cashbackAvailableCad.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.cashbackRow}>
+                <Text style={styles.cashbackLabel}>Applied Cashback</Text>
+                <Text style={styles.cashbackValueAccent}>
+                  −${appliedCashbackCad.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.cashbackRow}>
+                <Text style={styles.cashbackLabel}>Remaining Balance</Text>
+                <Text style={styles.cashbackValue}>
+                  ${remainingCashBalanceCad.toFixed(2)}
+                </Text>
+              </View>
+              <View style={[styles.cashbackRow, styles.cashbackRowLast]}>
+                <Text style={styles.cashbackPayLabel}>
+                  Remaining Amount to Pay
+                </Text>
+                <Text style={styles.cashbackPayValue}>{payFmt}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <CheckoutFundingModeCard mode={fundingMode} onChange={setFundingMode} />
 
         {/* Space for pinned footer */}
@@ -679,7 +794,7 @@ export default function CheckoutPremiumScreen() {
         />
         <StickyCheckoutButton
           label={fundingMode === 'complete_meal' ? 'Complete My Meal' : 'Next'}
-          sublabel={`Total ${totalFmt}`}
+          sublabel={`Total ${appliedCashbackCad > 0 ? payFmt : totalFmt}`}
           onPress={() => void submitOrder()}
           disabled={blocked}
           loading={placing}
@@ -773,4 +888,74 @@ const styles = StyleSheet.create({
     borderColor: CK.border,
   },
   locationLoadingText: { color: CK.textMuted, fontWeight: '600', textAlign: 'center' },
+  cashbackCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 6,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.35)',
+    backgroundColor: CK.surface,
+  },
+  cashbackHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cashbackTitle: {
+    fontSize: 15.5,
+    fontWeight: '900',
+    color: CK.text,
+  },
+  cashbackSub: {
+    marginTop: 4,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: CK.textMuted,
+    lineHeight: 17,
+  },
+  cashbackRows: {
+    marginTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: CK.border,
+    paddingTop: 10,
+  },
+  cashbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+  },
+  cashbackRowLast: {
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: CK.border,
+  },
+  cashbackLabel: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: CK.textSecondary,
+  },
+  cashbackValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: CK.text,
+  },
+  cashbackValueAccent: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#A855F7',
+  },
+  cashbackPayLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: CK.text,
+  },
+  cashbackPayValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: CK.text,
+  },
 });

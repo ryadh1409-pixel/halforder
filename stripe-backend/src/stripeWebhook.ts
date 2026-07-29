@@ -44,6 +44,12 @@ import {
   markEmoHiEmoooRedeemed,
 } from "./emoAiHiEmoooReward.js";
 import {markSwipeReferralRewardRedeemed} from "./swipeReferralRewardGrant.js";
+import {
+  finalizeHalfOrderCashRedemption,
+  releaseHalfOrderCashRedemption,
+  reverseCashbackAwardForOrder,
+  reverseHalfOrderCashRedemption,
+} from "./cashbackRedemption.js";
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -92,6 +98,15 @@ function logStripe(structLog: Record<string, unknown>): void {
 
 function logStripeDebug(stage: string, payload: Record<string, unknown>): void {
   console.log(`[stripeWebhook][DEBUG] ${stage}`, JSON.stringify(payload));
+}
+
+function isHalfOrderCashEvent(
+  orderId: string,
+  metadata: Stripe.Metadata | null | undefined,
+): boolean {
+  return (
+    trimMetadata(metadata?.halfOrderCashRedemptionId) === `use_${orderId}`
+  );
 }
 
 /**
@@ -374,17 +389,30 @@ function mergeOrderPaymentFailed(
   tx.set(orderSnap.ref, patch, { merge: true });
 }
 
-async function orderIdFromCharge(charge: Stripe.Charge): Promise<{
+async function orderIdFromCharge(
+  charge: Stripe.Charge,
+  resolveCashbackMetadata = false,
+): Promise<{
   orderId: string | null;
   paymentIntentId: string | null;
+  halfOrderCashRedemptionId: string | null;
 }> {
   const paymentIntentId = paymentIntentIdFromCharge(charge);
   let orderId = trimMetadata(charge.metadata?.orderId);
-  if (!orderId && paymentIntentId) {
+  let halfOrderCashRedemptionId = trimMetadata(
+    charge.metadata?.halfOrderCashRedemptionId,
+  );
+  if (
+    (!orderId || (resolveCashbackMetadata && !halfOrderCashRedemptionId)) &&
+    paymentIntentId
+  ) {
     const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
-    orderId = trimMetadata(pi.metadata?.orderId);
+    orderId = orderId ?? trimMetadata(pi.metadata?.orderId);
+    halfOrderCashRedemptionId =
+      halfOrderCashRedemptionId ??
+      trimMetadata(pi.metadata?.halfOrderCashRedemptionId);
   }
-  return {orderId, paymentIntentId};
+  return {orderId, paymentIntentId, halfOrderCashRedemptionId};
 }
 
 async function handleStripeEvent(event: Stripe.Event): Promise<void> {
@@ -419,6 +447,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
+      if (isHalfOrderCashEvent(orderId, pi.metadata)) {
+        await finalizeHalfOrderCashRedemption(orderId);
+      }
       if (await isWebhookOrderWriteBlocked(orderId)) {
         return;
       }
@@ -467,7 +498,11 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
 
     case "charge.succeeded": {
       const charge = event.data.object as Stripe.Charge;
-      const {orderId, paymentIntentId} = await orderIdFromCharge(charge);
+      const {
+        orderId,
+        paymentIntentId,
+        halfOrderCashRedemptionId,
+      } = await orderIdFromCharge(charge);
       logStripeDebug("charge_succeeded", {
         chargeId: charge.id,
         orderId,
@@ -484,6 +519,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
+      if (halfOrderCashRedemptionId === `use_${orderId}`) {
+        await finalizeHalfOrderCashRedemption(orderId);
+      }
       if (await isWebhookOrderWriteBlocked(orderId)) {
         return;
       }
@@ -535,6 +573,9 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
+      if (isHalfOrderCashEvent(orderId, session.metadata)) {
+        await finalizeHalfOrderCashRedemption(orderId);
+      }
       if (!(await assertWebhookCanWriteOrder(orderId))) {
         return;
       }
@@ -586,6 +627,12 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
+      if (isHalfOrderCashEvent(orderId, pi.metadata)) {
+        await releaseHalfOrderCashRedemption(
+          orderId,
+          "payment_intent.payment_failed",
+        );
+      }
       if (!(await assertWebhookCanWriteOrder(orderId))) {
         return;
       }
@@ -628,6 +675,54 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       return;
     }
 
+    case "payment_intent.canceled": {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      if (await handleCompleteMealPaymentIntentEvent(event, pi)) {
+        return;
+      }
+      if (await handleFoodSharePaymentIntentEvent(event, pi, getStripe())) {
+        return;
+      }
+      const orderId = trimMetadata(pi.metadata?.orderId);
+      if (!orderId) return;
+
+      if (isHalfOrderCashEvent(orderId, pi.metadata)) {
+        await releaseHalfOrderCashRedemption(orderId, event.type);
+      }
+      if (!(await assertWebhookCanWriteOrder(orderId))) {
+        return;
+      }
+      await withEventIdempotency(event, orderId, (tx, orderSnap) => {
+        mergeOrderPaymentFailed(tx, orderSnap, {
+          paymentIntentId: pi.id,
+          sourceEventType: event.type,
+          stripeEventId: event.id,
+        });
+      });
+      return;
+    }
+
+    case "checkout.session.expired": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orderId = trimMetadata(session.metadata?.orderId);
+      if (!orderId) return;
+
+      if (isHalfOrderCashEvent(orderId, session.metadata)) {
+        await releaseHalfOrderCashRedemption(orderId, event.type);
+      }
+      if (!(await assertWebhookCanWriteOrder(orderId))) {
+        return;
+      }
+      await withEventIdempotency(event, orderId, (tx, orderSnap) => {
+        mergeOrderPaymentFailed(tx, orderSnap, {
+          paymentIntentId: paymentIntentIdFromSession(session),
+          sourceEventType: event.type,
+          stripeEventId: event.id,
+        });
+      });
+      return;
+    }
+
     case "charge.dispute.created":
     case "charge.dispute.funds_withdrawn": {
       const dispute = event.data.object as Stripe.Dispute;
@@ -665,10 +760,20 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       if (await handleFoodShareChargeRefunded(event, charge)) {
         return;
       }
-      const paymentIntentId =
-        typeof charge.payment_intent === "string"
-          ? charge.payment_intent
-          : charge.payment_intent?.id ?? "";
+      const {
+        orderId,
+        paymentIntentId,
+        halfOrderCashRedemptionId,
+      } = await orderIdFromCharge(charge, true);
+      if (
+        orderId &&
+        halfOrderCashRedemptionId === `use_${orderId}`
+      ) {
+        await reverseHalfOrderCashRedemption(orderId);
+      }
+      if (orderId) {
+        await reverseCashbackAwardForOrder(orderId);
+      }
       if (paymentIntentId) {
         try {
           await updatePaymentTransactionStatus({

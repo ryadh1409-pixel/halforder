@@ -62,4 +62,6 @@ export const adminRoutes = {
   driverLaunchCampaign: '/(tabs)/admin/driver-launch-campaign',
   /** Driver invites new customers → first-order delivery-fee reward. */
   driverReferralCampaign: '/(tabs)/admin/driver-referral-campaign',
+  /** HalfOrder Cash cashback rewards campaign. */
+  cashbackRewards: '/(tabs)/admin/cashback-rewards',
 } as const;

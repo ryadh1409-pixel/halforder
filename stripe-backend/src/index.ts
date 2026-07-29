@@ -22,6 +22,11 @@ import {
   detachWalletPaymentMethodCallable,
   listWalletPaymentMethodsCallable,
 } from "./walletPaymentMethods.js";
+import {
+  finalizeHalfOrderCashRedemption,
+  releaseHalfOrderCashRedemption,
+  reserveHalfOrderCash,
+} from "./cashbackRedemption.js";
 
 /** Stripe CAD minimum charge (in cents). */
 const STRIPE_MIN_AMOUNT_CENTS = 50;
@@ -201,7 +206,7 @@ export const createPaymentIntent = functions
         "Order not found.",
       );
     }
-    const orderData = orderSnap.data() ?? {};
+    let orderData = orderSnap.data() ?? {};
     const restaurantId =
       typeof orderData.restaurantId === "string" && orderData.restaurantId.trim()
         ? orderData.restaurantId.trim()
@@ -263,6 +268,29 @@ export const createPaymentIntent = functions
       return "https://halforder.app";
     };
 
+    const useHalfOrderCash = payload.useHalfOrderCash === true;
+    const cashbackReservation = useHalfOrderCash
+      ? await reserveHalfOrderCash({uid, orderId})
+      : null;
+    if (cashbackReservation?.appliedCents) {
+      orderData = {
+        ...orderData,
+        halfOrderCashAppliedCents: cashbackReservation.appliedCents,
+        halfOrderCashAppliedCad: cashbackReservation.appliedCents / 100,
+        halfOrderCashRedemptionStatus: "reserved",
+        originalCustomerTotalCents:
+          cashbackReservation.originalCustomerTotalCents,
+        customerTotal: cashbackReservation.remainingCents / 100,
+        total: cashbackReservation.remainingCents / 100,
+        totalPrice: cashbackReservation.remainingCents / 100,
+      };
+    }
+    let releaseNewReservationOnError =
+      cashbackReservation?.newlyReserved === true;
+    const cashbackRedemptionId = cashbackReservation?.appliedCents
+      ? `use_${orderId}`
+      : "";
+
     try {
       // Charge = customerTotal (post-discount); fall back to total if missing. Min $0.50 CAD.
       const amountCents = Math.round(
@@ -273,6 +301,7 @@ export const createPaymentIntent = functions
 
       // $0.00 totals: skip Stripe entirely and mark the order paid.
       if (amountCents === 0) {
+        releaseNewReservationOnError = false;
         const freePaymentId = `free_${orderId}`;
         const basePatch = buildOrderPaidStatePatch(orderData, {
           paymentIntentId: freePaymentId,
@@ -291,6 +320,7 @@ export const createPaymentIntent = functions
         if (Object.keys(safe).length > 0) {
           await orderSnap.ref.set(safe, {merge: true});
         }
+        await finalizeHalfOrderCashRedemption(orderId);
         console.log(
           JSON.stringify({
             msg: "createPaymentIntent_zero_amount_marked_paid",
@@ -350,7 +380,15 @@ export const createPaymentIntent = functions
             prior.status === "requires_confirmation" ||
             prior.status === "requires_action";
           if (reusable && prior.amount === chargeAmountCents && prior.client_secret) {
-            reusedPaymentIntent = prior;
+            reusedPaymentIntent =
+              cashbackRedemptionId &&
+              prior.metadata.halfOrderCashRedemptionId !== cashbackRedemptionId
+                ? await stripe.paymentIntents.update(prior.id, {
+                    metadata: {
+                      halfOrderCashRedemptionId: cashbackRedemptionId,
+                    },
+                  })
+                : prior;
             console.log(
               JSON.stringify({
                 msg: "createPaymentIntent_reused_matching_pi",
@@ -415,6 +453,9 @@ export const createPaymentIntent = functions
             uid,
             treasury: "halforder_platform",
             restaurantStripeAccountId: restaurantStripeAccountId ?? "",
+            ...(cashbackRedemptionId
+              ? {halfOrderCashRedemptionId: cashbackRedemptionId}
+              : {}),
           },
           payment_intent_data: {
             metadata: {
@@ -425,9 +466,13 @@ export const createPaymentIntent = functions
               uid,
               treasury: "halforder_platform",
               restaurantStripeAccountId: restaurantStripeAccountId ?? "",
+              ...(cashbackRedemptionId
+                ? {halfOrderCashRedemptionId: cashbackRedemptionId}
+                : {}),
             },
           },
         });
+        releaseNewReservationOnError = false;
 
         console.log(
           JSON.stringify({
@@ -473,8 +518,12 @@ export const createPaymentIntent = functions
             uid,
             treasury: "halforder_platform",
             restaurantStripeAccountId: restaurantStripeAccountId ?? "",
+            ...(cashbackRedemptionId
+              ? {halfOrderCashRedemptionId: cashbackRedemptionId}
+              : {}),
           },
         }));
+      releaseNewReservationOnError = false;
       if (!reusedPaymentIntent) {
         console.log(
           JSON.stringify({
@@ -523,6 +572,19 @@ export const createPaymentIntent = functions
         ephemeralKey: ephemeralKey.secret ?? null,
       };
     } catch (err) {
+      if (releaseNewReservationOnError) {
+        try {
+          await releaseHalfOrderCashRedemption(
+            orderId,
+            "stripe_payment_artifact_creation_failed",
+          );
+        } catch (releaseErr) {
+          console.error(
+            "[createPaymentIntent] HalfOrder Cash release failed:",
+            releaseErr,
+          );
+        }
+      }
       const stripeErr = err as {
         message?: string;
         type?: string;

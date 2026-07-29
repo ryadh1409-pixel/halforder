@@ -1,4 +1,5 @@
 import { useAuth } from '@/services/AuthContext';
+import { getCashbackWallet } from '@/services/cashbackRewards';
 import { parseHalfOrderBalance } from '@/services/halfOrderBalance';
 import {
   formatCardExpiry,
@@ -16,11 +17,16 @@ import {
 } from '@/services/walletVouchers';
 import { db } from '@/services/firebase';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
+import type {
+  CashbackTransaction,
+  CashbackTransactionStatus,
+  CashbackWallet,
+} from '@/types/cashbackRewards';
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -48,6 +54,58 @@ const PAL = {
   onPrimary: '#FFFFFF',
 } as const;
 
+function formatCad(amount: number): string {
+  return `$${Math.max(0, amount).toFixed(2)}`;
+}
+
+function formatEarnedDate(ms: number | null): string {
+  if (ms == null || !Number.isFinite(ms)) return '—';
+  try {
+    return new Date(ms).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function cashbackStatusLabel(status: CashbackTransactionStatus): string {
+  switch (status) {
+    case 'pending':
+    case 'reserved':
+      return 'Pending';
+    case 'available':
+      return 'Available';
+    case 'redeemed':
+      return 'Used';
+    case 'expired':
+      return 'Expired';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return 'Pending';
+  }
+}
+
+function statusTone(status: CashbackTransactionStatus): string {
+  switch (status) {
+    case 'available':
+      return '#34D399';
+    case 'pending':
+    case 'reserved':
+      return '#F59E0B';
+    case 'redeemed':
+      return PAL.primary;
+    case 'expired':
+    case 'cancelled':
+      return PAL.textMuted;
+    default:
+      return PAL.textMuted;
+  }
+}
+
 export default function WalletScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -58,6 +116,7 @@ export default function WalletScreen() {
   const [defaultPmId, setDefaultPmId] = useState<string | null>(null);
   const [vouchers, setVouchers] = useState<WalletRedeemedVoucher[]>([]);
   const [applePayAvailable, setApplePayAvailable] = useState(false);
+  const [cashback, setCashback] = useState<CashbackWallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
@@ -75,6 +134,19 @@ export default function WalletScreen() {
     } catch (e) {
       showError(getUserFriendlyError(e, { context: 'payment' }));
       setCards([]);
+    }
+  }, [uid]);
+
+  const loadCashback = useCallback(async () => {
+    if (!uid) {
+      setCashback(null);
+      return;
+    }
+    try {
+      const wallet = await getCashbackWallet();
+      setCashback(wallet);
+    } catch {
+      setCashback(null);
     }
   }, [uid]);
 
@@ -100,7 +172,7 @@ export default function WalletScreen() {
     void (async () => {
       const apple = await resolveApplePayAvailable();
       setApplePayAvailable(apple);
-      await loadCards();
+      await Promise.all([loadCards(), loadCashback()]);
       setLoading(false);
     })();
 
@@ -109,20 +181,28 @@ export default function WalletScreen() {
       unsubVouchers();
       unsubDefault();
     };
-  }, [uid, loadCards]);
+  }, [uid, loadCards, loadCashback]);
 
   useFocusEffect(
     useCallback(() => {
       if (!uid) return;
       void loadCards();
-    }, [uid, loadCards]),
+      void loadCashback();
+    }, [uid, loadCards, loadCashback]),
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadCards();
+    await Promise.all([loadCards(), loadCashback()]);
     setRefreshing(false);
-  }, [loadCards]);
+  }, [loadCards, loadCashback]);
+
+  const cashbackHistory = useMemo(() => {
+    const rows = cashback?.transactions ?? [];
+    return rows.filter((row) => row.status !== 'cancelled');
+  }, [cashback?.transactions]);
+
+  const showCashbackDetails = cashback?.settings.visibleInUserApp !== false;
 
   const onRedeem = async () => {
     setRedeemBusy(true);
@@ -202,6 +282,91 @@ export default function WalletScreen() {
               <Text style={styles.balanceHint}>
                 Managed by HalfOrder · Admin credits only
               </Text>
+            </View>
+
+            <View style={styles.cashCard}>
+              <View style={styles.cashHeader}>
+                <View style={styles.cashIcon}>
+                  <MaterialIcons
+                    name="account-balance-wallet"
+                    size={22}
+                    color={PAL.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cashTitle}>HalfOrder Cash</Text>
+                  <Text style={styles.cashSubtitle}>
+                    Rewards you can spend on future orders
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.cashMetrics}>
+                <View style={styles.cashMetric}>
+                  <Text style={styles.cashMetricLabel}>Current Balance</Text>
+                  <Text style={styles.cashMetricValue}>
+                    {formatCad(cashback?.availableCad ?? 0)}
+                  </Text>
+                </View>
+                <View style={styles.cashMetricDivider} />
+                <View style={styles.cashMetric}>
+                  <Text style={styles.cashMetricLabel}>Pending Cashback</Text>
+                  <Text style={styles.cashMetricValuePending}>
+                    {formatCad(cashback?.pendingCad ?? 0)}
+                  </Text>
+                </View>
+              </View>
+
+              {showCashbackDetails ? (
+                <>
+                  <Text style={styles.cashHistoryTitle}>Cashback History</Text>
+                  {cashbackHistory.length === 0 ? (
+                    <Text style={styles.emptyText}>
+                      Cashback from completed orders will appear here.
+                    </Text>
+                  ) : (
+                    cashbackHistory.map((row: CashbackTransaction) => {
+                      const status = cashbackStatusLabel(row.status);
+                      const orderLabel = row.orderId
+                        ? row.orderId.slice(0, 8).toUpperCase()
+                        : '—';
+                      return (
+                        <View key={row.id} style={styles.cashHistoryRow}>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.methodTitle} numberOfLines={1}>
+                              {row.restaurantName?.trim() || 'HalfOrder'}
+                            </Text>
+                            <Text style={styles.methodSub} numberOfLines={1}>
+                              Order {orderLabel} ·{' '}
+                              {formatEarnedDate(
+                                row.createdAtMs ?? row.availableAtMs,
+                              )}
+                            </Text>
+                          </View>
+                          <View style={styles.cashHistoryRight}>
+                            <Text style={styles.cashHistoryAmount}>
+                              {row.type === 'redemption' ? '−' : '+'}
+                              {formatCad(Math.abs(row.amountCad))}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.cashHistoryStatus,
+                                { color: statusTone(row.status) },
+                              ]}
+                            >
+                              {status}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </>
+              ) : (
+                <Text style={styles.cashHiddenHint}>
+                  Detailed cashback history is currently hidden.
+                </Text>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>Payment methods</Text>
@@ -402,6 +567,113 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: PAL.textMuted,
     textAlign: 'center',
+  },
+  cashCard: {
+    backgroundColor: PAL.surface,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: PAL.border,
+  },
+  cashHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  cashIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: PAL.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cashTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: PAL.text,
+    letterSpacing: -0.2,
+  },
+  cashSubtitle: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '500',
+    color: PAL.textMuted,
+  },
+  cashMetrics: {
+    flexDirection: 'row',
+    backgroundColor: PAL.surfaceMuted,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PAL.border,
+    overflow: 'hidden',
+  },
+  cashMetric: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+  },
+  cashMetricDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: PAL.border,
+  },
+  cashMetricLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: PAL.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cashMetricValue: {
+    marginTop: 8,
+    fontSize: 22,
+    fontWeight: '800',
+    color: PAL.text,
+    letterSpacing: -0.4,
+  },
+  cashMetricValuePending: {
+    marginTop: 8,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#F59E0B',
+    letterSpacing: -0.4,
+  },
+  cashHistoryTitle: {
+    marginTop: 18,
+    marginBottom: 4,
+    fontSize: 13,
+    fontWeight: '800',
+    color: PAL.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  cashHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PAL.border,
+  },
+  cashHistoryRight: { alignItems: 'flex-end' },
+  cashHistoryAmount: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: PAL.text,
+  },
+  cashHistoryStatus: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cashHiddenHint: {
+    marginTop: 14,
+    fontSize: 13,
+    fontWeight: '500',
+    color: PAL.textMuted,
+    lineHeight: 18,
   },
   sectionTitle: {
     fontSize: 13,

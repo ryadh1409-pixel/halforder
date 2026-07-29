@@ -31,6 +31,8 @@ type InitSheetParams = {
   amount: number;
   merchantDisplayName?: string;
   orderId?: string;
+  /** When true, server reserves available HalfOrder Cash against the order. */
+  useHalfOrderCash?: boolean;
 };
 
 type InitSheetResult = {
@@ -184,6 +186,7 @@ async function createPaymentIntentSecrets(
     amount: chargeAmountCents,
     orderId: params.orderId ?? null,
     platform: 'native',
+    ...(params.useHalfOrderCash === true ? { useHalfOrderCash: true } : {}),
   });
   const data = result.data as Record<string, unknown> | undefined;
 

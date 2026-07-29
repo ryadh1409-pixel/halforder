@@ -19,8 +19,16 @@ type Phase = 'loading' | 'paying' | 'confirming' | 'error';
 /** Root checkout — outside `(tabs)` so no tab chrome appears during payment. */
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+  const { orderId, useHalfOrderCash: useHalfOrderCashParam } =
+    useLocalSearchParams<{
+      orderId?: string;
+      useHalfOrderCash?: string;
+    }>();
   const orderIdTrimmed = typeof orderId === 'string' ? orderId.trim() : '';
+  const useHalfOrderCash =
+    useHalfOrderCashParam === 'true' ||
+    useHalfOrderCashParam === '1' ||
+    useHalfOrderCashParam === 'True';
   const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
@@ -82,6 +90,7 @@ export default function CheckoutScreen() {
         amount: Math.round(order.totalPrice * 100),
         merchantDisplayName: 'HalfOrder',
         orderId: id,
+        ...(useHalfOrderCash ? { useHalfOrderCash: true } : {}),
       });
 
       if (result.status === 'redirected') {
@@ -148,7 +157,7 @@ export default function CheckoutScreen() {
       );
       unlock();
     }
-  }, [orderIdTrimmed, user, router, unlock]);
+  }, [orderIdTrimmed, useHalfOrderCash, user, router, unlock]);
 
   useEffect(() => {
     if (started.current) return;

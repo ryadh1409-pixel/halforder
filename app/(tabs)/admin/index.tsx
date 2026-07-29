@@ -725,6 +725,23 @@ export default function AdminScreen() {
                   </View>
                   <Text style={styles.promoBadgesCta}>Open</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  onPress={() =>
+                    router.push(adminRoutes.cashbackRewards as never)
+                  }
+                  activeOpacity={0.88}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.promoBadgesTitle}>
+                      Cashback Rewards
+                    </Text>
+                    <Text style={styles.promoBadgesSub}>
+                      HalfOrder Cash — earn % back on eligible orders
+                    </Text>
+                  </View>
+                  <Text style={styles.promoBadgesCta}>Open</Text>
+                </TouchableOpacity>
               </View>
               <View style={[styles.panel, styles.sectionSpacer]}>
                 <AdminCardsDashboard />
