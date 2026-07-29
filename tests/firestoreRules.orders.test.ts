@@ -1949,6 +1949,7 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
           earningsRecorded: true,
           customerTotal: 14.3849,
           driverPayout: 3.5,
+          driverPayoutPercent: 25,
           platformFee: 1.2,
           updatedAt: serverTimestamp(),
           updatedBy: 'driverMarketplaceDelivered',
