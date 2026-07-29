@@ -6,6 +6,7 @@
  * `deleteUser()` signs the user out automatically.
  */
 import { REFERRAL_ORDER_ID_KEY, REFERRAL_STORAGE_KEY } from '../lib/invite-link';
+import { DRIVER_REFERRAL_PENDING_CODE_KEY } from './driverReferralProgram';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteUser, type User } from '@firebase/auth';
 import {
@@ -101,6 +102,7 @@ export async function deleteUserAccount(user: User): Promise<DeleteUserAccountRe
   await AsyncStorage.multiRemove([
     REFERRAL_STORAGE_KEY,
     REFERRAL_ORDER_ID_KEY,
+    DRIVER_REFERRAL_PENDING_CODE_KEY,
   ]).catch(() => {});
 
   // 7) Firebase Authentication — permanent removal

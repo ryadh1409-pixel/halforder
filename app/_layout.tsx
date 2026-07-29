@@ -16,6 +16,7 @@ import { AbandonedCheckoutNotificationListener } from '@/components/AbandonedChe
 import { AdminSupportInboundListener } from '@/components/AdminSupportInboundListener';
 import { AppBadgeSync } from '@/components/AppBadgeSync';
 import { SwipeReferralRewardUnlockHost } from '@/components/SwipeReferralRewardUnlockHost';
+import { DriverReferralAttributionBridge } from '@/components/DriverReferralAttributionBridge';
 import { APPLE_PAY_MERCHANT_ID } from '@/constants/applePay';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { AppStripeProvider } from '@/services/stripe';
@@ -136,6 +137,7 @@ export const linking = {
       'complete-meal/[campaignId]': 'complete-meal/:campaignId',
       'complete-meal/contribute/[shareToken]':
         'complete-meal/contribute/:shareToken',
+      'driver-invite/[code]': 'driver-invite/:code',
       'join/[orderId]': 'join/:orderId',
       'join/index': 'join',
       'chat/[id]': 'chat/:id',
@@ -172,6 +174,7 @@ export default function RootLayout() {
                     <AbandonedCheckoutNotificationListener />
                     <AdminSupportInboundListener />
                     <AppBadgeSync />
+                    <DriverReferralAttributionBridge />
                     <Slot />
                     <SwipeReferralRewardUnlockHost />
                     <SystemDialogHost />

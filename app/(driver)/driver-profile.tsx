@@ -1,6 +1,7 @@
 import { AccountLocationPicker } from '@/components/location/AccountLocationPicker';
 import { LOCATION_PALETTE_DARK } from '@/components/location/locationPalette';
 import { AppTextInput } from '@/components/AppTextInput';
+import { DriverReferralProgramCard } from '@/components/driver/DriverReferralProgramCard';
 import { DriverWalletCard } from '@/components/driver/DriverWalletCard';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
@@ -585,6 +586,10 @@ export default function DriverProfileTab() {
             )}
           </Pressable>
         </View>
+
+        {currentWorkspace === 'driver' ? (
+          <DriverReferralProgramCard driverId={uid} />
+        ) : null}
 
         <DriverWalletCard driverId={uid} />
 
