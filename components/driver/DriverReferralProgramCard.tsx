@@ -70,6 +70,7 @@ function formatOrderDate(ms: number | null): string {
  * enabled and set to show inside the driver app.
  */
 export function DriverReferralProgramCard({ driverId }: Props) {
+  console.log('[DriverReferralProgramCard] mounted');
   const [dashboard, setDashboard] = useState<DriverReferralDashboard | null>(
     null,
   );
@@ -142,6 +143,15 @@ ${dashboard.inviteLink}`,
       showError('Could not copy your referral code.');
     }
   }, [dashboard]);
+
+  console.log('[DriverReferralProgramCard] render state', {
+    driverId,
+    loading,
+    dashboard,
+    campaignEnabled: dashboard?.campaign?.enabled,
+    campaignVisibleInDriverApp: dashboard?.campaign?.visibleInDriverApp,
+    visible,
+  });
 
   if (loading) {
     return (

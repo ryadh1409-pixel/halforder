@@ -587,6 +587,13 @@ export default function DriverProfileTab() {
           </Pressable>
         </View>
 
+        {(() => {
+          console.log('[driver-profile] referral gate', {
+            currentWorkspace,
+            uid,
+          });
+          return null;
+        })()}
         {currentWorkspace === 'driver' ? (
           <DriverReferralProgramCard driverId={uid} />
         ) : null}
