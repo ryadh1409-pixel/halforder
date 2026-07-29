@@ -87,7 +87,11 @@ export function DriverReferralProgramCard({ driverId }: Props) {
     setLoading(true);
     try {
       setDashboard(await getDriverReferralDashboard());
-    } catch {
+    } catch (error) {
+      console.log('[DriverReferralProgramCard] dashboard load failed', {
+        code: (error as { code?: string })?.code,
+        message: (error as { message?: string })?.message,
+      });
       // Non-drivers and disabled campaigns simply hide this card.
       setDashboard(null);
     } finally {

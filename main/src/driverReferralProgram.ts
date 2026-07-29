@@ -342,6 +342,14 @@ export const getDriverReferralDashboard = onCall(async (request) => {
     db.doc(`users/${uid}`).get(),
     db.doc(SETTINGS_REF).get(),
   ]);
+  logger.info("[driverReferral] dashboard gate", {
+    uid,
+    driverDocExists: driverSnap.exists,
+    userRole: text(userSnap.data()?.role) || null,
+    settingsDocExists: settingsSnap.exists,
+    settingsEnabled: settingsSnap.data()?.enabled ?? null,
+    settingsVisibleInDriverApp: settingsSnap.data()?.visibleInDriverApp ?? null,
+  });
   if (!driverSnap.exists || text(userSnap.data()?.role) !== "driver") {
     throw new HttpsError("permission-denied", "Driver account required");
   }
