@@ -16,6 +16,7 @@ import {
   RestaurantOrdersPanel,
   type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
+import { RestaurantPayoutMethods } from '@/components/restaurant/RestaurantPayoutMethods';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import {
   mergeHostRestaurantProfile,
@@ -32,6 +33,7 @@ import {
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { runRootNavigationTask } from '@/lib/router/rootNavigation';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
+import { readRestaurantInteracEmail } from '@/services/restaurantPayoutMethods';
 import { startOnboarding } from '@/services/stripeConnect';
 import {
   pickMenuImageFromLibrary,
@@ -60,6 +62,7 @@ type RestaurantState = {
   timezone: string | null;
   phoneNumber: string | null;
   phone: string | null;
+  interacEmail: string;
 };
 
 const PRIMARY = '#16a34a';
@@ -169,6 +172,7 @@ export default function HostDashboardScreen() {
               : typeof data.timeZone === 'string' && data.timeZone.trim()
                 ? data.timeZone.trim()
                 : null,
+          interacEmail: readRestaurantInteracEmail(data),
         };
         setRestaurant(row);
         // Hydrate editable drafts once so live snapshots cannot wipe typing.
@@ -643,29 +647,17 @@ export default function HostDashboardScreen() {
                     <Text style={styles.primaryBtnText}>Save venue</Text>
                   )}
                 </TouchableOpacity>
-
-                {!stripeAccountId ? (
-                  <Pressable
-                    onPress={handleConnectStripe}
-                    disabled={stripeLoading}
-                    style={({ pressed }) => [
-                      styles.stripeConnectBtn,
-                      pressed && { opacity: 0.9 },
-                      stripeLoading && styles.stripeConnectBtnDisabled,
-                    ]}
-                  >
-                    {stripeLoading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.stripeConnectBtnText}>Connect Stripe</Text>
-                    )}
-                  </Pressable>
-                ) : (
-                  <Text style={styles.stripeConnectedText}>Stripe Connected ✅</Text>
-                )}
               </>
             )}
           </View>
+
+          <RestaurantPayoutMethods
+            restaurantId={uid}
+            interacEmail={restaurant?.interacEmail ?? ''}
+            stripeConnected={Boolean(stripeAccountId)}
+            stripeLoading={stripeLoading}
+            onConnectStripe={() => void handleConnectStripe()}
+          />
 
           <View style={styles.card}>
             <View style={styles.ordersSummaryRow}>
@@ -876,24 +868,6 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  stripeConnectBtn: {
-    marginTop: 12,
-    backgroundColor: '#635BFF',
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  stripeConnectBtnDisabled: { opacity: 0.55 },
-  stripeConnectBtnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  stripeConnectedText: {
-    marginTop: 12,
-    color: '#15803d',
-    textAlign: 'center',
-    fontWeight: '600',
-    fontSize: 16,
-  },
   fab: {
     position: 'absolute',
     right: 18,

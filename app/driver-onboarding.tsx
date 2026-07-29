@@ -1,15 +1,18 @@
 import { goBackFromProfileScreen } from '@/lib/profileBack';
 import { navigateForRole } from '@/lib/navigation';
 import { applySignupRole } from '@/services/authRoleAssignment';
-import { setActiveWorkspace } from '@/services/activeWorkspace';
+import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
+import { getUserFriendlyError } from '@/services/errors';
+import { db } from '@/services/firebase';
 import { useActiveWorkspaceStore } from '@/store/activeWorkspaceStore';
 import { useAuth } from '@/services/AuthContext';
 import { logError } from '@/utils/errorLogger';
 import { showError } from '@/utils/toast';
+import { doc, getDoc } from 'firebase/firestore';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -51,29 +54,89 @@ const REQUIREMENTS = [
  */
 export default function DriverOnboardingScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, firestoreUserRole, reloadAuthUser } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const runDriverSignup = useCallback(async () => {
+    console.log('[driver-activation] confirmation pressed', {
+      uid: user?.uid ?? null,
+      roleBeforeRefresh: firestoreUserRole ?? null,
+    });
+
     if (!user?.uid) {
       router.push('/(auth)/register?intent=driver' as never);
       return;
     }
+    if (submittingRef.current) {
+      console.log('[driver-activation] ignored duplicate submit');
+      return;
+    }
+
+    const uid = user.uid;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
-      const role = await applySignupRole(user.uid, 'driver', {
+      const driverRef = doc(db, 'drivers', uid);
+      let existedBefore = false;
+      try {
+        existedBefore = (await getDoc(driverRef)).exists();
+      } catch (checkError) {
+        console.error('[driver-activation] driver profile check failed', {
+          documentId: uid,
+          error: checkError,
+        });
+      }
+      console.log('[driver-activation] driver profile exists check', {
+        documentId: uid,
+        existedBefore,
+      });
+
+      // `setDoc(..., { merge: true })` inside `applySignupRole` — never duplicates.
+      const role = await applySignupRole(uid, 'driver', {
         displayName: user.displayName,
       });
-      await setActiveWorkspace(user.uid, 'driver');
-      await useActiveWorkspaceStore.getState().hydrate(user.uid, 'driver');
+      const writtenSnap = await getDoc(driverRef);
+      console.log('[driver-activation] firestore write result', {
+        documentId: uid,
+        driverDocExists: writtenSnap.exists(),
+        assignedRole: role,
+      });
+
+      // Token claims gate driver marketplace reads — refresh before routing.
+      await ensureAuthRoleClaim('driver');
+      await reloadAuthUser().catch((reloadError) => {
+        console.error('[driver-activation] auth reload failed', reloadError);
+      });
+
+      await useActiveWorkspaceStore
+        .getState()
+        .activateWorkspace(uid, 'driver', 'driver');
+      const workspaceState = useActiveWorkspaceStore.getState();
+      console.log('[driver-activation] context refresh completed', {
+        roleAfterRefresh: role,
+        activeWorkspace: workspaceState.activeWorkspace,
+        availableWorkspaces: workspaceState.availableWorkspaces,
+        workspaceReady: workspaceState.ready,
+      });
+
+      console.log('[driver-activation] navigating to driver dashboard');
       navigateForRole(role);
     } catch (e) {
       logError(e);
-      showError('Could not set up driver account. Try again.');
+      console.error('[driver-activation] activation failed', e);
+      showError(getUserFriendlyError(e));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [router, user?.displayName, user?.uid]);
+  }, [
+    firestoreUserRole,
+    reloadAuthUser,
+    router,
+    user?.displayName,
+    user?.uid,
+  ]);
 
   const onBecomeDriver = useCallback(() => {
     if (submitting) return;

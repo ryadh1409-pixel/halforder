@@ -24,6 +24,12 @@ type ActiveWorkspaceState = {
   firestoreRole: string | null | undefined;
   hydrate: (uid: string | null, firestoreRole: string | null | undefined) => Promise<void>;
   switchWorkspace: (workspace: ActiveWorkspace) => Promise<void>;
+  /** Activate a newly granted workspace immediately (persist + latch in one step). */
+  activateWorkspace: (
+    uid: string,
+    workspace: ActiveWorkspace,
+    firestoreRole?: string | null,
+  ) => Promise<void>;
 };
 
 /** Monotonic token — stale async completions must not rewrite latched state. */
@@ -155,6 +161,37 @@ export const useActiveWorkspaceStore = create<ActiveWorkspaceState>((set, get) =
     if (!uid) return;
     await persistActiveWorkspace(uid, workspace);
     set({ activeWorkspace: workspace });
+  },
+
+  /**
+   * Role was just granted in Firestore — make the workspace active now.
+   * `hydrate` intentionally never overwrites a latched `activeWorkspace`, so a
+   * freshly granted role needs this explicit activation to take effect without
+   * an app restart.
+   */
+  async activateWorkspace(uid, workspace, firestoreRole) {
+    const id = uid.trim();
+    if (!id) return;
+
+    await persistActiveWorkspace(id, workspace);
+
+    const prev = get();
+    const baseAvailable: ActiveWorkspace[] =
+      prev.uid === id ? prev.availableWorkspaces : ['user'];
+    const available = mergeAvailable(
+      [...baseAvailable, workspace],
+      firestoreRole ?? prev.firestoreRole,
+    );
+
+    hydrateGeneration += 1;
+    set({
+      uid: id,
+      ready: true,
+      hydrating: false,
+      activeWorkspace: workspace,
+      availableWorkspaces: available,
+      firestoreRole: firestoreRole ?? prev.firestoreRole,
+    });
   },
 }));
 
