@@ -23,6 +23,18 @@ const DRIVER_STATS = "driverReferralDriverStats";
 const IDENTITIES = "driverReferralIdentities";
 const NEW_ACCOUNT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Must stay in sync with `isAdminUidAllowlist()` in firestore.rules. */
+const ADMIN_UIDS = [
+  "KT3LfXRsVgaH4LfRTQaexvj3CRn1",
+  "Gjj6x4OU4OQmsnplollo9PLLpxt2",
+];
+/** Must stay in sync with `isAdminEmailToken()` in firestore.rules. */
+const ADMIN_EMAILS = [
+  "ryadh1409@gmail.com",
+  "admin@ourfood.com",
+  "support@halforder.app",
+];
+
 type RewardType = "delivery_fee_percentage" | "fixed_amount";
 type RewardStatus = "pending" | "approved" | "paid" | "cancelled";
 
@@ -160,11 +172,24 @@ function isAdmin(data: DocumentData | undefined): boolean {
   return text(data?.role).toLowerCase() === "admin";
 }
 
-async function requireAdmin(uid: string): Promise<void> {
-  const snap = await getFirestore().doc(`users/${uid}`).get();
-  if (!isAdmin(snap.data())) {
-    throw new HttpsError("permission-denied", "Admin only");
-  }
+/** Mirrors the four admin identities accepted by `isAdmin()` in firestore.rules. */
+async function requireAdmin(auth: {
+  uid: string;
+  token?: {email?: unknown};
+}): Promise<void> {
+  const email = text(auth.token?.email).toLowerCase();
+  if (ADMIN_EMAILS.includes(email)) return;
+  if (ADMIN_UIDS.includes(auth.uid)) return;
+
+  const db = getFirestore();
+  const [userSnap, adminSnap] = await Promise.all([
+    db.doc(`users/${auth.uid}`).get(),
+    db.doc(`admins/${auth.uid}`).get(),
+  ]);
+  if (isAdmin(userSnap.data())) return;
+  if (adminSnap.exists && adminSnap.data()?.active === true) return;
+
+  throw new HttpsError("permission-denied", "Admin only");
 }
 
 function codeForDriver(uid: string): string {
@@ -748,9 +773,9 @@ export const trackDriverReferralReward = onDocumentWritten(
 );
 
 export const getAdminDriverReferralCampaign = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required");
-  await requireAdmin(uid);
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign in required");
+  await requireAdmin(auth);
 
   const db = getFirestore();
   const [settingsSnap, rewardsSnap, topDriversSnap] = await Promise.all([
@@ -806,9 +831,10 @@ export const getAdminDriverReferralCampaign = onCall(async (request) => {
 });
 
 export const saveAdminDriverReferralCampaign = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required");
-  await requireAdmin(uid);
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign in required");
+  await requireAdmin(auth);
+  const uid = auth.uid;
 
   const input = request.data ?? {};
   const rewardType: RewardType =
@@ -878,9 +904,10 @@ export const saveAdminDriverReferralCampaign = onCall(async (request) => {
 });
 
 export const updateDriverReferralRewardStatus = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in required");
-  await requireAdmin(uid);
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign in required");
+  await requireAdmin(auth);
+  const uid = auth.uid;
   const customerId = text(request.data?.customerId);
   const action = text(request.data?.action);
   if (!customerId || !["paid", "cancelled"].includes(action)) {
