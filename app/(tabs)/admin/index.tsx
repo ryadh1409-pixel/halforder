@@ -707,6 +707,24 @@ export default function AdminScreen() {
                   </View>
                   <Text style={styles.promoBadgesCta}>Open</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  onPress={() =>
+                    router.push(adminRoutes.driverReferralCampaign as never)
+                  }
+                  activeOpacity={0.88}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.promoBadgesTitle}>
+                      Driver Referral Campaign
+                    </Text>
+                    <Text style={styles.promoBadgesSub}>
+                      Drivers invite new customers — reward on first completed
+                      order
+                    </Text>
+                  </View>
+                  <Text style={styles.promoBadgesCta}>Open</Text>
+                </TouchableOpacity>
               </View>
               <View style={[styles.panel, styles.sectionSpacer]}>
                 <AdminCardsDashboard />
