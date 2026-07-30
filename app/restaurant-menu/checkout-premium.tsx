@@ -503,7 +503,7 @@ export default function CheckoutPremiumScreen() {
             ? 'Hi emooo discount (-50%)'
             : 'Promotions',
         value: `-$${promoDiscount.toFixed(2)}`,
-        emphasizeDiscount: true,
+        emphasizeSave: true,
         badge:
           appliedPromoCode === HI_EMOOO_PROMO_CODE ? 'Hi emooo' : 'Promo',
       });
@@ -538,16 +538,19 @@ export default function CheckoutPremiumScreen() {
       label: `Tax (HST ${Math.round(taxRate * 1000) / 10}%)`,
       value: `$${taxes.toFixed(2)}`,
     });
+    const beforeSavings = strikeSubtotal + taxes;
+    if (beforeSavings > total + 0.009) {
+      rows.push({
+        key: 'beforeSave',
+        label: 'Pricing before promotions',
+        value: `$${beforeSavings.toFixed(2)}`,
+        strikethrough: true,
+      });
+    }
     rows.push({
       key: 'total',
       label: 'Final total',
       value: totalFmt,
-    });
-    rows.push({
-      key: 'beforeSave',
-      label: 'Pricing before promotions',
-      value: `$${(strikeSubtotal + taxes).toFixed(2)}`,
-      strikethrough: true,
     });
     return rows;
   }, [
@@ -562,6 +565,7 @@ export default function CheckoutPremiumScreen() {
     subtotal,
     taxes,
     taxRate,
+    total,
     totalFmt,
     waiveDeliveryFee,
     waiveServiceFee,
@@ -794,7 +798,7 @@ export default function CheckoutPremiumScreen() {
         />
         <StickyCheckoutButton
           label={fundingMode === 'complete_meal' ? 'Complete My Meal' : 'Next'}
-          sublabel={`Total ${appliedCashbackCad > 0 ? payFmt : totalFmt}`}
+          sublabel={`Pay ${appliedCashbackCad > 0 ? payFmt : totalFmt}`}
           onPress={() => void submitOrder()}
           disabled={blocked}
           loading={placing}

@@ -112,13 +112,18 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   webPointer: { cursor: 'pointer' as const },
-  btnInner: { alignItems: 'center', justifyContent: 'center', gap: 2 },
+  btnInner: { alignItems: 'center', justifyContent: 'center', gap: 3 },
   btnTxt: {
     fontSize: 17,
     fontWeight: '900',
     color: '#fff',
     letterSpacing: -0.1,
   },
-  sub: { fontSize: 12.5, fontWeight: '700', color: 'rgba(255,255,255,0.78)' },
+  sub: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.88)',
+    letterSpacing: -0.1,
+  },
   disabled: { opacity: 0.38 },
 });
