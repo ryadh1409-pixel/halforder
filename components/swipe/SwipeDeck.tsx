@@ -21,6 +21,7 @@ const REJECT_MS = 165;
 type Props = {
   current: CardType | undefined;
   next: CardType | undefined;
+  deckCursor: number;
   cardMaxHeight: number;
   loading?: boolean;
   actionSignal?: { id: number; direction: 'like' | 'pass' };
@@ -31,6 +32,7 @@ type Props = {
 function SwipeDeckInner({
   current,
   next,
+  deckCursor,
   cardMaxHeight,
   loading,
   actionSignal,
@@ -44,7 +46,7 @@ function SwipeDeckInner({
   useEffect(() => {
     translateX.value = 0;
     translateY.value = 0;
-  }, [current?.id, translateX, translateY]);
+  }, [current?.id, deckCursor, translateX, translateY]);
 
   const swipeOut = useCallback(
     (direction: 'like' | 'pass') => {

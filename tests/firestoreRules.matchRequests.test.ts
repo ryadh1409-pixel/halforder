@@ -11,6 +11,7 @@ import {
   getDoc,
   serverTimestamp,
   setDoc,
+  Timestamp,
 } from 'firebase/firestore';
 
 const integrationDescribe =
@@ -76,6 +77,50 @@ integrationDescribe('firestore rules: matchRequests food share flow', () => {
   it('allows user to create own WAITING matchRequest', async () => {
     const db = te().authenticatedContext('userA').firestore();
     await assertSucceeds(
+      setDoc(doc(db, 'matchRequests', '1_userA'), {
+        adminFoodShareId: '1',
+        userId: 'userA',
+        userFirstName: 'Alice',
+        status: 'WAITING',
+        matchId: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies joining a share before its availability window', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), 'adminFoodShares', '1'),
+        { availableFrom: Timestamp.fromMillis(Date.now() + 60_000) },
+        { merge: true },
+      );
+    });
+    const db = te().authenticatedContext('userA').firestore();
+    await assertFails(
+      setDoc(doc(db, 'matchRequests', '1_userA'), {
+        adminFoodShareId: '1',
+        userId: 'userA',
+        userFirstName: 'Alice',
+        status: 'WAITING',
+        matchId: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('denies joining a share after its availability window', async () => {
+    await te().withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), 'adminFoodShares', '1'),
+        { availableUntil: Timestamp.fromMillis(Date.now() - 60_000) },
+        { merge: true },
+      );
+    });
+    const db = te().authenticatedContext('userA').firestore();
+    await assertFails(
       setDoc(doc(db, 'matchRequests', '1_userA'), {
         adminFoodShareId: '1',
         userId: 'userA',

@@ -16,6 +16,15 @@ import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { adminLog } from '@/lib/admin/adminDebug';
 import { parsePromotionBadge } from '@/lib/promotionBadge';
 import {
+  adminFoodShareAvailabilityStatus,
+  availabilityDateInput,
+  availabilityStatusLabel,
+  availabilityTimeInput,
+  formatAvailabilityDateTime,
+  nextAvailabilityBoundaryDelay,
+  parseAvailabilityDateTime,
+} from '@/lib/adminFoodShareAvailability';
+import {
   deleteAdminFoodCardSlot,
   setAdminFoodCardActive,
   subscribeAdminFoodCardDetail,
@@ -59,6 +68,10 @@ function emptyDraft(): FoodSlotDraft {
     deliveryShare: '',
     venueLocation: '',
     active: false,
+    availableFromDate: '',
+    availableFromTime: '',
+    availableUntilDate: '',
+    availableUntilTime: '',
     aiDescription: '',
     restaurantName: 'HalfOrder',
     promotionBadge: 'none',
@@ -129,6 +142,7 @@ export default function AdminFoodCardDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [availabilityNow, setAvailabilityNow] = useState(Date.now());
 
   const slotMeta = useMemo((): AdminFoodCardSlot | null => {
     if (!detail || !isAdminFoodCardSlotId(detail.cardId)) return null;
@@ -144,12 +158,30 @@ export default function AdminFoodCardDetailScreen() {
       deliveryShare: Number.isFinite(fee) ? fee : 0,
       venueLocation: detail.pickupAddress === '—' ? '' : detail.pickupAddress,
       active: detail.active,
+      availableFromMs: detail.availableFromMs,
+      availableUntilMs: detail.availableUntilMs,
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
       promotionBadge: detail.promotionBadge,
       fulfillmentMode: detail.fulfillmentMode,
     };
   }, [detail]);
+
+  useEffect(() => {
+    if (!detail) return undefined;
+    const delay = nextAvailabilityBoundaryDelay([detail], Date.now());
+    if (delay == null) return undefined;
+    const timer = setTimeout(() => setAvailabilityNow(Date.now()), delay);
+    return () => clearTimeout(timer);
+  }, [availabilityNow, detail]);
+
+  const availabilityStatus = useMemo(
+    () =>
+      detail
+        ? adminFoodShareAvailabilityStatus(detail, availabilityNow)
+        : 'inactive',
+    [availabilityNow, detail],
+  );
 
   useEffect(() => {
     if (!isAdminFoodCardSlotId(cardId)) {
@@ -183,6 +215,10 @@ export default function AdminFoodCardDetailScreen() {
           : '0',
       venueLocation: detail.pickupAddress === '—' ? '' : detail.pickupAddress,
       active: detail.active,
+      availableFromDate: availabilityDateInput(detail.availableFromMs),
+      availableFromTime: availabilityTimeInput(detail.availableFromMs),
+      availableUntilDate: availabilityDateInput(detail.availableUntilMs),
+      availableUntilTime: availabilityTimeInput(detail.availableUntilMs),
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
       promotionBadge: detail.promotionBadge,
@@ -213,6 +249,23 @@ export default function AdminFoodCardDetailScreen() {
     const priceNum = Number(draft.price);
     const sharingNum = Number(draft.sharingPrice);
     const deliveryNum = Number(draft.deliveryShare);
+    let availableFromMs: number | null;
+    let availableUntilMs: number | null;
+    try {
+      availableFromMs = parseAvailabilityDateTime(
+        draft.availableFromDate,
+        draft.availableFromTime,
+      );
+      availableUntilMs = parseAvailabilityDateTime(
+        draft.availableUntilDate,
+        draft.availableUntilTime,
+      );
+    } catch (error) {
+      failValidation(
+        error instanceof Error ? error.message : 'Enter a valid availability window.',
+      );
+      return;
+    }
 
     if (!draft.title.trim()) {
       failValidation('Food title is required.');
@@ -244,6 +297,14 @@ export default function AdminFoodCardDetailScreen() {
       failValidation('Enter a valid delivery share (0 or more).');
       return;
     }
+    if (
+      availableFromMs != null &&
+      availableUntilMs != null &&
+      availableUntilMs <= availableFromMs
+    ) {
+      failValidation('Available Until must be after Available From.');
+      return;
+    }
 
     const slotDocId = cardId as AdminFoodCardSlotId;
     const slotIdNum = Number.parseInt(cardId, 10) || 1;
@@ -263,6 +324,8 @@ export default function AdminFoodCardDetailScreen() {
         deliveryShare: deliveryNum,
         venueLocation: draft.venueLocation,
         active: draft.active,
+        availableFromMs,
+        availableUntilMs,
         aiDescription: draft.aiDescription,
         restaurantName: draft.restaurantName,
         promotionBadge: parsePromotionBadge(draft.promotionBadge),
@@ -379,7 +442,7 @@ export default function AdminFoodCardDetailScreen() {
     const ok = await systemConfirm({
       title: next ? 'Activate card' : 'Deactivate card',
       message: next
-        ? 'This card will appear in the swipe deck.'
+        ? 'This card will appear in Swipe during its availability window.'
         : 'This card will be hidden from the swipe deck.',
       confirmLabel: next ? 'Activate' : 'Deactivate',
     });
@@ -499,19 +562,46 @@ export default function AdminFoodCardDetailScreen() {
           <View
             style={[
               styles.statusPill,
-              detail.active ? styles.statusActive : styles.statusInactive,
+              availabilityStatus === 'live'
+                ? styles.statusActive
+                : styles.statusInactive,
             ]}
           >
             <Text
               style={[
                 styles.statusText,
-                detail.active ? styles.statusTextActive : styles.statusTextInactive,
+                availabilityStatus === 'live'
+                  ? styles.statusTextActive
+                  : styles.statusTextInactive,
               ]}
             >
-              {detail.active ? 'Active' : 'Inactive'}
+              {availabilityStatusLabel(availabilityStatus)}
             </Text>
           </View>
         </View>
+
+        <Section title="Availability">
+          <Row
+            label="Available From"
+            value={
+              detail.availableFromMs == null
+                ? 'Immediately'
+                : formatAvailabilityDateTime(detail.availableFromMs)
+            }
+          />
+          <Row
+            label="Available Until"
+            value={
+              detail.availableUntilMs == null
+                ? 'No expiry'
+                : formatAvailabilityDateTime(detail.availableUntilMs)
+            }
+          />
+          <Row
+            label="Current Status"
+            value={availabilityStatusLabel(availabilityStatus)}
+          />
+        </Section>
 
         <Section title="Card details">
           <Row label="Card ID" value={detail.cardId} mono />

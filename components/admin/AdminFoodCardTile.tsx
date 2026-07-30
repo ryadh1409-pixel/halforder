@@ -4,6 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React from 'react';
 import {
+  availabilityStatusLabel,
+  type AdminFoodShareAvailabilityStatus,
+} from '@/lib/adminFoodShareAvailability';
+import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
@@ -18,7 +22,7 @@ export type AdminFoodCardTileProps = {
   imageUri: string;
   priceLabel: string;
   sharingPriceLabel?: string;
-  active: boolean;
+  availabilityStatus: AdminFoodShareAvailabilityStatus;
   configured: boolean;
   onPress: () => void;
   busy?: boolean;
@@ -36,7 +40,7 @@ export function AdminFoodCardTile({
   imageUri,
   priceLabel,
   sharingPriceLabel,
-  active,
+  availabilityStatus,
   configured,
   onPress,
   busy,
@@ -78,16 +82,24 @@ export function AdminFoodCardTile({
         <View
           style={[
             styles.badge,
-            active ? styles.badgeActive : styles.badgeInactive,
+            availabilityStatus === 'live'
+              ? styles.badgeActive
+              : availabilityStatus === 'scheduled'
+                ? styles.badgeScheduled
+                : availabilityStatus === 'expired'
+                  ? styles.badgeExpired
+                  : styles.badgeInactive,
           ]}
         >
           <Text
             style={[
               styles.badgeText,
-              active ? styles.badgeTextActive : styles.badgeTextInactive,
+              availabilityStatus === 'live'
+                ? styles.badgeTextActive
+                : styles.badgeTextInactive,
             ]}
           >
-            {active ? 'Active' : 'Inactive'}
+            {availabilityStatusLabel(availabilityStatus)}
           </Text>
         </View>
         {busy ? (
@@ -178,6 +190,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   badgeActive: { backgroundColor: COLORS.successBg },
+  badgeScheduled: { backgroundColor: 'rgba(99,102,241,0.16)' },
+  badgeExpired: { backgroundColor: 'rgba(220,38,38,0.12)' },
   badgeInactive: { backgroundColor: 'rgba(15, 23, 42, 0.08)' },
   badgeText: { fontSize: 10, fontWeight: '800' },
   badgeTextActive: { color: COLORS.successText },

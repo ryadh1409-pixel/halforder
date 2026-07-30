@@ -138,8 +138,13 @@ export function SwipeDiscoveryScreen() {
     [cardsWithReferral, fulfillmentMode],
   );
 
-  const current = filteredCards[deckIndex];
-  const next = filteredCards[deckIndex + 1];
+  const deckLength = filteredCards.length;
+  const currentIndex = deckLength > 0 ? deckIndex % deckLength : 0;
+  const current = deckLength > 0 ? filteredCards[currentIndex] : undefined;
+  const next =
+    deckLength > 1
+      ? filteredCards[(currentIndex + 1) % deckLength]
+      : undefined;
   const cardMaxH = useMemo(() => Math.min(SCREEN_H * 0.52, 500), []);
 
   const selectMode = useCallback(
@@ -305,6 +310,7 @@ export function SwipeDiscoveryScreen() {
         <SwipeDeck
           current={current}
           next={next}
+          deckCursor={deckIndex}
           cardMaxHeight={cardMaxH}
           loading={loadingDeck}
           actionSignal={actionSignal ?? undefined}

@@ -5,6 +5,10 @@ import {
   ADMIN_FOOD_CARD_SLOT_COUNT,
 } from '../../../../constants/adminFoodCards';
 import { formatWaitingElapsed } from '../../../../lib/swipeMarketplaceStatus';
+import {
+  adminFoodShareAvailabilityStatus,
+  nextAvailabilityBoundaryDelay,
+} from '../../../../lib/adminFoodShareAvailability';
 import { auth } from '../../../../services/firebase';
 import {
   subscribeAdminFoodCardWaitingQueues,
@@ -48,6 +52,7 @@ export function AdminCardsDashboard() {
     converted: 0,
     conversionRate: 0,
   });
+  const [availabilityNow, setAvailabilityNow] = useState(Date.now());
 
   useEffect(() => {
     const unsub = subscribeAdminFoodCardSlots((rows) => {
@@ -66,6 +71,14 @@ export function AdminCardsDashboard() {
     const unsub = subscribeAllFoodShareInviteStats(setInviteStats);
     return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!remote) return undefined;
+    const delay = nextAvailabilityBoundaryDelay(remote, Date.now());
+    if (delay == null) return undefined;
+    const timer = setTimeout(() => setAvailabilityNow(Date.now()), delay);
+    return () => clearTimeout(timer);
+  }, [availabilityNow, remote]);
 
   const openDetail = (docId: string) => {
     const href = adminRoutes.foodCard(docId);
@@ -142,6 +155,10 @@ export function AdminCardsDashboard() {
             waiting?.waitingSinceMs != null
               ? formatWaitingElapsed(Date.now() - waiting.waitingSinceMs)
               : null;
+          const availabilityStatus = adminFoodShareAvailabilityStatus(
+            slot,
+            availabilityNow,
+          );
           return (
             <View style={{ width: cellW }}>
               <AdminFoodCardTile
@@ -151,7 +168,7 @@ export function AdminCardsDashboard() {
                 imageUri={slot.image}
                 priceLabel={priceLabel}
                 sharingPriceLabel={sharingPriceLabel}
-                active={slot.active}
+                availabilityStatus={availabilityStatus}
                 configured={configured}
                 waitingUserName={waitingUserName}
                 staleWaiting={staleWaiting}

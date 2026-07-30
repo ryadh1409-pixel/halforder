@@ -5,6 +5,10 @@ import {
 import { resolveFoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import { buildAdminShareCostBreakdown } from '@/lib/foodSharePricing';
 import {
+  isAdminFoodShareLive,
+  nextAvailabilityBoundaryDelay,
+} from '@/lib/adminFoodShareAvailability';
+import {
   emptySwipeQueueMarketplaceState,
   resolveSwipeMarketplaceStatus,
   swipeMarketplacePeopleJoined,
@@ -83,6 +87,8 @@ export function mapAdminFoodShareDoc(
     description: normStr(data.description, normStr(data.aiDescription)),
     active: normBool(data.active),
     createdAtMs: safeToMillis(data.createdAt),
+    availableFromMs: safeToMillis(data.availableFrom),
+    availableUntilMs: safeToMillis(data.availableUntil),
     fulfillmentMode,
     promotionBadge: promotionBadges[0] ?? parsePromotionBadge(data.promotionBadge),
     promotionBadges,
@@ -282,10 +288,26 @@ export function subscribeActiveAdminFoodShares(
     limit(DECK_LIMIT),
   );
 
-  return onSnapshot(
+  let rows: AdminFoodShareDoc[] = [];
+  let boundaryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const emitLiveRows = () => {
+    if (boundaryTimer) {
+      clearTimeout(boundaryTimer);
+      boundaryTimer = null;
+    }
+    const now = Date.now();
+    onData(rows.filter((row) => isAdminFoodShareLive(row, now)));
+    const delay = nextAvailabilityBoundaryDelay(rows, now);
+    if (delay != null) {
+      boundaryTimer = setTimeout(emitLiveRows, delay);
+    }
+  };
+
+  const unsubscribe = onSnapshot(
     q,
     (snap) => {
-      const rows = sortSlotIds(
+      rows = sortSlotIds(
         snap.docs.map((d) =>
           mapAdminFoodShareDoc(d.id, d.data() as Record<string, unknown>),
         ),
@@ -297,9 +319,14 @@ export function subscribeActiveAdminFoodShares(
         activeIds: rows.map((r) => r.id),
         rows,
       });
-      onData(rows);
+      emitLiveRows();
     },
     (err) => {
+      rows = [];
+      if (boundaryTimer) {
+        clearTimeout(boundaryTimer);
+        boundaryTimer = null;
+      }
       console.error('[SWIPE QUERY RESULT] listener error', {
         collectionPath,
         queryDescription,
@@ -309,6 +336,10 @@ export function subscribeActiveAdminFoodShares(
       onData([]);
     },
   );
+  return () => {
+    unsubscribe();
+    if (boundaryTimer) clearTimeout(boundaryTimer);
+  };
 }
 
 /** Admin panel — all 10 fixed slots (active or not). */
@@ -342,9 +373,12 @@ export function adminFoodSharesToSwipeCards(
   shares: AdminFoodShareDoc[],
   queues?: Record<string, SwipeQueueMarketplaceState>,
 ): SwipeFoodCard[] {
-  const cards = shares.map((share) =>
-    adminFoodShareToSwipeCard(share, queues?.[share.id] ?? null),
-  );
+  const now = Date.now();
+  const cards = shares
+    .filter((share) => isAdminFoodShareLive(share, now))
+    .map((share) =>
+      adminFoodShareToSwipeCard(share, queues?.[share.id] ?? null),
+    );
   return sortSwipeCardsByMarketplacePriority(cards);
 }
 

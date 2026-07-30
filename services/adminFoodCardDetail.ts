@@ -42,6 +42,8 @@ export type AdminFoodCardWaitingUser = {
 export type AdminFoodCardDetail = {
   cardId: AdminFoodCardSlotId;
   active: boolean;
+  availableFromMs: number | null;
+  availableUntilMs: number | null;
   createdAtLabel: string;
   updatedAtLabel: string;
   foodName: string;
@@ -312,6 +314,8 @@ function buildDetail(input: {
   return {
     cardId: input.cardId,
     active: share.active,
+    availableFromMs: share.availableFromMs,
+    availableUntilMs: share.availableUntilMs,
     createdAtLabel: formatFirestoreTime(input.cardRaw.createdAt),
     updatedAtLabel: formatFirestoreTime(input.cardRaw.updatedAt),
     foodName: hasCardContent
@@ -366,6 +370,7 @@ function buildDetail(input: {
       scheduleLabel(input.cardRaw, 'deliveryTime'),
     expirationDateLabel: scheduleLabel(
       input.cardRaw,
+      'availableUntil',
       'expirationDate',
       'expiresAt',
       'expirationAt',

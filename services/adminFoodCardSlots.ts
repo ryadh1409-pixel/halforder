@@ -7,6 +7,7 @@ import { mapAdminFoodShareDoc } from './adminFoodSharesService';
 import { auth, db } from './firebase';
 import {
   collection,
+  deleteField,
   doc,
   documentId,
   getDoc,
@@ -14,6 +15,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   where,
 } from 'firebase/firestore';
 
@@ -27,6 +29,8 @@ export type AdminFoodCardSlot = {
   deliveryShare: number;
   venueLocation: string;
   active: boolean;
+  availableFromMs: number | null;
+  availableUntilMs: number | null;
   aiDescription: string;
   restaurantName: string;
   promotionBadge: PromotionBadgeValue;
@@ -63,6 +67,8 @@ function slotFromShare(
     deliveryShare: share.deliveryShare,
     venueLocation: readVenueLocation(raw),
     active: share.active,
+    availableFromMs: share.availableFromMs,
+    availableUntilMs: share.availableUntilMs,
     aiDescription: share.description,
     restaurantName: share.restaurantName,
     promotionBadge: share.promotionBadge,
@@ -106,6 +112,8 @@ export async function saveAdminFoodCardSlot(
     deliveryShare: number;
     venueLocation?: string;
     active: boolean;
+    availableFromMs?: number | null;
+    availableUntilMs?: number | null;
     aiDescription?: string;
     restaurantName?: string;
     promotionBadge?: PromotionBadgeValue;
@@ -131,6 +139,15 @@ export async function saveAdminFoodCardSlot(
   if (!foodName) throw new Error('Food name required');
   const image = input.image.trim();
   if (!image) throw new Error('Image required');
+  const availableFromMs = input.availableFromMs ?? null;
+  const availableUntilMs = input.availableUntilMs ?? null;
+  if (
+    availableFromMs != null &&
+    availableUntilMs != null &&
+    availableUntilMs <= availableFromMs
+  ) {
+    throw new Error('Available Until must be after Available From.');
+  }
 
   const description =
     typeof input.aiDescription === 'string' && input.aiDescription.trim()
@@ -169,6 +186,14 @@ export async function saveAdminFoodCardSlot(
     deliveryShare: isPickup ? 0 : Number(deliveryShare.toFixed(2)),
     description,
     active: input.active === true,
+    availableFrom:
+      availableFromMs == null
+        ? deleteField()
+        : Timestamp.fromMillis(availableFromMs),
+    availableUntil:
+      availableUntilMs == null
+        ? deleteField()
+        : Timestamp.fromMillis(availableUntilMs),
     fulfillmentMode,
     pickupOnly: isPickup,
     deliveryEnabled: !isPickup,

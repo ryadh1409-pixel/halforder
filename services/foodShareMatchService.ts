@@ -2,6 +2,7 @@ import { buildAdminShareCostBreakdown, normalizeFoodShareCostBreakdown } from '@
 import { resolveFoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
 import { FOOD_SHARE_ERRORS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
+import { isAdminFoodShareLive } from '@/lib/adminFoodShareAvailability';
 import {
   notifyAdminMatchCreated,
   notifyPairingAwaitingPayment,
@@ -173,6 +174,14 @@ export async function joinAdminFoodShare(
       const share = shareSnap.data() as Record<string, unknown>;
       if (share.active !== true) {
         throw new Error('This meal share is not active.');
+      }
+      if (
+        !isAdminFoodShareLive(
+          mapAdminFoodShareDoc(adminFoodShareId, share),
+          Date.now(),
+        )
+      ) {
+        throw new Error('This meal share is outside its availability window.');
       }
 
       const queueSnap = await tx.get(queueRef);

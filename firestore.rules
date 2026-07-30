@@ -642,6 +642,20 @@ service cloud.firestore {
     function adminFoodShareById(cardId) {
       return get(/databases/$(database)/documents/adminFoodShares/$(cardId)).data;
     }
+    function isAdminFoodShareAvailableNow(cardId) {
+      let share = adminFoodShareById(cardId);
+      return share.active == true
+        && (
+          !share.keys().hasAny(['availableFrom'])
+          || share.availableFrom == null
+          || request.time >= share.availableFrom
+        )
+        && (
+          !share.keys().hasAny(['availableUntil'])
+          || share.availableUntil == null
+          || request.time <= share.availableUntil
+        );
+    }
     function isAdminFoodShareSlotId(cardId) {
       return cardId == '1' || cardId == '2' || cardId == '3' || cardId == '4' || cardId == '5'
         || cardId == '6' || cardId == '7' || cardId == '8' || cardId == '9' || cardId == '10';
@@ -659,6 +673,22 @@ service cloud.firestore {
         && request.resource.data.deliveryShare is number
         && request.resource.data.description is string
         && request.resource.data.active is bool
+        && (
+          !request.resource.data.keys().hasAny(['availableFrom'])
+          || request.resource.data.availableFrom == null
+          || request.resource.data.availableFrom is timestamp
+        )
+        && (
+          !request.resource.data.keys().hasAny(['availableUntil'])
+          || request.resource.data.availableUntil == null
+          || request.resource.data.availableUntil is timestamp
+        )
+        && (
+          !request.resource.data.keys().hasAll(['availableFrom', 'availableUntil'])
+          || request.resource.data.availableFrom == null
+          || request.resource.data.availableUntil == null
+          || request.resource.data.availableFrom < request.resource.data.availableUntil
+        )
         && request.resource.data.createdAt != null;
     }
     function isValidMatchQueueWrite(cardId) {
@@ -666,7 +696,7 @@ service cloud.firestore {
         && !isCurrentUserRestricted()
         && isAdminFoodShareSlotId(cardId)
         && exists(/databases/$(database)/documents/adminFoodShares/$(cardId))
-        && adminFoodShareById(cardId).active == true
+        && isAdminFoodShareAvailableNow(cardId)
         && request.resource.data.adminFoodShareId == cardId
         && (
           (
@@ -697,6 +727,8 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.adminFoodShareId is string
         && isAdminFoodShareSlotId(request.resource.data.adminFoodShareId)
+        && exists(/databases/$(database)/documents/adminFoodShares/$(request.resource.data.adminFoodShareId))
+        && isAdminFoodShareAvailableNow(request.resource.data.adminFoodShareId)
         && requestId == request.resource.data.adminFoodShareId + '_' + request.auth.uid;
     }
     function isValidMatchRequestCreate(requestId) {
@@ -722,7 +754,7 @@ service cloud.firestore {
         && request.resource.data.matchId.size() > 0
         && request.resource.data.matchId == expectedAdminFoodShareMatchId(shareId, partnerUid, matcherUid)
         && exists(/databases/$(database)/documents/adminFoodShares/$(shareId))
-        && adminFoodShareById(shareId).active == true;
+        && isAdminFoodShareAvailableNow(shareId);
     }
     function canReadMatchRequestDoc(requestId) {
       return isSignedIn()
@@ -737,6 +769,14 @@ service cloud.firestore {
       return isSignedIn()
         && !isCurrentUserRestricted()
         && request.resource.data.adminFoodShareId == resource.data.adminFoodShareId
+        && (
+          request.resource.data.status == resource.data.status
+          || request.resource.data.status == 'CANCELLED'
+          || (
+            exists(/databases/$(database)/documents/adminFoodShares/$(resource.data.adminFoodShareId))
+            && isAdminFoodShareAvailableNow(resource.data.adminFoodShareId)
+          )
+        )
         && (
           (
             resource.data.userId == request.auth.uid
@@ -813,7 +853,7 @@ service cloud.firestore {
           matchDocId == request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', '')) + '_' + request.resource.data.users[0] + '_' + request.resource.data.users[1]
         )
         && exists(/databases/$(database)/documents/adminFoodShares/$(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', ''))))
-        && adminFoodShareById(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', ''))).active == true;
+        && isAdminFoodShareAvailableNow(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', '')));
     }
     function isValidMatchChatCreate(chatId) {
       return isSignedIn()

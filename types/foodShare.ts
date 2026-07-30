@@ -17,6 +17,10 @@ export type AdminFoodShareDoc = {
   description: string;
   active: boolean;
   createdAtMs: number | null;
+  /** Missing means immediately available (backward compatible). */
+  availableFromMs: number | null;
+  /** Missing means no automatic expiry (backward compatible). */
+  availableUntilMs: number | null;
   /** Defaults to delivery when missing. */
   fulfillmentMode: FoodShareFulfillmentMode;
   /** Admin promotion badge: primary / legacy. */

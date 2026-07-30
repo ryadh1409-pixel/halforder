@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { AppTextInput } from '../AppTextInput';
@@ -6,6 +6,12 @@ import {
   PROMOTION_BADGE_OPTIONS,
   type PromotionBadgeValue,
 } from '@/lib/promotionBadge';
+import {
+  adminFoodShareAvailabilityStatus,
+  availabilityStatusLabel,
+  parseAvailabilityDateTime,
+  type AdminFoodShareAvailabilityStatus,
+} from '@/lib/adminFoodShareAvailability';
 
 const BG = '#FFFFFF';
 const CARD = '#ffffff';
@@ -21,6 +27,10 @@ export type FoodSlotDraft = {
   deliveryShare: string;
   venueLocation: string;
   active: boolean;
+  availableFromDate: string;
+  availableFromTime: string;
+  availableUntilDate: string;
+  availableUntilTime: string;
   aiDescription: string;
   restaurantName: string;
   promotionBadge: PromotionBadgeValue;
@@ -57,6 +67,38 @@ export function FoodSlotEditModal({
   uploading,
   aiBusy,
 }: FoodSlotEditModalProps) {
+  const [availabilityNow, setAvailabilityNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    setAvailabilityNow(Date.now());
+    const timer = setInterval(() => setAvailabilityNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [visible]);
+
+  const availabilityStatus = useMemo<
+    AdminFoodShareAvailabilityStatus | 'invalid'
+  >(() => {
+    try {
+      return adminFoodShareAvailabilityStatus(
+        {
+          active: draft.active,
+          availableFromMs: parseAvailabilityDateTime(
+            draft.availableFromDate,
+            draft.availableFromTime,
+          ),
+          availableUntilMs: parseAvailabilityDateTime(
+            draft.availableUntilDate,
+            draft.availableUntilTime,
+          ),
+        },
+        availabilityNow,
+      );
+    } catch {
+      return 'invalid';
+    }
+  }, [availabilityNow, draft]);
+
   return (
     <Modal
       visible={visible}
@@ -92,6 +134,71 @@ export function FoodSlotEditModal({
                 }}
                 thumbColor={draft.active ? PRIMARY : '#f1f5f9'}
               />
+            </View>
+
+            <View style={styles.availabilitySection}>
+              <View style={styles.availabilityHeader}>
+                <View>
+                  <Text style={styles.availabilityTitle}>Availability</Text>
+                  <Text style={styles.availabilityHint}>
+                    The card appears only during this window.
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.availabilityStatus,
+                    availabilityStatus === 'live' && styles.statusLive,
+                    availabilityStatus === 'scheduled' && styles.statusScheduled,
+                    availabilityStatus === 'expired' && styles.statusExpired,
+                  ]}
+                >
+                  <Text style={styles.availabilityStatusText}>
+                    {availabilityStatus === 'invalid'
+                      ? 'Invalid'
+                      : availabilityStatusLabel(availabilityStatus)}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>Available From</Text>
+              <View style={styles.dateTimeRow}>
+                <AppTextInput
+                  style={[styles.input, styles.dateInput]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={MUTED}
+                  value={draft.availableFromDate}
+                  onChangeText={(value) => onChange({ availableFromDate: value })}
+                  autoCapitalize="none"
+                />
+                <AppTextInput
+                  style={[styles.input, styles.timeInput]}
+                  placeholder="HH:MM"
+                  placeholderTextColor={MUTED}
+                  value={draft.availableFromTime}
+                  onChangeText={(value) => onChange({ availableFromTime: value })}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <Text style={styles.fieldLabel}>Available Until</Text>
+              <View style={styles.dateTimeRow}>
+                <AppTextInput
+                  style={[styles.input, styles.dateInput]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={MUTED}
+                  value={draft.availableUntilDate}
+                  onChangeText={(value) => onChange({ availableUntilDate: value })}
+                  autoCapitalize="none"
+                />
+                <AppTextInput
+                  style={[styles.input, styles.timeInput]}
+                  placeholder="HH:MM"
+                  placeholderTextColor={MUTED}
+                  value={draft.availableUntilTime}
+                  onChangeText={(value) => onChange({ availableUntilTime: value })}
+                  autoCapitalize="none"
+                />
+              </View>
             </View>
 
             <Text style={styles.fieldLabel}>Fulfillment</Text>
@@ -325,6 +432,51 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginBottom: 6,
   },
+  availabilitySection: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.1)',
+    backgroundColor: '#F8FAFC',
+    padding: 14,
+    marginBottom: 16,
+  },
+  availabilityHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+  },
+  availabilityTitle: {
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  availabilityHint: {
+    marginTop: 3,
+    color: MUTED,
+    fontSize: 12,
+  },
+  availabilityStatus: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(100,116,139,0.12)',
+  },
+  statusLive: { backgroundColor: 'rgba(22,163,74,0.14)' },
+  statusScheduled: { backgroundColor: 'rgba(99,102,241,0.14)' },
+  statusExpired: { backgroundColor: 'rgba(220,38,38,0.12)' },
+  availabilityStatusText: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dateInput: { flex: 1.6 },
+  timeInput: { flex: 1 },
   uploadBtn: {
     backgroundColor: PRIMARY,
     paddingVertical: 14,

@@ -15,6 +15,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   where,
 } from 'firebase/firestore';
 
@@ -127,6 +128,40 @@ integrationDescribe('firestore rules: adminFoodShares swipe catalog', () => {
         {
           foodName: 'Updated Bowl',
           active: true,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+  });
+
+  it('allows admin to save a valid availability window', async () => {
+    const db = te()
+      .authenticatedContext('admin1', { email: 'admin@ourfood.com' })
+      .firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'adminFoodShares', '1'),
+        {
+          availableFrom: Timestamp.fromMillis(Date.now() + 60_000),
+          availableUntil: Timestamp.fromMillis(Date.now() + 120_000),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+  });
+
+  it('denies admin saving an inverted availability window', async () => {
+    const db = te()
+      .authenticatedContext('admin1', { email: 'admin@ourfood.com' })
+      .firestore();
+    await assertFails(
+      setDoc(
+        doc(db, 'adminFoodShares', '1'),
+        {
+          availableFrom: Timestamp.fromMillis(Date.now() + 120_000),
+          availableUntil: Timestamp.fromMillis(Date.now() + 60_000),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
