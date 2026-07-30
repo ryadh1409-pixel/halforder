@@ -145,7 +145,7 @@ export function SwipeDiscoveryScreen() {
     deckLength > 1
       ? filteredCards[(currentIndex + 1) % deckLength]
       : undefined;
-  const cardMaxH = useMemo(() => Math.min(SCREEN_H * 0.52, 500), []);
+  const cardMaxH = useMemo(() => Math.min(SCREEN_H * 0.56, 500), []);
 
   const selectMode = useCallback(
     (mode: FoodShareFulfillmentMode) => {

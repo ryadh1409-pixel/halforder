@@ -69,7 +69,7 @@ function SwipeFoodCardInner({ card }: Props) {
         : card.spotsLeft === 1
           ? 'Last spot remaining'
           : urgent
-            ? `Only ${card.spotsLeft} spots left`
+            ? `Only ${card.spotsLeft} spots remaining`
             : `${card.spotsLeft} spots available`;
 
   const chips = useMemo<Chip[]>(() => {
@@ -135,12 +135,13 @@ function SwipeFoodCardInner({ card }: Props) {
           transition={280}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.72)']}
+          colors={['transparent', 'rgba(0,0,0,0.34)', 'rgba(0,0,0,0.78)']}
+          locations={[0, 0.5, 1]}
           style={styles.scrimBottom}
           pointerEvents="none"
         />
 
-        <View style={styles.topRow} pointerEvents="none">
+        <View style={styles.topStack} pointerEvents="none">
           <View style={styles.chipRow}>
             {visibleChips.length > 0 ? (
               visibleChips.map((chip) => (
@@ -189,6 +190,7 @@ function SwipeFoodCardInner({ card }: Props) {
             <Text
               style={[styles.availTxt, closingSoon && styles.availTxtSoon]}
               numberOfLines={1}
+              ellipsizeMode="clip"
             >
               {availabilityText}
             </Text>
@@ -232,11 +234,19 @@ function SwipeFoodCardInner({ card }: Props) {
               pressed && styles.detailsBtnPressed,
             ]}
           >
+            {Platform.OS === 'ios' ? (
+              <BlurView
+                intensity={14}
+                tint="light"
+                style={styles.glassFill}
+                pointerEvents="none"
+              />
+            ) : null}
             <Text style={styles.detailsTxt}>View pricing details</Text>
             <Ionicons
               name="chevron-forward"
-              size={13}
-              color="rgba(255,255,255,0.5)"
+              size={12}
+              color="rgba(255,255,255,0.9)"
             />
           </Pressable>
         </View>
@@ -245,7 +255,7 @@ function SwipeFoodCardInner({ card }: Props) {
           {saving > 0 ? (
             <View style={styles.savePill}>
               <Text style={styles.pillTxt} numberOfLines={1}>
-                {`✓ Save ${formatShareCurrency(saving)} vs full order`}
+                {`✓ Save ${formatShareCurrency(saving)}`}
               </Text>
             </View>
           ) : null}
@@ -264,7 +274,19 @@ function SwipeFoodCardInner({ card }: Props) {
             </View>
           ) : (
             <View style={[styles.spotsPill, urgent && styles.spotsPillHot]}>
-              <Text style={styles.pillTxt} numberOfLines={1}>
+              {urgent ? (
+                <LinearGradient
+                  colors={['rgba(251,146,60,0.34)', 'rgba(234,88,12,0.18)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.glassFill}
+                  pointerEvents="none"
+                />
+              ) : null}
+              <Text
+                style={[styles.pillTxt, urgent && styles.pillTxtHot]}
+                numberOfLines={1}
+              >
                 {`${waiting ? '✓' : urgent ? '🔥' : '👥'} ${spotsLabel}`}
               </Text>
             </View>
@@ -292,13 +314,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#141820',
     shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   imageArea: { flex: 1, overflow: 'hidden' },
-  hero: { ...StyleSheet.absoluteFillObject },
+  /** Scaled a touch so the crop fills the hero area; `cover` keeps the ratio. */
+  hero: { ...StyleSheet.absoluteFillObject, transform: [{ scale: 1.03 }] },
   scrimBottom: {
     position: 'absolute',
     left: 0,
@@ -306,36 +329,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: '50%',
   },
-  topRow: {
+  topStack: {
     position: 'absolute',
     top: 16,
-    left: 16,
-    right: 16,
+    left: 20,
+    right: 20,
     zIndex: 3,
-    flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: 8,
   },
   chipRow: {
-    flexShrink: 1,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'nowrap',
     gap: 8,
   },
+  /** Badge metrics are shared so every chip keeps the same height. */
   chip: {
     flexShrink: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
   },
   chipTxt: {
     fontSize: 11,
+    lineHeight: 14,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.1,
@@ -344,42 +368,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.42)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(168, 85, 247, 0.32)',
   },
-  ghostChipTxt: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+  ghostChipTxt: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ADE80' },
   overflowChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.24)',
   },
-  overflowChipTxt: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
+  overflowChipTxt: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
   availChip: {
-    flexShrink: 0,
-    maxWidth: '62%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    gap: 6,
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   glassFill: { ...StyleSheet.absoluteFillObject },
   availTxt: {
-    flexShrink: 1,
-    fontSize: 11,
+    fontSize: 10.5,
+    lineHeight: 14,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.92)',
     letterSpacing: 0.1,
   },
   availTxtSoon: { color: '#FFC49B', fontWeight: '600' },
@@ -389,16 +424,19 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    paddingTop: 32,
+    paddingBottom: 24,
+    paddingTop: 28,
   },
   restaurant: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 1.5,
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   title: {
     fontSize: 26,
@@ -406,23 +444,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 30,
     letterSpacing: -0.4,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   description: {
-    marginTop: 6,
+    marginTop: 10,
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.65)',
-    lineHeight: 18,
+    color: 'rgba(255,255,255,0.82)',
+    lineHeight: 21,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   panel: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 18,
+    paddingBottom: 16,
     backgroundColor: '#141820',
   },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
@@ -436,48 +480,73 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     marginTop: 2,
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.8,
+    letterSpacing: -0.9,
   },
   detailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingBottom: 6,
+    gap: 5,
+    height: 38,
+    paddingLeft: 16,
+    paddingRight: 13,
+    borderRadius: 19,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
-  detailsBtnPressed: { opacity: 0.6 },
+  detailsBtnPressed: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    transform: [{ scale: 0.97 }],
+  },
   detailsTxt: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.95)',
   },
   pillRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 14,
+    marginTop: 16,
   },
-  pillTxt: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  /** Pills size to their content so they never stretch across the card. */
+  pillTxt: {
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  pillTxtHot: { color: '#FFE1CE' },
   savePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
+    height: 30,
+    paddingHorizontal: 14,
+    borderRadius: 15,
     backgroundColor: '#15803D',
   },
   spotsPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
+    height: 30,
+    paddingHorizontal: 14,
+    borderRadius: 15,
+    overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  spotsPillHot: { backgroundColor: '#92400E' },
+  spotsPillHot: {
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(251,146,60,0.45)',
+  },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
+    height: 30,
+    paddingHorizontal: 14,
+    borderRadius: 15,
   },
   statusBadgeMatched: { backgroundColor: 'rgba(168, 85, 247, 0.92)' },
   statusBadgeReady: { backgroundColor: 'rgba(34, 197, 94, 0.92)' },
