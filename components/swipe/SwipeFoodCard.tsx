@@ -69,7 +69,7 @@ function SwipeFoodCardInner({ card }: Props) {
         : card.spotsLeft === 1
           ? 'Last spot remaining'
           : urgent
-            ? `Only ${card.spotsLeft} spots remaining`
+            ? `Only ${card.spotsLeft} spots left`
             : `${card.spotsLeft} spots available`;
 
   const chips = useMemo<Chip[]>(() => {
@@ -127,136 +127,128 @@ function SwipeFoodCardInner({ card }: Props) {
 
   return (
     <View style={styles.face}>
-      <Image
-        source={{ uri: card.heroImageUri }}
-        style={styles.hero}
-        contentFit="cover"
-        transition={280}
-      />
-      <LinearGradient
-        colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0.12)', 'transparent']}
-        locations={[0, 0.62, 1]}
-        style={styles.scrimTop}
-        pointerEvents="none"
-      />
-      <LinearGradient
-        colors={[
-          'transparent',
-          'rgba(0,0,0,0.28)',
-          'rgba(0,0,0,0.7)',
-          'rgba(0,0,0,0.9)',
-        ]}
-        locations={[0, 0.3, 0.7, 1]}
-        style={styles.scrimBottom}
-        pointerEvents="none"
-      />
+      <View style={styles.imageArea}>
+        <Image
+          source={{ uri: card.heroImageUri }}
+          style={styles.hero}
+          contentFit="cover"
+          transition={280}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.72)']}
+          style={styles.scrimBottom}
+          pointerEvents="none"
+        />
 
-      <View style={styles.topStack} pointerEvents="none">
-        <View style={styles.chipRow}>
-          {visibleChips.length > 0 ? (
-            visibleChips.map((chip) => (
-              <View
-                key={chip.key}
-                style={[styles.chip, { backgroundColor: chip.color }]}
-              >
-                <Text style={styles.chipTxt} numberOfLines={1}>
-                  {chip.label}
-                </Text>
+        <View style={styles.topRow} pointerEvents="none">
+          <View style={styles.chipRow}>
+            {visibleChips.length > 0 ? (
+              visibleChips.map((chip) => (
+                <View
+                  key={chip.key}
+                  style={[styles.chip, { backgroundColor: chip.color }]}
+                >
+                  <Text style={styles.chipTxt} numberOfLines={1}>
+                    {chip.label}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.ghostChip}>
+                <View style={styles.liveDot} />
+                <Text style={styles.ghostChipTxt}>Admin meal share</Text>
               </View>
-            ))
-          ) : (
-            <View style={styles.ghostChip}>
+            )}
+            {hiddenChipCount > 0 ? (
+              <View style={styles.overflowChip}>
+                <Text
+                  style={styles.overflowChipTxt}
+                >{`+${hiddenChipCount}`}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.availChip}>
+            {Platform.OS === 'ios' ? (
+              <BlurView
+                intensity={18}
+                tint="dark"
+                style={styles.glassFill}
+                pointerEvents="none"
+              />
+            ) : null}
+            {liveNow ? (
               <View style={styles.liveDot} />
-              <Text style={styles.ghostChipTxt}>Admin meal share</Text>
-            </View>
-          )}
-          {hiddenChipCount > 0 ? (
-            <View style={styles.overflowChip}>
-              <Text style={styles.overflowChipTxt}>{`+${hiddenChipCount}`}</Text>
-            </View>
-          ) : null}
+            ) : (
+              <Ionicons
+                name={closingSoon ? 'hourglass-outline' : 'time-outline'}
+                size={11}
+                color={closingSoon ? '#FFC49B' : 'rgba(255,255,255,0.8)'}
+              />
+            )}
+            <Text
+              style={[styles.availTxt, closingSoon && styles.availTxtSoon]}
+              numberOfLines={1}
+            >
+              {availabilityText}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.availChip}>
-          {liveNow ? (
-            <View style={styles.liveDot} />
-          ) : (
-            <Ionicons
-              name={closingSoon ? 'hourglass-outline' : 'time-outline'}
-              size={12}
-              color={closingSoon ? '#FFC49B' : 'rgba(255,255,255,0.78)'}
-            />
-          )}
-          <Text
-            style={[styles.availTxt, closingSoon && styles.availTxtSoon]}
-            numberOfLines={1}
-          >
-            {availabilityText}
+        <View style={styles.titleBlock} pointerEvents="none">
+          <Text style={styles.restaurant} numberOfLines={1}>
+            {card.restaurantName}
           </Text>
+          <Text style={styles.title} numberOfLines={2}>
+            {card.title}
+          </Text>
+          {card.description ? (
+            <Text
+              style={styles.description}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {card.description}
+            </Text>
+          ) : null}
         </View>
       </View>
 
-      <View style={styles.body}>
-        <Text style={styles.restaurant} numberOfLines={1}>
-          {card.restaurantName}
-        </Text>
-        <Text style={styles.title} numberOfLines={2}>
-          {card.title}
-        </Text>
-        {card.description ? (
-          <Text
-            style={styles.description}
-            numberOfLines={2}
-            ellipsizeMode="tail"
-          >
-            {card.description}
-          </Text>
-        ) : null}
-
-        <View style={styles.priceBlock}>
-          <Text style={styles.priceLabel}>You Pay</Text>
-          <View style={styles.priceRow}>
+      <View style={styles.panel}>
+        <View style={styles.priceRow}>
+          <View style={styles.priceBlock}>
+            <Text style={styles.priceLabel}>You pay</Text>
             <Text style={styles.priceValue} numberOfLines={1}>
               {youPay}
             </Text>
-            <Pressable
-              onPress={openPricing}
-              accessibilityRole="button"
-              accessibilityLabel="View pricing details"
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.glassBtn,
-                pressed && styles.glassBtnPressed,
-              ]}
-            >
-              {Platform.OS === 'ios' ? (
-                <BlurView
-                  intensity={18}
-                  tint="dark"
-                  style={styles.glassFill}
-                  pointerEvents="none"
-                />
-              ) : null}
-              <Text style={styles.glassBtnTxt}>View pricing details</Text>
-              <Ionicons name="chevron-forward" size={12} color="#F2F3F6" />
-            </Pressable>
           </View>
-          {saving > 0 ? (
-            <LinearGradient
-              colors={['rgba(52,211,153,0.30)', 'rgba(34,197,94,0.14)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.savePill}
-            >
-              <Ionicons name="checkmark-circle" size={13} color="#7DFFB8" />
-              <Text style={styles.savePillTxt} numberOfLines={1}>
-                {`Save ${formatShareCurrency(saving)} vs Full Order`}
-              </Text>
-            </LinearGradient>
-          ) : null}
+          <Pressable
+            onPress={openPricing}
+            accessibilityRole="button"
+            accessibilityLabel="View pricing details"
+            hitSlop={10}
+            style={({ pressed }) => [
+              styles.detailsBtn,
+              pressed && styles.detailsBtnPressed,
+            ]}
+          >
+            <Text style={styles.detailsTxt}>View pricing details</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={13}
+              color="rgba(255,255,255,0.5)"
+            />
+          </Pressable>
         </View>
 
-        <View style={styles.footerRow}>
+        <View style={styles.pillRow}>
+          {saving > 0 ? (
+            <View style={styles.savePill}>
+              <Text style={styles.pillTxt} numberOfLines={1}>
+                {`✓ Save ${formatShareCurrency(saving)} vs full order`}
+              </Text>
+            </View>
+          ) : null}
           {joinLocked ? (
             <View
               style={[
@@ -266,24 +258,17 @@ function SwipeFoodCardInner({ card }: Props) {
                   : styles.statusBadgeMatched,
               ]}
             >
-              <Text style={styles.statusBadgeTxt}>{statusLabel}</Text>
+              <Text style={styles.pillTxt} numberOfLines={1}>
+                {statusLabel}
+              </Text>
             </View>
-          ) : null}
-          <View style={[styles.urgencyChip, urgent && styles.urgencyChipHot]}>
-            {waiting ? (
-              <Ionicons name="checkmark-circle" size={13} color="#4ADE80" />
-            ) : urgent ? (
-              <Ionicons name="flame" size={13} color="#FF8A5C" />
-            ) : (
-              <Ionicons name="people-outline" size={13} color="#C9CFDB" />
-            )}
-            <Text
-              style={[styles.spots, urgent && styles.spotsUrgent]}
-              numberOfLines={1}
-            >
-              {spotsLabel}
-            </Text>
-          </View>
+          ) : (
+            <View style={[styles.spotsPill, urgent && styles.spotsPillHot]}>
+              <Text style={styles.pillTxt} numberOfLines={1}>
+                {`${waiting ? '✓' : urgent ? '🔥' : '👥'} ${spotsLabel}`}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -303,36 +288,37 @@ export const SwipeFoodCard = memo(SwipeFoodCardInner);
 const styles = StyleSheet.create({
   face: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#141820',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
+  imageArea: { flex: 1, overflow: 'hidden' },
   hero: { ...StyleSheet.absoluteFillObject },
-  scrimTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: '20%',
-  },
   scrimBottom: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '54%',
+    height: '50%',
   },
-  topStack: {
+  topRow: {
     position: 'absolute',
     top: 16,
-    left: 24,
-    right: 24,
+    left: 16,
+    right: 16,
     zIndex: 3,
+    flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: 8,
   },
   chipRow: {
-    alignSelf: 'stretch',
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'nowrap',
@@ -376,155 +362,123 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.24)',
   },
   overflowChipTxt: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
-  body: {
+  availChip: {
+    flexShrink: 0,
+    maxWidth: '62%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  glassFill: { ...StyleSheet.absoluteFillObject },
+  availTxt: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.9)',
+    letterSpacing: 0.1,
+  },
+  availTxtSoon: { color: '#FFC49B', fontWeight: '600' },
+  titleBlock: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    paddingTop: 40,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    paddingTop: 32,
   },
   restaurant: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
-    letterSpacing: 1.4,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontSize: 26,
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.7,
-    lineHeight: 36,
+    lineHeight: 30,
+    letterSpacing: -0.4,
   },
   description: {
-    marginTop: 12,
+    marginTop: 6,
     fontSize: 13,
     fontWeight: '500',
-    color: '#DDE1E8',
-    opacity: 0.7,
-    lineHeight: 19,
+    color: 'rgba(255,255,255,0.65)',
+    lineHeight: 18,
   },
-  availChip: {
-    maxWidth: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(8,10,16,0.3)',
-  },
-  availTxt: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    opacity: 0.82,
-    letterSpacing: 0.1,
-  },
-  availTxtSoon: { color: '#FFC49B', opacity: 1, fontWeight: '600' },
-  priceBlock: { marginTop: 24 },
-  priceLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9AA1AF',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+  panel: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 18,
+    backgroundColor: '#141820',
   },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginTop: 4,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  priceBlock: { flexShrink: 1 },
+  priceLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   priceValue: {
-    flexShrink: 1,
-    fontSize: 30,
-    fontWeight: '900',
+    marginTop: 2,
+    fontSize: 32,
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.6,
+    letterSpacing: -0.8,
   },
-  savePill: {
-    alignSelf: 'flex-start',
+  detailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 16,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(125,255,184,0.3)',
+    gap: 2,
+    paddingBottom: 6,
   },
-  savePillTxt: { fontSize: 12.5, fontWeight: '800', color: '#7DFFB8' },
-  glassBtn: {
+  detailsBtnPressed: { opacity: 0.6 },
+  detailsTxt: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
+  },
+  pillRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  glassBtnPressed: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    transform: [{ scale: 0.97 }],
-  },
-  glassFill: { ...StyleSheet.absoluteFillObject },
-  glassBtnTxt: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.92,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 24,
+    marginTop: 14,
   },
-  urgencyChip: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
+  pillTxt: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  savePill: {
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(12,14,20,0.4)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: '#15803D',
   },
-  urgencyChipHot: {
-    backgroundColor: 'rgba(255,138,92,0.15)',
-    borderColor: 'rgba(255,138,92,0.36)',
+  spotsPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  spots: {
-    flexShrink: 1,
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#C9CFDB',
-  },
-  spotsUrgent: { color: '#FFD9C4', fontWeight: '800' },
+  spotsPillHot: { backgroundColor: '#92400E' },
   statusBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 999,
   },
   statusBadgeMatched: { backgroundColor: 'rgba(168, 85, 247, 0.92)' },
   statusBadgeReady: { backgroundColor: 'rgba(34, 197, 94, 0.92)' },
-  statusBadgeTxt: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
-  },
 });
