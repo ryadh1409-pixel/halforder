@@ -100,22 +100,29 @@ export const PROMOTION_BADGE_COLORS: Record<
   limited_time: '#EF4444',
 };
 
+/** Keys are compared lowercased, so camelCase legacy values land here too. */
 const BADGE_ALIASES: Record<string, PromotionBadgeValue> = {
   none: 'none',
   '': 'none',
   most_ordered: 'most_ordered',
   'most ordered': 'most_ordered',
+  mostordered: 'most_ordered',
   great_price: 'great_price',
   'great price': 'great_price',
+  greatprice: 'great_price',
   free_delivery: 'free_delivery',
   'free delivery': 'free_delivery',
+  freedelivery: 'free_delivery',
   free_service_fee: 'free_service_fee',
   'free service fee': 'free_service_fee',
+  freeservicefee: 'free_service_fee',
   staff_pick: 'staff_pick',
   'staff pick': 'staff_pick',
+  staffpick: 'staff_pick',
   new: 'new',
   limited_time: 'limited_time',
   'limited time': 'limited_time',
+  limitedtime: 'limited_time',
 };
 
 export function parsePromotionBadge(raw: unknown): PromotionBadgeValue {

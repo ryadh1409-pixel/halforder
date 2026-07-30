@@ -14,7 +14,6 @@ import {
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { adminLog } from '@/lib/admin/adminDebug';
-import { parsePromotionBadge } from '@/lib/promotionBadge';
 import {
   adminFoodShareAvailabilityStatus,
   availabilityDateInput,
@@ -74,7 +73,7 @@ function emptyDraft(): FoodSlotDraft {
     availableUntilTime: '',
     aiDescription: '',
     restaurantName: 'HalfOrder',
-    promotionBadge: 'none',
+    promotionBadges: [],
     fulfillmentMode: 'delivery',
   };
 }
@@ -163,6 +162,7 @@ export default function AdminFoodCardDetailScreen() {
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
       promotionBadge: detail.promotionBadge,
+      promotionBadges: detail.promotionBadges,
       fulfillmentMode: detail.fulfillmentMode,
     };
   }, [detail]);
@@ -221,7 +221,7 @@ export default function AdminFoodCardDetailScreen() {
       availableUntilTime: availabilityTimeInput(detail.availableUntilMs),
       aiDescription: detail.description === '—' ? '' : detail.description,
       restaurantName: detail.restaurantName,
-      promotionBadge: detail.promotionBadge,
+      promotionBadges: detail.promotionBadges,
       fulfillmentMode: detail.fulfillmentMode,
     });
     setEditOpen(true);
@@ -328,7 +328,7 @@ export default function AdminFoodCardDetailScreen() {
         availableUntilMs,
         aiDescription: draft.aiDescription,
         restaurantName: draft.restaurantName,
-        promotionBadge: parsePromotionBadge(draft.promotionBadge),
+        promotionBadges: draft.promotionBadges,
         fulfillmentMode: draft.fulfillmentMode,
       });
       console.log('[SAVE] completed successfully');
@@ -609,7 +609,7 @@ export default function AdminFoodCardDetailScreen() {
           <Row label="Restaurant name" value={detail.restaurantName} />
           <Row label="Original price" value={money(detail.originalPrice)} />
           <Row label="Sharing price" value={money(detail.sharedPrice)} />
-          <Row label="Promotion badge" value={detail.promotionBadgeLabel} />
+          <Row label="Promotion badges" value={detail.promotionBadgesLabel} />
           <Row label="Pickup or delivery" value={detail.pickupOrDeliveryLabel} />
           <Row label="Delivery fee" value={detail.deliveryFeeLabel} />
           <Row label="Date" value={detail.dateLabel} />

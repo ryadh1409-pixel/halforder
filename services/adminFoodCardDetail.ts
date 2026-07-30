@@ -52,9 +52,13 @@ export type AdminFoodCardDetail = {
   description: string;
   originalPrice: number;
   sharedPrice: number;
-  /** Admin promotion badge stored on the food card. */
+  /** Admin promotion badge stored on the food card (primary / legacy). */
   promotionBadge: PromotionBadgeValue;
   promotionBadgeLabel: string;
+  /** Every selected badge, in stored order. */
+  promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
+  /** All selected badge labels joined for display. */
+  promotionBadgesLabel: string;
   fulfillmentMode: 'delivery' | 'pickup';
   portionsLabel: string;
   pickupAddress: string;
@@ -328,6 +332,12 @@ function buildDetail(input: {
     sharedPrice: share.sharedPrice,
     promotionBadge: share.promotionBadge,
     promotionBadgeLabel: promotionBadgeLabel(share.promotionBadge) ?? 'None',
+    promotionBadges: share.promotionBadges,
+    promotionBadgesLabel:
+      share.promotionBadges
+        .map((badge) => promotionBadgeLabel(badge))
+        .filter((label): label is string => Boolean(label))
+        .join(' · ') || 'None',
     fulfillmentMode: share.fulfillmentMode,
     portionsLabel: portions != null ? String(portions) : '—',
     pickupAddress: pickupAddress || '—',

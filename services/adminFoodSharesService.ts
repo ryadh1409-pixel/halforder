@@ -159,6 +159,8 @@ export function adminFoodShareToSwipeCard(
         ? 'MATCHED'
         : 'WAITING_FOR_PARTNER',
     fulfillmentMode: share.fulfillmentMode,
+    availableFromMs: share.availableFromMs,
+    availableUntilMs: share.availableUntilMs,
     promotionBadge: showSwipePromo ? share.promotionBadge : 'none',
     promotionBadges: showSwipePromo ? share.promotionBadges : [],
   };

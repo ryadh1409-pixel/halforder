@@ -2,7 +2,10 @@ import {
   ADMIN_FOOD_CARD_SLOT_IDS,
   type AdminFoodCardSlotId,
 } from '../constants/adminFoodCards';
-import type { PromotionBadgeValue } from '@/lib/promotionBadge';
+import {
+  normalizePromotionBadges,
+  type PromotionBadgeValue,
+} from '@/lib/promotionBadge';
 import { mapAdminFoodShareDoc } from './adminFoodSharesService';
 import { auth, db } from './firebase';
 import {
@@ -33,7 +36,9 @@ export type AdminFoodCardSlot = {
   availableUntilMs: number | null;
   aiDescription: string;
   restaurantName: string;
+  /** Primary / legacy badge (first entry of `promotionBadges`). */
   promotionBadge: PromotionBadgeValue;
+  promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
   fulfillmentMode: 'delivery' | 'pickup';
 };
 
@@ -72,6 +77,7 @@ function slotFromShare(
     aiDescription: share.description,
     restaurantName: share.restaurantName,
     promotionBadge: share.promotionBadge,
+    promotionBadges: share.promotionBadges,
     fulfillmentMode: share.fulfillmentMode,
   };
 }
@@ -116,7 +122,9 @@ export async function saveAdminFoodCardSlot(
     availableUntilMs?: number | null;
     aiDescription?: string;
     restaurantName?: string;
+    /** Legacy single badge — used when `promotionBadges` is omitted. */
     promotionBadge?: PromotionBadgeValue;
+    promotionBadges?: readonly (PromotionBadgeValue | string)[];
     fulfillmentMode?: 'delivery' | 'pickup';
   },
 ): Promise<void> {
@@ -165,10 +173,10 @@ export async function saveAdminFoodCardSlot(
   console.log('[SAVE] document id', slotDocId);
   console.log('[SAVE] document exists', existing.exists());
 
-  const promotionBadge: PromotionBadgeValue =
-    input.promotionBadge && input.promotionBadge !== 'none'
-      ? input.promotionBadge
-      : 'none';
+  const promotionBadges = normalizePromotionBadges(
+    input.promotionBadges ?? [input.promotionBadge],
+  );
+  const promotionBadge: PromotionBadgeValue = promotionBadges[0] ?? 'none';
 
   const fulfillmentMode =
     input.fulfillmentMode === 'pickup' ? 'pickup' : 'delivery';
@@ -198,7 +206,7 @@ export async function saveAdminFoodCardSlot(
     pickupOnly: isPickup,
     deliveryEnabled: !isPickup,
     promotionBadge,
-    promotionBadges: promotionBadge === 'none' ? [] : [promotionBadge],
+    promotionBadges,
     updatedAt: serverTimestamp(),
     ...(venueLocation
       ? {

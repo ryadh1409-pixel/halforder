@@ -35,6 +35,9 @@ export type SwipeFoodCard = {
   lifecycle: FoodShareMatchLifecycle;
   /** Defaults to delivery when omitted. */
   fulfillmentMode: FoodShareFulfillmentMode;
+  /** Admin availability window, display only (visibility filtering is upstream). */
+  availableFromMs?: number | null;
+  availableUntilMs?: number | null;
   promotionBadge?: PromotionBadgeValue;
   promotionBadges?: Exclude<PromotionBadgeValue, 'none'>[];
   /** Live admin Referral Reward badge copy (Swipe Delivery only). */
