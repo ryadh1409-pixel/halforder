@@ -1,7 +1,9 @@
+import AppLogo from '@/components/AppLogo';
 import {
   SettingsRow,
   SettingsSection,
 } from '@/components/settings/SettingsList';
+import { useCountUpValue } from '@/hooks/useCountUpValue';
 import { useAuth } from '@/services/AuthContext';
 import { getCashbackWallet } from '@/services/cashbackRewards';
 import { parseHalfOrderBalance } from '@/services/halfOrderBalance';
@@ -29,10 +31,20 @@ import type {
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { goBackFromProfileScreen } from '@/lib/profileBack';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Modal,
   Platform,
   RefreshControl,
@@ -109,6 +121,134 @@ function statusTone(status: CashbackTransactionStatus): string {
       return PAL.textMuted;
   }
 }
+
+/**
+ * Premium HalfOrder balance card — presentational only.
+ * Memoized so the count-up frames never re-render the wallet lists below.
+ */
+const HalfOrderBalanceCard = memo(function HalfOrderBalanceCard({
+  balance,
+  cashAvailableCad,
+  cashPendingCad,
+}: {
+  balance: number;
+  cashAvailableCad: number;
+  cashPendingCad: number;
+}) {
+  const displayBalance = useCountUpValue(balance, { durationMs: 900 });
+  const entrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [entrance]);
+
+  const translateY = entrance.interpolate({
+    inputRange: [0, 1],
+    outputRange: [16, 0],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.cardShell,
+        { opacity: entrance, transform: [{ translateY }] },
+      ]}
+      accessibilityRole="summary"
+      accessibilityLabel={`HalfOrder balance ${balance.toFixed(
+        2,
+      )} dollars. Managed by HalfOrder, admin credits only. HalfOrder Cash current balance ${formatCad(
+        cashAvailableCad,
+      )}, pending cashback ${formatCad(cashPendingCad)}.`}
+    >
+      <LinearGradient
+        colors={['#3B1873', '#25123F', '#140B23']}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.cardSurface}
+      >
+        {/* Decorative lighting, reflections and engraved arcs */}
+        <View style={styles.cardGlowTop} pointerEvents="none" />
+        <View style={styles.cardGlowBottom} pointerEvents="none" />
+        <View style={styles.cardArcOuter} pointerEvents="none" />
+        <View style={styles.cardArcInner} pointerEvents="none" />
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0.16)',
+            'rgba(255,255,255,0.04)',
+            'transparent',
+          ]}
+          locations={[0, 0.42, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.95, y: 0.8 }}
+          style={styles.cardSheen}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={[
+            'transparent',
+            'rgba(255,255,255,0.34)',
+            'transparent',
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.cardTopEdge}
+          pointerEvents="none"
+        />
+        <View style={styles.cardWatermark} pointerEvents="none">
+          <AppLogo size={168} />
+        </View>
+
+        <Text style={styles.cardEyebrow} maxFontSizeMultiplier={1.2}>
+          HALFORDER BALANCE
+        </Text>
+
+        <Text style={styles.cardBalance} maxFontSizeMultiplier={1.15}>
+          {`$${displayBalance.toFixed(2)}`}
+        </Text>
+
+        <Text style={styles.cardFootnote} maxFontSizeMultiplier={1.25}>
+          Managed by HalfOrder · Admin credits only
+        </Text>
+
+        <View style={styles.cardDivider} pointerEvents="none" />
+
+        <Text style={styles.cardCashTitle} maxFontSizeMultiplier={1.2}>
+          HalfOrder Cash
+        </Text>
+        <Text style={styles.cardCashSubtitle} maxFontSizeMultiplier={1.25}>
+          Rewards you can spend on future orders
+        </Text>
+
+        <View style={styles.cardCashRow}>
+          <Text style={styles.cardCashLabel} maxFontSizeMultiplier={1.25}>
+            Current Balance
+          </Text>
+          <Text style={styles.cardCashValue} maxFontSizeMultiplier={1.2}>
+            {formatCad(cashAvailableCad)}
+          </Text>
+        </View>
+
+        <View style={styles.cardCashRow}>
+          <Text style={styles.cardCashLabel} maxFontSizeMultiplier={1.25}>
+            Pending Cashback
+          </Text>
+          <Text
+            style={[styles.cardCashValue, styles.cardCashValuePending]}
+            maxFontSizeMultiplier={1.2}
+          >
+            {formatCad(cashPendingCad)}
+          </Text>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+});
 
 export default function WalletScreen() {
   const router = useRouter();
@@ -280,47 +420,13 @@ export default function WalletScreen() {
           />
         ) : (
           <>
-            <View style={styles.balanceCard}>
-              <Text style={styles.balanceLabel}>HalfOrder Balance</Text>
-              <Text style={styles.balanceValue}>${balance.toFixed(2)}</Text>
-              <Text style={styles.balanceHint}>
-                Managed by HalfOrder · Admin credits only
-              </Text>
-            </View>
+            <HalfOrderBalanceCard
+              balance={balance}
+              cashAvailableCad={cashback?.availableCad ?? 0}
+              cashPendingCad={cashback?.pendingCad ?? 0}
+            />
 
-            <View style={styles.cashCard}>
-              <View style={styles.cashHeader}>
-                <View style={styles.cashIcon}>
-                  <MaterialIcons
-                    name="account-balance-wallet"
-                    size={22}
-                    color={PAL.primary}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cashTitle}>HalfOrder Cash</Text>
-                  <Text style={styles.cashSubtitle}>
-                    Rewards you can spend on future orders
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.cashMetrics}>
-                <View style={styles.cashMetric}>
-                  <Text style={styles.cashMetricLabel}>Current Balance</Text>
-                  <Text style={styles.cashMetricValue}>
-                    {formatCad(cashback?.availableCad ?? 0)}
-                  </Text>
-                </View>
-                <View style={styles.cashMetricDivider} />
-                <View style={styles.cashMetric}>
-                  <Text style={styles.cashMetricLabel}>Pending Cashback</Text>
-                  <Text style={styles.cashMetricValuePending}>
-                    {formatCad(cashback?.pendingCad ?? 0)}
-                  </Text>
-                </View>
-              </View>
-
+            <View style={styles.historySection}>
               {showCashbackDetails ? (
                 <>
                   <Text style={styles.cashHistoryTitle}>Cashback History</Text>
@@ -521,109 +627,149 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   scroll: { padding: 20, paddingBottom: 48 },
-  balanceCard: {
-    backgroundColor: PAL.surface,
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: PAL.border,
+  cardShell: {
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(196,181,253,0.30)',
+    overflow: 'hidden',
+    marginBottom: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 16 },
+        shadowOpacity: 0.34,
+        shadowRadius: 26,
+      },
+      android: { elevation: 12 },
+      default: {},
+    }),
   },
-  balanceLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: PAL.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  balanceValue: {
-    marginTop: 10,
-    fontSize: 40,
-    fontWeight: '800',
-    color: PAL.text,
-    letterSpacing: -1,
-  },
-  balanceHint: {
-    marginTop: 10,
-    fontSize: 13,
-    color: PAL.textMuted,
-    textAlign: 'center',
-  },
-  cashCard: {
-    backgroundColor: PAL.surface,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: PAL.border,
-  },
-  cashHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  cashIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: PAL.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cashTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: PAL.text,
-    letterSpacing: -0.2,
-  },
-  cashSubtitle: {
-    marginTop: 3,
-    fontSize: 13,
-    fontWeight: '500',
-    color: PAL.textMuted,
-  },
-  cashMetrics: {
-    flexDirection: 'row',
-    backgroundColor: PAL.surfaceMuted,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PAL.border,
+  cardSurface: {
+    minHeight: 202,
+    paddingHorizontal: 22,
+    paddingVertical: 22,
     overflow: 'hidden',
   },
-  cashMetric: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
+  cardGlowTop: {
+    position: 'absolute',
+    top: -132,
+    right: -84,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(168,85,247,0.22)',
   },
-  cashMetricDivider: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: PAL.border,
+  cardGlowBottom: {
+    position: 'absolute',
+    bottom: -150,
+    left: -96,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(196,181,253,0.10)',
   },
-  cashMetricLabel: {
+  cardArcOuter: {
+    position: 'absolute',
+    right: -118,
+    bottom: -128,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  cardArcInner: {
+    position: 'absolute',
+    right: -74,
+    bottom: -84,
+    width: 212,
+    height: 212,
+    borderRadius: 106,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  cardSheen: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cardTopEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+  },
+  cardWatermark: {
+    position: 'absolute',
+    top: -34,
+    right: -26,
+    opacity: 0.07,
+  },
+  cardEyebrow: {
     fontSize: 11,
     fontWeight: '700',
-    color: PAL.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: 'rgba(255,255,255,0.62)',
+    letterSpacing: 1.8,
   },
-  cashMetricValue: {
-    marginTop: 8,
-    fontSize: 22,
+  cardBalance: {
+    marginTop: 12,
+    fontSize: 46,
     fontWeight: '800',
-    color: PAL.text,
-    letterSpacing: -0.4,
+    color: '#FFFFFF',
+    letterSpacing: -1.6,
   },
-  cashMetricValuePending: {
+  cardFootnote: {
     marginTop: 8,
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#F59E0B',
-    letterSpacing: -0.4,
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.52)',
+    letterSpacing: 0.1,
+  },
+  cardDivider: {
+    marginTop: 20,
+    marginBottom: 18,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  cardCashTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  cardCashSubtitle: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.52)',
+    lineHeight: 16,
+  },
+  cardCashRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 14,
+  },
+  cardCashLabel: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.66)',
+  },
+  cardCashValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  cardCashValuePending: {
+    color: '#E9BE86',
+  },
+  historySection: {
+    marginBottom: 24,
   },
   cashHistoryTitle: {
-    marginTop: 18,
     marginBottom: 4,
     fontSize: 13,
     fontWeight: '800',
@@ -651,15 +797,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cashHiddenHint: {
-    marginTop: 14,
     fontSize: 13,
     fontWeight: '500',
     color: PAL.textMuted,
     lineHeight: 18,
   },
   listSection: {
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 2,
+    marginBottom: 24,
   },
   methodTitle: {
     fontSize: 16,
