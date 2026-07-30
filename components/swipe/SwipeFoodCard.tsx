@@ -13,10 +13,11 @@ import {
 } from '@/lib/swipeMarketplaceStatus';
 import type { SwipeFoodCard as SwipeFoodCardType } from '@/types/swipe';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   card: SwipeFoodCardType;
@@ -56,6 +57,7 @@ function SwipeFoodCardInner({ card }: Props) {
   const statusLabel = SWIPE_MARKETPLACE_STATUS_LABEL[status];
   const waitingCopy =
     status === 'waiting_for_member' ? '✔ 1 of 2 members joined' : null;
+  const urgent = !joinLocked && card.spotsLeft > 0 && card.spotsLeft <= 3;
   const spotsLabel = joinLocked
     ? status === 'ready'
       ? 'Both members joined successfully'
@@ -64,9 +66,9 @@ function SwipeFoodCardInner({ card }: Props) {
       ? 'Waiting for 1 more member'
       : card.spotsLeft <= 0
         ? 'Full'
-        : card.spotsLeft === 1
-          ? 'Last available spot'
-          : `${card.spotsLeft} spots left`;
+        : urgent
+          ? `Only ${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} remaining`
+          : `${card.spotsLeft} spots available`;
 
   const chips = useMemo<Chip[]>(() => {
     const promoValues =
@@ -120,18 +122,18 @@ function SwipeFoodCardInner({ card }: Props) {
         transition={280}
       />
       <LinearGradient
-        colors={['rgba(0,0,0,0.45)', 'transparent']}
+        colors={['rgba(0,0,0,0.38)', 'transparent']}
         style={styles.scrimTop}
         pointerEvents="none"
       />
       <LinearGradient
         colors={[
           'transparent',
-          'rgba(0,0,0,0.38)',
-          'rgba(0,0,0,0.82)',
-          'rgba(0,0,0,0.96)',
+          'rgba(0,0,0,0.3)',
+          'rgba(0,0,0,0.78)',
+          'rgba(0,0,0,0.95)',
         ]}
-        locations={[0, 0.34, 0.72, 1]}
+        locations={[0, 0.4, 0.76, 1]}
         style={styles.scrimBottom}
         pointerEvents="none"
       />
@@ -198,6 +200,7 @@ function SwipeFoodCardInner({ card }: Props) {
           </View>
           {saving > 0 ? (
             <View style={styles.savePill}>
+              <Ionicons name="checkmark" size={12} color="#7DFFB8" />
               <Text style={styles.savePillTxt} numberOfLines={1}>
                 {`Save ${formatShareCurrency(saving)}`}
               </Text>
@@ -211,12 +214,20 @@ function SwipeFoodCardInner({ card }: Props) {
           accessibilityLabel="View pricing details"
           hitSlop={6}
           style={({ pressed }) => [
-            styles.detailsBtn,
-            pressed && styles.detailsBtnPressed,
+            styles.glassBtn,
+            pressed && styles.glassBtnPressed,
           ]}
         >
-          <Text style={styles.detailsBtnTxt}>View pricing details</Text>
-          <Ionicons name="chevron-forward" size={13} color="#E6E8EE" />
+          {Platform.OS === 'ios' ? (
+            <BlurView
+              intensity={28}
+              tint="dark"
+              style={styles.glassFill}
+              pointerEvents="none"
+            />
+          ) : null}
+          <Text style={styles.glassBtnTxt}>View pricing details</Text>
+          <Ionicons name="chevron-forward" size={13} color="#F2F3F6" />
         </Pressable>
 
         <View style={styles.statusRow}>
@@ -235,10 +246,15 @@ function SwipeFoodCardInner({ card }: Props) {
             <Text style={styles.waitingAccent} numberOfLines={1}>
               {waitingCopy}
             </Text>
+          ) : urgent ? (
+            <Ionicons name="flame" size={14} color="#FF8A5C" />
           ) : (
             <Ionicons name="people-outline" size={14} color="#C9CFDB" />
           )}
-          <Text style={styles.spots} numberOfLines={1}>
+          <Text
+            style={[styles.spots, urgent && styles.spotsUrgent]}
+            numberOfLines={1}
+          >
             {spotsLabel}
           </Text>
         </View>
@@ -270,14 +286,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    height: '24%',
+    height: '18%',
   },
   scrimBottom: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '62%',
+    height: '56%',
   },
   chipRow: {
     position: 'absolute',
@@ -394,38 +410,50 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   savePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 5,
     paddingHorizontal: 11,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(34,197,94,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(125,255,184,0.35)',
   },
   savePillTxt: { fontSize: 12, fontWeight: '800', color: '#7DFFB8' },
-  detailsBtn: {
+  glassBtn: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
+    gap: 5,
+    marginTop: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  detailsBtnPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  detailsBtnTxt: { fontSize: 13, fontWeight: '700', color: '#E6E8EE' },
+  glassBtnPressed: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    transform: [{ scale: 0.97 }],
+  },
+  glassFill: { ...StyleSheet.absoluteFillObject },
+  glassBtnTxt: { fontSize: 13, fontWeight: '700', color: '#F2F3F6' },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 22,
+    marginTop: 24,
     paddingTop: 18,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.14)',
+    borderTopColor: 'rgba(255,255,255,0.12)',
   },
   spots: {
     flexShrink: 1,
@@ -433,6 +461,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#C9CFDB',
   },
+  spotsUrgent: { color: '#FFFFFF', fontWeight: '700' },
   waitingAccent: { fontSize: 13, fontWeight: '700', color: '#4ADE80' },
   statusBadge: {
     paddingHorizontal: 10,
