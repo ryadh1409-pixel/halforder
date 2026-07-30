@@ -5,6 +5,11 @@ export type RestaurantDeliverySettings = {
   /** Legacy alias; used when maxDeliveryDistanceKm is unset. */
   deliveryRadiusKm: number;
   supportsLongDistance: boolean;
+  /**
+   * Admin-configured delivery fee (`restaurants/{id}.deliveryFee`). When set it is
+   * the exact fee charged, with no distance surcharge.
+   */
+  configuredDeliveryFee: number | null;
   baseDeliveryFee: number | null;
   maxDeliveryDistanceKm: number;
 };

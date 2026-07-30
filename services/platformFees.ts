@@ -14,8 +14,13 @@ export type PlatformFeeSettings = {
 
 const DOC_PATH = ['platformSettings', 'fees'] as const;
 
+/**
+ * Accepts a fraction (0.13) or a percentage (13) — the admin form collects percent.
+ * Values above 1 are always percentages; a tax rate over 100% is not a real rate.
+ */
 export function parseTaxRate(raw: unknown, fallback = DEFAULT_TAX_RATE): number {
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 && raw <= 1) {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+    if (raw > 1) return Math.min(1, raw / 100);
     return raw;
   }
   if (typeof raw === 'string' && raw.trim()) {

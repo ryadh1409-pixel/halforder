@@ -1,7 +1,9 @@
 import {
   assertDeliveryEligibleForOrder,
-  deliveryFeeForTier,
+  resolveOrderDeliveryFee,
 } from '@/lib/delivery/deliveryEligibility';
+import { computeOrderPricing, DEFAULT_TAX_RATE } from '@/lib/orderPricing';
+import { resolveRestaurantTaxRate } from '@/services/platformFees';
 import {
   isDeliveryStageRegression,
   resolveDeliveryStageRank,
@@ -873,18 +875,14 @@ export async function createOrder(
     deliveryEligible = true;
     maxDeliveryDistanceKmAtCheckout = zoneCheck.settings.maxDeliveryDistanceKm;
     if (deliveryType === 'delivery') {
-      const feeEst = deliveryFeeForTier(
-        zoneCheck.tier,
-        zoneCheck.distanceKm,
-        zoneCheck.settings,
-      );
-      // Prefer checkout-provided restaurant-configured fee when present.
-      orderDeliveryFee =
-        typeof payload.deliveryFee === 'number' &&
-        Number.isFinite(payload.deliveryFee) &&
-        payload.deliveryFee >= 0
-          ? payload.deliveryFee
-          : (feeEst.amount ?? 0);
+      orderDeliveryFee = resolveOrderDeliveryFee({
+        deliveryType,
+        restaurantData: restaurantRaw,
+        settings: zoneCheck.settings,
+        tier: zoneCheck.tier,
+        distanceKm: zoneCheck.distanceKm,
+        checkoutDeliveryFee: payload.deliveryFee ?? null,
+      });
     }
   } catch (zoneErr) {
     if (deliveryType === 'delivery') {
@@ -904,14 +902,22 @@ export async function createOrder(
     typeof payload.promoDiscount === 'number' && Number.isFinite(payload.promoDiscount)
       ? payload.promoDiscount
       : 0;
-  const taxRate =
+  const taxRate = resolveRestaurantTaxRate(
+    restaurantRaw,
     typeof payload.taxRate === 'number' && Number.isFinite(payload.taxRate)
       ? payload.taxRate
-      : 0.13;
-  const tax =
-    typeof payload.tax === 'number' && Number.isFinite(payload.tax)
-      ? payload.tax
-      : 0;
+      : DEFAULT_TAX_RATE,
+  );
+  // Receipt totals are derived from the stored fees so the document, Stripe charge and
+  // receipt can never disagree.
+  const pricing = computeOrderPricing({
+    foodSubtotal,
+    deliveryFee: orderDeliveryFee,
+    serviceFee,
+    promoDiscount,
+    taxRate,
+  });
+  const tax = pricing.hst;
   const receiptNumber = `HO-${Date.now().toString(36).toUpperCase().slice(-8)}`;
 
   const orderPayload = {
@@ -934,8 +940,8 @@ export async function createOrder(
     deliveryEligible,
     deliveryTier,
     maxDeliveryDistanceKmAtCheckout,
-    totalPrice: payload.totalPrice,
-    total: payload.totalPrice,
+    totalPrice: pricing.totalPaid,
+    total: pricing.totalPaid,
     deliveryType,
     estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',

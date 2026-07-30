@@ -1,10 +1,12 @@
 import { logDistanceCoordInputs } from '@/lib/location/extractCoords';
 import { haversineDistanceKm } from '@/lib/haversine';
+import { restaurantPromoWaivesDeliveryFee } from '@/lib/promotionBadge';
 import {
   calculateETA,
   distanceKmBetween,
   formatCad,
   formatDistanceKm,
+  pickFirestoreDeliveryFee,
   type DeliveryMode,
   type FeeEstimate,
 } from '@/lib/restaurantStoreMetrics';
@@ -62,6 +64,7 @@ export function parseRestaurantDeliverySettings(
   return {
     deliveryRadiusKm,
     supportsLongDistance: raw.supportsLongDistance === true,
+    configuredDeliveryFee: pickFirestoreDeliveryFee(raw),
     baseDeliveryFee,
     maxDeliveryDistanceKm,
   };
@@ -120,7 +123,8 @@ function tierFromDistance(
 }
 
 /**
- * Tier-based delivery fee (CAD). Uses restaurant base fee when set, otherwise distance curve.
+ * Delivery fee (CAD). The admin-configured restaurant fee wins outright; the base fee
+ * and the distance curve are fallbacks for restaurants with no configured fee.
  */
 export function deliveryFeeForTier(
   tier: DeliveryDistanceTier,
@@ -129,6 +133,14 @@ export function deliveryFeeForTier(
 ): FeeEstimate {
   if (tier === 'blocked' || tier === 'unknown') {
     return { amount: null, label: 'Delivery unavailable' };
+  }
+
+  if (settings.configuredDeliveryFee != null) {
+    const amount = roundCad(settings.configuredDeliveryFee);
+    return {
+      amount,
+      label: amount <= 0 ? 'Free delivery' : formatCad(amount),
+    };
   }
 
   if (settings.baseDeliveryFee != null) {
@@ -158,6 +170,37 @@ export function deliveryFeeForTier(
   }
 
   return { amount, label: formatCad(amount) };
+}
+
+/**
+ * Delivery fee to store on an order. The admin-configured restaurant fee wins over the
+ * checkout-supplied amount so a stale payload can never drift from current configuration.
+ * Pickup and a free-delivery promotion still waive the fee entirely.
+ */
+export function resolveOrderDeliveryFee(params: {
+  deliveryType: 'delivery' | 'pickup';
+  restaurantData: Record<string, unknown> | null | undefined;
+  settings: RestaurantDeliverySettings;
+  tier: DeliveryDistanceTier;
+  distanceKm: number | null;
+  /** Fee the customer saw at checkout, when the caller provides one. */
+  checkoutDeliveryFee?: number | null;
+}): number {
+  if (params.deliveryType === 'pickup') return 0;
+  if (restaurantPromoWaivesDeliveryFee(params.restaurantData)) return 0;
+
+  const estimate = deliveryFeeForTier(params.tier, params.distanceKm, params.settings);
+  if (params.settings.configuredDeliveryFee != null) return estimate.amount ?? 0;
+
+  const fromCheckout = params.checkoutDeliveryFee;
+  if (
+    typeof fromCheckout === 'number' &&
+    Number.isFinite(fromCheckout) &&
+    fromCheckout >= 0
+  ) {
+    return roundCad(fromCheckout);
+  }
+  return estimate.amount ?? 0;
 }
 
 function etaForTier(tier: DeliveryDistanceTier, distanceKm: number | null): string {
