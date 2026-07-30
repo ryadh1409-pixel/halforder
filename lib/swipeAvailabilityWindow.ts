@@ -17,6 +17,9 @@ export type SwipeAvailabilityDisplay = {
 };
 
 const MS_PER_DAY = 86_400_000;
+const MS_PER_MINUTE = 60_000;
+/** Below this remaining time a countdown reads better than a clock time. */
+const RELATIVE_END_WINDOW_MS = 3 * 60 * MS_PER_MINUTE;
 
 function formatClock(ms: number): string {
   return new Date(ms).toLocaleTimeString(undefined, {
@@ -42,6 +45,18 @@ function startOfDay(ms: number): number {
 /** Calendar days between two instants (0 = same day, 1 = next day). */
 function calendarDayOffset(targetMs: number, nowMs: number): number {
   return Math.round((startOfDay(targetMs) - startOfDay(nowMs)) / MS_PER_DAY);
+}
+
+/** Rounds down so the countdown never over-promises time. */
+function formatCountdown(remainingMs: number): string | null {
+  if (remainingMs <= 0 || remainingMs > RELATIVE_END_WINDOW_MS) return null;
+  const minutes = Math.floor(remainingMs / MS_PER_MINUTE);
+  if (minutes < 1) return 'Ends in under a minute';
+  if (minutes < 60) {
+    return `Ends in ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return `Ends in ${hours} hour${hours === 1 ? '' : 's'}`;
 }
 
 /**
@@ -72,15 +87,16 @@ export function formatSwipeAvailabilityWindow(
 
   if (until == null) return null;
 
-  // Open now — lead with when it closes.
+  // Open now — a countdown is friendliest once the end is close.
+  const countdown = formatCountdown(until - nowMs);
+  if (countdown) return { title: countdown, detail: null };
+
   const offset = calendarDayOffset(until, nowMs);
   if (offset <= 0) {
-    return from != null
-      ? { title: 'Today', detail: `${formatClock(from)} – ${formatClock(until)}` }
-      : { title: `Available until ${formatClock(until)}`, detail: null };
+    return { title: 'Today', detail: `Until ${formatClock(until)}` };
   }
   if (offset === 1) {
-    return { title: 'Available until tomorrow', detail: formatClock(until) };
+    return { title: 'Ends tomorrow', detail: formatClock(until) };
   }
   return {
     title: 'Available until',

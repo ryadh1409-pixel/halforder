@@ -66,25 +66,32 @@ function SwipePricingDetailsSheetInner({ visible, onClose, card }: Props) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.body}
           >
-            <FoodSharePricingCard
-              pricing={card.pricing}
-              variant="card"
-              showTax={false}
-              showSavings
-              fulfillmentMode={card.fulfillmentMode}
-            />
-
-            <View style={styles.savingsNote}>
-              <Ionicons name="pricetag" size={14} color="#7DFFB8" />
-              <Text style={styles.savingsNoteTxt}>
-                You save {formatShareCurrency(card.pricing.totalSaving)} by
-                splitting this order.
-              </Text>
+            <View style={styles.receipt}>
+              <FoodSharePricingCard
+                pricing={card.pricing}
+                variant="card"
+                showTax={false}
+                showSavings
+                fulfillmentMode={card.fulfillmentMode}
+                style={styles.receiptRows}
+              />
+              <View style={styles.receiptFooter}>
+                <Text style={styles.receiptFooterLabel}>Taxes</Text>
+                <Text style={styles.receiptFooterValue}>
+                  Calculated at checkout
+                </Text>
+              </View>
             </View>
 
-            <Text style={styles.footnote}>
-              Taxes are calculated at checkout.
-            </Text>
+            {card.pricing.totalSaving > 0 ? (
+              <View style={styles.savingsNote}>
+                <Ionicons name="pricetag" size={14} color="#7DFFB8" />
+                <Text style={styles.savingsNoteTxt}>
+                  You save {formatShareCurrency(card.pricing.totalSaving)} by
+                  splitting this order.
+                </Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           <Pressable
@@ -157,11 +164,44 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   body: { paddingBottom: 8 },
+  receipt: {
+    borderRadius: 20,
+    backgroundColor: 'rgba(23,25,35,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  receiptRows: {
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+  },
+  receiptFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.12)',
+  },
+  receiptFooterLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B7BDC9',
+  },
+  receiptFooterValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A91A0',
+  },
   savingsNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 14,
+    marginTop: 16,
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: 14,
@@ -175,12 +215,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#7DFFB8',
     lineHeight: 18,
-  },
-  footnote: {
-    marginTop: 12,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A91A0',
   },
   doneBtn: {
     marginTop: 16,

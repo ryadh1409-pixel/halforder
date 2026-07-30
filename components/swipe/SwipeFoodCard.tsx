@@ -64,7 +64,9 @@ function SwipeFoodCardInner({ card }: Props) {
       ? 'Waiting for 1 more member'
       : card.spotsLeft <= 0
         ? 'Full'
-        : `${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} left`;
+        : card.spotsLeft === 1
+          ? 'Last available spot'
+          : `${card.spotsLeft} spots left`;
 
   const chips = useMemo<Chip[]>(() => {
     const promoValues =
@@ -118,18 +120,18 @@ function SwipeFoodCardInner({ card }: Props) {
         transition={280}
       />
       <LinearGradient
-        colors={['rgba(0,0,0,0.55)', 'transparent']}
+        colors={['rgba(0,0,0,0.45)', 'transparent']}
         style={styles.scrimTop}
         pointerEvents="none"
       />
       <LinearGradient
         colors={[
           'transparent',
-          'rgba(0,0,0,0.45)',
-          'rgba(0,0,0,0.86)',
-          'rgba(0,0,0,0.97)',
+          'rgba(0,0,0,0.38)',
+          'rgba(0,0,0,0.82)',
+          'rgba(0,0,0,0.96)',
         ]}
-        locations={[0, 0.3, 0.68, 1]}
+        locations={[0, 0.34, 0.72, 1]}
         style={styles.scrimBottom}
         pointerEvents="none"
       />
@@ -167,7 +169,11 @@ function SwipeFoodCardInner({ card }: Props) {
           {card.title}
         </Text>
         {card.description ? (
-          <Text style={styles.description} numberOfLines={1}>
+          <Text
+            style={styles.description}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
             {card.description}
           </Text>
         ) : null}
@@ -177,7 +183,7 @@ function SwipeFoodCardInner({ card }: Props) {
             <Ionicons name="time-outline" size={13} color="#C9CFDB" />
             <Text style={styles.availabilityTxt} numberOfLines={1}>
               {availability.detail
-                ? `${availability.title} · ${availability.detail}`
+                ? `${availability.title} • ${availability.detail}`
                 : availability.title}
             </Text>
           </View>
@@ -275,24 +281,28 @@ const styles = StyleSheet.create({
   },
   chipRow: {
     position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
+    top: 18,
+    left: 18,
+    right: 18,
     zIndex: 3,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 7,
   },
   chip: {
     flexShrink: 1,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.24,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   chipTxt: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.1,
   },
@@ -323,106 +333,107 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 22,
-    paddingBottom: 22,
-    paddingTop: 40,
+    paddingHorizontal: 24,
+    paddingBottom: 26,
+    paddingTop: 44,
   },
   restaurant: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
     color: '#B7BDC9',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   title: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: -0.6,
-    lineHeight: 34,
+    letterSpacing: -0.7,
+    lineHeight: 36,
   },
   description: {
-    marginTop: 6,
+    marginTop: 10,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#9AA1AF',
-    lineHeight: 18,
+    lineHeight: 19,
   },
   availability: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 10,
+    marginTop: 16,
   },
   availabilityTxt: {
     flexShrink: 1,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#C9CFDB',
+    letterSpacing: 0.1,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 12,
-    marginTop: 18,
+    marginTop: 22,
   },
   priceBlock: { flexShrink: 1 },
   priceLabel: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#9AA1AF',
-    letterSpacing: 0.6,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
   priceValue: {
-    marginTop: 2,
-    fontSize: 34,
+    marginTop: 4,
+    fontSize: 28,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: -1,
+    letterSpacing: -0.6,
   },
   savePill: {
-    marginBottom: 6,
-    paddingHorizontal: 10,
+    marginBottom: 5,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 999,
     backgroundColor: 'rgba(34,197,94,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(125,255,184,0.35)',
   },
-  savePillTxt: { fontSize: 12, fontWeight: '900', color: '#7DFFB8' },
+  savePillTxt: { fontSize: 12, fontWeight: '800', color: '#7DFFB8' },
   detailsBtn: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    marginTop: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
   },
   detailsBtnPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  detailsBtnTxt: { fontSize: 13, fontWeight: '800', color: '#E6E8EE' },
+  detailsBtnTxt: { fontSize: 13, fontWeight: '700', color: '#E6E8EE' },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 16,
-    paddingTop: 14,
+    gap: 8,
+    marginTop: 22,
+    paddingTop: 18,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.15)',
+    borderTopColor: 'rgba(255,255,255,0.14)',
   },
   spots: {
     flexShrink: 1,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#C9CFDB',
   },
-  waitingAccent: { fontSize: 13, fontWeight: '800', color: '#4ADE80' },
+  waitingAccent: { fontSize: 13, fontWeight: '700', color: '#4ADE80' },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
