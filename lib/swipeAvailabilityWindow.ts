@@ -9,11 +9,19 @@ export type SwipeAvailabilityWindow = {
   availableUntilMs?: number | null;
 };
 
+/**
+ * How the window should read, so callers never have to inspect the copy:
+ * `now` is open and closes today, `live` is open past today,
+ * `ending-soon` is counting down, `scheduled` has not opened yet.
+ */
+export type SwipeAvailabilityTone = 'now' | 'live' | 'ending-soon' | 'scheduled';
+
 export type SwipeAvailabilityDisplay = {
-  /** Lead copy, e.g. `Today` or `Available until 3:00 PM`. */
+  /** Lead copy, e.g. `Available now` or `Available until tomorrow`. */
   title: string;
   /** Supporting time range, e.g. `11:00 AM – 3:00 PM`. */
   detail: string | null;
+  tone: SwipeAvailabilityTone;
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -75,13 +83,18 @@ export function formatSwipeAvailabilityWindow(
   if (from != null && from > nowMs) {
     const offset = calendarDayOffset(from, nowMs);
     const title =
-      offset <= 0 ? 'Today' : offset === 1 ? 'Tomorrow' : formatDay(from);
+      offset <= 0
+        ? 'Available today'
+        : offset === 1
+          ? 'Available tomorrow'
+          : `Available ${formatDay(from)}`;
     return {
       title,
       detail:
         until != null
           ? `${formatClock(from)} – ${formatClock(until)}`
           : `From ${formatClock(from)}`,
+      tone: 'scheduled',
     };
   }
 
@@ -89,17 +102,26 @@ export function formatSwipeAvailabilityWindow(
 
   // Open now — a countdown is friendliest once the end is close.
   const countdown = formatCountdown(until - nowMs);
-  if (countdown) return { title: countdown, detail: null };
+  if (countdown) return { title: countdown, detail: null, tone: 'ending-soon' };
 
   const offset = calendarDayOffset(until, nowMs);
   if (offset <= 0) {
-    return { title: 'Today', detail: `Until ${formatClock(until)}` };
+    return {
+      title: 'Available now',
+      detail: `Until ${formatClock(until)}`,
+      tone: 'now',
+    };
   }
   if (offset === 1) {
-    return { title: 'Ends tomorrow', detail: formatClock(until) };
+    return {
+      title: 'Available until tomorrow',
+      detail: formatClock(until),
+      tone: 'live',
+    };
   }
   return {
     title: 'Available until',
     detail: `${formatDay(until)}, ${formatClock(until)}`,
+    tone: 'live',
   };
 }

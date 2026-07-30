@@ -55,9 +55,9 @@ function SwipeFoodCardInner({ card }: Props) {
   const status = card.marketplaceStatus ?? 'available';
   const joinLocked = isSwipeMarketplaceJoinLocked(status);
   const statusLabel = SWIPE_MARKETPLACE_STATUS_LABEL[status];
-  const waitingCopy =
-    status === 'waiting_for_member' ? '✔ 1 of 2 members joined' : null;
-  const urgent = !joinLocked && card.spotsLeft > 0 && card.spotsLeft <= 3;
+  const waiting = !joinLocked && status === 'waiting_for_member';
+  const urgent =
+    !joinLocked && !waiting && card.spotsLeft > 0 && card.spotsLeft <= 3;
   const spotsLabel = joinLocked
     ? status === 'ready'
       ? 'Both members joined successfully'
@@ -66,9 +66,11 @@ function SwipeFoodCardInner({ card }: Props) {
       ? 'Waiting for 1 more member'
       : card.spotsLeft <= 0
         ? 'Full'
-        : urgent
-          ? `Only ${card.spotsLeft} spot${card.spotsLeft === 1 ? '' : 's'} remaining`
-          : `${card.spotsLeft} spots available`;
+        : card.spotsLeft === 1
+          ? 'Last spot remaining'
+          : urgent
+            ? `Only ${card.spotsLeft} spots remaining`
+            : `${card.spotsLeft} spots available`;
 
   const chips = useMemo<Chip[]>(() => {
     const promoValues =
@@ -113,6 +115,16 @@ function SwipeFoodCardInner({ card }: Props) {
   const youPay = formatShareCurrency(card.pricing.displaySubtotal);
   const saving = card.pricing.totalSaving;
 
+  // No window means the share is open-ended, so it is simply live right now.
+  const availabilityText = availability
+    ? availability.detail
+      ? `${availability.title} • ${availability.detail}`
+      : availability.title
+    : 'Available now';
+  // A green dot reads as "open right now"; anything dated gets a clock.
+  const liveNow = availability == null || availability.tone === 'now';
+  const closingSoon = availability?.tone === 'ending-soon';
+
   return (
     <View style={styles.face}>
       <Image
@@ -122,45 +134,66 @@ function SwipeFoodCardInner({ card }: Props) {
         transition={280}
       />
       <LinearGradient
-        colors={['rgba(0,0,0,0.38)', 'transparent']}
+        colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0.12)', 'transparent']}
+        locations={[0, 0.62, 1]}
         style={styles.scrimTop}
         pointerEvents="none"
       />
       <LinearGradient
         colors={[
           'transparent',
-          'rgba(0,0,0,0.3)',
-          'rgba(0,0,0,0.78)',
-          'rgba(0,0,0,0.95)',
+          'rgba(0,0,0,0.28)',
+          'rgba(0,0,0,0.7)',
+          'rgba(0,0,0,0.9)',
         ]}
-        locations={[0, 0.4, 0.76, 1]}
+        locations={[0, 0.3, 0.7, 1]}
         style={styles.scrimBottom}
         pointerEvents="none"
       />
 
-      <View style={styles.chipRow} pointerEvents="none">
-        {visibleChips.length > 0 ? (
-          visibleChips.map((chip) => (
-            <View
-              key={chip.key}
-              style={[styles.chip, { backgroundColor: chip.color }]}
-            >
-              <Text style={styles.chipTxt} numberOfLines={1}>
-                {chip.label}
-              </Text>
+      <View style={styles.topStack} pointerEvents="none">
+        <View style={styles.chipRow}>
+          {visibleChips.length > 0 ? (
+            visibleChips.map((chip) => (
+              <View
+                key={chip.key}
+                style={[styles.chip, { backgroundColor: chip.color }]}
+              >
+                <Text style={styles.chipTxt} numberOfLines={1}>
+                  {chip.label}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.ghostChip}>
+              <View style={styles.liveDot} />
+              <Text style={styles.ghostChipTxt}>Admin meal share</Text>
             </View>
-          ))
-        ) : (
-          <View style={styles.ghostChip}>
+          )}
+          {hiddenChipCount > 0 ? (
+            <View style={styles.overflowChip}>
+              <Text style={styles.overflowChipTxt}>{`+${hiddenChipCount}`}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.availChip}>
+          {liveNow ? (
             <View style={styles.liveDot} />
-            <Text style={styles.ghostChipTxt}>Admin meal share</Text>
-          </View>
-        )}
-        {hiddenChipCount > 0 ? (
-          <View style={styles.overflowChip}>
-            <Text style={styles.overflowChipTxt}>{`+${hiddenChipCount}`}</Text>
-          </View>
-        ) : null}
+          ) : (
+            <Ionicons
+              name={closingSoon ? 'hourglass-outline' : 'time-outline'}
+              size={12}
+              color={closingSoon ? '#FFC49B' : 'rgba(255,255,255,0.78)'}
+            />
+          )}
+          <Text
+            style={[styles.availTxt, closingSoon && styles.availTxtSoon]}
+            numberOfLines={1}
+          >
+            {availabilityText}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.body}>
@@ -180,57 +213,50 @@ function SwipeFoodCardInner({ card }: Props) {
           </Text>
         ) : null}
 
-        {availability ? (
-          <View style={styles.availability}>
-            <Ionicons name="time-outline" size={13} color="#C9CFDB" />
-            <Text style={styles.availabilityTxt} numberOfLines={1}>
-              {availability.detail
-                ? `${availability.title} • ${availability.detail}`
-                : availability.title}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.priceRow}>
-          <View style={styles.priceBlock}>
-            <Text style={styles.priceLabel}>You Pay</Text>
+        <View style={styles.priceBlock}>
+          <Text style={styles.priceLabel}>You Pay</Text>
+          <View style={styles.priceRow}>
             <Text style={styles.priceValue} numberOfLines={1}>
               {youPay}
             </Text>
+            <Pressable
+              onPress={openPricing}
+              accessibilityRole="button"
+              accessibilityLabel="View pricing details"
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.glassBtn,
+                pressed && styles.glassBtnPressed,
+              ]}
+            >
+              {Platform.OS === 'ios' ? (
+                <BlurView
+                  intensity={18}
+                  tint="dark"
+                  style={styles.glassFill}
+                  pointerEvents="none"
+                />
+              ) : null}
+              <Text style={styles.glassBtnTxt}>View pricing details</Text>
+              <Ionicons name="chevron-forward" size={12} color="#F2F3F6" />
+            </Pressable>
           </View>
           {saving > 0 ? (
-            <View style={styles.savePill}>
-              <Ionicons name="checkmark" size={12} color="#7DFFB8" />
+            <LinearGradient
+              colors={['rgba(52,211,153,0.30)', 'rgba(34,197,94,0.14)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.savePill}
+            >
+              <Ionicons name="checkmark-circle" size={13} color="#7DFFB8" />
               <Text style={styles.savePillTxt} numberOfLines={1}>
-                {`Save ${formatShareCurrency(saving)}`}
+                {`Save ${formatShareCurrency(saving)} vs Full Order`}
               </Text>
-            </View>
+            </LinearGradient>
           ) : null}
         </View>
 
-        <Pressable
-          onPress={openPricing}
-          accessibilityRole="button"
-          accessibilityLabel="View pricing details"
-          hitSlop={6}
-          style={({ pressed }) => [
-            styles.glassBtn,
-            pressed && styles.glassBtnPressed,
-          ]}
-        >
-          {Platform.OS === 'ios' ? (
-            <BlurView
-              intensity={28}
-              tint="dark"
-              style={styles.glassFill}
-              pointerEvents="none"
-            />
-          ) : null}
-          <Text style={styles.glassBtnTxt}>View pricing details</Text>
-          <Ionicons name="chevron-forward" size={13} color="#F2F3F6" />
-        </Pressable>
-
-        <View style={styles.statusRow}>
+        <View style={styles.footerRow}>
           {joinLocked ? (
             <View
               style={[
@@ -242,21 +268,22 @@ function SwipeFoodCardInner({ card }: Props) {
             >
               <Text style={styles.statusBadgeTxt}>{statusLabel}</Text>
             </View>
-          ) : waitingCopy ? (
-            <Text style={styles.waitingAccent} numberOfLines={1}>
-              {waitingCopy}
+          ) : null}
+          <View style={[styles.urgencyChip, urgent && styles.urgencyChipHot]}>
+            {waiting ? (
+              <Ionicons name="checkmark-circle" size={13} color="#4ADE80" />
+            ) : urgent ? (
+              <Ionicons name="flame" size={13} color="#FF8A5C" />
+            ) : (
+              <Ionicons name="people-outline" size={13} color="#C9CFDB" />
+            )}
+            <Text
+              style={[styles.spots, urgent && styles.spotsUrgent]}
+              numberOfLines={1}
+            >
+              {spotsLabel}
             </Text>
-          ) : urgent ? (
-            <Ionicons name="flame" size={14} color="#FF8A5C" />
-          ) : (
-            <Ionicons name="people-outline" size={14} color="#C9CFDB" />
-          )}
-          <Text
-            style={[styles.spots, urgent && styles.spotsUrgent]}
-            numberOfLines={1}
-          >
-            {spotsLabel}
-          </Text>
+          </View>
         </View>
       </View>
 
@@ -286,33 +313,38 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    height: '18%',
+    height: '20%',
   },
   scrimBottom: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '56%',
+    height: '54%',
+  },
+  topStack: {
+    position: 'absolute',
+    top: 16,
+    left: 24,
+    right: 24,
+    zIndex: 3,
+    alignItems: 'flex-start',
+    gap: 8,
   },
   chipRow: {
-    position: 'absolute',
-    top: 18,
-    left: 18,
-    right: 18,
-    zIndex: 3,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 7,
+    flexWrap: 'nowrap',
+    gap: 8,
   },
   chip: {
     flexShrink: 1,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 999,
     shadowColor: '#000',
-    shadowOpacity: 0.24,
+    shadowOpacity: 0.18,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
@@ -327,21 +359,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.42)',
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.28)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(168, 85, 247, 0.32)',
   },
   ghostChipTxt: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ADE80' },
   overflowChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.24)',
   },
   overflowChipTxt: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   body: {
@@ -350,16 +382,17 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 24,
-    paddingBottom: 26,
-    paddingTop: 44,
+    paddingBottom: 24,
+    paddingTop: 40,
   },
   restaurant: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#B7BDC9',
-    letterSpacing: 0.8,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   title: {
     fontSize: 32,
@@ -369,100 +402,118 @@ const styles = StyleSheet.create({
     lineHeight: 36,
   },
   description: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 13,
     fontWeight: '500',
-    color: '#9AA1AF',
+    color: '#DDE1E8',
+    opacity: 0.7,
     lineHeight: 19,
   },
-  availability: {
+  availChip: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(8,10,16,0.3)',
   },
-  availabilityTxt: {
+  availTxt: {
     flexShrink: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#C9CFDB',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    opacity: 0.82,
     letterSpacing: 0.1,
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-    marginTop: 22,
-  },
-  priceBlock: { flexShrink: 1 },
+  availTxtSoon: { color: '#FFC49B', opacity: 1, fontWeight: '600' },
+  priceBlock: { marginTop: 24 },
   priceLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: '#9AA1AF',
-    letterSpacing: 1,
+    letterSpacing: 1.1,
     textTransform: 'uppercase',
   },
-  priceValue: {
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     marginTop: 4,
-    fontSize: 28,
+  },
+  priceValue: {
+    flexShrink: 1,
+    fontSize: 30,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -0.6,
   },
   savePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 5,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(34,197,94,0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(125,255,184,0.35)',
-  },
-  savePillTxt: { fontSize: 12, fontWeight: '800', color: '#7DFFB8' },
-  glassBtn: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginTop: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    marginTop: 16,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(125,255,184,0.3)',
+  },
+  savePillTxt: { fontSize: 12.5, fontWeight: '800', color: '#7DFFB8' },
+  glassBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 999,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.28)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   glassBtnPressed: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     transform: [{ scale: 0.97 }],
   },
   glassFill: { ...StyleSheet.absoluteFillObject },
-  glassBtnTxt: { fontSize: 13, fontWeight: '700', color: '#F2F3F6' },
-  statusRow: {
+  glassBtnTxt: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    opacity: 0.92,
+  },
+  footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 24,
-    paddingTop: 18,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.12)',
+  },
+  urgencyChip: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(12,14,20,0.4)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  urgencyChipHot: {
+    backgroundColor: 'rgba(255,138,92,0.15)',
+    borderColor: 'rgba(255,138,92,0.36)',
   },
   spots: {
     flexShrink: 1,
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#C9CFDB',
   },
-  spotsUrgent: { color: '#FFFFFF', fontWeight: '700' },
-  waitingAccent: { fontSize: 13, fontWeight: '700', color: '#4ADE80' },
+  spotsUrgent: { color: '#FFD9C4', fontWeight: '800' },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,

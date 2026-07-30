@@ -29,7 +29,11 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(30, 11), availableUntilMs: at(30, 17) },
         now,
       ),
-    ).toEqual({ title: 'Today', detail: 'Until 5:00 PM' });
+    ).toEqual({
+      title: 'Available now',
+      detail: 'Until 5:00 PM',
+      tone: 'now',
+    });
   });
 
   it('leads with the closing time when only an end is configured', () => {
@@ -38,7 +42,11 @@ describe('swipe availability window copy', () => {
         { availableFromMs: null, availableUntilMs: at(30, 17) },
         now,
       ),
-    ).toEqual({ title: 'Today', detail: 'Until 5:00 PM' });
+    ).toEqual({
+      title: 'Available now',
+      detail: 'Until 5:00 PM',
+      tone: 'now',
+    });
   });
 
   it('counts down at exactly the three hour boundary', () => {
@@ -47,7 +55,7 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(30, 11), availableUntilMs: at(30, 15) },
         now,
       ),
-    ).toEqual({ title: 'Ends in 3 hours', detail: null });
+    ).toEqual({ title: 'Ends in 3 hours', detail: null, tone: 'ending-soon' });
   });
 
   it('counts down once the window is about to close', () => {
@@ -56,19 +64,23 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(30, 11), availableUntilMs: at(30, 14) },
         now,
       ),
-    ).toEqual({ title: 'Ends in 2 hours', detail: null });
+    ).toEqual({ title: 'Ends in 2 hours', detail: null, tone: 'ending-soon' });
     expect(
       formatSwipeAvailabilityWindow(
         { availableFromMs: at(30, 11), availableUntilMs: at(30, 12, 40) },
         now,
       ),
-    ).toEqual({ title: 'Ends in 40 minutes', detail: null });
+    ).toEqual({
+      title: 'Ends in 40 minutes',
+      detail: null,
+      tone: 'ending-soon',
+    });
     expect(
       formatSwipeAvailabilityWindow(
         { availableFromMs: at(30, 11), availableUntilMs: at(30, 13) },
         now,
       ),
-    ).toEqual({ title: 'Ends in 1 hour', detail: null });
+    ).toEqual({ title: 'Ends in 1 hour', detail: null, tone: 'ending-soon' });
   });
 
   it('never counts down past three hours', () => {
@@ -77,7 +89,11 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(30, 11), availableUntilMs: at(30, 16) },
         now,
       ),
-    ).toEqual({ title: 'Today', detail: 'Until 4:00 PM' });
+    ).toEqual({
+      title: 'Available now',
+      detail: 'Until 4:00 PM',
+      tone: 'now',
+    });
   });
 
   it('names tomorrow for a window that closes the next day', () => {
@@ -86,7 +102,11 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(30, 11), availableUntilMs: at(31, 15) },
         now,
       ),
-    ).toEqual({ title: 'Ends tomorrow', detail: '3:00 PM' });
+    ).toEqual({
+      title: 'Available until tomorrow',
+      detail: '3:00 PM',
+      tone: 'live',
+    });
   });
 
   it('leads with tomorrow for a window that opens the next day', () => {
@@ -95,7 +115,11 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(31, 10), availableUntilMs: at(31, 14) },
         now,
       ),
-    ).toEqual({ title: 'Tomorrow', detail: '10:00 AM – 2:00 PM' });
+    ).toEqual({
+      title: 'Available tomorrow',
+      detail: '10:00 AM – 2:00 PM',
+      tone: 'scheduled',
+    });
   });
 
   it('names the day for a window further out', () => {
@@ -103,9 +127,10 @@ describe('swipe availability window copy', () => {
       { availableFromMs: at(2 + 30, 10), availableUntilMs: at(2 + 30, 14) },
       now,
     );
-    expect(display?.title).not.toBe('Today');
-    expect(display?.title).not.toBe('Tomorrow');
+    expect(display?.title).not.toBe('Available today');
+    expect(display?.title).not.toBe('Available tomorrow');
     expect(display?.detail).toBe('10:00 AM – 2:00 PM');
+    expect(display?.tone).toBe('scheduled');
   });
 
   it('keeps a later start on the same day as today', () => {
@@ -114,7 +139,24 @@ describe('swipe availability window copy', () => {
         { availableFromMs: at(30, 18), availableUntilMs: at(30, 20) },
         now,
       ),
-    ).toEqual({ title: 'Today', detail: '6:00 PM – 8:00 PM' });
+    ).toEqual({
+      title: 'Available today',
+      detail: '6:00 PM – 8:00 PM',
+      tone: 'scheduled',
+    });
+  });
+
+  it('separates a scheduled window today from one that is already open', () => {
+    const scheduled = formatSwipeAvailabilityWindow(
+      { availableFromMs: at(30, 18), availableUntilMs: at(30, 20) },
+      now,
+    );
+    const open = formatSwipeAvailabilityWindow(
+      { availableFromMs: at(30, 9), availableUntilMs: at(30, 20) },
+      now,
+    );
+    expect(scheduled?.tone).toBe('scheduled');
+    expect(open?.tone).toBe('now');
   });
 
   it('spells out an end date beyond tomorrow', () => {
@@ -124,5 +166,6 @@ describe('swipe availability window copy', () => {
     );
     expect(display?.title).toBe('Available until');
     expect(display?.detail).toContain('3:00 PM');
+    expect(display?.tone).toBe('live');
   });
 });
