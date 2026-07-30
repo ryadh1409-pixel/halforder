@@ -1,4 +1,5 @@
 import type { BlockedUserRow } from '../hooks/useBlockedUsers';
+import { SETTINGS_LIST_COLORS } from './settings/SettingsList';
 import { Image } from 'expo-image';
 import React from 'react';
 import {
@@ -9,14 +10,13 @@ import {
   View,
 } from 'react-native';
 
-/** Matches Profile tab dark palette (Instagram-style settings). */
+/** Matches the shared settings list palette. */
 const D = {
-  card: '#171923',
-  text: '#FFFFFF',
-  sub: '#B7BDC9',
-  border: 'rgba(255,255,255,0.12)',
+  text: SETTINGS_LIST_COLORS.text,
+  sub: SETTINGS_LIST_COLORS.subtitle,
+  border: SETTINGS_LIST_COLORS.separator,
   avatarPh: '#1E2230',
-  danger: '#EF4444',
+  danger: SETTINGS_LIST_COLORS.danger,
 };
 
 type Props = {
@@ -54,8 +54,11 @@ export function BlockedUsersList({
 
   return (
     <View style={styles.list}>
-      {blockedUsers.map((u) => (
-        <View key={u.userId} style={styles.card}>
+      {blockedUsers.map((u, index) => (
+        <View
+          key={u.userId}
+          style={[styles.row, index > 0 && styles.rowSeparator]}
+        >
           {u.avatarUrl ? (
             <Image
               source={{ uri: u.avatarUrl }}
@@ -95,7 +98,7 @@ export function BlockedUsersList({
 }
 
 const styles = StyleSheet.create({
-  list: { gap: 10 },
+  list: {},
   loadingWrap: {
     paddingVertical: 24,
     alignItems: 'center',
@@ -104,24 +107,22 @@ const styles = StyleSheet.create({
   emptyText: {
     color: D.sub,
     fontSize: 15,
-    textAlign: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
   },
-  card: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: D.card,
-    borderRadius: 14,
+    minHeight: 56,
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: D.border,
+  },
+  rowSeparator: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: D.border,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: D.avatarPh,
   },
   avatarFallback: {
@@ -130,28 +131,26 @@ const styles = StyleSheet.create({
   },
   avatarLetter: {
     color: D.text,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  meta: { flex: 1, marginLeft: 12, minWidth: 0 },
-  name: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  meta: { flex: 1, marginLeft: 14, minWidth: 0 },
+  name: {
+    fontSize: 16,
+    fontWeight: '600',
     color: D.text,
+    letterSpacing: -0.2,
   },
   unblockBtn: {
-    borderWidth: 1.5,
-    borderColor: D.danger,
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     paddingVertical: 8,
-    borderRadius: 10,
-    minWidth: 92,
-    alignItems: 'center',
+    minWidth: 72,
+    alignItems: 'flex-end',
     justifyContent: 'center',
   },
   unblockLabel: {
     color: D.danger,
-    fontWeight: '700',
-    fontSize: 14,
+    fontWeight: '600',
+    fontSize: 15,
   },
 });

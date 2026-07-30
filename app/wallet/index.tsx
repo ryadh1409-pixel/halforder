@@ -1,3 +1,7 @@
+import {
+  SettingsRow,
+  SettingsSection,
+} from '@/components/settings/SettingsList';
 import { useAuth } from '@/services/AuthContext';
 import { getCashbackWallet } from '@/services/cashbackRewards';
 import { parseHalfOrderBalance } from '@/services/halfOrderBalance';
@@ -369,76 +373,55 @@ export default function WalletScreen() {
               )}
             </View>
 
-            <Text style={styles.sectionTitle}>Payment methods</Text>
-            <View style={styles.card}>
+            <SettingsSection
+              title="Payment methods"
+              style={styles.listSection}
+            >
               {cards.length === 0 && !applePayAvailable ? (
                 <Text style={styles.emptyText}>No payment methods yet.</Text>
               ) : null}
 
-              {cards.map((pm) => {
+              {cards.map((pm, index) => {
                 const expiry = formatCardExpiry(pm);
                 const isDefault = defaultPmId === pm.id;
                 return (
-                  <TouchableOpacity
+                  <SettingsRow
                     key={pm.id}
-                    style={styles.methodRow}
+                    title={formatCardLabel(pm)}
+                    subtitle={
+                      [expiry, isDefault ? 'Default' : null]
+                        .filter(Boolean)
+                        .join(' · ') || null
+                    }
+                    icon="credit-card"
                     onPress={() => router.push(`/wallet/card/${pm.id}` as never)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.methodIcon}>
-                      <MaterialIcons
-                        name="credit-card"
-                        size={22}
-                        color={PAL.primary}
-                      />
-                    </View>
-                    <View style={styles.methodCopy}>
-                      <Text style={styles.methodTitle}>{formatCardLabel(pm)}</Text>
-                      <Text style={styles.methodSub}>
-                        {[expiry, isDefault ? 'Default' : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </Text>
-                    </View>
-                    <MaterialIcons
-                      name="chevron-right"
-                      size={22}
-                      color={PAL.textMuted}
-                    />
-                  </TouchableOpacity>
+                    showChevron
+                    isFirst={index === 0}
+                  />
                 );
               })}
 
               {applePayAvailable ? (
-                <View style={styles.methodRow}>
-                  <View style={styles.methodIcon}>
-                    <MaterialIcons
-                      name="phone-iphone"
-                      size={22}
-                      color={PAL.text}
-                    />
-                  </View>
-                  <View style={styles.methodCopy}>
-                    <Text style={styles.methodTitle}>Apple Pay</Text>
-                    <Text style={styles.methodSub}>Available on this iPhone</Text>
-                  </View>
-                </View>
+                <SettingsRow
+                  title="Apple Pay"
+                  subtitle="Available on this iPhone"
+                  icon="phone-iphone"
+                  iconColor={PAL.text}
+                  isFirst={cards.length === 0}
+                />
               ) : null}
 
-              <TouchableOpacity
-                style={styles.addBtn}
+              <SettingsRow
+                title="Add payment method"
+                icon="add"
+                tone="accent"
                 onPress={() =>
                   router.push('/wallet/add-payment-method' as never)
                 }
-                activeOpacity={0.9}
-              >
-                <MaterialIcons name="add" size={22} color={PAL.onPrimary} />
-                <Text style={styles.addBtnText}>Add payment method</Text>
-              </TouchableOpacity>
-            </View>
+              />
+            </SettingsSection>
 
-            <Text style={styles.sectionTitle}>Vouchers</Text>
-            <View style={styles.card}>
+            <SettingsSection title="Vouchers" style={styles.listSection}>
               <View style={styles.voucherHeader}>
                 <Text style={styles.voucherCount}>
                   {vouchers.length} voucher{vouchers.length === 1 ? '' : 's'}
@@ -457,18 +440,17 @@ export default function WalletScreen() {
                   Redeem a code to save it for later checkout.
                 </Text>
               ) : (
-                vouchers.map((v) => (
-                  <View key={`${v.promoId}-${v.redeemedAtMs}`} style={styles.voucherRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.methodTitle}>{v.code}</Text>
-                      <Text style={styles.methodSub}>
-                        {formatVoucherValue(v)} · Ready for checkout
-                      </Text>
-                    </View>
-                  </View>
+                vouchers.map((v, index) => (
+                  <SettingsRow
+                    key={`${v.promoId}-${v.redeemedAtMs}`}
+                    title={v.code}
+                    subtitle={`${formatVoucherValue(v)} · Ready for checkout`}
+                    icon="confirmation-number"
+                    isFirst={index === 0}
+                  />
                 ))
               )}
-            </View>
+            </SettingsSection>
           </>
         )}
       </ScrollView>
@@ -675,41 +657,10 @@ const styles = StyleSheet.create({
     color: PAL.textMuted,
     lineHeight: 18,
   },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: PAL.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 10,
+  listSection: {
+    marginTop: 8,
+    marginBottom: 20,
   },
-  card: {
-    backgroundColor: PAL.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: PAL.border,
-    padding: 8,
-    marginBottom: 28,
-    overflow: 'hidden',
-  },
-  methodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: PAL.border,
-  },
-  methodIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: PAL.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  methodCopy: { flex: 1, minWidth: 0 },
   methodTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -721,24 +672,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: PAL.textMuted,
   },
-  addBtn: {
-    margin: 10,
-    marginTop: 12,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: PAL.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  addBtnText: {
-    color: PAL.onPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-  },
   emptyText: {
-    padding: 16,
+    paddingVertical: 14,
     fontSize: 14,
     color: PAL.textMuted,
     fontWeight: '500',
@@ -748,9 +683,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 6,
   },
   voucherCount: {
     fontSize: 16,
@@ -769,12 +703,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: PAL.primary,
-  },
-  voucherRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: PAL.border,
   },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   hint: { fontSize: 16, color: PAL.textMuted },

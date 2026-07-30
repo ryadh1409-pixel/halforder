@@ -3,6 +3,10 @@ import { ActionCard } from '../../../components/ActionCard';
 import { AdminStatCard } from '../../../components/AdminStatCard';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
 import { AdminAiAssistantPanel } from '../../../components/admin/AdminAiAssistantPanel';
+import {
+  SettingsRow,
+  SettingsSection,
+} from '../../../components/settings/SettingsList';
 import { adminRoutes } from '../../../constants/adminRoutes';
 import { ADMIN_PANEL_EMAIL, isAdminUser } from '../../../constants/adminUid';
 import { goHome } from '../../../lib/navigation';
@@ -632,117 +636,68 @@ export default function AdminScreen() {
                 />
               </View>
 
-              <Text style={[styles.sectionHeading, styles.homeBannersSection]}>
-                Home banners
-              </Text>
-              <View style={styles.panel}>
-                <TouchableOpacity
-                  style={styles.promoBadgesEntry}
+              <SettingsSection
+                title="Home banners"
+                style={styles.homeBannersSection}
+              >
+                <SettingsRow
+                  title="Home Banners"
+                  subtitle="Manage promotional carousel images, copy, and visibility on Home"
+                  icon="view-carousel"
                   onPress={() => router.push(adminRoutes.homeBanners as never)}
-                  activeOpacity={0.88}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.promoBadgesTitle}>Home Banners</Text>
-                    <Text style={styles.promoBadgesSub}>
-                      Manage promotional carousel images, copy, and visibility on
-                      Home
-                    </Text>
-                  </View>
-                  <Text style={styles.promoBadgesCta}>Open</Text>
-                </TouchableOpacity>
-              </View>
+                  showChevron
+                  isFirst
+                />
+              </SettingsSection>
 
-              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
-                Promotions
-              </Text>
-              <View style={styles.panel}>
-                <TouchableOpacity
-                  style={styles.promoBadgesEntry}
+              <SettingsSection title="Promotions">
+                <SettingsRow
+                  title="Promotion Badges"
+                  subtitle="Choose Most Ordered or Great Price for each restaurant / food card"
+                  icon="local-offer"
                   onPress={() =>
                     router.push(adminRoutes.promotionBadges as never)
                   }
-                  activeOpacity={0.88}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.promoBadgesTitle}>Promotion Badges</Text>
-                    <Text style={styles.promoBadgesSub}>
-                      Choose Most Ordered or Great Price for each restaurant /
-                      food card
-                    </Text>
-                  </View>
-                  <Text style={styles.promoBadgesCta}>Open</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  showChevron
+                  isFirst
+                />
+                <SettingsRow
+                  title="Referral Reward Promotions"
+                  subtitle="Swipe Delivery invite rewards — unlock % OFF after a friend pays"
+                  icon="card-giftcard"
                   onPress={() =>
                     router.push(adminRoutes.referralRewardPromotions as never)
                   }
-                  activeOpacity={0.88}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.promoBadgesTitle}>
-                      Referral Reward Promotions
-                    </Text>
-                    <Text style={styles.promoBadgesSub}>
-                      Swipe Delivery invite rewards — unlock % OFF after a friend
-                      pays
-                    </Text>
-                  </View>
-                  <Text style={styles.promoBadgesCta}>Open</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  showChevron
+                />
+                <SettingsRow
+                  title="Abandoned Checkout Recovery"
+                  subtitle="Reminders and limited-time offers for unpaid checkouts"
+                  icon="shopping-cart"
                   onPress={() =>
                     router.push(adminRoutes.abandonedCheckoutRecovery as never)
                   }
-                  activeOpacity={0.88}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.promoBadgesTitle}>
-                      Abandoned Checkout Recovery
-                    </Text>
-                    <Text style={styles.promoBadgesSub}>
-                      Reminders and limited-time offers for unpaid checkouts
-                    </Text>
-                  </View>
-                  <Text style={styles.promoBadgesCta}>Open</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  showChevron
+                />
+                <SettingsRow
+                  title="Driver Referral Campaign"
+                  subtitle="Drivers invite new customers — reward on first completed order"
+                  icon="two-wheeler"
                   onPress={() =>
                     router.push(adminRoutes.driverReferralCampaign as never)
                   }
-                  activeOpacity={0.88}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.promoBadgesTitle}>
-                      Driver Referral Campaign
-                    </Text>
-                    <Text style={styles.promoBadgesSub}>
-                      Drivers invite new customers — reward on first completed
-                      order
-                    </Text>
-                  </View>
-                  <Text style={styles.promoBadgesCta}>Open</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.promoBadgesEntry, { marginTop: 10 }]}
+                  showChevron
+                />
+                <SettingsRow
+                  title="Cashback Rewards"
+                  subtitle="HalfOrder Cash — earn % back on eligible orders"
+                  icon="savings"
                   onPress={() =>
                     router.push(adminRoutes.cashbackRewards as never)
                   }
-                  activeOpacity={0.88}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.promoBadgesTitle}>
-                      Cashback Rewards
-                    </Text>
-                    <Text style={styles.promoBadgesSub}>
-                      HalfOrder Cash — earn % back on eligible orders
-                    </Text>
-                  </View>
-                  <Text style={styles.promoBadgesCta}>Open</Text>
-                </TouchableOpacity>
-              </View>
+                  showChevron
+                />
+              </SettingsSection>
               <View style={[styles.panel, styles.sectionSpacer]}>
                 <AdminCardsDashboard />
               </View>
@@ -818,7 +773,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   sectionSpacer: { marginTop: 28 },
-  homeBannersSection: { marginTop: 44 },
+  homeBannersSection: { marginTop: 40 },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -837,28 +792,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-  },
-  promoBadgesEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  promoBadgesTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  promoBadgesSub: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    lineHeight: 18,
-  },
-  promoBadgesCta: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: PRIMARY,
   },
   devLinks: {
     flexDirection: 'row',

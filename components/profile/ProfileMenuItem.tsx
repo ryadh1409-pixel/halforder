@@ -1,16 +1,18 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
 
+import {
+  SETTINGS_LIST_COLORS,
+  SettingsRow,
+} from '../settings/SettingsList';
 import { ProfileGrowIcon } from './ProfileGrowIcon';
 import type { ProfileGrowIconKind } from './profileGrowIconShared';
 
 export const PROFILE_MENU_COLORS = {
   surface: '#171923',
-  text: '#FFFFFF',
+  text: SETTINGS_LIST_COLORS.text,
   textSecondary: '#B7BDC9',
-  textTertiary: '#8B93A7',
-  border: 'rgba(168, 85, 247, 0.22)',
+  textTertiary: SETTINGS_LIST_COLORS.subtitle,
+  border: SETTINGS_LIST_COLORS.separator,
 } as const;
 
 export type ProfileMenuItemProps = {
@@ -18,8 +20,10 @@ export type ProfileMenuItemProps = {
   subtitle: string;
   iconKind: ProfileGrowIconKind;
   onPress: () => void;
-  /** Hide bottom divider (use on last item in a group). */
+  /** Separators are drawn above rows; kept for callers that still pass it. */
   isLast?: boolean;
+  /** Skip the leading separator on the first row of a group. */
+  isFirst?: boolean;
 };
 
 export function ProfileMenuItem({
@@ -27,77 +31,15 @@ export function ProfileMenuItem({
   subtitle,
   iconKind,
   onPress,
-  isLast = false,
+  isFirst = false,
 }: ProfileMenuItemProps) {
-  const styles = useMemo(() => createStyles(), []);
-
   return (
-    <Pressable
-      accessibilityRole="button"
+    <SettingsRow
+      title={title}
+      subtitle={subtitle}
+      renderIcon={() => <ProfileGrowIcon kind={iconKind} />}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-    >
-      <ProfileGrowIcon kind={iconKind} />
-      <View style={styles.textCol}>
-        <Text style={styles.title} numberOfLines={2}>
-          {title}
-        </Text>
-        <Text style={styles.subtitle} numberOfLines={2}>
-          {subtitle}
-        </Text>
-      </View>
-      <MaterialIcons
-        name="chevron-right"
-        size={22}
-        color={PROFILE_MENU_COLORS.textTertiary}
-        style={styles.chevron}
-      />
-      {!isLast ? <View style={styles.divider} pointerEvents="none" /> : null}
-    </Pressable>
+      isFirst={isFirst}
+    />
   );
-}
-
-function createStyles() {
-  return StyleSheet.create({
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingVertical: 16,
-      paddingHorizontal: 16,
-      minHeight: 68,
-    },
-    rowPressed: {
-      opacity: 0.88,
-    },
-    textCol: {
-      flex: 1,
-      minWidth: 0,
-      paddingRight: 4,
-    },
-    title: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: PROFILE_MENU_COLORS.text,
-      letterSpacing: -0.25,
-    },
-    subtitle: {
-      marginTop: 2,
-      fontSize: 13,
-      fontWeight: '400',
-      color: PROFILE_MENU_COLORS.textTertiary,
-      lineHeight: 18,
-    },
-    chevron: {
-      marginLeft: 2,
-    },
-    divider: {
-      position: 'absolute',
-      left: 16,
-      right: 16,
-      bottom: 0,
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: PROFILE_MENU_COLORS.border,
-    },
-  });
 }

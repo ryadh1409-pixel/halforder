@@ -1,8 +1,9 @@
 import SwipeWrapper from '@/components/SwipeWrapper';
+import { ProfileMenuItem } from '@/components/profile/ProfileMenuItem';
 import {
-    PROFILE_MENU_COLORS,
-    ProfileMenuItem,
-} from '@/components/profile/ProfileMenuItem';
+    SettingsRow,
+    SettingsSection,
+} from '@/components/settings/SettingsList';
 import { isProfileOrderVisibleStatus } from '@/constants/profileOrders';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import { isRegisteredAuthUser } from '@/lib/authSession';
@@ -756,133 +757,74 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
 
-          <View style={dynamicStyles.quickGrid}>
-            <TouchableOpacity
-              style={dynamicStyles.quickGridCard}
+          <SettingsSection style={dynamicStyles.firstSection}>
+            <SettingsRow
+              title="Help"
+              icon="help-outline"
               onPress={() => router.push('/help')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Help"
-            >
-              <View style={dynamicStyles.quickGridIconWrap}>
-                <MaterialIcons name="help-outline" size={26} color={pal.primary} />
-              </View>
-              <Text style={dynamicStyles.quickGridTitle}>Help</Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={22}
-                color={pal.textTertiary}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={dynamicStyles.quickGridCard}
+              isFirst
+            />
+            <SettingsRow
+              title="Wallet"
+              icon="account-balance-wallet"
               onPress={() => router.push('/wallet' as never)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Wallet"
-            >
-              <View style={dynamicStyles.quickGridIconWrap}>
-                <MaterialIcons
-                  name="account-balance-wallet"
-                  size={26}
-                  color={pal.primary}
-                />
-              </View>
-              <Text style={dynamicStyles.quickGridTitle}>Wallet</Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={22}
-                color={pal.textTertiary}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={dynamicStyles.quickGridCard}
+            />
+            <SettingsRow
+              title="Location"
+              icon="place"
               onPress={() => router.push('/location' as never)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Location"
-            >
-              <View style={dynamicStyles.quickGridIconWrap}>
-                <MaterialIcons name="place" size={26} color={pal.primary} />
-              </View>
-              <Text
-                style={dynamicStyles.quickGridTitle}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.85}
-              >
-                Location
-              </Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={22}
-                color={pal.textTertiary}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={dynamicStyles.quickGridCard}
+            />
+            <SettingsRow
+              title="Inbox"
+              icon="inbox"
               onPress={() => router.push('/inbox' as never)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
               accessibilityLabel={
                 inboxUnreadCount > 0
                   ? `Inbox, ${inboxUnreadCount} unread`
                   : 'Inbox'
               }
-            >
-              <View style={dynamicStyles.quickGridIconWrap}>
-                <MaterialIcons name="inbox" size={26} color={pal.primary} />
-                {inboxUnreadCount > 0 ? (
+              trailing={
+                inboxUnreadCount > 0 ? (
                   <View style={dynamicStyles.inboxBadge}>
                     <Text style={dynamicStyles.inboxBadgeText}>
                       {inboxUnreadCount > 99 ? '99+' : String(inboxUnreadCount)}
                     </Text>
                   </View>
-                ) : null}
-              </View>
-              <Text style={dynamicStyles.quickGridTitle}>Inbox</Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={22}
-                color={pal.textTertiary}
-              />
-            </TouchableOpacity>
-          </View>
+                ) : null
+              }
+            />
+          </SettingsSection>
 
           {isAdminUser(user, firestoreUserRole) && firestoreUserRole ? (
-            <>
-              <Text style={dynamicStyles.sectionHeading}>Account type</Text>
-              <View style={dynamicStyles.card}>
-                <Text style={dynamicStyles.bodyMuted}>
-                  Role: {firestoreUserRole}
-                </Text>
-              </View>
-            </>
+            <SettingsSection title="Account type">
+              <SettingsRow
+                title="Role"
+                subtitle={firestoreUserRole}
+                icon="verified-user"
+                isFirst
+              />
+            </SettingsSection>
           ) : null}
 
-          <Text style={dynamicStyles.sectionHeading}>Notifications</Text>
-          <View style={dynamicStyles.card}>
-            <View style={dynamicStyles.rowBetween}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={dynamicStyles.cardTitle}>Push & updates</Text>
-                <Text style={dynamicStyles.bodyMuted}>
-                  Order updates and reminders from HalfOrder
-                </Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={handleNotificationsToggle}
-                trackColor={{
-                  false: isDark ? '#3F3F46' : tc.border,
-                  true: isDark ? 'rgba(255,122,0,0.45)' : tc.primaryLight,
-                }}
-                thumbColor={notificationsEnabled ? pal.primary : pal.inputBg}
-              />
-            </View>
-          </View>
+          <SettingsSection title="Notifications">
+            <SettingsRow
+              title="Push & updates"
+              subtitle="Order updates and reminders from HalfOrder"
+              icon="notifications-none"
+              isFirst
+              trailing={
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={handleNotificationsToggle}
+                  trackColor={{
+                    false: isDark ? '#3F3F46' : tc.border,
+                    true: isDark ? 'rgba(255,122,0,0.45)' : tc.primaryLight,
+                  }}
+                  thumbColor={notificationsEnabled ? pal.primary : pal.inputBg}
+                />
+              }
+            />
+          </SettingsSection>
 
           <Text style={dynamicStyles.sectionHeading}>Your Savings</Text>
           <MoneySavedProfileTeaser
@@ -924,98 +866,46 @@ export default function ProfileScreen() {
             onRetry={() => void refreshProfileOrders()}
           />
 
-          <Text style={dynamicStyles.sectionHeading}>Quick Access</Text>
-          <View style={dynamicStyles.supportListCard}>
-            <TouchableOpacity
-              style={dynamicStyles.supportRow}
+          <SettingsSection title="Quick Access">
+            <SettingsRow
+              title="Referral Program"
+              icon="card-giftcard"
               onPress={() => router.push('/referral-program' as never)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Referral Program"
-            >
-              <View style={dynamicStyles.supportIconWrap}>
-                <MaterialIcons
-                  name="card-giftcard"
-                  size={22}
-                  color={pal.primary}
-                />
-              </View>
-              <Text style={dynamicStyles.supportRowLabel}>Referral Program</Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={22}
-                color={pal.textTertiary}
-              />
-            </TouchableOpacity>
-          </View>
+              isFirst
+            />
+          </SettingsSection>
 
-          <Text style={dynamicStyles.sectionHeading}>Help</Text>
-          <View style={dynamicStyles.supportListCard}>
-            {(
-              [
-                {
-                  key: 'support',
-                  label: 'Customer Support',
-                  icon: 'headset-mic' as const,
-                  onPress: () => router.push('/customer-support' as never),
-                },
-                {
-                  key: 'complaint',
-                  label: 'Complaint',
-                  icon: 'flag' as const,
-                  onPress: () => router.push('/complaint'),
-                },
-                {
-                  key: 'terms',
-                  label: 'Terms of Service',
-                  icon: 'description' as const,
-                  onPress: () => router.push('/terms'),
-                },
-                {
-                  key: 'privacy',
-                  label: 'Privacy Policy',
-                  icon: 'shield' as const,
-                  onPress: () => router.push('/privacy'),
-                },
-              ] as const
-            ).map((item, index, arr) => (
-              <TouchableOpacity
-                key={item.key}
-                style={[
-                  dynamicStyles.supportRow,
-                  index < arr.length - 1 && dynamicStyles.supportRowBorder,
-                ]}
-                onPress={item.onPress}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={item.label}
-              >
-                <View style={dynamicStyles.supportIconWrap}>
-                  <MaterialIcons
-                    name={item.icon}
-                    size={22}
-                    color={pal.primary}
-                  />
-                </View>
-                <Text style={dynamicStyles.supportRowLabel}>{item.label}</Text>
-                <MaterialIcons
-                  name="chevron-right"
-                  size={22}
-                  color={pal.textTertiary}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
+          <SettingsSection title="Help">
+            <SettingsRow
+              title="Customer Support"
+              icon="headset-mic"
+              onPress={() => router.push('/customer-support' as never)}
+              isFirst
+            />
+            <SettingsRow
+              title="Complaint"
+              icon="flag"
+              onPress={() => router.push('/complaint')}
+            />
+            <SettingsRow
+              title="Terms of Service"
+              icon="description"
+              onPress={openTerms}
+            />
+            <SettingsRow
+              title="Privacy Policy"
+              icon="shield"
+              onPress={openPrivacy}
+            />
+          </SettingsSection>
 
-          <Text style={[dynamicStyles.sectionHeading, styles.growSectionHeading]}>
-            Grow with Us
-          </Text>
-          <View style={dynamicStyles.menuGroupCard}>
+          <SettingsSection title="Grow with Us">
             <ProfileMenuItem
               title="Create a restaurant account"
               subtitle="Manage team and restaurant orders"
               iconKind="business"
               onPress={handleBusinessAccount}
+              isFirst
             />
             <ProfileMenuItem
               title="Add your restaurant"
@@ -1028,50 +918,51 @@ export default function ProfileScreen() {
               subtitle="Earn by delivering orders"
               iconKind="driver"
               onPress={handleDriverSignup}
-              isLast
             />
-          </View>
-
-          <View style={dynamicStyles.card}>
-            <Text style={dynamicStyles.bodyMuted}>
-              Users can report inappropriate behavior. To report or block someone you
-              interacted with, open the order chat, Join tab, or Help. See Terms for
-              how we handle reports.
-            </Text>
-            <TouchableOpacity
-              style={dynamicStyles.dangerButton}
-              onPress={handleDeleteAccount}
-            >
-              <Text style={dynamicStyles.dangerButtonText}>Delete account</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={dynamicStyles.signOutRow} onPress={handleSignOut}>
-              <Text style={dynamicStyles.signOutText}>Sign out</Text>
-            </TouchableOpacity>
-          </View>
+          </SettingsSection>
 
           {isAdminUser(user, firestoreUserRole) ? (
-            <View style={dynamicStyles.card}>
-              <Text style={dynamicStyles.label}>Admin</Text>
-              <TouchableOpacity
-                style={dynamicStyles.primaryButton}
+            <SettingsSection title="Admin">
+              <SettingsRow
+                title="Open admin panel"
+                icon="admin-panel-settings"
                 onPress={() => router.push(adminRoutes.home as never)}
-              >
-                <Text style={dynamicStyles.primaryButtonText}>Open admin panel</Text>
-              </TouchableOpacity>
-            </View>
+                isFirst
+              />
+            </SettingsSection>
           ) : null}
 
           {firestoreUserRole === 'restaurant' || firestoreUserRole === 'host' ? (
-            <View style={dynamicStyles.card}>
-              <Text style={dynamicStyles.label}>Host</Text>
-              <TouchableOpacity
-                style={dynamicStyles.primaryButton}
+            <SettingsSection title="Host">
+              <SettingsRow
+                title="Open Host Dashboard"
+                icon="storefront"
                 onPress={() => router.push('/(host)/dashboard' as never)}
-              >
-                <Text style={dynamicStyles.primaryButtonText}>Open Host Dashboard</Text>
-              </TouchableOpacity>
-            </View>
+                isFirst
+              />
+            </SettingsSection>
           ) : null}
+
+          <SettingsSection title="Account">
+            <SettingsRow
+              title="Sign out"
+              icon="logout"
+              onPress={handleSignOut}
+              isFirst
+            />
+            <SettingsRow
+              title="Delete account"
+              icon="delete-outline"
+              tone="danger"
+              onPress={handleDeleteAccount}
+            />
+          </SettingsSection>
+
+          <Text style={dynamicStyles.sectionFootnote}>
+            Users can report inappropriate behavior. To report or block someone you
+            interacted with, open the order chat, Join tab, or Help. See Terms for
+            how we handle reports.
+          </Text>
 
           <MemberSinceCard year={memberSinceYear} />
 
@@ -1234,108 +1125,22 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       color: pal.text,
       letterSpacing: 0.2,
     },
-    quickGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      rowGap: 14,
-      marginBottom: 12,
-      marginTop: 8,
-    },
-    quickGridCard: {
-      width: '48%',
-      minHeight: 76,
-      borderRadius: 20,
-      backgroundColor: pal.surface,
-      borderWidth: 1,
-      borderColor: pal.border,
-      paddingVertical: 18,
-      paddingHorizontal: 14,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#A855F7',
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.14,
-          shadowRadius: 14,
-        },
-        android: { elevation: 4 },
-        default: {},
-      }),
-    },
-    quickGridIconWrap: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      backgroundColor: 'rgba(168, 85, 247, 0.14)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative',
+    firstSection: {
+      marginTop: 4,
     },
     inboxBadge: {
-      position: 'absolute',
-      top: -4,
-      right: -6,
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
-      paddingHorizontal: 4,
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 6,
       backgroundColor: pal.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: pal.bg,
     },
     inboxBadgeText: {
       color: pal.onPrimary,
-      fontSize: 10,
+      fontSize: 11,
       fontWeight: '800',
-    },
-    supportListCard: {
-      backgroundColor: pal.surface,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: pal.border,
-      marginBottom: 12,
-      overflow: 'hidden',
-    },
-    supportRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 14,
-      paddingHorizontal: 14,
-      gap: 12,
-      minHeight: 56,
-    },
-    supportRowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: pal.border,
-    },
-    supportIconWrap: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(168, 85, 247, 0.14)',
-    },
-    supportRowLabel: {
-      flex: 1,
-      fontSize: 16,
-      fontWeight: '700',
-      color: pal.text,
-      letterSpacing: -0.2,
-    },
-    quickGridTitle: {
-      flexShrink: 1,
-      flexGrow: 1,
-      minWidth: 0,
-      fontSize: 15,
-      fontWeight: '800',
-      color: pal.text,
-      letterSpacing: -0.2,
     },
     quickAction: {
       flexDirection: 'row',
@@ -1367,12 +1172,19 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
     },
     sectionHeading: {
       fontSize: 12,
-      fontWeight: '800',
+      fontWeight: '700',
       color: pal.textTertiary,
       textTransform: 'uppercase',
-      letterSpacing: 1,
+      letterSpacing: 0.9,
       marginBottom: 10,
-      marginTop: 16,
+      marginTop: 24,
+    },
+    sectionFootnote: {
+      marginTop: 24,
+      fontSize: 12,
+      fontWeight: '400',
+      color: pal.textTertiary,
+      lineHeight: 18,
     },
     card: {
       backgroundColor: pal.surface,
@@ -1381,36 +1193,6 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       borderColor: pal.border,
       padding: 20,
       marginBottom: 12,
-    },
-    menuGroupCard: {
-      backgroundColor: PROFILE_MENU_COLORS.surface,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: pal.border,
-      marginBottom: 12,
-      overflow: 'hidden',
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.22,
-          shadowRadius: 14,
-        },
-        android: { elevation: 4 },
-        default: {},
-      }),
-    },
-    label: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: pal.textSecondary,
-      marginBottom: 8,
-    },
-    cardTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: pal.text,
-      marginBottom: 4,
     },
     bodyMuted: {
       fontSize: 14,
@@ -1531,11 +1313,6 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       color: pal.textTertiary,
       fontWeight: '500',
     },
-    rowBetween: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
     link: {
       fontSize: 16,
       color: tc.accentBlue,
@@ -1588,30 +1365,6 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       fontSize: 15,
       fontWeight: '700',
       color: pal.primary,
-    },
-    dangerButton: {
-      backgroundColor: pal.danger,
-      paddingVertical: 14,
-      borderRadius: 12,
-      alignItems: 'center',
-      marginTop: 10,
-    },
-    dangerButtonText: {
-      color: pal.onPrimary,
-      fontSize: 16,
-      fontWeight: '700',
-    },
-    signOutRow: {
-      paddingVertical: 16,
-      alignItems: 'center',
-      marginTop: 4,
-      borderTopWidth: 1,
-      borderTopColor: pal.border,
-    },
-    signOutText: {
-      color: pal.text,
-      fontWeight: '700',
-      fontSize: 16,
     },
     footerMuted: {
       fontSize: 13,
@@ -1675,9 +1428,6 @@ const styles = StyleSheet.create({
   },
   blockedUsersCard: {
     overflow: 'hidden',
-  },
-  growSectionHeading: {
-    marginTop: 8,
   },
   inputMultiline: {
     minHeight: 88,
