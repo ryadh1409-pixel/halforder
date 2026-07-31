@@ -1,41 +1,18 @@
-import { AppTextInput } from '@/components/AppTextInput';
+import {
+  EMPTY_PAYOUT_WALLET,
+  PayoutWalletForm,
+  type PayoutMethod,
+  type PayoutWalletDetails,
+} from '@/components/payout/PayoutWalletForm';
 import { auth, db, ensureAuthReady } from '@/services/firebase';
 import { getUserFriendlyError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
 
-export type DriverPayoutMethod = 'interac' | 'bank';
-
-export type DriverWalletDetails = {
-  payoutMethod: DriverPayoutMethod;
-  /** Interac: full legal name */
-  legalName: string;
-  interacEmail: string;
-  accountHolderName: string;
-  bankName: string;
-  institutionNumber: string;
-  transitNumber: string;
-  accountNumber: string;
-};
-
-export const EMPTY_DRIVER_WALLET: DriverWalletDetails = {
-  payoutMethod: 'interac',
-  legalName: '',
-  interacEmail: '',
-  accountHolderName: '',
-  bankName: '',
-  institutionNumber: '',
-  transitNumber: '',
-  accountNumber: '',
-};
+export type DriverPayoutMethod = PayoutMethod;
+export type DriverWalletDetails = PayoutWalletDetails;
+export const EMPTY_DRIVER_WALLET = EMPTY_PAYOUT_WALLET;
 
 function parsePayoutMethod(raw: unknown): DriverPayoutMethod {
   return raw === 'bank' ? 'bank' : 'interac';
@@ -72,7 +49,6 @@ async function ensureDriverWalletDoc(driverId: string): Promise<void> {
   if (wallet != null && typeof wallet === 'object' && !Array.isArray(wallet)) {
     const w = wallet as Record<string, unknown>;
     if (w.payoutMethod === 'interac' || w.payoutMethod === 'bank') return;
-    // Legacy wallet without method — default Interac, keep existing fields.
     await setDoc(
       ref,
       {
@@ -200,210 +176,15 @@ export function DriverWalletCard({ driverId }: Props) {
     }
   }, [draft, saving, uid]);
 
-  const isInterac = draft.payoutMethod !== 'bank';
-
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>Driver Wallet</Text>
-      <Text style={styles.subtitle}>
-        Choose how you would like to receive your HalfOrder earnings.
-      </Text>
-
-      <Pressable
-        style={[styles.methodBtn, isInterac && styles.methodBtnOn]}
-        onPress={() => selectMethod('interac')}
-        disabled={saving}
-      >
-        <Text style={[styles.methodTitle, isInterac && styles.methodTitleOn]}>
-          🇨🇦 Interac e-Transfer (Recommended)
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={[styles.methodBtn, !isInterac && styles.methodBtnOn]}
-        onPress={() => selectMethod('bank')}
-        disabled={saving}
-      >
-        <Text style={[styles.methodTitle, !isInterac && styles.methodTitleOn]}>
-          Bank Transfer
-        </Text>
-      </Pressable>
-
-      {isInterac ? (
-        <View style={styles.fields}>
-          <Text style={styles.label}>Interac e-Transfer Email</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.interacEmail}
-            onChangeText={(t) => setField('interacEmail', t)}
-            placeholder="name@email.com"
-            placeholderTextColor="#7D8493"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!saving}
-          />
-
-          <Text style={styles.label}>Full Legal Name</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.legalName}
-            onChangeText={(t) => setField('legalName', t)}
-            placeholder="Name on your bank account"
-            placeholderTextColor="#7D8493"
-            autoCapitalize="words"
-            editable={!saving}
-          />
-        </View>
-      ) : (
-        <View style={styles.fields}>
-          <Text style={styles.label}>Account Holder Name</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.accountHolderName}
-            onChangeText={(t) => setField('accountHolderName', t)}
-            placeholder="Full legal name"
-            placeholderTextColor="#7D8493"
-            autoCapitalize="words"
-            editable={!saving}
-          />
-
-          <Text style={styles.label}>Bank Name</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.bankName}
-            onChangeText={(t) => setField('bankName', t)}
-            placeholder="e.g. RBC, TD, Scotiabank"
-            placeholderTextColor="#7D8493"
-            autoCapitalize="words"
-            editable={!saving}
-          />
-
-          <Text style={styles.label}>Institution Number</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.institutionNumber}
-            onChangeText={(t) => setField('institutionNumber', t)}
-            placeholder="3 digits"
-            placeholderTextColor="#7D8493"
-            keyboardType="number-pad"
-            editable={!saving}
-          />
-
-          <Text style={styles.label}>Transit Number</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.transitNumber}
-            onChangeText={(t) => setField('transitNumber', t)}
-            placeholder="5 digits"
-            placeholderTextColor="#7D8493"
-            keyboardType="number-pad"
-            editable={!saving}
-          />
-
-          <Text style={styles.label}>Account Number</Text>
-          <AppTextInput
-            style={styles.input}
-            value={draft.accountNumber}
-            onChangeText={(t) => setField('accountNumber', t)}
-            placeholder="Account number"
-            placeholderTextColor="#7D8493"
-            keyboardType="number-pad"
-            editable={!saving}
-          />
-        </View>
-      )}
-
-      <Pressable
-        style={[styles.saveBtn, (saving || !uid) && styles.saveBtnDisabled]}
-        disabled={saving || !uid}
-        onPress={() => void handleSave()}
-      >
-        {saving ? (
-          <ActivityIndicator color="#052e1b" />
-        ) : (
-          <Text style={styles.saveBtnText}>Save Payout Details</Text>
-        )}
-      </Pressable>
-    </View>
+    <PayoutWalletForm
+      title="Driver Wallet"
+      draft={draft}
+      saving={saving}
+      canSave={Boolean(uid)}
+      onSelectMethod={selectMethod}
+      onChangeField={setField}
+      onSave={() => void handleSave()}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    alignSelf: 'stretch',
-    marginBottom: 20,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#22223A',
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  subtitle: {
-    marginTop: 4,
-    marginBottom: 14,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#7D8493',
-    lineHeight: 18,
-  },
-  methodBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: '#1a1a2e',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-  },
-  methodBtnOn: {
-    borderColor: 'rgba(0, 200, 83, 0.55)',
-    backgroundColor: 'rgba(0, 200, 83, 0.12)',
-  },
-  methodTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#B7BDC9',
-  },
-  methodTitleOn: {
-    color: '#FFFFFF',
-  },
-  fields: {
-    marginTop: 6,
-  },
-  label: {
-    marginTop: 10,
-    marginBottom: 6,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7D8493',
-  },
-  input: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    color: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    marginTop: 16,
-    alignSelf: 'stretch',
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#00C853',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: '#052e1b', fontWeight: '800', fontSize: 15 },
-});

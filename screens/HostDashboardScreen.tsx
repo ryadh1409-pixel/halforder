@@ -698,13 +698,7 @@ export default function HostDashboardScreen() {
             )}
           </View>
 
-          <RestaurantPayoutMethods
-            restaurantId={uid}
-            interacEmail={restaurant?.interacEmail ?? ''}
-            stripeConnected={Boolean(stripeAccountId)}
-            stripeLoading={stripeLoading}
-            onConnectStripe={() => void handleConnectStripe()}
-          />
+          <RestaurantPayoutMethods restaurantId={uid} />
         </ScrollView>
       </KeyboardAvoidingView>
 
