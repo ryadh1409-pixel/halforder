@@ -10,7 +10,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE } from '../constants/pushTypes';
+import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE, RESTAURANT_NEW_ORDER_PUSH_TYPE } from '../constants/pushTypes';
 
 let foregroundHandlerConfigured = false;
 
@@ -49,6 +49,14 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#A855F7',
     sound: 'default',
+  });
+  await Notifications.setNotificationChannelAsync('restaurant_orders', {
+    name: 'Restaurant Orders',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 150, 250],
+    lightColor: '#16a34a',
+    sound: 'default',
+    enableVibrate: true,
   });
 }
 
@@ -97,7 +105,9 @@ export function configureForegroundNotificationHandler(): void {
       return {
         shouldShowAlert: true,
         shouldPlaySound: true,
-        shouldSetBadge: false,
+        shouldSetBadge:
+          data?.type === RESTAURANT_NEW_ORDER_PUSH_TYPE ||
+          data?.type === 'admin_new_order_created',
         shouldShowBanner: true,
         shouldShowList: true,
       };

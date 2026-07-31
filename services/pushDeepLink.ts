@@ -1,7 +1,11 @@
 /**
- * Handle tap → deep link for admin / system push payloads.
+ * Handle tap → deep link for admin / system / restaurant push payloads.
  */
 import { isExpoGo } from '@/constants/runtimeEnvironment';
+import { RESTAURANT_NEW_ORDER_PUSH_TYPE } from '@/constants/pushTypes';
+import { adminRoutes } from '@/constants/adminRoutes';
+import { HOST_ROUTES } from '@/lib/navigationPaths';
+import { setRestaurantOrderFocusFromPush } from '@/lib/restaurantOrderFocus';
 import { increment, doc, updateDoc } from 'firebase/firestore';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -22,6 +26,44 @@ function resolveDeepLink(data: Record<string, unknown> | undefined): string | nu
   for (const c of candidates) {
     if (typeof c === 'string' && c.trim()) return c.trim();
   }
+  return null;
+}
+
+function resolvePushNavigation(data: Record<string, unknown> | undefined): string | null {
+  if (!data) return null;
+  const type = typeof data.type === 'string' ? data.type.trim() : '';
+  const orderId = typeof data.orderId === 'string' ? data.orderId.trim() : '';
+
+  if (type === RESTAURANT_NEW_ORDER_PUSH_TYPE && orderId) {
+    setRestaurantOrderFocusFromPush(orderId);
+  } else if (orderId && resolveDeepLink(data)?.includes('focusOrderId=')) {
+    // Restaurant focus via deep link query
+    if (resolveDeepLink(data)?.includes('/(host)/')) {
+      setRestaurantOrderFocusFromPush(orderId);
+    }
+  }
+
+  const link = resolveDeepLink(data);
+  if (link) {
+    // Admin paid-order: land on dashboard then open the order detail.
+    if (
+      type === 'admin_new_order_created' &&
+      orderId &&
+      link.includes('/(tabs)/admin/dashboard')
+    ) {
+      return adminRoutes.order(orderId);
+    }
+    return link;
+  }
+
+  if (type === RESTAURANT_NEW_ORDER_PUSH_TYPE && orderId) {
+    return `${HOST_ROUTES.orders}?focusOrderId=${encodeURIComponent(orderId)}`;
+  }
+
+  if (type === 'admin_new_order_created' && orderId) {
+    return adminRoutes.order(orderId);
+  }
+
   return null;
 }
 
@@ -60,7 +102,7 @@ export function wirePushNotificationDeepLinks(navigate: NavigateFn): () => void 
       void logNotificationOpened(response.notification.request.identifier);
       void bumpCampaignOpened(data.campaignId);
 
-      const link = resolveDeepLink(data);
+      const link = resolvePushNavigation(data);
       if (link) {
         try {
           navigate(link);
@@ -79,7 +121,7 @@ export function wirePushNotificationDeepLinks(navigate: NavigateFn): () => void 
         string,
         unknown
       >;
-      const link = resolveDeepLink(data);
+      const link = resolvePushNavigation(data);
       if (link) {
         try {
           navigate(link);

@@ -14,6 +14,8 @@ export function showCustomerLifecycleAlert(key: CustomerLifecycleAlertKey): void
 }
 
 export function showRestaurantLifecycleAlert(key: RestaurantLifecycleAlertKey): void {
+  // Native Expo push (`restaurant_new_order`) owns the new-order alert.
+  if (key === 'new_paid_order') return;
   const copy = RESTAURANT_LIFECYCLE_ALERTS[key];
   Alert.alert(copy.title, copy.message);
 }

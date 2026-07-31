@@ -77,12 +77,14 @@ export const TABS_ROUTES = {
 export const HOST_ROUTES = {
   hub: '/(host)',
   dashboard: '/(host)/dashboard',
+  orders: '/(host)/orders',
   menu: '/(host)/menu',
 } as const;
 
-export type HostTabKey = 'dashboard' | 'menu';
+export type HostTabKey = 'dashboard' | 'orders' | 'menu';
 
 export const HOST_TAB_HREFS: Record<HostTabKey, Href> = {
   dashboard: HOST_ROUTES.dashboard,
+  orders: HOST_ROUTES.orders,
   menu: HOST_ROUTES.menu,
 };

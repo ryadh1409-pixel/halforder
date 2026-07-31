@@ -2,8 +2,8 @@ import { useAuth } from '../../../services/AuthContext';
 import { db } from '../../../services/firebase';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -32,6 +32,29 @@ function endOfTodayMs(): number {
   return d.getTime();
 }
 
+function orderCreatedMs(data: Record<string, unknown>): number {
+  const rawCreated = data.createdAt ?? data.paidAt;
+  if (rawCreated && typeof rawCreated === 'object' && 'toMillis' in rawCreated) {
+    return (rawCreated as { toMillis: () => number }).toMillis();
+  }
+  if (typeof data.createdAtMs === 'number') return data.createdAtMs;
+  if (typeof data.paidAtMs === 'number') return data.paidAtMs;
+  const n = typeof rawCreated === 'number' ? rawCreated : Number(rawCreated);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isPendingNewPaidOrder(data: Record<string, unknown>): boolean {
+  const payment =
+    typeof data.paymentStatus === 'string' ? data.paymentStatus.trim().toLowerCase() : '';
+  if (payment !== 'paid' && payment !== 'succeeded') return false;
+  const status = typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
+  return (
+    status === 'payment_confirmed' ||
+    status === 'pending' ||
+    status === 'confirmed'
+  );
+}
+
 type Stats = {
   totalUsers: number;
   totalOrders: number;
@@ -43,16 +66,30 @@ type Stats = {
   complaints: number;
   ordersToday: number;
   reports: number;
+  pendingNewOrders: number;
+  newestPendingOrderId: string | null;
 };
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ focusOrderId?: string }>();
   const { user, firestoreUserRole } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const openedFocusRef = useRef<string | null>(null);
 
   const isAdmin = isAdminUser(user, firestoreUserRole);
+
+  const focusOrderId =
+    typeof params.focusOrderId === 'string' ? params.focusOrderId.trim() : '';
+
+  useEffect(() => {
+    if (!isAdmin || !focusOrderId) return;
+    if (openedFocusRef.current === focusOrderId) return;
+    openedFocusRef.current = focusOrderId;
+    router.push(adminRoutes.order(focusOrderId) as never);
+  }, [focusOrderId, isAdmin, router]);
 
   useEffect(() => {
     if (!user) {
@@ -68,7 +105,7 @@ export default function AdminDashboardScreen() {
       users: 0,
       complaints: 0,
       reports: [] as Record<string, unknown>[],
-      orders: [] as Record<string, unknown>[],
+      orders: [] as Array<Record<string, unknown> & { __id?: string }>,
     };
 
     const publish = () => {
@@ -80,6 +117,9 @@ export default function AdminDashboardScreen() {
       let activeDeliveries = 0;
       let completedOrders = 0;
       let ordersToday = 0;
+      let pendingNewOrders = 0;
+      let newestPendingOrderId: string | null = null;
+      let newestPendingMs = -1;
 
       state.orders.forEach((data) => {
         const status = typeof data.status === 'string' ? data.status : '';
@@ -107,13 +147,19 @@ export default function AdminDashboardScreen() {
           completedOrders += 1;
         }
 
-        const rawCreated = data.createdAt;
-        const created =
-          rawCreated && typeof rawCreated === 'object' && 'toMillis' in rawCreated
-            ? (rawCreated as { toMillis: () => number }).toMillis()
-            : rawCreated ?? 0;
-        const ms = typeof created === 'number' ? created : Number(created);
+        const ms = orderCreatedMs(data);
         if (ms >= todayStart && ms <= todayEnd) ordersToday += 1;
+
+        if (isPendingNewPaidOrder(data)) {
+          pendingNewOrders += 1;
+          if (ms >= newestPendingMs) {
+            newestPendingMs = ms;
+            newestPendingOrderId =
+              typeof data.__id === 'string' && data.__id.trim()
+                ? data.__id.trim()
+                : null;
+          }
+        }
       });
 
       state.reports.forEach((data) => {
@@ -134,6 +180,8 @@ export default function AdminDashboardScreen() {
         complaints: state.complaints,
         ordersToday,
         reports: state.reports.length,
+        pendingNewOrders,
+        newestPendingOrderId,
       };
       adminLog('dashboard', 'live stats updated', payload);
       setStats(payload);
@@ -151,7 +199,10 @@ export default function AdminDashboardScreen() {
         setLoading(false);
       }),
       onSnapshot(collection(db, 'orders'), (snap) => {
-        state.orders = snap.docs.map((doc) => doc.data());
+        state.orders = snap.docs.map((docSnap) => ({
+          ...docSnap.data(),
+          __id: docSnap.id,
+        }));
         publish();
       }, (err) => {
         adminError('dashboard', 'orders listener failed', err);
@@ -178,6 +229,11 @@ export default function AdminDashboardScreen() {
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
   }, [user, firestoreUserRole]);
+
+  const newOrdersBadge = useMemo(
+    () => stats?.pendingNewOrders ?? 0,
+    [stats?.pendingNewOrders],
+  );
 
   if (!user) {
     return (
@@ -240,6 +296,33 @@ export default function AdminDashboardScreen() {
 
         {stats ? (
           <View style={styles.cards}>
+            <TouchableOpacity
+              style={[styles.card, styles.newOrdersCard]}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (stats.newestPendingOrderId) {
+                  router.push(adminRoutes.order(stats.newestPendingOrderId) as never);
+                  return;
+                }
+                router.push(adminRoutes.orders({ filter: 'pending' }) as never);
+              }}
+            >
+              <View style={styles.newOrdersHeader}>
+                <Text style={[styles.cardLabel, { marginBottom: 0 }]}>New Orders</Text>
+                {newOrdersBadge > 0 ? (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {newOrdersBadge > 99 ? '99+' : String(newOrdersBadge)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.cardValue}>{stats.pendingNewOrders}</Text>
+              <Text style={styles.cardSub}>Pending new paid orders</Text>
+              <Text style={styles.cardCta}>
+                {stats.newestPendingOrderId ? 'Open newest →' : 'No new orders'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.85}
@@ -366,6 +449,30 @@ const styles = StyleSheet.create({
     ...adminCardShell,
     padding: theme.spacing.section,
     marginBottom: 12,
+  },
+  newOrdersCard: {
+    borderColor: 'rgba(239,68,68,0.35)',
+    borderWidth: 1,
+  },
+  newOrdersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   cardLabel: {
     fontSize: 14,

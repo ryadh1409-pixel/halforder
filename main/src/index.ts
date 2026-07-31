@@ -27,6 +27,7 @@ export {
   notifyAdminsOnReportCreated,
   notifyAdminsOnUserSuspended,
 } from "./adminNotifications.js";
+export {notifyRestaurantOnNewOrder} from "./restaurantNewOrderNotifications.js";
 export {
   notifyOrderChatMessageCreated,
   provisionDriverChatOnAssignment,

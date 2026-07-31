@@ -1,11 +1,12 @@
 import {
-    RestaurantOrdersPanel,
     type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
 import { RestaurantPayoutMethods } from '@/components/restaurant/RestaurantPayoutMethods';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
+import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
+import { computeRestaurantDashboardMetrics } from '@/lib/restaurantOrderFreshness';
 import {
     displayFromStoredProfilePhone,
     formatProfileWhatsAppDisplay,
@@ -109,6 +110,22 @@ export default function HostDashboardScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const isVenueOpen = restaurant?.isOpen ?? true;
+
+  const { allOrders } = useRestaurantOrders({
+    restaurantId: uid || null,
+    restaurantTimeZone: restaurant?.timezone,
+    filter: 'new',
+    enableAutoCleanup: false,
+  });
+
+  useEffect(() => {
+    if (!uid) {
+      setDashboardMetrics({ ordersToday: 0, revenue: 0 });
+      return;
+    }
+    const m = computeRestaurantDashboardMetrics(allOrders);
+    setDashboardMetrics({ ordersToday: m.total, revenue: m.revenue });
+  }, [allOrders, uid]);
 
   useEffect(() => {
     profileHydratedRef.current = false;
@@ -580,15 +597,6 @@ export default function HostDashboardScreen() {
                   )}
                 </TouchableOpacity>
               ) : null}
-
-              {workspaceReady ? (
-                <WorkspaceSwitcher
-                  availableWorkspaces={availableWorkspaces}
-                  activeWorkspace={currentWorkspace}
-                  onSwitch={switchWorkspace}
-                  variant="restaurant"
-                />
-              ) : null}
             </View>
           </View>
 
@@ -604,6 +612,15 @@ export default function HostDashboardScreen() {
               <Text style={styles.statLabel}>Revenue</Text>
             </View>
           </View>
+
+          {workspaceReady ? (
+            <WorkspaceSwitcher
+              availableWorkspaces={availableWorkspaces}
+              activeWorkspace={currentWorkspace}
+              onSwitch={switchWorkspace}
+              variant="restaurant"
+            />
+          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>Venue info</Text>
@@ -658,23 +675,6 @@ export default function HostDashboardScreen() {
             stripeLoading={stripeLoading}
             onConnectStripe={() => void handleConnectStripe()}
           />
-
-          <View style={styles.card}>
-            <View style={styles.ordersSummaryRow}>
-              <View style={styles.ordersSummaryTile}>
-                <Text style={styles.ordersSummaryValue}>${stats.revenueToday.toFixed(0)}</Text>
-                <Text style={styles.ordersSummaryLabel}>Revenue (24h)</Text>
-              </View>
-            </View>
-            {uid ? (
-              <RestaurantOrdersPanel
-                restaurantId={uid}
-                restaurantTimeZone={restaurant?.timezone}
-                title="Live orders"
-                onDashboardMetrics={setDashboardMetrics}
-              />
-            ) : null}
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

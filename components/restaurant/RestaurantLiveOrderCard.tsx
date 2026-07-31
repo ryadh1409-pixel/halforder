@@ -13,8 +13,8 @@ import {
     safePhone,
 } from '@/utils/orderTime';
 import { platformElevation } from '@/utils/platformElevation';
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   order: RestaurantOrder;
@@ -24,6 +24,8 @@ type Props = {
   onReject: () => void;
   loading?: boolean;
   pendingAction?: RestaurantKitchenAction | null;
+  /** Brief highlight when opened from a new-order push. */
+  highlighted?: boolean;
 };
 
 function customerDisplayName(order: RestaurantOrder): string {
@@ -61,8 +63,33 @@ export function RestaurantLiveOrderCard({
   onReject,
   loading,
   pendingAction = null,
+  highlighted = false,
 }: Props) {
   const displayOrder = useMemo(() => applyStageLockToOrder(order), [order]);
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!highlighted) {
+      highlightAnim.setValue(0);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(highlightAnim, {
+          toValue: 1,
+          duration: 550,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 0.35,
+          duration: 550,
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [highlightAnim, highlighted]);
 
   const presentation = useMemo(() => {
     traceOrderStageRender(displayOrder, { sourceScreen });
@@ -104,8 +131,21 @@ export function RestaurantLiveOrderCard({
 
   if (!isOrderFresh(order)) return null;
 
+  const borderColor = highlighted
+    ? highlightAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['rgba(22,163,74,0.35)', '#16a34a'],
+      })
+    : 'rgba(255,255,255,0.1)';
+
   return (
-    <View style={styles.card}>
+    <Animated.View
+      style={[
+        styles.card,
+        highlighted && styles.cardHighlighted,
+        { borderColor },
+      ]}
+    >
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
           <Text style={styles.customerName}>{customerDisplayName(order)}</Text>
@@ -189,7 +229,7 @@ export function RestaurantLiveOrderCard({
         onMarkReady={() => onStatus('ready')}
         onReject={onReject}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -211,6 +251,10 @@ const styles = StyleSheet.create({
       },
       android: { elevation: 3 },
     }),
+  },
+  cardHighlighted: {
+    borderWidth: 2,
+    backgroundColor: '#07140C',
   },
   headerRow: {
     flexDirection: 'row',

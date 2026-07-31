@@ -30,6 +30,10 @@ import {
     computeRestaurantDashboardMetrics,
     isOrderFresh,
 } from '@/lib/restaurantOrderFreshness';
+import {
+    consumePendingRestaurantOrderFocus,
+    subscribeRestaurantOrderFocus,
+} from '@/lib/restaurantOrderFocus';
 import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { deriveOrderStage, getRestaurantOrderPresentation } from '@/services/orderStage';
@@ -83,6 +87,7 @@ export function RestaurantOrdersPanel({
 }: Props) {
   const [filter, setFilter] = useState<RestaurantOrderListFilter>('new');
   const [archivedSearch, setArchivedSearch] = useState('');
+  const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState<{
     orderId: string;
     action: RestaurantKitchenAction;
@@ -103,6 +108,52 @@ export function RestaurantOrdersPanel({
   });
 
   useRestaurantOrdersLifecycleAlerts(allOrders);
+
+  const applyFocusOrder = useCallback((orderId: string) => {
+    const id = orderId.trim();
+    if (!id) return;
+    setFilter('new');
+    setHighlightOrderId(id);
+    const timer = setTimeout(() => {
+      setHighlightOrderId((current) => (current === id ? null : current));
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    const pending = consumePendingRestaurantOrderFocus();
+    let clearHighlight: (() => void) | undefined;
+    if (pending) {
+      clearHighlight = applyFocusOrder(pending);
+    }
+    const unsub = subscribeRestaurantOrderFocus((orderId) => {
+      clearHighlight?.();
+      clearHighlight = applyFocusOrder(orderId);
+    });
+    return () => {
+      unsub();
+      clearHighlight?.();
+    };
+  }, [applyFocusOrder]);
+
+  /** Uber-style: newly arrived kitchen orders highlight instantly from the live listener. */
+  const seenOrderIdsRef = React.useRef<Set<string> | null>(null);
+  React.useEffect(() => {
+    if (loading) return;
+    const ids = allOrders.map((order) => order.id).filter(Boolean);
+    if (!seenOrderIdsRef.current) {
+      seenOrderIdsRef.current = new Set(ids);
+      return;
+    }
+    for (const order of allOrders) {
+      const id = order.id?.trim();
+      if (!id || seenOrderIdsRef.current.has(id)) continue;
+      seenOrderIdsRef.current.add(id);
+      if (deriveOrderStage(order) === 'awaiting_restaurant') {
+        applyFocusOrder(id);
+      }
+    }
+  }, [allOrders, applyFocusOrder, loading]);
 
   const freshOrders = useMemo(
     () => (filter === 'archived' ? orders : orders.filter((order) => isOrderFresh(order))),
@@ -215,7 +266,13 @@ export function RestaurantOrdersPanel({
     return { pending, preparing, ready, withDriver };
   }, [allOrders]);
 
-  const listOrders = filter === 'archived' ? archivedFiltered : freshOrders;
+  const listOrders = useMemo(() => {
+    const base = filter === 'archived' ? archivedFiltered : freshOrders;
+    if (!highlightOrderId) return base;
+    const focused = base.filter((order) => order.id === highlightOrderId);
+    const rest = base.filter((order) => order.id !== highlightOrderId);
+    return focused.length ? [...focused, ...rest] : base;
+  }, [archivedFiltered, filter, freshOrders, highlightOrderId]);
 
   return (
     <View style={styles.wrap}>
@@ -304,6 +361,7 @@ export function RestaurantOrdersPanel({
                     order={order}
                     timeZone={timeZone}
                     sourceScreen="RestaurantOrdersPanel"
+                    highlighted={highlightOrderId === order.id}
                     pendingAction={
                       actionInFlight?.orderId === order.id ? actionInFlight.action : null
                     }

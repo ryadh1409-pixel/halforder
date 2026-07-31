@@ -72,6 +72,7 @@ async function sendExpoPush(
   title: string,
   body: string,
   data: Record<string, string>,
+  options?: {badge?: number; channelId?: string},
 ): Promise<void> {
   if (tokens.length === 0) return;
   try {
@@ -87,6 +88,8 @@ async function sendExpoPush(
         body,
         sound: "default",
         priority: "high",
+        channelId: options?.channelId ?? "halforder",
+        ...(typeof options?.badge === "number" ? {badge: options.badge} : {}),
         data,
       }))),
     });
@@ -110,6 +113,9 @@ async function createAdminNotification(input: {
   restaurantName?: string | null;
   hostName?: string | null;
   metadata?: Record<string, unknown>;
+  deepLink?: string | null;
+  badge?: number;
+  channelId?: string;
 }): Promise<void> {
   const recipients = await listAdminRecipients();
   const sentTo = recipients.map((r) => r.uid);
@@ -133,6 +139,10 @@ async function createAdminNotification(input: {
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  const deepLink =
+    input.deepLink ||
+    (input.orderId ? `/(tabs)/admin/order/${encodeURIComponent(input.orderId)}` : "");
+
   await sendExpoPush(
     recipients.map((r) => r.token).filter((token): token is string => Boolean(token)),
     input.title,
@@ -144,6 +154,11 @@ async function createAdminNotification(input: {
       ...(input.reportId ? {reportId: input.reportId} : {}),
       ...(input.userId ? {userId: input.userId} : {}),
       ...(input.paymentId ? {paymentId: input.paymentId} : {}),
+      ...(deepLink ? {deepLink} : {}),
+    },
+    {
+      badge: input.badge,
+      channelId: input.channelId,
     },
   );
 
@@ -155,35 +170,137 @@ async function createAdminNotification(input: {
   });
 }
 
-export const notifyAdminsOnOrderCreated = onDocumentCreated(
+function isPaid(data: Record<string, unknown>): boolean {
+  const payment = str(data.paymentStatus).toLowerCase();
+  return payment === "paid" || payment === "succeeded";
+}
+
+function restaurantNameOf(order: Record<string, unknown>): string {
+  const nested =
+    order.restaurant && typeof order.restaurant === "object"
+      ? str((order.restaurant as Record<string, unknown>).name)
+      : "";
+  return str(order.restaurantName) || nested || "Restaurant";
+}
+
+function itemCountOf(order: Record<string, unknown>): number {
+  const items = order.items;
+  if (!Array.isArray(items)) return 0;
+  return items.reduce((sum: number, item: unknown) => {
+    if (!item || typeof item !== "object") return sum + 1;
+    const qty = (item as Record<string, unknown>).qty;
+    const n = typeof qty === "number" && Number.isFinite(qty) ? qty : 1;
+    return sum + Math.max(1, Math.round(n));
+  }, 0);
+}
+
+function totalLabelOf(order: Record<string, unknown>): string {
+  const raw =
+    typeof order.totalPrice === "number"
+      ? order.totalPrice
+      : typeof order.total === "number"
+        ? order.total
+        : typeof order.customerTotal === "number"
+          ? order.customerTotal
+          : 0;
+  const amount = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  return `$${amount.toFixed(2)}`;
+}
+
+async function claimAdminPaidOrderPush(orderId: string): Promise<boolean> {
+  const ref = db.collection("adminPaidOrderPushes").doc(orderId);
+  try {
+    await ref.create({
+      orderId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error: unknown) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as {code?: unknown}).code)
+        : "";
+    if (code === "6" || code === "already-exists" || /ALREADY_EXISTS/i.test(String(error))) {
+      return false;
+    }
+    logger.warn("[admin-paid-order] receipt_create_failed", {
+      orderId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+async function countUnreadAdminNotifications(): Promise<number> {
+  try {
+    const snap = await db.collection("admin_notifications").orderBy("createdAt", "desc").limit(80).get();
+    let unread = 0;
+    snap.docs.forEach((docSnap) => {
+      const readBy = docSnap.data()?.readBy;
+      if (!Array.isArray(readBy) || readBy.length === 0) unread += 1;
+    });
+    return Math.max(1, unread);
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * Notify all admins once when a customer payment succeeds (paid order).
+ * Replaces create-time spam with a single paid-order push.
+ */
+export const notifyAdminsOnOrderCreated = onDocumentWritten(
   {document: "orders/{orderId}", region: "us-central1"},
   async (event) => {
-    const order = event.data?.data() ?? {};
     const orderId = event.params.orderId;
-    const restaurantName =
-      str(order.restaurantName) ||
-      (order.restaurant && typeof order.restaurant === "object" ?
-        str((order.restaurant as Record<string, unknown>).name) :
-        "");
+    const before = event.data?.before.exists
+      ? (event.data.before.data() as Record<string, unknown>)
+      : null;
+    const after = event.data?.after.exists
+      ? (event.data.after.data() as Record<string, unknown>)
+      : null;
+    if (!after) return;
+
+    const becamePaid = !isPaid(before ?? {}) && isPaid(after);
+    if (!becamePaid) return;
+
+    const claimed = await claimAdminPaidOrderPush(orderId);
+    if (!claimed) {
+      logger.info("[admin-paid-order] deduped", {orderId});
+      return;
+    }
+
+    const restaurantName = restaurantNameOf(after);
+    const itemCount = itemCountOf(after);
+    const totalLabel = totalLabelOf(after);
+    const itemLabel = itemCount === 1 ? "1 item" : `${itemCount} items`;
+    const body =
+      `${restaurantName} • ${itemLabel} • ${totalLabel}\n` +
+      "Customer payment completed.";
     const hostName =
-      str(order.hostName) ||
-      str(order.customerName) ||
-      (order.customer && typeof order.customer === "object" ?
-        str((order.customer as Record<string, unknown>).name) :
-        "");
+      str(after.hostName) ||
+      str(after.customerName) ||
+      (after.customer && typeof after.customer === "object"
+        ? str((after.customer as Record<string, unknown>).name)
+        : "");
+    const badge = await countUnreadAdminNotifications();
 
     await createAdminNotification({
       type: "new_order_created",
-      title: "New Order Created",
-      body: "A new order was created and requires monitoring.",
+      title: "New Paid Order",
+      body,
       orderId,
       restaurantName: restaurantName || null,
       hostName: hostName || null,
+      deepLink: `/(tabs)/admin/dashboard?focusOrderId=${encodeURIComponent(orderId)}`,
+      badge,
+      channelId: "halforder",
       metadata: {
         orderId,
         restaurantName: restaurantName || null,
         hostName: hostName || null,
-        createdAt: order.createdAt ?? null,
+        paidAt: after.paidAt ?? null,
+        event: "payment_completed",
       },
     });
   },
