@@ -27,19 +27,11 @@ import type { FoodShareHubItem } from '@/lib/ordersHubStatus';
 
 const c = theme.colors;
 
-function EmptyBlock({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
+function CompactEmpty({ label }: { label: string }) {
   return (
-    <View style={styles.emptyBlock}>
-      <Ionicons name="restaurant-outline" size={28} color="#7D8493" />
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyBody}>{body}</Text>
-    </View>
+    <Text style={styles.compactEmpty} numberOfLines={1}>
+      {label}
+    </Text>
   );
 }
 
@@ -139,66 +131,58 @@ export function OrdersHubScreen() {
           <Text style={styles.kicker}>Your activity</Text>
           <Text style={styles.title}>Orders</Text>
           <Text style={styles.subtitle}>
-            Food shares and marketplace orders — always one tap away.
+            HalfOrder shares and FullOrder deliveries in one place.
           </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Active food shares</Text>
-        {hubLoading ? (
-          <ActivityIndicator color={c.primary} style={{ marginVertical: 24 }} />
-        ) : active.length === 0 ? (
-          <EmptyBlock
-            title="No active food shares yet."
-            body="Looking for someone to share this meal? Join a card from Swipe."
-          />
-        ) : (
-          active.map((item) => <FoodShareHubCard key={item.hubId} item={item} />)
-        )}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>HalfOrder</Text>
+          {hubLoading ? (
+            <ActivityIndicator color={c.primary} style={styles.sectionLoader} />
+          ) : active.length === 0 ? (
+            <CompactEmpty label="No active orders" />
+          ) : (
+            active.map((item) => <FoodShareHubCard key={item.hubId} item={item} />)
+          )}
+        </View>
 
-        {completed.length > 0 ? (
-          <>
-            <Text style={styles.sectionTitle}>Completed food shares</Text>
-            {completed.map((item) => (
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>HalfOrder History</Text>
+          {hubLoading ? null : completed.length === 0 ? (
+            <CompactEmpty label="No past orders" />
+          ) : (
+            completed.map((item) => (
               <FoodShareHubCard key={item.hubId} item={item} />
-            ))}
-          </>
-        ) : !hubLoading ? (
-          <>
-            <Text style={styles.sectionTitle}>Completed food shares</Text>
-            <EmptyBlock
-              title="No completed food shares yet."
-              body="Finished meal shares will appear here."
-            />
-          </>
-        ) : null}
+            ))
+          )}
+        </View>
 
         {cancelled.length > 0 ? (
-          <>
+          <View style={styles.sectionBlockMuted}>
             <Text style={styles.sectionTitleMuted}>Cancelled</Text>
             {cancelled.map((item) => (
               <FoodShareHubCard key={item.hubId} item={item} />
             ))}
-          </>
+          </View>
         ) : null}
 
-        <Text style={[styles.sectionTitle, styles.sectionGap]}>Regular orders</Text>
-        {ordersLoading ? (
-          <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} />
-        ) : orderRows.length === 0 ? (
-          <EmptyBlock
-            title="No marketplace orders yet."
-            body="Your HalfOrder deliveries and pickups will show up here."
-          />
-        ) : (
-          orderRows.slice(0, 12).map((row) => (
-            <MarketplaceOrderCard
-              key={row.id}
-              row={row}
-              onPress={() => router.push(customerOrderDetailHref(row.id) as never)}
-              onReport={() => reportOrder(row)}
-            />
-          ))
-        )}
+        <View style={[styles.sectionBlock, styles.fullOrderBlock]}>
+          <Text style={styles.sectionTitle}>FullOrder</Text>
+          {ordersLoading ? (
+            <ActivityIndicator color={c.primary} style={styles.sectionLoader} />
+          ) : orderRows.length === 0 ? (
+            <CompactEmpty label="No FullOrder deliveries yet" />
+          ) : (
+            orderRows.slice(0, 12).map((row) => (
+              <MarketplaceOrderCard
+                key={row.id}
+                row={row}
+                onPress={() => router.push(customerOrderDetailHref(row.id) as never)}
+                onReport={() => reportOrder(row)}
+              />
+            ))
+          )}
+        </View>
 
         <Pressable
           style={styles.swipeLink}
@@ -214,7 +198,7 @@ export function OrdersHubScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#000000' },
-  scroll: { padding: 20, paddingBottom: 120 },
+  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 120 },
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -222,61 +206,63 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 12,
   },
-  header: { marginBottom: 18 },
+  header: { marginBottom: 28 },
   kicker: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#B7BDC9',
+    fontWeight: '700',
+    color: '#8B929E',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
-  title: { fontSize: 30, fontWeight: '900', color: '#FFF', marginTop: 4 },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#B7BDC9',
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFF',
     marginTop: 6,
+    letterSpacing: -0.6,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: '#A8AFBC',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  sectionBlock: {
+    marginBottom: 28,
+  },
+  sectionBlockMuted: {
+    marginBottom: 28,
+  },
+  fullOrderBlock: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#B7BDC9',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
+    marginBottom: 14,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    marginTop: 8,
   },
   sectionTitleMuted: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#7D8493',
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    marginTop: 16,
-  },
-  sectionGap: { marginTop: 24 },
-  emptyBlock: {
-    alignItems: 'center',
-    paddingVertical: 22,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(23,25,35,0.72)',
+    letterSpacing: 0.4,
     marginBottom: 12,
-    gap: 6,
+    textTransform: 'uppercase',
   },
-  emptyTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#B7BDC9',
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 12,
-    lineHeight: 18,
+  sectionLoader: { marginVertical: 12, alignSelf: 'flex-start' },
+  compactEmpty: {
+    fontSize: 13,
+    fontWeight: '500',
     color: '#7D8493',
-    textAlign: 'center',
+    marginBottom: 4,
+    paddingVertical: 2,
   },
   signInTitle: { fontSize: 24, fontWeight: '900', color: '#FFF' },
   signInBody: { fontSize: 14, color: '#B7BDC9', textAlign: 'center' },
@@ -293,8 +279,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 20,
-    paddingVertical: 12,
+    marginTop: 8,
+    paddingVertical: 14,
   },
   swipeLinkText: { color: '#A855F7', fontWeight: '800', fontSize: 13 },
 });

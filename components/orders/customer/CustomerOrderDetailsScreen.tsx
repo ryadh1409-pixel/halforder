@@ -732,30 +732,39 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           )}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Delivery details</Text>
-          <Text style={styles.metaStrong}>Address</Text>
-          <Text style={styles.meta}>{formatAddress(order.deliveryLocation?.address)}</Text>
-          <OrderReceiptBreakdown
-            tone="dark"
-            title="Order Summary"
-            pricing={computeOrderPricing({
-              foodSubtotal: order.subtotal,
-              deliveryFee: order.deliveryFee,
-              serviceFee: order.serviceFee,
-              promoDiscount: order.promoDiscount,
-              taxRate: order.taxRate,
-            })}
-            meta={{
-              receiptNumber: order.receiptNumber,
-              idForReceipt: order.id,
-              paymentMethod: order.paymentMethod ?? 'Card',
-              paymentStatus: order.paymentStatus,
-              stripeTransactionId:
-                order.stripePaymentIntentId ?? order.paymentIntentId,
-              paidAt: order.paidAt,
-            }}
-          />
+        <View style={[styles.card, styles.deliveryCard]}>
+          <Text style={styles.deliverySectionTitle}>Delivery details</Text>
+
+          <View style={styles.addressBlock}>
+            <Text style={styles.addressLabel}>Address</Text>
+            <Text style={styles.addressValue}>
+              {formatAddress(order.deliveryLocation?.address)}
+            </Text>
+          </View>
+
+          <View style={styles.summaryBlock}>
+            <OrderReceiptBreakdown
+              tone="dark"
+              title="Order Summary"
+              pricing={computeOrderPricing({
+                foodSubtotal: order.subtotal,
+                deliveryFee: order.deliveryFee,
+                serviceFee: order.serviceFee,
+                promoDiscount: order.promoDiscount,
+                taxRate: order.taxRate,
+              })}
+              meta={{
+                receiptNumber: order.receiptNumber,
+                idForReceipt: order.id,
+                paymentMethod: order.paymentMethod ?? 'Card',
+                paymentStatus: order.paymentStatus,
+                stripeTransactionId:
+                  order.stripePaymentIntentId ?? order.paymentIntentId,
+                paidAt: order.paidAt,
+              }}
+            />
+          </View>
+
           <Pressable
             style={styles.mapOpenBtn}
             onPress={() => {
@@ -801,26 +810,28 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             <Text style={styles.mapOpenBtnText}>Open in Google Maps</Text>
           </Pressable>
 
-          <Text style={[styles.metaStrong, { marginTop: 18 }]}>Help</Text>
-          <Pressable
-            style={[styles.secondaryBtn, !driverChatEnabled && styles.secondaryBtnDisabled]}
-            disabled={!driverChatEnabled}
-            onPress={() =>
-              router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)
-            }
-          >
-            <Text style={styles.secondaryBtnText}>Chat with driver</Text>
-          </Pressable>
-          {!driverChatEnabled ? (
-            <Text style={styles.hint}>Available once a driver is assigned.</Text>
-          ) : null}
+          <View style={styles.helpBlock}>
+            <Text style={styles.helpLabel}>Help</Text>
+            <Pressable
+              style={[styles.secondaryBtn, !driverChatEnabled && styles.secondaryBtnDisabled]}
+              disabled={!driverChatEnabled}
+              onPress={() =>
+                router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.CUSTOMER_DRIVER) as never)
+              }
+            >
+              <Text style={styles.secondaryBtnText}>Chat with driver</Text>
+            </Pressable>
+            {!driverChatEnabled ? (
+              <Text style={styles.hint}>Available once a driver is assigned.</Text>
+            ) : null}
 
-          <Pressable
-            style={[styles.secondaryBtn, { marginTop: 10 }]}
-            onPress={() => router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.SUPPORT) as never)}
-          >
-            <Text style={styles.secondaryBtnText}>Help & support</Text>
-          </Pressable>
+            <Pressable
+              style={[styles.secondaryBtn, styles.helpSecondaryBtn]}
+              onPress={() => router.push(orderRoomHref(order.id, ORDER_CHAT_TYPE.SUPPORT) as never)}
+            >
+              <Text style={styles.secondaryBtnText}>Help & support</Text>
+            </Pressable>
+          </View>
 
           <Pressable
             style={[
@@ -850,7 +861,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 48 },
   stickyHeader: {
     backgroundColor: '#000000',
-    paddingBottom: 14,
+    paddingBottom: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
@@ -868,12 +879,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     paddingHorizontal: 16,
-    marginTop: 6,
+    marginTop: 8,
     lineHeight: 20,
   },
   trackFullscreenBtn: {
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 14,
     paddingVertical: 12,
     borderRadius: 14,
     backgroundColor: 'rgba(168, 85, 247, 0.14)',
@@ -884,7 +895,7 @@ const styles = StyleSheet.create({
   trackFullscreenBtnText: { color: '#C084FC', fontWeight: '900', fontSize: 15 },
   liveMapPreviewCard: {
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 14,
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
@@ -918,20 +929,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   pinHint: { color: 'rgba(254, 243, 199, 0.88)', fontWeight: '600', fontSize: 12, marginTop: 8 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingHorizontal: 16 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, paddingHorizontal: 16 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   chipText: { fontWeight: '800', fontSize: 12, textTransform: 'capitalize' },
   driverLine: {
-    marginTop: 10,
+    marginTop: 12,
     paddingHorizontal: 16,
     color: 'rgba(226,232,240,0.85)',
     fontWeight: '600',
     fontSize: 13,
   },
-  etaWrap: { marginTop: 10, paddingHorizontal: 16 },
-  progressWrap: { marginTop: 14, paddingHorizontal: 16 },
+  etaWrap: { marginTop: 12, paddingHorizontal: 16 },
+  progressWrap: { marginTop: 16, paddingHorizontal: 16 },
   completedBadge: {
-    marginTop: 14,
+    marginTop: 16,
     marginHorizontal: 16,
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(34,197,94,0.18)',
@@ -951,12 +962,63 @@ const styles = StyleSheet.create({
   completedCardBody: { color: '#7D8493', marginTop: 8, fontWeight: '600', lineHeight: 20 },
   card: {
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 16,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     backgroundColor: '#0E1218',
     padding: 16,
+  },
+  deliveryCard: {
+    marginTop: 20,
+    padding: 18,
+  },
+  deliverySectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    marginBottom: 16,
+  },
+  addressBlock: {
+    marginBottom: 20,
+    paddingBottom: 18,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  addressLabel: {
+    color: '#8B929E',
+    fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  addressValue: {
+    color: 'rgba(226,232,240,0.92)',
+    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  summaryBlock: {
+    marginBottom: 8,
+  },
+  helpBlock: {
+    marginTop: 20,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  helpLabel: {
+    color: '#8B929E',
+    fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 10,
+  },
+  helpSecondaryBtn: {
+    marginTop: 10,
   },
   cardTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -1039,7 +1101,7 @@ const styles = StyleSheet.create({
   totalLabel: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
   totalVal: { color: '#22C55E', fontWeight: '900', fontSize: 17 },
   mapOpenBtn: {
-    marginTop: 14,
+    marginTop: 16,
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1072,7 +1134,7 @@ const styles = StyleSheet.create({
   secondaryBtnDisabled: { opacity: 0.45 },
   secondaryBtnText: { color: 'rgba(255,255,255,0.9)', fontWeight: '800', fontSize: 14 },
   cancelBtn: {
-    marginTop: 14,
+    marginTop: 18,
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,

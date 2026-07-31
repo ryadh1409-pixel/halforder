@@ -73,7 +73,7 @@ export function MarketplaceOrderCard({
           ? 'Payment failed'
           : row.paymentStatus === 'refunded'
             ? 'Refunded'
-            : 'Unpaid';
+            : 'Awaiting Payment';
 
   const addressLine =
     row.deliveryAddress || row.restaurant.address
@@ -98,7 +98,7 @@ export function MarketplaceOrderCard({
             <Image source={{ uri: row.restaurant.image }} style={styles.img} />
           ) : (
             <View style={styles.imgPlaceholder}>
-              <MaterialIcons name="restaurant" size={26} color="#8B929E" />
+              <MaterialIcons name="restaurant" size={24} color="#8B929E" />
             </View>
           )}
         </View>
@@ -108,11 +108,11 @@ export function MarketplaceOrderCard({
             <Text style={styles.restaurantName} numberOfLines={1}>
               {formatRestaurantName(row.restaurant.name)}
             </Text>
-            <MaterialIcons name="chevron-right" size={22} color="#8B929E" />
+            <MaterialIcons name="chevron-right" size={20} color="#6B7280" />
           </View>
 
           {addressLine ? (
-            <Text style={styles.address} numberOfLines={1}>
+            <Text style={styles.address} numberOfLines={2}>
               {addressLine}
             </Text>
           ) : null}
@@ -123,7 +123,7 @@ export function MarketplaceOrderCard({
             </Text>
             <View style={styles.metaDot} />
             <View style={styles.participantBadge}>
-              <MaterialIcons name="people" size={12} color="#C4C9D4" />
+              <MaterialIcons name="people" size={13} color="#C4C9D4" />
               <Text style={styles.participantText}>{row.participantCount}</Text>
             </View>
           </View>
@@ -140,6 +140,7 @@ export function MarketplaceOrderCard({
           <View style={[styles.payBadge, payBadgeStyle(row.paymentStatus)]}>
             <Text
               style={[styles.payBadgeText, payBadgeTextStyle(row.paymentStatus)]}
+              numberOfLines={1}
             >
               {payLabel}
             </Text>
@@ -176,7 +177,7 @@ export function MarketplaceOrderCard({
             }}
             style={styles.reportBtn}
           >
-            <MaterialIcons name="flag" size={14} color="#EF4444" />
+            <MaterialIcons name="flag" size={13} color="#EF4444" />
             <Text style={styles.reportText}>Report</Text>
           </Pressable>
         ) : (
@@ -191,47 +192,47 @@ export function MarketplaceOrderCard({
 function payBadgeStyle(p: string): object {
   switch (p) {
     case 'paid':
-      return { backgroundColor: 'rgba(34,197,94,0.14)' };
+      return { backgroundColor: 'rgba(34,197,94,0.16)' };
     case 'processing':
-      return { backgroundColor: 'rgba(245,158,11,0.14)' };
+      return { backgroundColor: 'rgba(245,158,11,0.16)' };
     case 'failed':
-      return { backgroundColor: 'rgba(239,68,68,0.14)' };
+      return { backgroundColor: 'rgba(239,68,68,0.16)' };
     default:
-      return { backgroundColor: 'rgba(139,146,158,0.14)' };
+      return { backgroundColor: 'rgba(148,163,184,0.16)' };
   }
 }
 
 function payBadgeTextStyle(p: string): object {
   switch (p) {
     case 'paid':
-      return { color: '#22C55E' };
+      return { color: '#4ADE80' };
     case 'processing':
-      return { color: '#F59E0B' };
+      return { color: '#FBBF24' };
     case 'failed':
-      return { color: '#EF4444' };
+      return { color: '#F87171' };
     default:
-      return { color: '#8B929E' };
+      return { color: '#94A3B8' };
   }
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 18,
+    paddingVertical: 18,
     paddingHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: '#14161E',
+    marginBottom: 14,
+    backgroundColor: '#12141C',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.07)',
     ...platformElevation({
-      web: '0px 6px 16px rgba(0,0,0,0.28)',
+      web: '0px 8px 20px rgba(0,0,0,0.32)',
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.22,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.28,
+        shadowRadius: 14,
       },
-      android: { elevation: 4 },
+      android: { elevation: 5 },
     }),
   },
   cardDisabled: { opacity: 0.52 },
@@ -242,11 +243,11 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   imgWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 58,
+    height: 58,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   img: { width: '100%', height: '100%' },
   imgPlaceholder: {
@@ -258,26 +259,27 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   restaurantName: {
     flex: 1,
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    letterSpacing: -0.35,
   },
   address: {
-    marginTop: 4,
+    marginTop: 5,
     color: '#8B929E',
     fontSize: 13,
     fontWeight: '500',
-    lineHeight: 17,
+    lineHeight: 18,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    flexWrap: 'wrap',
+    marginTop: 10,
     gap: 8,
   },
   metaTime: {
@@ -290,15 +292,15 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.26)',
   },
   participantBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   participantText: {
@@ -308,8 +310,8 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginTop: 16,
     marginBottom: 14,
   },
   statusTotalRow: {
@@ -322,6 +324,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     minWidth: 0,
   },
@@ -333,25 +336,25 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   payBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
-  payBadgeText: { fontWeight: '700', fontSize: 11 },
+  payBadgeText: { fontWeight: '700', fontSize: 11, letterSpacing: 0.1 },
   totalVal: {
     color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 17,
-    letterSpacing: -0.2,
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
   eta: {
-    marginTop: 8,
+    marginTop: 10,
     color: '#F59E0B',
     fontWeight: '600',
     fontSize: 13,
   },
   driverLine: {
-    marginTop: 6,
+    marginTop: 8,
     color: '#8B929E',
     fontWeight: '500',
     fontSize: 13,
@@ -368,7 +371,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginTop: 14,
+    marginTop: 16,
   },
   openCue: {
     color: '#34D399',
@@ -378,10 +381,10 @@ const styles = StyleSheet.create({
   reportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
     backgroundColor: 'rgba(239,68,68,0.1)',
   },
   reportText: {
