@@ -3,22 +3,22 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import 'react-native-svg';
 
-import { AppLocationSync } from '@/components/AppLocationSync';
-import { BootstrapShell } from '@/components/BootstrapShell';
-import { SystemDialogHost } from '@/components/SystemDialogHost';
-import { HomeMarketplaceLocationProvider } from '@/contexts/HomeMarketplaceLocationContext';
-import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
-import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
-import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
-import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
-import { PushNotificationDeepLinkListener } from '@/components/PushNotificationDeepLinkListener';
 import { AbandonedCheckoutNotificationListener } from '@/components/AbandonedCheckoutNotificationListener';
 import { AdminSupportInboundListener } from '@/components/AdminSupportInboundListener';
 import { AppBadgeSync } from '@/components/AppBadgeSync';
-import { SwipeReferralRewardUnlockHost } from '@/components/SwipeReferralRewardUnlockHost';
+import { AppLocationSync } from '@/components/AppLocationSync';
+import { BootstrapShell } from '@/components/BootstrapShell';
+import { DevClientRequiredScreen } from '@/components/DevClientRequiredScreen';
 import { DriverReferralAttributionBridge } from '@/components/DriverReferralAttributionBridge';
+import { RoleBoundaryGuard } from '@/components/layout/RoleBoundaryGuard';
+import { PushNotificationDeepLinkListener } from '@/components/PushNotificationDeepLinkListener';
+import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
+import { StartupRedirectOrchestrator } from '@/components/StartupRedirectOrchestrator';
+import { SwipeReferralRewardUnlockHost } from '@/components/SwipeReferralRewardUnlockHost';
+import { SystemDialogHost } from '@/components/SystemDialogHost';
 import { APPLE_PAY_MERCHANT_ID } from '@/constants/applePay';
 import { isExpoGo } from '@/constants/runtimeEnvironment';
+import { HomeMarketplaceLocationProvider } from '@/contexts/HomeMarketplaceLocationContext';
 import { AppStripeProvider } from '@/services/stripe';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot } from 'expo-router';
@@ -26,14 +26,14 @@ import React from 'react';
 import { LogBox, Platform, StyleSheet, View } from 'react-native';
 LogBox.ignoreLogs(['FirebaseError: Missing or insufficient permissions']);
 
+import { ordersPalette } from '@/theme/theme';
+import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
+import { toastConfig } from '@/utils/toast';
 import Toast from 'react-native-toast-message';
 import { forceEnglishLayout } from '../lib/forceEnglishLayout';
-import { toastConfig } from '@/utils/toast';
-import { logDevStartupConfig, useDevProviderMount } from '@/utils/devBootstrapDiagnostics';
 import { AuthProvider } from '../services/AuthContext';
 import { CartProvider } from '../services/CartContext';
 import { configureExpoPushNotificationHandler } from '../services/pushNotifications';
-import { ordersPalette } from '@/theme/theme';
 
 const HalfOrderNavigationTheme = {
   ...DarkTheme,

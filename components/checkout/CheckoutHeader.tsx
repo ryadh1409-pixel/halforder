@@ -19,7 +19,7 @@ type Props = {
 };
 
 /**
- * Minimal sticky header — centered title + back glass pill; separates with hairline while scrolling.
+ * Minimal sticky header — centered title + premium circular back control.
  */
 function CheckoutHeaderInner({ scrollY, title = 'Checkout', onBack }: Props) {
   const top = useSafeAreaInsets().top;
@@ -51,7 +51,7 @@ function CheckoutHeaderInner({ scrollY, title = 'Checkout', onBack }: Props) {
         <Pressable
           {...checkoutPressableProps}
           accessibilityLabel="Go back"
-          hitSlop={12}
+          hitSlop={8}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onBack();
@@ -59,7 +59,7 @@ function CheckoutHeaderInner({ scrollY, title = 'Checkout', onBack }: Props) {
           style={styles.backSlot}
         >
           {Platform.OS === 'ios' ? (
-            <BlurView intensity={28} tint="light" style={styles.glassCircle}>
+            <BlurView intensity={36} tint="dark" style={styles.glassCircle}>
               <Ionicons name="chevron-back" size={22} color={CK.text} />
             </BlurView>
           ) : (
@@ -96,43 +96,57 @@ const styles = StyleSheet.create({
   },
   hair: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: CK.headerHairline,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    minHeight: 44,
+    paddingHorizontal: 12,
+    minHeight: 48,
   },
-  backSlot: { width: 44, alignItems: 'flex-start', justifyContent: 'center' },
+  backSlot: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: CK.text,
     textAlign: 'center',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   glassCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(12,12,14,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(28,24,38,0.72)',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
   androidCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: CK.surface,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(28,24,38,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: CK.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
 });

@@ -1,25 +1,25 @@
 import { CompleteMealAmountPicker } from '@/components/completeMeal/CompleteMealAmountPicker';
 import { CK } from '@/constants/checkoutUi';
+import { useAuth } from '@/services/AuthContext';
+import { useCart } from '@/services/CartContext';
 import {
-  createCompleteMealCampaign,
+    createCompleteMealCampaign,
 } from '@/services/completeMeal/callables';
 import { payCompleteMealContribution } from '@/services/completeMeal/payCompleteMeal';
 import {
-  clearPendingCompleteMealDraft,
-  peekPendingCompleteMealDraft,
+    clearPendingCompleteMealDraft,
+    peekPendingCompleteMealDraft,
 } from '@/services/completeMeal/pendingDraft';
-import { useCart } from '@/services/CartContext';
-import { useAuth } from '@/services/AuthContext';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

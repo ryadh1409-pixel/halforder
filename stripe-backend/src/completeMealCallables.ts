@@ -1,13 +1,13 @@
+import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
-import type {CallableContext} from "firebase-functions/v1/https";
-import {defineSecret} from "firebase-functions/params";
+import type { CallableContext } from "firebase-functions/v1/https";
 import Stripe from "stripe";
 import {
-  cancelCompleteMealCampaignCore,
-  confirmCompleteMealPaymentCore,
-  createCompleteMealCampaignCore,
-  createCompleteMealPaymentIntentCore,
-  getCompleteMealCampaignCore,
+    cancelCompleteMealCampaignCore,
+    confirmCompleteMealPaymentCore,
+    createCompleteMealCampaignCore,
+    createCompleteMealPaymentIntentCore,
+    getCompleteMealCampaignCore,
 } from "./completeMealCore.js";
 
 const stripeSecret = defineSecret("STRIPE_SECRET_KEY");

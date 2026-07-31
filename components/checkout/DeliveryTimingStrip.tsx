@@ -45,12 +45,12 @@ function DeliveryTimingStripInner({ value, onChange }: Props) {
 export const DeliveryTimingStrip = memo(DeliveryTimingStripInner);
 
 const styles = StyleSheet.create({
-  block: { marginTop: 8 },
+  block: { marginTop: 0 },
   eyebrow: {
     paddingHorizontal: 16,
     fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.65,
+    fontWeight: '700',
+    letterSpacing: 0.7,
     textTransform: 'uppercase',
     color: CK.textMuted,
     marginBottom: 12,
@@ -61,5 +61,5 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingBottom: 2,
   },
-  cardSlot: { width: 124, marginRight: 11 },
+  cardSlot: { width: 124, marginRight: 12 },
 });

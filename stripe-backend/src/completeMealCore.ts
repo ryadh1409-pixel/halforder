@@ -1,9 +1,9 @@
-import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
-import type {CallableContext} from "firebase-functions/v1/https";
+import type { CallableContext } from "firebase-functions/v1/https";
 import type Stripe from "stripe";
-import {writeFoodShareInbox} from "./foodShareServerNotify.js";
+import { writeFoodShareInbox } from "./foodShareServerNotify.js";
 
 const CAMPAIGNS = "completeMealCampaigns";
 const PAYMENTS = "completeMealPayments";

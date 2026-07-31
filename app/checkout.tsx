@@ -4,6 +4,7 @@ import {
 } from '@/hooks/useAwaitOrderPaidNavigation';
 import { logPaymentNavigation } from '@/lib/paymentNavigation';
 import { useAuth } from '@/services/AuthContext';
+import { useCart } from '@/services/CartContext';
 import { auth, ensureAuthReady } from '@/services/firebase';
 import { getRestaurantOrderById } from '@/services/orderService';
 import { openPaymentSheet } from '@/services/stripe';
@@ -19,17 +20,24 @@ type Phase = 'loading' | 'paying' | 'confirming' | 'error';
 /** Root checkout — outside `(tabs)` so no tab chrome appears during payment. */
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { orderId, useHalfOrderCash: useHalfOrderCashParam } =
-    useLocalSearchParams<{
-      orderId?: string;
-      useHalfOrderCash?: string;
-    }>();
+  const {
+    orderId,
+    restaurantId: restaurantIdParam,
+    useHalfOrderCash: useHalfOrderCashParam,
+  } = useLocalSearchParams<{
+    orderId?: string;
+    restaurantId?: string;
+    useHalfOrderCash?: string;
+  }>();
   const orderIdTrimmed = typeof orderId === 'string' ? orderId.trim() : '';
+  const restaurantIdParamTrimmed =
+    typeof restaurantIdParam === 'string' ? restaurantIdParam.trim() : '';
   const useHalfOrderCash =
     useHalfOrderCashParam === 'true' ||
     useHalfOrderCashParam === '1' ||
     useHalfOrderCashParam === 'True';
   const { user } = useAuth();
+  const { clearCartForRestaurant } = useCart();
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
   const started = useRef(false);
@@ -101,9 +109,14 @@ export default function CheckoutScreen() {
       }
 
       if (result.status === 'canceled') {
+        // Dismiss PaymentSheet only — return to checkout review with state intact.
         logPaymentNavigation('checkout_payment_canceled', { orderId: id });
         unlock();
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/restaurant-menu/checkout-premium' as never);
+        }
         return;
       }
       if (result.status === 'failed') {
@@ -116,6 +129,12 @@ export default function CheckoutScreen() {
         );
         unlock();
         return;
+      }
+
+      const restaurantIdToClear =
+        restaurantIdParamTrimmed || order.restaurantId;
+      if (restaurantIdToClear) {
+        clearCartForRestaurant(restaurantIdToClear);
       }
 
       console.log(
@@ -157,7 +176,15 @@ export default function CheckoutScreen() {
       );
       unlock();
     }
-  }, [orderIdTrimmed, useHalfOrderCash, user, router, unlock]);
+  }, [
+    orderIdTrimmed,
+    restaurantIdParamTrimmed,
+    useHalfOrderCash,
+    user,
+    router,
+    unlock,
+    clearCartForRestaurant,
+  ]);
 
   useEffect(() => {
     if (started.current) return;
@@ -188,7 +215,7 @@ export default function CheckoutScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <AppHeader title="Pay now" />
+      <AppHeader title="Pay now" showHome={false} />
       <View style={styles.center}>
         {(phase === 'loading' || phase === 'paying') && (
           <>
@@ -223,8 +250,14 @@ export default function CheckoutScreen() {
             >
               <Text style={styles.buttonText}>Try again</Text>
             </Pressable>
-            <Pressable style={styles.link} onPress={() => router.back()} disabled={busy}>
-              <Text style={styles.linkText}>Back</Text>
+            <Pressable
+              style={styles.link}
+              onPress={() => {
+                if (router.canGoBack()) router.back();
+              }}
+              disabled={busy}
+            >
+              <Text style={styles.linkText}>Back to checkout</Text>
             </Pressable>
           </>
         )}

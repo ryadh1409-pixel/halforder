@@ -25,10 +25,10 @@ type Props = {
 };
 
 /**
- * Large rounded preview map card + floating “Edit pin” — uses platform `MapRenderer`.
+ * Map preview that integrates with the address list — light chrome, no heavy card.
  */
 function DeliveryMapCardInner({
-  height = 218,
+  height = 168,
   center,
   markers,
   addressPrimary,
@@ -38,7 +38,7 @@ function DeliveryMapCardInner({
   mapSubtitle = 'Dropoff pin',
 }: Props) {
   return (
-    <View style={[styles.shell, { minHeight: height }]}>
+    <View style={styles.shell}>
       <View style={[styles.clip, { height }]}>
         <MapRenderer
           style={styles.mapFill}
@@ -62,9 +62,12 @@ function DeliveryMapCardInner({
           {...checkoutPressableProps}
           accessibilityLabel="Edit delivery pin"
           onPress={onEditPin}
-          style={({ pressed }) => [styles.fabEdit, pressed && styles.fabEditPressed]}
+          style={({ pressed }) => [
+            styles.fabEdit,
+            pressed && styles.fabEditPressed,
+          ]}
         >
-          <Text style={styles.fabTxt}>Edit pin</Text>
+          <Text style={styles.fabTxt}>Edit</Text>
         </Pressable>
       </View>
       <View style={styles.addressBlock}>
@@ -78,7 +81,9 @@ function DeliveryMapCardInner({
         ) : null}
       </View>
       {Platform.OS === 'web' ? (
-        <Text style={styles.webHint}>Map preview — native apps show full gesture map.</Text>
+        <Text style={styles.webHint}>
+          Map preview — native apps show full gesture map.
+        </Text>
       ) : null}
     </View>
   );
@@ -89,40 +94,54 @@ export const DeliveryMapCard = memo(DeliveryMapCardInner);
 const styles = StyleSheet.create({
   shell: {
     marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: CK.mapRadius,
-    borderWidth: 1,
-    borderColor: CK.border,
+    marginTop: 8,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: CK.bg,
-    shadowColor: CK.shadow,
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+    backgroundColor: 'transparent',
   },
-  clip: { borderTopLeftRadius: CK.mapRadius, borderTopRightRadius: CK.mapRadius, overflow: 'hidden', position: 'relative' },
+  clip: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+  },
   mapFill: { ...StyleSheet.absoluteFillObject },
   fabEdit: {
     position: 'absolute',
-    right: 14,
-    bottom: 14,
-    backgroundColor: CK.bg,
-    paddingHorizontal: 18,
-    paddingVertical: Platform.select({ ios: 11, android: 10, web: 10 }),
+    right: 12,
+    bottom: 12,
+    backgroundColor: 'rgba(23,25,35,0.88)',
+    paddingHorizontal: 14,
+    paddingVertical: Platform.select({ ios: 8, android: 8, web: 8 }),
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(12,12,14,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
-  fabEditPressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
-  fabTxt: { fontSize: 14, fontWeight: '900', color: CK.text },
-  addressBlock: { paddingHorizontal: 16, paddingVertical: 14, backgroundColor: CK.bg },
-  addrMain: { fontSize: 16, fontWeight: '900', color: CK.text, letterSpacing: -0.2, lineHeight: 22 },
-  addrSub: { marginTop: 4, fontSize: 14, fontWeight: '600', color: CK.textSecondary, lineHeight: 19 },
-  webHint: { paddingHorizontal: 16, paddingBottom: 10, fontSize: 11, fontWeight: '600', color: CK.textMuted },
+  fabEditPressed: { opacity: 0.88 },
+  fabTxt: { fontSize: 13, fontWeight: '700', color: CK.text },
+  addressBlock: {
+    paddingHorizontal: 2,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  addrMain: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: CK.text,
+    letterSpacing: -0.15,
+    lineHeight: 20,
+  },
+  addrSub: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '500',
+    color: CK.textSecondary,
+    lineHeight: 18,
+  },
+  webHint: {
+    paddingHorizontal: 2,
+    paddingBottom: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    color: CK.textMuted,
+  },
 });

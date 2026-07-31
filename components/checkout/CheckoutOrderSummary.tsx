@@ -1,8 +1,20 @@
 import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
 import * as Haptics from 'expo-haptics';
 import React, { memo, useState } from 'react';
-import { Image, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import {
+  Image,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 type Props = {
   restaurantName: string;
@@ -11,8 +23,13 @@ type Props = {
   children: React.ReactNode;
 };
 
-/** Collapsible bag card with spring chevron; mirrors Uber Eats order summary. */
-function CheckoutOrderSummaryInner({ restaurantName, imageUri, itemCount, children }: Props) {
+/** Collapsible bag summary — list style, no heavy card chrome. */
+function CheckoutOrderSummaryInner({
+  restaurantName,
+  imageUri,
+  itemCount,
+  children,
+}: Props) {
   const [expanded, setExpanded] = useState(true);
   const open = useSharedValue(1);
 
@@ -34,13 +51,13 @@ function CheckoutOrderSummaryInner({ restaurantName, imageUri, itemCount, childr
 
   return (
     <View style={styles.card}>
-      <Pressable
-        {...checkoutPressableProps}
-        onPress={toggle}
-        style={styles.head}
-      >
+      <Pressable {...checkoutPressableProps} onPress={toggle} style={styles.head}>
         {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.thumb} accessibilityIgnoresInvertColors />
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.thumb}
+            accessibilityIgnoresInvertColors
+          />
         ) : (
           <View style={[styles.thumb, styles.thumbPh]}>
             <Text style={styles.thumbTxt}>{restaurantName.charAt(0)}</Text>
@@ -69,33 +86,48 @@ export const CheckoutOrderSummary = memo(CheckoutOrderSummaryInner);
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: 16,
-    marginTop: 18,
-    borderRadius: CK.mapRadius,
-    borderWidth: 1,
-    borderColor: CK.border,
-    backgroundColor: CK.bg,
+    marginTop: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     overflow: 'hidden',
-    shadowColor: CK.shadow,
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
   },
-  head: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14 },
-  thumb: { width: 56, height: 56, borderRadius: 14, backgroundColor: CK.surface },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    gap: 12,
+  },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
   thumbPh: { alignItems: 'center', justifyContent: 'center' },
-  thumbTxt: { fontSize: 22, fontWeight: '900', color: CK.text },
+  thumbTxt: { fontSize: 18, fontWeight: '800', color: CK.text },
   headMid: { flex: 1, minWidth: 0 },
-  name: { fontSize: 18.5, fontWeight: '900', color: CK.text, letterSpacing: -0.35 },
-  sub: { marginTop: 3, fontSize: 13.5, fontWeight: '600', color: CK.textSecondary },
-  chevWrap: { paddingHorizontal: 6 },
-  chev: { fontSize: 16, fontWeight: '900', color: CK.textMuted },
+  name: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: CK.text,
+    letterSpacing: -0.25,
+  },
+  sub: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '600',
+    color: CK.textSecondary,
+  },
+  chevWrap: { paddingHorizontal: 4 },
+  chev: { fontSize: 15, fontWeight: '700', color: CK.textMuted },
   body: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 0,
+    paddingBottom: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: CK.border,
-    gap: 10,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: 12,
     paddingTop: 12,
   },
 });

@@ -1,12 +1,12 @@
 import { CompleteMealProgressBar } from '@/components/completeMeal/CompleteMealProgressBar';
 import { CK } from '@/constants/checkoutUi';
 import {
-  buildCompleteMealShareUrl,
-  shareCompleteMealInvite,
+    buildCompleteMealShareUrl,
+    shareCompleteMealInvite,
 } from '@/lib/completeMealShare';
 import {
-  cancelCompleteMealCampaign,
-  getCompleteMealCampaign,
+    cancelCompleteMealCampaign,
+    getCompleteMealCampaign,
 } from '@/services/completeMeal/callables';
 import type { CompleteMealCampaignPublic } from '@/types/completeMeal';
 import { moneyLabelFromCents } from '@/types/completeMeal';
@@ -16,12 +16,12 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

@@ -1,4 +1,5 @@
 import { CK, checkoutPressableProps } from '@/constants/checkoutUi';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import React, { memo } from 'react';
 import {
@@ -69,21 +70,35 @@ function StickyCheckoutButtonInner({
   const CtaPressable = Platform.OS === 'web' ? Pressable : AnimatedPressable;
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom + 6, 14) }]} pointerEvents="box-none">
+    <View
+      style={[styles.bar, { paddingBottom: Math.max(insets.bottom + 8, 16) }]}
+      pointerEvents="box-none"
+    >
       <CtaPressable
         {...checkoutPressableProps}
         disabled={isDisabled}
         {...pressHandlers}
         style={pressableStyle}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <View style={styles.btnInner} pointerEvents="none">
-            <Text style={styles.btnTxt}>{label}</Text>
-            {sublabel ? <Text style={styles.sub}>{sublabel}</Text> : null}
-          </View>
-        )}
+        <LinearGradient
+          colors={
+            isDisabled
+              ? ['#5B4B73', '#4A3D5E']
+              : ['#C084FC', '#A855F7', '#7C3AED']
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradient}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <View style={styles.btnInner} pointerEvents="none">
+              <Text style={styles.btnTxt}>{label}</Text>
+              {sublabel ? <Text style={styles.sub}>{sublabel}</Text> : null}
+            </View>
+          )}
+        </LinearGradient>
       </CtaPressable>
     </View>
   );
@@ -93,37 +108,46 @@ export const StickyCheckoutButton = memo(StickyCheckoutButtonInner);
 
 const styles = StyleSheet.create({
   bar: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: CK.headerHairline,
+    borderTopColor: 'rgba(255,255,255,0.06)',
     backgroundColor: CK.bg,
   },
   btn: {
-    borderRadius: CK.nextBtnRadius,
-    height: 58,
-    backgroundColor: CK.blackBtn,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  gradient: {
+    minHeight: 64,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#050505',
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
   },
   webPointer: { cursor: 'pointer' as const },
-  btnInner: { alignItems: 'center', justifyContent: 'center', gap: 3 },
+  btnInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
   btnTxt: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '900',
     color: '#fff',
-    letterSpacing: -0.1,
+    letterSpacing: -0.25,
   },
   sub: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.88)',
-    letterSpacing: -0.1,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.72)',
+    letterSpacing: -0.05,
   },
-  disabled: { opacity: 0.38 },
+  disabled: { opacity: 0.45 },
 });

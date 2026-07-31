@@ -1,18 +1,18 @@
 import { CompleteMealProgressBar } from '@/components/completeMeal/CompleteMealProgressBar';
 import { CK } from '@/constants/checkoutUi';
 import {
-  COMPLETE_MEAL_MIN_OWNER_CENTS,
-  COMPLETE_MEAL_PRESET_DOLLARS,
+    COMPLETE_MEAL_MIN_OWNER_CENTS,
+    COMPLETE_MEAL_PRESET_DOLLARS,
 } from '@/constants/completeMeal';
 import { clampOwnerPayCents, moneyLabelFromCents } from '@/types/completeMeal';
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 
 type Props = {

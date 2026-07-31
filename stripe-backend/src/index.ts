@@ -6,27 +6,27 @@
  */
 
 import * as admin from "firebase-admin";
+import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import type { CallableContext } from "firebase-functions/v1/https";
-import {defineSecret} from "firebase-functions/params";
 import Stripe from "stripe";
 import {
-  handleFoodSharePaymentCallable,
-  isFoodShareConfirmPayload,
-  isFoodSharePaymentPayload,
-} from "./foodSharePaymentIntentCore.js";
-import {buildOrderPaidStatePatch} from "./orderPaidState.js";
-import {prepareServerOrderPatch} from "./serverOrderWrite.js";
-import {
-  createWalletSetupIntentCallable,
-  detachWalletPaymentMethodCallable,
-  listWalletPaymentMethodsCallable,
-} from "./walletPaymentMethods.js";
-import {
-  finalizeHalfOrderCashRedemption,
-  releaseHalfOrderCashRedemption,
-  reserveHalfOrderCash,
+    finalizeHalfOrderCashRedemption,
+    releaseHalfOrderCashRedemption,
+    reserveHalfOrderCash,
 } from "./cashbackRedemption.js";
+import {
+    handleFoodSharePaymentCallable,
+    isFoodShareConfirmPayload,
+    isFoodSharePaymentPayload,
+} from "./foodSharePaymentIntentCore.js";
+import { buildOrderPaidStatePatch } from "./orderPaidState.js";
+import { prepareServerOrderPatch } from "./serverOrderWrite.js";
+import {
+    createWalletSetupIntentCallable,
+    detachWalletPaymentMethodCallable,
+    listWalletPaymentMethodsCallable,
+} from "./walletPaymentMethods.js";
 
 /** Stripe CAD minimum charge (in cents). */
 const STRIPE_MIN_AMOUNT_CENTS = 50;
@@ -507,9 +507,8 @@ export const createPaymentIntent = functions
           amount: chargeAmountCents,
           currency: "cad",
           customer: customerId,
-          automatic_payment_methods: {
-            enabled: true,
-          },
+          // Card + Apple Pay / Link via PaymentSheet only — no Klarna / BNPL.
+          payment_method_types: ["card"],
           metadata: {
             orderId,
             userId: uid,
@@ -637,46 +636,38 @@ export const createPaymentIntent = functions
     }
   });
 
-export { stripeWebhook } from "./stripeWebhook.js";
-export { createFoodSharePaymentIntent } from "./createFoodSharePaymentIntent.js";
 export {
-  createCompleteMealCampaign,
-  getCompleteMealCampaign,
-  cancelCompleteMealCampaign,
-  createCompleteMealPaymentIntent,
-  confirmCompleteMealPayment,
+    cancelCompleteMealCampaign, confirmCompleteMealPayment, createCompleteMealCampaign, createCompleteMealPaymentIntent, getCompleteMealCampaign
 } from "./completeMealCallables.js";
+export { createFoodSharePaymentIntent } from "./createFoodSharePaymentIntent.js";
+export { stripeWebhook } from "./stripeWebhook.js";
 
-export { ensureFoodShareDispatchOrder } from "./ensureFoodShareDispatchOrder.js";
-export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
-export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
+export { getAdminStripePayouts } from "./adminStripePayouts.js";
+export {
+    getStripeAccountDiagnostics, getStripeTreasurySummary
+} from "./adminStripeTreasury.js";
 export { cancelFoodShareMatch } from "./cancelFoodShareMatch.js";
+export { confirmFoodSharePayment } from "./confirmFoodSharePayment.js";
 export { confirmFoodSharePickup } from "./confirmFoodSharePickup.js";
 export {
-  syncFoodShareMatchLifecycleFromOrder,
-  syncFoodShareMatchLifecycleFromOrderUpdated,
+    claimEmoHiEmoooReward,
+    redeemEmoHiEmoooDiscount
+} from "./emoAiHiEmoooReward.js";
+export { ensureFoodShareDispatchOrder } from "./ensureFoodShareDispatchOrder.js";
+export {
+    syncFoodShareMatchLifecycleFromOrder,
+    syncFoodShareMatchLifecycleFromOrderUpdated
 } from "./foodShareOrderLifecycleMirror.js";
 export {
-  notifyFoodSharePaymentStatusPaid,
+    notifyFoodSharePaymentStatusPaid
 } from "./foodSharePaymentNotifications.js";
 export {
-  sendModeratedMatchChatMessage,
-  acceptCommunityGuidelines,
-} from "./sendModeratedMatchChatMessage.js";
-export {
-  emoAiChat,
-  generateMatchSuggestion,
-  generateFoodCardDescription,
+    emoAiChat, generateFoodCardDescription, generateMatchSuggestion
 } from "./openAiCallables.js";
+export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
 export {
-  claimEmoHiEmoooReward,
-  redeemEmoHiEmoooDiscount,
-} from "./emoAiHiEmoooReward.js";
-export {getAdminStripePayouts} from "./adminStripePayouts.js";
-export {
-  getStripeTreasurySummary,
-  getStripeAccountDiagnostics,
-} from "./adminStripeTreasury.js";
+    acceptCommunityGuidelines, sendModeratedMatchChatMessage
+} from "./sendModeratedMatchChatMessage.js";
 
 export const walletCreateSetupIntent = functions
   .runWith({secrets: ["STRIPE_SECRET_KEY"]})

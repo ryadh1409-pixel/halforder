@@ -10,9 +10,18 @@ type Props = {
   subtitle?: string;
   subtitlePlaceholder?: boolean;
   onPress: () => void;
+  /** Hide bottom divider (last row in a group). */
+  last?: boolean;
 };
 
-function AddressRowInner({ icon, title, subtitle, subtitlePlaceholder, onPress }: Props) {
+function AddressRowInner({
+  icon,
+  title,
+  subtitle,
+  subtitlePlaceholder,
+  onPress,
+  last,
+}: Props) {
   return (
     <Pressable
       {...checkoutPressableProps}
@@ -20,10 +29,14 @@ function AddressRowInner({ icon, title, subtitle, subtitlePlaceholder, onPress }
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
-      style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.wrap,
+        last && styles.wrapLast,
+        pressed && styles.pressed,
+      ]}
     >
       <View style={styles.iconBubble}>
-        <Ionicons name={icon} size={20} color={CK.text} />
+        <Ionicons name={icon} size={18} color={CK.textSecondary} />
       </View>
       <View style={styles.mid}>
         <Text style={styles.title} numberOfLines={2}>
@@ -38,7 +51,12 @@ function AddressRowInner({ icon, title, subtitle, subtitlePlaceholder, onPress }
           </Text>
         ) : null}
       </View>
-      <Ionicons name="chevron-forward" size={20} color={CK.textMuted} style={styles.chev} />
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={CK.textMuted}
+        style={styles.chev}
+      />
     </Pressable>
   );
 }
@@ -50,34 +68,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: Platform.OS === 'web' ? 14 : 16,
-    paddingHorizontal: 14,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: CK.bg,
-    borderWidth: 1,
-    borderColor: CK.border,
-    marginBottom: 10,
-    shadowColor: CK.shadow,
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    paddingVertical: Platform.OS === 'web' ? 12 : 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 0,
+    backgroundColor: 'transparent',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  pressed: { transform: [{ scale: 0.995 }], opacity: 0.95 },
+  wrapLast: {
+    borderBottomWidth: 0,
+  },
+  pressed: { opacity: 0.72 },
   iconBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: CK.surface,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(12,12,14,0.05)',
   },
   mid: { flex: 1, minWidth: 0 },
-  title: { fontSize: 16, fontWeight: '800', color: CK.text, letterSpacing: -0.15 },
-  subtitle: { marginTop: 4, fontSize: 14, fontWeight: '600', color: CK.textSecondary, lineHeight: 19 },
-  placeholder: { color: CK.textMuted, fontWeight: '600' },
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: CK.text,
+    letterSpacing: -0.15,
+  },
+  subtitle: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '500',
+    color: CK.textSecondary,
+    lineHeight: 17,
+  },
+  placeholder: { color: CK.textMuted, fontWeight: '500' },
   chev: { marginLeft: 4 },
 });

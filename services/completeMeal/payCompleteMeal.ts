@@ -1,8 +1,8 @@
-import { auth } from '@/services/firebase';
 import {
-  confirmCompleteMealPayment,
-  createCompleteMealPaymentIntent,
+    confirmCompleteMealPayment,
+    createCompleteMealPaymentIntent,
 } from '@/services/completeMeal/callables';
+import { auth } from '@/services/firebase';
 import { presentConfiguredPaymentSheet } from '@/services/stripe';
 
 export type CompleteMealPayResult =

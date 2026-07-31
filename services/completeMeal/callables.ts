@@ -1,7 +1,7 @@
 import { functions } from '@/services/firebase';
 import type {
-  CompleteMealCampaignPublic,
-  CompleteMealOrderDraft,
+    CompleteMealCampaignPublic,
+    CompleteMealOrderDraft,
 } from '@/types/completeMeal';
 import { httpsCallable } from 'firebase/functions';
 

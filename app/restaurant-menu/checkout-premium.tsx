@@ -23,6 +23,7 @@ import {
 } from '@/components/completeMeal/CheckoutFundingModeCard';
 import { DeliveryEligibilityBanner } from '@/components/delivery/DeliveryEligibilityBanner';
 import { setPendingCompleteMealDraft } from '@/services/completeMeal/pendingDraft';
+import { COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED } from '@/constants/completeMeal';
 import { CK } from '@/constants/checkoutUi';
 import type {
   CheckoutDeliveryTiming,
@@ -90,7 +91,7 @@ export default function CheckoutPremiumScreen() {
 
   const { user, loading: authLoading } = useAuth();
 
-  const { items: cart, clearCartForRestaurant } = useCart();
+  const { items: cart } = useCart();
   const { profile } = useRestaurantProfile(restaurantId || null);
   const { items: menuItems, loading: menuLoading } = useMenu(restaurantId || null);
   const {
@@ -358,12 +359,13 @@ export default function CheckoutPremiumScreen() {
       return;
     }
 
-    const confirmMessage =
-      fundingMode === 'complete_meal'
-        ? `Start Complete My Meal for ${totalFmt}? You’ll choose how much to pay now, then invite friends.`
-        : appliedCashbackCad > 0
-          ? `Pay ${payFmt} securely with Stripe PaymentSheet ($${appliedCashbackCad.toFixed(2)} HalfOrder Cash applied) and continue to confirmation?`
-          : `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
+    const usingCompleteMeal =
+      COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED && fundingMode === 'complete_meal';
+    const confirmMessage = usingCompleteMeal
+      ? `Start Complete My Meal for ${totalFmt}? You’ll choose how much to pay now, then invite friends.`
+      : appliedCashbackCad > 0
+        ? `Pay ${payFmt} securely with Stripe PaymentSheet ($${appliedCashbackCad.toFixed(2)} HalfOrder Cash applied) and continue to confirmation?`
+        : `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
         await placeOrder();
@@ -371,7 +373,7 @@ export default function CheckoutPremiumScreen() {
       return;
     }
     Alert.alert(
-      fundingMode === 'complete_meal' ? 'Complete My Meal' : 'Confirm checkout',
+      usingCompleteMeal ? 'Complete My Meal' : 'Complete Checkout',
       confirmMessage,
       [
         { text: 'Review', style: 'cancel' },
@@ -414,7 +416,10 @@ export default function CheckoutPremiumScreen() {
         customerLocation = delivery.customerLocation;
       }
 
-      if (fundingMode === 'complete_meal') {
+      if (
+        COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED &&
+        fundingMode === 'complete_meal'
+      ) {
         setPendingCompleteMealDraft({
           restaurantId,
           restaurantName: profile?.name ?? 'Restaurant',
@@ -466,12 +471,13 @@ export default function CheckoutPremiumScreen() {
         deliveryLocation,
         customerLocation,
       });
-      // Hi emooo is redeemed after successful Stripe payment (not at place-order).
-      clearCartForRestaurant(restaurantId);
-      router.replace({
+      // Cart stays until payment succeeds so dismissing PaymentSheet
+      // returns here with checkout progress intact.
+      router.push({
         pathname: '/checkout',
         params: {
           orderId,
+          restaurantId,
           ...(useHalfOrderCash && appliedCashbackCad > 0
             ? { useHalfOrderCash: 'true' }
             : {}),
@@ -616,6 +622,7 @@ export default function CheckoutPremiumScreen() {
           <DeliveryEligibilityBanner
             eligibility={eligibility}
             loading={distanceCheckLoading}
+            variant="checkout"
           />
         ) : null}
 
@@ -639,32 +646,51 @@ export default function CheckoutPremiumScreen() {
           </View>
         ) : null}
 
-        <View style={{ height: 6 }} />
+        <View style={{ height: 8 }} />
 
-        <AddressRow
-          icon="location-outline"
-          title={addressPrimary}
-          subtitle={fulfillmentMode === 'delivery' ? 'Apartment buzzer 402' : restaurantName}
-          onPress={() => Alert.alert('Address', 'Address book syncing with Firestore — coming shortly.')}
-        />
-        <AddressRow
-          icon="chatbubble-ellipses-outline"
-          title="Delivery instructions"
-          subtitle="Meet at my door • Add instructions & photo drop-off guides"
-          subtitlePlaceholder
-          onPress={() =>
-            Alert.alert(
-              'Delivery instructions',
-              'Photo references + gate codes persist on `orders.notes` in the next Firebase schema rev.',
-            )
-          }
-        />
-        <AddressRow
-          icon="call-outline"
-          title={phoneDisplay}
-          subtitle="Driver can call when nearby"
-          onPress={() => Alert.alert('Phone', 'Wire this row to `users/{uid}.phoneNumber`.')}
-        />
+        <View style={styles.addressGroup}>
+          <AddressRow
+            icon="location-outline"
+            title={addressPrimary}
+            subtitle={
+              fulfillmentMode === 'delivery'
+                ? 'Apartment buzzer 402'
+                : restaurantName
+            }
+            onPress={() =>
+              Alert.alert(
+                'Address',
+                'Address book syncing with Firestore — coming shortly.',
+              )
+            }
+          />
+          <AddressRow
+            icon="chatbubble-ellipses-outline"
+            title="Delivery instructions"
+            subtitle="Meet at my door • Add instructions & photo drop-off guides"
+            subtitlePlaceholder
+            onPress={() =>
+              Alert.alert(
+                'Delivery instructions',
+                'Photo references + gate codes persist on `orders.notes` in the next Firebase schema rev.',
+              )
+            }
+          />
+          <AddressRow
+            icon="call-outline"
+            title={phoneDisplay}
+            subtitle="Driver can call when nearby"
+            onPress={() =>
+              Alert.alert(
+                'Phone',
+                'Wire this row to `users/{uid}.phoneNumber`.',
+              )
+            }
+            last
+          />
+        </View>
+
+        <View style={{ height: 8 }} />
 
         {fulfillmentMode === 'delivery' ? (
           <DeliveryTimingStrip value={timing} onChange={handleTimingChange} />
@@ -676,6 +702,8 @@ export default function CheckoutPremiumScreen() {
             </Text>
           </View>
         )}
+
+        <View style={{ height: 8 }} />
 
         <CheckoutOrderSummary
           restaurantName={restaurantName}
@@ -692,7 +720,11 @@ export default function CheckoutPremiumScreen() {
           ))}
         </CheckoutOrderSummary>
 
+        <View style={{ height: 8 }} />
+
         <GiftToggleRow checked={gift} onToggle={setGift} />
+
+        <View style={{ height: 8 }} />
 
         {autoHiEmooo && appliedPromoCode === HI_EMOOO_PROMO_CODE ? (
           <View style={styles.hiEmoooGiftCard}>
@@ -720,7 +752,7 @@ export default function CheckoutPremiumScreen() {
           />
         )}
 
-        <View style={{ height: 6 }} />
+        <View style={{ height: 8 }} />
 
         <CheckoutPriceBreakdown lines={priceLines} />
 
@@ -769,10 +801,16 @@ export default function CheckoutPremiumScreen() {
           </View>
         ) : null}
 
-        <CheckoutFundingModeCard mode={fundingMode} onChange={setFundingMode} />
+        <View style={{ height: 8 }} />
+
+        <CheckoutFundingModeCard
+          mode={fundingMode}
+          onChange={setFundingMode}
+          showCompleteMeal={COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED}
+        />
 
         {/* Space for pinned footer */}
-        <View style={{ height: 190 }} />
+        <View style={{ height: 200 }} />
       </Animated.ScrollView>
 
       <View style={styles.footerDock} pointerEvents="box-none">
@@ -797,7 +835,12 @@ export default function CheckoutPremiumScreen() {
           }
         />
         <StickyCheckoutButton
-          label={fundingMode === 'complete_meal' ? 'Complete My Meal' : 'Next'}
+          label={
+            COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED &&
+            fundingMode === 'complete_meal'
+              ? 'Complete My Meal'
+              : 'Complete Checkout'
+          }
           sublabel={`Pay ${appliedCashbackCad > 0 ? payFmt : totalFmt}`}
           onPress={() => void submitOrder()}
           disabled={blocked}
@@ -811,6 +854,10 @@ export default function CheckoutPremiumScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: CK.bg },
   scrollContent: { paddingBottom: 0 },
+  addressGroup: {
+    marginHorizontal: 16,
+    marginTop: 4,
+  },
   footerDock: {
     position: 'absolute',
     bottom: 0,
@@ -820,24 +867,29 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     backgroundColor: CK.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: CK.headerHairline,
-    paddingTop: 4,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    paddingTop: 8,
     ...Platform.select({
-      web: { boxShadow: '0 -4px 24px rgba(15, 23, 42, 0.08)' },
+      web: { boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.18)' },
       default: {},
     }),
   },
   pickupNote: {
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 6,
-    padding: 14,
-    borderRadius: CK.mapRadius,
-    backgroundColor: CK.surface,
-    borderWidth: 1,
-    borderColor: CK.border,
+    marginTop: 0,
+    marginBottom: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
-  pickupTitle: { fontSize: 14, fontWeight: '900', color: CK.text },
+  pickupTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: CK.text,
+    letterSpacing: -0.1,
+  },
   pickupBody: {
     marginTop: 8,
     fontSize: 13.5,
@@ -851,56 +903,73 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'flex-start',
   },
-  lineLeft: { flex: 1, fontSize: 14, fontWeight: '600', color: CK.textSecondary, lineHeight: 19 },
-  lineRight: { fontSize: 14, fontWeight: '800', color: CK.text },
+  lineLeft: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: CK.textSecondary,
+    lineHeight: 19,
+  },
+  lineRight: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: CK.text,
+    fontVariant: ['tabular-nums'],
+  },
   hiEmoooGiftCard: {
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 6,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: CK.savingsGoldMid,
-    backgroundColor: CK.surface,
+    marginTop: 0,
+    marginBottom: 0,
+    paddingVertical: 14,
+    paddingHorizontal: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
   },
   hiEmoooGiftTitle: {
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 16,
+    fontWeight: '800',
     color: CK.text,
+    letterSpacing: -0.2,
   },
   hiEmoooGiftOff: {
-    marginTop: 4,
+    marginTop: 8,
     fontSize: 15,
     fontWeight: '800',
     color: CK.savingsGoldMid,
     lineHeight: 21,
   },
   hiEmoooGiftHint: {
-    marginTop: 6,
+    marginTop: 8,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: CK.textSecondary,
   },
   locationLoading: {
     marginHorizontal: 16,
     marginVertical: 8,
-    padding: 16,
-    borderRadius: CK.mapRadius,
-    backgroundColor: CK.surface,
-    borderWidth: 1,
-    borderColor: CK.border,
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
-  locationLoadingText: { color: CK.textMuted, fontWeight: '600', textAlign: 'center' },
+  locationLoadingText: {
+    color: CK.textMuted,
+    fontWeight: '600',
+    textAlign: 'left',
+  },
   cashbackCard: {
     marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 6,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.35)',
-    backgroundColor: CK.surface,
+    marginTop: 16,
+    marginBottom: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
   },
   cashbackHeader: {
     flexDirection: 'row',
@@ -908,58 +977,63 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cashbackTitle: {
-    fontSize: 15.5,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '800',
     color: CK.text,
+    letterSpacing: -0.15,
   },
   cashbackSub: {
     marginTop: 4,
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '600',
     color: CK.textMuted,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   cashbackRows: {
-    marginTop: 14,
+    marginTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: CK.border,
-    paddingTop: 10,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 8,
   },
   cashbackRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 7,
+    paddingVertical: 8,
   },
   cashbackRowLast: {
-    marginTop: 4,
-    paddingTop: 10,
+    marginTop: 8,
+    paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: CK.border,
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   cashbackLabel: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: CK.textSecondary,
   },
   cashbackValue: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: CK.text,
+    fontVariant: ['tabular-nums'],
   },
   cashbackValueAccent: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#A855F7',
+    fontVariant: ['tabular-nums'],
   },
   cashbackPayLabel: {
     fontSize: 14,
-    fontWeight: '800',
-    color: CK.text,
+    fontWeight: '700',
+    color: CK.textSecondary,
   },
   cashbackPayValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: CK.text,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
 });

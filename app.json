@@ -77,6 +77,11 @@
             {
               "scheme": "https",
               "host": "halforder.app",
+              "pathPrefix": "/complete-meal"
+            },
+            {
+              "scheme": "https",
+              "host": "halforder.app",
               "pathPrefix": "/driver-invite"
             },
             {
@@ -113,6 +118,11 @@
               "scheme": "https",
               "host": "www.halforder.app",
               "pathPrefix": "/group"
+            },
+            {
+              "scheme": "https",
+              "host": "www.halforder.app",
+              "pathPrefix": "/complete-meal"
             },
             {
               "scheme": "https",

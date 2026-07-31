@@ -14,7 +14,7 @@ type Props = {
   onChange: (m: CheckoutFulfillmentMode) => void;
 };
 
-const TRACK_PAD = 4;
+const TRACK_PAD = 3;
 
 function DeliverySegmentInner({ mode, onChange }: Props) {
   const win = useWindowDimensions();
@@ -24,12 +24,12 @@ function DeliverySegmentInner({ mode, onChange }: Props) {
   const x = useSharedValue(mode === 'delivery' ? 0 : seg);
 
   useEffect(() => {
-    x.value = withSpring(mode === 'delivery' ? 0 : seg, { damping: 22, stiffness: 280 });
+    x.value = withSpring(mode === 'delivery' ? 0 : seg, { damping: 24, stiffness: 320 });
   }, [mode, seg, x]);
 
   const knob = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }],
-    width: Math.max(seg - TRACK_PAD * 2, 40),
+    width: Math.max(seg, 40),
   }));
 
   const select = (m: CheckoutFulfillmentMode) => {
@@ -39,18 +39,31 @@ function DeliverySegmentInner({ mode, onChange }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.sectionEyebrow}>Fulfillment</Text>
-      <View style={styles.trackOuter}>
-        <View style={[styles.track, { padding: TRACK_PAD }]}>
-          <Animated.View style={[styles.knobLayer, knob]} />
-          <View style={[styles.flexRow]}>
-            <Pressable {...checkoutPressableProps} style={[styles.cell, { width: seg }]} onPress={() => select('delivery')}>
-              <Text style={[styles.label, mode === 'delivery' && styles.labelOn]}>Delivery</Text>
-            </Pressable>
-            <Pressable {...checkoutPressableProps} style={[styles.cell, { width: seg }]} onPress={() => select('pickup')}>
-              <Text style={[styles.label, mode === 'pickup' && styles.labelOn]}>Pickup</Text>
-            </Pressable>
-          </View>
+      <View style={[styles.track, { padding: TRACK_PAD }]}>
+        <Animated.View style={[styles.knob, knob]} />
+        <View style={styles.flexRow}>
+          <Pressable
+            {...checkoutPressableProps}
+            style={[styles.cell, { width: seg }]}
+            onPress={() => select('delivery')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === 'delivery' }}
+          >
+            <Text style={[styles.label, mode === 'delivery' && styles.labelOn]}>
+              Delivery
+            </Text>
+          </Pressable>
+          <Pressable
+            {...checkoutPressableProps}
+            style={[styles.cell, { width: seg }]}
+            onPress={() => select('pickup')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === 'pickup' }}
+          >
+            <Text style={[styles.label, mode === 'pickup' && styles.labelOn]}>
+              Pickup
+            </Text>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -60,46 +73,37 @@ function DeliverySegmentInner({ mode, onChange }: Props) {
 export const DeliverySegment = memo(DeliverySegmentInner);
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 4, marginHorizontal: 16 },
-  sectionEyebrow: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: CK.textMuted,
-    letterSpacing: 0.6,
-    marginBottom: 10,
-    textTransform: 'uppercase',
+  wrap: {
+    marginTop: 4,
+    marginHorizontal: 16,
+    marginBottom: 4,
   },
   flexRow: { flexDirection: 'row', position: 'relative', zIndex: 1 },
-  trackOuter: {
-    borderRadius: 18,
-    backgroundColor: CK.surface,
-    borderWidth: 1,
-    borderColor: CK.border,
-    shadowColor: CK.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
+  track: {
+    position: 'relative',
+    minHeight: 36,
     overflow: 'hidden',
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  track: { position: 'relative', minHeight: 50, overflow: 'hidden', borderRadius: 15 },
-  knobLayer: {
+  knob: {
     position: 'absolute',
     left: TRACK_PAD,
     top: TRACK_PAD,
     bottom: TRACK_PAD,
-    borderRadius: 13,
-    backgroundColor: CK.bg,
-    shadowColor: '#060606',
-    shadowOpacity: CK.cardShadowOpacity,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     zIndex: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(15,23,42,0.06)',
   },
-  cell: { justifyContent: 'center', alignItems: 'center' },
-  label: { fontSize: 15.5, fontWeight: '700', color: CK.textSecondary },
-  labelOn: { color: CK.text, fontWeight: '900' },
+  cell: { justifyContent: 'center', alignItems: 'center', minHeight: 30 },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: CK.textMuted,
+    letterSpacing: -0.1,
+  },
+  labelOn: {
+    color: CK.text,
+    fontWeight: '700',
+  },
 });

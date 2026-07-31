@@ -1,14 +1,14 @@
 import { CompleteMealProgressBar } from '@/components/completeMeal/CompleteMealProgressBar';
 import { CK } from '@/constants/checkoutUi';
 import {
-  COMPLETE_MEAL_MIN_CONTRIBUTION_CENTS,
-  COMPLETE_MEAL_PRESET_DOLLARS,
+    COMPLETE_MEAL_MIN_CONTRIBUTION_CENTS,
+    COMPLETE_MEAL_PRESET_DOLLARS,
 } from '@/constants/completeMeal';
+import { useAuth } from '@/services/AuthContext';
 import {
-  getCompleteMealCampaign,
+    getCompleteMealCampaign,
 } from '@/services/completeMeal/callables';
 import { payCompleteMealContribution } from '@/services/completeMeal/payCompleteMeal';
-import { useAuth } from '@/services/AuthContext';
 import type { CompleteMealCampaignPublic } from '@/types/completeMeal';
 import { moneyLabelFromCents } from '@/types/completeMeal';
 import { showError, showSuccess } from '@/utils/toast';
@@ -16,13 +16,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

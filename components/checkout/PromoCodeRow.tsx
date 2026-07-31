@@ -37,13 +37,13 @@ function PromoCodeRowInner({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}
     >
       <View style={styles.block}>
-        <Text style={styles.eyebrow}>Promotions</Text>
+        <Text style={styles.eyebrow}>Promo code</Text>
         <View style={styles.outer}>
-          <Ionicons name="prism-outline" size={20} color={CK.textSecondary} />
+          <Ionicons name="ticket-outline" size={18} color={CK.textMuted} />
           <AppTextInput
             value={value}
-            placeholder="Enter promo code"
-            placeholderTextColor={CK.textMuted}
+            placeholder="Enter code"
+            placeholderTextColor="rgba(183,189,201,0.45)"
             autoCapitalize="characters"
             onChangeText={onChange}
             style={styles.input}
@@ -59,10 +59,14 @@ function PromoCodeRowInner({
               {...checkoutPressableProps}
               onPress={onApply}
               disabled={applying || !value.trim()}
-              style={styles.applyBtn}
+              style={({ pressed }) => [
+                styles.applyBtn,
+                (applying || !value.trim()) && styles.applyDisabled,
+                pressed && !applying && value.trim() ? styles.applyPressed : null,
+              ]}
             >
               {applying ? (
-                <ActivityIndicator size="small" color={CK.offer} />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.applyTxt}>Apply</Text>
               )}
@@ -79,40 +83,73 @@ function PromoCodeRowInner({
 export const PromoCodeRow = memo(PromoCodeRowInner);
 
 const styles = StyleSheet.create({
-  block: { marginTop: 6, paddingHorizontal: 16 },
+  block: {
+    marginTop: 0,
+    marginBottom: 0,
+    paddingHorizontal: 16,
+  },
   eyebrow: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: CK.textMuted,
-    letterSpacing: 0.6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: CK.textSecondary,
+    letterSpacing: -0.1,
     marginBottom: 10,
-    textTransform: 'uppercase',
   },
   outer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderRadius: CK.mapRadius,
-    borderWidth: 1,
-    borderColor: CK.border,
-    backgroundColor: CK.bg,
-    paddingHorizontal: 14,
-    minHeight: 54,
-    shadowColor: CK.shadow,
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    paddingLeft: 12,
+    paddingRight: 6,
+    minHeight: 48,
   },
-  input: { flex: 1, fontSize: 16.5, fontWeight: '600', color: CK.text },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: CK.text,
+    letterSpacing: 0.3,
+    paddingVertical: 10,
+  },
   badge: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: 'rgba(229,57,53,0.1)',
+    backgroundColor: 'rgba(229,57,53,0.12)',
   },
-  badgeTxt: { fontSize: 11, fontWeight: '900', color: CK.offer },
-  applyBtn: { paddingHorizontal: 8, paddingVertical: 6 },
-  applyTxt: { fontSize: 14, fontWeight: '800', color: CK.offer },
-  hint: { marginTop: 10, fontSize: 13, fontWeight: '600', color: CK.textMuted },
-  error: { marginTop: 8, fontSize: 13, fontWeight: '700', color: CK.offer },
+  badgeTxt: { fontSize: 11, fontWeight: '800', color: CK.offer },
+  applyBtn: {
+    minHeight: 36,
+    minWidth: 72,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#A855F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyPressed: { opacity: 0.88 },
+  applyDisabled: { opacity: 0.4 },
+  applyTxt: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.1,
+  },
+  hint: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(183,189,201,0.55)',
+    lineHeight: 16,
+  },
+  error: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: CK.offer,
+  },
 });
