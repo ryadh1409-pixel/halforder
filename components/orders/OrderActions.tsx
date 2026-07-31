@@ -1,8 +1,8 @@
+import StatusActionButton from '@/components/orders/StatusActionButton';
 import type { MerchantOrderStatus } from '@/components/orders/statusFlow';
 import type { RestaurantKitchenAction } from '@/lib/restaurantKitchenActions';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import StatusActionButton from '@/components/orders/StatusActionButton';
+import { StyleSheet, View } from 'react-native';
 
 type Props = {
   status: MerchantOrderStatus;

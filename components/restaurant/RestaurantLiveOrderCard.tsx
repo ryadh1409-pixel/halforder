@@ -1,16 +1,16 @@
 import OrderActions from '@/components/orders/OrderActions';
 import { PaymentBadge } from '@/components/orders/StatusBadge';
-import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import { traceOrderStageRender } from '@/lib/orderStageTrace';
 import type { RestaurantKitchenAction } from '@/lib/restaurantKitchenActions';
+import { isOrderFresh } from '@/lib/restaurantOrderFreshness';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { getRestaurantOrderPresentation } from '@/services/orderStage';
 import {
-  formatOrderDate,
-  formatOrderTime,
-  formatRelativeAge,
-  safePhone,
+    formatOrderDate,
+    formatOrderTime,
+    formatRelativeAge,
+    safePhone,
 } from '@/utils/orderTime';
 import { platformElevation } from '@/utils/platformElevation';
 import React, { useMemo } from 'react';

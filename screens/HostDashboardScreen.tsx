@@ -1,57 +1,57 @@
 import {
-  formatRestaurantPhoneDisplay,
-  resolveRestaurantDisplayName,
-  resolveRestaurantLogoUrl,
-  resolveRestaurantProfilePhone,
-} from '@/lib/restaurantDashboardProfile';
-import {
-  displayFromStoredProfilePhone,
-  formatProfileWhatsAppDisplay,
-  isCompleteNaProfilePhone,
-  isProfilePhoneStorageEmpty,
-  profilePhoneForFirestore,
-  profileWhatsAppOnChangeText,
-} from '@/lib/profileWhatsAppPhone';
-import {
-  RestaurantOrdersPanel,
-  type RestaurantDashboardMetrics,
+    RestaurantOrdersPanel,
+    type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
 import { RestaurantPayoutMethods } from '@/components/restaurant/RestaurantPayoutMethods';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
-import {
-  mergeHostRestaurantProfile,
-  saveRestaurantVenueMain,
-} from '@/services/hostRestaurant';
 import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
+import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
+import {
+    displayFromStoredProfilePhone,
+    formatProfileWhatsAppDisplay,
+    isCompleteNaProfilePhone,
+    isProfilePhoneStorageEmpty,
+    profilePhoneForFirestore,
+    profileWhatsAppOnChangeText,
+} from '@/lib/profileWhatsAppPhone';
+import {
+    formatRestaurantPhoneDisplay,
+    resolveRestaurantDisplayName,
+    resolveRestaurantLogoUrl,
+    resolveRestaurantProfilePhone,
+} from '@/lib/restaurantDashboardProfile';
+import {
+    isRestaurantIsOpenMatching,
+    logVenueStatusError,
+    parseRestaurantIsOpen,
+} from '@/lib/restaurantVenueStatus';
+import { runRootNavigationTask } from '@/lib/router/rootNavigation';
 import { useAuth } from '@/services/AuthContext';
+import { showUserError } from '@/services/errors';
 import { auth, db } from '@/services/firebase';
 import {
-  isRestaurantIsOpenMatching,
-  logVenueStatusError,
-  parseRestaurantIsOpen,
-} from '@/lib/restaurantVenueStatus';
-import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
-import { runRootNavigationTask } from '@/lib/router/rootNavigation';
+    mergeHostRestaurantProfile,
+    saveRestaurantVenueMain,
+} from '@/services/hostRestaurant';
+import {
+    pickMenuImageFromLibrary,
+    uploadRestaurantLogo,
+} from '@/services/menuImageService';
 import { updateRestaurantOpen } from '@/services/restaurantDashboard';
 import { readRestaurantInteracEmail } from '@/services/restaurantPayoutMethods';
 import { startOnboarding } from '@/services/stripeConnect';
-import {
-  pickMenuImageFromLibrary,
-  uploadRestaurantLogo,
-} from '@/services/menuImageService';
-import { showUserError } from '@/services/errors';
 import { requireRole } from '@/utils/requireRole';
 import { stripeConnectErrorMessage } from '@/utils/stripeConnectErrors';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { AppTextInput } from '../components/AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppTextInput } from '../components/AppTextInput';
 type RestaurantState = {
   id: string;
   ownerId: string;

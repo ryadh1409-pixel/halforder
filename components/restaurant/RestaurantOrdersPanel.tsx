@@ -1,38 +1,38 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 
 import { RestaurantDeliveredOrderCard } from '@/components/restaurant/RestaurantDeliveredOrderCard';
 import { RestaurantLiveOrderCard } from '@/components/restaurant/RestaurantLiveOrderCard';
 import {
-  isRestaurantOrderDelivered,
-  RESTAURANT_ORDER_FILTERS,
-  restaurantOrderFilterEmptyTitle,
-  type RestaurantOrderListFilter,
+    isRestaurantOrderDelivered,
+    RESTAURANT_ORDER_FILTERS,
+    restaurantOrderFilterEmptyTitle,
+    type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
-import {
-  computeRestaurantDashboardMetrics,
-  isOrderFresh,
-} from '@/lib/restaurantOrderFreshness';
-import {
-  applyRestaurantKitchenAction,
-  primeRestaurantKitchenOptimistic,
-  type RestaurantKitchenAction,
-} from '@/lib/restaurantKitchenActions';
-import { clearOrderStageLock } from '@/lib/orderStageLock';
-import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import { useRestaurantOrdersLifecycleAlerts } from '@/hooks/useOrderLifecycleAlerts';
+import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
+import { clearOrderStageLock } from '@/lib/orderStageLock';
+import {
+    applyRestaurantKitchenAction,
+    primeRestaurantKitchenOptimistic,
+    type RestaurantKitchenAction,
+} from '@/lib/restaurantKitchenActions';
+import {
+    computeRestaurantDashboardMetrics,
+    isOrderFresh,
+} from '@/lib/restaurantOrderFreshness';
+import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
 import { deriveOrderStage, getRestaurantOrderPresentation } from '@/services/orderStage';
-import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 
 export type RestaurantDashboardMetrics = {
