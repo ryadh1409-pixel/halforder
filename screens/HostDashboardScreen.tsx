@@ -4,8 +4,6 @@ import {
     type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
 import { RestaurantPayoutMethods } from '@/components/restaurant/RestaurantPayoutMethods';
-import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
-import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
 import { useDrivers } from '@/hooks/useDrivers';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
 import {
@@ -77,13 +75,6 @@ const AVATAR_SIZE = 90;
 export default function HostDashboardScreen() {
   const router = useRouter();
   const { user, loading: authLoading, signOutUser } = useAuth();
-  const {
-    ready: workspaceReady,
-    activeWorkspace,
-    availableWorkspaces,
-    switchWorkspace,
-  } = useActiveWorkspace();
-  const currentWorkspace = activeWorkspace ?? 'restaurant';
   const { authorized, loading: roleLoading } = requireRole(['restaurant', 'host']);
   const uid = user?.uid ?? '';
 
@@ -640,15 +631,6 @@ export default function HostDashboardScreen() {
               title="Live orders"
               onAssignDriver={openAssignDriverModal}
               onDashboardMetrics={setDashboardMetrics}
-            />
-          ) : null}
-
-          {workspaceReady ? (
-            <WorkspaceSwitcher
-              availableWorkspaces={availableWorkspaces}
-              activeWorkspace={currentWorkspace}
-              onSwitch={switchWorkspace}
-              variant="restaurant"
             />
           ) : null}
 
