@@ -321,8 +321,8 @@ export function SwipeDiscoveryScreen() {
         {!loadingDeck && filteredCards.length === 0 ? (
           <Text style={styles.empty}>
             {isPickup
-              ? 'No active pickup shares yet. An admin must activate pickup cards first.'
-              : 'No active meal shares yet. An admin must activate cards first.'}
+              ? 'No pickup meal shares available yet. Check back soon for new pickup opportunities on HalfOrder.'
+              : 'No meal shares available right now. New meal shares will appear here as soon as they’re available on HalfOrder.'}
           </Text>
         ) : null}
 

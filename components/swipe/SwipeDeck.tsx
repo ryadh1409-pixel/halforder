@@ -147,14 +147,15 @@ function SwipeDeckInner({
             <View style={styles.loadingOrb} />
             <Text style={styles.emptyTitle}>Finding meal shares</Text>
             <Text style={styles.emptySub}>
-              Loading admin meal share cards.
+              Looking for available shares on HalfOrder.
             </Text>
           </>
         ) : (
           <>
-            <Text style={styles.emptyTitle}>No meal shares to swipe</Text>
+            <Text style={styles.emptyTitle}>No meal shares available right now</Text>
             <Text style={styles.emptySub}>
-              Ask an admin to activate cards in the dashboard.
+              New meal shares will appear here as soon as they’re available on
+              HalfOrder.
             </Text>
           </>
         )}
