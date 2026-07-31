@@ -407,7 +407,7 @@ export const getDriverReferralDashboard = onCall(async (request) => {
 
   return {
     code,
-    inviteLink: `https://halforder.app/driver-invite/${code}`,
+    inviteLink: "https://apps.apple.com/ca/app/halforder/id6760587041",
     campaign: publicSettings(settings),
     stats: {
       successfulReferrals: Math.max(
@@ -557,6 +557,7 @@ export const attachDriverReferral = onCall(async (request) => {
     tx.create(attributionRef, {
       customerId,
       customerName,
+      customerEmail: customerAuth.email ?? null,
       driverId,
       driverName,
       code,

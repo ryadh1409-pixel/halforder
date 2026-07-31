@@ -5,10 +5,16 @@ import type {
   DriverReferralCampaignSettings,
   DriverReferralDashboard,
 } from '@/types/driverReferralProgram';
+import * as Clipboard from 'expo-clipboard';
+import * as Crypto from 'expo-crypto';
 import { httpsCallable } from 'firebase/functions';
 
 export const DRIVER_REFERRAL_PENDING_CODE_KEY =
   'halforder_driver_referral_code';
+
+/** Shared invite destination — never use the website referral URL in share/copy/QR. */
+export const DRIVER_REFERRAL_APP_STORE_URL =
+  'https://apps.apple.com/ca/app/halforder/id6760587041';
 
 export function normalizeDriverReferralCode(value: unknown): string {
   return typeof value === 'string' ? value.trim().toUpperCase() : '';
@@ -18,8 +24,39 @@ export function isDriverReferralCode(value: unknown): boolean {
   return /^DRV[A-F0-9]{10}$/.test(normalizeDriverReferralCode(value));
 }
 
+/** Matches server `codeForDriver` in `main/src/driverReferralProgram.ts`. */
+export async function computeDriverReferralCode(driverId: string): Promise<string> {
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `halforder-driver-referral:${driverId}`,
+  );
+  return `DRV${hash.slice(0, 10).toUpperCase()}`;
+}
+
+export function buildDriverReferralInviteMessage(code: string): string {
+  const referralCode = normalizeDriverReferralCode(code);
+  return `Join me on HalfOrder and start earning by delivering food.
+
+Download the app:
+${DRIVER_REFERRAL_APP_STORE_URL}
+
+Use my referral code:
+${referralCode}
+
+Sign up using this referral code to get started.`;
+}
+
+export function buildDriverReferralInviteLink(_code?: string): string {
+  return DRIVER_REFERRAL_APP_STORE_URL;
+}
+
 export function buildDriverReferralQrUrl(inviteLink: string): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(inviteLink)}`;
+}
+
+function extractDriverReferralCodeFromText(value: string): string {
+  const match = value.toUpperCase().match(/DRV[A-F0-9]{10}/);
+  return match?.[0] ?? '';
 }
 
 export async function storePendingDriverReferralCode(
@@ -34,9 +71,21 @@ export async function storePendingDriverReferralCode(
 export async function applyPendingDriverReferralCode(): Promise<
   'none' | 'applied' | 'deferred'
 > {
-  const code = normalizeDriverReferralCode(
+  let code = normalizeDriverReferralCode(
     await AsyncStorage.getItem(DRIVER_REFERRAL_PENDING_CODE_KEY),
   );
+  if (!isDriverReferralCode(code)) {
+    try {
+      const clip = await Clipboard.getStringAsync();
+      const fromClip = extractDriverReferralCodeFromText(clip ?? '');
+      if (isDriverReferralCode(fromClip)) {
+        code = fromClip;
+        await AsyncStorage.setItem(DRIVER_REFERRAL_PENDING_CODE_KEY, code);
+      }
+    } catch {
+      // Clipboard unavailable — keep going with stored pending code only.
+    }
+  }
   if (!isDriverReferralCode(code)) return 'none';
   try {
     const callable = httpsCallable(functions, 'attachDriverReferral');

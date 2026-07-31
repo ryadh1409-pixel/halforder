@@ -1,4 +1,6 @@
 import {
+  buildDriverReferralInviteLink,
+  buildDriverReferralInviteMessage,
   buildDriverReferralQrUrl,
   getDriverReferralDashboard,
 } from '@/services/driverReferralProgram';
@@ -127,11 +129,7 @@ export function DriverReferralProgramCard({ driverId }: Props) {
     try {
       await Share.share({
         title: 'Join HalfOrder',
-        message: `Join me on HalfOrder and start sharing meals.
-
-Use my referral code: ${dashboard.code}
-
-${dashboard.inviteLink}`,
+        message: buildDriverReferralInviteMessage(dashboard.code),
       });
     } catch {
       showError('Could not open the share sheet.');
@@ -141,8 +139,10 @@ ${dashboard.inviteLink}`,
   const copyCode = useCallback(async () => {
     if (!dashboard) return;
     try {
-      await Clipboard.setStringAsync(dashboard.code);
-      showSuccess('Referral code copied.');
+      await Clipboard.setStringAsync(
+        buildDriverReferralInviteMessage(dashboard.code),
+      );
+      showSuccess('Referral invitation copied.');
     } catch {
       showError('Could not copy your referral code.');
     }
@@ -167,6 +167,7 @@ ${dashboard.inviteLink}`,
 
   if (!dashboard || !visible) return null;
 
+  const inviteLink = buildDriverReferralInviteLink(dashboard.code);
   const rewardLabel =
     dashboard.campaign.rewardType === 'fixed_amount'
       ? `${formatMoney(dashboard.campaign.fixedRewardCad)} per referral`
@@ -206,12 +207,12 @@ ${dashboard.inviteLink}`,
           <Text style={styles.codeLabel}>Your code</Text>
           <Text style={styles.codeValue}>{dashboard.code}</Text>
           <Text style={styles.linkValue} numberOfLines={2}>
-            {dashboard.inviteLink}
+            {inviteLink}
           </Text>
         </View>
         <View style={styles.qrFrame}>
           <Image
-            source={{ uri: buildDriverReferralQrUrl(dashboard.inviteLink) }}
+            source={{ uri: buildDriverReferralQrUrl(inviteLink) }}
             style={styles.qr}
             contentFit="contain"
             transition={200}
