@@ -132,6 +132,79 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const ENSURE_USER_DOC_MAX_ATTEMPTS = 5;
+const ENSURE_USER_DOC_BASE_DELAY_MS = 300;
+
+function firestoreErrorCode(error: unknown): string {
+  if (!error || typeof error !== 'object') return '';
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code.trim().toLowerCase() : '';
+}
+
+function firestoreErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message.toLowerCase();
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: unknown }).message).toLowerCase();
+  }
+  return String(error ?? '').toLowerCase();
+}
+
+/** Transient Firestore connectivity after Auth — safe to retry. */
+function isRetryableFirestoreUnavailableError(error: unknown): boolean {
+  const code = firestoreErrorCode(error);
+  if (
+    code === 'unavailable' ||
+    code === 'firestore/unavailable' ||
+    code === 'deadline-exceeded' ||
+    code === 'firestore/deadline-exceeded' ||
+    code === 'resource-exhausted' ||
+    code === 'firestore/resource-exhausted'
+  ) {
+    return true;
+  }
+  const message = firestoreErrorMessage(error);
+  return (
+    message.includes('client is offline') ||
+    message.includes('failed to get document because the client is offline')
+  );
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureUserDocumentWithRetry(
+  uid: string,
+  displayName: string | null,
+  email: string | null,
+  phoneNumber: string | null,
+  photoURL: string | null = null,
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= ENSURE_USER_DOC_MAX_ATTEMPTS; attempt++) {
+    try {
+      await ensureUserDocument(uid, displayName, email, phoneNumber, photoURL);
+      return;
+    } catch (error) {
+      lastError = error;
+      const retryable = isRetryableFirestoreUnavailableError(error);
+      if (!retryable || attempt === ENSURE_USER_DOC_MAX_ATTEMPTS) {
+        throw error;
+      }
+      const waitMs = ENSURE_USER_DOC_BASE_DELAY_MS * 2 ** (attempt - 1);
+      if (__DEV__) {
+        console.warn('[auth] ensureUserDocument retry', {
+          attempt,
+          nextDelayMs: waitMs,
+          code: firestoreErrorCode(error) || undefined,
+        });
+      }
+      await delayMs(waitMs);
+    }
+  }
+  throw lastError;
+}
+
 async function ensureUserDocument(
   uid: string,
   displayName: string | null,
@@ -823,8 +896,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logError(err);
         throw new Error(getUserFriendlyError(err));
       }
+      // Auth already succeeded — keep the session even if Firestore is briefly offline.
       try {
-        await ensureUserDocument(
+        await ensureUserDocumentWithRetry(
           cred.user.uid,
           cred.user.displayName ?? null,
           cred.user.email ?? null,
@@ -853,6 +927,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logAuthRoleDetected(migrated, cred.user.uid);
       } catch (e) {
         logError(e);
+        if (isRetryableFirestoreUnavailableError(e)) {
+          if (__DEV__) {
+            console.warn(
+              '[auth] ensureUserDocument exhausted retries after auth (non-fatal)',
+              e,
+            );
+          }
+          void syncUserRoleToFirestore(cred.user);
+          return;
+        }
         throw new Error(getUserFriendlyError(e));
       }
     },
