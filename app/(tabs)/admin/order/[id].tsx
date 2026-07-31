@@ -1,4 +1,5 @@
 import { AdminHeader } from '../../../../components/admin/AdminHeader';
+import { AdminOrderPeopleSection } from '../../../../components/admin/AdminOrderPeopleSection';
 import { adminRoutes } from '../../../../constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '../../../../constants/adminTheme';
 import { theme } from '../../../../constants/theme';
@@ -264,6 +265,8 @@ export default function AdminOrderDetailScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        <AdminOrderPeopleSection order={record} />
 
         <Text style={styles.section}>Messages (recent)</Text>
         {messages.length === 0 ? (
