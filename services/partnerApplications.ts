@@ -26,11 +26,63 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 
+const LOG = '[partnerApplications]';
+
 function pickString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
   return null;
+}
+
+/** Firestore rejects `undefined`; strip recursively. Keep null. */
+function stripUndefinedDeep<T>(value: T): T {
+  if (value === undefined) return value;
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value
+      .filter((v) => v !== undefined)
+      .map((v) => stripUndefinedDeep(v)) as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    out[k] = stripUndefinedDeep(v);
+  }
+  return out as T;
+}
+
+function logFirebaseError(phase: string, error: unknown): void {
+  const err = error as {
+    code?: unknown;
+    message?: unknown;
+    stack?: unknown;
+    name?: unknown;
+  } | null;
+  console.error(`${LOG} FAILED at ${phase}`, {
+    code: err && typeof err === 'object' ? err.code : undefined,
+    message: err && typeof err === 'object' ? err.message : String(error),
+    name: err && typeof err === 'object' ? err.name : undefined,
+    stack: err && typeof err === 'object' ? err.stack : undefined,
+    fullError: error,
+  });
+}
+
+export function formatPartnerApplicationError(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return String(error ?? 'Unknown error');
+  }
+  const e = error as { code?: unknown; message?: unknown };
+  const code = typeof e.code === 'string' ? e.code : null;
+  const message = typeof e.message === 'string' ? e.message : null;
+  if (code && message) return `${code}: ${message}`;
+  if (message) return message;
+  if (code) return code;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 }
 
 function mapApplication(
@@ -81,6 +133,7 @@ async function readApplicantProfile(uid: string): Promise<{
   email: string | null;
   phone: string | null;
 }> {
+  console.log(`${LOG} readApplicantProfile`, { path: `users/${uid}` });
   const snap = await getDoc(doc(db, 'users', uid));
   const data = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
   const authUser = auth.currentUser;
@@ -115,18 +168,51 @@ export type SubmitPartnerApplicationInput = {
 export async function submitPartnerApplication(
   input: SubmitPartnerApplicationInput,
 ): Promise<PartnerApplication> {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error('Sign in required');
+  console.log(`${LOG} submitPartnerApplication() called`, { type: input.type });
 
-  const existing = await getPendingApplicationForUser(uid, input.type);
-  if (existing) return existing;
+  const uid = auth.currentUser?.uid ?? null;
+  console.log(`${LOG} auth check`, {
+    authenticated: Boolean(auth.currentUser),
+    uid,
+  });
+  if (!uid) {
+    throw new Error('Sign in required (no auth.currentUser.uid)');
+  }
 
-  const profile = await readApplicantProfile(uid);
+  console.log(`${LOG} validation passed`);
+
+  try {
+    console.log(`${LOG} checking existing pending application`, {
+      collection: PARTNER_APPLICATIONS_COLLECTION,
+      applicantUserId: uid,
+      type: input.type,
+    });
+    const existing = await getPendingApplicationForUser(uid, input.type);
+    if (existing) {
+      console.log(`${LOG} reusing existing pending application`, {
+        id: existing.id,
+      });
+      return existing;
+    }
+  } catch (error) {
+    logFirebaseError('getPendingApplicationForUser', error);
+    throw error;
+  }
+
+  let profile: { name: string; email: string | null; phone: string | null };
+  try {
+    profile = await readApplicantProfile(uid);
+    console.log(`${LOG} applicant profile loaded`, profile);
+  } catch (error) {
+    logFirebaseError('readApplicantProfile', error);
+    throw error;
+  }
+
   const restaurantName =
     pickString(input.restaurantName) ??
     (input.type === 'restaurant' ? profile.name : null);
 
-  const payload: Record<string, unknown> = {
+  const payload = stripUndefinedDeep({
     type: input.type,
     status: 'pending',
     applicantUserId: uid,
@@ -149,11 +235,44 @@ export async function submitPartnerApplication(
     cuisine: input.type === 'restaurant' ? pickString(input.cuisine) : null,
     onboardingData:
       input.type === 'restaurant' ? input.onboardingData ?? {} : null,
-  };
+  });
 
-  const ref = await addDoc(collection(db, PARTNER_APPLICATIONS_COLLECTION), payload);
-  const snap = await getDoc(ref);
-  return mapApplication(ref.id, (snap.data() ?? payload) as Record<string, unknown>);
+  const firestorePath = PARTNER_APPLICATIONS_COLLECTION;
+  console.log(`${LOG} application payload ready`, {
+    firestorePath,
+    type: payload.type,
+    status: payload.status,
+    applicantUserId: payload.applicantUserId,
+    applicantName: payload.applicantName,
+    email: payload.email,
+    phoneNumber: payload.phoneNumber,
+    hasDriverInfo: payload.driverInfo != null,
+    keys: Object.keys(payload),
+  });
+
+  console.log(`${LOG} createPartnerApplication / addDoc called`, {
+    path: firestorePath,
+  });
+
+  try {
+    const ref = await addDoc(
+      collection(db, PARTNER_APPLICATIONS_COLLECTION),
+      payload,
+    );
+    console.log(`${LOG} Firestore write success`, {
+      path: `${PARTNER_APPLICATIONS_COLLECTION}/${ref.id}`,
+      id: ref.id,
+    });
+    const snap = await getDoc(ref);
+    console.log(`${LOG} post-write getDoc`, { exists: snap.exists() });
+    return mapApplication(
+      ref.id,
+      (snap.data() ?? payload) as Record<string, unknown>,
+    );
+  } catch (error) {
+    logFirebaseError('addDoc(partnerApplications)', error);
+    throw error;
+  }
 }
 
 export async function getPendingApplicationForUser(

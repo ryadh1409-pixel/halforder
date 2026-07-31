@@ -1,10 +1,10 @@
 import { goBackFromProfileScreen } from '@/lib/profileBack';
 import {
+  formatPartnerApplicationError,
   getPendingApplicationForUser,
   submitPartnerApplication,
 } from '@/services/partnerApplications';
 import { useAuth } from '@/services/AuthContext';
-import { getUserFriendlyError } from '@/services/errors';
 import { logError } from '@/utils/errorLogger';
 import { showError } from '@/utils/toast';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -91,22 +91,41 @@ export default function DriverOnboardingScreen() {
   }, [firestoreUserRole, user?.uid]);
 
   const runDriverApplication = useCallback(async () => {
+    console.log('[driver-onboarding] Submit pressed');
     if (!user?.uid) {
+      console.log('[driver-onboarding] no uid — redirect register');
       router.push('/(auth)/register?intent=driver' as never);
       return;
     }
-    if (submittingRef.current) return;
+    if (submittingRef.current) {
+      console.log('[driver-onboarding] ignored duplicate submit');
+      return;
+    }
 
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      await submitPartnerApplication({ type: 'driver' });
+      console.log('[driver-onboarding] validation passed', { uid: user.uid });
+      const created = await submitPartnerApplication({ type: 'driver' });
+      console.log('[driver-onboarding] submitPartnerApplication success', {
+        id: created.id,
+        status: created.status,
+      });
       router.replace(
         '/partner-application-submitted?type=driver' as never,
       );
+      console.log('[driver-onboarding] Navigation success');
     } catch (e) {
+      const err = e as { code?: unknown; message?: unknown; stack?: unknown };
+      console.error('[driver-onboarding] Submit failed', {
+        code: err?.code,
+        message: err?.message,
+        stack: err?.stack,
+        fullError: e,
+      });
       logError(e);
-      showError(getUserFriendlyError(e));
+      // Surface the real Firebase error while diagnosing (do not hide with generic copy).
+      showError(formatPartnerApplicationError(e));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
