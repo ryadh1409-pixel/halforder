@@ -4,13 +4,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   onPress: () => void;
-  onEmoGamePress: () => void;
 };
 
 /**
- * Compact in-chat actions above the composer — I Want + Emo Game.
+ * Compact in-chat action above the composer — I Want Something.
  */
-function IWantComposerCtaInner({ onPress, onEmoGamePress }: Props) {
+function IWantComposerCtaInner({ onPress }: Props) {
   return (
     <View style={styles.wrap}>
       <Pressable
@@ -21,16 +20,6 @@ function IWantComposerCtaInner({ onPress, onEmoGamePress }: Props) {
       >
         <Text style={styles.label} numberOfLines={1}>
           ✨ I Want Something
-        </Text>
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.chip, styles.chipFlex, pressed && styles.pressed]}
-        onPress={onEmoGamePress}
-        accessibilityRole="button"
-        accessibilityLabel="Emo Game"
-      >
-        <Text style={styles.label} numberOfLines={1}>
-          🎮 Emo Game
         </Text>
       </Pressable>
     </View>
