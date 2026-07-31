@@ -140,6 +140,7 @@ export default function AdminLayout() {
           name="driver-management"
           options={{ title: 'Driver Management' }}
         />
+        <Stack.Screen name="requests" options={{ title: 'Requests' }} />
         <Stack.Screen
           name="driver-launch-campaign"
           options={{ title: 'Driver Launch Campaign' }}

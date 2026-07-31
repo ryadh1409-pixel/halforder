@@ -21,12 +21,27 @@ export type ActionCardProps = {
   label: string;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
+  /** Optional count badge (e.g. pending Requests). */
+  badgeCount?: number;
 };
 
-export function ActionCard({ icon, label, onPress, style }: ActionCardProps) {
+export function ActionCard({
+  icon,
+  label,
+  onPress,
+  style,
+  badgeCount,
+}: ActionCardProps) {
   const { width: winW } = useWindowDimensions();
   const cellW =
     (winW - GRID_HORIZONTAL_PAD * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+  const showBadge =
+    typeof badgeCount === 'number' && badgeCount > 0;
+  const badgeLabel = showBadge
+    ? badgeCount > 99
+      ? '99+'
+      : String(badgeCount)
+    : null;
 
   return (
     <Pressable
@@ -40,6 +55,11 @@ export function ActionCard({ icon, label, onPress, style }: ActionCardProps) {
     >
       <View style={styles.iconCircle}>
         <Ionicons name={icon} size={20} color={COLORS.primary} />
+        {badgeLabel ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badgeLabel}</Text>
+          </View>
+        ) : null}
       </View>
       <Text
         style={styles.label}
@@ -79,6 +99,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: COLORS.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontFamily: adminFontFamily,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
   },
   label: {
     fontFamily: adminFontFamily,

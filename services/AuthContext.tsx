@@ -719,7 +719,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logError(e);
     }
 
-    const signupRole = roleForSignupIntent(payload.signupIntent ?? 'user');
+    const signupIntent = payload.signupIntent ?? 'user';
+    const partnerIntent =
+      signupIntent === 'driver' || signupIntent === 'restaurant'
+        ? signupIntent
+        : null;
+    /** Partner intents stay as customer until admin approval. */
+    const signupRole = partnerIntent
+      ? 'user'
+      : roleForSignupIntent(signupIntent);
 
     try {
       console.log('[PRE FIRESTORE]', {
@@ -739,7 +747,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           photoURL: photoURL ?? null,
           avatar: photoURL ?? null,
           role: signupRole,
-          restaurantId: signupRole === 'restaurant' ? uid : null,
+          restaurantId: null,
           rating: 5,
           reviewsCount: 0,
           averageRating: 5,
@@ -779,12 +787,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    try {
-      await applySignupRole(uid, payload.signupIntent ?? 'user', {
-        displayName: nameTrim,
-      });
-    } catch (e) {
-      logError(e);
+    if (partnerIntent) {
+      try {
+        const { submitPartnerApplication } = await import(
+          '@/services/partnerApplications'
+        );
+        await submitPartnerApplication({
+          type: partnerIntent,
+          restaurantName:
+            partnerIntent === 'restaurant' ? nameTrim : undefined,
+        });
+      } catch (e) {
+        logError(e);
+      }
+    } else {
+      try {
+        await applySignupRole(uid, signupIntent, {
+          displayName: nameTrim,
+        });
+      } catch (e) {
+        logError(e);
+      }
     }
 
     void syncUserRoleToFirestore(firebaseUser);
@@ -949,10 +972,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error('Not signed in');
       if (role === 'driver' || role === 'restaurant') {
-        await applySignupRole(uid, role, {
-          displayName: auth.currentUser?.displayName,
-        });
-        await refreshAuthRoleClaims();
+        const current = firestoreRoleRef.current;
+        if (current === role || current === 'admin') {
+          await refreshAuthRoleClaims();
+          return;
+        }
+        // First-time partner activation requires admin approval — do not grant role here.
+        const { submitPartnerApplication } = await import(
+          '@/services/partnerApplications'
+        );
+        await submitPartnerApplication({ type: role });
         return;
       }
       await assignUserRole(uid, 'user', { restaurantId: null });

@@ -3296,10 +3296,25 @@ service cloud.firestore {
           && resource.data.isOnline == true
           && resource.data.get('adminSuspended', false) != true
         );
-      allow create, delete: if isSignedIn()
-        && request.auth.uid == driverId;
+      allow create: if isAdmin()
+        || (isSignedIn() && request.auth.uid == driverId);
+      allow delete: if isAdmin()
+        || (isSignedIn() && request.auth.uid == driverId);
       allow update: if isAdmin()
         || (isSignedIn() && request.auth.uid == driverId);
+    }
+
+    /** Driver / restaurant partner applications — pending until admin approves. */
+    match /partnerApplications/{applicationId} {
+      allow create: if isSignedIn()
+        && request.resource.data.applicantUserId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && (request.resource.data.type == 'driver'
+            || request.resource.data.type == 'restaurant');
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.applicantUserId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
     match /app_sessions/{sessionId} {
       allow read, write: if request.auth != null;

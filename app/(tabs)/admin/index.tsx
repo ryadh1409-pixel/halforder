@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { ADMIN_FOOD_CARD_SLOT_IDS } from '../../../constants/adminFoodCards';
 import { countFoodCardsWithStatus } from '../../../services/foodCards';
+import { subscribePendingPartnerApplications } from '@/services/partnerApplications';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -68,6 +69,7 @@ export default function AdminScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [metrics, setMetrics] = useState<{
     totalUsers: number;
     totalOrders: number;
@@ -108,6 +110,16 @@ export default function AdminScreen() {
     }
     nonAdminRedirectRef.current = false;
   }, [isAdmin, user?.uid]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingRequestsCount(0);
+      return;
+    }
+    return subscribePendingPartnerApplications((rows) => {
+      setPendingRequestsCount(rows.length);
+    });
+  }, [isAdmin]);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -467,6 +479,16 @@ export default function AdminScreen() {
                 Quick actions
               </Text>
               <View style={styles.actionsGrid}>
+                <ActionCard
+                  icon="clipboard-outline"
+                  label={
+                    pendingRequestsCount > 0
+                      ? `Requests (${pendingRequestsCount})`
+                      : 'Requests'
+                  }
+                  badgeCount={pendingRequestsCount}
+                  onPress={() => router.push(adminRoutes.requests as never)}
+                />
                 <ActionCard
                   icon="sparkles-outline"
                   label="Admin AI"

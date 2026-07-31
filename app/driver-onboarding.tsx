@@ -1,18 +1,16 @@
 import { goBackFromProfileScreen } from '@/lib/profileBack';
-import { navigateForRole } from '@/lib/navigation';
-import { applySignupRole } from '@/services/authRoleAssignment';
-import { ensureAuthRoleClaim } from '@/services/authRoleClaims';
-import { getUserFriendlyError } from '@/services/errors';
-import { db } from '@/services/firebase';
-import { useActiveWorkspaceStore } from '@/store/activeWorkspaceStore';
+import {
+  getPendingApplicationForUser,
+  submitPartnerApplication,
+} from '@/services/partnerApplications';
 import { useAuth } from '@/services/AuthContext';
+import { getUserFriendlyError } from '@/services/errors';
 import { logError } from '@/utils/errorLogger';
 import { showError } from '@/utils/toast';
-import { doc, getDoc } from 'firebase/firestore';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,6 +32,7 @@ const pal = {
   primary: '#A855F7',
   onPrimary: '#FFFFFF',
   accent: '#FF9E40',
+  warning: '#F59E0B',
 } as const;
 
 const BENEFITS = [
@@ -50,110 +49,96 @@ const REQUIREMENTS = [
 ];
 
 /**
- * Driver onboarding — confirms before applying existing driver signup logic.
+ * Driver onboarding — submits a pending application (admin must approve).
  */
 export default function DriverOnboardingScreen() {
   const router = useRouter();
-  const { user, firestoreUserRole, reloadAuthUser } = useAuth();
+  const { user, firestoreUserRole } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [checkingPending, setCheckingPending] = useState(true);
+  const [hasPending, setHasPending] = useState(false);
   const submittingRef = useRef(false);
 
-  const runDriverSignup = useCallback(async () => {
-    console.log('[driver-activation] confirmation pressed', {
-      uid: user?.uid ?? null,
-      roleBeforeRefresh: firestoreUserRole ?? null,
-    });
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!user?.uid) {
+        if (!cancelled) {
+          setHasPending(false);
+          setCheckingPending(false);
+        }
+        return;
+      }
+      if (firestoreUserRole === 'driver' || firestoreUserRole === 'admin') {
+        if (!cancelled) {
+          setHasPending(false);
+          setCheckingPending(false);
+        }
+        return;
+      }
+      try {
+        const pending = await getPendingApplicationForUser(user.uid, 'driver');
+        if (!cancelled) setHasPending(Boolean(pending));
+      } catch {
+        if (!cancelled) setHasPending(false);
+      } finally {
+        if (!cancelled) setCheckingPending(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [firestoreUserRole, user?.uid]);
 
+  const runDriverApplication = useCallback(async () => {
     if (!user?.uid) {
       router.push('/(auth)/register?intent=driver' as never);
       return;
     }
-    if (submittingRef.current) {
-      console.log('[driver-activation] ignored duplicate submit');
-      return;
-    }
+    if (submittingRef.current) return;
 
-    const uid = user.uid;
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const driverRef = doc(db, 'drivers', uid);
-      let existedBefore = false;
-      try {
-        existedBefore = (await getDoc(driverRef)).exists();
-      } catch (checkError) {
-        console.error('[driver-activation] driver profile check failed', {
-          documentId: uid,
-          error: checkError,
-        });
-      }
-      console.log('[driver-activation] driver profile exists check', {
-        documentId: uid,
-        existedBefore,
-      });
-
-      // `setDoc(..., { merge: true })` inside `applySignupRole` — never duplicates.
-      const role = await applySignupRole(uid, 'driver', {
-        displayName: user.displayName,
-      });
-      const writtenSnap = await getDoc(driverRef);
-      console.log('[driver-activation] firestore write result', {
-        documentId: uid,
-        driverDocExists: writtenSnap.exists(),
-        assignedRole: role,
-      });
-
-      // Token claims gate driver marketplace reads — refresh before routing.
-      await ensureAuthRoleClaim('driver');
-      await reloadAuthUser().catch((reloadError) => {
-        console.error('[driver-activation] auth reload failed', reloadError);
-      });
-
-      await useActiveWorkspaceStore
-        .getState()
-        .activateWorkspace(uid, 'driver', 'driver');
-      const workspaceState = useActiveWorkspaceStore.getState();
-      console.log('[driver-activation] context refresh completed', {
-        roleAfterRefresh: role,
-        activeWorkspace: workspaceState.activeWorkspace,
-        availableWorkspaces: workspaceState.availableWorkspaces,
-        workspaceReady: workspaceState.ready,
-      });
-
-      console.log('[driver-activation] navigating to driver dashboard');
-      navigateForRole(role);
+      await submitPartnerApplication({ type: 'driver' });
+      router.replace(
+        '/partner-application-submitted?type=driver' as never,
+      );
     } catch (e) {
       logError(e);
-      console.error('[driver-activation] activation failed', e);
       showError(getUserFriendlyError(e));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [
-    firestoreUserRole,
-    reloadAuthUser,
-    router,
-    user?.displayName,
-    user?.uid,
-  ]);
+  }, [router, user?.uid]);
 
   const onBecomeDriver = useCallback(() => {
-    if (submitting) return;
+    if (submitting || hasPending) return;
     Alert.alert(
-      'Become a Driver?',
-      'Are you sure you want to create a Driver account? You can switch between User and Driver at any time.',
+      'Apply as a Driver?',
+      'Submit your driver application for review. You will gain Driver access after admin approval.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Continue',
+          text: 'Submit application',
           onPress: () => {
-            void runDriverSignup();
+            void runDriverApplication();
           },
         },
       ],
     );
-  }, [runDriverSignup, submitting]);
+  }, [hasPending, runDriverApplication, submitting]);
+
+  if (checkingPending) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <View style={styles.centered}>
+          <ActivityIndicator color={pal.primary} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -181,8 +166,19 @@ export default function DriverOnboardingScreen() {
         <Text style={styles.title}>Become a HalfOrder Driver</Text>
         <Text style={styles.description}>
           Deliver meals in your area on your own schedule. Keep your customer
-          account and switch to Driver mode whenever you are ready to earn.
+          account and switch to Driver mode after your application is approved.
         </Text>
+
+        {hasPending ? (
+          <View style={styles.pendingCard}>
+            <Text style={styles.pendingLabel}>Application Status</Text>
+            <Text style={styles.pendingValue}>Pending Review</Text>
+            <Text style={styles.pendingHint}>
+              Our team is reviewing your application. Estimated review: 1–2
+              business days. Driver tools stay locked until approval.
+            </Text>
+          </View>
+        ) : null}
 
         <Text style={styles.sectionLabel}>Benefits</Text>
         <View style={styles.card}>
@@ -222,20 +218,22 @@ export default function DriverOnboardingScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
-          onPress={onBecomeDriver}
-          activeOpacity={0.85}
-          disabled={submitting}
-          accessibilityRole="button"
-          accessibilityLabel="Become a Driver"
-        >
-          {submitting ? (
-            <ActivityIndicator color={pal.onPrimary} />
-          ) : (
-            <Text style={styles.primaryBtnText}>Become a Driver</Text>
-          )}
-        </TouchableOpacity>
+        {!hasPending ? (
+          <TouchableOpacity
+            style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
+            onPress={onBecomeDriver}
+            activeOpacity={0.85}
+            disabled={submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Submit driver application"
+          >
+            {submitting ? (
+              <ActivityIndicator color={pal.onPrimary} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Submit Application</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.cancelBtn}
           onPress={() => goBackFromProfileScreen(router)}
@@ -244,7 +242,9 @@ export default function DriverOnboardingScreen() {
           accessibilityRole="button"
           accessibilityLabel="Cancel"
         >
-          <Text style={styles.cancelBtnText}>Cancel</Text>
+          <Text style={styles.cancelBtnText}>
+            {hasPending ? 'Done' : 'Cancel'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -256,6 +256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: pal.bg,
   },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -307,6 +308,34 @@ const styles = StyleSheet.create({
     color: pal.textSecondary,
     textAlign: 'center',
     marginBottom: 24,
+  },
+  pendingCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    padding: 16,
+    marginBottom: 20,
+  },
+  pendingLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: pal.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  pendingValue: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: '800',
+    color: pal.warning,
+  },
+  pendingHint: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    color: pal.textSecondary,
+    fontWeight: '500',
   },
   sectionLabel: {
     fontSize: 12,

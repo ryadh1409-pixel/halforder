@@ -559,10 +559,6 @@ export default function ProfileScreen() {
     router.replace(POST_LOGOUT_ROUTE as Parameters<typeof router.replace>[0]);
   }, [router, signOutUser]);
 
-  const handleBusinessAccount = useCallback(() => {
-    Alert.alert('Coming soon');
-  }, []);
-
   const handleAddRestaurant = useCallback(() => {
     router.push('/restaurant-account-onboarding' as never);
   }, [router]);
@@ -899,17 +895,11 @@ export default function ProfileScreen() {
 
           <SettingsSection title="Grow with Us">
             <ProfileMenuItem
-              title="Create a restaurant account"
-              subtitle="Manage team and restaurant orders"
-              iconKind="business"
-              onPress={handleBusinessAccount}
-              isFirst
-            />
-            <ProfileMenuItem
               title="Add your restaurant"
               subtitle="Partner your restaurant with us"
               iconKind="restaurant"
               onPress={handleAddRestaurant}
+              isFirst
             />
             <ProfileMenuItem
               title="Sign up as driver"

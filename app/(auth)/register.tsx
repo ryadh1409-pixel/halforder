@@ -219,7 +219,13 @@ export default function RegisterScreen() {
         signupIntent,
       });
       showSuccess('Account created successfully 🎉');
-      router.replace('/(auth)/location-permission' as never);
+      if (signupIntent === 'driver' || signupIntent === 'restaurant') {
+        router.replace(
+          `/partner-application-submitted?type=${signupIntent}` as never,
+        );
+      } else {
+        router.replace('/(auth)/location-permission' as never);
+      }
     } catch (e: unknown) {
       const friendly = getAuthFlowFriendlyMessage(e);
       setFormError(friendly);
