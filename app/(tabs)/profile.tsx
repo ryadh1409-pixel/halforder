@@ -690,14 +690,12 @@ export default function ProfileScreen() {
                 </Text>
               ) : null}
               <View style={dynamicStyles.profileBadgeRow}>
-                {!(
-                  reviewCount === 0 && !isAdminUser(user, firestoreUserRole)
-                ) ? (
+                {reviewCount > 0 ? (
                   <View style={dynamicStyles.profileBadge}>
                     <MaterialIcons name="star" size={14} color={pal.star} />
                     <Text style={dynamicStyles.profileBadgeText}>
                       {ratingValue != null ? ratingValue.toFixed(1) : '—'}
-                      {reviewCount > 0 ? ` · ${reviewCount}` : ''}
+                      {` · ${reviewCount}`}
                     </Text>
                   </View>
                 ) : null}
@@ -958,12 +956,6 @@ export default function ProfileScreen() {
             />
           </SettingsSection>
 
-          <Text style={dynamicStyles.sectionFootnote}>
-            Users can report inappropriate behavior. To report or block someone you
-            interacted with, open the order chat, Join tab, or Help. See Terms for
-            how we handle reports.
-          </Text>
-
           <MemberSinceCard year={memberSinceYear} />
 
         </View>
@@ -1178,13 +1170,6 @@ function createDynamicStyles(pal: Palette, isDarkMode: boolean) {
       letterSpacing: 0.9,
       marginBottom: 10,
       marginTop: 24,
-    },
-    sectionFootnote: {
-      marginTop: 24,
-      fontSize: 12,
-      fontWeight: '400',
-      color: pal.textTertiary,
-      lineHeight: 18,
     },
     card: {
       backgroundColor: pal.surface,

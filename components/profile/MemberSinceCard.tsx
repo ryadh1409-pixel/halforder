@@ -71,7 +71,7 @@ export function MemberSinceCard({ year }: Props) {
               </Text>
               <MaterialIcons
                 name="diamond"
-                size={13}
+                size={14}
                 color="#C4B5FD"
                 style={styles.badgeIcon}
                 accessible={false}
@@ -81,7 +81,9 @@ export function MemberSinceCard({ year }: Props) {
               Thank you for being part of HalfOrder.
             </Text>
             <Text style={styles.loyalty} maxFontSizeMultiplier={1.3}>
-              {"Thank you for choosing HalfOrder. We're excited to have you with us."}
+              {
+                "Thank you for choosing HalfOrder. We're excited to have you with us."
+              }
             </Text>
           </View>
         </View>
@@ -96,6 +98,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(196, 181, 253, 0.32)',
+    marginTop: 24,
     marginBottom: 12,
     overflow: 'hidden',
     ...Platform.select({
@@ -110,9 +113,12 @@ const styles = StyleSheet.create({
     }),
   },
   surface: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    minHeight: 132,
+    paddingTop: 26,
+    paddingBottom: 26,
+    paddingHorizontal: 22,
     overflow: 'hidden',
+    justifyContent: 'center',
   },
   mesh: {
     ...StyleSheet.absoluteFillObject,
@@ -128,9 +134,10 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   logoOuter: {
+    marginTop: 2,
     ...Platform.select({
       ios: {
         shadowColor: '#A855F7',
@@ -164,34 +171,38 @@ const styles = StyleSheet.create({
   textCol: {
     flex: 1,
     minWidth: 0,
-    marginLeft: 14,
+    marginLeft: 18,
+    paddingRight: 6,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
   },
   title: {
+    flexShrink: 1,
     fontSize: 17,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.35,
+    lineHeight: 22,
   },
   badgeIcon: {
     opacity: 0.9,
   },
   subtitle: {
-    marginTop: 3,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-    lineHeight: 17,
+    lineHeight: 20,
     color: '#E8EAF0',
   },
   loyalty: {
-    marginTop: 5,
-    fontSize: 12,
+    marginTop: 12,
+    fontSize: 13,
     fontWeight: '500',
-    lineHeight: 16,
+    lineHeight: 19,
     color: '#BFA8F5',
   },
 });
