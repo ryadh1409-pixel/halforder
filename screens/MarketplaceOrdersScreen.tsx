@@ -3,6 +3,7 @@ import {
   type MarketplaceOrdersFeedRow,
 } from '@/components/orders/MarketplaceOrderCard';
 import { getOrderListSection, type OrderListSection } from '@/constants/orderStatus';
+import { formatOrderListTimeLabel } from '@/lib/orderReceipt';
 import { useAuth } from '@/services/AuthContext';
 import { db } from '@/services/firebase';
 import { normalizeDeliveryStatus } from '@/services/deliveryStatus';
@@ -42,27 +43,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const TAB_SPINNER = '#A855F7';
 const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
 type OrderHistoryFilter = 'active' | 'completed' | 'cancelled';
-
-const PROGRESS_KEYS = [
-  'awaiting_payment',
-  'payment_processing',
-  'pending_driver',
-  'pending',
-  'restaurant_accepted',
-  'preparing',
-  'ready_for_pickup',
-  'picked_up',
-  'on_the_way',
-  'arrived_customer',
-  'delivered',
-] as const;
-
-function listProgressFromStatus(status: string): number {
-  const s = status.trim().toLowerCase();
-  const i = PROGRESS_KEYS.indexOf(s as (typeof PROGRESS_KEYS)[number]);
-  if (i >= 0) return (i + 1) / PROGRESS_KEYS.length;
-  return 0.18;
-}
 
 function sectionFromOrder(data: Record<string, unknown>): OrderListSection {
   const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
@@ -114,20 +94,6 @@ function driverSummaryFromDoc(data: Record<string, unknown>): string | null {
   return labels[n] ?? n.replace(/_/g, ' ');
 }
 
-function createdLabel(ms: number | null): string {
-  if (ms == null) return '—';
-  const d = new Date(ms);
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  if (sameDay) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
 function GlassBar({
   children,
   style,
@@ -150,7 +116,6 @@ function mapDocToFeedRow(
   restaurantImages: Record<string, string | null>,
 ): MarketplaceOrdersFeedRow {
   const data = d.data() as Record<string, unknown>;
-  const createdAtMs = safeToMillis(data.createdAt);
 
   const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
   const paymentStatus = typeof data.paymentStatus === 'string' ? data.paymentStatus : 'unpaid';
@@ -349,9 +314,12 @@ function mapDocToFeedRow(
     driverSummary: driverSummaryFromDoc(data),
     itemsPreview,
     participantCount,
-    createdAtLabel: createdLabel(createdAtMs),
+    // Same paidAt source + Toronto formatter as Order Details "Paid At".
+    createdAtLabel: formatOrderListTimeLabel({
+      paidAt: data.paidAt,
+      createdAt: data.createdAt,
+    }),
     section,
-    listProgress: listProgressFromStatus(status),
   };
 }
 

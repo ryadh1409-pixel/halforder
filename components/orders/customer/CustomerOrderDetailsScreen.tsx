@@ -305,6 +305,41 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     ].filter((p): p is { latitude: number; longitude: number } => Boolean(p));
   }, [order]);
 
+  /** Center embedded preview on restaurant / dropoff (never driver-first). */
+  const previewCenter = useMemo(() => {
+    if (
+      order.restaurantLocation &&
+      Number.isFinite(order.restaurantLocation.lat) &&
+      Number.isFinite(order.restaurantLocation.lng)
+    ) {
+      return {
+        latitude: order.restaurantLocation.lat,
+        longitude: order.restaurantLocation.lng,
+      };
+    }
+    if (
+      order.deliveryLocation &&
+      Number.isFinite(order.deliveryLocation.lat) &&
+      Number.isFinite(order.deliveryLocation.lng)
+    ) {
+      return {
+        latitude: order.deliveryLocation.lat,
+        longitude: order.deliveryLocation.lng,
+      };
+    }
+    if (
+      order.driverLocation &&
+      Number.isFinite(order.driverLocation.lat) &&
+      Number.isFinite(order.driverLocation.lng)
+    ) {
+      return {
+        latitude: order.driverLocation.lat,
+        longitude: order.driverLocation.lng,
+      };
+    }
+    return null;
+  }, [order.restaurantLocation, order.deliveryLocation, order.driverLocation]);
+
   const mapMarkers = useMemo(() => {
     const out: {
       id: string;
@@ -342,6 +377,54 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     }
     return out;
   }, [order]);
+
+  /** Preview markers: destination required when present; driver when available. */
+  const previewMarkers = useMemo(() => {
+    const out: {
+      id: string;
+      latitude: number;
+      longitude: number;
+      title?: string;
+      pinColor?: string;
+      variant?: 'driver' | 'destination' | 'default';
+    }[] = [];
+    if (order.deliveryLocation) {
+      out.push({
+        id: 'destination',
+        latitude: order.deliveryLocation.lat,
+        longitude: order.deliveryLocation.lng,
+        title: 'Destination',
+        variant: 'destination',
+      });
+    } else if (order.restaurantLocation) {
+      out.push({
+        id: 'destination',
+        latitude: order.restaurantLocation.lat,
+        longitude: order.restaurantLocation.lng,
+        title: 'Restaurant',
+        variant: 'destination',
+      });
+    }
+    if (order.restaurantLocation && order.deliveryLocation) {
+      out.push({
+        id: 'restaurant',
+        latitude: order.restaurantLocation.lat,
+        longitude: order.restaurantLocation.lng,
+        title: 'Restaurant',
+        pinColor: '#F59E0B',
+      });
+    }
+    if (order.driverLocation) {
+      out.push({
+        id: 'driver',
+        latitude: order.driverLocation.lat,
+        longitude: order.driverLocation.lng,
+        title: 'Driver',
+        variant: 'driver',
+      });
+    }
+    return out;
+  }, [order.deliveryLocation, order.restaurantLocation, order.driverLocation]);
 
   const statusChip = chipForFulfillment(
     delivered ? 'completed' : order.status,
@@ -406,12 +489,50 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
               : customerPhase.subtitle}
           </Text>
           {!delivered ? (
-            <Pressable
-              style={styles.trackFullscreenBtn}
-              onPress={() => router.push(`/track-order/${encodeURIComponent(order.id)}` as never)}
-            >
-              <Text style={styles.trackFullscreenBtnText}>Fullscreen live map</Text>
-            </Pressable>
+            <>
+              <Pressable
+                style={styles.trackFullscreenBtn}
+                onPress={() =>
+                  router.push(`/track-order/${encodeURIComponent(order.id)}` as never)
+                }
+              >
+                <Text style={styles.trackFullscreenBtnText}>Fullscreen live map</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open fullscreen live map"
+                onPress={() =>
+                  router.push(`/track-order/${encodeURIComponent(order.id)}` as never)
+                }
+                style={styles.liveMapPreviewCard}
+              >
+                <View style={styles.liveMapPreviewHost} pointerEvents="none">
+                  {previewCenter ? (
+                    <MapRenderer
+                      style={styles.liveMapPreview}
+                      userInterfaceStyle="dark"
+                      initialRegion={{
+                        latitude: previewCenter.latitude,
+                        longitude: previewCenter.longitude,
+                        latitudeDelta: 0.045,
+                        longitudeDelta: 0.045,
+                      }}
+                      markers={previewMarkers}
+                      fitToCoordinates={
+                        mapPoints.length >= 2 ? mapPoints : undefined
+                      }
+                      fitEdgePadding={{ top: 36, right: 28, bottom: 36, left: 28 }}
+                      webTitle="Live map"
+                      webSubtitle="Tap for fullscreen tracking"
+                    />
+                  ) : (
+                    <View style={styles.mapPlaceholder}>
+                      <Text style={styles.muted}>Map preview unavailable</Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            </>
           ) : null}
           <View style={styles.chipRow}>
             <View style={[styles.chip, { backgroundColor: statusChip.bg }]}>
@@ -521,7 +642,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Apple Maps</Text>
+          <Text style={styles.cardTitle}>Google Maps</Text>
           {delivered ? (
             <View style={styles.completedCard}>
               <Text style={styles.completedCardTitle}>Delivery complete</Text>
@@ -563,7 +684,7 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
                           ]
                         : []
                     }
-                    webTitle="Apple Maps"
+                    webTitle="Google Maps"
                     webSubtitle="Restaurant → dropoff route"
                   />
                 ) : (
@@ -637,13 +758,47 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           />
           <Pressable
             style={styles.mapOpenBtn}
-            onPress={() =>
-              void Linking.openURL(
-                `http://maps.apple.com/?q=${encodeURIComponent(formatAddress(order.deliveryLocation?.address))}`,
-              )
-            }
+            onPress={() => {
+              void (async () => {
+                const loc = order.restaurantLocation;
+                if (
+                  !loc ||
+                  !Number.isFinite(loc.lat) ||
+                  !Number.isFinite(loc.lng)
+                ) {
+                  showError('Restaurant location unavailable');
+                  return;
+                }
+                const coords = `${loc.lat},${loc.lng}`;
+                // Directions from the user's current location → restaurant (nav-ready).
+                const webDirectionsUrl =
+                  `https://www.google.com/maps/dir/?api=1` +
+                  `&destination=${encodeURIComponent(coords)}` +
+                  `&travelmode=driving&dir_action=navigate`;
+                const appUrl =
+                  Platform.OS === 'ios'
+                    ? `comgooglemaps://?daddr=${encodeURIComponent(coords)}&directionsmode=driving`
+                    : `google.navigation:q=${encodeURIComponent(coords)}`;
+                try {
+                  const canOpenApp = await Linking.canOpenURL(appUrl).catch(
+                    () => false,
+                  );
+                  if (canOpenApp) {
+                    await Linking.openURL(appUrl);
+                    return;
+                  }
+                } catch {
+                  /* fall through to web directions */
+                }
+                try {
+                  await Linking.openURL(webDirectionsUrl);
+                } catch {
+                  showError('Could not open Google Maps');
+                }
+              })();
+            }}
           >
-            <Text style={styles.mapOpenBtnText}>Open in Apple Maps</Text>
+            <Text style={styles.mapOpenBtnText}>Open in Google Maps</Text>
           </Pressable>
 
           <Text style={[styles.metaStrong, { marginTop: 18 }]}>Help</Text>
@@ -727,6 +882,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   trackFullscreenBtnText: { color: '#C084FC', fontWeight: '900', fontSize: 15 },
+  liveMapPreviewCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#0E1218',
+  },
+  liveMapPreviewHost: {
+    minHeight: 180,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  liveMapPreview: {
+    height: 180,
+    width: '100%',
+  },
   pinCard: {
     marginHorizontal: 16,
     marginTop: 14,
