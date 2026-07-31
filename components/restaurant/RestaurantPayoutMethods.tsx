@@ -3,6 +3,7 @@ import { saveRestaurantInteracEmail } from '@/services/restaurantPayoutMethods';
 import { getUserFriendlyError } from '@/services/errors';
 import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,7 +21,8 @@ type Props = {
   interacEmail: string;
   stripeConnected: boolean;
   stripeLoading: boolean;
-  onConnectStripe: () => void;
+  /** @deprecated Connect now opens the Bank Account screen. Kept for call-site compat. */
+  onConnectStripe?: () => void;
 };
 
 export function RestaurantPayoutMethods({
@@ -28,8 +30,8 @@ export function RestaurantPayoutMethods({
   interacEmail,
   stripeConnected,
   stripeLoading,
-  onConnectStripe,
 }: Props) {
+  const router = useRouter();
   const [emailDraft, setEmailDraft] = useState(interacEmail);
   const [savingInterac, setSavingInterac] = useState(false);
 
@@ -69,6 +71,10 @@ export function RestaurantPayoutMethods({
     [isDirty, restaurantId, savingInterac],
   );
 
+  const openBankAccount = useCallback(() => {
+    router.push('/(host)/bank-account' as never);
+  }, [router]);
+
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Payout Methods</Text>
@@ -90,13 +96,26 @@ export function RestaurantPayoutMethods({
         </View>
 
         {stripeConnected ? (
-          <View style={styles.connectedRow}>
-            <Ionicons name="checkmark-circle" size={20} color="#15803d" />
-            <Text style={styles.connectedText}>Stripe Connected</Text>
-          </View>
+          <>
+            <View style={styles.connectedRow}>
+              <Ionicons name="checkmark-circle" size={20} color="#15803d" />
+              <Text style={styles.connectedText}>Stripe Connected</Text>
+            </View>
+            <Pressable
+              onPress={openBankAccount}
+              style={({ pressed }) => [
+                styles.stripeButton,
+                pressed && styles.buttonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="View bank account details"
+            >
+              <Text style={styles.stripeButtonText}>View Bank Account</Text>
+            </Pressable>
+          </>
         ) : (
           <Pressable
-            onPress={onConnectStripe}
+            onPress={openBankAccount}
             disabled={stripeLoading}
             style={({ pressed }) => [
               styles.stripeButton,

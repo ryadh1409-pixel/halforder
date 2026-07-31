@@ -138,6 +138,11 @@ export function RestaurantLiveOrderCard({
       })
     : 'rgba(255,255,255,0.1)';
 
+  const orderNumber = order.id.slice(-6).toUpperCase();
+  const fulfillment = order.deliveryType === 'pickup' ? 'Pickup' : 'Delivery';
+  const paymentStatus = order.paymentStatus === 'paid' ? 'paid' : order.paymentStatus;
+  const etaLabel = safeEta(order.estimatedDeliveryTime);
+
   return (
     <Animated.View
       style={[
@@ -149,6 +154,7 @@ export function RestaurantLiveOrderCard({
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
           <Text style={styles.customerName}>{customerDisplayName(order)}</Text>
+          <Text style={styles.orderNo}>Order #{orderNumber}</Text>
           <Text style={styles.phone}>
             {safePhone(order.customerPhone, null)}
           </Text>
@@ -174,13 +180,15 @@ export function RestaurantLiveOrderCard({
       </View>
 
       <View style={styles.badgeRow}>
-        {presentation.showPaymentBadge ? (
-          <PaymentBadge paymentStatus="unpaid" />
-        ) : (
+        <PaymentBadge paymentStatus={paymentStatus} />
+        <View style={styles.courierBadge}>
+          <Text style={styles.courierBadgeText}>{fulfillment}</Text>
+        </View>
+        {presentation.courierBadgeText ? (
           <View style={styles.courierBadge}>
             <Text style={styles.courierBadgeText}>{presentation.courierBadgeText}</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       <View style={styles.section}>
@@ -205,7 +213,11 @@ export function RestaurantLiveOrderCard({
         </View>
         <View style={styles.metaCell}>
           <Text style={styles.metaLabel}>ETA</Text>
-          <Text style={styles.metaValue}>{safeEta(order.estimatedDeliveryTime)}</Text>
+          <Text style={styles.metaValue}>{etaLabel}</Text>
+        </View>
+        <View style={styles.metaCell}>
+          <Text style={styles.metaLabel}>Type</Text>
+          <Text style={styles.metaValue}>{fulfillment}</Text>
         </View>
         <View style={[styles.metaCell, styles.metaCellWide]}>
           <Text style={styles.metaLabel}>Driver</Text>
@@ -216,8 +228,12 @@ export function RestaurantLiveOrderCard({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Delivery address</Text>
-        <Text style={styles.address}>{deliveryAddressLine(order)}</Text>
+        <Text style={styles.sectionLabel}>
+          {order.deliveryType === 'pickup' ? 'Pickup' : 'Delivery address'}
+        </Text>
+        <Text style={styles.address}>
+          {order.deliveryType === 'pickup' ? 'Customer pickup' : deliveryAddressLine(order)}
+        </Text>
       </View>
 
       <OrderActions
@@ -268,6 +284,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.2,
+  },
+  orderNo: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
   phone: {
     marginTop: 4,

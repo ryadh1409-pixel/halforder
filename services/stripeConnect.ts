@@ -28,6 +28,23 @@ export type StripeConnectStatus = {
   details_submitted: boolean;
 };
 
+export type RestaurantPayoutBankDetails = {
+  connected: boolean;
+  accountId?: string;
+  bankName?: string;
+  accountHolderName?: string;
+  last4?: string | null;
+  routingLast4?: string | null;
+  currency?: string;
+  country?: string;
+  accountStatus?: string;
+  chargesEnabled?: boolean;
+  payoutsEnabled?: boolean;
+  detailsSubmitted?: boolean;
+  lastPayoutDate?: string | null;
+  nextPayoutEstimate?: string | null;
+};
+
 export type StripeAccountStatus = {
   charges_enabled: boolean;
   details_submitted: boolean;
@@ -286,5 +303,61 @@ export async function checkStripeStatus(restaurantId?: string): Promise<StripeAc
     charges_enabled: data.charges_enabled,
     details_submitted: data.details_submitted,
   };
+}
+
+/** Owner-only: masked bank payout details for the Bank Account screen. */
+export async function fetchRestaurantPayoutBankDetails(): Promise<RestaurantPayoutBankDetails> {
+  await requireAuthReady();
+  if (!auth.currentUser?.uid) throw new Error('Not signed in');
+  const fn = httpsCallable(functions, 'getRestaurantPayoutBankDetails');
+  const result = await fn({});
+  const data = (result.data ?? {}) as Record<string, unknown>;
+  return {
+    connected: data.connected === true,
+    accountId: typeof data.accountId === 'string' ? data.accountId : undefined,
+    bankName: typeof data.bankName === 'string' ? data.bankName : undefined,
+    accountHolderName:
+      typeof data.accountHolderName === 'string' ? data.accountHolderName : undefined,
+    last4: typeof data.last4 === 'string' ? data.last4 : null,
+    routingLast4: typeof data.routingLast4 === 'string' ? data.routingLast4 : null,
+    currency: typeof data.currency === 'string' ? data.currency : undefined,
+    country: typeof data.country === 'string' ? data.country : undefined,
+    accountStatus: typeof data.accountStatus === 'string' ? data.accountStatus : undefined,
+    chargesEnabled: data.chargesEnabled === true,
+    payoutsEnabled: data.payoutsEnabled === true,
+    detailsSubmitted: data.detailsSubmitted === true,
+    lastPayoutDate: typeof data.lastPayoutDate === 'string' ? data.lastPayoutDate : null,
+    nextPayoutEstimate:
+      typeof data.nextPayoutEstimate === 'string' ? data.nextPayoutEstimate : null,
+  };
+}
+
+/** Soft-disconnect Stripe from the restaurant profile (does not delete the Stripe account). */
+export async function disconnectRestaurantStripeAccount(): Promise<void> {
+  await requireAuthReady();
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not signed in');
+  await Promise.all([
+    setDoc(
+      doc(db, 'users', uid),
+      {
+        stripeAccountId: null,
+        stripeOnboardingComplete: false,
+        stripeChargesEnabled: false,
+      },
+      { merge: true },
+    ),
+    setDoc(
+      doc(db, 'restaurants', uid),
+      {
+        stripeAccountId: null,
+        stripeConnected: false,
+        stripeReady: false,
+        stripeChargesEnabled: false,
+        stripeDetailsSubmitted: false,
+      },
+      { merge: true },
+    ),
+  ]);
 }
 

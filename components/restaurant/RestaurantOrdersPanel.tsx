@@ -1,38 +1,39 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 
-import { RestaurantDeliveredOrderCard } from '@/components/restaurant/RestaurantDeliveredOrderCard';
+import { RestaurantArchiveOrderCard } from '@/components/restaurant/RestaurantArchiveOrderCard';
 import { RestaurantLiveOrderCard } from '@/components/restaurant/RestaurantLiveOrderCard';
 import {
-    isRestaurantOrderDelivered,
-    RESTAURANT_ORDER_FILTERS,
-    restaurantOrderFilterEmptyTitle,
-    type RestaurantOrderListFilter,
+  isRestaurantOrderCancelled,
+  isRestaurantOrderDelivered,
+  RESTAURANT_ACTIVE_ORDER_FILTERS,
+  restaurantOrderFilterEmptyTitle,
+  type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
 import { useRestaurantOrdersLifecycleAlerts } from '@/hooks/useOrderLifecycleAlerts';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
 import {
-    applyRestaurantKitchenAction,
-    primeRestaurantKitchenOptimistic,
-    type RestaurantKitchenAction,
+  applyRestaurantKitchenAction,
+  primeRestaurantKitchenOptimistic,
+  type RestaurantKitchenAction,
 } from '@/lib/restaurantKitchenActions';
 import {
-    computeRestaurantDashboardMetrics,
-    isOrderFresh,
+  computeRestaurantDashboardMetrics,
+  isOrderFresh,
 } from '@/lib/restaurantOrderFreshness';
 import {
-    consumePendingRestaurantOrderFocus,
-    subscribeRestaurantOrderFocus,
+  consumePendingRestaurantOrderFocus,
+  subscribeRestaurantOrderFocus,
 } from '@/lib/restaurantOrderFocus';
 import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import type { OrderStatus, RestaurantOrder } from '@/services/orderService';
@@ -44,6 +45,10 @@ export type RestaurantDashboardMetrics = {
   revenue: number;
 };
 
+type OrdersMode = 'active' | 'history';
+type ArchiveStatusFilter = 'all' | 'completed' | 'cancelled';
+type ArchiveDateFilter = 'all' | 'today' | '7d' | '30d';
+
 type Props = {
   restaurantId: string;
   restaurantTimeZone?: string | null;
@@ -52,8 +57,8 @@ type Props = {
   onDashboardMetrics?: (metrics: RestaurantDashboardMetrics) => void;
 };
 
-const EMPTY_SUBTITLE =
-  'Orders placed within the last 24 hours will appear here instantly.';
+const EMPTY_ACTIVE = 'New orders appear here instantly — no refresh needed.';
+const EMPTY_HISTORY = 'Completed and cancelled orders are archived here automatically.';
 
 function kitchenActionFromStatus(status: OrderStatus): RestaurantKitchenAction | null {
   if (status === 'accepted') return 'accept';
@@ -78,20 +83,50 @@ function matchesArchivedSearch(order: RestaurantOrder, query: string): boolean {
   return haystack.includes(q);
 }
 
+function startOfLocalDay(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function matchesArchiveDate(order: RestaurantOrder, filter: ArchiveDateFilter): boolean {
+  if (filter === 'all') return true;
+  const created = order.createdAtMs ?? 0;
+  if (!created) return false;
+  const now = Date.now();
+  if (filter === 'today') return created >= startOfLocalDay(now);
+  if (filter === '7d') return created >= now - 7 * 24 * 60 * 60 * 1000;
+  if (filter === '30d') return created >= now - 30 * 24 * 60 * 60 * 1000;
+  return true;
+}
+
+function matchesArchiveStatus(order: RestaurantOrder, filter: ArchiveStatusFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'completed') {
+    return isRestaurantOrderDelivered(order) && !isRestaurantOrderCancelled(order);
+  }
+  return isRestaurantOrderCancelled(order);
+}
+
 export function RestaurantOrdersPanel({
   restaurantId,
   restaurantTimeZone,
   onAssignDriver,
-  title = 'Live orders',
+  title = 'Orders',
   onDashboardMetrics,
 }: Props) {
+  const [mode, setMode] = useState<OrdersMode>('active');
   const [filter, setFilter] = useState<RestaurantOrderListFilter>('new');
   const [archivedSearch, setArchivedSearch] = useState('');
+  const [archiveStatus, setArchiveStatus] = useState<ArchiveStatusFilter>('all');
+  const [archiveDate, setArchiveDate] = useState<ArchiveDateFilter>('all');
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState<{
     orderId: string;
     action: RestaurantKitchenAction;
   } | null>(null);
+
+  const listFilter: RestaurantOrderListFilter = mode === 'history' ? 'archived' : filter;
 
   const {
     orders,
@@ -103,7 +138,7 @@ export function RestaurantOrdersPanel({
   } = useRestaurantOrders({
     restaurantId,
     restaurantTimeZone,
-    filter,
+    filter: listFilter,
     enableAutoCleanup: false,
   });
 
@@ -112,6 +147,7 @@ export function RestaurantOrdersPanel({
   const applyFocusOrder = useCallback((orderId: string) => {
     const id = orderId.trim();
     if (!id) return;
+    setMode('active');
     setFilter('new');
     setHighlightOrderId(id);
     const timer = setTimeout(() => {
@@ -136,7 +172,6 @@ export function RestaurantOrdersPanel({
     };
   }, [applyFocusOrder]);
 
-  /** Uber-style: newly arrived kitchen orders highlight instantly from the live listener. */
   const seenOrderIdsRef = React.useRef<Set<string> | null>(null);
   React.useEffect(() => {
     if (loading) return;
@@ -155,23 +190,30 @@ export function RestaurantOrdersPanel({
     }
   }, [allOrders, applyFocusOrder, loading]);
 
-  const freshOrders = useMemo(
-    () => (filter === 'archived' ? orders : orders.filter((order) => isOrderFresh(order))),
-    [filter, orders],
-  );
-
   const archivedFiltered = useMemo(() => {
-    if (filter !== 'archived') return freshOrders;
-    return orders.filter((order) => matchesArchivedSearch(order, archivedSearch));
-  }, [archivedSearch, filter, freshOrders, orders]);
+    if (mode !== 'history') return [];
+    return orders.filter(
+      (order) =>
+        matchesArchivedSearch(order, archivedSearch) &&
+        matchesArchiveStatus(order, archiveStatus) &&
+        matchesArchiveDate(order, archiveDate),
+    );
+  }, [archiveDate, archiveStatus, archivedSearch, mode, orders]);
+
+  const activeOrders = useMemo(() => {
+    if (mode !== 'active') return [];
+    return orders.filter((order) => isOrderFresh(order));
+  }, [mode, orders]);
 
   const archivedRevenue = useMemo(() => {
-    if (filter !== 'archived') return 0;
     return archivedFiltered.reduce(
-      (sum, order) => sum + (isRestaurantOrderDelivered(order) ? order.totalPrice : 0),
+      (sum, order) =>
+        sum + (isRestaurantOrderDelivered(order) && !isRestaurantOrderCancelled(order)
+          ? order.totalPrice
+          : 0),
       0,
     );
-  }, [archivedFiltered, filter]);
+  }, [archivedFiltered]);
 
   React.useEffect(() => {
     if (!onDashboardMetrics) return;
@@ -181,16 +223,14 @@ export function RestaurantOrdersPanel({
 
   const emptyTitle = useMemo(() => {
     if (!loading && allOrders.length === 0) return 'No orders yet';
+    if (mode === 'history') return 'No matching archive orders';
     return restaurantOrderFilterEmptyTitle(filter);
-  }, [allOrders.length, filter, loading]);
+  }, [allOrders.length, filter, loading, mode]);
 
   const emptySubtitle = useMemo(() => {
-    if (!loading && allOrders.length === 0) return EMPTY_SUBTITLE;
-    if (filter === 'archived') {
-      return 'Historical orders older than 24h or manually archived.';
-    }
-    return EMPTY_SUBTITLE;
-  }, [allOrders.length, filter, loading]);
+    if (!loading && allOrders.length === 0) return EMPTY_ACTIVE;
+    return mode === 'history' ? EMPTY_HISTORY : EMPTY_ACTIVE;
+  }, [allOrders.length, loading, mode]);
 
   const handleKitchenAction = useCallback(
     async (order: RestaurantOrder, status: OrderStatus) => {
@@ -256,23 +296,34 @@ export function RestaurantOrdersPanel({
     let preparing = 0;
     let ready = 0;
     let withDriver = 0;
-    for (const o of allOrders.filter(isOrderFresh)) {
+    let completed = 0;
+    let cancelled = 0;
+    for (const o of allOrders) {
+      if (isRestaurantOrderCancelled(o)) {
+        cancelled += 1;
+        continue;
+      }
+      if (isRestaurantOrderDelivered(o)) {
+        completed += 1;
+        continue;
+      }
+      if (!isOrderFresh(o)) continue;
       const stage = deriveOrderStage(o);
       if (stage === 'awaiting_restaurant') pending += 1;
       else if (stage === 'preparing') preparing += 1;
       else if (stage === 'driver_assignment') ready += 1;
       else if (stage === 'driver_assigned' || stage === 'picked_up') withDriver += 1;
     }
-    return { pending, preparing, ready, withDriver };
+    return { pending, preparing, ready, withDriver, completed, cancelled };
   }, [allOrders]);
 
   const listOrders = useMemo(() => {
-    const base = filter === 'archived' ? archivedFiltered : freshOrders;
-    if (!highlightOrderId) return base;
+    const base = mode === 'history' ? archivedFiltered : activeOrders;
+    if (!highlightOrderId || mode !== 'active') return base;
     const focused = base.filter((order) => order.id === highlightOrderId);
     const rest = base.filter((order) => order.id !== highlightOrderId);
     return focused.length ? [...focused, ...rest] : base;
-  }, [archivedFiltered, filter, freshOrders, highlightOrderId]);
+  }, [activeOrders, archivedFiltered, highlightOrderId, mode]);
 
   return (
     <View style={styles.wrap}>
@@ -281,28 +332,132 @@ export function RestaurantOrdersPanel({
         {!loading ? <Text style={styles.count}>{listOrders.length} shown</Text> : null}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {RESTAURANT_ORDER_FILTERS.map((chip) => {
-          const active = chip.id === filter;
-          return (
-            <Pressable
-              key={chip.id}
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => setFilter(chip.id)}
-            >
-              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                {chip.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.modeRow}>
+        <Pressable
+          style={[styles.modeTab, mode === 'active' && styles.modeTabActive]}
+          onPress={() => setMode('active')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === 'active' }}
+        >
+          <Text style={[styles.modeTabText, mode === 'active' && styles.modeTabTextActive]}>
+            Active Orders
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.modeTab, mode === 'history' && styles.modeTabActive]}
+          onPress={() => setMode('history')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === 'history' }}
+        >
+          <Text style={[styles.modeTabText, mode === 'history' && styles.modeTabTextActive]}>
+            Order History
+          </Text>
+        </Pressable>
+      </View>
 
-      {!loading ? (
+      {mode === 'active' ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          {RESTAURANT_ACTIVE_ORDER_FILTERS.map((chip) => {
+            const active = chip.id === filter;
+            const count =
+              chip.id === 'new'
+                ? summary.pending
+                : chip.id === 'preparing'
+                  ? summary.preparing
+                  : chip.id === 'ready'
+                    ? summary.ready
+                    : summary.withDriver;
+            return (
+              <Pressable
+                key={chip.id}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setFilter(chip.id)}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {chip.label}
+                  {count > 0 ? ` · ${count}` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <View style={styles.archiveTools}>
+          <Text style={styles.archiveLabel}>Archive</Text>
+          <Text style={styles.archiveHint}>
+            Completed and cancelled orders move here automatically.
+          </Text>
+          <TextInput
+            value={archivedSearch}
+            onChangeText={setArchivedSearch}
+            placeholder="Search order, customer, driver…"
+            placeholderTextColor="#94A3B8"
+            style={styles.searchInput}
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            {(
+              [
+                { id: 'all', label: 'All status' },
+                { id: 'completed', label: 'Completed' },
+                { id: 'cancelled', label: 'Cancelled' },
+              ] as const
+            ).map((chip) => {
+              const active = archiveStatus === chip.id;
+              return (
+                <Pressable
+                  key={chip.id}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setArchiveStatus(chip.id)}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {chip.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            {(
+              [
+                { id: 'all', label: 'Any date' },
+                { id: 'today', label: 'Today' },
+                { id: '7d', label: 'Last 7 days' },
+                { id: '30d', label: 'Last 30 days' },
+              ] as const
+            ).map((chip) => {
+              const active = archiveDate === chip.id;
+              return (
+                <Pressable
+                  key={chip.id}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setArchiveDate(chip.id)}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {chip.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Text style={styles.revenueLine}>
+            Completed revenue in view: ${archivedRevenue.toFixed(2)}
+          </Text>
+        </View>
+      )}
+
+      {!loading && mode === 'active' ? (
         <View style={styles.summaryRow}>
           <View style={styles.summaryTile}>
             <Text style={styles.summaryValue}>{summary.pending}</Text>
@@ -323,21 +478,6 @@ export function RestaurantOrdersPanel({
         </View>
       ) : null}
 
-      {filter === 'archived' ? (
-        <View style={styles.archivedTools}>
-          <TextInput
-            value={archivedSearch}
-            onChangeText={setArchivedSearch}
-            placeholder="Search order, customer, driver…"
-            placeholderTextColor="#7D8493"
-            style={styles.searchInput}
-          />
-          <Text style={styles.revenueLine}>
-            Delivered revenue in view: ${archivedRevenue.toFixed(2)}
-          </Text>
-        </View>
-      ) : null}
-
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color="#16a34a" />
@@ -345,7 +485,7 @@ export function RestaurantOrdersPanel({
         </View>
       ) : listOrders.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Ionicons name="receipt-outline" size={36} color="#7D8493" />
+          <Ionicons name="receipt-outline" size={36} color="#94A3B8" />
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
           <Text style={styles.emptySub}>{emptySubtitle}</Text>
         </View>
@@ -353,8 +493,8 @@ export function RestaurantOrdersPanel({
         <View style={styles.list}>
           {listOrders.map((order) => (
             <View key={order.id} style={styles.cardWrap}>
-              {filter === 'delivered' ? (
-                <RestaurantDeliveredOrderCard order={order} timeZone={timeZone} />
+              {mode === 'history' ? (
+                <RestaurantArchiveOrderCard order={order} timeZone={timeZone} />
               ) : (
                 <>
                   <RestaurantLiveOrderCard
@@ -397,22 +537,43 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
   },
-  title: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
-  count: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  title: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
+  count: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  modeRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  modeTab: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeTabActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E2E8F0',
+  },
+  modeTabText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+  modeTabTextActive: { color: '#0F172A' },
   filterRow: { gap: 8, paddingVertical: 2 },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#F8FAFC',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#B7BDC9',
+    borderColor: '#CBD5E1',
   },
   filterChipActive: {
     backgroundColor: '#16a34a',
     borderColor: '#16a34a',
   },
-  filterChipText: { fontSize: 13, fontWeight: '700', color: '#B7BDC9' },
+  filterChipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
   filterChipTextActive: { color: '#fff' },
   summaryRow: { flexDirection: 'row', gap: 8 },
   summaryTile: {
@@ -423,19 +584,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#B7BDC9',
+    borderColor: '#E2E8F0',
   },
-  summaryValue: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
-  summaryLabel: { marginTop: 2, fontSize: 10, fontWeight: '700', color: '#64748b' },
-  archivedTools: { gap: 8 },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  summaryLabel: { marginTop: 2, fontSize: 10, fontWeight: '700', color: '#64748B' },
+  archiveTools: { gap: 8 },
+  archiveLabel: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  archiveHint: { fontSize: 13, fontWeight: '500', color: '#64748B', lineHeight: 18 },
   searchInput: {
     borderWidth: 1,
-    borderColor: '#B7BDC9',
+    borderColor: '#CBD5E1',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#000000',
-    color: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
+    color: '#0F172A',
     fontWeight: '600',
   },
   revenueLine: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
@@ -446,21 +609,21 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     justifyContent: 'center',
   },
-  loadingText: { color: '#64748b', fontWeight: '600' },
+  loadingText: { color: '#64748B', fontWeight: '600' },
   emptyCard: {
     alignItems: 'center',
     gap: 8,
     paddingVertical: 32,
     paddingHorizontal: 20,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#B7BDC9',
+    borderColor: '#E2E8F0',
   },
-  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#B7BDC9', marginTop: 6 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A', marginTop: 6 },
   emptySub: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 21,
     maxWidth: 320,
@@ -474,10 +637,10 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  assignBtnText: { color: '#B7BDC9', fontWeight: '800', fontSize: 14 },
+  assignBtnText: { color: '#334155', fontWeight: '800', fontSize: 14 },
 });

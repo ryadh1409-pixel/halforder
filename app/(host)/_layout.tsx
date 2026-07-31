@@ -44,6 +44,7 @@ export default function HostLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="bank-account" options={{ href: null }} />
       <Tabs.Screen
         name="dashboard"
         options={{

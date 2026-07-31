@@ -15,9 +15,17 @@ export function stripeConnectErrorMessage(error: unknown): string {
     if (code.includes('permission-denied')) {
       return "You don't have permission to manage payouts for this account.";
     }
-    if (code.includes('internal') || code.includes('unavailable')) {
-      return 'Could not connect payouts. Check your connection and try again.';
+    if (code.includes('unavailable') || code.includes('deadline-exceeded')) {
+      return 'Network error. Check your connection and try again.';
+    }
+    if (code.includes('internal')) {
+      return 'Server error while opening payout setup. Please try again.';
     }
   }
-  return getReadableErrorMessage(error, 'payment');
+  const msg = getReadableErrorMessage(error, 'payment');
+  // Avoid the old generic Connect failure copy for non-network cases.
+  if (/could not connect payouts/i.test(msg)) {
+    return 'Unable to open bank account setup. Please try again.';
+  }
+  return msg;
 }

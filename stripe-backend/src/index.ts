@@ -109,26 +109,277 @@ async function getOrCreateStripeCustomer(
 export const startRestaurantStripeConnect = functions
   .runWith({secrets: ["STRIPE_SECRET_KEY"]})
   .region("us-central1")
-  .https.onCall(async (_data: unknown, _context: CallableContext) => {
+  .https.onCall(async (_data: unknown, context: CallableContext) => {
+    if (!context.auth?.uid) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Login required",
+      );
+    }
+    const uid = context.auth.uid;
     try {
       const stripe = getStripe();
-      const account = await stripe.accounts.create({
-        type: "express",
-      });
+      const db = admin.firestore();
+      const userRef = db.doc(`users/${uid}`);
+      const restaurantRef = db.doc(`restaurants/${uid}`);
+      const [userSnap, restaurantSnap] = await Promise.all([
+        userRef.get(),
+        restaurantRef.get(),
+      ]);
+
+      if (!restaurantSnap.exists) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Restaurant profile is not initialized yet.",
+        );
+      }
+
+      const userData = userSnap.data() ?? {};
+      const restaurantData = restaurantSnap.data() ?? {};
+      const existing =
+        (typeof userData.stripeAccountId === "string" &&
+        userData.stripeAccountId.startsWith("acct_")
+          ? userData.stripeAccountId
+          : null) ||
+        (typeof restaurantData.stripeAccountId === "string" &&
+        restaurantData.stripeAccountId.startsWith("acct_")
+          ? restaurantData.stripeAccountId
+          : null);
+
+      let accountId = existing;
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "CA",
+          capabilities: {
+            card_payments: {requested: true},
+            transfers: {requested: true},
+          },
+          business_type: "company",
+          metadata: {firebaseUid: uid, role: "restaurant"},
+        });
+        accountId = account.id;
+      }
+
+      await Promise.all([
+        userRef.set(
+          {
+            stripeAccountId: accountId,
+            stripeOnboardingComplete: false,
+          },
+          {merge: true},
+        ),
+        restaurantRef.set(
+          {
+            stripeAccountId: accountId,
+            stripeConnected: false,
+          },
+          {merge: true},
+        ),
+      ]);
 
       const accountLink = await stripe.accountLinks.create({
-        account: account.id,
-        refresh_url: "https://example.com/refresh",
-        return_url: "https://example.com/return",
+        account: accountId,
+        refresh_url: "https://halforder.app/restaurant-onboarding",
+        return_url: "https://halforder.app/restaurant-onboarding",
         type: "account_onboarding",
       });
 
-      return {url: accountLink.url};
+      return {url: accountLink.url, accountId};
     } catch (error) {
-      console.error(error);
+      console.error("[startRestaurantStripeConnect]", error);
+      if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError(
         "internal",
-        "Stripe onboarding failed",
+        error instanceof Error ? error.message : "Stripe onboarding failed",
+      );
+    }
+  });
+
+export const checkStripeStatus = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
+  .region("us-central1")
+  .https.onCall(async (_data: unknown, context: CallableContext) => {
+    if (!context.auth?.uid) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Login required",
+      );
+    }
+    const uid = context.auth.uid;
+    try {
+      const stripe = getStripe();
+      const db = admin.firestore();
+      const userSnap = await db.doc(`users/${uid}`).get();
+      const restaurantSnap = await db.doc(`restaurants/${uid}`).get();
+      const userData = userSnap.data() ?? {};
+      const restaurantData = restaurantSnap.data() ?? {};
+      const accountId =
+        (typeof userData.stripeAccountId === "string" &&
+        userData.stripeAccountId.startsWith("acct_")
+          ? userData.stripeAccountId
+          : null) ||
+        (typeof restaurantData.stripeAccountId === "string" &&
+        restaurantData.stripeAccountId.startsWith("acct_")
+          ? restaurantData.stripeAccountId
+          : null);
+
+      if (!accountId) {
+        return {
+          hasAccount: false,
+          stripeConnected: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+        };
+      }
+
+      const account = await stripe.accounts.retrieve(accountId);
+      const charges = account.charges_enabled === true;
+      const payouts = account.payouts_enabled === true;
+      const details = account.details_submitted === true;
+
+      await Promise.all([
+        db.doc(`users/${uid}`).set(
+          {
+            stripeAccountId: accountId,
+            stripeChargesEnabled: charges,
+            stripeOnboardingComplete: charges,
+          },
+          {merge: true},
+        ),
+        db.doc(`restaurants/${uid}`).set(
+          {
+            stripeAccountId: accountId,
+            stripeChargesEnabled: charges,
+            stripeDetailsSubmitted: details,
+            stripeReady: charges && details,
+            stripeConnected: details || charges,
+          },
+          {merge: true},
+        ),
+      ]);
+
+      return {
+        hasAccount: true,
+        stripeConnected: details || charges,
+        charges_enabled: charges,
+        payouts_enabled: payouts,
+        details_submitted: details,
+      };
+    } catch (error) {
+      console.error("[checkStripeStatus]", error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError(
+        "internal",
+        error instanceof Error ? error.message : "Could not load Stripe status",
+      );
+    }
+  });
+
+export const getRestaurantPayoutBankDetails = functions
+  .runWith({secrets: ["STRIPE_SECRET_KEY"]})
+  .region("us-central1")
+  .https.onCall(async (_data: unknown, context: CallableContext) => {
+    if (!context.auth?.uid) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Login required",
+      );
+    }
+    const uid = context.auth.uid;
+    try {
+      const stripe = getStripe();
+      const db = admin.firestore();
+      const [userSnap, restaurantSnap] = await Promise.all([
+        db.doc(`users/${uid}`).get(),
+        db.doc(`restaurants/${uid}`).get(),
+      ]);
+      const userData = userSnap.data() ?? {};
+      const restaurantData = restaurantSnap.data() ?? {};
+      const accountId =
+        (typeof userData.stripeAccountId === "string" &&
+        userData.stripeAccountId.startsWith("acct_")
+          ? userData.stripeAccountId
+          : null) ||
+        (typeof restaurantData.stripeAccountId === "string" &&
+        restaurantData.stripeAccountId.startsWith("acct_")
+          ? restaurantData.stripeAccountId
+          : null);
+
+      if (!accountId) {
+        return {connected: false};
+      }
+
+      const account = await stripe.accounts.retrieve(accountId);
+      const banks = await stripe.accounts.listExternalAccounts(accountId, {
+        object: "bank_account",
+        limit: 5,
+      });
+      const bank = banks.data[0] as Stripe.BankAccount | undefined;
+      const restaurantName =
+        typeof restaurantData.name === "string" && restaurantData.name.trim()
+          ? restaurantData.name.trim()
+          : "Restaurant";
+
+      let lastPayoutDate: string | null = null;
+      let nextPayoutEstimate: string | null = null;
+      try {
+        const payouts = await stripe.payouts.list(
+          {limit: 1},
+          {stripeAccount: accountId},
+        );
+        const latest = payouts.data[0];
+        if (latest?.arrival_date) {
+          lastPayoutDate = new Date(latest.arrival_date * 1000).toISOString();
+        }
+        const schedule = account.settings?.payouts?.schedule;
+        if (schedule?.interval) {
+          nextPayoutEstimate =
+            schedule.interval === "daily"
+              ? "Daily"
+              : schedule.interval === "weekly"
+                ? `Weekly${schedule.weekly_anchor ? ` (${schedule.weekly_anchor})` : ""}`
+                : schedule.interval === "monthly"
+                  ? "Monthly"
+                  : schedule.interval;
+        }
+      } catch {
+        /* payouts list may fail before onboarding completes */
+      }
+
+      const status =
+        account.charges_enabled && account.payouts_enabled
+          ? "Active"
+          : account.details_submitted
+            ? "Pending review"
+            : "Setup incomplete";
+
+      return {
+        connected: true,
+        accountId,
+        bankName: bank?.bank_name ?? "Connected bank",
+        accountHolderName:
+          bank?.account_holder_name?.trim() || restaurantName,
+        last4: bank?.last4 ?? null,
+        routingLast4: bank?.routing_number
+          ? String(bank.routing_number).slice(-4)
+          : null,
+        currency: (bank?.currency || account.default_currency || "cad").toUpperCase(),
+        country: bank?.country || account.country || "CA",
+        accountStatus: status,
+        chargesEnabled: account.charges_enabled === true,
+        payoutsEnabled: account.payouts_enabled === true,
+        detailsSubmitted: account.details_submitted === true,
+        lastPayoutDate,
+        nextPayoutEstimate,
+      };
+    } catch (error) {
+      console.error("[getRestaurantPayoutBankDetails]", error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError(
+        "internal",
+        error instanceof Error ? error.message : "Could not load bank details",
       );
     }
   });

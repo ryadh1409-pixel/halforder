@@ -26,6 +26,7 @@ describe('restaurantOrderFilters delivered tab', () => {
     });
     expect(isRestaurantOrderDelivered(order)).toBe(true);
     expect(matchesRestaurantOrderFilter(order, 'delivered')).toBe(true);
+    expect(matchesRestaurantOrderFilter(order, 'archived')).toBe(true);
   });
 
   it('does not treat timestamp-only rows as delivered', () => {
@@ -36,5 +37,16 @@ describe('restaurantOrderFilters delivered tab', () => {
       deliveredAtMs: Date.now(),
     });
     expect(isRestaurantOrderDelivered(order)).toBe(false);
+  });
+
+  it('puts cancelled orders in archive and cancelled filter', () => {
+    const order = stubOrder({
+      id: 'o3',
+      status: 'cancelled',
+      deliveryStatus: 'cancelled',
+    });
+    expect(matchesRestaurantOrderFilter(order, 'cancelled')).toBe(true);
+    expect(matchesRestaurantOrderFilter(order, 'archived')).toBe(true);
+    expect(matchesRestaurantOrderFilter(order, 'new')).toBe(false);
   });
 });

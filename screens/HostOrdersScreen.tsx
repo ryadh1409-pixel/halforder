@@ -69,7 +69,7 @@ export default function HostOrdersScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Orders</Text>
-        <Text style={styles.subtitle}>Live kitchen queue — updates instantly.</Text>
+        <Text style={styles.subtitle}>Updates instantly — no refresh needed.</Text>
       </View>
       <ScrollView
         style={styles.scroll}
@@ -79,7 +79,7 @@ export default function HostOrdersScreen() {
         <RestaurantOrdersPanel
           restaurantId={uid}
           restaurantTimeZone={timezone}
-          title="Kitchen queue"
+          title="Order management"
         />
       </ScrollView>
     </SafeAreaView>
