@@ -49,7 +49,7 @@ import {
 } from '@/lib/promotionBadge';
 import { showError } from '@/utils/toast';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -85,6 +85,7 @@ function buildOptionsFingerprint(payload: ItemSheetAddPayload): string {
  */
 export function RestaurantDetailsScreen({ restaurantId }: Props) {
   const router = useRouter();
+  const navigation = useNavigation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollY = useSharedValue(0);
@@ -366,12 +367,15 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
     [cartForRestaurant, removeFromCart],
   );
 
-  const openRestaurantMenu = useCallback(() => {
-    Alert.alert(
-      'Menu',
-      'Search and dietary filters arrive in the next update. Explore categories below.',
-    );
-  }, []);
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+    }
+  }, [navigation, router]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -379,7 +383,7 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
         scrollY={scrollY}
         title={resolvedProfile.name}
         topInset={insets.top}
-        onBack={() => router.back()}
+        onBack={handleBack}
       />
 
       <Animated.ScrollView
@@ -408,19 +412,8 @@ export function RestaurantDetailsScreen({ restaurantId }: Props) {
                 scrollY={scrollY}
                 coverUri={resolvedProfile.coverImage}
                 topInset={insets.top}
-                onBack={() => router.back()}
-                onSearch={openRestaurantMenu}
-                onFavorite={() =>
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                }
+                onBack={handleBack}
                 onShare={() => void shareRestaurant()}
-                onMore={() => {
-                  void Haptics.selectionAsync();
-                  Alert.alert(
-                    'Restaurant',
-                    'Coupons, hours, and allergen info — coming soon.',
-                  );
-                }}
               />
               <RestaurantInfo
                 profile={resolvedProfile}

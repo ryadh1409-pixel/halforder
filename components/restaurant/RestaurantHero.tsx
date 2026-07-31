@@ -23,10 +23,7 @@ type Props = {
   coverUri: string | null;
   topInset?: number;
   onBack: () => void;
-  onSearch: () => void;
-  onFavorite: () => void;
   onShare: () => void;
-  onMore: () => void;
 };
 
 export function RestaurantHero({
@@ -34,10 +31,7 @@ export function RestaurantHero({
   coverUri,
   topInset = 0,
   onBack,
-  onSearch,
-  onFavorite,
   onShare,
-  onMore,
 }: Props) {
   const parallax = useAnimatedStyle(() => ({
     transform: [
@@ -95,20 +89,15 @@ export function RestaurantHero({
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </GlassIconButton>
 
-        <View style={styles.topRight}>
-          <GlassIconButton onPress={() => { tapLight(); onSearch(); }} label="Search menu">
-            <Ionicons name="search" size={19} color="#fff" />
-          </GlassIconButton>
-          <GlassIconButton onPress={() => { tapLight(); onFavorite(); }} label="Favorite">
-            <Ionicons name="heart-outline" size={21} color="#fff" />
-          </GlassIconButton>
-          <GlassIconButton onPress={() => { tapLight(); onMore(); }} label="More">
-            <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
-          </GlassIconButton>
-          <GlassIconButton onPress={() => { tapLight(); onShare(); }} label="Share">
-            <Ionicons name="share-outline" size={20} color="#fff" />
-          </GlassIconButton>
-        </View>
+        <GlassIconButton
+          onPress={() => {
+            tapLight();
+            onShare();
+          }}
+          label="Share"
+        >
+          <Ionicons name="share-outline" size={20} color="#fff" />
+        </GlassIconButton>
       </Animated.View>
     </View>
   );
@@ -124,7 +113,12 @@ function GlassIconButton({
   label: string;
 }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.iconBtn}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={styles.iconBtn}
+    >
       {Platform.OS === 'ios' ? (
         <BlurView intensity={34} tint="dark" style={styles.blurCircle}>
           {children}
@@ -148,13 +142,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     zIndex: 2,
-  },
-  topRight: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    maxWidth: 230,
   },
   iconBtn: {},
   blurCircle: {
