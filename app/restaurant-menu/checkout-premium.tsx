@@ -359,31 +359,7 @@ export default function CheckoutPremiumScreen() {
       return;
     }
 
-    const usingCompleteMeal =
-      COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED && fundingMode === 'complete_meal';
-    const confirmMessage = usingCompleteMeal
-      ? `Start Complete My Meal for ${totalFmt}? You’ll choose how much to pay now, then invite friends.`
-      : appliedCashbackCad > 0
-        ? `Pay ${payFmt} securely with Stripe PaymentSheet ($${appliedCashbackCad.toFixed(2)} HalfOrder Cash applied) and continue to confirmation?`
-        : `Pay ${totalFmt} securely with Stripe PaymentSheet and continue to confirmation?`;
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
-        await placeOrder();
-      }
-      return;
-    }
-    Alert.alert(
-      usingCompleteMeal ? 'Complete My Meal' : 'Complete Checkout',
-      confirmMessage,
-      [
-        { text: 'Review', style: 'cancel' },
-        {
-          text: 'Continue',
-          style: 'default',
-          onPress: () => void placeOrder(),
-        },
-      ],
-    );
+    await placeOrder();
   }
 
   async function placeOrder() {
@@ -459,6 +435,7 @@ export default function CheckoutPremiumScreen() {
         userId: user!.uid,
         restaurantId,
         items: cartItems,
+        // Checkout Final Total — single source of truth (never recompute for Stripe).
         totalPrice: total,
         foodSubtotal: subtotal,
         tax: taxes,
@@ -473,11 +450,32 @@ export default function CheckoutPremiumScreen() {
       });
       // Cart stays until payment succeeds so dismissing PaymentSheet
       // returns here with checkout progress intact.
+      // Charge = Final Total, minus HalfOrder Cash when applied (equals Final Total otherwise).
+      const checkoutFinalTotalCents = Math.round(total * 100);
+      const checkoutChargeCents = Math.round(remainingAmountToPay * 100);
+      console.log(
+        JSON.stringify({
+          msg: 'checkout_final_total_to_payment',
+          orderId,
+          checkoutFinalTotalCad: total,
+          checkoutFinalTotalCents,
+          checkoutChargeCents,
+          appliedCashbackCad,
+          promoDiscount,
+          subtotal,
+          deliveryFee,
+          priorityFee,
+          serviceFee,
+          taxes,
+        }),
+      );
       router.push({
         pathname: '/checkout',
         params: {
           orderId,
           restaurantId,
+          amountCents: String(checkoutChargeCents),
+          finalTotalCents: String(checkoutFinalTotalCents),
           ...(useHalfOrderCash && appliedCashbackCad > 0
             ? { useHalfOrderCash: 'true' }
             : {}),

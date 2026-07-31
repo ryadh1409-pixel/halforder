@@ -1,6 +1,7 @@
 import {
   initPaymentSheet,
   presentPaymentSheet,
+  retrievePaymentIntent,
   StripeProvider,
   useStripe,
   type InitPaymentSheetResult,
@@ -28,6 +29,7 @@ function assertNonAnonymousPaymentUser(): void {
 }
 
 type InitSheetParams = {
+  /** Amount in cents — must match Checkout Final Total (or post-cashback charge). */
   amount: number;
   merchantDisplayName?: string;
   orderId?: string;
@@ -172,8 +174,8 @@ async function createPaymentIntentSecrets(
     throw new Error('Amount must be a non-negative integer (in cents).');
   }
 
-  // Use chargeAmountCents for Stripe; keep display total elsewhere.
-  const chargeAmountCents =
+  // Checkout charge (Final Total / post-cashback) — single source of truth.
+  const checkoutChargeCents =
     amountCents === 0
       ? 0
       : Math.max(amountCents, STRIPE_MIN_AMOUNT_CENTS);
@@ -181,54 +183,166 @@ async function createPaymentIntentSecrets(
   assertNonAnonymousPaymentUser();
   await auth.currentUser?.getIdToken(true);
 
-  const fn = httpsCallable(functions, 'createPaymentIntent');
-  const result = await fn({
-    amount: chargeAmountCents,
-    orderId: params.orderId ?? null,
-    platform: 'native',
-    ...(params.useHalfOrderCash === true ? { useHalfOrderCash: true } : {}),
-  });
-  const data = result.data as Record<string, unknown> | undefined;
+  const requestSecrets = async (): Promise<{
+    clientSecret: string;
+    paymentIntentId: string;
+    customerId: string;
+    ephemeralKey: string;
+    zeroAmountPaid?: boolean;
+    backendChargeAmountCents?: number | null;
+  }> => {
+    console.log(
+      JSON.stringify({
+        msg: 'checkout_payment_intent_create_request',
+        orderId: params.orderId ?? null,
+        checkoutChargeCents,
+        amountSentToStripe: checkoutChargeCents,
+      }),
+    );
+    const fn = httpsCallable(functions, 'createPaymentIntent');
+    const result = await fn({
+      amount: checkoutChargeCents,
+      orderId: params.orderId ?? null,
+      platform: 'native',
+      ...(params.useHalfOrderCash === true ? { useHalfOrderCash: true } : {}),
+    });
+    const data = result.data as Record<string, unknown> | undefined;
 
-  if (data?.zeroAmountPaid === true) {
+    if (data?.zeroAmountPaid === true) {
+      const paymentIntentId =
+        typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
+          ? data.paymentIntentId.trim()
+          : `free_${params.orderId ?? 'order'}`;
+      return {
+        clientSecret: '',
+        paymentIntentId,
+        customerId: '',
+        ephemeralKey: '',
+        zeroAmountPaid: true,
+        backendChargeAmountCents: 0,
+      };
+    }
+
+    const clientSecret =
+      typeof data?.clientSecret === 'string'
+        ? data.clientSecret
+        : typeof data?.client_secret === 'string'
+          ? data.client_secret
+          : undefined;
+
+    if (!clientSecret) throw new Error('clientSecret missing');
+
+    const customerId =
+      typeof data?.customerId === 'string' ? data.customerId.trim() : '';
+    const ephemeralKey =
+      typeof data?.ephemeralKey === 'string' ? data.ephemeralKey.trim() : '';
     const paymentIntentId =
       typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
         ? data.paymentIntentId.trim()
-        : `free_${params.orderId ?? 'order'}`;
+        : parsePaymentIntentId(clientSecret);
+    const backendChargeAmountCents =
+      typeof data?.chargeAmountCents === 'number' &&
+      Number.isFinite(data.chargeAmountCents)
+        ? data.chargeAmountCents
+        : null;
+
     return {
-      clientSecret: '',
+      clientSecret,
       paymentIntentId,
-      customerId: '',
-      ephemeralKey: '',
+      customerId,
+      ephemeralKey,
+      backendChargeAmountCents,
+    };
+  };
+
+  const readPiAmountCents = async (
+    clientSecret: string,
+  ): Promise<number | null> => {
+    const retrieved = await retrievePaymentIntent(clientSecret);
+    return retrieved.paymentIntent &&
+      typeof retrieved.paymentIntent.amount === 'number'
+      ? retrieved.paymentIntent.amount
+      : null;
+  };
+
+  let secrets = await requestSecrets();
+  if (secrets.zeroAmountPaid) {
+    return {
+      ...secrets,
       chargeAmountCents: 0,
       zeroAmountPaid: true,
     };
   }
 
-  const clientSecret =
-    typeof data?.clientSecret === 'string'
-      ? data.clientSecret
-      : typeof data?.client_secret === 'string'
-        ? data.client_secret
-        : undefined;
+  let piAmount = await readPiAmountCents(secrets.clientSecret);
 
-  if (!clientSecret) throw new Error('clientSecret missing');
+  console.log(
+    JSON.stringify({
+      msg: 'checkout_payment_amount_verify',
+      orderId: params.orderId ?? null,
+      checkoutChargeCents,
+      amountSentToStripe: checkoutChargeCents,
+      backendChargeAmountCents: secrets.backendChargeAmountCents ?? null,
+      paymentIntentAmountCents: piAmount,
+      match: piAmount === checkoutChargeCents,
+    }),
+  );
 
-  const customerId =
-    typeof data?.customerId === 'string' ? data.customerId.trim() : '';
-  const ephemeralKey =
-    typeof data?.ephemeralKey === 'string' ? data.ephemeralKey.trim() : '';
-  const paymentIntentId =
-    typeof data?.paymentIntentId === 'string' && data.paymentIntentId.trim()
-      ? data.paymentIntentId.trim()
-      : parsePaymentIntentId(clientSecret);
+  // Order may still hold the pre-promo total ($2.26) while checkoutChargeCents is
+  // the current Final Total ($1.13). Recreate the PaymentIntent so Stripe matches
+  // checkout (backend cancels the stale PI when the amount differs).
+  if (
+    checkoutChargeCents > 0 &&
+    (piAmount == null || piAmount !== checkoutChargeCents)
+  ) {
+    console.warn(
+      JSON.stringify({
+        msg: 'checkout_payment_amount_mismatch_recreating_pi',
+        orderId: params.orderId ?? null,
+        checkoutChargeCents,
+        stalePaymentIntentAmountCents: piAmount,
+      }),
+    );
+    secrets = await requestSecrets();
+    if (secrets.zeroAmountPaid) {
+      return {
+        ...secrets,
+        chargeAmountCents: 0,
+        zeroAmountPaid: true,
+      };
+    }
+    piAmount = await readPiAmountCents(secrets.clientSecret);
+
+    console.log(
+      JSON.stringify({
+        msg: 'checkout_payment_amount_verify_after_recreate',
+        orderId: params.orderId ?? null,
+        checkoutChargeCents,
+        amountSentToStripe: checkoutChargeCents,
+        backendChargeAmountCents: secrets.backendChargeAmountCents ?? null,
+        paymentIntentAmountCents: piAmount,
+        match: piAmount === checkoutChargeCents,
+      }),
+    );
+  }
+
+  if (piAmount == null || piAmount !== checkoutChargeCents) {
+    const err = new Error(
+      `Payment amount mismatch: checkout ${amountDollarsLabel(checkoutChargeCents)} vs PaymentIntent ${
+        piAmount == null ? 'unknown' : amountDollarsLabel(piAmount)
+      }. Please go back and try again.`,
+    );
+    logError(err);
+    throw err;
+  }
 
   return {
-    clientSecret,
-    paymentIntentId,
-    customerId,
-    ephemeralKey,
-    chargeAmountCents,
+    clientSecret: secrets.clientSecret,
+    paymentIntentId: secrets.paymentIntentId,
+    customerId: secrets.customerId,
+    ephemeralKey: secrets.ephemeralKey,
+    // Verified PaymentIntent amount — used for Apple Pay / sheet line items.
+    chargeAmountCents: piAmount,
   };
 }
 

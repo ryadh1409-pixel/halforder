@@ -23,15 +23,27 @@ export default function CheckoutScreen() {
   const {
     orderId,
     restaurantId: restaurantIdParam,
+    amountCents: amountCentsParam,
+    finalTotalCents: finalTotalCentsParam,
     useHalfOrderCash: useHalfOrderCashParam,
   } = useLocalSearchParams<{
     orderId?: string;
     restaurantId?: string;
+    amountCents?: string | string[];
+    finalTotalCents?: string | string[];
     useHalfOrderCash?: string;
   }>();
   const orderIdTrimmed = typeof orderId === 'string' ? orderId.trim() : '';
   const restaurantIdParamTrimmed =
     typeof restaurantIdParam === 'string' ? restaurantIdParam.trim() : '';
+  const parseCentsParam = (raw: string | string[] | undefined): number | null => {
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof value !== 'string') return null;
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  };
+  const checkoutAmountCents = parseCentsParam(amountCentsParam);
+  const checkoutFinalTotalCents = parseCentsParam(finalTotalCentsParam);
   const useHalfOrderCash =
     useHalfOrderCashParam === 'true' ||
     useHalfOrderCashParam === '1' ||
@@ -93,9 +105,36 @@ export default function CheckoutScreen() {
       }
 
       // Preparing → native PaymentSheet / Apple Pay (presented once).
+      // Always charge checkoutChargeCents (current Checkout Final Total / pay amount).
+      // Never use the stored order total when checkout has already applied promotions
+      // (e.g. free_delivery / free_service_fee) that lowered the amount after createOrder.
       setPhase('paying');
+      const amountFromOrder = Math.round(order.totalPrice * 100);
+      const checkoutChargeCents = checkoutAmountCents;
+
+      if (checkoutChargeCents == null) {
+        setPhase('error');
+        setMessage(
+          'Missing checkout total. Please go back to checkout and try again.',
+        );
+        unlock();
+        return;
+      }
+
+      console.log(
+        JSON.stringify({
+          msg: 'checkout_open_payment_sheet_amount',
+          orderId: id,
+          checkoutFinalTotalCents,
+          checkoutChargeCents,
+          orderTotalPriceCents: amountFromOrder,
+          amountSentToStripe: checkoutChargeCents,
+          usingCheckoutChargeNotOrderTotal: checkoutChargeCents !== amountFromOrder,
+        }),
+      );
+
       const result = await openPaymentSheet({
-        amount: Math.round(order.totalPrice * 100),
+        amount: checkoutChargeCents,
         merchantDisplayName: 'HalfOrder',
         orderId: id,
         ...(useHalfOrderCash ? { useHalfOrderCash: true } : {}),
@@ -179,6 +218,8 @@ export default function CheckoutScreen() {
   }, [
     orderIdTrimmed,
     restaurantIdParamTrimmed,
+    checkoutAmountCents,
+    checkoutFinalTotalCents,
     useHalfOrderCash,
     user,
     router,

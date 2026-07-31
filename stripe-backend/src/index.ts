@@ -292,12 +292,51 @@ export const createPaymentIntent = functions
       : "";
 
     try {
-      // Charge = customerTotal (post-discount); fall back to total if missing. Min $0.50 CAD.
-      const amountCents = Math.round(
+      // Canonical payable amount = client checkoutChargeCents / checkoutFinalTotalCents.
+      // Never charge order.totalPrice (may be a stale pre-promo reuse, e.g. $2.26 vs $1.13).
+      const orderAmountCents = Math.round(
         (readFiniteNumber(orderData.customerTotal) ??
           readFiniteNumber(orderData.total) ??
+          readFiniteNumber(orderData.totalPrice) ??
           0) * 100,
       );
+      const amountCents =
+        amount > 0
+          ? amount
+          : orderAmountCents;
+
+      if (
+        amount > 0 &&
+        orderAmountCents > 0 &&
+        Math.abs(amount - orderAmountCents) > 1
+      ) {
+        const checkoutCad = amount / 100;
+        console.warn(
+          JSON.stringify({
+            msg: "createPaymentIntent_amount_mismatch_using_checkout",
+            orderId,
+            checkoutAmountCents: amount,
+            orderAmountCents,
+            amountSentToStripe: amount,
+          }),
+        );
+        // Align stored charge fields to Checkout so retries do not re-read stale totals.
+        await orderSnap.ref.set(
+          {
+            customerTotal: checkoutCad,
+            total: checkoutCad,
+            totalPrice: checkoutCad,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+        );
+        orderData = {
+          ...orderData,
+          customerTotal: checkoutCad,
+          total: checkoutCad,
+          totalPrice: checkoutCad,
+        };
+      }
 
       // $0.00 totals: skip Stripe entirely and mark the order paid.
       if (amountCents === 0) {
@@ -569,6 +608,8 @@ export const createPaymentIntent = functions
         paymentIntentId: paymentIntent.id,
         customerId,
         ephemeralKey: ephemeralKey.secret ?? null,
+        // Echo so the client can log amountSentToStripe vs PaymentIntent amount.
+        chargeAmountCents,
       };
     } catch (err) {
       if (releaseNewReservationOnError) {

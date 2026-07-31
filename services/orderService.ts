@@ -725,7 +725,71 @@ export async function createOrder(
       ),
     );
     if (!existingUnpaid.empty) {
-      return existingUnpaid.docs[0].id;
+      // Reuse the unpaid order id, but NEVER keep a stale pre-promo total.
+      // Checkout Final Total is the only payable amount (e.g. $1.13 after
+      // free_delivery / free_service_fee vs an older $2.26 on the doc).
+      const existingDoc = existingUnpaid.docs[0];
+      const existingData = existingDoc.data() as Record<string, unknown>;
+      const checkoutFinalTotal =
+        typeof payload.totalPrice === 'number' && Number.isFinite(payload.totalPrice)
+          ? Math.round(Math.max(0, payload.totalPrice) * 100) / 100
+          : null;
+      if (checkoutFinalTotal != null) {
+        const priorTotalCad =
+          typeof existingData.customerTotal === 'number'
+            ? existingData.customerTotal
+            : typeof existingData.total === 'number'
+              ? existingData.total
+              : typeof existingData.totalPrice === 'number'
+                ? existingData.totalPrice
+                : null;
+        const priorCents =
+          priorTotalCad != null ? Math.round(priorTotalCad * 100) : null;
+        const checkoutCents = Math.round(checkoutFinalTotal * 100);
+        const patch: Record<string, unknown> = {
+          totalPrice: checkoutFinalTotal,
+          total: checkoutFinalTotal,
+          customerTotal: checkoutFinalTotal,
+          updatedAt: serverTimestamp(),
+        };
+        if (typeof payload.foodSubtotal === 'number' && Number.isFinite(payload.foodSubtotal)) {
+          patch.subtotal = payload.foodSubtotal;
+        }
+        if (typeof payload.tax === 'number' && Number.isFinite(payload.tax)) {
+          patch.tax = payload.tax;
+        }
+        if (typeof payload.taxRate === 'number' && Number.isFinite(payload.taxRate)) {
+          patch.taxRate = payload.taxRate;
+        }
+        if (typeof payload.deliveryFee === 'number' && Number.isFinite(payload.deliveryFee)) {
+          patch.deliveryFee = Math.max(0, payload.deliveryFee);
+        }
+        if (typeof payload.serviceFee === 'number' && Number.isFinite(payload.serviceFee)) {
+          patch.serviceFee = Math.max(0, payload.serviceFee);
+        }
+        if (typeof payload.promoDiscount === 'number' && Number.isFinite(payload.promoDiscount)) {
+          patch.promoDiscount = Math.max(0, payload.promoDiscount);
+        }
+        // Drop stale PaymentIntent so Stripe is recreated at checkout cents.
+        if (priorCents != null && priorCents !== checkoutCents) {
+          patch.paymentIntentId = null;
+          patch.stripePaymentIntentId = null;
+        }
+        console.log(
+          JSON.stringify({
+            msg: 'createOrder_reuse_unpaid_sync_checkout_total',
+            orderId: existingDoc.id,
+            priorTotalCents: priorCents,
+            checkoutFinalTotalCents: checkoutCents,
+            clearedStalePaymentIntent: priorCents != null && priorCents !== checkoutCents,
+          }),
+        );
+        await rawUpdateOrder(existingDoc.id, patch, {
+          fileName: 'services/orderService.ts',
+          functionName: 'createOrder:reuseUnpaid',
+        });
+      }
+      return existingDoc.id;
     }
   } catch {
     /* composite index may be missing — continue to create */
@@ -875,7 +939,7 @@ export async function createOrder(
     deliveryEligible = true;
     maxDeliveryDistanceKmAtCheckout = zoneCheck.settings.maxDeliveryDistanceKm;
     if (deliveryType === 'delivery') {
-      orderDeliveryFee = resolveOrderDeliveryFee({
+      const resolvedDeliveryFee = resolveOrderDeliveryFee({
         deliveryType,
         restaurantData: restaurantRaw,
         settings: zoneCheck.settings,
@@ -883,6 +947,11 @@ export async function createOrder(
         distanceKm: zoneCheck.distanceKm,
         checkoutDeliveryFee: payload.deliveryFee ?? null,
       });
+      // Prefer the fee Checkout displayed (incl. 0 for free_delivery).
+      orderDeliveryFee =
+        typeof payload.deliveryFee === 'number' && Number.isFinite(payload.deliveryFee)
+          ? Math.max(0, payload.deliveryFee)
+          : resolvedDeliveryFee;
     }
   } catch (zoneErr) {
     if (deliveryType === 'delivery') {
@@ -908,8 +977,9 @@ export async function createOrder(
       ? payload.taxRate
       : DEFAULT_TAX_RATE,
   );
-  // Receipt totals are derived from the stored fees so the document, Stripe charge and
-  // receipt can never disagree.
+  // Receipt charge totals: Checkout Final Total is the single source of truth.
+  // Fee lines may be re-resolved for records, but totalPrice/total/customerTotal
+  // must never diverge from what the customer saw on the Checkout screen.
   const pricing = computeOrderPricing({
     foodSubtotal,
     deliveryFee: orderDeliveryFee,
@@ -917,7 +987,36 @@ export async function createOrder(
     promoDiscount,
     taxRate,
   });
-  const tax = pricing.hst;
+  const checkoutFinalTotal =
+    typeof payload.totalPrice === 'number' && Number.isFinite(payload.totalPrice)
+      ? Math.round(Math.max(0, payload.totalPrice) * 100) / 100
+      : null;
+  const totalPaid = checkoutFinalTotal ?? pricing.totalPaid;
+  if (
+    checkoutFinalTotal != null &&
+    Math.abs(checkoutFinalTotal - pricing.totalPaid) > 0.01
+  ) {
+    console.warn('[createOrder] checkout Final Total differs from recomputed fees', {
+      checkoutFinalTotal,
+      recomputed: pricing.totalPaid,
+      foodSubtotal,
+      orderDeliveryFee,
+      serviceFee,
+      promoDiscount,
+      taxRate,
+    });
+  }
+  const tax =
+    checkoutFinalTotal != null &&
+    Math.abs(checkoutFinalTotal - pricing.totalPaid) > 0.01
+      ? Math.round(
+          Math.max(
+            0,
+            totalPaid -
+              (foodSubtotal + orderDeliveryFee + serviceFee - promoDiscount),
+          ) * 100,
+        ) / 100
+      : pricing.hst;
   const receiptNumber = `HO-${Date.now().toString(36).toUpperCase().slice(-8)}`;
 
   const orderPayload = {
@@ -940,8 +1039,9 @@ export async function createOrder(
     deliveryEligible,
     deliveryTier,
     maxDeliveryDistanceKmAtCheckout,
-    totalPrice: pricing.totalPaid,
-    total: pricing.totalPaid,
+    totalPrice: totalPaid,
+    total: totalPaid,
+    customerTotal: totalPaid,
     deliveryType,
     estimatedPrepTime: estimatedDeliveryTime,
     status: 'awaiting_payment',
