@@ -1,12 +1,13 @@
+import { AssignDriverModal } from '@/components/AssignDriverModal';
 import {
+    RestaurantOrdersPanel,
     type RestaurantDashboardMetrics,
 } from '@/components/restaurant/RestaurantOrdersPanel';
 import { RestaurantPayoutMethods } from '@/components/restaurant/RestaurantPayoutMethods';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
-import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
+import { useDrivers } from '@/hooks/useDrivers';
 import { logoutAndResetSession, POST_LOGOUT_ROUTE } from '@/lib/auth/logoutSession';
-import { computeRestaurantDashboardMetrics } from '@/lib/restaurantOrderFreshness';
 import {
     displayFromStoredProfilePhone,
     formatProfileWhatsAppDisplay,
@@ -28,6 +29,7 @@ import {
 } from '@/lib/restaurantVenueStatus';
 import { runRootNavigationTask } from '@/lib/router/rootNavigation';
 import { useAuth } from '@/services/AuthContext';
+import { assignDriverToOrder } from '@/services/driverService';
 import { showUserError } from '@/services/errors';
 import { auth, db } from '@/services/firebase';
 import {
@@ -108,24 +110,41 @@ export default function HostDashboardScreen() {
   const profileHydratedRef = useRef(false);
   const [toggleBusy, setToggleBusy] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [assignDriverModalOpen, setAssignDriverModalOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const { drivers, loading: driversLoading } = useDrivers();
 
   const isVenueOpen = restaurant?.isOpen ?? true;
 
-  const { allOrders } = useRestaurantOrders({
-    restaurantId: uid || null,
-    restaurantTimeZone: restaurant?.timezone,
-    filter: 'new',
-    enableAutoCleanup: false,
-  });
+  const openAssignDriverModal = useCallback((orderId: string) => {
+    setSelectedOrderId(orderId);
+    setAssignDriverModalOpen(true);
+  }, []);
 
-  useEffect(() => {
-    if (!uid) {
-      setDashboardMetrics({ ordersToday: 0, revenue: 0 });
-      return;
-    }
-    const m = computeRestaurantDashboardMetrics(allOrders);
-    setDashboardMetrics({ ordersToday: m.total, revenue: m.revenue });
-  }, [allOrders, uid]);
+  const handleAssignDriver = useCallback(
+    async (driver: (typeof drivers)[number]) => {
+      if (!selectedOrderId) return;
+      try {
+        await assignDriverToOrder(
+          selectedOrderId,
+          {
+            id: driver.id,
+            name: driver.name,
+            phone: driver.phone,
+            isOnline: driver.isOnline,
+          },
+          'ready_for_pickup',
+        );
+        showSuccess('Driver assigned');
+        setAssignDriverModalOpen(false);
+        setSelectedOrderId(null);
+      } catch (error) {
+        console.log('[HostDashboard] failed to assign driver', error);
+        showError('Could not assign driver.');
+      }
+    },
+    [drivers, selectedOrderId],
+  );
 
   useEffect(() => {
     profileHydratedRef.current = false;
@@ -135,6 +154,7 @@ export default function HostDashboardScreen() {
       setNameDraft('');
       setPhoneDraft('');
       setLocationDraft('');
+      setDashboardMetrics({ ordersToday: 0, revenue: 0 });
       setRestaurantLoading(false);
       return;
     }
@@ -613,6 +633,16 @@ export default function HostDashboardScreen() {
             </View>
           </View>
 
+          {uid ? (
+            <RestaurantOrdersPanel
+              restaurantId={uid}
+              restaurantTimeZone={restaurant?.timezone}
+              title="Live orders"
+              onAssignDriver={openAssignDriverModal}
+              onDashboardMetrics={setDashboardMetrics}
+            />
+          ) : null}
+
           {workspaceReady ? (
             <WorkspaceSwitcher
               availableWorkspaces={availableWorkspaces}
@@ -677,6 +707,14 @@ export default function HostDashboardScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AssignDriverModal
+        visible={assignDriverModalOpen}
+        drivers={drivers}
+        loading={driversLoading}
+        onClose={() => setAssignDriverModalOpen(false)}
+        onSelectDriver={(driver) => void handleAssignDriver(driver)}
+      />
     </SafeAreaView>
   );
 }

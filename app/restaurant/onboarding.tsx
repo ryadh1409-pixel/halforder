@@ -48,7 +48,7 @@ export default function RestaurantOnboardingScreen() {
       .then((restaurant) => {
         if (!active) return;
         if (restaurant?.profileCompleted) {
-          router.replace('/restaurant-dashboard');
+          router.replace('/(host)/dashboard');
           return;
         }
         setName(restaurant?.name ?? '');
@@ -107,7 +107,7 @@ export default function RestaurantOnboardingScreen() {
         profileCompleted: true,
       });
       showSuccess('Restaurant profile saved');
-      router.replace('/restaurant-dashboard');
+      router.replace('/(host)/dashboard');
     } catch {
       showError('Could not create restaurant profile.');
     } finally {

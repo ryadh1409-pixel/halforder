@@ -332,7 +332,7 @@ export default function SwipeExploreFeed() {
         <TouchableOpacity
           activeOpacity={0.88}
           style={styles.dashboardBtn}
-          onPress={() => router.push('/restaurant-dashboard' as never)}
+          onPress={() => router.push('/(host)/dashboard' as never)}
         >
           <Text style={styles.dashboardBtnText}>Open Restaurant Dashboard</Text>
         </TouchableOpacity>
