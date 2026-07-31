@@ -2,12 +2,13 @@
  * Shared active-workspace state (navigation preference only).
  * Persists to AsyncStorage; does not write Firestore roles.
  *
- * Hydration is idempotent: once ready for a uid, readiness is never cleared
- * unless the user signs out or a different uid hydrates.
+ * Hydration waits for a known Firestore role before latching so a pre-approval
+ * `user` preference cannot beat `driver` / `restaurant` after admin approval.
  */
 import {
   getActiveWorkspace,
   loadAvailableWorkspaces,
+  primaryWorkspaceForRole,
   resolveRoutingWorkspace,
   setActiveWorkspace as persistActiveWorkspace,
   type ActiveWorkspace,
@@ -48,6 +49,10 @@ function mergeAvailable(
   return (['user', 'driver', 'restaurant'] as const).filter((w) => set.has(w));
 }
 
+function isPartnerRole(role: string | null | undefined): boolean {
+  return role === 'driver' || role === 'restaurant' || role === 'host';
+}
+
 export const useActiveWorkspaceStore = create<ActiveWorkspaceState>((set, get) => ({
   uid: null,
   ready: false,
@@ -72,9 +77,29 @@ export const useActiveWorkspaceStore = create<ActiveWorkspaceState>((set, get) =
 
     const prev = get();
 
-    // Latched for this uid — never clear ready. Soft-update role only.
+    // Soft-update after latch: adopt newly granted partner role immediately.
     if (prev.uid === uid && prev.ready) {
       if (firestoreRole != null && firestoreRole !== prev.firestoreRole) {
+        const primary = primaryWorkspaceForRole(firestoreRole);
+        const shouldAdoptPartnerShell =
+          isPartnerRole(firestoreRole) &&
+          (prev.activeWorkspace === 'user' ||
+            prev.activeWorkspace == null ||
+            !isPartnerRole(prev.firestoreRole));
+
+        if (shouldAdoptPartnerShell) {
+          await persistActiveWorkspace(uid, primary);
+          set({
+            firestoreRole,
+            availableWorkspaces: mergeAvailable(
+              prev.availableWorkspaces,
+              firestoreRole,
+            ),
+            activeWorkspace: primary,
+          });
+          return;
+        }
+
         set({
           firestoreRole,
           availableWorkspaces: mergeAvailable(
@@ -86,8 +111,27 @@ export const useActiveWorkspaceStore = create<ActiveWorkspaceState>((set, get) =
       return;
     }
 
+    // Do not latch shells until Firestore role is known — prevents defaulting
+    // to customer before an approved driver/restaurant role arrives.
+    if (firestoreRole == null) {
+      if (prev.uid === uid && prev.hydrating) return;
+      set({
+        uid,
+        hydrating: true,
+        ready: false,
+        firestoreRole: null,
+        ...(prev.uid !== uid
+          ? {
+              activeWorkspace: null,
+              availableWorkspaces: ['user'] as ActiveWorkspace[],
+            }
+          : {}),
+      });
+      return;
+    }
+
     // First hydrate already in flight for this uid — do not reset ready.
-    if (prev.uid === uid && prev.hydrating) {
+    if (prev.uid === uid && prev.hydrating && prev.firestoreRole != null) {
       return;
     }
 
@@ -97,8 +141,7 @@ export const useActiveWorkspaceStore = create<ActiveWorkspaceState>((set, get) =
     set({
       uid,
       hydrating: true,
-      firestoreRole: firestoreRole ?? prev.firestoreRole,
-      // Only drop ready when switching accounts — never flap for same uid.
+      firestoreRole,
       ...(switchingUser
         ? {
             ready: false,
@@ -117,41 +160,42 @@ export const useActiveWorkspaceStore = create<ActiveWorkspaceState>((set, get) =
       if (gen !== hydrateGeneration || get().uid !== uid) return;
 
       const current = get();
-      // If something else already latched this uid, do not overwrite.
       if (current.ready && current.uid === uid) {
         set({ hydrating: false });
         return;
       }
 
-      const next =
-        stored && workspaces.includes(stored)
-          ? stored
-          : resolveRoutingWorkspace(
-              firestoreRole ?? current.firestoreRole,
-              current.activeWorkspace,
-            );
+      const primary = primaryWorkspaceForRole(firestoreRole);
+      // Partner Firestore role is source of truth — ignore stale pre-approval "user".
+      const next: ActiveWorkspace =
+        primary === 'driver' || primary === 'restaurant'
+          ? primary
+          : stored && workspaces.includes(stored)
+            ? stored
+            : resolveRoutingWorkspace(firestoreRole, current.activeWorkspace);
+
+      await persistActiveWorkspace(uid, next);
 
       set({
         uid,
         ready: true,
         hydrating: false,
-        firestoreRole: firestoreRole ?? current.firestoreRole,
+        firestoreRole,
         availableWorkspaces: workspaces,
         activeWorkspace: next,
       });
     } catch {
       if (gen !== hydrateGeneration || get().uid !== uid) return;
-      const current = get();
+      const primary = primaryWorkspaceForRole(firestoreRole);
       set({
         ready: true,
         hydrating: false,
-        activeWorkspace:
-          current.activeWorkspace ??
-          resolveRoutingWorkspace(firestoreRole, null),
+        activeWorkspace: primary,
         availableWorkspaces: mergeAvailable(
-          current.availableWorkspaces,
+          get().availableWorkspaces,
           firestoreRole,
         ),
+        firestoreRole,
       });
     }
   },

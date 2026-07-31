@@ -66,14 +66,30 @@ export async function loadAvailableWorkspaces(
   return order.filter((w) => set.has(w));
 }
 
-export function resolveRoutingWorkspace(
+/**
+ * Primary shell from Firestore role — source of truth after admin approval.
+ * Partner roles always map to their own workspace (not customer).
+ */
+export function primaryWorkspaceForRole(
   firestoreRole: string | null | undefined,
-  activeWorkspace: ActiveWorkspace | null,
 ): ActiveWorkspace {
-  if (activeWorkspace) return activeWorkspace;
   if (firestoreRole === 'driver') return 'driver';
   if (firestoreRole === 'restaurant' || firestoreRole === 'host') {
     return 'restaurant';
   }
   return 'user';
+}
+
+/**
+ * Routing workspace for shells.
+ * Prefer an explicit active workspace when set (mid-session switcher).
+ * Hydrate is responsible for never latching a stale pre-approval `user`
+ * when Firestore role is driver/restaurant.
+ */
+export function resolveRoutingWorkspace(
+  firestoreRole: string | null | undefined,
+  activeWorkspace: ActiveWorkspace | null,
+): ActiveWorkspace {
+  if (activeWorkspace) return activeWorkspace;
+  return primaryWorkspaceForRole(firestoreRole);
 }
