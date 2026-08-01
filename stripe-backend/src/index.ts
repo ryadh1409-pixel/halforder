@@ -960,6 +960,7 @@ export { refundFoodShareMatch } from "./refundFoodShareMatch.js";
 export {
     acceptCommunityGuidelines, sendModeratedMatchChatMessage
 } from "./sendModeratedMatchChatMessage.js";
+export { sendDailyMetricsReport } from "./dailyMetricsReport.js";
 
 export const walletCreateSetupIntent = functions
   .runWith({secrets: ["STRIPE_SECRET_KEY"]})
