@@ -1,4 +1,5 @@
 import { AdminAlertsToastListener } from '@/components/admin/AdminAlertsToastListener';
+import { AdminOrderAlarmListener } from '@/components/admin/AdminOrderAlarmListener';
 import { adminColors as COLORS } from '@/constants/adminTheme';
 import { requireRole } from '@/utils/requireRole';
 import { Stack } from 'expo-router';
@@ -27,6 +28,7 @@ export default function AdminLayout() {
   return (
     <>
       <AdminAlertsToastListener />
+      <AdminOrderAlarmListener />
       <Stack
         screenOptions={{
           headerShown: false,
