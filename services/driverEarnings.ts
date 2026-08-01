@@ -230,6 +230,11 @@ export function subscribeDriverEarnings(
     attachEarningsListener(uid, 'assignedDriverId', 'completedStatus', ingest),
   ];
 
+  // Guarantee onStats is called at least once.
+  // Drivers with 0 deliveries never trigger ingest() so statsLoading would
+  // stay true forever without this initial emit.
+  emit();
+
   return () => {
     for (const unsub of unsubs) unsub();
   };
