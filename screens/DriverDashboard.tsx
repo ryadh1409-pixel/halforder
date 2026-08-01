@@ -159,8 +159,8 @@ export default function DriverDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#151126' },
   content: { padding: 16, paddingBottom: 26 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   title: { color: '#FFFFFF', fontSize: 28, fontWeight: '800' },
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 14,
     marginBottom: 12,
   },
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   status: { color: '#1D4ED8', marginTop: 6, fontWeight: '800' },
   primaryButton: { marginTop: 10, height: 42, borderRadius: 10, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#FFFFFF', fontWeight: '800' },
-  secondaryButton: { marginTop: 8, height: 40, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' },
+  secondaryButton: { marginTop: 8, height: 40, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#0B0816', alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#B7BDC9', fontWeight: '700' },
   disabled: { opacity: 0.45 },
 });

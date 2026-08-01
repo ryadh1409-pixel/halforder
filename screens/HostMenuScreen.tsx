@@ -36,7 +36,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-const PRIMARY = '#16a34a';
+const PRIMARY = '#A855F7';
 const PAGE = '#FFFFFF';
 const CARD = '#ffffff';
 

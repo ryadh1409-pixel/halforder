@@ -210,7 +210,7 @@ function MoneySavedScreenContentInner({ data, theme, isDark }: Props) {
           colors={
             isDark
               ? ['#1a1033', '#2d1b69', '#1e1b4b']
-              : ['#7C3AED', '#8B5CF6', '#6D28D9']
+              : ['#7C3AED', '#8B5CF6', '#A855F7']
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   savedBadgeText: {
-    color: '#16A34A',
+    color: '#A855F7',
     fontSize: 12,
     fontWeight: '800',
   },

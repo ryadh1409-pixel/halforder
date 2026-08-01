@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: '#7D8493', fontSize: 14 },
   markerBubble: {
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

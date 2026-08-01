@@ -4,8 +4,8 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
-const ACTIVE = '#16a34a';
-const INACTIVE = '#64748b';
+const ACTIVE = '#A855F7';
+const INACTIVE = '#8A829E';
 
 export const unstable_settings = {
   initialRouteName: 'dashboard',
@@ -81,17 +81,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0816',
   },
   shellLoadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#64748b',
+    color: '#8A829E',
     fontWeight: '600',
   },
   tabBar: {
-    backgroundColor: '#000000',
-    borderTopColor: '#B7BDC9',
+    backgroundColor: '#0B0816',
+    borderTopColor: 'rgba(168, 85, 247, 0.22)',
     height: Platform.OS === 'ios' ? 88 : 64,
     paddingTop: 6,
   },

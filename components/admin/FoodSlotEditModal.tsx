@@ -43,7 +43,7 @@ const BG = '#F2F2F7';
 const CARD = '#ffffff';
 const TEXT = '#0f172a';
 const MUTED = '#64748b';
-const PRIMARY = '#16a34a';
+const PRIMARY = '#A855F7';
 const SEPARATOR = 'rgba(60, 60, 67, 0.12)';
 const FIELD_BG = '#F6F7F9';
 

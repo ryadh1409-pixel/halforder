@@ -43,8 +43,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AUTH = {
-  bg: '#000000',
-  card: '#171923',
+  bg: '#0B0816',
+  card: '#151126',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   placeholder: '#7D8493',

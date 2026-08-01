@@ -60,14 +60,14 @@ import {
 const DEFAULT_AVATAR = require('../assets/default-avatar.png') as number;
 
 const PAL = {
-  bg: '#000000',
-  surface: '#171923',
+  bg: '#0B0816',
+  surface: '#151126',
   surfaceMuted: '#1E2230',
   text: '#FFFFFF',
   textSecondary: '#B7BDC9',
   textTertiary: '#7D8493',
   border: 'rgba(255,255,255,0.08)',
-  inputBg: '#1C2030',
+  inputBg: '#1B1630',
   primary: '#A855F7',
   onPrimary: '#FFFFFF',
   success: '#22C55E',

@@ -24,10 +24,10 @@ import { errorHaptic, successHaptic } from '../../utils/haptics';
 import { showError, showFriendlyError, showSuccess } from '../../utils/toast';
 
 const AUTH = {
-  bg: '#000000',
+  bg: '#0B0816',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
-  inputBg: '#1C2030',
+  inputBg: '#1B1630',
   inputBorder: 'rgba(255,255,255,0.08)',
   placeholder: '#7D8493',
   primary: '#A855F7',
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 18,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
   },
   readOnlyText: {
     fontSize: 16,

@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     overflow: 'hidden',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
   },
   scene: {
     ...StyleSheet.absoluteFillObject,

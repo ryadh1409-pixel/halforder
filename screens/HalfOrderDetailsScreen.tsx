@@ -1198,10 +1198,10 @@ export function HalfOrderDetailsScreen({ orderId: orderIdProp }: { orderId: stri
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#0B0816' },
   loadingWrap: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     justifyContent: 'center',
     alignItems: 'center',
   },

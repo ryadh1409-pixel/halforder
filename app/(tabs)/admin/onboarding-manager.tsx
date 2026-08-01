@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#000',
+    backgroundColor: '#0B0816',
   },
   imageSection: { marginBottom: 8 },
   imageLabel: {
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     marginBottom: 8,
   },
   imagePreview: {
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     marginBottom: 8,
   },
   imageActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

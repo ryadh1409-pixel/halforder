@@ -414,7 +414,7 @@ function OrderParticipantChat({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     paddingHorizontal: 14,
   },
   chatBody: {

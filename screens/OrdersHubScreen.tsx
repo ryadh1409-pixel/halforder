@@ -197,7 +197,7 @@ export function OrdersHubScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+  safe: { flex: 1, backgroundColor: '#0B0816' },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 120 },
   centered: {
     flex: 1,

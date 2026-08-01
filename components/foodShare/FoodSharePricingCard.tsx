@@ -272,19 +272,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     fontWeight: '900',
-    color: SUCCESS,
+    color: '#D4AF37',
     letterSpacing: 0.4,
   },
   freeBadgeInline: {
     fontSize: 15,
     fontWeight: '900',
-    color: SUCCESS,
+    color: '#D4AF37',
     letterSpacing: 0.3,
   },
   promoValue: {
     fontSize: 15,
     fontWeight: '800',
-    color: SUCCESS,
+    color: '#D4AF37',
   },
   divider: {
     height: StyleSheet.hairlineWidth,

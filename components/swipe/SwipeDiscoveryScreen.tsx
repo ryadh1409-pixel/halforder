@@ -364,7 +364,7 @@ export function SwipeDiscoveryScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+  root: { flex: 1, backgroundColor: '#0B0816' },
   safe: { flex: 1 },
   header: {
     paddingHorizontal: 20,

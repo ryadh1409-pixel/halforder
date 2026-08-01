@@ -21,8 +21,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const BG = '#000000';
-const CARD = '#171923';
+const BG = '#0B0816';
+const CARD = '#151126';
 const TEXT = '#FFFFFF';
 const MUTED = '#B7BDC9';
 const PRIMARY = '#A855F7';

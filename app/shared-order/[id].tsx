@@ -424,7 +424,7 @@ function GlassCard({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+  root: { flex: 1, backgroundColor: '#0B0816' },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: 'rgba(255,255,255,0.7)', fontWeight: '700' },
   content: { padding: 18, paddingBottom: 24 },
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 13,
     borderRadius: 999,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
   },
   primaryTxt: { color: '#05070A', fontWeight: '900' },
 });

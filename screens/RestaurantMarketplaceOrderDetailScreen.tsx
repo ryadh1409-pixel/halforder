@@ -185,7 +185,7 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
       <SafeAreaView style={styles.screen} edges={['top']}>
         <AppHeader title="Order Details" />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#16a34a" />
+          <ActivityIndicator size="large" color="#A855F7" />
         </View>
       </SafeAreaView>
     );
@@ -315,14 +315,14 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   content: { padding: 16, paddingBottom: 32 },
   card: {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 14,
     marginBottom: 12,
   },

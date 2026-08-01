@@ -43,7 +43,7 @@ export default function DriverEarningsScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       {statsLoading ? (
-        <ActivityIndicator size="large" color="#00C853" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#A855F7" style={{ marginTop: 40 }} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.heroTitle}>Earnings</Text>
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   heroTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '900' },
   heroSubtitle: { color: '#7D8493', marginTop: 4, marginBottom: 16, fontWeight: '600' },
   heroCard: {
-    backgroundColor: '#00C853',
+    backgroundColor: '#A855F7',
     borderRadius: 18,
     padding: 20,
     marginBottom: 14,
@@ -154,5 +154,5 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1 },
   rowTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   rowMeta: { color: '#7D8493', marginTop: 4, fontWeight: '600', fontSize: 13 },
-  rowEarning: { color: '#00C853', fontWeight: '900', fontSize: 16 },
+  rowEarning: { color: '#A855F7', fontWeight: '900', fontSize: 16 },
 });

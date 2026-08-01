@@ -155,7 +155,7 @@ export default function RegularOrderScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingBottom: 24 },
   title: { fontSize: 30, fontWeight: '800', color: '#FFFFFF' },
@@ -174,13 +174,13 @@ const styles = StyleSheet.create({
   smallBtn: { flex: 1, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   primaryBtn: { backgroundColor: '#2563EB' },
   primaryBtnText: { color: '#FFFFFF', fontWeight: '800' },
-  secondaryBtn: { borderWidth: 1, borderColor: '#3B82F6', backgroundColor: '#000000' },
+  secondaryBtn: { borderWidth: 1, borderColor: '#3B82F6', backgroundColor: '#0B0816' },
   secondaryBtnText: { color: '#1D4ED8', fontWeight: '700' },
   card: {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 14,
     marginBottom: 12,
   },

@@ -24,7 +24,7 @@ export function MemberSinceCard({ year }: Props) {
       importantForAccessibility="yes"
     >
       <LinearGradient
-        colors={['#22183A', '#171923', '#100E18']}
+        colors={['#22183A', '#151126', '#100E18']}
         locations={[0, 0.55, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 12.5,
     overflow: 'hidden',
-    backgroundColor: '#0C0D12',
+    backgroundColor: '#0B0816',
   },
   icon: {
     width: '100%',

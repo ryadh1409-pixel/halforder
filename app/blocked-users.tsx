@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getUserFriendlyError } from '../utils/errorHandler';
 import { showError, showSuccess } from '../utils/toast';
 
-const BG = '#000000';
+const BG = '#0B0816';
 
 export default function BlockedUsersScreen() {
   const router = useRouter();

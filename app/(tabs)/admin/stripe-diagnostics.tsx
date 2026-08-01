@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 12 },
   statusRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
   statusDot: { width: 12, height: 12, borderRadius: 999, marginTop: 4 },
-  statusOk: { backgroundColor: '#16a34a' },
+  statusOk: { backgroundColor: '#A855F7' },
   statusBad: { backgroundColor: '#dc2626' },
   statusCopy: { flex: 1 },
   statusLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },

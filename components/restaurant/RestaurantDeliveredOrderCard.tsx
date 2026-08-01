@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#B7BDC9',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 14,
     marginBottom: 10,
   },
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   orderNumber: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
-  amount: { fontSize: 16, fontWeight: '900', color: '#16a34a' },
+  amount: { fontSize: 16, fontWeight: '900', color: '#A855F7' },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

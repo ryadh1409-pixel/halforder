@@ -6,8 +6,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const pal = {
-  bg: '#000000',
-  surface: '#171923',
+  bg: '#0B0816',
+  surface: '#151126',
   border: 'rgba(168, 85, 247, 0.22)',
   text: '#FFFFFF',
   textSecondary: '#B7BDC9',

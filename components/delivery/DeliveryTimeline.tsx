@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#334155',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     padding: 14,
   },
   title: { color: '#FFFFFF', fontWeight: '800', marginBottom: 8 },

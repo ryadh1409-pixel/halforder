@@ -606,7 +606,7 @@ export default function FoodShareChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000', direction: 'ltr' },
+  root: { flex: 1, backgroundColor: '#0B0816', direction: 'ltr' },
   flex: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { color: '#B7BDC9', fontWeight: '600' },

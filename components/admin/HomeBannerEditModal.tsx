@@ -16,7 +16,7 @@ import {
 const BG = '#FFFFFF';
 const TEXT = '#0f172a';
 const MUTED = '#64748b';
-const PRIMARY = '#16a34a';
+const PRIMARY = '#A855F7';
 
 export type HomeBannerDraft = {
   id?: string;

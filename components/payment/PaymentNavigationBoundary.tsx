@@ -81,7 +81,7 @@ export function PostPaymentLoadingShell({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#171923' },
+  root: { flex: 1, backgroundColor: '#151126' },
   center: {
     flex: 1,
     padding: 24,

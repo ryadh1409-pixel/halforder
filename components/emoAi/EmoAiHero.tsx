@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: 'hidden',
     height: 200,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.22)',
   },

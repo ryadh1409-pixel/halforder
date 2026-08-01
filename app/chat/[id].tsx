@@ -593,7 +593,7 @@ export default function ChatByIdScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000', direction: 'ltr' },
+  container: { flex: 1, backgroundColor: '#0B0816', direction: 'ltr' },
   header: {
     height: 56,
     paddingHorizontal: 14,

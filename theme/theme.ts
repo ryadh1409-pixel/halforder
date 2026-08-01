@@ -1,58 +1,63 @@
 /**
- * HalfOrder design system — premium dark palette aligned with Emo AI.
- * Color tokens only; spacing / radius / typography sizes unchanged.
+ * HalfOrder design system — premium deep purple-black.
+ * Color / typography / surface tokens only; spacing metrics unchanged unless noted.
  */
 import { StyleSheet, type TextStyle } from 'react-native';
 
 import { platformElevation } from '../utils/platformElevation';
 
 /**
- * Centralized premium palette (Emo AI reference).
- * Primary brand: purple #A855F7
+ * Centralized premium palette.
+ * Brand gradient: #7C3AED → #8B5CF6 → #A855F7
  */
 export const ordersPalette = {
-  /** Page / safe-area background — deep black */
-  bg: '#000000',
-  bgDeep: '#000000',
-  bgMid: '#0C0D12',
-  bgWash: '#111217',
+  /** Page / safe-area background — deep purple-black */
+  bg: '#0B0816',
+  bgDeep: '#0B0816',
+  bgMid: '#100C1C',
+  bgWash: '#151126',
   /** Secondary background */
-  bgSecondary: '#0C0D12',
-  /** Card — dark charcoal with subtle purple tint */
-  surfaceSolid: '#171923',
-  /** Elevated card */
-  surfaceElevated: '#1C1F2E',
+  bgSecondary: '#100C1C',
+  /** Card — premium dark surface */
+  surfaceSolid: '#151126',
+  /** Elevated / secondary surface */
+  surfaceElevated: '#1B1630',
   /** Input fill */
-  input: '#1C2030',
+  input: '#1B1630',
   /** Translucent card surface (depth on dark bg) */
-  surface: 'rgba(23,25,35,0.94)',
-  surfaceSoft: 'rgba(28,31,46,0.78)',
-  surfaceChip: 'rgba(168,85,247,0.08)',
-  surfacePill: 'rgba(168,85,247,0.10)',
+  surface: 'rgba(21,17,38,0.96)',
+  surfaceSoft: 'rgba(27,22,48,0.82)',
+  surfaceChip: 'rgba(139,92,246,0.10)',
+  surfacePill: 'rgba(168,85,247,0.12)',
   /** Subtle purple glow borders */
-  border: 'rgba(168, 85, 247, 0.22)',
-  borderStrong: 'rgba(168, 85, 247, 0.38)',
-  borderMuted: 'rgba(168, 85, 247, 0.14)',
+  border: 'rgba(168, 85, 247, 0.24)',
+  borderStrong: 'rgba(168, 85, 247, 0.42)',
+  borderMuted: 'rgba(139, 92, 246, 0.16)',
   text: '#FFFFFF',
   textBright: '#FFFFFF',
-  textBody: '#E8EAF0',
-  textSecondary: '#B7BDC9',
-  textMuted: '#8B93A7',
-  textTertiary: '#7D8493',
-  textDim: '#7D8493',
-  textSubtle: '#7D8493',
-  textSection: '#B7BDC9',
-  textSlate: '#8B93A7',
-  textSlateSolid: '#8B93A7',
-  /** Primary brand — Emo AI purple */
+  textBody: '#F1EFFF',
+  textSecondary: '#C4BDD9',
+  textMuted: '#9B93B0',
+  textTertiary: '#8A829E',
+  textDim: '#8A829E',
+  textSubtle: '#8A829E',
+  textSection: '#C4BDD9',
+  textSlate: '#9B93B0',
+  textSlateSolid: '#9B93B0',
+  /** Primary brand — premium purple */
   accent: '#A855F7',
   accentCta: '#A855F7',
-  accentGlow: 'rgba(168, 85, 247, 0.28)',
+  accentMid: '#8B5CF6',
+  accentDeep: '#7C3AED',
+  accentGlow: 'rgba(168, 85, 247, 0.32)',
   purple: '#A855F7',
   purpleSoft: 'rgba(168, 85, 247, 0.18)',
-  purpleGlow: 'rgba(168, 85, 247, 0.28)',
-  purpleBorder: 'rgba(168, 85, 247, 0.35)',
-  /** Semantic success (status only — not decorative) */
+  purpleGlow: 'rgba(139, 92, 246, 0.30)',
+  purpleBorder: 'rgba(168, 85, 247, 0.38)',
+  /** Promotional “Free …” labels */
+  freeGold: '#D4AF37',
+  freeGoldText: '#FFFFFF',
+  /** Semantic success (status only — not decorative branding) */
   success: '#22C55E',
   successBright: '#22C55E',
   successSoft: 'rgba(34,197,94,0.16)',
@@ -72,12 +77,12 @@ export const ordersPalette = {
   infoSoft: 'rgba(168,85,247,0.18)',
   whatsapp: '#25D366',
   /** Deprecated decorative alias → purple soft */
-  greenGlow: 'rgba(168, 85, 247, 0.12)',
+  greenGlow: 'rgba(168, 85, 247, 0.14)',
   /** Navigation glass */
-  navGlass: 'rgba(12,13,18,0.88)',
-  shadow: '#000000',
-  overlayScrim: 'rgba(0,0,0,0.55)',
-  badgeScrim: 'rgba(0,0,0,0.2)',
+  navGlass: 'rgba(11,8,22,0.90)',
+  shadow: '#05030A',
+  overlayScrim: 'rgba(5,3,10,0.58)',
+  badgeScrim: 'rgba(5,3,10,0.22)',
 } as const;
 
 export const palette = {
@@ -100,7 +105,7 @@ export const colors = {
   /** Primary CTA — purple */
   primary: ordersPalette.purple,
   primaryLight: ordersPalette.purpleSoft,
-  primaryDark: '#9333EA',
+  primaryDark: ordersPalette.accentDeep,
   purple: ordersPalette.purple,
   purpleSoft: ordersPalette.purpleSoft,
   purpleGlow: ordersPalette.purpleGlow,
@@ -150,6 +155,8 @@ export const colors = {
   ordersTextSecondary: ordersPalette.textSecondary,
   ordersTextMuted: ordersPalette.textMuted,
   ordersTextSection: ordersPalette.textSection,
+  freeGold: ordersPalette.freeGold,
+  freeGoldText: ordersPalette.freeGoldText,
 };
 
 export const spacing = {
@@ -167,90 +174,91 @@ export const spacing = {
 };
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 22,
   full: 9999,
-  button: 12,
-  card: 16,
-  input: 12,
+  button: 14,
+  card: 20,
+  input: 14,
   dot: 6,
 };
 
 export const typography = {
   hero: {
-    fontSize: 32,
-    fontWeight: '700' as TextStyle['fontWeight'],
-    lineHeight: 38,
-    letterSpacing: -0.8,
+    fontSize: 34,
+    fontWeight: '800' as TextStyle['fontWeight'],
+    lineHeight: 40,
+    letterSpacing: -0.9,
     color: colors.textDark,
   },
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '700' as TextStyle['fontWeight'],
-    lineHeight: 34,
-    letterSpacing: -0.6,
+    fontSize: 30,
+    fontWeight: '800' as TextStyle['fontWeight'],
+    lineHeight: 36,
+    letterSpacing: -0.7,
     color: colors.textDark,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600' as TextStyle['fontWeight'],
-    lineHeight: 26,
+    fontSize: 22,
+    fontWeight: '700' as TextStyle['fontWeight'],
+    lineHeight: 28,
+    letterSpacing: -0.3,
     color: colors.textDark,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '400' as TextStyle['fontWeight'],
-    lineHeight: 24,
+    lineHeight: 25,
     color: colors.textMuted,
   },
   body: {
     fontSize: 16,
     fontWeight: '400' as TextStyle['fontWeight'],
-    lineHeight: 24,
+    lineHeight: 25,
     color: colors.textDark,
   },
   bodyMedium: {
     fontSize: 16,
     fontWeight: '500' as TextStyle['fontWeight'],
-    lineHeight: 24,
+    lineHeight: 25,
     color: colors.textDark,
   },
   bodyMuted: {
     fontSize: 15,
     fontWeight: '400' as TextStyle['fontWeight'],
-    lineHeight: 22,
+    lineHeight: 23,
     color: colors.textMuted,
   },
   caption: {
     fontSize: 13,
-    fontWeight: '400' as TextStyle['fontWeight'],
-    lineHeight: 18,
+    fontWeight: '500' as TextStyle['fontWeight'],
+    lineHeight: 19,
     color: colors.textMuted,
   },
   button: {
     fontSize: 16,
-    fontWeight: '600' as TextStyle['fontWeight'],
-    letterSpacing: 0.15,
+    fontWeight: '700' as TextStyle['fontWeight'],
+    letterSpacing: 0.2,
   },
 };
 
-/** Brand gradients — purple primary. */
+/** Brand gradients — premium purple. */
 export const gradients = {
   brand: {
-    colors: ['#C084FC', '#A855F7'] as [string, string],
+    colors: ['#7C3AED', '#8B5CF6', '#A855F7'] as [string, string, string],
     start: { x: 0, y: 0 },
     end: { x: 1, y: 1 },
   },
   brandHorizontal: {
-    colors: ['#C084FC', '#A855F7'] as [string, string],
+    colors: ['#7C3AED', '#8B5CF6', '#A855F7'] as [string, string, string],
     start: { x: 0, y: 0.5 },
     end: { x: 1, y: 0.5 },
   },
   /** Purple brand hairline */
   brandAccent: {
-    colors: ['#A855F7', '#7C3AED'] as [string, string],
+    colors: ['#7C3AED', '#A855F7'] as [string, string],
     start: { x: 0, y: 0.5 },
     end: { x: 1, y: 0.5 },
   },
@@ -278,14 +286,14 @@ export const theme = {
 /** Soft elevation — cards with subtle purple glow */
 export const shadows = {
   card: platformElevation({
-    web: '0px 8px 28px rgba(168, 85, 247, 0.12)',
+    web: '0px 10px 32px rgba(124, 58, 237, 0.18)',
     ios: {
-      shadowColor: '#A855F7',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.16,
-      shadowRadius: 24,
+      shadowColor: '#7C3AED',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.22,
+      shadowRadius: 28,
     },
-    android: { elevation: 6 },
+    android: { elevation: 8 },
   }),
 } as const;
 
@@ -293,7 +301,7 @@ const shadowCard = shadows.card;
 
 /**
  * Reusable UI blocks — compose with TouchableOpacity + Text children.
- * Colors only remapped to Orders dark; sizes unchanged.
+ * Colors remapped to premium purple-black; sizes largely unchanged.
  */
 export const layoutStyles = StyleSheet.create({
   container: {
@@ -307,7 +315,7 @@ export const layoutStyles = StyleSheet.create({
   /** Card with purple-tinted border + soft shadow */
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -316,7 +324,7 @@ export const layoutStyles = StyleSheet.create({
   /** Flat panel (no shadow) */
   cardFlat: {
     backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -326,19 +334,19 @@ export const layoutStyles = StyleSheet.create({
     backgroundColor: colors.purple,
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.xl,
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
     ...platformElevation({
-      web: '0px 6px 18px rgba(168, 85, 247, 0.4)',
+      web: '0px 8px 22px rgba(124, 58, 237, 0.45)',
       ios: {
-        shadowColor: '#A855F7',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 14,
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.42,
+        shadowRadius: 16,
       },
-      android: { elevation: 5 },
+      android: { elevation: 6 },
     }),
   },
   primaryButtonText: {
@@ -347,10 +355,10 @@ export const layoutStyles = StyleSheet.create({
   },
   /** Purple outline — secondary */
   secondaryButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: ordersPalette.surfaceElevated,
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.xl,
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
@@ -365,7 +373,7 @@ export const layoutStyles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.xl,
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
@@ -390,7 +398,7 @@ export const layoutStyles = StyleSheet.create({
   },
 });
 
-/** Expo template hook compatibility — both modes use Emo AI dark */
+/** Expo template hook compatibility — both modes use premium dark */
 export const Colors = {
   light: {
     text: ordersPalette.text,

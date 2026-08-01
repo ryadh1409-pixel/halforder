@@ -48,7 +48,7 @@ import { getUserFriendlyError } from '../../../../utils/errorHandler';
 import { getReadableErrorMessageOr } from '../../../../utils/errorMessages';
 import { showError, showSuccess } from '../../../../utils/toast';
 
-const PRIMARY = '#16a34a';
+const PRIMARY = '#A855F7';
 
 function parsePrice(raw: string): number | null {
   const n = Number(String(raw).replace(/[^0-9.]/g, ''));

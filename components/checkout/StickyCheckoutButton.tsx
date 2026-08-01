@@ -84,7 +84,7 @@ function StickyCheckoutButtonInner({
           colors={
             isDisabled
               ? ['#5B4B73', '#4A3D5E']
-              : ['#C084FC', '#A855F7', '#7C3AED']
+              : ['#7C3AED', '#8B5CF6', '#A855F7']
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}

@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.22)',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     marginBottom: 12,
   },
 });

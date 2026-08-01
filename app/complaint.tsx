@@ -653,7 +653,7 @@ export default function ComplaintScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  screen: { flex: 1, backgroundColor: '#0B0816' },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
   },
   bubbleEmo: {
     alignSelf: 'flex-start',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderWidth: 1,
     borderColor: 'rgba(168,85,247,0.35)',
     gap: 10,
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     paddingHorizontal: 16,
     paddingVertical: 10,
     color: '#FFF',

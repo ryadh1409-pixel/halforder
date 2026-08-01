@@ -277,7 +277,7 @@ export default function InboxScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+  safe: { flex: 1, backgroundColor: '#0B0816' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

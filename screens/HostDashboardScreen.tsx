@@ -66,7 +66,7 @@ type RestaurantState = {
   interacEmail: string;
 };
 
-const PRIMARY = '#16a34a';
+const PRIMARY = '#A855F7';
 const PAGE = '#FFFFFF';
 const CARD = '#ffffff';
 const AVATAR_SIZE = 90;
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 16,
-    color: '#171923',
+    color: '#151126',
     backgroundColor: '#fafafa',
     textAlign: 'center',
   },
@@ -853,7 +853,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#171923',
+    color: '#151126',
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#B7BDC9',
     borderRadius: 12,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     marginBottom: 10,
   },
   orderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -963,7 +963,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     padding: 8,
     alignItems: 'center',
   },

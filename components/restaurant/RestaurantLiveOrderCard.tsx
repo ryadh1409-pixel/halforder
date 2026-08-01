@@ -134,7 +134,7 @@ export const RestaurantLiveOrderCard = React.memo(function RestaurantLiveOrderCa
   const borderColor = highlighted
     ? highlightAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: ['rgba(22,163,74,0.35)', '#16a34a'],
+        outputRange: ['rgba(22,163,74,0.35)', '#A855F7'],
       })
     : 'rgba(255,255,255,0.1)';
 
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 16,
     marginBottom: 14,
     ...platformElevation({
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.1)',
     gap: 4,
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   metaCell: {
     minWidth: '30%',
     flexGrow: 1,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,

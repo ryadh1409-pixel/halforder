@@ -207,18 +207,18 @@ export default function CartScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingBottom: 120 },
   title: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginBottom: 12 },
-  emptyCard: { borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#000000', padding: 16 },
+  emptyCard: { borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#0B0816', padding: 16 },
   emptyTitle: { color: '#7D8493', fontWeight: '700' },
   emptySubTitle: { color: '#7D8493', fontWeight: '600', marginTop: 4 },
   card: {
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 12,
     marginBottom: 10,
     flexDirection: 'row',
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',

@@ -93,7 +93,7 @@ export function DeliveryEligibilityBanner({
 
   const blocked = eligibility.blocked;
   const iconName = blocked ? 'location-outline' : 'checkmark-circle';
-  const iconColor = blocked ? '#B45309' : '#16A34A';
+  const iconColor = blocked ? '#B45309' : '#A855F7';
 
   if (isCheckout) {
     return (

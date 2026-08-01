@@ -125,7 +125,7 @@ export default function Index() {
           justifyContent: 'center',
           alignItems: 'center',
           paddingTop: 60,
-          backgroundColor: '#000000',
+          backgroundColor: '#0B0816',
         }}
       >
         <AppLogo size={112} marginTop={0} />
@@ -136,7 +136,7 @@ export default function Index() {
 
   /** Registered: transparent shell while orchestrator navigates to role home. */
   if (isRegisteredAuthUser(user)) {
-    return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
+    return <View style={{ flex: 1, backgroundColor: '#0B0816' }} />;
   }
 
   return (

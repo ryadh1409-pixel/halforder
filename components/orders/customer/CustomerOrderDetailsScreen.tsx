@@ -857,10 +857,10 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  screen: { flex: 1, backgroundColor: '#0B0816' },
   scrollContent: { paddingBottom: 48 },
   stickyHeader: {
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     paddingBottom: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
@@ -1061,7 +1061,7 @@ const styles = StyleSheet.create({
   mapPlaceholder: {
     height: 200,
     borderRadius: 14,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     alignItems: 'center',
     justifyContent: 'center',
   },

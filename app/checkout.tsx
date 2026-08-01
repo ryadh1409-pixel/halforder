@@ -308,7 +308,7 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
   hint: { marginTop: 16, color: '#7D8493', fontWeight: '600', textAlign: 'center' },
   title: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },

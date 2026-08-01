@@ -8,7 +8,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const PAGE = '#FFFFFF';
-const PRIMARY = '#16a34a';
+const PRIMARY = '#A855F7';
 
 /** Restaurant Orders tab — live kitchen queue (realtime). */
 export default function HostOrdersScreen() {

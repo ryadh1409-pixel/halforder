@@ -7,7 +7,7 @@ function SwipeCinematicBackgroundInner() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient
-        colors={['#000000', '#0C0D12', '#000000']}
+        colors={['#0B0816', '#151126', '#0B0816']}
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />

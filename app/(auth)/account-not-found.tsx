@@ -4,11 +4,11 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const AUTH = {
-  bg: '#000000',
+  bg: '#0B0816',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   primary: '#A855F7',
-  surface: '#171923',
+  surface: '#151126',
   border: 'rgba(255,255,255,0.1)',
 } as const;
 

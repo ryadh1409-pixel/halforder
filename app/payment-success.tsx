@@ -60,7 +60,7 @@ export default function PaymentSuccessScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   center: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginTop: 16 },
   sub: {

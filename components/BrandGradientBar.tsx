@@ -15,10 +15,11 @@ export function BrandGradientBar({
   style,
   variant = 'diagonal',
 }: Props) {
-  const g = gradients.brandAccent ?? gradients.brand;
+  const g =
+    variant === 'horizontal' ? gradients.brandHorizontal : gradients.brand;
   return (
     <LinearGradient
-      colors={[g.colors[0], g.colors[1]]}
+      colors={[g.colors[0], g.colors[1], g.colors[2]]}
       start={g.start}
       end={g.end}
       style={[styles.bar, { height }, style]}

@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#09090B',
+    backgroundColor: '#0B0816',
   },
   toolbar: {
     flexDirection: 'row',

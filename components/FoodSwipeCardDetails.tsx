@@ -175,10 +175,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
   inlineJoinBtnDisabled: { opacity: 0.45 },
-  inlineJoinText: { color: '#07241A', fontWeight: '800', fontSize: 15 },
+  inlineJoinText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
 });

@@ -14,7 +14,7 @@ export function DriverFallbackScreen({
 }: DriverFallbackScreenProps) {
   return (
     <View style={styles.screen}>
-      <ActivityIndicator size="large" color="#00C853" />
+      <ActivityIndicator size="large" color="#A855F7" />
       <Text style={styles.text}>{message}</Text>
     </View>
   );

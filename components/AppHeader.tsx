@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(168, 85, 247, 0.22)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
   },
   buttonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 });

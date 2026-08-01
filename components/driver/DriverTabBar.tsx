@@ -45,7 +45,7 @@ function DriverTabBar({ state }: BottomTabBarProps) {
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
           >
-            <Ionicons name={tab.icon} size={22} color={focused ? '#00C853' : '#9CA3AF'} />
+            <Ionicons name={tab.icon} size={22} color={focused ? '#A855F7' : '#8A829E'} />
             <Text style={[styles.label, focused && styles.labelFocused]}>{tab.label}</Text>
           </Pressable>
         );
@@ -60,11 +60,11 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#2A2A45',
-    backgroundColor: '#151526',
+    borderTopColor: 'rgba(168, 85, 247, 0.22)',
+    backgroundColor: '#0B0816',
     paddingTop: 8,
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  label: { color: '#7D8493', fontSize: 11, fontWeight: '700' },
-  labelFocused: { color: '#00C853' },
+  label: { color: '#8A829E', fontSize: 11, fontWeight: '700' },
+  labelFocused: { color: '#A855F7' },
 });

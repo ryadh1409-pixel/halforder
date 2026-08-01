@@ -54,7 +54,7 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
     name: 'Restaurant Orders',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 150, 250],
-    lightColor: '#16a34a',
+    lightColor: '#A855F7',
     sound: 'default',
     enableVibrate: true,
   });

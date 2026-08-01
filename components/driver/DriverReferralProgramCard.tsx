@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.22)',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     alignItems: 'center',
   },
   card: {
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.35)',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
   },
   headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   iconBadge: {

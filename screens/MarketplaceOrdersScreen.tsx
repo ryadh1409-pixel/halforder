@@ -791,7 +791,7 @@ export default function MarketplaceOrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+  root: { flex: 1, backgroundColor: '#0B0816' },
   safe: { flex: 1 },
   scrollFlex: { flex: 1 },
   glass: {

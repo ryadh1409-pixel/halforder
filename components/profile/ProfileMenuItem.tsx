@@ -8,7 +8,7 @@ import { ProfileGrowIcon } from './ProfileGrowIcon';
 import type { ProfileGrowIconKind } from './profileGrowIconShared';
 
 export const PROFILE_MENU_COLORS = {
-  surface: '#171923',
+  surface: '#151126',
   text: SETTINGS_LIST_COLORS.text,
   textSecondary: '#B7BDC9',
   textTertiary: SETTINGS_LIST_COLORS.subtitle,

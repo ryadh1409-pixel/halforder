@@ -303,13 +303,13 @@ const styles = StyleSheet.create({
   },
   blurFill: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(12,13,18,0.88)',
+    backgroundColor: 'rgba(11,8,22,0.88)',
   },
   androidFill: {
-    backgroundColor: 'rgba(12,13,18,0.92)',
+    backgroundColor: 'rgba(11,8,22,0.92)',
   },
   webFill: {
-    backgroundColor: 'rgba(12,13,18,0.88)',
+    backgroundColor: 'rgba(11,8,22,0.88)',
     backdropFilter: 'blur(20px)' as never,
   },
   container: {
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: ICON_SIZE / 2,
     overflow: 'hidden',
-    backgroundColor: '#0C0D12',
+    backgroundColor: '#0B0816',
   },
   emoAvatar: {
     width: '100%',

@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     paddingTop: 16,
     paddingBottom: 14,
     paddingLeft: 16,
@@ -166,5 +166,5 @@ const styles = StyleSheet.create({
   },
   total: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
   updatedSub: { marginTop: 2, color: '#7D8493', fontSize: 12, fontWeight: '600' },
-  link: { color: '#16a34a', fontWeight: '800', fontSize: 14 },
+  link: { color: '#A855F7', fontWeight: '800', fontSize: 14 },
 });

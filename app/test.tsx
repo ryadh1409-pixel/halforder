@@ -20,7 +20,7 @@ export default function TestNavigationScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   content: { flex: 1, padding: 16, justifyContent: 'center' },
   title: { color: '#FFFFFF', fontSize: 28, fontWeight: '800' },
   subtitle: { color: '#7D8493', marginTop: 8, fontWeight: '600' },

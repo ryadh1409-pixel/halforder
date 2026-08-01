@@ -16,8 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const AUTH = {
-  bg: '#000000',
-  card: '#171923',
+  bg: '#0B0816',
+  card: '#151126',
   text: '#FFFFFF',
   textMuted: '#B7BDC9',
   primary: '#A855F7',

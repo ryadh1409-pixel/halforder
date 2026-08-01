@@ -392,7 +392,7 @@ export default function DriverProfileTab() {
           >
             {uploadingPhoto ? (
               <View style={styles.avatarFallback}>
-                <ActivityIndicator color="#00C853" />
+                <ActivityIndicator color="#A855F7" />
               </View>
             ) : identity.photoURL ? (
               <Image
@@ -460,7 +460,7 @@ export default function DriverProfileTab() {
           >
             {uploadingVehiclePhoto ? (
               <View style={styles.vehiclePhotoFallback}>
-                <ActivityIndicator color="#00C853" />
+                <ActivityIndicator color="#A855F7" />
               </View>
             ) : vehiclePhotoDraft ? (
               <Image
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#00C853',
+    backgroundColor: '#A855F7',
   },
   vehiclePhotoBadgeText: {
     color: '#052e1b',
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
   previewLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#00C853',
+    color: '#A855F7',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 6,
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#00C853',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
   },

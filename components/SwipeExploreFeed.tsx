@@ -490,7 +490,7 @@ export default function SwipeExploreFeed() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#0B0816' },
   header: { paddingHorizontal: theme.spacing.screen, paddingVertical: 12 },
   templateSection: {
     paddingLeft: theme.spacing.screen,
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },

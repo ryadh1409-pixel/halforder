@@ -13,7 +13,7 @@ export function BrandBanner({ children, style }: Props) {
   const g = gradients.brandHorizontal;
   return (
     <LinearGradient
-      colors={[g.colors[0], g.colors[1]]}
+      colors={[g.colors[0], g.colors[1], g.colors[2]]}
       start={g.start}
       end={g.end}
       style={[styles.banner, style]}

@@ -55,7 +55,7 @@ function OrderCard({
           <Text style={styles.newOrderLabel}>🔴 NEW ORDER</Text>
         </View>
         <Pressable onPress={onDismiss} hitSlop={12} style={styles.dismissBtn}>
-          <Ionicons name="checkmark-circle" size={28} color="#16a34a" />
+          <Ionicons name="checkmark-circle" size={28} color="#A855F7" />
         </Pressable>
       </View>
 
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   topLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topTitle: { fontSize: 18, fontWeight: '800', color: '#EF4444' },
   dismissAllBtn: {
-    backgroundColor: '#16a34a',
+    backgroundColor: '#A855F7',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,

@@ -210,14 +210,14 @@ type Palette = {
 function useProfilePalette(): Palette {
   return useMemo(
     () => ({
-      bg: '#000000',
-      surface: '#171923',
-      surfaceMuted: '#1C1F2E',
+      bg: '#0B0816',
+      surface: '#151126',
+      surfaceMuted: '#1B1630',
       text: '#FFFFFF',
       textSecondary: '#B7BDC9',
       textTertiary: '#8B93A7',
       border: 'rgba(168, 85, 247, 0.22)',
-      inputBg: '#1C2030',
+      inputBg: '#1B1630',
       chipBg: 'rgba(168,85,247,0.10)',
       primary: '#A855F7',
       onPrimary: '#FFFFFF',

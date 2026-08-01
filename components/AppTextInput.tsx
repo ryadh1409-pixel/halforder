@@ -39,7 +39,7 @@ export const AppTextInput = forwardRef<TextInput, TextInputProps>(
 const styles = StyleSheet.create({
   base: {
     color: '#FFFFFF',
-    backgroundColor: '#1C2030',
+    backgroundColor: '#1B1630',
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.35)',
     borderRadius: 14,

@@ -100,7 +100,7 @@ export default function PaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   content: {
     flex: 1,
     paddingHorizontal: 24,

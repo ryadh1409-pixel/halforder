@@ -9,7 +9,7 @@ export type EmoAiMessage = {
 
 export const EMO_AI_PURPLE = '#A855F7';
 export const EMO_AI_PURPLE_SOFT = 'rgba(168, 85, 247, 0.18)';
-export const EMO_AI_BG = '#000000';
+export const EMO_AI_BG = '#0B0816';
 export const EMO_AI_SURFACE = '#171923';
 export const EMO_AI_BUBBLE_AI = '#252A38';
 export const EMO_AI_ONLINE = '#22C55E';

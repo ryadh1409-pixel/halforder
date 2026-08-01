@@ -92,11 +92,12 @@ export const PROMOTION_BADGE_COLORS: Record<
   string
 > = {
   most_ordered: '#A855F7',
-  great_price: '#22C55E',
-  free_delivery: '#0EA5E9',
-  free_service_fee: '#F59E0B',
-  staff_pick: '#EAB308',
-  new: '#EC4899',
+  great_price: '#8B5CF6',
+  /** Premium gold — “Free …” promotional labels only */
+  free_delivery: '#D4AF37',
+  free_service_fee: '#D4AF37',
+  staff_pick: '#8B5CF6',
+  new: '#A855F7',
   limited_time: '#EF4444',
 };
 

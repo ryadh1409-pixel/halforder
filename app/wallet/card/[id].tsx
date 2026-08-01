@@ -25,8 +25,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const PAL = {
-  bg: '#000000',
-  surface: '#171923',
+  bg: '#0B0816',
+  surface: '#151126',
   surfaceMuted: '#1E2230',
   text: '#FFFFFF',
   textMuted: '#7D8493',

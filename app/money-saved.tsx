@@ -30,9 +30,9 @@ export default function MoneySavedScreen() {
     () =>
       isDark
         ? {
-            bg: '#000000',
-            card: '#171923',
-            cardElevated: '#1C1F2E',
+            bg: '#0B0816',
+            card: '#151126',
+            cardElevated: '#1B1630',
             text: '#FFFFFF',
             textSecondary: '#B7BDC9',
             border: 'rgba(255,255,255,0.08)',
@@ -47,7 +47,7 @@ export default function MoneySavedScreen() {
             text: '#0F172A',
             textSecondary: '#64748B',
             border: 'rgba(15, 23, 42, 0.08)',
-            success: '#16A34A',
+            success: '#A855F7',
             primary: '#7C3AED',
             shadow: '#0F172A',
           },

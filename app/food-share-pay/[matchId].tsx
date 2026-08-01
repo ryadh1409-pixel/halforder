@@ -456,7 +456,7 @@ function CostRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+  safe: { flex: 1, backgroundColor: '#0B0816' },
   pad: { padding: 20, paddingBottom: 48 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   hint: { color: c.textSecondary, fontSize: 14 },
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   payBtn: {
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

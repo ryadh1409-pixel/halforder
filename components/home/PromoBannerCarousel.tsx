@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: UE.radiusPill,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
   },
   ctaTxt: { fontSize: 14, fontWeight: '900', color: UE.text },
   ctaArrow: { fontSize: 18, fontWeight: '300', color: UE.text, marginTop: -2 },

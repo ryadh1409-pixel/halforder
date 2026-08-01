@@ -30,7 +30,7 @@ import {
 import { startOnboarding } from '../services/stripeConnect';
 import { alertFriendly } from '../utils/friendlyAlert';
 
-const BG = '#000000';
+const BG = '#0B0816';
 const { width } = Dimensions.get('window');
 const IMAGE_CARD_WIDTH = width - 48;
 const IMAGE_CARD_HEIGHT = Math.min(width * 1.15, 480);
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     height: IMAGE_CARD_HEIGHT,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   },
   imageFallback: {
     flex: 1,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
   },
   footer: {
     paddingHorizontal: 24,

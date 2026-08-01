@@ -188,7 +188,7 @@ export default function DriverAccountSettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {identity.loading ? (
-          <ActivityIndicator color="#00C853" style={styles.loader} />
+          <ActivityIndicator color="#A855F7" style={styles.loader} />
         ) : (
           <>
             <Text style={[styles.label, { color: palette.label }]}>Display name</Text>
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#00C853',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -82,14 +82,14 @@ export default function ReviewOrderScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   content: { flex: 1, padding: 16 },
   title: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginBottom: 12 },
   summaryCard: {
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 14,
   },
   row: { color: '#B7BDC9', fontWeight: '600', marginBottom: 6 },
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     padding: 14,
   },
   paymentTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 17 },

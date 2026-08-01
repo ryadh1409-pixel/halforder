@@ -1009,8 +1009,8 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
-  container: { flex: 1, backgroundColor: '#000000' },
+  safe: { flex: 1, backgroundColor: '#0B0816' },
+  container: { flex: 1, backgroundColor: '#0B0816' },
   screenHeader: {
     paddingHorizontal: 16,
     paddingTop: 6,

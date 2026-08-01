@@ -480,7 +480,7 @@ export function RestaurantOrdersPanel({
 
       {loading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color="#16a34a" />
+          <ActivityIndicator size="small" color="#A855F7" />
           <Text style={styles.loadingText}>Loading orders…</Text>
         </View>
       ) : listOrders.length === 0 ? (
@@ -570,8 +570,8 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   filterChipActive: {
-    backgroundColor: '#16a34a',
-    borderColor: '#16a34a',
+    backgroundColor: '#A855F7',
+    borderColor: '#A855F7',
   },
   filterChipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
   filterChipTextActive: { color: '#fff' },
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontWeight: '600',
   },
-  revenueLine: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
+  revenueLine: { fontSize: 13, fontWeight: '700', color: '#A855F7' },
   loadingBox: {
     flexDirection: 'row',
     alignItems: 'center',

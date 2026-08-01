@@ -34,8 +34,8 @@ import { showError, showNotice } from '../utils/toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const D = {
-  bg: '#000000',
-  card: '#171923',
+  bg: '#0B0816',
+  card: '#151126',
   border: 'rgba(255,255,255,0.1)',
   text: '#FFFFFF',
   muted: 'rgba(248,250,252,0.55)',

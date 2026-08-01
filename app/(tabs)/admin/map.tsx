@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: '#0C0D12',
+    backgroundColor: '#0B0816',
     gap: 12,
   },
   webPlaceholderText: {

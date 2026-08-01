@@ -121,9 +121,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
   },
   like: {
-    backgroundColor: '#22C55E',
-    borderColor: '#7D8493',
-    shadowColor: '#22C55E',
+    backgroundColor: '#A855F7',
+    borderColor: 'rgba(168, 85, 247, 0.45)',
+    shadowColor: '#7C3AED',
     shadowOpacity: 0.45,
   },
   disabled: { opacity: 0.4 },

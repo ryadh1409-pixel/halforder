@@ -91,7 +91,7 @@ export default function AdminUsersScreen() {
   if (roleLoading || !authorized) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" color="#16a34a" />
+        <ActivityIndicator size="large" color="#A855F7" />
       </SafeAreaView>
     );
   }
@@ -104,7 +104,7 @@ export default function AdminUsersScreen() {
       />
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#16a34a" />
+          <ActivityIndicator size="large" color="#A855F7" />
         </View>
       ) : (
         <FlatList
@@ -191,7 +191,7 @@ export default function AdminUsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { textAlign: 'center', color: '#7D8493', marginTop: 32, fontSize: 15 },
   list: { padding: 16, paddingBottom: 32 },
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     marginBottom: 12,
     padding: 14,
   },
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
   },
   roleChipActive: { backgroundColor: '#DCFCE7', borderColor: '#22C55E' },
   roleChipText: { color: '#B7BDC9', fontWeight: '700' },

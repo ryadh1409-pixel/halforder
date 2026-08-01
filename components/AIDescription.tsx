@@ -152,13 +152,13 @@ const sheetDark = StyleSheet.create({
 
 const sheetLight = StyleSheet.create({
   panel: {
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     borderTopColor: 'rgba(0,0,0,0.08)',
   },
   handle: { backgroundColor: 'rgba(0,0,0,0.15)' },
   title: { color: '#FFFFFF' },
   body: { color: 'rgba(51,65,85,0.95)' },
-  btn: { backgroundColor: '#000000' },
+  btn: { backgroundColor: '#0B0816' },
   btnText: { color: '#FFFFFF' },
 });
 

@@ -86,7 +86,7 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  screen: { flex: 1, backgroundColor: '#0B0816' },
   content: { flex: 1, justifyContent: 'center', padding: 20 },
   title: { color: '#FFFFFF', fontSize: 30, fontWeight: '800' },
   subtitle: { color: '#7D8493', marginTop: 8, marginBottom: 20, fontSize: 15 },
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   googleButton: { backgroundColor: '#2563EB' },
-  appleButton: { backgroundColor: '#171923' },
+  appleButton: { backgroundColor: '#151126' },
   buttonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },
   errorText: { color: '#EF4444', marginTop: 10, fontWeight: '600' },
 });

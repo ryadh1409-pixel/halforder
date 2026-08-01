@@ -381,7 +381,7 @@ export default function DriverHubScreen() {
         <View style={styles.onlineCardRight}>
           {togglingOnline ? (
             <ActivityIndicator
-              color={isOnline ? '#00C853' : '#9CA3AF'}
+              color={isOnline ? '#A855F7' : '#9CA3AF'}
               size="small"
               style={styles.toggleSpinner}
             />
@@ -391,7 +391,7 @@ export default function DriverHubScreen() {
             onValueChange={(value) => {
               void handleToggleOnline(value);
             }}
-            trackColor={{ false: '#3E3E5A', true: '#00C853' }}
+            trackColor={{ false: '#3E3E5A', true: '#A855F7' }}
             thumbColor="#FFFFFF"
             ios_backgroundColor="#3E3E5A"
             disabled={!uid || togglingOnline}
@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
   },
   onlineCardActive: {
     backgroundColor: '#132B1E',
-    borderColor: '#00C853',
+    borderColor: '#A855F7',
   },
   onlineCardOffline: {
     backgroundColor: '#22223A',
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  statCardMid: { backgroundColor: '#00C853' },
+  statCardMid: { backgroundColor: '#A855F7' },
   statValue: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
   statLabel: { color: '#7D8493', marginTop: 2, fontWeight: '600', fontSize: 11 },
   statLabelMid: { color: '#E7FBEA', marginTop: 2, fontWeight: '700', fontSize: 11 },
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
   timestamp: { color: '#7D8493', marginTop: 2, fontWeight: '600', fontSize: 12 },
   timestampExpired: { color: '#EF4444' },
   earningPill: {
-    backgroundColor: '#00C853',
+    backgroundColor: '#A855F7',
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
   acceptBtn: {
     height: 46,
     borderRadius: 12,
-    backgroundColor: '#00C853',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   meta: { fontSize: 13, fontWeight: '600', color: '#64748B', flex: 1 },
-  total: { fontSize: 17, fontWeight: '900', color: '#16A34A' },
+  total: { fontSize: 17, fontWeight: '900', color: '#A855F7' },
   chipRow: {
     marginTop: 12,
     flexDirection: 'row',

@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   hero: {
     borderRadius: 16,
     padding: 16,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     borderWidth: 1,
     borderColor: 'rgba(168,85,247,0.25)',
   },

@@ -53,7 +53,7 @@ export default function OrderScreen({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   content: { flex: 1, justifyContent: 'center', padding: 20 },
   title: { color: '#FFFFFF', fontSize: 28, fontWeight: '800', marginBottom: 12 },
   meta: { color: '#7D8493', fontSize: 15, fontWeight: '600', marginBottom: 6 },

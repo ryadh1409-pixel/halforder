@@ -20,7 +20,7 @@ export const UE = {
   chipActive: ordersPalette.purple,
   chipInactiveBg: ordersPalette.surface,
   chipInactiveText: ordersPalette.text,
-  shadow: 'rgba(168, 85, 247, 0.18)',
+  shadow: 'rgba(124, 58, 237, 0.22)',
   radiusXL: 20,
   radiusL: 16,
   radiusM: 12,

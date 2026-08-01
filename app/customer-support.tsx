@@ -484,7 +484,7 @@ export default function CustomerSupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#09090B' },
+  screen: { flex: 1, backgroundColor: '#0B0816' },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#09090B',
+    backgroundColor: '#0B0816',
   },
   backBtn: {
     width: 40,

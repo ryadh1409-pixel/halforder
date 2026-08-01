@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   card: {
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sheet: {
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingTop: 16,
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   },
   actionCancel: {
     marginTop: 8,
-    backgroundColor: '#171923',
+    backgroundColor: '#151126',
   },
   actionCancelLabel: {
     color: palette.primaryOrange,

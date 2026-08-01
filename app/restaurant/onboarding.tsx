@@ -118,7 +118,7 @@ export default function RestaurantOnboardingScreen() {
   if (loading || !authorized || checking) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" color="#16a34a" />
+        <ActivityIndicator size="large" color="#A855F7" />
       </SafeAreaView>
     );
   }
@@ -202,7 +202,7 @@ export default function RestaurantOnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#171923' },
+  screen: { flex: 1, backgroundColor: '#151126' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingBottom: 40, gap: 4 },
   title: { color: '#FFFFFF', fontSize: 28, fontWeight: '800', marginBottom: 14 },
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     marginBottom: 10,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
   },
   textArea: {
     minHeight: 88,
@@ -227,18 +227,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     paddingVertical: 10,
     alignItems: 'center',
   },
-  typeChipActive: { borderColor: '#16a34a', backgroundColor: '#DCFCE7' },
+  typeChipActive: { borderColor: '#A855F7', backgroundColor: '#DCFCE7' },
   typeChipText: { color: '#B7BDC9', fontWeight: '700' },
   typeChipTextActive: { color: '#166534' },
   primaryButton: {
     marginTop: 10,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0816',
     alignItems: 'center',
     justifyContent: 'center',
   },

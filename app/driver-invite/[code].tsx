@@ -73,7 +73,7 @@ export default function DriverInviteScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  screen: { flex: 1, backgroundColor: '#0B0816' },
   content: {
     flex: 1,
     alignItems: 'center',
