@@ -1,7 +1,7 @@
 import { DeviceEventEmitter } from 'react-native';
 
 /** Bump when Terms / UGC rules materially change (re-prompt on next launch). */
-export const TERMS_ACCEPTANCE_STORAGE_KEY = 'halforder_terms_accepted_v5';
+export const TERMS_ACCEPTANCE_STORAGE_KEY = 'halforder_terms_accepted_v6';
 
 /** Primary storage key for terms + privacy acceptance (Guideline 1.2). */
 export const ACCEPTED_TERMS_KEY = 'acceptedTerms';
