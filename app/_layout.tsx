@@ -53,6 +53,17 @@ logDevStartupConfig();
 
 if (!__DEV__) {
   LogBox.ignoreAllLogs(true);
+  // Silence console output in production — these calls are expensive
+  // (object serialization + native bridge) and there are 1000+ log sites.
+  // Keep console.error so crash reporters (Sentry etc.) still capture errors.
+  const noop = () => {};
+  console.log = noop;
+  console.info = noop;
+  console.debug = noop;
+  console.warn = noop;
+  console.trace = noop;
+  console.group = noop;
+  console.groupEnd = noop;
 }
 
 if (Platform.OS !== 'web' && !isExpoGo) {
