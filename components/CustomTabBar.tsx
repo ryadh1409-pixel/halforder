@@ -75,9 +75,9 @@ function iconGlyph(
 
   switch (routeName) {
     case 'index':
-      return pick('home', 'home-outline');
+      return pick('bag-handle', 'bag-handle-outline');
     case 'swipe':
-      return pick('flame', 'flame-outline');
+      return pick('people', 'people-outline');
     case 'explore':
       return pick('grid', 'grid-outline');
     case 'search':

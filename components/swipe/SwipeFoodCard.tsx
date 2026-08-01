@@ -217,6 +217,17 @@ function SwipeFoodCardInner({ card }: Props) {
       </View>
 
       <View style={styles.panel}>
+        {/* Delivery window banner */}
+        <View style={styles.deliveryWindowBanner}>
+          <Ionicons name="time-outline" size={13} color="#A78BFA" />
+          <Text style={styles.deliveryWindowText}>
+            Pay anytime · Delivery{' '}
+            <Text style={styles.deliveryWindowHighlight}>11am–1pm</Text>
+            {' '}or{' '}
+            <Text style={styles.deliveryWindowHighlight}>5–7pm</Text>
+          </Text>
+        </View>
+
         <View style={styles.priceRow}>
           <View style={styles.priceBlock}>
             <Text style={styles.priceLabel}>You pay</Text>
@@ -460,9 +471,31 @@ const styles = StyleSheet.create({
   },
   panel: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: '#141820',
+  },
+  deliveryWindowBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(124, 58, 237, 0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(167, 139, 250, 0.3)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  deliveryWindowText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.7)',
+    flex: 1,
+  },
+  deliveryWindowHighlight: {
+    color: '#A78BFA',
+    fontWeight: '700',
   },
   priceRow: {
     flexDirection: 'row',
