@@ -68,24 +68,32 @@ export async function storePendingDriverReferralCode(
   return true;
 }
 
+/**
+ * Check clipboard for a driver referral code and save it to AsyncStorage.
+ * Call this ONLY when the user explicitly taps "Paste code" — never on app launch.
+ * Returns the found code or null.
+ */
+export async function checkClipboardForDriverReferralCode(): Promise<string | null> {
+  try {
+    const clip = await Clipboard.getStringAsync();
+    const code = extractDriverReferralCodeFromText(clip ?? '');
+    if (isDriverReferralCode(code)) {
+      await AsyncStorage.setItem(DRIVER_REFERRAL_PENDING_CODE_KEY, code);
+      return code;
+    }
+  } catch {
+    // Clipboard unavailable
+  }
+  return null;
+}
+
 export async function applyPendingDriverReferralCode(): Promise<
   'none' | 'applied' | 'deferred'
 > {
-  let code = normalizeDriverReferralCode(
+  // Only check AsyncStorage — clipboard is never read automatically (avoids iOS paste dialog on launch)
+  const code = normalizeDriverReferralCode(
     await AsyncStorage.getItem(DRIVER_REFERRAL_PENDING_CODE_KEY),
   );
-  if (!isDriverReferralCode(code)) {
-    try {
-      const clip = await Clipboard.getStringAsync();
-      const fromClip = extractDriverReferralCodeFromText(clip ?? '');
-      if (isDriverReferralCode(fromClip)) {
-        code = fromClip;
-        await AsyncStorage.setItem(DRIVER_REFERRAL_PENDING_CODE_KEY, code);
-      }
-    } catch {
-      // Clipboard unavailable — keep going with stored pending code only.
-    }
-  }
   if (!isDriverReferralCode(code)) return 'none';
   try {
     const callable = httpsCallable(functions, 'attachDriverReferral');
