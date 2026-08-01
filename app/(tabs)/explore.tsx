@@ -1,3 +1,4 @@
+import { usePageTracking } from '@/hooks/usePageTracking';
 import { FeaturedSection } from '@/components/home/FeaturedSection';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { UE } from '@/constants/uberEatsTheme';
@@ -25,6 +26,7 @@ const BROWSE_SECTIONS = [
 
 /** Browse tab — full-width discovery rails without duplicate home chrome. */
 export default function ExploreTab() {
+  usePageTracking('explore');
   const router = useRouter();
   const { addressLine } = useHomeMarketplaceLocation();
   const { restaurants, loading } = useHomeRestaurants();

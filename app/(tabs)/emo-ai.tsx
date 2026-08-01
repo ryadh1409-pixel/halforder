@@ -1,3 +1,4 @@
+import { usePageTracking } from '@/hooks/usePageTracking';
 import { EmoAiComposer } from '@/components/emoAi/EmoAiComposer';
 import { EmoAiEmptyState } from '@/components/emoAi/EmoAiEmptyState';
 import { EmoAiHeader } from '@/components/emoAi/EmoAiHeader';
@@ -29,6 +30,7 @@ import {
 } from 'react-native-safe-area-context';
 
 export default function EmoAiScreen() {
+  usePageTracking('emo_ai');
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();

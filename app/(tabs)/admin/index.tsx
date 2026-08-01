@@ -33,6 +33,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -341,6 +342,26 @@ export default function AdminScreen() {
               </Text>
 
               <AdminLiveOrdersFeed />
+
+              {/* Quick links: User Activity + Referral Dashboard */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                <Pressable
+                  style={styles.quickLinkCard}
+                  onPress={() => router.push(adminRoutes.userActivity as never)}
+                >
+                  <Text style={styles.quickLinkIcon}>👁️</Text>
+                  <Text style={styles.quickLinkTitle}>User Activity</Text>
+                  <Text style={styles.quickLinkSub}>Page views & sign-ins</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.quickLinkCard}
+                  onPress={() => router.push(adminRoutes.referralDashboard as never)}
+                >
+                  <Text style={styles.quickLinkIcon}>🔗</Text>
+                  <Text style={styles.quickLinkTitle}>Referrals</Text>
+                  <Text style={styles.quickLinkSub}>Customer & driver</Text>
+                </Pressable>
+              </View>
 
               <AdminAiAssistantPanel displayName={user?.displayName} />
 
@@ -852,4 +873,16 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239,68,68,0.28)',
   },
   errorText: { color: COLORS.error, fontSize: 14, fontWeight: '600' },
+  quickLinkCard: {
+    flex: 1,
+    backgroundColor: '#0D0D1A',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1F1F2E',
+    padding: 14,
+    gap: 4,
+  },
+  quickLinkIcon: { fontSize: 22 },
+  quickLinkTitle: { fontSize: 14, fontWeight: '800', color: '#E2E8F0', marginTop: 4 },
+  quickLinkSub: { fontSize: 11, color: '#4B5563', fontWeight: '600' },
 });

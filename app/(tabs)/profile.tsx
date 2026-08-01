@@ -67,6 +67,7 @@ import {
     logProfileFsSuccess,
     profileFirestoreOp,
 } from '../../services/profileFirestoreLog';
+import { usePageTracking } from '@/hooks/usePageTracking';
 import { logError } from '../../utils/errorLogger';
 import { showError, showNotice, showSuccess } from '../../utils/toast';
 
@@ -230,6 +231,7 @@ function useProfilePalette(): Palette {
 }
 
 export default function ProfileScreen() {
+  usePageTracking('profile');
   const router = useRouter();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
