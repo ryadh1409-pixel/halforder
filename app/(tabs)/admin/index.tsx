@@ -3,6 +3,7 @@ import { ActionCard } from '../../../components/ActionCard';
 import { AdminStatCard } from '../../../components/AdminStatCard';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
 import { AdminAiAssistantPanel } from '../../../components/admin/AdminAiAssistantPanel';
+import { AdminLiveOrdersFeed } from '../../../components/admin/AdminLiveOrdersFeed';
 import {
   SettingsRow,
   SettingsSection,
@@ -338,6 +339,8 @@ export default function AdminScreen() {
               <Text style={styles.subtitle}>
                 Live metrics, finance, and quick actions
               </Text>
+
+              <AdminLiveOrdersFeed />
 
               <AdminAiAssistantPanel displayName={user?.displayName} />
 
