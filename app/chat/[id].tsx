@@ -461,6 +461,10 @@ export default function ChatByIdScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             onContentSizeChange={scrollToEnd}
+            removeClippedSubviews
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={15}
             renderItem={({ item }) => {
               const senderId = String(item.senderId ?? '');
               const isSystem = senderId === 'system' || item['system'] === true;

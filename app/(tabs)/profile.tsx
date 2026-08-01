@@ -335,17 +335,20 @@ export default function ProfileScreen() {
     setProfileLoading(true);
     void (async () => {
       try {
-        const serverSnap = await profileFirestoreOp(
+        // Use getDoc (cache-first) instead of getDocFromServer to avoid
+        // blocking the UI on a network round-trip every time the tab opens.
+        // The onSnapshot listener below keeps data fresh in the background.
+        const snap = await profileFirestoreOp(
           {
             file: 'app/(tabs)/profile.tsx',
-            operation: 'getDocFromServer',
+            operation: 'getDoc',
             path: userPath,
           },
-          () => getDocFromServer(userRef),
+          () => getDoc(userRef),
         );
         if (cancelled) return;
         applyUserDoc(
-          serverSnap.exists() ? (serverSnap.data() as DocumentData) : undefined,
+          snap.exists() ? (snap.data() as DocumentData) : undefined,
         );
       } catch {
         if (cancelled) return;

@@ -474,6 +474,10 @@ export default function FoodShareChatScreen() {
           onContentSizeChange={() =>
             listRef.current?.scrollToEnd({ animated: false })
           }
+          removeClippedSubviews
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={15}
           renderItem={({ item }) => {
             const mine = item.senderId === myUid;
             const system = item.senderId === 'system';

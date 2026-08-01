@@ -359,6 +359,10 @@ function OrderParticipantChat({
             onContentSizeChange={() =>
               listRef.current?.scrollToEnd({ animated: true })
             }
+            removeClippedSubviews
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={15}
           />
         )}
         {readOnly ? (

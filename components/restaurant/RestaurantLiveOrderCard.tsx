@@ -55,7 +55,7 @@ function safeEta(minutes: number | null | undefined): string {
   return `${Math.round(minutes)} min`;
 }
 
-export function RestaurantLiveOrderCard({
+export const RestaurantLiveOrderCard = React.memo(function RestaurantLiveOrderCard({
   order,
   timeZone,
   sourceScreen = 'RestaurantLiveOrderCard',
@@ -247,7 +247,7 @@ export function RestaurantLiveOrderCard({
       />
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
