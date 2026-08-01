@@ -15,7 +15,7 @@ import {
   setDoc,
   addDoc,
 } from 'firebase/firestore';
-import { Platform } from 'react-native';
+import { InteractionManager, Platform } from 'react-native';
 
 export type ActivityEventType = 'signin' | 'page_view' | 'button_click';
 
@@ -62,6 +62,14 @@ async function writeEvent(
 }
 
 /**
+ * Defer a write until after all JS-thread interactions (animations, transitions)
+ * have finished. This ensures tracking never competes with the UI thread.
+ */
+function afterInteractions(fn: () => void): void {
+  InteractionManager.runAfterInteractions(fn);
+}
+
+/**
  * Call when a non-anonymous user signs in.
  * Updates lastSignInAt, increments signInCount, logs a signin event.
  */
@@ -84,27 +92,29 @@ export async function trackSignIn(
 
 /**
  * Call from usePageTracking hook when a screen comes into focus.
+ * Deferred via InteractionManager so the tab-switch animation finishes first.
  */
-export async function trackPageView(uid: string, page: string): Promise<void> {
-  await writeEvent(
-    uid,
-    { type: 'page_view', page },
-    { lastPage: page },
-  );
+export function trackPageView(uid: string, page: string): void {
+  afterInteractions(() => {
+    void writeEvent(uid, { type: 'page_view', page }, { lastPage: page });
+  });
 }
 
 /**
  * Call from any pressable to log a meaningful button tap.
  * Keep buttonName concise: 'place_order', 'open_cart', etc.
+ * Deferred so the press feedback animation is never blocked.
  */
-export async function trackButtonClick(
+export function trackButtonClick(
   uid: string,
   buttonName: string,
   page: string,
-): Promise<void> {
-  await writeEvent(
-    uid,
-    { type: 'button_click', buttonName, page },
-    { lastPage: page },
-  );
+): void {
+  afterInteractions(() => {
+    void writeEvent(
+      uid,
+      { type: 'button_click', buttonName, page },
+      { lastPage: page },
+    );
+  });
 }

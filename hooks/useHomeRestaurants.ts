@@ -8,8 +8,8 @@ import {
 } from '@/services/firestoreQueryDiagnostics';
 import { normalizeRestaurantFirestoreDoc } from '@/lib/location/normalizeRestaurantDoc';
 import { mapFirestoreRestaurant, type HomeRestaurant } from '@/types/homeRestaurant';
-import { collection, onSnapshot, query } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { collection, limit, onSnapshot, query } from 'firebase/firestore';
+import { useEffect, useRef, useState } from 'react';
 
 type State = {
   restaurants: HomeRestaurant[];
@@ -20,6 +20,11 @@ type State = {
 /** Realtime Firestore `restaurants` list for marketplace home (live GPS distances). */
 export function useHomeRestaurants(): State {
   const { userCoords, locationReady } = useHomeMarketplaceLocation();
+  // Keep coords in a ref so the snapshot callback always reads the latest
+  // value without needing to recreate the Firestore listener on every GPS update.
+  const userCoordsRef = useRef(userCoords);
+  useEffect(() => { userCoordsRef.current = userCoords; }, [userCoords]);
+
   const [restaurants, setRestaurants] = useState<HomeRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,20 +37,22 @@ export function useHomeRestaurants(): State {
       file: 'hooks/useHomeRestaurants.ts',
       listener: 'useHomeRestaurants.restaurants',
       collection: 'restaurants',
-      filters: { op: 'onSnapshot', query: 'collection(restaurants)' },
+      filters: { op: 'onSnapshot', query: 'collection(restaurants).limit(50)' },
     });
 
     setLoading(true);
-    const q = query(collection(db, 'restaurants'));
+    // Cap at 50 restaurants — prevents unbounded reads as the catalogue grows.
+    const q = query(collection(db, 'restaurants'), limit(50));
     unsub = onSnapshot(
       q,
       (snap) => {
+        const coords = userCoordsRef.current;
         const rows = snap.docs
           .map((d) => {
             const raw = d.data() as Record<string, unknown>;
             if (raw.adminEnabled === false) return null;
             const normalized = normalizeRestaurantFirestoreDoc(d.id, raw);
-            const mapped = mapFirestoreRestaurant(d.id, normalized, userCoords);
+            const mapped = mapFirestoreRestaurant(d.id, normalized, coords);
             // Hide restaurants without valid coordinates (no broken placeholder cards).
             if (!mapped.normalizedCoords) return null;
             return mapped;
@@ -70,7 +77,8 @@ export function useHomeRestaurants(): State {
     );
 
     return () => unsub?.();
-  }, [userCoords, locationReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationReady]); // ← intentionally omit userCoords: coords go through the ref
 
   return { restaurants, loading, error };
 }

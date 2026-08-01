@@ -19,7 +19,7 @@ export function usePageTracking(pageName: string): void {
       const user = auth.currentUser;
       // Only track real (non-anonymous) users
       if (!user || user.isAnonymous) return;
-      void trackPageView(user.uid, pageName);
+      trackPageView(user.uid, pageName);
     }, [pageName]),
   );
 }

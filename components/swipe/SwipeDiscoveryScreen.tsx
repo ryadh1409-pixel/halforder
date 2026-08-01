@@ -35,6 +35,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import {
   Dimensions,
   Pressable,
@@ -84,14 +85,20 @@ export function SwipeDiscoveryScreen() {
   const setLastMatch = useSwipeStore((s) => s.setLastMatch);
   const sharesRef = useRef<AdminFoodShareDoc[]>([]);
   const queuesRef = useRef<Record<string, SwipeQueueMarketplaceState>>({});
+  const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const rebuildDeck = useCallback(() => {
-    const result = adminFoodSharesToSwipeCards(
-      sharesRef.current,
-      queuesRef.current,
-    );
-    setCards(result);
-    setLoadingDeck(false);
+    // Debounce: both subscriptions often fire within milliseconds of each other.
+    // Wait 30 ms so we only rebuild once when both fire together.
+    if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
+    rebuildTimerRef.current = setTimeout(() => {
+      const result = adminFoodSharesToSwipeCards(
+        sharesRef.current,
+        queuesRef.current,
+      );
+      setCards(result);
+      setLoadingDeck(false);
+    }, 30);
   }, [setCards]);
 
   useEffect(() => {
@@ -106,6 +113,7 @@ export function SwipeDiscoveryScreen() {
     return () => {
       unsubShares();
       unsubQueues();
+      if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
     };
   }, [rebuildDeck]);
 
@@ -146,6 +154,13 @@ export function SwipeDiscoveryScreen() {
       ? filteredCards[(currentIndex + 1) % deckLength]
       : undefined;
   const cardMaxH = useMemo(() => Math.min(SCREEN_H * 0.56, 500), []);
+
+  // Prefetch the next card's hero image so it loads instantly after a swipe.
+  useEffect(() => {
+    if (next?.heroImageUri) {
+      void Image.prefetch(next.heroImageUri);
+    }
+  }, [next?.heroImageUri]);
 
   const selectMode = useCallback(
     (mode: FoodShareFulfillmentMode) => {
