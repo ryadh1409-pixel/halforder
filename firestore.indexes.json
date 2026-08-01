@@ -246,7 +246,7 @@
         { "fieldPath": "paymentStatus", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
-    }
+    },
   ],
   "fieldOverrides": []
 }

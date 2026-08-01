@@ -1,16 +1,19 @@
 /**
- * Admin AI Assistant engine — parse → search/insights → reply + navigate.
+ * Admin AI Assistant engine -- parse -> search/insights -> reply + navigate.
  * Only opens existing dashboard destinations.
  */
 import { adminRoutes } from '@/constants/adminRoutes';
 import { parseAdminAiIntent } from '@/services/adminAiAssistant/adminAiIntents';
 import { buildAdminAiInsights } from '@/services/adminAiAssistant/adminAiInsights';
+import { buildAdminLiveContext } from '@/services/adminAiAssistant/adminLiveContext';
 import {
   searchAdminDrivers,
   searchAdminOrders,
   searchAdminRestaurants,
   searchAdminUsers,
 } from '@/services/adminAiAssistant/adminAiSearch';
+import { functions, syncAuthForFirestoreReads } from '@/services/firebase';
+import { httpsCallable } from 'firebase/functions';
 import type {
   AdminAiEntityCard,
   AdminAiMessage,
@@ -41,13 +44,13 @@ function needsMoreInput(kind: string, query: string | null): string | null {
   if (query) return null;
   switch (kind) {
     case 'search_user':
-      return 'Tell me the customer name, email, phone, or user ID and I’ll open their profile.';
+      return "Tell me the customer name, email, phone, or user ID and I'll open their profile.";
     case 'search_driver':
       return 'Which driver? Share a name or driver ID.';
     case 'search_restaurant':
       return 'Which restaurant? Share the restaurant name.';
     case 'search_order':
-      return 'Paste the Order ID (or #ID) and I’ll open it with live status.';
+      return "Paste the Order ID (or #ID) and I'll open it with live status.";
     case 'search_email':
       return 'Paste the email address to search.';
     case 'search_phone':
@@ -62,7 +65,7 @@ const HELP_TEXT = [
   '',
   'Try things like:',
   '• Find user Ahmed',
-  '• Open Orders / Show today’s orders',
+  "• Open Orders / Show today's orders",
   '• Find order #12345',
   '• Where is driver Alex?',
   '• Open Restaurant Pizzaro',
@@ -71,7 +74,7 @@ const HELP_TEXT = [
   '• Send announcement',
   '• How many new users today?',
   '',
-  'I’ll navigate to the right dashboard screen and surface matching records.',
+  "I'll navigate to the right dashboard screen and surface matching records.",
 ].join('\n');
 
 export async function runAdminAiAssistant(
@@ -139,7 +142,7 @@ export async function runAdminAiAssistant(
     ) {
       entities = await searchAdminUsers(intent.query ?? '');
       if (entities.length === 0) {
-        content = `No users matched “${intent.query}”. Try another name, email, phone, or UID.`;
+        content = `No users matched "${intent.query}". Try another name, email, phone, or UID.`;
         navigate = { href: adminRoutes.users, label: 'Browse Users' };
       } else if (entities.length === 1) {
         content = `Found ${entities[0].title}. Opening their profile.`;
@@ -156,7 +159,7 @@ export async function runAdminAiAssistant(
       entities = await searchAdminDrivers(intent.query ?? '');
       if (entities.length === 0) {
         content = intent.query
-          ? `No drivers matched “${intent.query}”.`
+          ? `No drivers matched "${intent.query}".`
           : 'No drivers found.';
         navigate = {
           href: adminRoutes.driverManagement,
@@ -167,7 +170,7 @@ export async function runAdminAiAssistant(
           `Found driver ${entities[0].title}.`,
           entities[0].meta?.join('\n') ?? '',
           '',
-          'Live map coordinates stay on the Drivers screen — opening it now.',
+          'Live map coordinates stay on the Drivers screen -- opening it now.',
         ]
           .filter(Boolean)
           .join('\n');
@@ -188,7 +191,7 @@ export async function runAdminAiAssistant(
       entities = await searchAdminRestaurants(intent.query ?? '');
       if (entities.length === 0) {
         content = intent.query
-          ? `No restaurants matched “${intent.query}”.`
+          ? `No restaurants matched "${intent.query}".`
           : 'Opening restaurant management.';
         navigate = {
           href: adminRoutes.restaurantManagement,
@@ -217,7 +220,7 @@ export async function runAdminAiAssistant(
       entities = orderEntities;
       if (entities.length === 0) {
         content = intent.query
-          ? `I couldn’t find order “${intent.query}”. Double-check the ID.`
+          ? `I couldn't find order "${intent.query}". Double-check the ID.`
           : 'Share an Order ID to look it up.';
         navigate = { href: adminRoutes.orders(), label: 'Open Orders' };
       } else if (entities.length === 1) {
@@ -232,9 +235,26 @@ export async function runAdminAiAssistant(
         navigate = { href: adminRoutes.orders(), label: 'Open Orders' };
       }
     } else {
-      content =
-        "I didn’t catch that. Try “Find user …”, “Open Orders”, “Payment summary”, or ask for help.";
-      suggestions = ['Find a user', 'Open Orders', 'Payment summary', 'Support inbox'];
+      // Free-form question -> call OpenAI with live Firestore data as context
+      try {
+        const platformContext = await buildAdminLiveContext();
+        await syncAuthForFirestoreReads();
+        const fn = httpsCallable(functions, 'emoAiChat');
+        const result = await fn({
+          messages: [{ role: 'user', content: userText }],
+          userDisplayName: 'Admin',
+          platformContext,
+        });
+        const data = result.data as { reply?: unknown };
+        content = typeof data?.reply === 'string' ? data.reply.trim() : '';
+        if (!content) {
+          content = "I didn't catch that. Try: Find user, Open Orders, Payment summary, or ask for help.";
+          suggestions = ['Find a user', 'Open Orders', 'Payment summary', 'Support inbox'];
+        }
+      } catch {
+        content = "I didn't catch that. Try: Find user, Open Orders, Payment summary, or ask for help.";
+        suggestions = ['Find a user', 'Open Orders', 'Payment summary', 'Support inbox'];
+      }
     }
 
     await animateReply(content, handlers.onToken);

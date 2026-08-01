@@ -66,4 +66,8 @@ export const adminRoutes = {
   driverReferralCampaign: '/(tabs)/admin/driver-referral-campaign',
   /** HalfOrder Cash cashback rewards campaign. */
   cashbackRewards: '/(tabs)/admin/cashback-rewards',
+  /** Full referral dashboard — customer & driver referrals. */
+  referralDashboard: '/(tabs)/admin/referral-dashboard',
+  /** Live user activity — sign-ins, page views, button clicks. */
+  userActivity: '/(tabs)/admin/user-activity',
 } as const;

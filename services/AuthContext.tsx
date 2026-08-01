@@ -649,6 +649,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('[auth] user signed in', firebaseUser.uid);
       }
 
+      // Track sign-in (fire-and-forget, never throws)
+      void import('@/services/userActivityTracker').then((m) =>
+        m.trackSignIn(
+          firebaseUser.uid,
+          firebaseUser.displayName,
+          firebaseUser.email,
+        ),
+      );
+
       try {
         try {
           await reload(firebaseUser);

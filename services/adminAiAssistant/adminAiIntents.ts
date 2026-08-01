@@ -86,6 +86,10 @@ const NAV_RULES: NavRule[] = [
   { test: /\bbalances?\b/, href: adminRoutes.balances, label: 'Balances' },
   { test: /\bvouchers?\b/, href: adminRoutes.vouchers, label: 'Vouchers' },
   { test: /\bhome\s+banners?\b/, href: adminRoutes.homeBanners, label: 'Home banners' },
+  { test: /\breferral\s+dashboard\b|\bshow\s+referrals?\b|\breferral\s+report\b/, href: adminRoutes.referralDashboard, label: 'Referral Dashboard' },
+  { test: /\bdriver\s+referrals?\b/, href: adminRoutes.referralDashboard, label: 'Driver Referrals' },
+  { test: /\bcustomer\s+referrals?\b/, href: adminRoutes.referralDashboard, label: 'Customer Referrals' },
+  { test: /\buser\s+activity\b|\btrack\s+users?\b|\bwho\s+(is\s+)?online\b|\bactive\s+users?\b|\buser\s+tracking\b/, href: adminRoutes.userActivity, label: 'User Activity' },
 ];
 
 export function parseAdminAiIntent(rawInput: string): AdminAiParsedIntent {
