@@ -266,7 +266,11 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
 
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
+    case 'apple/canceled':
       return 'Sign-in was canceled.';
+
+    case 'apple/request-failed':
+      return 'Apple Sign-In failed. Please try again or use a different sign-in method.';
 
     case 'auth/account-exists-with-different-credential':
       return 'An account already exists with a different sign-in method.';

@@ -115,6 +115,11 @@ export default function LoginScreen() {
       await signInWithApple();
       await finishSignedIn();
     } catch (err: unknown) {
+      const code = err != null && typeof err === 'object'
+        ? (err as Record<string, unknown>).code
+        : undefined;
+      // User explicitly tapped Cancel — discard silently, no toast.
+      if (code === 'apple/canceled') return;
       console.error('[Login] Apple Sign-In ORIGINAL ERROR', err);
       errorHaptic();
       showFriendlyError(err);

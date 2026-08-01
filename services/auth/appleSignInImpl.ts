@@ -161,7 +161,32 @@ export async function signInWithApple(): Promise<void> {
     } catch (nativeError) {
       logAppleAuthError('signInAsync', nativeError);
       console.error('[Apple Sign-In] stopped_at', { executionStage });
-      // Re-throw the ORIGINAL native error — do not replace it.
+
+      // Map known Apple native error codes to user-friendly errors.
+      const nativeCode =
+        nativeError != null && typeof nativeError === 'object'
+          ? (nativeError as Record<string, unknown>).code
+          : undefined;
+
+      if (nativeCode === 'ERR_REQUEST_CANCELED') {
+        // User tapped Cancel — not a real error, propagate with a known code
+        // so callers can silently discard it without showing a toast.
+        const cancelErr = new Error('Sign-in was canceled.');
+        (cancelErr as unknown as Record<string, unknown>).code = 'apple/canceled';
+        throw cancelErr;
+      }
+
+      if (nativeCode === 'ERR_APPLE_AUTHENTICATION_REQUEST_FAILED') {
+        // Native ASAuthorizationError code 1000 — happens on iOS Simulator when
+        // no Apple ID is signed in, or on devices with misconfigured entitlements.
+        const friendlyErr = new Error(
+          "Apple Sign-In failed. On a simulator, go to Settings → Apple ID to sign in first. On a real device, please try again.",
+        );
+        (friendlyErr as unknown as Record<string, unknown>).code = 'apple/request-failed';
+        throw friendlyErr;
+      }
+
+      // Unknown native error — re-throw as-is so the logger captures it.
       throw nativeError;
     }
 
