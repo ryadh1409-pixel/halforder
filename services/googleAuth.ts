@@ -230,11 +230,15 @@ export function useGoogleAuth() {
             ? result.error ?? result
             : result;
         logGoogleAuthError('promptAsync', googleError);
-        throw new Error(
-          result.type === 'dismiss' || result.type === 'cancel'
-            ? 'Google sign-in was cancelled.'
-            : 'Unable to sign in with Google. Please try again.',
-        );
+
+        if (result.type === 'dismiss' || result.type === 'cancel') {
+          // User closed/swiped the OAuth browser — not a real error.
+          const cancelErr = new Error('Sign-in was canceled.');
+          (cancelErr as unknown as Record<string, unknown>).code = 'google/canceled';
+          throw cancelErr;
+        }
+
+        throw new Error('Unable to sign in with Google. Please try again.');
       }
 
       const idToken = await resolveGoogleIdToken({

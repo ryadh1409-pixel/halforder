@@ -101,6 +101,11 @@ export default function LoginScreen() {
       await signInWithGoogle();
       await finishSignedIn();
     } catch (err: unknown) {
+      const code = err != null && typeof err === 'object'
+        ? (err as Record<string, unknown>).code
+        : undefined;
+      // User dismissed the OAuth browser — discard silently, no toast.
+      if (code === 'google/canceled') return;
       console.error('[Login] Google Sign-In ORIGINAL ERROR', err);
       errorHaptic();
       showFriendlyError(err);

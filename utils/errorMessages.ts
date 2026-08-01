@@ -267,6 +267,7 @@ function messageForCode(code: string, context: ReadableErrorContext): string {
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
     case 'apple/canceled':
+    case 'google/canceled':
       return 'Sign-in was canceled.';
 
     case 'apple/request-failed':
