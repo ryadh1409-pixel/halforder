@@ -48,6 +48,7 @@ import {
 } from '@/services/errors';
 import { showError, showNotice } from '@/utils/toast';
 import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
+import { openDeliveryTrackingInGoogleMaps } from '@/lib/maps/openDeliveryTrackingMaps';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
@@ -748,45 +749,56 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             style={styles.mapOpenBtn}
             onPress={() => {
               void (async () => {
-                // Show delivery address as a pinned location — NOT turn-by-turn navigation.
-                // Customers are at home waiting; they don't drive to the restaurant.
-                const delivLoc = order.deliveryLocation;
-                const restLoc = order.restaurantLocation;
+                const restaurant = order.restaurantLocation
+                  ? {
+                      latitude: order.restaurantLocation.lat,
+                      longitude: order.restaurantLocation.lng,
+                      label: order.restaurant?.name ?? 'Restaurant',
+                    }
+                  : null;
+                const customerLoc =
+                  order.deliveryLocation ??
+                  order.customerLocation ??
+                  order.userLocation;
+                const customer =
+                  customerLoc &&
+                  Number.isFinite(customerLoc.lat) &&
+                  Number.isFinite(customerLoc.lng)
+                    ? {
+                        latitude: customerLoc.lat,
+                        longitude: customerLoc.lng,
+                        label:
+                          ('address' in customerLoc &&
+                          typeof customerLoc.address === 'string' &&
+                          customerLoc.address.trim()
+                            ? customerLoc.address
+                            : null) ||
+                          order.deliveryLocation?.address ||
+                          'Delivery address',
+                      }
+                    : null;
+                const driver =
+                  order.driverLocation &&
+                  Number.isFinite(order.driverLocation.lat) &&
+                  Number.isFinite(order.driverLocation.lng)
+                    ? {
+                        latitude: order.driverLocation.lat,
+                        longitude: order.driverLocation.lng,
+                        label: 'Driver',
+                      }
+                    : null;
 
-                // Prefer delivery address (customer's home), fall back to restaurant.
-                const loc = delivLoc ?? restLoc;
-                if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) {
+                if (!restaurant && !customer) {
                   showError('Location unavailable');
                   return;
                 }
 
-                const lat = loc.lat;
-                const lng = loc.lng;
-                const label = delivLoc
-                  ? encodeURIComponent(delivLoc.address ?? 'Delivery address')
-                  : encodeURIComponent('Restaurant');
-
-                // Web: search pin (no navigation)
-                const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-
-                // iOS app: show pin without starting navigation
-                const iosAppUrl = `comgooglemaps://?q=${lat},${lng}&zoom=15`;
-                // Android app: show location without navigation
-                const androidAppUrl = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
-
-                const appUrl = Platform.OS === 'ios' ? iosAppUrl : androidAppUrl;
-                try {
-                  const canOpenApp = await Linking.canOpenURL(appUrl).catch(() => false);
-                  if (canOpenApp) {
-                    await Linking.openURL(appUrl);
-                    return;
-                  }
-                } catch {
-                  /* fall through to web */
-                }
-                try {
-                  await Linking.openURL(webUrl);
-                } catch {
+                const opened = await openDeliveryTrackingInGoogleMaps({
+                  restaurant,
+                  driver,
+                  customer,
+                });
+                if (!opened) {
                   showError('Could not open Google Maps');
                 }
               })();

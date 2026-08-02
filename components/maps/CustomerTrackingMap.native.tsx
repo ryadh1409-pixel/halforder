@@ -2,17 +2,25 @@
  * Customer live tracking map — native only (`react-native-maps` never imported on web).
  */
 import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
+import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import {
   collectMapCoordinates,
   regionFromCoordinates,
   toMapCoordinate,
 } from '@/lib/location/coordinates';
-import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
 import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
+import { haversineDistanceKm } from '@/lib/haversine';
 import type { RestaurantOrder } from '@/services/orderService';
-import React, { Component, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import React, { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import MapView, {
   AnimatedRegion,
   Marker,
@@ -38,28 +46,46 @@ class MapErrorBoundary extends Component<
   }
 }
 
+function MarkerPin({ emoji, accent }: { emoji: string; accent: string }) {
+  return (
+    <View style={[styles.markerBubble, { borderColor: accent }]}>
+      <Text style={styles.markerEmoji}>{emoji}</Text>
+    </View>
+  );
+}
+
 function TrackingMapInner({
   restaurant,
   dropoff,
   driver,
-  routeLeg,
+  driverHeading,
+  routeCoordinates,
 }: {
   restaurant: LatLng | null;
   dropoff: LatLng | null;
   driver: LatLng | null;
-  routeLeg: 'to_restaurant' | 'to_customer';
+  driverHeading: number | null;
+  routeCoordinates: LatLng[];
 }) {
   const mapRef = useRef<MapView | null>(null);
   const driverAnimRef = useRef<AnimatedRegion | null>(null);
+  const lastDriverRef = useRef<LatLng | null>(null);
   const seededRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
+  const [followDriver, setFollowDriver] = useState(true);
 
   const markerPoints = useMemo(
     () => collectMapCoordinates(restaurant, dropoff, driver),
     [restaurant, dropoff, driver],
   );
+  const fitPoints = useMemo(() => {
+    if (routeCoordinates.length >= 2) {
+      return collectMapCoordinates(...routeCoordinates, ...markerPoints);
+    }
+    return markerPoints;
+  }, [routeCoordinates, markerPoints]);
   const initialRegion = useMemo(() => regionFromCoordinates(markerPoints), [markerPoints]);
-  const seedPoint = markerPoints[0] ?? null;
+  const seedPoint = driver ?? markerPoints[0] ?? null;
 
   useEffect(() => {
     if (!seedPoint) return;
@@ -79,52 +105,62 @@ function TrackingMapInner({
     const anim = driverAnimRef.current;
     if (!seededRef.current) {
       anim.setValue({ ...driver, latitudeDelta: 0, longitudeDelta: 0 });
+      lastDriverRef.current = driver;
       seededRef.current = true;
       return;
     }
+
+    const prev = lastDriverRef.current;
+    const movedKm = prev
+      ? haversineDistanceKm(
+          prev.latitude,
+          prev.longitude,
+          driver.latitude,
+          driver.longitude,
+        )
+      : 0;
+    // Scale duration with distance so GPS updates never "jump".
+    const duration = Math.min(2200, Math.max(700, Math.round(movedKm * 12000)));
+    lastDriverRef.current = driver;
     anim
       .timing({
         latitude: driver.latitude,
         longitude: driver.longitude,
         latitudeDelta: 0,
         longitudeDelta: 0,
-        duration: 850,
+        duration,
         useNativeDriver: false,
       } as never)
       .start();
   }, [driver?.latitude, driver?.longitude]);
 
-  // Uber Eats–style: draw the active leg only (pickup vs delivery).
-  const polyline = useMemo(() => {
-    const pts: LatLng[] = [];
-    if (routeLeg === 'to_customer') {
-      if (driver) pts.push(driver);
-      if (dropoff) pts.push(dropoff);
-    } else if (driver && restaurant) {
-      pts.push(driver, restaurant);
-    } else if (restaurant && dropoff) {
-      pts.push(restaurant, dropoff);
-    }
-    return pts;
-  }, [restaurant, driver, dropoff, routeLeg]);
+  const recenter = useCallback(() => {
+    setFollowDriver(true);
+    fitMapToCoordinates(mapRef.current, fitPoints.length ? fitPoints : markerPoints, {
+      top: 100,
+      right: 36,
+      bottom: 56,
+      left: 36,
+    });
+  }, [fitPoints, markerPoints]);
 
   useEffect(() => {
-    if (!mapReady || markerPoints.length < 1) return;
+    if (!mapReady || !followDriver || fitPoints.length < 1) return;
     const t = setTimeout(() => {
-      fitMapToCoordinates(mapRef.current, markerPoints, {
+      fitMapToCoordinates(mapRef.current, fitPoints, {
         top: 100,
         right: 36,
-        bottom: 40,
+        bottom: 56,
         left: 36,
       });
-    }, 450);
+    }, 420);
     return () => clearTimeout(t);
-  }, [mapReady, markerPoints]);
+  }, [mapReady, followDriver, fitPoints]);
 
   if (!initialRegion) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator color="#FF3008" />
+        <ActivityIndicator color="#A855F7" />
         <Text style={styles.loadingText}>Waiting for location data…</Text>
       </View>
     );
@@ -134,58 +170,127 @@ function TrackingMapInner({
   const mapProvider = getNativeMapProvider();
 
   return (
-    <MapView
-      ref={mapRef}
-      style={styles.mapView}
-      provider={mapProvider}
-      initialRegion={initialRegion}
-      userInterfaceStyle="light"
-      showsCompass={false}
-      toolbarEnabled={false}
-      onMapReady={() => setMapReady(true)}
-    >
-      {restaurant ? (
-        <Marker coordinate={restaurant} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
-          <View style={styles.markerBubble}>
-            <Text style={styles.markerEmoji}>📍</Text>
-          </View>
-        </Marker>
-      ) : null}
-      {dropoff ? (
-        <Marker coordinate={dropoff} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
-          <View style={styles.markerBubble}>
-            <Text style={styles.markerEmoji}>🏠</Text>
-          </View>
-        </Marker>
-      ) : null}
-      {driver && anim && MarkerAnimated ? (
-        <MarkerAnimated coordinate={anim as never} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.driverMarker}>
-            <Text style={styles.driverEmoji}>🚗</Text>
-          </View>
-        </MarkerAnimated>
-      ) : driver ? (
-        <Marker coordinate={driver} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.driverMarker}>
-            <Text style={styles.driverEmoji}>🚗</Text>
-          </View>
-        </Marker>
-      ) : null}
-      {polyline.length >= 2 ? (
-        <Polyline coordinates={polyline} strokeColor="#FF3008" strokeWidth={4} />
-      ) : null}
-    </MapView>
+    <View style={styles.mapWrap}>
+      <MapView
+        ref={mapRef}
+        style={styles.mapView}
+        provider={mapProvider}
+        initialRegion={initialRegion}
+        userInterfaceStyle="light"
+        showsCompass
+        showsScale={false}
+        rotateEnabled
+        pitchEnabled
+        zoomEnabled
+        zoomTapEnabled
+        scrollEnabled
+        toolbarEnabled={false}
+        onMapReady={() => setMapReady(true)}
+        onPanDrag={() => setFollowDriver(false)}
+      >
+        {restaurant ? (
+          <Marker
+            coordinate={restaurant}
+            title="Restaurant"
+            tracksViewChanges={false}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <MarkerPin emoji="🍔" accent="#F59E0B" />
+          </Marker>
+        ) : null}
+        {dropoff ? (
+          <Marker
+            coordinate={dropoff}
+            title="Customer"
+            tracksViewChanges={false}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <MarkerPin emoji="🏠" accent="#22C55E" />
+          </Marker>
+        ) : null}
+        {driver && anim && MarkerAnimated ? (
+          <MarkerAnimated
+            coordinate={anim as never}
+            title="Driver"
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat
+            rotation={typeof driverHeading === 'number' ? driverHeading : 0}
+          >
+            <View style={styles.driverMarker}>
+              <Text style={styles.driverEmoji}>🚗</Text>
+            </View>
+          </MarkerAnimated>
+        ) : driver ? (
+          <Marker
+            coordinate={driver}
+            title="Driver"
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat
+            rotation={typeof driverHeading === 'number' ? driverHeading : 0}
+          >
+            <View style={styles.driverMarker}>
+              <Text style={styles.driverEmoji}>🚗</Text>
+            </View>
+          </Marker>
+        ) : null}
+        {routeCoordinates.length >= 2 ? (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeColor="#A855F7"
+            strokeWidth={4}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
+      </MapView>
+
+      <Pressable
+        style={styles.recenterBtn}
+        onPress={recenter}
+        accessibilityLabel="Recenter map"
+      >
+        <Ionicons
+          name={followDriver ? 'navigate' : 'navigate-outline'}
+          size={20}
+          color="#FFFFFF"
+        />
+      </Pressable>
+    </View>
   );
 }
 
-export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
+export type CustomerTrackingMapProps = {
+  order: RestaurantOrder;
+  /** Optional externally computed route (preferred when parent owns ETA). */
+  routeCoordinates?: LatLng[];
+};
+
+export function CustomerTrackingMap({
+  order,
+  routeCoordinates: routeCoordinatesProp,
+}: CustomerTrackingMapProps) {
   const restaurant = toMapCoordinate(order.restaurantLocation);
   const dropoff =
     toMapCoordinate(order.customerLocation) ??
     toMapCoordinate(order.deliveryLocation) ??
     toMapCoordinate(order.userLocation);
   const driver = order.driverLocation ? toMapCoordinate(order.driverLocation) : null;
-  const routeLeg = deliveryMapLegFromStatuses(order.deliveryStatus, order.status);
+  const driverHeading =
+    typeof order.driverLocation?.heading === 'number' &&
+    Number.isFinite(order.driverLocation.heading)
+      ? order.driverLocation.heading
+      : null;
+
+  const internalRoute = useLiveDeliveryRoute({
+    restaurant,
+    driver,
+    customer: dropoff,
+    enabled: routeCoordinatesProp == null,
+  });
+
+  const routeCoordinates =
+    routeCoordinatesProp != null ? routeCoordinatesProp : internalRoute.coordinates;
+
   const pickupLabel =
     order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';
   const dropoffLabel =
@@ -200,13 +305,15 @@ export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
         restaurant={restaurant}
         dropoff={dropoff}
         driver={driver}
-        routeLeg={routeLeg}
+        driverHeading={driverHeading}
+        routeCoordinates={routeCoordinates}
       />
     </MapErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
+  mapWrap: { flex: 1, width: '100%', minHeight: 200 },
   mapView: { flex: 1, width: '100%', minHeight: 200 },
   loadingWrap: {
     flex: 1,
@@ -221,8 +328,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(15,23,42,0.12)',
+    borderWidth: 2,
   },
   markerEmoji: { fontSize: 18 },
   driverMarker: {
@@ -236,4 +342,22 @@ const styles = StyleSheet.create({
     borderColor: '#A855F7',
   },
   driverEmoji: { fontSize: 22 },
+  recenterBtn: {
+    position: 'absolute',
+    right: 12,
+    bottom: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#0B0816',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
 });

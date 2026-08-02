@@ -2,7 +2,12 @@ import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
 import type { RestaurantOrder } from '@/services/orderService';
 import React from 'react';
 
-export function CustomerTrackingMap({ order }: { order: RestaurantOrder }) {
+export function CustomerTrackingMap({
+  order,
+}: {
+  order: RestaurantOrder;
+  routeCoordinates?: { latitude: number; longitude: number }[];
+}) {
   const pickupLabel =
     order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';
   const dropoffLabel =

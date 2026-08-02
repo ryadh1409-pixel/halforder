@@ -107,7 +107,36 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('driver_at_restaurant');
-    expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe('Driver at restaurant');
+    expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe(
+      'Driver arrived at restaurant',
+    );
+    expect(customerTrackStepLabel('driver_at_restaurant')).toBe(
+      'Driver arrived at restaurant',
+    );
+  });
+
+  it('maps on_the_way and near_customer as distinct timeline steps', () => {
+    expect(
+      resolveCustomerTrackStep({
+        paymentStatus: 'paid',
+        status: 'picked_up',
+        deliveryStatus: 'on_the_way',
+        driverId: 'driver-1',
+      }),
+    ).toBe('on_the_way');
+    expect(customerTrackHeaderTitle('on_the_way')).toBe('Driver on the way');
+    expect(customerTrackStepLabel('on_the_way')).toBe('Driver on the way');
+
+    expect(
+      resolveCustomerTrackStep({
+        paymentStatus: 'paid',
+        status: 'picked_up',
+        deliveryStatus: 'near_customer',
+        driverId: 'driver-1',
+      }),
+    ).toBe('driver_nearby');
+    expect(customerTrackHeaderTitle('driver_nearby')).toBe('Driver nearby');
+    expect(customerTrackStepLabel('driver_nearby')).toBe('Driver nearby');
   });
 
   it('maps picked_up and delivered', () => {
@@ -119,7 +148,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('picked_up');
-    expect(customerTrackHeaderTitle('picked_up')).toBe('Driver heading to you');
+    expect(customerTrackHeaderTitle('picked_up')).toBe('Order picked up');
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',

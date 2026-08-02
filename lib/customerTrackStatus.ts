@@ -36,13 +36,12 @@ export const DELIVERY_STAGES = [
       'driver_assigned',
       'driver_on_way',
       'driver_accepted',
-      'arriving_restaurant',
       'heading_to_restaurant',
     ],
   },
   {
     key: 'driver_at_restaurant',
-    label: 'Driver at restaurant',
+    label: 'Driver arrived at restaurant',
     statuses: [
       'driver_at_restaurant',
       'arrived_restaurant',
@@ -52,13 +51,17 @@ export const DELIVERY_STAGES = [
   {
     key: 'picked_up',
     label: 'Picked up',
-    statuses: [
-      'picked_up',
-      'on_the_way',
-      'near_customer',
-      'heading_to_customer',
-      'arrived_customer',
-    ],
+    statuses: ['picked_up'],
+  },
+  {
+    key: 'on_the_way',
+    label: 'Driver on the way',
+    statuses: ['on_the_way', 'heading_to_customer', 'en_route_to_customer'],
+  },
+  {
+    key: 'driver_nearby',
+    label: 'Driver nearby',
+    statuses: ['near_customer', 'arrived_customer', 'arrived_nearby'],
   },
   { key: 'delivered', label: 'Delivered', statuses: ['delivered', 'completed'] },
 ] as const;
@@ -120,7 +123,31 @@ function stageIndexFromField(value: unknown): number {
   return STATUS_TO_STAGE_INDEX.get(normalized) ?? -1;
 }
 
+/**
+ * Post-pickup courier finesse — reads raw Firestore values before marketplace
+ * normalize collapses `on_the_way` / `near_customer` into `picked_up`.
+ */
+function postPickupTrackStep(order: OrderStageInput): CustomerTrackStep | null {
+  const rawCourier = norm(order.deliveryStatus);
+  const rawStatus = norm(order.status);
+  const nearby = new Set([
+    'near_customer',
+    'arrived_customer',
+    'arrived_nearby',
+  ]);
+  const onWay = new Set([
+    'on_the_way',
+    'heading_to_customer',
+    'en_route_to_customer',
+  ]);
+  if (nearby.has(rawCourier) || nearby.has(rawStatus)) return 'driver_nearby';
+  if (onWay.has(rawCourier) || onWay.has(rawStatus)) return 'on_the_way';
+  return null;
+}
+
 function courierStageFromOrder(order: OrderStageInput): CustomerTrackStep | null {
+  const fine = postPickupTrackStep(order);
+  if (fine) return fine;
   const deliveryStage = resolveCustomerDeliveryStage(order);
   if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DELIVERED) return 'delivered';
   if (deliveryStage === CUSTOMER_DELIVERY_STAGE.PICKED_UP) return 'picked_up';
@@ -175,9 +202,15 @@ export function resolveCustomerTrackStep(
   }
 
   const courierStep = courierStageFromOrder(order);
+  if (courierStep === 'driver_nearby' || courierStep === 'on_the_way') {
+    logResolvedCustomerTrackStep(order, courierStep);
+    return courierStep;
+  }
   if (courierStep === 'picked_up' || isPickedUp(order)) {
-    logResolvedCustomerTrackStep(order, 'picked_up');
-    return 'picked_up';
+    const fine = postPickupTrackStep(order);
+    const step = fine ?? 'picked_up';
+    logResolvedCustomerTrackStep(order, step);
+    return step;
   }
   if (courierStep === 'driver_at_restaurant') {
     logResolvedCustomerTrackStep(order, 'driver_at_restaurant');
@@ -238,9 +271,13 @@ export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
     case 'driver_assigned':
       return 'Driver heading to restaurant';
     case 'driver_at_restaurant':
-      return 'Driver at restaurant';
+      return 'Driver arrived at restaurant';
     case 'picked_up':
-      return 'Driver heading to you';
+      return 'Order picked up';
+    case 'on_the_way':
+      return 'Driver on the way';
+    case 'driver_nearby':
+      return 'Driver nearby';
     case 'delivered':
       return 'Your order has been delivered! 🎉';
     case 'cancelled':
@@ -270,7 +307,11 @@ export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
     case 'driver_at_restaurant':
       return 'Your courier has arrived at the restaurant.';
     case 'picked_up':
+      return 'Your courier has your order.';
+    case 'on_the_way':
       return 'Your order is on the way to you.';
+    case 'driver_nearby':
+      return 'Your courier is almost there.';
     case 'delivered':
       return 'Enjoy your meal.';
     case 'cancelled':

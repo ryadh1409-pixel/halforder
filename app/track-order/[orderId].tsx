@@ -12,7 +12,6 @@ import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketplaceTimeline';
 import { IWantTimeline } from '@/components/iWant/IWantTimeline';
 import { isIWantOrder } from '@/lib/iWantTimeline';
-import { OrderRatingPrompt } from '@/components/order-rating-prompt';
 import { logCustomerRawDoc } from '@/lib/customerOrderSnapshotLog';
 import {
   logCustomerTrackingUi,
@@ -26,6 +25,8 @@ import {
   type RestaurantOrder,
 } from '@/services/orderService';
 import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
+import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
+import { toMapCoordinate } from '@/lib/location/coordinates';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -61,8 +62,49 @@ function vehicleFromOrder(order: RestaurantOrder): DriverVehicleInfo {
   return info;
 }
 
-function TrackingMap({ order }: { order: RestaurantOrder }) {
-  return <CustomerTrackingMap order={order} />;
+function driverFirstName(order: RestaurantOrder): string {
+  const full = order.driver?.name?.trim() || order.driverName?.trim() || '';
+  if (!full) return 'Matching a driver…';
+  return full.split(/\s+/)[0] || full;
+}
+
+function formatLiveEtaDistance(
+  distanceKm: number | null,
+  etaMinutes: number | null,
+  fallbackEta: number | null,
+): { primary: string; secondary: string } {
+  const km =
+    distanceKm != null && Number.isFinite(distanceKm)
+      ? distanceKm < 0.1
+        ? '< 0.1 km'
+        : `${distanceKm.toFixed(1)} km`
+      : null;
+  const mins =
+    etaMinutes != null && Number.isFinite(etaMinutes) && etaMinutes > 0
+      ? Math.round(etaMinutes)
+      : fallbackEta != null && fallbackEta > 0 && fallbackEta < 180
+        ? Math.round(fallbackEta)
+        : null;
+  if (km && mins != null) {
+    return { primary: `${km}`, secondary: `${mins} min` };
+  }
+  if (mins != null) {
+    return { primary: `${mins} min`, secondary: 'Updating distance…' };
+  }
+  if (km) {
+    return { primary: km, secondary: 'Updating ETA…' };
+  }
+  return { primary: 'Updating estimate…', secondary: '' };
+}
+
+function TrackingMap({
+  order,
+  routeCoordinates,
+}: {
+  order: RestaurantOrder;
+  routeCoordinates: { latitude: number; longitude: number }[];
+}) {
+  return <CustomerTrackingMap order={order} routeCoordinates={routeCoordinates} />;
 }
 
 function TrackOrderScreen() {
@@ -75,7 +117,6 @@ function TrackOrderScreen() {
 
   const [order, setOrder] = useState<RestaurantOrder | null | undefined>(undefined);
   const [listenError, setListenError] = useState(false);
-  const [ratePromptVisible, setRatePromptVisible] = useState(false);
 
   useEffect(() => {
     logPaymentNavigation('track_order_mount', { orderId });
@@ -113,6 +154,9 @@ function TrackOrderScreen() {
           status: mapped.status,
           deliveryStatus: mapped.deliveryStatus,
           updatedAtMs: mapped.updatedAtMs,
+          driverLat: mapped.driverLocation?.lat ?? null,
+          driverLng: mapped.driverLocation?.lng ?? null,
+          driverHeading: mapped.driverLocation?.heading ?? null,
         });
       },
       {
@@ -166,22 +210,50 @@ function TrackOrderScreen() {
 
   const delivered = trackingUi?.delivered ?? false;
 
-  const etaText = useMemo(() => {
-    if (!order) return '';
+  const restaurantCoord = order ? toMapCoordinate(order.restaurantLocation) : null;
+  const customerCoord = order
+    ? toMapCoordinate(order.customerLocation) ??
+      toMapCoordinate(order.deliveryLocation) ??
+      toMapCoordinate(order.userLocation)
+    : null;
+  const driverCoord =
+    order?.driverLocation != null ? toMapCoordinate(order.driverLocation) : null;
+
+  const liveRoute = useLiveDeliveryRoute({
+    restaurant: restaurantCoord,
+    driver: driverCoord,
+    customer: customerCoord,
+    enabled: !!order && !delivered,
+  });
+
+  const etaDisplay = useMemo(() => {
+    if (!order) return { primary: '', secondary: '' };
     if (
       delivered ||
       order.status === 'delivered' ||
       order.status === 'completed' ||
       order.deliveryStatus === 'delivered'
     ) {
-      return 'Delivered!';
+      return { primary: 'Delivered!', secondary: '' };
     }
-    const eta = order.estimatedDeliveryTime;
-    if (typeof eta === 'number' && eta > 0 && eta < 180) {
-      return `Arriving in about ${eta} min`;
-    }
-    return 'Updating estimate…';
-  }, [order?.status, order?.deliveryStatus, order?.estimatedDeliveryTime, delivered]);
+    const fallback =
+      typeof order.estimatedDeliveryTime === 'number'
+        ? order.estimatedDeliveryTime
+        : null;
+    return formatLiveEtaDistance(
+      liveRoute.distanceKm,
+      liveRoute.etaMinutes,
+      fallback,
+    );
+  }, [
+    order,
+    delivered,
+    liveRoute.distanceKm,
+    liveRoute.etaMinutes,
+    order?.estimatedDeliveryTime,
+    order?.status,
+    order?.deliveryStatus,
+  ]);
 
   const driverChatEnabled =
     !!order &&
@@ -252,7 +324,7 @@ function TrackOrderScreen() {
     <View style={styles.screenRoot}>
       {!delivered ? (
         <View style={[styles.mapSection, { height: MAP_HEIGHT }]}>
-          <TrackingMap order={order} />
+          <TrackingMap order={order} routeCoordinates={liveRoute.coordinates} />
 
           <SafeAreaView edges={['top']} style={styles.mapOverlay}>
             <View style={styles.mapTopRow}>
@@ -326,19 +398,21 @@ function TrackOrderScreen() {
           {!delivered ? (
             <View style={styles.etaCard}>
               <Text style={styles.etaLabel}>Estimated arrival</Text>
-              <Text style={styles.etaValue}>{etaText}</Text>
+              <View style={styles.etaRow}>
+                <Text style={styles.etaValue}>{etaDisplay.primary}</Text>
+                {etaDisplay.secondary ? (
+                  <Text style={styles.etaSecondary}>{etaDisplay.secondary}</Text>
+                ) : null}
+              </View>
             </View>
           ) : null}
 
           {!delivered ? (
             <>
               <DriverVehicleInfoCard
-                driverName={
-                  order.driver?.name?.trim() ||
-                  order.driverName ||
-                  'Matching a driver…'
-                }
+                driverName={driverFirstName(order)}
                 driverPhotoURL={order.driver?.avatar}
+                rating={order.driver?.rating ?? null}
                 vehicle={
                   order.driverId || order.assignedDriverId
                     ? vehicleFromOrder(order)
@@ -363,7 +437,7 @@ function TrackOrderScreen() {
                       )
                     }
                   >
-                    <Text style={styles.outlineBtnText}>Chat</Text>
+                    <Text style={styles.outlineBtnText}>Message Driver</Text>
                   </Pressable>
                   {order.driverPhone || order.driver?.phone ? (
                     <Pressable
@@ -374,11 +448,11 @@ function TrackOrderScreen() {
                         )
                       }
                     >
-                      <Text style={styles.outlineBtnText}>Call</Text>
+                      <Text style={styles.outlineBtnText}>Call Driver</Text>
                     </Pressable>
                   ) : (
                     <View style={[styles.outlineBtn, styles.outlineBtnDisabled]}>
-                      <Text style={styles.outlineBtnMuted}>Call</Text>
+                      <Text style={styles.outlineBtnMuted}>Call Driver</Text>
                     </View>
                   )}
                 </View>
@@ -536,7 +610,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   etaLabel: { fontSize: 12, fontWeight: '800', color: '#7D8493', textTransform: 'uppercase' },
-  etaValue: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', marginTop: 6 },
+  etaRow: { flexDirection: 'row', alignItems: 'baseline', gap: 12, marginTop: 6, flexWrap: 'wrap' },
+  etaValue: { fontSize: 28, fontWeight: '900', color: '#FFFFFF' },
+  etaSecondary: { fontSize: 20, fontWeight: '800', color: '#C4B5FD' },
   card: {
     borderRadius: 16,
     borderWidth: 1,
@@ -572,8 +648,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0816',
   },
   outlineBtnDisabled: { opacity: 0.45 },
-  outlineBtnText: { fontWeight: '900', fontSize: 16, color: '#FFFFFF' },
-  outlineBtnMuted: { fontWeight: '800', fontSize: 16, color: '#7D8493' },
+  outlineBtnText: { fontWeight: '900', fontSize: 14, color: '#FFFFFF' },
+  outlineBtnMuted: { fontWeight: '800', fontSize: 14, color: '#7D8493' },
   pinBanner: {
     borderRadius: 16,
     padding: 16,

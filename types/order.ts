@@ -26,6 +26,8 @@ export type DriverSnapshot = {
   vehicleYear?: string | null;
   vehicleColor?: string | null;
   licensePlate?: string | null;
+  /** Existing driver rating fields when present on the order/driver snapshot. */
+  rating?: number | null;
 };
 
 export type OrderDocument = {

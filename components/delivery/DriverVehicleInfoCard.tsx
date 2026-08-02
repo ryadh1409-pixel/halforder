@@ -12,6 +12,8 @@ type Props = {
   driverName: string;
   driverPhotoURL?: string | null;
   driverPhone?: string | null;
+  /** Optional star rating (e.g. 4.9). */
+  rating?: number | null;
   vehicle: DriverVehicleInfo;
   /** When true, show phone row (admin). */
   showPhone?: boolean;
@@ -26,12 +28,21 @@ export function DriverVehicleInfoCard({
   driverName,
   driverPhotoURL,
   driverPhone,
+  rating,
   vehicle,
   showPhone = false,
   dark = true,
   heading = 'Your courier',
 }: Props) {
   const makeModel = formatVehicleMakeModel(vehicle);
+  const vehicleType =
+    makeModel ||
+    (vehicle.vehicleMake ? vehicle.vehicleMake : null) ||
+    null;
+  const ratingLabel =
+    typeof rating === 'number' && Number.isFinite(rating) && rating > 0
+      ? rating.toFixed(1)
+      : null;
   const colors = dark
     ? {
         card: '#111827',
@@ -73,14 +84,19 @@ export function DriverVehicleInfoCard({
           <Text style={[styles.driverName, { color: colors.title }]} numberOfLines={1}>
             {driverName || 'Driver'}
           </Text>
+          {ratingLabel ? (
+            <Text style={[styles.meta, { color: colors.muted }]} numberOfLines={1}>
+              ★ {ratingLabel}
+            </Text>
+          ) : null}
           {showPhone && driverPhone ? (
             <Text style={[styles.meta, { color: colors.muted }]} numberOfLines={1}>
               {driverPhone}
             </Text>
           ) : null}
-          {makeModel ? (
+          {vehicleType ? (
             <Text style={[styles.meta, { color: colors.muted }]} numberOfLines={1}>
-              {makeModel}
+              {vehicleType}
             </Text>
           ) : hasAnyVehicleInfo(vehicle) ? null : (
             <Text style={[styles.meta, { color: colors.muted }]}>Delivery vehicle</Text>
@@ -102,9 +118,9 @@ export function DriverVehicleInfoCard({
           )}
         </View>
         <View style={styles.vehicleDetails}>
-          {makeModel ? (
+          {vehicleType ? (
             <Text style={[styles.vehicleTitle, { color: colors.title }]} numberOfLines={1}>
-              {makeModel}
+              {vehicleType}
             </Text>
           ) : (
             <Text style={[styles.vehicleTitle, { color: colors.muted }]}>Vehicle</Text>

@@ -628,6 +628,19 @@ function mapDocToRestaurantOrderFromData(
                 : typeof data.licensePlate === 'string'
                   ? data.licensePlate
                   : null,
+            rating: (() => {
+              const candidates = [
+                driverObj && (driverObj as { rating?: unknown }).rating,
+                driverObj && (driverObj as { averageRating?: unknown }).averageRating,
+                driverObj && (driverObj as { ratingAverage?: unknown }).ratingAverage,
+                data.driverRating,
+                data.driverAverageRating,
+              ];
+              for (const c of candidates) {
+                if (typeof c === 'number' && Number.isFinite(c) && c > 0) return c;
+              }
+              return null;
+            })(),
           }
         : null,
     acceptedAtMs: safeToMillis(data.acceptedAt),
