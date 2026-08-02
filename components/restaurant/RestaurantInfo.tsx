@@ -6,6 +6,7 @@ import {
   formatRatingCompact,
   type RatingDisplay,
 } from '@/lib/restaurantStoreMetrics';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
@@ -23,6 +24,35 @@ type Props = {
   promoLabel: string | null;
   promoLabels?: string[];
 };
+
+// ── Stat chip ─────────────────────────────────────────────────────────────────
+function StatChip({
+  icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <View style={styles.stat}>
+      <View style={[styles.statIconWrap, accent && styles.statIconAccent]}>
+        <Ionicons
+          name={icon}
+          size={14}
+          color={accent ? '#22C55E' : RP.textMuted}
+        />
+      </View>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statVal, accent && styles.statValAccent]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 export function RestaurantInfo({
   profile,
@@ -45,10 +75,18 @@ export function RestaurantInfo({
   const adminLabels = labels.filter((l) => isAdminPromotionBadgeLabel(l));
   const legacyLabels = labels.filter((l) => !isAdminPromotionBadgeLabel(l));
 
+  const isFreeDelivery =
+    deliveryFeeLabel.toLowerCase().includes('free') ||
+    deliveryFeeLabel === 'CA$0.00';
+  const isFreeService =
+    serviceFeeLabel === 'FREE' || serviceFeeLabel === 'CA$0.00';
+
   return (
     <View style={styles.card}>
-      <View style={styles.rowTop}>
-        <View style={styles.logoWrap}>
+      {/* ── Header row ────────────────────────────────────────────────── */}
+      <View style={styles.headerRow}>
+        {/* Logo */}
+        <View style={styles.logoShadow}>
           {profile.image ? (
             <Image source={{ uri: profile.image }} style={styles.logo} />
           ) : (
@@ -57,77 +95,94 @@ export function RestaurantInfo({
             </View>
           )}
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{profile.name}</Text>
-          <View style={styles.ratingRow}>
-            {ratingDisplay.kind === 'rated' ? (
-              <Text style={styles.ratingCompact}>
+
+        {/* Name + rating */}
+        <View style={styles.nameBlock}>
+          <Text style={styles.name} numberOfLines={1}>
+            {profile.name}
+          </Text>
+
+          {ratingDisplay.kind === 'rated' ? (
+            <View style={styles.ratingChip}>
+              <Ionicons name="star" size={11} color="#FBBF24" />
+              <Text style={styles.ratingTxt}>
                 {formatRatingCompact(
                   ratingDisplay.rating,
                   ratingDisplay.reviewCount,
                 )}
               </Text>
-            ) : (
-              <Text style={styles.newLabel}>New</Text>
-            )}
-          </View>
-          {adminLabels.length > 0 || legacyLabels.length > 0 ? (
-            <View style={styles.badgeRow}>
-              {adminLabels.length > 0 ? (
-                <PromotionBadgesRow values={adminLabels} />
-              ) : null}
-              {legacyLabels.map((label) => (
-                <View key={label} style={styles.badgePromo}>
-                  <Text style={styles.badgePromoText}>{label}</Text>
-                </View>
-              ))}
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.newChip}>
+              <Text style={styles.newTxt}>✨ New</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      <View style={styles.metrics}>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Delivery</Text>
-          <Text style={styles.metricVal} numberOfLines={2}>
-            {deliveryFeeLabel}
-          </Text>
+      {/* ── Promo badges ──────────────────────────────────────────────── */}
+      {(adminLabels.length > 0 || legacyLabels.length > 0) && (
+        <View style={styles.badgeRow}>
+          {adminLabels.length > 0 && (
+            <PromotionBadgesRow values={adminLabels} />
+          )}
+          {legacyLabels.map((label) => (
+            <View key={label} style={styles.legacyBadge}>
+              <Text style={styles.legacyBadgeTxt}>{label}</Text>
+            </View>
+          ))}
         </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Service</Text>
-          <Text style={styles.metricVal}>{serviceFeeLabel}</Text>
-        </View>
-        {distanceLabel ? (
+      )}
+
+      {/* ── Stats row ─────────────────────────────────────────────────── */}
+      <View style={styles.statsRow}>
+        <StatChip
+          icon="bicycle-outline"
+          label="Delivery"
+          value={deliveryFeeLabel}
+          accent={isFreeDelivery}
+        />
+        <View style={styles.statDivider} />
+        <StatChip
+          icon="receipt-outline"
+          label="Service"
+          value={serviceFeeLabel}
+          accent={isFreeService}
+        />
+        {distanceLabel != null && (
           <>
-            <View style={styles.metricDivider} />
-            <View style={styles.metric}>
-              <Text style={styles.metricLabel}>Distance</Text>
-              <Text style={styles.metricVal}>{distanceLabel}</Text>
-            </View>
+            <View style={styles.statDivider} />
+            <StatChip
+              icon="navigate-outline"
+              label="Distance"
+              value={distanceLabel}
+            />
           </>
-        ) : null}
-        <View style={styles.metricDivider} />
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>ETA</Text>
-          <Text style={styles.metricVal} numberOfLines={2}>
-            {etaLabel}
-          </Text>
-        </View>
+        )}
+        <View style={styles.statDivider} />
+        <StatChip icon="time-outline" label="ETA" value={etaLabel} />
       </View>
 
+      {/* ── Address ───────────────────────────────────────────────────── */}
       {profile.address ? (
-        <Text style={styles.address} numberOfLines={2}>
-          {profile.address}
-        </Text>
+        <View style={styles.addressRow}>
+          <Ionicons name="location-outline" size={13} color={RP.textMuted} />
+          <Text style={styles.addressTxt} numberOfLines={2}>
+            {profile.address}
+          </Text>
+        </View>
       ) : null}
 
+      {/* ── Status card ───────────────────────────────────────────────── */}
       {statusLabel ? (
-        <View style={styles.statusBox}>
-          <Text style={styles.statusStrong}>{statusLabel}</Text>
-          {statusSubtext ? (
-            <Text style={styles.statusSub}>{statusSubtext}</Text>
-          ) : null}
+        <View style={styles.statusCard}>
+          <View style={styles.statusDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statusStrong}>{statusLabel}</Text>
+            {statusSubtext ? (
+              <Text style={styles.statusSub}>{statusSubtext}</Text>
+            ) : null}
+          </View>
         </View>
       ) : null}
     </View>
@@ -140,101 +195,178 @@ const styles = StyleSheet.create({
     marginTop: -RESTAURANT_INFO_OVERLAP,
     backgroundColor: RP.bg,
     borderRadius: RP.radiusL,
-    padding: 18,
-    shadowColor: RP.shadow,
+    padding: 20,
+    shadowColor: 'rgba(0,0,0,0.6)',
     shadowOpacity: 1,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: RP.border,
   },
-  rowTop: { flexDirection: 'row', gap: 14 },
-  logoWrap: {},
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    backgroundColor: RP.surface2,
+
+  // Header
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  logoShadow: {
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    borderRadius: 20,
   },
-  logoFallback: { alignItems: 'center', justifyContent: 'center' },
-  logoLetter: { fontSize: 28, fontWeight: '900', color: RP.text },
+  logo: { width: 76, height: 76, borderRadius: 20 },
+  logoFallback: {
+    backgroundColor: RP.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoLetter: { fontSize: 30, fontWeight: '900', color: RP.text },
+  nameBlock: { flex: 1, gap: 8 },
   name: {
-    fontSize: RP.fontH1,
+    fontSize: 26,
     fontWeight: '900',
     color: RP.text,
-    letterSpacing: -0.6,
+    letterSpacing: -0.7,
   },
-  ratingRow: {
+  ratingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
     gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: 'rgba(251,191,36,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.25)',
+  },
+  ratingTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FBBF24',
+  },
+  newChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: 'rgba(124,58,237,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.25)',
+  },
+  newTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#A78BFA',
+  },
+
+  // Badges
+  badgeRow: {
+    flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 16,
   },
-  ratingCompact: {
-    fontWeight: '800',
-    color: RP.text,
-    fontSize: 15,
-    letterSpacing: -0.2,
-  },
-  newLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: RP.textSecondary,
-    letterSpacing: -0.2,
-  },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  badgePromo: {
+  legacyBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: 'rgba(229,57,53,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(229,57,53,0.25)',
+    borderColor: 'rgba(229,57,53,0.2)',
   },
-  badgePromoText: { fontSize: 11, fontWeight: '900', color: RP.offer },
-  metrics: {
+  legacyBadgeTxt: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: RP.offer,
+  },
+
+  // Stats
+  statsRow: {
     flexDirection: 'row',
     marginTop: 18,
     paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: RP.border,
   },
-  metric: { flex: 1, alignItems: 'center', minWidth: 0, paddingHorizontal: 4 },
-  metricDivider: { width: 1, backgroundColor: RP.border },
-  metricLabel: {
-    fontSize: 11,
+  stat: { flex: 1, alignItems: 'center', gap: 5, paddingHorizontal: 2 },
+  statIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: RP.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statIconAccent: {
+    backgroundColor: 'rgba(34,197,94,0.10)',
+  },
+  statLabel: {
+    fontSize: 10,
     fontWeight: '700',
     color: RP.textMuted,
     textTransform: 'uppercase',
-    textAlign: 'center',
+    letterSpacing: 0.4,
   },
-  metricVal: {
-    marginTop: 4,
-    fontSize: 13,
+  statVal: {
+    fontSize: 12,
     fontWeight: '900',
     color: RP.text,
     textAlign: 'center',
   },
-  address: {
+  statValAccent: { color: '#22C55E' },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: RP.border,
+    marginHorizontal: 2,
+  },
+
+  // Address
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
     marginTop: 14,
-    fontSize: 14,
-    fontWeight: '600',
-    color: RP.textSecondary,
-    lineHeight: 20,
   },
-  statusBox: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: RP.radiusM,
-    backgroundColor: RP.surface,
-  },
-  statusStrong: { fontSize: 15, fontWeight: '900', color: RP.text },
-  statusSub: {
-    marginTop: 4,
+  addressTxt: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '600',
     color: RP.textSecondary,
+    lineHeight: 18,
+  },
+
+  // Status
+  statusCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: RP.radiusM,
+    backgroundColor: RP.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: RP.border,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#A78BFA',
+    marginTop: 5,
+  },
+  statusStrong: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: RP.text,
+    lineHeight: 20,
+  },
+  statusSub: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600',
+    color: RP.textSecondary,
+    lineHeight: 17,
   },
 });

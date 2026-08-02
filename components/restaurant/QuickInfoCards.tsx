@@ -1,6 +1,7 @@
 import { RP } from '@/constants/restaurantPremiumTheme';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type { DeliveryMode } from '@/components/restaurant/DeliveryOptions';
 
@@ -11,9 +12,6 @@ type Props = {
   promoLabel: string | null;
 };
 
-/**
- * Two-up cards under order type switch — delivery fee + ETA (no invented promos).
- */
 export function QuickInfoCards({
   mode,
   deliveryFeeLabel,
@@ -21,42 +19,62 @@ export function QuickInfoCards({
   promoLabel,
 }: Props) {
   const etaUnavailable = etaLabel === 'ETA unavailable';
+  const isFree = deliveryFeeLabel.toLowerCase().includes('free');
+
+  const deliveryTitle = promoLabel ?? (mode === 'pickup' ? 'Pickup order' : deliveryFeeLabel);
+  const deliverySub = promoLabel
+    ? deliveryFeeLabel
+    : mode === 'pickup'
+      ? 'No delivery fee on pickup'
+      : 'Confirmed at checkout';
+
+  const etaTitle = etaUnavailable ? 'No estimate' : `Arrives ${etaLabel}`;
+  const etaSub = etaUnavailable
+    ? 'Enable location for ETA'
+    : 'Updates after order placed';
 
   return (
     <View style={styles.row}>
-      <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-        <View style={styles.pill}>
-          <Text style={styles.pillTxt}>Delivery</Text>
+      {/* Delivery card */}
+      <View style={[styles.card, isFree && styles.cardAccent]}>
+        <View style={styles.cardTop}>
+          <View style={[styles.iconWrap, isFree && styles.iconWrapAccent]}>
+            <Ionicons
+              name="bicycle-outline"
+              size={16}
+              color={isFree ? '#22C55E' : RP.textMuted}
+            />
+          </View>
+          {isFree && (
+            <View style={styles.freePill}>
+              <Text style={styles.freePillTxt}>FREE</Text>
+            </View>
+          )}
         </View>
-        <Text style={styles.title}>
-          {promoLabel ?? (mode === 'pickup' ? 'Pickup order' : deliveryFeeLabel)}
+        <Text style={[styles.cardTitle, isFree && styles.cardTitleAccent]} numberOfLines={2}>
+          {deliveryTitle}
         </Text>
-        <Text style={styles.sub}>
-          {promoLabel
-            ? deliveryFeeLabel
-            : mode === 'pickup'
-              ? 'No delivery fee on pickup'
-              : 'Final fee confirmed at checkout'}
+        <Text style={styles.cardSub} numberOfLines={2}>
+          {deliverySub}
         </Text>
-        <View style={styles.accent} />
-      </Pressable>
+        <View style={[styles.bar, isFree && styles.barAccent]} />
+      </View>
 
-      <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-        <View style={[styles.pill, styles.pillNeutral]}>
-          <Text style={styles.pillTxtNeutral}>Estimate</Text>
+      {/* ETA card */}
+      <View style={styles.card}>
+        <View style={styles.cardTop}>
+          <View style={styles.iconWrap}>
+            <Ionicons name="time-outline" size={16} color={RP.textMuted} />
+          </View>
         </View>
-        <Text style={styles.title}>
-          {etaUnavailable ? 'ETA unavailable' : `Arrives ${etaLabel}`}
+        <Text style={styles.cardTitle} numberOfLines={2}>
+          {etaTitle}
         </Text>
-        <Text style={styles.sub}>
-          {etaUnavailable
-            ? 'Enable location access for a delivery estimate'
-            : mode === 'group'
-              ? 'Everyone pays their share separately'
-              : 'Updates once your order is placed'}
+        <Text style={styles.cardSub} numberOfLines={2}>
+          {etaSub}
         </Text>
-        <View style={[styles.accent, styles.accentMuted]} />
-      </Pressable>
+        <View style={styles.bar} />
+      </View>
     </View>
   );
 }
@@ -64,59 +82,79 @@ export function QuickInfoCards({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
     marginBottom: 4,
   },
   card: {
     flex: 1,
-    minWidth: 0,
-    backgroundColor: RP.bg,
+    backgroundColor: RP.surface,
     borderRadius: RP.radiusM,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: RP.border,
     padding: 14,
-    shadowColor: RP.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
     overflow: 'hidden',
-    position: 'relative',
   },
-  cardPressed: { transform: [{ scale: 0.985 }] },
-  pill: {
-    alignSelf: 'flex-start',
-    marginBottom: 8,
+  cardAccent: {
+    borderColor: 'rgba(34,197,94,0.25)',
+    backgroundColor: 'rgba(34,197,94,0.05)',
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: RP.bg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: RP.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapAccent: {
+    backgroundColor: 'rgba(34,197,94,0.10)',
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  freePill: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,200,83,0.12)',
+    paddingVertical: 3,
+    borderRadius: 20,
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.3)',
   },
-  pillNeutral: { backgroundColor: RP.surface },
-  pillTxt: { fontSize: 10, fontWeight: '900', color: RP.accent, letterSpacing: 0.6 },
-  pillTxtNeutral: {
+  freePillTxt: {
     fontSize: 10,
     fontWeight: '900',
-    color: RP.textMuted,
-    letterSpacing: 0.6,
+    color: '#22C55E',
+    letterSpacing: 0.8,
   },
-  title: { fontSize: 14, fontWeight: '900', color: RP.text, lineHeight: 19 },
-  sub: {
-    marginTop: 6,
-    fontSize: 12,
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: RP.text,
+    lineHeight: 19,
+  },
+  cardTitleAccent: { color: '#22C55E' },
+  cardSub: {
+    marginTop: 4,
+    fontSize: 11,
     fontWeight: '600',
-    color: RP.textSecondary,
-    lineHeight: 16,
+    color: RP.textMuted,
+    lineHeight: 15,
   },
-  accent: {
+  bar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 3,
-    backgroundColor: RP.accent,
+    height: 2,
+    backgroundColor: RP.border,
   },
-  accentMuted: { backgroundColor: RP.surface2 },
+  barAccent: { backgroundColor: '#22C55E' },
 });
