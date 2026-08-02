@@ -55,7 +55,7 @@ const EMPTY_DRAFT: DraftPromo = {
 function formatValue(promo: PromoCodeDoc): string {
   return promo.discountType === 'percent'
     ? `${promo.discountValue}%`
-    : `$${promo.discountValue.toFixed(2)}`;
+    : `CA$${promo.discountValue.toFixed(2)}`;
 }
 
 function formatExpiry(ms: number | null): string {

@@ -16,7 +16,7 @@ export function buildOrderInviteWhatsAppMessage(input: {
   return `🍕 Join my HalfOrder!
 We're splitting a ${input.foodType} (${input.size}) from ${input.restaurant}
 
-💰 Only $${input.pricePerPerson.toFixed(2)} per person
+💰 Only CA$${input.pricePerPerson.toFixed(2)} per person
 
 ⏱ Hurry! ${input.timeRemaining} left
 

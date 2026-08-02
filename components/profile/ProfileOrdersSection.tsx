@@ -60,7 +60,7 @@ type Props = {
 };
 
 function formatMoney(n: number): string {
-  return `$${n.toFixed(2)}`;
+  return `CA$${n.toFixed(2)}`;
 }
 
 function groupLabel(order: ProfileOrderRow): 'Today' | 'Yesterday' | 'Earlier' {

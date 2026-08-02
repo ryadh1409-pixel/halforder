@@ -6,7 +6,7 @@
 import type { EmoAiExecutiveReport } from '@/types/emoAiAgent';
 
 function money(n: number): string {
-  return `$${n.toFixed(2)}`;
+  return `CA$${n.toFixed(2)}`;
 }
 
 function pct(n: number): string {

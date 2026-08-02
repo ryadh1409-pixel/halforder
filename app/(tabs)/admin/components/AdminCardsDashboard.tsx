@@ -143,10 +143,10 @@ export function AdminCardsDashboard() {
           const configured =
             slot.title.trim().length > 0 || slot.image.trim().length > 0;
           const priceLabel =
-            slot.price > 0 ? `$${slot.price.toFixed(2)}` : 'Not set';
+            slot.price > 0 ? `CA$${slot.price.toFixed(2)}` : 'Not set';
           const sharingPriceLabel =
             slot.sharingPrice > 0
-              ? `Share $${slot.sharingPrice.toFixed(2)}`
+              ? `Share CA$${slot.sharingPrice.toFixed(2)}`
               : undefined;
           const waiting = waitingQueues[slot.docId];
           const waitingUserName = waiting?.waitingUserFirstName ?? null;

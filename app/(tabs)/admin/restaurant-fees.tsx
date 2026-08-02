@@ -30,7 +30,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 function formatMoney(value: number | null): string {
   if (value == null) return '—';
-  return `$${value.toFixed(2)}`;
+  return `CA$${value.toFixed(2)}`;
 }
 
 function formatTaxPercent(value: number | null): string {

@@ -161,5 +161,5 @@ export function formatVoucherValue(v: {
 }): string {
   return v.discountType === 'percent'
     ? `${v.discountValue}% off`
-    : `$${v.discountValue.toFixed(2)} off`;
+    : `CA$${v.discountValue.toFixed(2)} off`;
 }

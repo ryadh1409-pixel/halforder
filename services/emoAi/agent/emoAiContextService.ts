@@ -237,14 +237,14 @@ export function formatPlatformContextForPrompt(
     .slice(0, 25)
     .map(
       (m) =>
-        `- ${m.restaurantName}: ${m.name} $${m.price.toFixed(2)}${m.discountLabel ? ` (${m.discountLabel})` : ''}`,
+        `- ${m.restaurantName}: ${m.name} CA$${m.price.toFixed(2)}${m.discountLabel ? ` (${m.discountLabel})` : ''}`,
     )
     .join('\n');
   const orderLines = ctx.userOrders
     .slice(0, 6)
     .map(
       (o) =>
-        `- ${o.id.slice(0, 8)}… ${o.restaurantName} | status=${o.status} pay=${o.paymentStatus} delivery=${o.deliveryStatus} total=$${o.total.toFixed(2)}`,
+        `- ${o.id.slice(0, 8)}… ${o.restaurantName} | status=${o.status} pay=${o.paymentStatus} delivery=${o.deliveryStatus} total=CA$${o.total.toFixed(2)}`,
     )
     .join('\n');
   const promoLines = ctx.promotions

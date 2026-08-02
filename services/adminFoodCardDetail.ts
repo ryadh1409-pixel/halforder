@@ -117,7 +117,7 @@ function normBoolLabel(v: unknown): string {
 
 function moneyLabel(amount: number): string {
   if (!Number.isFinite(amount)) return '—';
-  return `$${amount.toFixed(2)}`;
+  return `CA$${amount.toFixed(2)}`;
 }
 
 function scheduleLabel(raw: Record<string, unknown>, ...keys: string[]): string {

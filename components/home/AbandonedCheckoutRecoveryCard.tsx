@@ -25,7 +25,7 @@ type Props = {
 };
 
 function formatMoney(n: number): string {
-  return `$${Math.max(0, n).toFixed(2)}`;
+  return `CA$${Math.max(0, n).toFixed(2)}`;
 }
 
 function formatCountdown(seconds: number | null): string {

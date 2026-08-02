@@ -148,7 +148,7 @@ See you on HalfOrder!`;
             />
             <StatCell
               label="Rewards"
-              value={`$${stats.totalRewardsEarned.toFixed(2)}`}
+              value={`CA$${stats.totalRewardsEarned.toFixed(2)}`}
               pal={pal}
             />
           </View>

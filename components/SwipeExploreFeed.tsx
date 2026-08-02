@@ -366,7 +366,7 @@ export default function SwipeExploreFeed() {
                     params: {
                       fromFoodTemplate: '1',
                       prefillTitle: t.name,
-                      prefillPriceSplit: `$${t.price.toFixed(2)}`,
+                      prefillPriceSplit: `CA$${t.price.toFixed(2)}`,
                       prefillImageUrl: t.imageUrl,
                       prefillDescription: t.description,
                       templateId: t.id,

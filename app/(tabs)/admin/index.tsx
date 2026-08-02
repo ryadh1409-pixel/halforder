@@ -405,7 +405,7 @@ export default function AdminScreen() {
                     />
                     <AdminStatCard
                       label="Revenue"
-                      value={`$${metrics.totalRevenue.toFixed(0)}`}
+                      value={`CA$${metrics.totalRevenue.toFixed(0)}`}
                       hint="Stripe treasury"
                       icon="cash-outline"
                       onPress={() => router.push(adminRoutes.payments as never)}
@@ -419,21 +419,21 @@ export default function AdminScreen() {
                   <View style={styles.statsGrid}>
                     <AdminStatCard
                       label="Revenue Today"
-                      value={`$${(metrics.paymentSummary?.revenueToday ?? 0).toFixed(0)}`}
+                      value={`CA$${(metrics.paymentSummary?.revenueToday ?? 0).toFixed(0)}`}
                       hint="Paid today"
                       onPress={() => router.push(adminRoutes.payments as never)}
                       style={{ width: statCellW }}
                     />
                     <AdminStatCard
                       label="Revenue This Week"
-                      value={`$${(metrics.paymentSummary?.revenueThisWeek ?? 0).toFixed(0)}`}
+                      value={`CA$${(metrics.paymentSummary?.revenueThisWeek ?? 0).toFixed(0)}`}
                       hint="Last 7 days"
                       onPress={() => router.push(adminRoutes.revenue as never)}
                       style={{ width: statCellW }}
                     />
                     <AdminStatCard
                       label="Revenue This Month"
-                      value={`$${(metrics.paymentSummary?.revenueThisMonth ?? 0).toFixed(0)}`}
+                      value={`CA$${(metrics.paymentSummary?.revenueThisMonth ?? 0).toFixed(0)}`}
                       hint="Calendar month"
                       onPress={() => router.push(adminRoutes.revenue as never)}
                       style={{ width: statCellW }}
@@ -467,7 +467,7 @@ export default function AdminScreen() {
                   <View style={styles.statsGrid}>
                     <AdminStatCard
                       label="Share revenue"
-                      value={`$${metrics.foodShareRevenue.toFixed(0)}`}
+                      value={`CA$${metrics.foodShareRevenue.toFixed(0)}`}
                       hint="Paid food shares"
                       style={{ width: statCellW }}
                     />

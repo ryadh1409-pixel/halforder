@@ -65,22 +65,22 @@ export default function DriverEarningsScreen() {
             />
             <StatTile
               label="This week"
-              value={`$${stats.earningsWeek.toFixed(2)}`}
+              value={`CA$${stats.earningsWeek.toFixed(2)}`}
               sub={`${stats.deliveriesWeek} trips`}
             />
             <StatTile
               label="All time"
-              value={`$${stats.earnings.toFixed(2)}`}
+              value={`CA$${stats.earnings.toFixed(2)}`}
               sub="Lifetime earnings"
             />
             <StatTile
               label="Avg / trip"
-              value={`$${stats.averageEarning.toFixed(2)}`}
+              value={`CA$${stats.averageEarning.toFixed(2)}`}
               sub="Driver payout"
             />
             <StatTile
               label="Platform fees"
-              value={`$${stats.platformFees.toFixed(2)}`}
+              value={`CA$${stats.platformFees.toFixed(2)}`}
               sub="Collected on trips"
             />
           </View>

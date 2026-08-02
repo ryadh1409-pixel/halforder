@@ -22,7 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 function money(n: number) {
-  return `$${Number(n || 0).toFixed(2)}`;
+  return `CA$${Number(n || 0).toFixed(2)}`;
 }
 
 export default function EmoAiReportDetailScreen() {

@@ -45,7 +45,7 @@ function deliveryAddressLine(order: RestaurantOrder): string {
 
 function safeTotal(price: number | null | undefined): string {
   if (typeof price !== 'number' || !Number.isFinite(price)) return '$0.00';
-  return `$${price.toFixed(2)}`;
+  return `CA$${price.toFixed(2)}`;
 }
 
 function safeEta(minutes: number | null | undefined): string {

@@ -125,7 +125,7 @@ function Row({
 
 function money(amount: number): string {
   if (!Number.isFinite(amount) || amount <= 0) return '—';
-  return `$${amount.toFixed(2)}`;
+  return `CA$${amount.toFixed(2)}`;
 }
 
 export default function AdminFoodCardDetailScreen() {

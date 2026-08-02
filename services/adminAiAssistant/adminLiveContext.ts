@@ -99,7 +99,7 @@ export async function buildAdminLiveContext(): Promise<string> {
 
       if (recentOrders.length < 10 && ms >= todayMs) {
         recentOrders.push(
-          `  - #${d.id.slice(-6).toUpperCase()} | ${customer} | ${restaurant} | $${price.toFixed(2)} | ${status} | ${payStatus}`,
+          `  - #${d.id.slice(-6).toUpperCase()} | ${customer} | ${restaurant} | CA$${price.toFixed(2)} | ${status} | ${payStatus}`,
         );
       }
     });
@@ -161,7 +161,7 @@ export async function buildAdminLiveContext(): Promise<string> {
       `Total orders: ${ordersSnap.size}`,
       `Today: ${ordersToday} | This week: ${ordersWeek}`,
       `Paid: ${paidOrders} | Completed: ${completedOrders} | Pending/Active: ${pendingOrders}`,
-      `Revenue today: $${revenueToday.toFixed(2)} | Revenue this week: $${revenueWeek.toFixed(2)}`,
+      `Revenue today: CA$${revenueToday.toFixed(2)} | Revenue this week: CA$${revenueWeek.toFixed(2)}`,
       recentOrders.length > 0
         ? `Recent today's orders:\n${recentOrders.join('\n')}`
         : 'No orders today yet.',

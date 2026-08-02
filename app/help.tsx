@@ -194,7 +194,7 @@ export default function HelpScreen() {
         `Issue with order - ${order.restaurantName}`,
       );
       const body = encodeURIComponent(
-        `Order ID: ${order.id}\nRestaurant: ${order.restaurantName}\nDate: ${order.date}\nTotal: $${order.totalPrice.toFixed(2)}`,
+        `Order ID: ${order.id}\nRestaurant: ${order.restaurantName}\nDate: ${order.date}\nTotal: CA$${order.totalPrice.toFixed(2)}`,
       );
       const url = `mailto:support@halforder.app?subject=${subject}&body=${body}`;
       Linking.openURL(url).catch(() => {});
@@ -318,7 +318,7 @@ export default function HelpScreen() {
                 <Text style={styles.orderDate}>{order.date}</Text>
                 <Text style={styles.orderMeta}>{order.restaurantName}</Text>
                 <Text style={styles.orderTotal}>
-                  Amount paid: ${order.totalPrice.toFixed(2)}
+                  Amount paid: CA$${order.totalPrice.toFixed(2)}
                 </Text>
                 <View style={styles.safetyRow}>
                   <TouchableOpacity
@@ -345,7 +345,7 @@ export default function HelpScreen() {
                 <Text style={styles.orderRestaurant}>{order.restaurantName}</Text>
                 <Text style={styles.orderDate}>{order.date}</Text>
                 <Text style={styles.orderTotal}>
-                  Total: ${order.totalPrice.toFixed(2)}
+                  Total: CA$${order.totalPrice.toFixed(2)}
                 </Text>
                 {order.itemsCount != null && (
                   <Text style={styles.orderItems}>Items: {order.itemsCount}</Text>

@@ -108,10 +108,10 @@ export function orderDisplayPriceLabel(data: Record<string, unknown>): string {
   const total = data.totalPrice ?? data.price;
   const split = data.splitPrice ?? data.sharePrice;
   if (typeof total === 'number' && Number.isFinite(total)) {
-    return `$${total.toFixed(2)} total`;
+    return `CA$${total.toFixed(2)} total`;
   }
   if (typeof split === 'number' && Number.isFinite(split)) {
-    return `$${split.toFixed(2)} / share`;
+    return `CA$${split.toFixed(2)} / share`;
   }
   return '—';
 }

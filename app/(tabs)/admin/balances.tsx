@@ -64,7 +64,7 @@ function subscribeUsersWithBalance(
 }
 
 function formatBalance(value: number): string {
-  return `$${value.toFixed(2)}`;
+  return `CA$${value.toFixed(2)}`;
 }
 
 export default function AdminBalancesScreen() {

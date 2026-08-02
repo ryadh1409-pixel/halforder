@@ -23,7 +23,7 @@ export default function PaymentScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const amount = DEFAULT_AMOUNT_CENTS;
-  const amountLabel = useMemo(() => `$${(amount / 100).toFixed(2)}`, [amount]);
+  const amountLabel = useMemo(() => `CA$${(amount / 100).toFixed(2)}`, [amount]);
   const payDisabled = loading;
   const trimmedOrderId = typeof orderId === 'string' ? orderId.trim() : '';
 

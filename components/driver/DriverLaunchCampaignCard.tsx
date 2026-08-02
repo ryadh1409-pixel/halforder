@@ -90,11 +90,11 @@ export function DriverLaunchCampaignCard({ driverId }: Props) {
         </Text>
         <Text style={styles.body}>
           {enrollment.status === 'active'
-            ? `${enrollment.completedDeliveries}/${enrollment.requiredDeliveries} deliveries · unlock $${enrollment.bonusAmountCad.toFixed(0)} CAD`
+            ? `${enrollment.completedDeliveries}/${enrollment.requiredDeliveries} deliveries · unlock CA$${enrollment.bonusAmountCad.toFixed(0)}`
             : enrollment.status === 'bonus_unlocked'
-              ? `$${enrollment.bonusAmountCad.toFixed(0)} CAD ready — admin will pay your bonus.`
+              ? `CA$${enrollment.bonusAmountCad.toFixed(0)} ready — admin will pay your bonus.`
               : enrollment.status === 'bonus_paid'
-                ? `$${enrollment.bonusAmountCad.toFixed(0)} CAD bonus marked paid.`
+                ? `CA$${enrollment.bonusAmountCad.toFixed(0)} bonus marked paid.`
                 : 'Your seat was reserved while the promotion was active.'}
         </Text>
         {enrollment.status === 'active' ? (

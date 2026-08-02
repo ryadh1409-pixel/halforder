@@ -349,7 +349,7 @@ export function AdminFoodCatalogList() {
           <FoodCard
             imageUri={item.imageUrl ?? ''}
             title={item.name}
-            priceLabel={`$${item.price.toFixed(2)}`}
+            priceLabel={`CA$${item.price.toFixed(2)}`}
             active={item.active}
             onPress={() => openEdit(item)}
             onActiveChange={(v: boolean) => toggleTemplateActive(item, v)}

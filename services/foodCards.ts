@@ -152,7 +152,7 @@ export function formatFoodCardSharingPriceLine(amount: number): string {
   if (!Number.isFinite(amount) || amount < 0) return '$0 per person';
   const rounded = Math.round(amount * 100) / 100;
   const s = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
-  return `$${s} per person`;
+  return `CA$${s} per person`;
 }
 
 function coerceExpiresAtMs(raw: unknown): number {

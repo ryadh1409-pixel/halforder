@@ -80,7 +80,7 @@ export function buildEmoAiInsightsAndRecommendations(args: {
   }
   if (args.revenue > 0) {
     insights.push(
-      `Gross completed-order revenue this period: $${args.revenue.toFixed(2)}.`,
+      `Gross completed-order revenue this period: CA$${args.revenue.toFixed(2)}.`,
     );
   }
   if (!recommendations.length) {

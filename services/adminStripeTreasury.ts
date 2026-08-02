@@ -36,6 +36,6 @@ export function formatTreasuryMoney(
       currency: currency.toUpperCase(),
     }).format(amount);
   } catch {
-    return `$${amount.toFixed(2)}`;
+    return `CA$${amount.toFixed(2)}`;
   }
 }

@@ -13,7 +13,7 @@ export type InviteShareInput = {
 
 function formatUsd(value: number | null): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
-  return `$${value.toFixed(0)}`;
+  return `CA$${value.toFixed(0)}`;
 }
 
 function cleanOrderId(orderId: string): string {

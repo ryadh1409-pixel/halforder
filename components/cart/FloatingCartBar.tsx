@@ -72,7 +72,7 @@ export function FloatingCartBar({
       >
         <Text style={styles.ctaTxt}>
           {label ??
-            `View cart · ${itemCount} ${itemCount === 1 ? 'item' : 'items'} · $${total.toFixed(2)}`}
+            `View cart · ${itemCount} ${itemCount === 1 ? 'item' : 'items'} · CA$${total.toFixed(2)}`}
         </Text>
       </AnimatedPressable>
     </Animated.View>

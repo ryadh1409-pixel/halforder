@@ -72,7 +72,7 @@ function moneyLabel(data: Record<string, unknown>): string {
         ? data.totalCents
         : null;
   if (cents != null && Number.isFinite(cents)) {
-    return `$${(cents / 100).toFixed(2)}`;
+    return `CA$${(cents / 100).toFixed(2)}`;
   }
   const dollars =
     typeof data.totalPrice === 'number'
@@ -83,7 +83,7 @@ function moneyLabel(data: Record<string, unknown>): string {
           ? data.price
           : null;
   if (dollars != null && Number.isFinite(dollars)) {
-    return `$${dollars.toFixed(2)}`;
+    return `CA$${dollars.toFixed(2)}`;
   }
   return '—';
 }

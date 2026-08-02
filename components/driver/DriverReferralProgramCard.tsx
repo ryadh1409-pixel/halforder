@@ -55,7 +55,7 @@ const STATUS_STYLE: Record<
 };
 
 function formatMoney(amount: number): string {
-  return `$${Math.max(0, amount).toFixed(2)}`;
+  return `CA$${Math.max(0, amount).toFixed(2)}`;
 }
 
 function formatOrderDate(ms: number | null): string {

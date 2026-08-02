@@ -195,7 +195,7 @@ export default function JoinInviteScreen() {
   }
 
   const sharePriceLabel =
-    order.sharePrice != null ? `$${Number(order.sharePrice).toFixed(2)}` : '—';
+    order.sharePrice != null ? `CA$${Number(order.sharePrice).toFixed(2)}` : '—';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>

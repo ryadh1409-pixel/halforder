@@ -31,7 +31,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 function formatMoney(n: number): string {
-  return `$${n.toFixed(2)} CAD`;
+  return `CA$${n.toFixed(2)}`;
 }
 
 function formatDateInput(ms: number | null): string {

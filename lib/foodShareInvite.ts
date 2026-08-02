@@ -86,7 +86,7 @@ export function resolveShareTimeLabel(raw: Record<string, unknown>): string {
 
 function formatMoney(amount: number): string {
   if (!Number.isFinite(amount)) return '$0.00';
-  return `$${amount.toFixed(2)}`;
+  return `CA$${amount.toFixed(2)}`;
 }
 
 export function buildFoodShareInviteMessage(

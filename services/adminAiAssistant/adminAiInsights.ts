@@ -208,7 +208,7 @@ export async function buildAdminAiInsights(
   }
 
   const money = (n: number) =>
-    `$${Number.isFinite(n) ? n.toFixed(2) : '0.00'}`;
+    `CA$${Number.isFinite(n) ? n.toFixed(2) : '0.00'}`;
 
   const overview = [
     'Here’s a live operations snapshot:',

@@ -57,7 +57,7 @@ const FORM_INPUT_SELECTION = 'rgba(168, 85, 247, 0.35)';
 function formatValue(v: PromoCodeDoc): string {
   return v.discountType === 'percent'
     ? `${v.discountValue}%`
-    : `$${v.discountValue.toFixed(2)}`;
+    : `CA$${v.discountValue.toFixed(2)}`;
 }
 
 function formatExpiry(ms: number | null): string {

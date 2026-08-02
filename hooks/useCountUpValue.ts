@@ -43,5 +43,5 @@ export function useCountUpValue(
 }
 
 export function formatCadAmount(amount: number): string {
-  return `$${amount.toFixed(2)} CAD`;
+  return `CA$${amount.toFixed(2)}`;
 }

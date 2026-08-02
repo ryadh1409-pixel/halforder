@@ -19,7 +19,7 @@ const ONTARIO_TZ = 'America/Toronto';
 /** CAD — always two decimals (Uber Eats style). */
 export function formatCad(amount: number): string {
   if (!Number.isFinite(amount)) return '$0.00';
-  return `$${amount.toFixed(2)}`;
+  return `CA$${amount.toFixed(2)}`;
 }
 
 function roundCad(amount: number): number {

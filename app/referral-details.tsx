@@ -125,8 +125,8 @@ See you on HalfOrder!`;
 
           <Section title="Reward summary">
             <View style={styles.summaryGrid}>
-              <SummaryCell label="Current balance" value={`$${stats.currentRewardBalance.toFixed(2)}`} />
-              <SummaryCell label="Lifetime rewards" value={`$${stats.lifetimeRewards.toFixed(2)}`} />
+              <SummaryCell label="Current balance" value={`CA$${stats.currentRewardBalance.toFixed(2)}`} />
+              <SummaryCell label="Lifetime rewards" value={`CA$${stats.lifetimeRewards.toFixed(2)}`} />
               <SummaryCell label="Successful referrals" value={String(stats.successfulReferrals)} />
               <SummaryCell label="Pending referrals" value={String(stats.pendingReferrals)} />
             </View>

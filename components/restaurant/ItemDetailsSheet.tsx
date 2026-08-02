@@ -158,7 +158,7 @@ export function ItemDetailsSheet({
 
               <Text style={styles.itemTitle}>{item.name}</Text>
               <Text style={styles.desc}>{item.description || item.shortIngredients}</Text>
-              <Text style={styles.price}>${unitPrice.toFixed(2)}</Text>
+              <Text style={styles.price}>CA$${unitPrice.toFixed(2)}</Text>
 
               <View style={styles.notesBlock}>
                 <Text style={styles.notesLabel}>Special instructions</Text>
@@ -226,8 +226,8 @@ export function ItemDetailsSheet({
                   {qty <= 0
                     ? 'Remove from cart'
                     : editingExisting
-                      ? `Update cart · $${lineTotal.toFixed(2)}`
-                      : `Add to cart · $${lineTotal.toFixed(2)}`}
+                      ? `Update cart · CA$${lineTotal.toFixed(2)}`
+                      : `Add to cart · CA$${lineTotal.toFixed(2)}`}
                 </Text>
               </Pressable>
             </View>

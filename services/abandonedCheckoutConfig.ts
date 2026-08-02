@@ -227,7 +227,7 @@ export function buildOfferLabel(
     case 'percent_discount':
       return `${Math.round(value)}% Off`;
     case 'fixed_discount':
-      return `$${value.toFixed(2)} Off`;
+      return `CA$${value.toFixed(2)} Off`;
     case 'reward_points':
       return `${Math.round(value)} Bonus Points`;
     default:

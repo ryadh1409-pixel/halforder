@@ -53,10 +53,10 @@ export function buildEmoAiRecommendations(args: {
   return scored.map(({ m, share }) => {
     const splitNote =
       splitSize > 1
-        ? ` Split ${splitSize} ways ≈ $${share.toFixed(2)} each.`
+        ? ` Split ${splitSize} ways ≈ CA$${share.toFixed(2)} each.`
         : '';
     const open = m.isOpen ? '' : ' (currently closed)';
-    return `${m.restaurantName}: ${m.name} at $${m.price.toFixed(2)}${open}.${splitNote}`;
+    return `${m.restaurantName}: ${m.name} at CA$${m.price.toFixed(2)}${open}.${splitNote}`;
   });
 }
 
@@ -84,11 +84,11 @@ export function findCheapestMealsMatching(
       .slice(0, limit)
       .map(
         (m) =>
-          `${m.restaurantName} — ${m.name}: $${m.price.toFixed(2)}${m.isOpen ? '' : ' (closed)'}`,
+          `${m.restaurantName} — ${m.name}: CA$${m.price.toFixed(2)}${m.isOpen ? '' : ' (closed)'}`,
       );
   }
   return filtered.map(
     (m) =>
-      `${m.restaurantName} — ${m.name}: $${m.price.toFixed(2)}${m.isOpen ? '' : ' (closed)'}`,
+      `${m.restaurantName} — ${m.name}: CA$${m.price.toFixed(2)}${m.isOpen ? '' : ' (closed)'}`,
   );
 }

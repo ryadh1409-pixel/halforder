@@ -25,7 +25,7 @@ function formatTs(ms: number | null | undefined, timeZone?: string): string {
 
 function money(n: number | null | undefined): string {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '$0.00';
-  return `$${n.toFixed(2)}`;
+  return `CA$${n.toFixed(2)}`;
 }
 
 export function RestaurantArchiveOrderCard({ order, timeZone }: Props) {

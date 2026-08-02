@@ -80,10 +80,10 @@ function moneyFromData(data: Record<string, unknown>): string | null {
   }
   if (typeof data.amount === 'number' && Number.isFinite(data.amount)) {
     const n = data.amount;
-    return n > 1000 ? `$${(n / 100).toFixed(2)}` : `$${n.toFixed(2)}`;
+    return n > 1000 ? `CA$${(n / 100).toFixed(2)}` : `CA$${n.toFixed(2)}`;
   }
   if (typeof data.total === 'number' && Number.isFinite(data.total)) {
-    return `$${data.total.toFixed(2)}`;
+    return `CA$${data.total.toFixed(2)}`;
   }
   return null;
 }

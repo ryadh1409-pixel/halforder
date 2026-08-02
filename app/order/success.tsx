@@ -37,8 +37,8 @@ export default function OrderSuccessScreen() {
   const saved = Number(params.saved) || 0;
   const restaurantName = params.restaurant ?? 'Order';
   const taxGiftApplied = params.taxGiftApplied === '1';
-  const totalLabel = totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : '—';
-  const savedLabel = saved > 0 ? `$${saved.toFixed(2)}` : '$0.00';
+  const totalLabel = totalPrice > 0 ? `CA$${totalPrice.toFixed(2)}` : '—';
+  const savedLabel = saved > 0 ? `CA$${saved.toFixed(2)}` : '$0.00';
 
   const shareMessage = `I saved ${savedLabel} with HalfOrder! 🍔 Coordinate shared meals nearby. Try it: https://apps.apple.com/ca/app/halforder/id6760587041`;
 

@@ -353,7 +353,7 @@ export default function ChatScreen() {
             : null;
         const summary =
           r && f
-            ? `I’d go with ${f} at ${r}${p != null ? ` (~$${p.toFixed(2)})` : ''}.`
+            ? `I’d go with ${f} at ${r}${p != null ? ` (~CA$${p.toFixed(2)})` : ''}.`
             : decision.reason?.trim() || 'Here’s a single pick — check Guided order above.';
         addMessage(summary);
         if (decision.suggest_split) {

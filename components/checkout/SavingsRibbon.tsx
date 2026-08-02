@@ -34,7 +34,7 @@ function SavingsRibbonInner({
   }, [appear, visible]);
 
   if (!visible) return null;
-  const formatted = `$${savingsAmount.toFixed(2)}`;
+  const formatted = `CA$${savingsAmount.toFixed(2)}`;
   const lead = `You saved ${formatted} today`;
   return (
     <Animated.View

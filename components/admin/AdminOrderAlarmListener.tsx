@@ -64,7 +64,7 @@ async function fireLocalNotification(order: AlarmOrder): Promise<void> {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: `🔴 New Order — $${order.totalPrice.toFixed(2)}`,
+        title: `🔴 New Order — CA$${order.totalPrice.toFixed(2)}`,
         body: [
           order.customerName ?? 'Customer',
           order.customerPhone ? `📞 ${order.customerPhone}` : null,

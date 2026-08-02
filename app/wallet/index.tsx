@@ -71,7 +71,7 @@ const PAL = {
 } as const;
 
 function formatCad(amount: number): string {
-  return `$${Math.max(0, amount).toFixed(2)}`;
+  return `CA$${Math.max(0, amount).toFixed(2)}`;
 }
 
 function formatEarnedDate(ms: number | null): string {
@@ -209,7 +209,7 @@ const HalfOrderBalanceCard = memo(function HalfOrderBalanceCard({
         </Text>
 
         <Text style={styles.cardBalance} maxFontSizeMultiplier={1.15}>
-          {`$${displayBalance.toFixed(2)}`}
+          {`CA$${displayBalance.toFixed(2)}`}
         </Text>
 
         <Text style={styles.cardFootnote} maxFontSizeMultiplier={1.25}>
