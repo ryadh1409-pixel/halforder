@@ -145,7 +145,7 @@ export function RestaurantInfo({
         <StatChip
           icon="bicycle-outline"
           label="Delivery"
-          value={deliveryFeeLabel}
+          value={isFreeDelivery ? 'FREE' : deliveryFeeLabel}
           free={isFreeDelivery}
         />
         <View style={styles.statDivider} />
