@@ -961,6 +961,7 @@ export {
     acceptCommunityGuidelines, sendModeratedMatchChatMessage
 } from "./sendModeratedMatchChatMessage.js";
 export { sendDailyMetricsReport } from "./dailyMetricsReport.js";
+export { onNewUserSignUp, onPaymentCompleted } from "./adminNotifications.js";
 
 export const walletCreateSetupIntent = functions
   .runWith({secrets: ["STRIPE_SECRET_KEY"]})
