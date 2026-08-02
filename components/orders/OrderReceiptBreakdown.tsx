@@ -152,12 +152,6 @@ export function OrderReceiptBreakdown({
             value={meta.paymentStatus?.trim() || '—'}
             muted
           />
-          <Row
-            tone={tone}
-            label="Stripe Transaction ID"
-            value={meta.stripeTransactionId?.trim() || '—'}
-            muted
-          />
           <Row tone={tone} label="Paid At" value={paidAtLabel} muted />
         </>
       ) : null}

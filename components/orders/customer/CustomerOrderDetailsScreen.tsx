@@ -739,8 +739,6 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
                 idForReceipt: order.id,
                 paymentMethod: order.paymentMethod ?? 'Card',
                 paymentStatus: order.paymentStatus,
-                stripeTransactionId:
-                  order.stripePaymentIntentId ?? order.paymentIntentId,
                 paidAt: order.paidAt,
               }}
             />
