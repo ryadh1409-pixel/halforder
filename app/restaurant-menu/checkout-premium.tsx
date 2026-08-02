@@ -282,8 +282,9 @@ export default function CheckoutPremiumScreen() {
   );
   const remainingAmountToPay = Math.max(0, total - appliedCashbackCad);
 
-  const totalFmt = `$${total.toFixed(2)}`;
-  const payFmt = `$${remainingAmountToPay.toFixed(2)}`;
+  const cad = (n: number) => `CA$${n.toFixed(2)}`;
+  const totalFmt = cad(total);
+  const payFmt = cad(remainingAmountToPay);
 
   const savingsRibbonAmount = useMemo(() => {
     return promoDiscount > 0 ? promoDiscount : 0;
@@ -496,7 +497,7 @@ export default function CheckoutPremiumScreen() {
       {
         key: 'subtotal',
         label: autoHiEmooo ? 'Food subtotal' : 'Item subtotal',
-        value: `$${subtotal.toFixed(2)}`,
+        value: cad(subtotal),
       },
     ];
     if (promoDiscount > 0) {
@@ -506,7 +507,7 @@ export default function CheckoutPremiumScreen() {
           appliedPromoCode === HI_EMOOO_PROMO_CODE
             ? 'Hi emooo discount (-50%)'
             : 'Promotions',
-        value: `-$${promoDiscount.toFixed(2)}`,
+        value: `-${cad(promoDiscount)}`,
         emphasizeSave: true,
         badge:
           appliedPromoCode === HI_EMOOO_PROMO_CODE ? 'Hi emooo' : 'Promo',
@@ -517,10 +518,10 @@ export default function CheckoutPremiumScreen() {
       label: 'Delivery',
       value:
         fulfillmentMode === 'pickup'
-          ? '$0.00'
+          ? cad(0)
           : waiveDeliveryFee || deliveryFee <= 0
             ? 'FREE'
-            : `$${deliveryFee.toFixed(2)}`,
+            : cad(deliveryFee),
       emphasizeSave:
         fulfillmentMode === 'delivery' &&
         (waiveDeliveryFee || subtotal >= 25),
@@ -529,25 +530,25 @@ export default function CheckoutPremiumScreen() {
       rows.push({
         key: 'priority',
         label: 'Priority delivery',
-        value: `$${priorityFee.toFixed(2)}`,
+        value: cad(priorityFee),
       });
     }
     rows.push({
       key: 'service',
       label: autoHiEmooo ? 'Service fee' : 'Fees & marketplace service',
-      value: waiveServiceFee || serviceFee <= 0 ? 'FREE' : `$${serviceFee.toFixed(2)}`,
+      value: waiveServiceFee || serviceFee <= 0 ? 'FREE' : cad(serviceFee),
     });
     rows.push({
       key: 'tax',
       label: `Tax (HST ${Math.round(taxRate * 1000) / 10}%)`,
-      value: `$${taxes.toFixed(2)}`,
+      value: cad(taxes),
     });
     const beforeSavings = strikeSubtotal + taxes;
     if (beforeSavings > total + 0.009) {
       rows.push({
         key: 'beforeSave',
         label: 'Pricing before promotions',
-        value: `$${beforeSavings.toFixed(2)}`,
+        value: cad(beforeSavings),
         strikethrough: true,
       });
     }
@@ -713,7 +714,7 @@ export default function CheckoutPremiumScreen() {
               <Text style={styles.lineLeft} numberOfLines={3}>
                 {line.qty}× {line.name}
               </Text>
-              <Text style={styles.lineRight}>${(line.price * line.qty).toFixed(2)}</Text>
+              <Text style={styles.lineRight}>{cad(line.price * line.qty)}</Text>
             </View>
           ))}
         </CheckoutOrderSummary>
@@ -774,19 +775,19 @@ export default function CheckoutPremiumScreen() {
               <View style={styles.cashbackRow}>
                 <Text style={styles.cashbackLabel}>Wallet Balance</Text>
                 <Text style={styles.cashbackValue}>
-                  ${cashbackAvailableCad.toFixed(2)}
+                  {cad(cashbackAvailableCad)}
                 </Text>
               </View>
               <View style={styles.cashbackRow}>
                 <Text style={styles.cashbackLabel}>Applied Cashback</Text>
                 <Text style={styles.cashbackValueAccent}>
-                  −${appliedCashbackCad.toFixed(2)}
+                  −{cad(appliedCashbackCad)}
                 </Text>
               </View>
               <View style={styles.cashbackRow}>
                 <Text style={styles.cashbackLabel}>Remaining Balance</Text>
                 <Text style={styles.cashbackValue}>
-                  ${remainingCashBalanceCad.toFixed(2)}
+                  {cad(remainingCashBalanceCad)}
                 </Text>
               </View>
               <View style={[styles.cashbackRow, styles.cashbackRowLast]}>
@@ -821,7 +822,7 @@ export default function CheckoutPremiumScreen() {
           }
           detail={
             autoHiEmooo && savingsRibbonAmount > 0
-              ? `You saved $${savingsRibbonAmount.toFixed(2)} on your first shared meal.`
+              ? `You saved ${cad(savingsRibbonAmount)} on your first shared meal.`
               : undefined
           }
           sublabel={
