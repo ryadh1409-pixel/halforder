@@ -50,7 +50,7 @@ export async function streamEmoAiReply(
     platformContext = formatPlatformContextForPrompt(ctx);
   } catch {
     platformContext =
-      'LIVE HALFORDER PLATFORM DATA unavailable this turn — stay in character as Tham and avoid inventing specific prices.';
+      'LIVE HALFORDER PLATFORM DATA unavailable this turn — stay in character as Kevin and avoid inventing specific prices.';
   }
 
   // Keep prompt builder imported so character docs stay in sync for local tooling.
