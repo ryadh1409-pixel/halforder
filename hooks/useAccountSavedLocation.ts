@@ -8,7 +8,10 @@ import {
   saveAccountSavedLocation,
   type SaveAccountLocationOptions,
 } from '@/services/location/savedLocationFirestore';
-import { readSavedLocationLabelFromUserDoc } from '@/lib/location/userLocationLabel';
+import {
+  readSavedLocationCustomLabelFromUserDoc,
+  readSavedLocationLabelFromUserDoc,
+} from '@/lib/location/userLocationLabel';
 import { db } from '@/services/firebase';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
@@ -27,6 +30,7 @@ export function useAccountSavedLocation(
   const skipCacheSnapshots = options?.skipCacheSnapshots === true;
   const [saved, setSaved] = useState<SavedLocation | null>(null);
   const [label, setLabel] = useState<SavedAddressLabel | null>(null);
+  const [customLabel, setCustomLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(accountId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +44,8 @@ export function useAccountSavedLocation(
       if (collection === 'users') {
         const nextLabel = readSavedLocationLabelFromUserDoc(data);
         setLabel((prev) => (prev === nextLabel ? prev : nextLabel));
+        const nextCustom = readSavedLocationCustomLabelFromUserDoc(data);
+        setCustomLabel((prev) => (prev === nextCustom ? prev : nextCustom));
       }
     },
     [collection],
@@ -49,6 +55,7 @@ export function useAccountSavedLocation(
     if (!accountId) {
       setSaved(null);
       setLabel(null);
+      setCustomLabel(null);
       return;
     }
     setLoading(true);
@@ -59,10 +66,16 @@ export function useAccountSavedLocation(
       );
       if (collection === 'users') {
         setLabel((prev) => (prev === result.label ? prev : result.label));
+        setCustomLabel((prev) =>
+          prev === result.customLabel ? prev : result.customLabel,
+        );
       }
     } catch {
       setSaved(null);
-      if (collection === 'users') setLabel(null);
+      if (collection === 'users') {
+        setLabel(null);
+        setCustomLabel(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -71,12 +84,14 @@ export function useAccountSavedLocation(
   const clearSaved = useCallback(() => {
     setSaved(null);
     setLabel(null);
+    setCustomLabel(null);
   }, []);
 
   useEffect(() => {
     if (!accountId) {
       setSaved(null);
       setLabel(null);
+      setCustomLabel(null);
       setLoading(false);
       return undefined;
     }
@@ -91,11 +106,17 @@ export function useAccountSavedLocation(
         );
         if (collection === 'users') {
           setLabel((prev) => (prev === result.label ? prev : result.label));
+          setCustomLabel((prev) =>
+            prev === result.customLabel ? prev : result.customLabel,
+          );
         }
       } catch {
         if (!cancelled) {
           setSaved(null);
-          if (collection === 'users') setLabel(null);
+          if (collection === 'users') {
+            setLabel(null);
+            setCustomLabel(null);
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -137,6 +158,11 @@ export function useAccountSavedLocation(
         if (collection === 'users' && persistOptions?.label) {
           const nextLabel = persistOptions.label;
           setLabel((prev) => (prev === nextLabel ? prev : nextLabel));
+          const nextCustom =
+            nextLabel === 'custom'
+              ? (persistOptions.customLabel ?? '').trim() || null
+              : null;
+          setCustomLabel((prev) => (prev === nextCustom ? prev : nextCustom));
         }
         return payload;
       } catch (e) {
@@ -155,6 +181,7 @@ export function useAccountSavedLocation(
   return {
     saved,
     label,
+    customLabel,
     loading,
     saving,
     error,

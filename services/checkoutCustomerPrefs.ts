@@ -12,6 +12,11 @@ import {
 import type { SavedLocation } from '@/types/savedLocation';
 import { db } from '@/services/firebase';
 import {
+  displaySavedAddressTypeLabel,
+  readSavedLocationCustomLabelFromUserDoc,
+  readSavedLocationLabelFromUserDoc,
+} from '@/lib/location/userLocationLabel';
+import {
   fetchSavedLocationFromServer,
   saveAccountSavedLocation,
 } from '@/services/location/savedLocationFirestore';
@@ -215,8 +220,19 @@ async function writeAddressBook(
   );
 
   if (defaultEntry) {
+    // Preserve address type / custom label already on the customer profile.
+    const snap = await getDoc(doc(db, 'users', uid));
+    const data = snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
+    const existingLabel = readSavedLocationLabelFromUserDoc(data);
+    const existingCustom = readSavedLocationCustomLabelFromUserDoc(data);
     await saveAccountSavedLocation('users', uid, toSavedLocation(defaultEntry), {
       role: 'user',
+      ...(existingLabel
+        ? {
+            label: existingLabel,
+            customLabel: existingLabel === 'custom' ? existingCustom : null,
+          }
+        : {}),
     });
   }
 }
@@ -307,18 +323,20 @@ export async function syncProfileLocationToAddressBook(
   const saved = await fetchSavedLocationFromServer('users', uid);
   const snap = await fetchCheckoutCustomerSnapshot(uid);
   if (!saved.location) return snap.addressBook;
+  const displayLabel =
+    displaySavedAddressTypeLabel(saved.label, saved.customLabel) || 'Home';
   const def = defaultCheckoutAddress(snap.addressBook);
   if (def) {
     return upsertCheckoutAddress(uid, {
       id: def.id,
       location: saved.location,
-      label: def.label,
+      label: displayLabel,
       makeDefault: true,
     });
   }
   return upsertCheckoutAddress(uid, {
     location: saved.location,
-    label: 'Home',
+    label: displayLabel,
     makeDefault: true,
   });
 }

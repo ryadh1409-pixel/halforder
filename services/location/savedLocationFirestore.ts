@@ -22,7 +22,10 @@ import type { AccountLocationRole } from '@/services/location/accountLocationRol
 import { logRoleGps } from '@/services/location/accountLocationRole';
 import { syncDriverProfileBaseLocation } from '@/services/location/driverTracking';
 import { refreshLiveGpsBiasCache } from '@/services/location/locationLocalCache';
-import { readSavedLocationLabelFromUserDoc } from '@/lib/location/userLocationLabel';
+import {
+  readSavedLocationCustomLabelFromUserDoc,
+  readSavedLocationLabelFromUserDoc,
+} from '@/lib/location/userLocationLabel';
 import { db } from '@/services/firebase';
 import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
 import type { SavedAddressLabel } from '@/types/userLocation';
@@ -31,6 +34,8 @@ export { parseSavedLocation };
 
 export type SaveAccountLocationOptions = {
   label?: SavedAddressLabel;
+  /** Free-text label when `label` is `custom` (Office, Parents, …). */
+  customLabel?: string | null;
   gpsAccuracy?: number | null;
   role?: AccountLocationRole;
 };
@@ -91,6 +96,7 @@ export function readSavedLocationFromDoc(
 export type ServerSavedLocationResult = {
   location: SavedLocation | null;
   label: SavedAddressLabel | null;
+  customLabel: string | null;
 };
 
 /** Load location from Firestore server — never from local persistence cache. */
@@ -99,7 +105,7 @@ export async function fetchSavedLocationFromServer(
   accountId: string,
 ): Promise<ServerSavedLocationResult> {
   const id = accountId.trim();
-  if (!id) return { location: null, label: null };
+  if (!id) return { location: null, label: null, customLabel: null };
 
   const snap = await getDocFromServer(doc(db, collection, id));
   const data = snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
@@ -107,6 +113,8 @@ export async function fetchSavedLocationFromServer(
   return {
     location: readSavedLocationFromDoc(data),
     label: collection === 'users' ? readSavedLocationLabelFromUserDoc(data) : null,
+    customLabel:
+      collection === 'users' ? readSavedLocationCustomLabelFromUserDoc(data) : null,
   };
 }
 
@@ -136,6 +144,10 @@ export async function saveAccountSavedLocation(
     collection === 'users' && options?.label
       ? savedAddressLabelToDeliveryType(options.label)
       : undefined;
+  const customLabel =
+    collection === 'users' && options?.label === 'custom'
+      ? (options.customLabel ?? '').trim()
+      : '';
 
   const locationWithTimestamp: Record<string, unknown> = {
     address: base.address,
@@ -154,6 +166,7 @@ export async function saveAccountSavedLocation(
       : {}),
     updatedAt: serverTimestamp(),
     ...(deliveryType ? { type: deliveryType } : {}),
+    ...(customLabel ? { customLabel } : {}),
   };
 
   let firestorePayload: Record<string, unknown>;
@@ -201,6 +214,8 @@ export async function saveAccountSavedLocation(
       if (options?.label) {
         firestorePayload.locationLabel = options.label;
         firestorePayload.type = deliveryType;
+        firestorePayload.locationCustomLabel =
+          options.label === 'custom' ? customLabel : '';
       }
     }
 

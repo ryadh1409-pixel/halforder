@@ -16,6 +16,16 @@ export const SAVED_ADDRESS_LABELS: {
   { id: 'custom', title: 'Custom', icon: 'edit-location' },
 ];
 
+/** Suggested custom labels when the customer picks “Custom”. */
+export const CUSTOM_ADDRESS_LABEL_SUGGESTIONS = [
+  'Office',
+  'Parents',
+  'Friend',
+  'Campus',
+  'Hotel',
+  'Other',
+] as const;
+
 export type PlaceAutocompleteSuggestion = {
   placeId: string;
   description: string;

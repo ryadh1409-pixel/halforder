@@ -14,11 +14,14 @@ import {
 import type { LocationPalette } from '@/components/location/locationPalette';
 import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { useLocationPickerMount } from '@/hooks/useLocationPickerMount';
+import { displaySavedAddressTypeLabel } from '@/lib/location/userLocationLabel';
+import { syncProfileLocationToAddressBook } from '@/services/checkoutCustomerPrefs';
 import { logRoleGps, type AccountLocationRole } from '@/services/location/accountLocationRole';
 import { useLocationSearch } from '@/services/location/useLocationSearch';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import type { AccountLocationCollection, SavedLocation } from '@/types/savedLocation';
 import {
+  CUSTOM_ADDRESS_LABEL_SUGGESTIONS,
   SAVED_ADDRESS_LABELS,
   type PlaceAutocompleteSuggestion,
   type SavedAddressLabel,
@@ -41,9 +44,14 @@ type Props = {
   saveSuccessMessage?: string;
 };
 
-function labelTitle(id: SavedAddressLabel | null): string {
-  if (!id) return '';
-  return SAVED_ADDRESS_LABELS.find((l) => l.id === id)?.title ?? '';
+function isValidSavedCoords(location: SavedLocation | null | undefined): boolean {
+  return Boolean(
+    location &&
+      location.address.trim() &&
+      Number.isFinite(location.latitude) &&
+      Number.isFinite(location.longitude) &&
+      !(Math.abs(location.latitude) < 0.001 && Math.abs(location.longitude) < 0.001),
+  );
 }
 
 function formatAccuracy(meters: number | null): string | null {
@@ -180,9 +188,11 @@ export function LocationSearchInput({
   const {
     saved,
     label,
+    customLabel,
     loading: savedLoading,
     saving: persistSaving,
     persist,
+    refreshFromServer,
   } = useAccountSavedLocation(collection, accountId, { skipCacheSnapshots: true });
 
   const {
@@ -202,12 +212,13 @@ export function LocationSearchInput({
     applyCurrentDeviceLocation,
     resolveDraftForSave,
     clearAllLocalState,
-    resetSearchField,
     settleAfterSave,
   } = useLocationSearch();
 
   const [selectedLabel, setSelectedLabel] = useState<SavedAddressLabel>('home');
+  const [customLabelText, setCustomLabelText] = useState('');
   const [localSaving, setLocalSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
 
   const mountReady = useLocationPickerMount(accountId, collection, clearAllLocalState);
 
@@ -217,41 +228,102 @@ export function LocationSearchInput({
   gpsAccuracyRef.current = gpsState.accuracyMeters;
   const selectedLabelRef = useRef(selectedLabel);
   selectedLabelRef.current = selectedLabel;
+  const customLabelTextRef = useRef(customLabelText);
+  customLabelTextRef.current = customLabelText;
   const showAddressLabelsRef = useRef(showAddressLabels);
   showAddressLabelsRef.current = showAddressLabels;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+  const editingLabelRef = useRef(false);
 
+  // Hydrate chips from Firestore when saved profile changes (not while editing chips).
   useEffect(() => {
-    if (!label) return;
-    setSelectedLabel((prev) => (prev === label ? prev : label));
-  }, [label]);
+    if (!showAddressLabels) return;
+    if (editingLabelRef.current) return;
+    if (label) {
+      setSelectedLabel((prev) => (prev === label ? prev : label));
+    }
+    if (customLabel != null) {
+      setCustomLabelText((prev) => (prev === customLabel ? prev : customLabel));
+    } else if (label && label !== 'custom') {
+      setCustomLabelText((prev) => (prev === '' ? prev : ''));
+    }
+  }, [label, customLabel, showAddressLabels]);
 
   const styles = useMemo(() => createStyles(palette), [palette]);
   const busy = persistSaving || localSaving;
   const previewLocation = selectedLocation;
   const accuracyLabel = formatAccuracy(gpsBusy ? null : gpsState.accuracyMeters);
-  const hideStaleSavedRow = Boolean(previewLocation);
+  const hideStaleSavedRow = Boolean(previewLocation) && !justSaved;
   const canSave =
-    Boolean(previewLocation) || searchQuery.trim().length >= 3;
+    Boolean(previewLocation) ||
+    searchQuery.trim().length >= 3 ||
+    isValidSavedCoords(saved);
+
+  const buildPersistOptions = useCallback(() => {
+    if (!showAddressLabelsRef.current) {
+      return {
+        role: roleRef.current,
+      };
+    }
+    const label = selectedLabelRef.current;
+    return {
+      role: roleRef.current,
+      label,
+      customLabel: label === 'custom' ? customLabelTextRef.current.trim() : null,
+    };
+  }, []);
+
+  const afterCustomerSave = useCallback(
+    async (location: SavedLocation) => {
+      editingLabelRef.current = false;
+      setJustSaved(true);
+      settleAfterSave();
+      if (collection === 'users' && accountId) {
+        try {
+          await refreshFromServer();
+          await syncProfileLocationToAddressBook(accountId);
+        } catch {
+          /* profile save already succeeded */
+        }
+      }
+      logRoleGps(roleRef.current, 'persist_success', {
+        city: location.city,
+        gpsAccuracy: location.gpsAccuracy ?? gpsAccuracyRef.current,
+        label: selectedLabelRef.current,
+      });
+      showSuccess(saveSuccessMessage);
+    },
+    [accountId, collection, refreshFromServer, saveSuccessMessage, settleAfterSave],
+  );
 
   const persistImmediately = useCallback(
     async (location: SavedLocation) => {
       if (!accountId) return;
+      if (!isValidSavedCoords(location)) {
+        const msg = 'Choose a valid address with coordinates before saving.';
+        setSearchError(msg);
+        showError(msg);
+        return;
+      }
+      if (
+        showAddressLabelsRef.current &&
+        selectedLabelRef.current === 'custom' &&
+        !customLabelTextRef.current.trim()
+      ) {
+        const msg = 'Enter a custom label (e.g. Office) before saving.';
+        setSearchError(msg);
+        showError(msg);
+        return;
+      }
       setLocalSaving(true);
       setSearchError(null);
       try {
         await persist(location, {
-          role: roleRef.current,
+          ...buildPersistOptions(),
           gpsAccuracy: location.gpsAccuracy ?? gpsAccuracyRef.current,
-          ...(showAddressLabelsRef.current
-            ? { label: selectedLabelRef.current }
-            : {}),
         });
-        logRoleGps(roleRef.current, 'persist_success', {
-          city: location.city,
-          gpsAccuracy: location.gpsAccuracy ?? gpsState.accuracyMeters,
-        });
-        settleAfterSave();
-        showSuccess(saveSuccessMessage);
+        await afterCustomerSave(location);
       } catch (e) {
         const msg = getUserFriendlyError(e, {
           fallback: 'Could not save your location.',
@@ -262,7 +334,7 @@ export function LocationSearchInput({
         setLocalSaving(false);
       }
     },
-    [accountId, persist, saveSuccessMessage, settleAfterSave, setSearchError],
+    [accountId, afterCustomerSave, buildPersistOptions, persist, setSearchError],
   );
 
   const handleSelectSuggestion = useCallback(
@@ -280,17 +352,37 @@ export function LocationSearchInput({
     setLocalSaving(true);
     setSearchError(null);
     try {
-      const location = await resolveDraftForSave();
+      if (
+        showAddressLabelsRef.current &&
+        selectedLabelRef.current === 'custom' &&
+        !customLabelTextRef.current.trim()
+      ) {
+        throw new Error('Enter a custom label (e.g. Office) before saving.');
+      }
+
+      const hasNewDraft =
+        isValidSavedCoords(selectedLocation) || searchQuery.trim().length >= 3;
+      let location: SavedLocation;
+      if (!hasNewDraft && isValidSavedCoords(savedRef.current)) {
+        // Re-save existing profile address (e.g. address type / custom label only).
+        location = savedRef.current!;
+      } else {
+        location = await resolveDraftForSave();
+      }
+
+      if (!isValidSavedCoords(location)) {
+        throw new Error('Choose a valid address with coordinates before saving.');
+      }
+
       await persist(location, {
-        role: roleRef.current,
+        ...buildPersistOptions(),
         gpsAccuracy: location.gpsAccuracy ?? gpsAccuracyRef.current,
-        ...(showAddressLabelsRef.current
-          ? { label: selectedLabelRef.current }
-          : {}),
       });
-      logRoleGps(roleRef.current, 'manual_save', { city: location.city });
-      settleAfterSave();
-      showSuccess(saveSuccessMessage);
+      logRoleGps(roleRef.current, 'manual_save', {
+        city: location.city,
+        label: selectedLabelRef.current,
+      });
+      await afterCustomerSave(location);
     } catch (e) {
       const msg = getUserFriendlyError(e, {
         fallback: 'Could not save your location.',
@@ -302,10 +394,12 @@ export function LocationSearchInput({
     }
   }, [
     accountId,
+    afterCustomerSave,
+    buildPersistOptions,
     persist,
     resolveDraftForSave,
-    saveSuccessMessage,
-    settleAfterSave,
+    selectedLocation,
+    searchQuery,
     setSearchError,
   ]);
 
@@ -315,6 +409,15 @@ export function LocationSearchInput({
       await persistImmediately(location);
     }
   }, [applyCurrentDeviceLocation, persistImmediately]);
+
+  const selectAddressType = useCallback((id: SavedAddressLabel) => {
+    editingLabelRef.current = true;
+    setJustSaved(false);
+    setSelectedLabel(id);
+    if (id !== 'custom') {
+      setCustomLabelText('');
+    }
+  }, []);
 
   const renderSuggestion = useCallback(
     ({ item }: { item: PlaceAutocompleteSuggestion }) => {
@@ -383,8 +486,8 @@ export function LocationSearchInput({
             <TouchableOpacity
               key={item.id}
               style={[styles.chip, active && styles.chipActive]}
-              onPress={() => setSelectedLabel(item.id)}
-              disabled={busy || gpsBusy}
+              onPress={() => selectAddressType(item.id)}
+              disabled={busy}
             >
               <MaterialIcons
                 name={item.icon}
@@ -398,6 +501,54 @@ export function LocationSearchInput({
           );
         })}
       </ScrollView>
+
+      {selectedLabel === 'custom' ? (
+        <View style={styles.customLabelBlock}>
+          <Text style={styles.customLabelHint}>Custom label</Text>
+          <TextInput
+            style={styles.customLabelInput}
+            value={customLabelText}
+            onChangeText={(text) => {
+              editingLabelRef.current = true;
+              setJustSaved(false);
+              setCustomLabelText(text);
+            }}
+            placeholder="e.g. Office, Parents, Friend…"
+            placeholderTextColor={palette.textTertiary}
+            autoCorrect={false}
+            autoCapitalize="words"
+            maxLength={40}
+            editable={!busy}
+            accessibilityLabel="Custom address label"
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+          >
+            {CUSTOM_ADDRESS_LABEL_SUGGESTIONS.map((suggestion) => {
+              const active =
+                customLabelText.trim().toLowerCase() === suggestion.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={suggestion}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => {
+                    editingLabelRef.current = true;
+                    setJustSaved(false);
+                    setCustomLabelText(suggestion);
+                  }}
+                  disabled={busy}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                    {suggestion}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
     </>
   ) : null;
 
@@ -506,7 +657,12 @@ export function LocationSearchInput({
               {saved.address}
             </Text>
             <Text style={styles.savedMeta}>
-              {showAddressLabels && labelTitle(label) ? `${labelTitle(label)} · ` : ''}
+              {showAddressLabels
+                ? `${displaySavedAddressTypeLabel(
+                    label ?? selectedLabel,
+                    customLabel ?? customLabelText,
+                  )} · `
+                : ''}
               {saved.latitude.toFixed(5)}, {saved.longitude.toFixed(5)}
             </Text>
           </View>
@@ -590,6 +746,23 @@ function createStyles(p: LocationPalette) {
     chipActive: { backgroundColor: p.primary, borderColor: p.primary },
     chipText: { fontSize: 13, fontWeight: '600', color: p.textSecondary },
     chipTextActive: { color: p.onPrimary },
+    customLabelBlock: { marginTop: 10, gap: 8 },
+    customLabelHint: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: p.textTertiary,
+    },
+    customLabelInput: {
+      minHeight: 44,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.border,
+      backgroundColor: p.inputBg,
+      color: p.text,
+      fontSize: 15,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
     accuracyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
     accuracyText: { fontSize: 12, color: p.textSecondary, flex: 1 },
     resolvedPreview: {
