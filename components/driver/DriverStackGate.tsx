@@ -1,5 +1,6 @@
 import { RouteGroupMonitor } from '@/components/RouteGroupMonitor';
 import { DriverFallbackScreen } from '@/components/driver/DriverFallbackScreen';
+import { DriverLiveSharingHost } from '@/components/driver/DriverLiveSharingHost';
 import DriverTabsNavigator from '@/components/driver/DriverTabsNavigator';
 import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
 import { DriverRealtimeProvider } from '@/contexts/DriverRealtimeContext';
@@ -99,6 +100,7 @@ function DriverStackGateInner() {
       <DriverPresenceProvider uid={uid}>
         <DriverShellProvider>
           <RouteGroupMonitor />
+          <DriverLiveSharingHost />
           <DriverTabsNavigator />
         </DriverShellProvider>
       </DriverPresenceProvider>

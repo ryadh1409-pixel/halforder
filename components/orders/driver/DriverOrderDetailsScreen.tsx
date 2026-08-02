@@ -19,10 +19,13 @@ import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import * as Linking from 'expo-linking';
 import { orderRoomHref } from '@/services/orderChat';
-import { updateDriverLiveLocation } from '@/services/delivery';
+import { promptEnableLiveLocation } from '@/services/location/promptEnableLiveLocation';
+import {
+  ensureDriverLiveSharing,
+  isDriverLiveSharingActive,
+} from '@/services/location/driverLiveSharingSession';
 import { useRouter } from 'expo-router';
-import * as Location from 'expo-location';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppTextInput } from '../../AppTextInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,7 +39,6 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [deliverPin, setDeliverPin] = useState('');
-  const watchRef = useRef<Location.LocationSubscription | null>(null);
 
   const driverProfile: DriverProfile | null = useMemo(() => {
     if (!user?.uid) return null;
@@ -58,38 +60,14 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
       order.deliveryStatus === 'ready_for_pickup' ||
       order.deliveryStatus === ('waiting_driver' as typeof order.deliveryStatus));
 
+  // Resume shell live-sharing when already enabled for this delivery.
   useEffect(() => {
-    if (!assignedToMe || !user?.uid || Platform.OS === 'web') return undefined;
-    if (order.status === 'delivered' || order.status === 'cancelled') return undefined;
-
-    let cancelled = false;
+    if (!assignedToMe || !user?.uid || Platform.OS === 'web') return;
+    if (order.status === 'delivered' || order.status === 'cancelled') return;
     const uid = user.uid;
-    void Location.requestForegroundPermissionsAsync().then(({ status }) => {
-      if (cancelled || status !== 'granted') return;
-      Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-          distanceInterval: 35,
-        },
-        (pos) => {
-          void updateDriverLiveLocation(order.id, uid, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            heading: pos.coords.heading ?? null,
-            speed: pos.coords.speed ?? null,
-          });
-        },
-      ).then((sub) => {
-        if (!cancelled) watchRef.current = sub;
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      watchRef.current?.remove();
-      watchRef.current = null;
-    };
+    if (!isDriverLiveSharingActive(order.id, uid)) {
+      void ensureDriverLiveSharing(order.id, uid);
+    }
   }, [assignedToMe, user?.uid, order.id, order.status]);
 
   const fulfillmentAction = assignedToMe
@@ -121,6 +99,7 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
         showError(res.reason === 'already_assigned' ? 'Already assigned' : 'Cannot accept this order');
         return;
       }
+      await promptEnableLiveLocation(order.id, driverProfile.id);
       showSuccess('Order accepted');
       showNotice('Head to the restaurant', 'Pickup instructions are below.');
     } catch (error) {

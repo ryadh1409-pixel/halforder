@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { DRIVER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '../../services/AuthContext';
 import { DriverHubActiveOrderCard } from '@/components/driver/DriverHubActiveOrderCard';
+import { promptEnableLiveLocation } from '@/services/location/promptEnableLiveLocation';
 import { acceptQueuedDeliveryOrder } from '../../services/driverService';
 import { useDriverDeliveryStats } from '../../contexts/DriverRealtimeContext';
 import { useDriverPresenceContext } from '../../contexts/DriverPresenceContext';
@@ -325,6 +326,8 @@ export default function DriverHubScreen() {
         }
         marketplaceLog.acceptSuccess(order.id, { driverId: uid });
         setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
+        // Before navigation / continuing on Hub — request live location for this delivery.
+        await promptEnableLiveLocation(order.id, uid);
         showSuccess('Order accepted — active delivery is on your Hub');
       } catch (e) {
         console.error('[driver] accept order failed', e);

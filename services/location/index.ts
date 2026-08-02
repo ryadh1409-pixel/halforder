@@ -159,3 +159,15 @@ export {
   resetDriverLocationThrottle,
   syncDriverLiveLocation,
 } from './driverTracking';
+
+export {
+  ensureDriverLiveSharing,
+  getDriverLiveSharingSession,
+  getEnabledDriverLiveShareOrderId,
+  isDriverLiveSharingActive,
+  startDriverLiveSharing,
+  stopDriverLiveSharing,
+  subscribeDriverLiveSharing,
+} from './driverLiveSharingSession';
+
+export { promptEnableLiveLocation } from './promptEnableLiveLocation';

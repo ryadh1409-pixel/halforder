@@ -1,16 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 import type { DriverLiveCoordinate } from '@/types/location';
 import {
-  getCurrentGpsReadingSafe,
-  gpsReadingToDriverCoord,
-  requestForegroundLocationPermission,
-  resetDriverLocationThrottle,
-  syncDriverLiveLocation,
-  watchGpsPosition,
-  type GpsReading,
-} from '@/services/location';
+  ensureDriverLiveSharing,
+  isDriverLiveSharingActive,
+  subscribeDriverLiveSharing,
+} from '@/services/location/driverLiveSharingSession';
 
 export type DriverLocationTrackingState = {
   current: DriverLiveCoordinate | null;
@@ -20,8 +16,9 @@ export type DriverLocationTrackingState = {
 };
 
 /**
- * Background-safe foreground GPS watch for active deliveries.
- * Throttled Firestore writes via syncDriverLiveLocation.
+ * Subscribe to the driver-shell live sharing session for map display.
+ * Publishing is owned by DriverLiveSharingHost / post-accept Enable flow.
+ * If OS permission is already granted and sharing was enabled, silently resumes.
  */
 export function useDriverLocationTracking(
   orderId: string | null | undefined,
@@ -32,63 +29,47 @@ export function useDriverLocationTracking(
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
-  const watchRef = useRef<{ remove: () => void } | null>(null);
 
   useEffect(() => {
     if (!enabled || Platform.OS === 'web' || !orderId?.trim() || !driverId?.trim()) {
+      setCurrent(null);
       return undefined;
     }
 
-    let mounted = true;
     const oid = orderId.trim();
     const did = driverId.trim();
+    let mounted = true;
+
+    const unsub = subscribeDriverLiveSharing((coord) => {
+      if (!mounted) return;
+      setCurrent(coord);
+      if (coord) {
+        setPermissionGranted(true);
+        setLastSyncedAt(Date.now());
+        setSyncing(false);
+      }
+    });
 
     void (async () => {
-      const permission = await requestForegroundLocationPermission();
-      if (!mounted || permission !== 'granted') return;
-      setPermissionGranted(true);
-
-      const writeCoord = (coord: DriverLiveCoordinate) => {
-        if (!mounted) return;
-        setCurrent(coord);
-        setSyncing(true);
-        void syncDriverLiveLocation(oid, did, coord, { force: true })
-          .then((written) => {
-            if (!mounted) return;
-            if (written) setLastSyncedAt(Date.now());
-          })
-          .finally(() => {
-            if (mounted) setSyncing(false);
-          });
-      };
-
-      // Seed immediately so customers see the vehicle before the watch fires.
-      const seed = await getCurrentGpsReadingSafe({ highAccuracy: true });
-      if (mounted && seed) {
-        writeCoord(gpsReadingToDriverCoord(seed));
-      }
-
+      setSyncing(true);
       try {
-        const subscription = await watchGpsPosition(
-          (reading: GpsReading) => {
-            writeCoord(gpsReadingToDriverCoord(reading));
-          },
-          {
-            timeIntervalMs: 2000,
-            distanceIntervalM: 5,
-          },
-        );
-        watchRef.current = subscription;
-      } catch {
-        /* watch failed */
+        if (!isDriverLiveSharingActive(oid, did)) {
+          // Resume only when OS permission already granted (no second modal here).
+          await ensureDriverLiveSharing(oid, did);
+        }
+        if (mounted) {
+          setPermissionGranted(isDriverLiveSharingActive(oid, did));
+        }
+      } finally {
+        if (mounted) setSyncing(false);
       }
     })();
 
     return () => {
       mounted = false;
-      watchRef.current?.remove();
-      watchRef.current = null;
-      resetDriverLocationThrottle(oid, did);
+      unsub();
+      // Do not stop the shell session when leaving the Active screen —
+      // sharing continues until delivered / cancelled / unassigned.
     };
   }, [orderId, driverId, enabled]);
 
