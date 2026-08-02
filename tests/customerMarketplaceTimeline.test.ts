@@ -25,6 +25,27 @@ describe('customerMarketplaceTimeline', () => {
     expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Order placed');
   });
 
+  it('does not skip to driver stages from driverId while still order_placed', () => {
+    const idx = customerMarketplaceTimelineIndex({
+      status: 'payment_confirmed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'pending',
+      driverId: 'driver-1',
+      assignedDriverId: 'driver-1',
+    });
+    expect(idx).toBe(0);
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('order_placed');
+    const steps = buildCustomerTimelineRenderSteps({
+      status: 'payment_confirmed',
+      paymentStatus: 'paid',
+      deliveryStatus: 'pending',
+      driverId: 'driver-1',
+    });
+    expect(steps.find((s) => s.id === 'restaurant_accepted')?.completed).toBe(false);
+    expect(steps.find((s) => s.id === 'preparing')?.completed).toBe(false);
+    expect(steps.find((s) => s.id === 'driver_assigned')?.completed).toBe(false);
+  });
+
   it('shows Ready for pickup when kitchen marks ready_for_pickup', () => {
     const idx = customerMarketplaceTimelineIndex({
       status: 'ready_for_pickup',
@@ -42,7 +63,7 @@ describe('customerMarketplaceTimeline', () => {
       driverId: 'driver-1',
     });
     expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('driver_at_restaurant');
-    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Driver at restaurant');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Driver arrived at restaurant');
   });
 
   it('returns -1 when cancelled', () => {

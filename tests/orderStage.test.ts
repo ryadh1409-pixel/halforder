@@ -59,6 +59,29 @@ describe('deriveOrderStage', () => {
     expect(deriveOrderStage(order)).toBe('driver_assigned');
   });
 
+  it('does not invent driver_assigned from driverId while kitchen/courier still pending', () => {
+    expect(
+      deriveOrderStage({
+        paymentStatus: 'paid',
+        status: 'payment_confirmed',
+        deliveryStatus: 'pending',
+        driverId: 'driver-1',
+        assignedDriverId: 'driver-1',
+      }),
+    ).toBe('awaiting_restaurant');
+  });
+
+  it('keeps unpaid+driverId as awaiting_payment (never skips to driver_assigned)', () => {
+    expect(
+      deriveOrderStage({
+        paymentStatus: 'unpaid',
+        status: 'awaiting_payment',
+        deliveryStatus: 'pending',
+        driverId: 'driver-1',
+      }),
+    ).toBe('awaiting_payment');
+  });
+
   it('returns picked_up when pickedUpAt is set', () => {
     expect(
       deriveOrderStage({

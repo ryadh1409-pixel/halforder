@@ -96,15 +96,27 @@ export function resolveCustomerDeliveryStage(
   if (
     normalized === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED ||
     raw === 'heading_to_restaurant' ||
+    raw === 'driver_on_way' ||
+    raw === 'driver_accepted' ||
     (hasDriver(order) && raw === 'driver_assigned')
   ) {
     return CUSTOMER_DELIVERY_STAGE.DRIVER_ASSIGNED;
   }
 
   const mapped = LEGACY_COURIER_TO_CUSTOMER[raw];
-  if (mapped && hasDriver(order)) return mapped;
+  if (mapped === CUSTOMER_DELIVERY_STAGE.DRIVER_ASSIGNED && hasDriver(order)) {
+    return mapped;
+  }
+  if (
+    mapped &&
+    mapped !== CUSTOMER_DELIVERY_STAGE.DRIVER_ASSIGNED &&
+    hasDriver(order)
+  ) {
+    return mapped;
+  }
 
-  return hasDriver(order) ? CUSTOMER_DELIVERY_STAGE.DRIVER_ASSIGNED : null;
+  // Never invent driver_assigned from driverId alone while courier is still pending/kitchen.
+  return null;
 }
 
 export function customerDeliveryStageLabel(stage: CustomerDeliveryStage): string {

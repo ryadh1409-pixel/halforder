@@ -61,6 +61,18 @@ describe('resolveCustomerDeliveryStage', () => {
       }),
     ).toBe(CUSTOMER_DELIVERY_STAGE.DELIVERED);
   });
+
+  it('does not invent driver_assigned from driverId alone', () => {
+    expect(
+      resolveCustomerDeliveryStage({
+        paymentStatus: 'paid',
+        status: 'payment_confirmed',
+        deliveryStatus: 'pending',
+        driverId: 'd1',
+        assignedDriverId: 'd1',
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('customer track step alignment', () => {

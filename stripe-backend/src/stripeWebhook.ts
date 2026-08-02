@@ -20,7 +20,6 @@ import {
   buildPaymentOnlyPaidStatePatch,
   orderPaymentStatusString,
   orderStatusString,
-  shouldBlockStripePaymentOverwrite,
 } from "./orderPaidState.js";
 import {prepareServerOrderPatch} from "./serverOrderWrite.js";
 import {
@@ -28,7 +27,6 @@ import {
   isWebhookOrderWriteBlocked,
   isWebhookOrderWriteBlockedForData,
 } from "./webhookOrderWriteGuard.js";
-import {isOrderTerminalForServerWrite} from "./orderTerminalWriteGuard.js";
 import {
   handleFoodShareChargeRefunded,
   handleFoodSharePaymentIntentEvent,
@@ -288,13 +286,12 @@ function mergeOrderPaidSync(
     return;
   }
 
-  if (
-    isOrderTerminalForServerWrite(data) ||
-    shouldBlockStripePaymentOverwrite(data) ||
-    isWebhookOrderWriteBlockedForData(orderId, data)
-  ) {
-    return;
-  }
+  // NOTE: The early isWebhookOrderWriteBlockedForData guard above already blocks truly
+  // terminal statuses (completed, delivered, picked_up, ready_for_pickup, earningsRecorded).
+  // shouldBlockStripePaymentOverwrite is intentionally NOT re-checked here because
+  // buildOrderPaidStatePatch already handled it by reducing `safe` to a payment-only patch
+  // ({paymentStatus:"paid"}). Re-checking it here would silently discard paymentStatus:"paid"
+  // for orders that have driverId set at order-creation time but are still awaiting payment.
 
   if (safe.status === "payment_confirmed" || safe.deliveryStatus === "pending") {
     const courier = typeof data.deliveryStatus === "string" ? data.deliveryStatus.trim().toLowerCase() : "";

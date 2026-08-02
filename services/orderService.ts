@@ -919,6 +919,16 @@ export async function createOrder(
         userLocation,
         restaurantLocation: restaurantLocationWrite,
         deliveryType,
+        // Prevent stale driver assignment from a prior unpaid attempt advancing lifecycle.
+        driverId: null,
+        assignedDriverId: null,
+        driverLocation: null,
+        driverName: null,
+        driverPhone: null,
+        driverVehicle: null,
+        deliveryStatus: 'pending',
+        status: 'awaiting_payment',
+        paymentStatus: 'unpaid',
       };
 
       if (checkoutFinalTotal != null) {

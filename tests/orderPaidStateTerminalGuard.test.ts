@@ -68,6 +68,24 @@ describe('orderPaidState terminal guards', () => {
     expect(patch.paymentIntentId).toBe('pi_new');
   });
 
+  it('writes payment_confirmed and clears stale driverId on unpaid pre-kitchen orders', () => {
+    const patch = buildOrderPaidStatePatch(
+      {
+        paymentStatus: 'unpaid',
+        status: 'awaiting_payment',
+        deliveryStatus: 'pending',
+        driverId: 'stale-driver',
+        assignedDriverId: 'stale-driver',
+      },
+      { paymentIntentId: 'pi_stale' },
+    );
+    expect(patch.paymentStatus).toBe('paid');
+    expect(patch.status).toBe('payment_confirmed');
+    expect(patch.deliveryStatus).toBe('pending');
+    expect(patch.driverId).toBeNull();
+    expect(patch.assignedDriverId).toBeNull();
+  });
+
   it('buildPaymentOnlyPaidStatePatch never includes lifecycle fields', () => {
     const patch = buildPaymentOnlyPaidStatePatch({
       paymentIntentId: 'pi_retry',

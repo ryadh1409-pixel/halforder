@@ -6,7 +6,7 @@ import {
   type DerivedOrderStage,
   type OrderStageInput
 } from '@/lib/orderSharedTypes';
-import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
+import { MARKETPLACE_DELIVERY_STATUS, normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
 import { ENABLE_ORDER_TRACE } from '@/lib/orderTraceFlags';
 import { safeToMillis } from '@/utils/safeToMillis';
 
@@ -314,6 +314,35 @@ function isPickedUp(order: OrderStageInput): boolean {
   );
 }
 
+/**
+ * True only when persisted kitchen/courier fields say the driver stage has started.
+ * Presence of driverId alone must never invent this stage (skips restaurant work).
+ */
+function isDriverAssignedStage(order: OrderStageInput): boolean {
+  const status = kitchenStatus(order);
+  const courierRaw = norm(order.deliveryStatus);
+  const courier = normalizeMarketplaceDeliveryStatus(order.deliveryStatus);
+
+  if (
+    status === 'driver_assigned' ||
+    status === 'driver_accepted' ||
+    status === 'arriving_restaurant' ||
+    courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED ||
+    courierRaw === 'heading_to_restaurant' ||
+    courierRaw === 'driver_on_way' ||
+    courierRaw === 'driver_accepted' ||
+    courierRaw === 'driver_at_restaurant' ||
+    courierRaw === 'arrived_restaurant' ||
+    courierRaw === 'arriving_restaurant'
+  ) {
+    return true;
+  }
+
+  // Driver arrived at restaurant: courier/kitchen ready_for_pickup after an assigned driver.
+  // Do not treat ready_for_pickup without a driver as assigned (that is driver_assignment).
+  return hasDriver(order) && isReadyForDriver(order);
+}
+
 function isDelivered(order: OrderStageInput): boolean {
   if (hasTimestamp(order.deliveredAt, order.deliveredAtMs)) return true;
   if (hasTimestamp(order.completedAt, order.completedAtMs)) return true;
@@ -344,7 +373,8 @@ export function deriveOrderStage(order: OrderStageInput | null | undefined): Der
   if (isDelivered(order)) return 'delivered';
   if (isPickedUp(order)) return 'picked_up';
 
-  if (hasDriver(order) && !isPickedUp(order)) {
+  // Driver stage only from persisted courier/kitchen fields — never from driverId alone.
+  if (isDriverAssignedStage(order)) {
     return 'driver_assigned';
   }
 

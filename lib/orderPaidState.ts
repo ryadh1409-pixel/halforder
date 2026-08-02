@@ -85,14 +85,6 @@ export function buildPaymentOnlyPaidStatePatch(
 /**
  * Atomic field set for webhook or repair. Caller adds Firestore server timestamps.
  */
-function hasAssignedDriver(order: OrderPaidStateInput & Record<string, unknown>): boolean {
-  const driverId = orderStatusString(order.driverId);
-  const assignedDriverId = orderStatusString(
-    (order as Record<string, unknown>).assignedDriverId,
-  );
-  return driverId.length > 0 || assignedDriverId.length > 0;
-}
-
 export function buildOrderPaidStatePatch(
   existing: OrderPaidStateInput & Record<string, unknown>,
   input: BuildOrderPaidStatePatchInput = {},
@@ -107,7 +99,6 @@ export function buildOrderPaidStatePatch(
   /** Never re-assert payment_confirmed when courier has advanced past pending. */
   if (
     FULFILLED_STATUSES.has(courier) ||
-    hasAssignedDriver(existing) ||
     currentStatus === 'completed' ||
     currentStatus === 'delivered' ||
     existing.earningsRecorded === true

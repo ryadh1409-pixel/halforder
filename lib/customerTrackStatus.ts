@@ -102,11 +102,6 @@ function hasTimestamp(...values: unknown[]): boolean {
   return false;
 }
 
-function hasDriver(order: OrderStageInput): boolean {
-  const id = order.driverId ?? order.assignedDriverId;
-  return typeof id === 'string' && id.trim().length > 0;
-}
-
 /** Kitchen `status` aliases — mirrors orderStage kitchenStatus for lifecycle fields. */
 function lifecycleStatusValue(value: unknown): string {
   const s = norm(value);
@@ -179,8 +174,8 @@ function isPickedUp(order: OrderStageInput): boolean {
 }
 
 /**
- * Resolves the active customer timeline step — courier `deliveryStatus` is authoritative.
- * Kitchen `status` (e.g. payment_confirmed) must never cap delivery progress.
+ * Resolves the active customer timeline step from persisted Firestore fields only.
+ * Never invents restaurant/driver stages from driverId presence or other secondary signals.
  */
 export function resolveCustomerTrackStep(
   order: OrderStageInput | null | undefined,
@@ -221,12 +216,11 @@ export function resolveCustomerTrackStep(
     return 'driver_assigned';
   }
 
-  let index = stageIndexFromField(order.deliveryStatus);
+  // Furthest persisted kitchen OR courier field — no driverId promotion / no skipping.
+  const kitchenIndex = stageIndexFromField(order.status);
+  const courierIndex = stageIndexFromField(order.deliveryStatus);
+  let index = Math.max(kitchenIndex, courierIndex);
   if (index < 0) index = STAGE_INDEX.order_placed;
-
-  if (hasDriver(order) && index < STAGE_INDEX.driver_assigned) {
-    index = STAGE_INDEX.driver_assigned;
-  }
 
   const step = indexToStep(index);
   logResolvedCustomerTrackStep(order, step);

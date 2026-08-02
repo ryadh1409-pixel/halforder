@@ -70,6 +70,44 @@ function courierStage(courier: string): MonotonicOrderStage | null {
   return null;
 }
 
+function isReadyForDriver(order: MonotonicOrderInput): boolean {
+  const status = kitchenStatus(order);
+  const courier = norm(order.deliveryStatus);
+  const fromCourier = courierStage(courier);
+  return (
+    status === "ready" ||
+    status === "ready_for_pickup" ||
+    fromCourier === "driver_assignment"
+  );
+}
+
+/**
+ * True only when persisted kitchen/courier fields say the driver stage has started.
+ * Presence of driverId alone must never invent this stage (skips restaurant work).
+ * Keep in sync with services/orderStage.ts isDriverAssignedStage.
+ */
+function isDriverAssignedStage(order: MonotonicOrderInput): boolean {
+  const status = kitchenStatus(order);
+  const courier = norm(order.deliveryStatus);
+  const fromCourier = courierStage(courier);
+
+  if (
+    status === "driver_assigned" ||
+    status === "driver_accepted" ||
+    status === "arriving_restaurant" ||
+    fromCourier === "driver_assigned" ||
+    courier === "driver_on_way" ||
+    courier === "driver_accepted" ||
+    courier === "driver_at_restaurant" ||
+    courier === "arrived_restaurant" ||
+    courier === "arriving_restaurant"
+  ) {
+    return true;
+  }
+
+  return hasDriver(order) && isReadyForDriver(order);
+}
+
 export function deriveMonotonicOrderStage(
   order: MonotonicOrderInput | null | undefined,
 ): MonotonicOrderStage {
@@ -86,12 +124,8 @@ export function deriveMonotonicOrderStage(
   if (status === "picked_up" || status === "on_the_way" || fromCourier === "picked_up") {
     return "picked_up";
   }
-  if (hasDriver(order)) return "driver_assigned";
-  if (
-    status === "ready" ||
-    status === "ready_for_pickup" ||
-    fromCourier === "driver_assignment"
-  ) {
+  if (isDriverAssignedStage(order)) return "driver_assigned";
+  if (isReadyForDriver(order)) {
     return "driver_assignment";
   }
   if (

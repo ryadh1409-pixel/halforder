@@ -98,6 +98,28 @@ describe('resolveCustomerTrackStep', () => {
     expect(customerTrackHeaderTitle('driver_assigned')).toBe('Driver heading to restaurant');
   });
 
+  it('does not invent driver_assigned from driverId while deliveryStatus is still pending', () => {
+    expect(
+      resolveCustomerTrackStep({
+        paymentStatus: 'paid',
+        status: 'payment_confirmed',
+        deliveryStatus: 'pending',
+        driverId: 'driver-1',
+        assignedDriverId: 'driver-1',
+      }),
+    ).toBe('order_placed');
+  });
+
+  it('stays at order_placed after payment with no restaurant action', () => {
+    expect(
+      resolveCustomerTrackStep({
+        paymentStatus: 'paid',
+        status: 'payment_confirmed',
+        deliveryStatus: 'pending',
+      }),
+    ).toBe('order_placed');
+  });
+
   it('maps driver_at_restaurant when assigned driver and courier ready_for_pickup', () => {
     expect(
       resolveCustomerTrackStep({

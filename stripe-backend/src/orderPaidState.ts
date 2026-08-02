@@ -62,7 +62,7 @@ export function shouldBlockStripePaymentOverwrite(
   if (isOrderFulfilledForPaidPatch(order)) return true;
   if (order.earningsRecorded === true) return true;
   if (order.marketplaceArchived === true) return true;
-  if (hasAssignedDriver(order)) return true;
+  // Stale driverId alone must not block payment_confirmed — only real fulfillment progress.
   const status = orderStatusString(order.status).toLowerCase();
   const courier = orderStatusString(order.deliveryStatus).toLowerCase();
   return FULFILLED_STATUSES.has(status) || FULFILLED_STATUSES.has(courier);
@@ -161,7 +161,6 @@ export function buildOrderPaidStatePatch(
   /** Never re-assert payment_confirmed when courier has advanced past pending. */
   if (
     FULFILLED_STATUSES.has(currentCourier) ||
-    hasAssignedDriver(existing) ||
     currentStatus === "completed" ||
     currentStatus === "delivered" ||
     existing.earningsRecorded === true
@@ -176,8 +175,7 @@ export function buildOrderPaidStatePatch(
 
   const courierFulfillmentAdvanced =
     isDriverFulfillmentAdvanced(existing.deliveryStatus) ||
-    FULFILLED_STATUSES.has(orderStatusString(existing.deliveryStatus).toLowerCase()) ||
-    hasAssignedDriver(existing);
+    FULFILLED_STATUSES.has(orderStatusString(existing.deliveryStatus).toLowerCase());
 
   if (!input.repairOnly) {
     if (!courierFulfillmentAdvanced) {
