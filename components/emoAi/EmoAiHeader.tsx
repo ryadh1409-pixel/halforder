@@ -15,7 +15,10 @@ export function EmoAiHeader({ onInfoPress }: Props) {
     <View style={styles.row}>
       <Image source={AVATAR} style={styles.avatar} contentFit="cover" />
       <View style={styles.copy}>
-        <Text style={styles.name}>Emo AI</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>Emo AI</Text>
+          <Text style={styles.flags}>🇨🇦🇺🇸</Text>
+        </View>
         <View style={styles.onlineRow}>
           <View style={styles.onlineDot} />
           <Text style={styles.onlineText}>Online</Text>
@@ -51,11 +54,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(168, 85, 247, 0.35)',
   },
   copy: { flex: 1, minWidth: 0 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   name: {
     fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.3,
+  },
+  flags: {
+    fontSize: 14,
   },
   onlineRow: {
     flexDirection: 'row',
