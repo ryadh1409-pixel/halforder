@@ -10,43 +10,25 @@ export type FreshOrderInput = {
   updatedAt?: unknown;
 };
 
-/** Normalize every known timestamp shape to epoch ms. */
+/** Normalize every known timestamp shape to epoch ms. Prefer Firestore fields. */
 export function getOrderTimestamp(order: FreshOrderInput): number {
+  if (order.createdAt != null) {
+    const parsed = safeToMillis(order.createdAt);
+    if (parsed != null && parsed > 0) return parsed;
+  }
+
   if (order.createdAtMs != null) {
     const ms = safeToMillis(order.createdAtMs);
     if (ms != null && ms > 0) return ms;
   }
 
-  if (order.createdAt != null) {
-    const createdAt = order.createdAt as {
-      toMillis?: () => number;
-      _seconds?: number;
-    };
-    try {
-      const direct = createdAt.toMillis?.();
-      if (typeof direct === 'number' && Number.isFinite(direct) && direct > 0) {
-        return direct;
-      }
-    } catch {
-      // fall through
-    }
-
-    const seconds = createdAt._seconds;
-    if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
-      return seconds * 1000;
-    }
-
-    const parsed = safeToMillis(order.createdAt);
-    if (parsed != null && parsed > 0) return parsed;
+  if (order.updatedAt != null) {
+    const ms = safeToMillis(order.updatedAt);
+    if (ms != null && ms > 0) return ms;
   }
 
   if (order.updatedAtMs != null) {
     const ms = safeToMillis(order.updatedAtMs);
-    if (ms != null && ms > 0) return ms;
-  }
-
-  if (order.updatedAt != null) {
-    const ms = safeToMillis(order.updatedAt);
     if (ms != null && ms > 0) return ms;
   }
 
@@ -64,7 +46,7 @@ export function formatProfileOrderAge(
   ts: number | null | undefined,
   nowMs: number = Date.now(),
 ): string {
-  if (ts == null || !Number.isFinite(ts) || ts <= 0) return 'Just now';
+  if (ts == null || !Number.isFinite(ts) || ts <= 0) return '—';
   const ageMs = nowMs - ts;
   if (ageMs < 0) return 'Just now';
 

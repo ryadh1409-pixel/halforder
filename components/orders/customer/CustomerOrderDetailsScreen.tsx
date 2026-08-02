@@ -47,6 +47,7 @@ import {
   showUserError,
 } from '@/services/errors';
 import { showError, showNotice } from '@/utils/toast';
+import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import { openDeliveryTrackingInGoogleMaps } from '@/lib/maps/openDeliveryTrackingMaps';
 import * as Linking from 'expo-linking';
@@ -287,14 +288,9 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
 
   const deliveredAtLabel = useMemo(() => {
     const ms = order.deliveredAtMs ?? order.completedAtMs;
-    if (ms == null || !Number.isFinite(ms)) return null;
-    return new Date(ms).toLocaleString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    if (ms == null || !Number.isFinite(ms) || ms <= 0) return null;
+    const label = formatOrderDateTimeAbsolute(ms);
+    return label === '—' ? null : label;
   }, [order.completedAtMs, order.deliveredAtMs]);
 
   const mapPoints = useMemo(() => {

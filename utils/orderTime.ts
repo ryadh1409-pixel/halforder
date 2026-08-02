@@ -1,6 +1,10 @@
-import { formatRelativeTime, safeTimestampToDate } from '@/utils/time';
+import {
+  formatOrderDateTimeAbsolute,
+  formatRelativeTime,
+  safeTimestampToDate,
+} from '@/utils/time';
 
-export { safeTimestampToDate };
+export { safeTimestampToDate, formatOrderDateTimeAbsolute };
 
 export type OrderTimeFormatOptions = {
   timeZone?: string;
@@ -20,7 +24,9 @@ function resolveTimeZone(timeZone?: string): string {
 function safeOrderDate(
   createdAtMs: number | null | undefined,
 ): Date | null {
-  if (createdAtMs == null || !Number.isFinite(createdAtMs)) return null;
+  if (createdAtMs == null || !Number.isFinite(createdAtMs) || createdAtMs <= 0) {
+    return null;
+  }
   const date = new Date(createdAtMs);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -62,19 +68,21 @@ export function formatOrderTime(
   }
 }
 
-/** Relative age — e.g. `5 min ago`. Never throws. */
+/** Relative age — e.g. `5 min ago`. Missing persisted time → `—`. */
 export function formatRelativeAge(
   createdAtMs: number | null | undefined,
   options?: OrderTimeFormatOptions,
 ): string {
-  if (createdAtMs == null || !Number.isFinite(createdAtMs)) return 'Just now';
+  if (createdAtMs == null || !Number.isFinite(createdAtMs) || createdAtMs <= 0) {
+    return '—';
+  }
   try {
     return formatRelativeTime(createdAtMs, {
       timeZone: options?.timeZone,
       now: options?.nowMs,
     });
   } catch {
-    return 'Just now';
+    return '—';
   }
 }
 
@@ -114,7 +122,10 @@ export function formatRestaurantOrderPlacedLabel(
   createdAtMs: number | null | undefined,
   timeZone?: string,
 ): string {
-  if (createdAtMs == null) return 'Placed just now';
+  if (createdAtMs == null || !Number.isFinite(createdAtMs) || createdAtMs <= 0) {
+    return '—';
+  }
   const age = formatRelativeAge(createdAtMs, { timeZone });
+  if (age === '—') return '—';
   return age === 'Just now' ? 'Placed just now' : `Placed ${age}`;
 }

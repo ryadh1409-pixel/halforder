@@ -13,6 +13,7 @@ import {
   type AdminPaymentDateFilter,
 } from '@/services/adminPaymentCenter';
 import type { AdminPaymentTransaction } from '@/types/adminPaymentTransaction';
+import { formatOrderDate, formatOrderTime } from '@/utils/orderTime';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -30,11 +31,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 function formatDateTime(ms: number | null): { date: string; time: string } {
-  if (!ms) return { date: '—', time: '—' };
-  const d = new Date(ms);
+  if (ms == null || !Number.isFinite(ms) || ms <= 0) return { date: '—', time: '—' };
   return {
-    date: d.toLocaleDateString(),
-    time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    date: formatOrderDate(ms),
+    time: formatOrderTime(ms),
   };
 }
 

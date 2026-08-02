@@ -48,9 +48,16 @@ export function isActiveOrderStatus(status: string): boolean {
   ].includes(status);
 }
 
-/** All admin-visible timestamps use Toronto (product region). */
+/** All admin-visible timestamps use the viewer's local timezone. */
+function resolveLocalTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
 const TORONTO_LOCALE: Intl.DateTimeFormatOptions = {
-  timeZone: 'America/Toronto',
   year: 'numeric',
   month: 'short',
   day: 'numeric',
@@ -67,8 +74,9 @@ export function firestoreTimeToMs(v: unknown): number | null {
       return typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
     }
   }
-  if (typeof v === 'number' && Number.isFinite(v)) {
-    return v;
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
+    if (v < 1e12) return Math.round(v * 1000);
+    return Math.round(v);
   }
   if (typeof v === 'string' && v.trim() && !Number.isNaN(Date.parse(v))) {
     return Date.parse(v);
@@ -79,12 +87,18 @@ export function firestoreTimeToMs(v: unknown): number | null {
 export function formatFirestoreTime(v: unknown): string {
   const ms = firestoreTimeToMs(v);
   if (ms == null) return '—';
-  return new Date(ms).toLocaleString('en-CA', TORONTO_LOCALE);
+  return new Date(ms).toLocaleString('en-CA', {
+    ...TORONTO_LOCALE,
+    timeZone: resolveLocalTimeZone(),
+  });
 }
 
 export function formatMillisToronto(ms: number): string {
-  if (!Number.isFinite(ms)) return '—';
-  return new Date(ms).toLocaleString('en-CA', TORONTO_LOCALE);
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  return new Date(ms).toLocaleString('en-CA', {
+    ...TORONTO_LOCALE,
+    timeZone: resolveLocalTimeZone(),
+  });
 }
 
 export function orderDisplayTitle(
@@ -117,8 +131,5 @@ export function orderDisplayPriceLabel(data: Record<string, unknown>): string {
 }
 
 export function orderExpiresAtMs(data: Record<string, unknown>): number | null {
-  const exp = data.expiresAt;
-  if (typeof exp === 'number' && Number.isFinite(exp)) return exp;
-  const ms = firestoreTimeToMs(exp);
-  return ms;
+  return firestoreTimeToMs(data.expiresAt);
 }

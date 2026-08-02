@@ -5,6 +5,8 @@
  */
 import { adminColors as COLORS } from '@/constants/adminTheme';
 import { db } from '@/services/firebase';
+import { safeToMillis } from '@/utils/safeToMillis';
+import { formatRelativeTime } from '@/utils/time';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
@@ -34,27 +36,18 @@ type LiveOrder = {
   deliveryAddress: string | null;
   restaurantName: string | null;
   itemCount: number;
-  createdAtMs: number;
+  createdAtMs: number | null;
   status: string;
 };
 
-function formatTime(ms: number): string {
-  const now = Date.now();
-  const diff = now - ms;
-  if (diff < 60_000) return 'Just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return new Date(ms).toLocaleDateString();
+function formatTime(ms: number | null): string {
+  if (ms == null || ms <= 0) return '—';
+  return formatRelativeTime(ms);
 }
 
 function mapDoc(id: string, data: Record<string, unknown>): LiveOrder {
-  const createdAt = data.createdAt as Timestamp | null;
   const createdAtMs =
-    createdAt instanceof Timestamp
-      ? createdAt.toMillis()
-      : typeof (data.createdAtMs) === 'number'
-        ? (data.createdAtMs as number)
-        : Date.now();
+    safeToMillis(data.createdAt) ?? safeToMillis(data.createdAtMs);
 
   const items = Array.isArray(data.items) ? data.items : [];
   const deliveryLocation = data.deliveryLocation as Record<string, unknown> | null;

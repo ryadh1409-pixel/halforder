@@ -58,9 +58,10 @@ import {
   foodSharePickupPhone,
   isFoodShareDriverOrder,
 } from '@/lib/foodShareDriverOrderDisplay';
+import { formatOrderTime } from '@/utils/orderTime';
 
 function formatOrderPlacedAt(createdAtMs: number | null | undefined): string {
-  return createdAtMs ? new Date(createdAtMs).toLocaleTimeString() : 'Now';
+  return formatOrderTime(createdAtMs);
 }
 
 function formatItems(items: Array<{ qty?: number; quantity?: number; name?: string; title?: string }>): string {

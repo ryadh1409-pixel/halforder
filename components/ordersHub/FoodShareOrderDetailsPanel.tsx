@@ -9,6 +9,7 @@ import type { FoodShareHubItem } from '@/lib/ordersHubStatus';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/services/AuthContext';
 import { theme } from '@/constants/theme';
+import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -19,14 +20,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 const c = theme.colors;
 
 function formatPaidDate(ms: number | null): string {
-  if (ms == null || ms <= 0) return '—';
-  return new Date(ms).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatOrderDateTimeAbsolute(ms);
 }
 
 type Props = {

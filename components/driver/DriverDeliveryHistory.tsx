@@ -1,15 +1,10 @@
 import type { DriverOrder } from '@/services/driverService';
+import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 function formatCompletedAt(ms: number | null | undefined): string {
-  if (ms == null || !Number.isFinite(ms)) return 'Recently';
-  return new Date(ms).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatOrderDateTimeAbsolute(ms);
 }
 
 function money(value: number): string {

@@ -34,6 +34,7 @@ import {
 } from '@/services/paymentDetailSupport';
 import type { AdminPaymentTransaction } from '@/types/adminPaymentTransaction';
 import { getReadableErrorMessageOr } from '@/utils/errorMessages';
+import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import { showError, showSuccess } from '@/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -74,8 +75,8 @@ function DetailRow({
 }
 
 function formatWhen(ms: number | null | undefined): string {
-  if (ms == null) return '—';
-  return new Date(ms).toLocaleString();
+  if (ms == null || !Number.isFinite(ms) || ms <= 0) return '—';
+  return formatOrderDateTimeAbsolute(ms);
 }
 
 type HistoryRow = {

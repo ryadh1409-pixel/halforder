@@ -115,17 +115,17 @@ function parseOrderRow(id: string, d: DocumentData): ProfileOrderRow {
       return acc + (Number.isFinite(qty) && qty > 0 ? qty : 1);
     }, 0),
     createdAtMs:
-      safeToMillis(d?.createdAtMs) ??
       safeToMillis(d?.createdAt) ??
+      safeToMillis(d?.createdAtMs) ??
       safeToMillis(d?.updatedAt) ??
       0,
     createdAt: d?.createdAt,
     updatedAtMs:
-      safeToMillis(d?.updatedAtMs) ?? safeToMillis(d?.updatedAt) ?? null,
+      safeToMillis(d?.updatedAt) ?? safeToMillis(d?.updatedAtMs) ?? null,
     deliveredAtMs:
-      safeToMillis(d?.deliveredAtMs) ?? safeToMillis(d?.deliveredAt) ?? null,
+      safeToMillis(d?.deliveredAt) ?? safeToMillis(d?.deliveredAtMs) ?? null,
     completedAtMs:
-      safeToMillis(d?.completedAtMs) ?? safeToMillis(d?.completedAt) ?? null,
+      safeToMillis(d?.completedAt) ?? safeToMillis(d?.completedAtMs) ?? null,
     marketplaceArchived: d?.marketplaceArchived === true,
     imageUrl: imageFromItem || imageFromRestaurant,
     source: 'marketplace',
@@ -181,11 +181,13 @@ function parseFoodShareMatchRow(id: string, d: DocumentData, uid: string): Profi
     driverName: null,
     driverPhone: null,
     itemsCount: 1,
-    createdAtMs: createdAtMs || Date.now(),
+    createdAtMs: createdAtMs > 0 ? createdAtMs : 0,
     createdAt: d?.createdAt,
     updatedAtMs: safeToMillis(d?.updatedAt) ?? (createdAtMs > 0 ? createdAtMs : null),
-    deliveredAtMs: fields.status === 'completed' ? createdAtMs : null,
-    completedAtMs: fields.status === 'completed' ? createdAtMs : null,
+    deliveredAtMs:
+      safeToMillis(d?.deliveredAt) ?? safeToMillis(d?.deliveredAtMs) ?? null,
+    completedAtMs:
+      safeToMillis(d?.completedAt) ?? safeToMillis(d?.completedAtMs) ?? null,
     marketplaceArchived: false,
     imageUrl,
     source: 'food_share',

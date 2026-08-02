@@ -235,8 +235,8 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
             </View>
             <Text style={styles.timer}>
               {order.createdAtMs
-                ? `${Math.max(1, Math.floor((Date.now() - order.createdAtMs) / 60000))} min`
-                : 'now'}
+                ? `${Math.max(0, Math.floor((Date.now() - order.createdAtMs) / 60000))} min`
+                : '—'}
             </Text>
           </View>
           <View style={styles.headerMain}>

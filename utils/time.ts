@@ -34,6 +34,18 @@ function calendarDayKey(date: Date, timeZone: string): string {
   }).format(date);
 }
 
+/** Yesterday's calendar day key in `timeZone`, derived from today's key (YYYY-MM-DD). */
+function yesterdayDayKey(todayKey: string): string {
+  const parts = todayKey.split('-').map((p) => Number(p));
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return todayKey;
+  const [y, m, d] = parts;
+  const prev = new Date(Date.UTC(y, m - 1, d - 1, 12, 0, 0));
+  const yy = prev.getUTCFullYear();
+  const mm = String(prev.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(prev.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
 function formatTimeOfDay(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -56,13 +68,14 @@ function formatMonthDayTime(date: Date, timeZone: string, includeYear: boolean):
 /**
  * Short relative label for recent times.
  * Examples: `Just now`, `2 min ago`, `3 hr ago`.
+ * Missing/unparseable Firestore times never invent a clock — returns `—`.
  */
 export function formatRelativeTime(
   value: unknown,
   options?: TimeFormatOptions,
 ): string {
   const date = safeTimestampToDate(value);
-  if (!date) return 'Just now';
+  if (!date) return '—';
 
   const now = options?.now ?? Date.now();
   const diff = now - date.getTime();
@@ -81,15 +94,16 @@ export function formatRelativeTime(
 }
 
 /**
- * Merchant-friendly order timestamp.
+ * Merchant-friendly order timestamp in the viewer's local timezone (or `options.timeZone`).
  * Examples: `2 min ago`, `Yesterday 8:41 PM`, `May 22, 7:14 PM`.
+ * Missing/unparseable Firestore times never invent a clock — returns `—`.
  */
 export function formatOrderTime(
   value: unknown,
   options?: TimeFormatOptions,
 ): string {
   const date = safeTimestampToDate(value);
-  if (!date) return 'Just now';
+  if (!date) return '—';
 
   const now = options?.now ?? Date.now();
   const timeZone = resolveTimeZone(options?.timeZone);
@@ -102,10 +116,7 @@ export function formatOrderTime(
   const nowDate = new Date(now);
   const todayKey = calendarDayKey(nowDate, timeZone);
   const orderKey = calendarDayKey(date, timeZone);
-
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterdayKey = calendarDayKey(yesterdayDate, timeZone);
+  const yesterdayKey = yesterdayDayKey(todayKey);
 
   const clock = formatTimeOfDay(date, timeZone);
 
@@ -126,4 +137,28 @@ export function formatOrderTime(
   }).format(nowDate);
 
   return formatMonthDayTime(date, timeZone, orderYear !== nowYear);
+}
+
+/**
+ * Absolute local date+time for the same persisted instant across Customer/Restaurant/Driver/Admin.
+ * Example: `May 30, 2026, 7:05 PM`.
+ */
+export function formatOrderDateTimeAbsolute(
+  value: unknown,
+  options?: TimeFormatOptions,
+): string {
+  const date = safeTimestampToDate(value);
+  if (!date) return '—';
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: resolveTimeZone(options?.timeZone),
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date);
+  } catch {
+    return '—';
+  }
 }

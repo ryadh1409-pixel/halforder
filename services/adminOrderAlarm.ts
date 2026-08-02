@@ -57,7 +57,7 @@ function toAlarmOrder(order: RestaurantOrder): AlarmOrder {
     restaurantName: order.restaurant?.name ?? null,
     itemCount: items.length,
     items,
-    createdAtMs: order.createdAtMs ?? Date.now(),
+    createdAtMs: order.createdAtMs ?? 0,
     paymentStatus: order.paymentStatus ?? '',
     status: order.status ?? '',
   };

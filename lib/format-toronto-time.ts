@@ -1,18 +1,27 @@
-import type { Timestamp } from 'firebase/firestore';
+import { safeToMillis } from '@/utils/safeToMillis';
 
-function toDate(value: Timestamp | Date | number): Date {
-  if (value instanceof Date) return value;
-  if (typeof value === 'number') return new Date(value);
-  return (value as Timestamp).toDate();
+function resolveLocalTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function toDate(value: unknown): Date | null {
+  const ms = safeToMillis(value);
+  if (ms == null || ms <= 0) return null;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export function formatTorontoTime(
-  timestamp: Timestamp | Date | number | null | undefined,
+  timestamp: unknown,
 ): string {
-  if (timestamp == null) return '—';
   const d = toDate(timestamp);
+  if (!d) return '—';
   return d.toLocaleString('en-CA', {
-    timeZone: 'America/Toronto',
+    timeZone: resolveLocalTimeZone(),
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -20,19 +29,20 @@ export function formatTorontoTime(
 }
 
 export function formatTorontoOrderTime(
-  timestamp: Timestamp | Date | number | null | undefined,
+  timestamp: unknown,
 ): string {
-  if (timestamp == null) return '—';
   const d = toDate(timestamp);
+  if (!d) return '—';
+  const timeZone = resolveLocalTimeZone();
   const today = new Date();
   const dateStr = d.toLocaleDateString('en-CA', {
-    timeZone: 'America/Toronto',
+    timeZone,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
   const todayStr = today.toLocaleDateString('en-CA', {
-    timeZone: 'America/Toronto',
+    timeZone,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -41,28 +51,28 @@ export function formatTorontoOrderTime(
   return dateStr === todayStr ? `Today ${timeStr}` : `${dateStr} ${timeStr}`;
 }
 
-/** Format as MMM DD, YYYY in America/Toronto */
+/** Format as MMM DD, YYYY in the viewer's local timezone */
 export function formatTorontoDate(
-  timestamp: Timestamp | Date | number | null | undefined,
+  timestamp: unknown,
 ): string {
-  if (timestamp == null) return '—';
   const d = toDate(timestamp);
+  if (!d) return '—';
   return d.toLocaleDateString('en-CA', {
-    timeZone: 'America/Toronto',
+    timeZone: resolveLocalTimeZone(),
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
 }
 
-/** Format as HH:mm (24h) in America/Toronto */
+/** Format as HH:mm (24h) in the viewer's local timezone */
 export function formatTorontoTimeHHMM(
-  timestamp: Timestamp | Date | number | null | undefined,
+  timestamp: unknown,
 ): string {
-  if (timestamp == null) return '—';
   const d = toDate(timestamp);
+  if (!d) return '—';
   return d.toLocaleTimeString('en-CA', {
-    timeZone: 'America/Toronto',
+    timeZone: resolveLocalTimeZone(),
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,

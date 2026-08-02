@@ -3,6 +3,7 @@
  * Displays all order details: customer, phone, total, items, delivery address, date.
  */
 import type { AlarmOrder } from '@/services/adminOrderAlarm';
+import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback } from 'react';
 import {
@@ -23,14 +24,8 @@ type Props = {
 };
 
 function formatTime(ms: number): string {
-  const d = new Date(ms);
-  return d.toLocaleString('en-CA', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  return formatOrderDateTimeAbsolute(ms);
 }
 
 function OrderCard({

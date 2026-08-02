@@ -745,14 +745,9 @@ function mapDocToRestaurantOrderFromData(
     preparedAtMs: safeToMillis(data.preparedAt),
     readyAtMs: safeToMillis(data.readyAt),
     pickedUpAtMs: safeToMillis(data.pickedUpAt),
-    deliveredAtMs:
-      typeof data.deliveredAtMs === 'number' && Number.isFinite(data.deliveredAtMs)
-        ? data.deliveredAtMs
-        : safeToMillis(data.deliveredAt),
-    completedAtMs:
-      typeof data.completedAtMs === 'number' && Number.isFinite(data.completedAtMs)
-        ? data.completedAtMs
-        : safeToMillis(data.completedAt),
+    // Prefer persisted Firestore Timestamps; mirrored *AtMs only as fallback.
+    deliveredAtMs: safeToMillis(data.deliveredAt) ?? safeToMillis(data.deliveredAtMs),
+    completedAtMs: safeToMillis(data.completedAt) ?? safeToMillis(data.completedAtMs),
     cancelledAtMs: safeToMillis(data.cancelledAt),
     driverPayout:
       typeof data.driverPayout === 'number' && Number.isFinite(data.driverPayout)

@@ -27,6 +27,7 @@ import {
 import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { toMapCoordinate } from '@/lib/location/coordinates';
+import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -221,14 +222,9 @@ function TrackOrderScreen() {
   const deliveredAtLabel = useMemo(() => {
     if (!order) return null;
     const ms = order.deliveredAtMs ?? order.completedAtMs;
-    if (ms == null || !Number.isFinite(ms)) return null;
-    return new Date(ms).toLocaleString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    if (ms == null || !Number.isFinite(ms) || ms <= 0) return null;
+    const label = formatOrderDateTimeAbsolute(ms);
+    return label === '—' ? null : label;
   }, [order?.deliveredAtMs, order?.completedAtMs]);
 
   const delivered = trackingUi?.delivered ?? false;
