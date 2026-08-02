@@ -15,6 +15,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDEIyDNTl3-f2juVsGaIV1AwhuJ-vru6sU",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "297728229596-gbi1kscn09km1j4ppkfqqalitmvfrjtq.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "297728229596-romffk4k60l1pi6vhvrusopa8l3pvhhd.apps.googleusercontent.com"
       }
