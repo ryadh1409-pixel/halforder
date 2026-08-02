@@ -99,7 +99,7 @@ function TrackingMapInner({
   const seedPoint = driver ?? markerPoints[0] ?? null;
 
   useEffect(() => {
-    if (!seedPoint) return;
+    if (!seedPoint || !AnimatedRegion) return;
     if (!driverAnimRef.current) {
       driverAnimRef.current = new AnimatedRegion({
         latitude: seedPoint.latitude,
