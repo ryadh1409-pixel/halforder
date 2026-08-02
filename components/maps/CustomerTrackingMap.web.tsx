@@ -7,6 +7,8 @@ export function CustomerTrackingMap({
 }: {
   order: RestaurantOrder;
   routeCoordinates?: { latitude: number; longitude: number }[];
+  e2eCapture?: boolean;
+  e2ePhase?: string;
 }) {
   const pickupLabel =
     order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';

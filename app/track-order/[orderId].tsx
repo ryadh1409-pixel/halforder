@@ -100,20 +100,43 @@ function formatLiveEtaDistance(
 function TrackingMap({
   order,
   routeCoordinates,
+  e2eCapture,
+  e2ePhase,
 }: {
   order: RestaurantOrder;
   routeCoordinates: { latitude: number; longitude: number }[];
+  e2eCapture?: boolean;
+  e2ePhase?: string;
 }) {
-  return <CustomerTrackingMap order={order} routeCoordinates={routeCoordinates} />;
+  return (
+    <CustomerTrackingMap
+      order={order}
+      routeCoordinates={routeCoordinates}
+      e2eCapture={e2eCapture}
+      e2ePhase={e2ePhase}
+    />
+  );
 }
 
 function TrackOrderScreen() {
   const insets = useSafeAreaInsets();
-  const { orderId: rawId } = useLocalSearchParams<{ orderId?: string | string[] }>();
+  const { orderId: rawId, e2eCapture: rawCapture, e2ePhase: rawPhase } = useLocalSearchParams<{
+    orderId?: string | string[];
+    e2eCapture?: string | string[];
+    e2ePhase?: string | string[];
+  }>();
   const orderId = useMemo(() => {
     const v = Array.isArray(rawId) ? rawId[0] : rawId;
     return typeof v === 'string' ? v.trim() : '';
   }, [rawId]);
+  const e2eCapture = useMemo(() => {
+    const v = Array.isArray(rawCapture) ? rawCapture[0] : rawCapture;
+    return v === '1' || v === 'true';
+  }, [rawCapture]);
+  const e2ePhase = useMemo(() => {
+    const v = Array.isArray(rawPhase) ? rawPhase[0] : rawPhase;
+    return typeof v === 'string' ? v : undefined;
+  }, [rawPhase]);
 
   const [order, setOrder] = useState<RestaurantOrder | null | undefined>(undefined);
   const [listenError, setListenError] = useState(false);
@@ -324,7 +347,12 @@ function TrackOrderScreen() {
     <View style={styles.screenRoot}>
       {!delivered ? (
         <View style={[styles.mapSection, { height: MAP_HEIGHT }]}>
-          <TrackingMap order={order} routeCoordinates={liveRoute.coordinates} />
+          <TrackingMap
+            order={order}
+            routeCoordinates={liveRoute.coordinates}
+            e2eCapture={e2eCapture}
+            e2ePhase={e2ePhase}
+          />
 
           <SafeAreaView edges={['top']} style={styles.mapOverlay}>
             <View style={styles.mapTopRow}>

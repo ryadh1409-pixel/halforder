@@ -61,6 +61,7 @@ import {
 } from '@/services/orderFirestoreWrite';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { fetchRestaurantLocation, restaurantLocationToLegacy } from '@/services/location/restaurantLocation';
+import { isValidGpsCoordinates } from '@/services/location/productionGps';
 import type { DeliveryDistanceTier } from '@/types/deliveryEligibility';
 import type { CustomerLocationRecord } from '@/types/location';
 import { formatOrderTime } from '@/utils/time';
@@ -258,13 +259,30 @@ function parsePaymentStatus(value: unknown, orderStatus: OrderStatus): PaymentSt
 }
 
 function parseLatLng(value: unknown): LatLng | null {
-  return parseLegacyLatLng(value);
+  const parsed = parseLegacyLatLng(value);
+  if (!parsed) return null;
+  // Never treat Null Island placeholders as real GPS.
+  if (!isValidGpsCoordinates(parsed.lat, parsed.lng)) return null;
+  return parsed;
 }
 
 function toCreatedAtLabel(value: unknown, timeZone?: string): string {
   return formatOrderTime(value, { timeZone });
 }
 
+function finiteCoord(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const n = Number(value.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Map Firestore delivery fields → `{ lat, lng, address }`.
+ * Never fabricates `{ lat: 0, lng: 0 }` when only an address exists.
+ */
 function resolveMappedDeliveryLocation(
   data: Record<string, unknown>,
   customerLoc: LatLng | null,
@@ -274,32 +292,81 @@ function resolveMappedDeliveryLocation(
     typeof data.deliveryAddress === 'string' ? data.deliveryAddress.trim() : '';
 
   if (delivery && typeof delivery === 'object') {
-    const lat = (delivery as { lat?: unknown }).lat;
-    const lng = (delivery as { lng?: unknown }).lng;
+    const d = delivery as Record<string, unknown>;
+    const lat = finiteCoord(d.lat) ?? finiteCoord(d.latitude);
+    const lng = finiteCoord(d.lng) ?? finiteCoord(d.longitude);
     const nestedAddress =
-      typeof (delivery as { address?: unknown }).address === 'string'
-        ? String((delivery as { address: string }).address).trim()
-        : '';
+      typeof d.address === 'string' ? d.address.trim() : '';
     const address = nestedAddress || deliveryAddress;
-    if (typeof lat === 'number' && typeof lng === 'number' && address) {
+
+    if (lat != null && lng != null && isValidGpsCoordinates(lat, lng) && address) {
       return { lat, lng, address };
     }
-    if (address && customerLoc) {
+    if (address && customerLoc && isValidGpsCoordinates(customerLoc.lat, customerLoc.lng)) {
       return { lat: customerLoc.lat, lng: customerLoc.lng, address };
     }
     if (address) {
-      return { lat: 0, lng: 0, address };
+      console.warn(
+        '[orderService] deliveryLocation has address but no valid GPS — not fabricating 0,0',
+        { address, lat, lng },
+      );
+      return null;
     }
   }
 
   if (deliveryAddress) {
-    if (customerLoc) {
+    if (customerLoc && isValidGpsCoordinates(customerLoc.lat, customerLoc.lng)) {
       return { lat: customerLoc.lat, lng: customerLoc.lng, address: deliveryAddress };
     }
-    return { lat: 0, lng: 0, address: deliveryAddress };
+    console.warn(
+      '[orderService] deliveryAddress present without GPS — not fabricating 0,0',
+      { deliveryAddress },
+    );
+    return null;
   }
 
   return null;
+}
+
+/** Persistable delivery pin — dual lat/lng + latitude/longitude for all readers. */
+function buildDeliveryLocationWrite(input: {
+  lat: number;
+  lng: number;
+  address: string;
+}): { lat: number; lng: number; latitude: number; longitude: number; address: string } {
+  return {
+    lat: input.lat,
+    lng: input.lng,
+    latitude: input.lat,
+    longitude: input.lng,
+    address: input.address.trim(),
+  };
+}
+
+function buildRestaurantLocationWrite(input: { lat: number; lng: number }): {
+  lat: number;
+  lng: number;
+  latitude: number;
+  longitude: number;
+} {
+  return {
+    lat: input.lat,
+    lng: input.lng,
+    latitude: input.lat,
+    longitude: input.lng,
+  };
+}
+
+function assertOrderGps(
+  lat: number,
+  lng: number,
+  label: string,
+): void {
+  if (!isValidGpsCoordinates(lat, lng)) {
+    throw new Error(
+      `${label} is missing valid GPS coordinates. Re-select your delivery address and try again.`,
+    );
+  }
 }
 
 /** True when the document is a paid marketplace delivery order (not half-order / pickup-only). */
@@ -399,10 +466,15 @@ function mapDocToRestaurantOrderFromData(
   const userLoc = customerLoc;
   const restLoc =
     parseLatLng(data.restaurantLocation) ??
-    (restaurantObj &&
-    typeof restaurantObj.latitude === 'number' &&
-    typeof restaurantObj.longitude === 'number'
-      ? { lat: restaurantObj.latitude, lng: restaurantObj.longitude }
+    (restaurantObj
+      ? parseLatLng({
+          lat:
+            finiteCoord(restaurantObj.latitude) ??
+            finiteCoord(restaurantObj.lat),
+          lng:
+            finiteCoord(restaurantObj.longitude) ??
+            finiteCoord(restaurantObj.lng),
+        })
       : null);
 
   // DEBUG — remove after confirming coordinates
@@ -411,7 +483,12 @@ function mapDocToRestaurantOrderFromData(
     rawUserLoc: JSON.stringify(data.userLocation),
     rawDeliveryLoc: JSON.stringify(data.deliveryLocation),
     rawRestaurantLoc: JSON.stringify(data.restaurantLocation),
-    restaurantObjLatLng: restaurantObj ? { lat: restaurantObj.latitude, lng: restaurantObj.longitude } : null,
+    restaurantObjLatLng: restaurantObj
+      ? {
+          lat: restaurantObj.latitude ?? restaurantObj.lat ?? null,
+          lng: restaurantObj.longitude ?? restaurantObj.lng ?? null,
+        }
+      : null,
     parsedCustomerLoc: JSON.stringify(customerLoc),
     parsedRestaurantLoc: JSON.stringify(restLoc),
   });
@@ -535,12 +612,18 @@ function mapDocToRestaurantOrderFromData(
           ? restaurantObj.address
           : null,
       latitude:
-        restaurantObj && typeof restaurantObj.latitude === 'number'
-          ? restaurantObj.latitude
+        restaurantObj
+          ? finiteCoord(restaurantObj.latitude) ??
+            finiteCoord(restaurantObj.lat) ??
+            restLoc?.lat ??
+            null
           : restLoc?.lat ?? null,
       longitude:
-        restaurantObj && typeof restaurantObj.longitude === 'number'
-          ? restaurantObj.longitude
+        restaurantObj
+          ? finiteCoord(restaurantObj.longitude) ??
+            finiteCoord(restaurantObj.lng) ??
+            restLoc?.lng ??
+            null
           : restLoc?.lng ?? null,
     },
     customer: {
@@ -728,6 +811,13 @@ export type MarketplaceOrderCreatePayload = {
   deliveryLocation: { lat: number; lng: number; address: string };
   customerLocation?: CustomerLocationRecord;
   restaurantLocation?: LatLng | null;
+  /** When true, always create a new doc (skip unpaid / pending reuse). */
+  forceNew?: boolean;
+  /**
+   * DEV/E2E only: seed driver GPS on create (create rules allow it;
+   * customer cannot patch driverLocation after create).
+   */
+  seedDriverLocation?: { latitude: number; longitude: number } | null;
 };
 
 export async function createOrder(
@@ -741,27 +831,96 @@ export async function createOrder(
 
   const deliveryType = payload.deliveryType ?? 'delivery';
 
+  // ── Require real GPS from checkout (never invent 0,0) ──────────────────────
+  assertOrderGps(
+    payload.deliveryLocation.lat,
+    payload.deliveryLocation.lng,
+    'Delivery location',
+  );
+
+  let restaurantLocation: LatLng;
+  if (
+    payload.restaurantLocation &&
+    isValidGpsCoordinates(payload.restaurantLocation.lat, payload.restaurantLocation.lng)
+  ) {
+    restaurantLocation = payload.restaurantLocation;
+  } else {
+    const restaurantRecord = await fetchRestaurantLocation(payload.restaurantId);
+    restaurantLocation = restaurantLocationToLegacy(restaurantRecord);
+  }
+  assertOrderGps(
+    restaurantLocation.lat,
+    restaurantLocation.lng,
+    'Restaurant location',
+  );
+
+  const deliveryLocationWrite = buildDeliveryLocationWrite(payload.deliveryLocation);
+  const restaurantLocationWrite = buildRestaurantLocationWrite(restaurantLocation);
+
+  const customerLat =
+    payload.customerLocation &&
+    isValidGpsCoordinates(
+      payload.customerLocation.latitude,
+      payload.customerLocation.longitude,
+    )
+      ? payload.customerLocation.latitude
+      : deliveryLocationWrite.lat;
+  const customerLng =
+    payload.customerLocation &&
+    isValidGpsCoordinates(
+      payload.customerLocation.latitude,
+      payload.customerLocation.longitude,
+    )
+      ? payload.customerLocation.longitude
+      : deliveryLocationWrite.lng;
+  assertOrderGps(customerLat, customerLng, 'Customer location');
+
+  const customerLocationRecord: CustomerLocationRecord = {
+    latitude: customerLat,
+    longitude: customerLng,
+    timestamp:
+      payload.customerLocation?.timestamp != null
+        ? payload.customerLocation.timestamp
+        : serverTimestamp(),
+  };
+  const userLocation: LatLng = { lat: customerLat, lng: customerLng };
+
   try {
-    const existingUnpaid = await getDocs(
-      query(
-        collection(db, 'orders'),
-        where('customerId', '==', customerUid),
-        where('restaurantId', '==', payload.restaurantId),
-        where('paymentStatus', '==', 'unpaid'),
-        where('status', '==', 'awaiting_payment'),
-        limit(1),
-      ),
-    );
-    if (!existingUnpaid.empty) {
-      // Reuse the unpaid order id, but NEVER keep a stale pre-promo total.
-      // Checkout Final Total is the only payable amount (e.g. $1.13 after
-      // free_delivery / free_service_fee vs an older $2.26 on the doc).
+    if (payload.forceNew) {
+      console.log('[ORDER CREATE] forceNew=true — skipping unpaid reuse');
+    }
+    const existingUnpaid = payload.forceNew
+      ? null
+      : await getDocs(
+          query(
+            collection(db, 'orders'),
+            where('customerId', '==', customerUid),
+            where('restaurantId', '==', payload.restaurantId),
+            where('paymentStatus', '==', 'unpaid'),
+            where('status', '==', 'awaiting_payment'),
+            limit(1),
+          ),
+        );
+    if (existingUnpaid && !existingUnpaid.empty) {
+      // Reuse the unpaid order id, but NEVER keep a stale pre-promo total
+      // or stale / missing delivery GPS from an earlier attempt.
       const existingDoc = existingUnpaid.docs[0];
       const existingData = existingDoc.data() as Record<string, unknown>;
       const checkoutFinalTotal =
         typeof payload.totalPrice === 'number' && Number.isFinite(payload.totalPrice)
           ? Math.round(Math.max(0, payload.totalPrice) * 100) / 100
           : null;
+
+      const patch: Record<string, unknown> = {
+        updatedAt: serverTimestamp(),
+        deliveryLocation: deliveryLocationWrite,
+        deliveryAddress: deliveryLocationWrite.address,
+        customerLocation: customerLocationRecord,
+        userLocation,
+        restaurantLocation: restaurantLocationWrite,
+        deliveryType,
+      };
+
       if (checkoutFinalTotal != null) {
         const priorTotalCad =
           typeof existingData.customerTotal === 'number'
@@ -774,12 +933,9 @@ export async function createOrder(
         const priorCents =
           priorTotalCad != null ? Math.round(priorTotalCad * 100) : null;
         const checkoutCents = Math.round(checkoutFinalTotal * 100);
-        const patch: Record<string, unknown> = {
-          totalPrice: checkoutFinalTotal,
-          total: checkoutFinalTotal,
-          customerTotal: checkoutFinalTotal,
-          updatedAt: serverTimestamp(),
-        };
+        patch.totalPrice = checkoutFinalTotal;
+        patch.total = checkoutFinalTotal;
+        patch.customerTotal = checkoutFinalTotal;
         if (typeof payload.foodSubtotal === 'number' && Number.isFinite(payload.foodSubtotal)) {
           patch.subtotal = payload.foodSubtotal;
         }
@@ -798,7 +954,6 @@ export async function createOrder(
         if (typeof payload.promoDiscount === 'number' && Number.isFinite(payload.promoDiscount)) {
           patch.promoDiscount = Math.max(0, payload.promoDiscount);
         }
-        // Drop stale PaymentIntent so Stripe is recreated at checkout cents.
         if (priorCents != null && priorCents !== checkoutCents) {
           patch.paymentIntentId = null;
           patch.stripePaymentIntentId = null;
@@ -812,11 +967,30 @@ export async function createOrder(
             clearedStalePaymentIntent: priorCents != null && priorCents !== checkoutCents,
           }),
         );
-        await rawUpdateOrder(existingDoc.id, patch, {
-          fileName: 'services/orderService.ts',
-          functionName: 'createOrder:reuseUnpaid',
-        });
       }
+
+      await rawUpdateOrder(existingDoc.id, patch, {
+        fileName: 'services/orderService.ts',
+        functionName: 'createOrder:reuseUnpaid',
+      });
+
+      console.log('[ORDER CREATE COORDS] reused unpaid order', {
+        orderId: existingDoc.id,
+        customerLocation: {
+          latitude: customerLocationRecord.latitude,
+          longitude: customerLocationRecord.longitude,
+        },
+        restaurantLocation: {
+          latitude: restaurantLocationWrite.latitude,
+          longitude: restaurantLocationWrite.longitude,
+        },
+        deliveryLocation: {
+          latitude: deliveryLocationWrite.latitude,
+          longitude: deliveryLocationWrite.longitude,
+          address: deliveryLocationWrite.address,
+        },
+      });
+
       return existingDoc.id;
     }
   } catch {
@@ -824,43 +998,29 @@ export async function createOrder(
   }
 
   let existingOrderId: string | null = null;
-  try {
-    const pendingSnap = await getDocs(
-      query(
-        collection(db, 'orders'),
-        where('restaurantId', '==', payload.restaurantId),
-        where('status', '==', 'pending'),
-        orderBy('createdAt', 'desc'),
-        limit(8),
-      ),
-    );
-    const found = pendingSnap.docs.find((docSnap) => {
-      const gd = docSnap.data();
-      return gd.groupId == null || gd.groupId === '';
-    });
-    if (found) existingOrderId = found.id;
-  } catch {
-    /* query/index may be missing — still create order */
+  if (!payload.forceNew) {
+    try {
+      const pendingSnap = await getDocs(
+        query(
+          collection(db, 'orders'),
+          where('restaurantId', '==', payload.restaurantId),
+          where('status', '==', 'pending'),
+          orderBy('createdAt', 'desc'),
+          limit(8),
+        ),
+      );
+      const found = pendingSnap.docs.find((docSnap) => {
+        const gd = docSnap.data();
+        return gd.groupId == null || gd.groupId === '';
+      });
+      if (found) existingOrderId = found.id;
+    } catch {
+      /* query/index may be missing — still create order */
+    }
   }
   const groupId = existingOrderId ? `grp_${existingOrderId}` : makeGroupId();
   const estimatedDeliveryTime = existingOrderId ? 25 : 35;
 
-  const { lat, lng } = payload.deliveryLocation;
-  const userLocation: LatLng = { lat, lng };
-  const customerLocationRecord: CustomerLocationRecord =
-    payload.customerLocation ?? {
-      latitude: lat,
-      longitude: lng,
-      timestamp: serverTimestamp(),
-    };
-
-  let restaurantLocation: LatLng;
-  if (payload.restaurantLocation) {
-    restaurantLocation = payload.restaurantLocation;
-  } else {
-    const restaurantRecord = await fetchRestaurantLocation(payload.restaurantId);
-    restaurantLocation = restaurantLocationToLegacy(restaurantRecord);
-  }
   let restaurantRaw: Record<string, unknown> = {};
   let restaurantSnapshot: RestaurantSnapshot = {
     id: payload.restaurantId,
@@ -937,7 +1097,7 @@ export async function createOrder(
       };
     }
   } catch {
-    // Keep snapshot fallbacks and still create order.
+    /* profiles optional — keep snapshot fallbacks and still create order */
   }
 
   if (payload.userId.trim() !== customerUid) {
@@ -957,8 +1117,8 @@ export async function createOrder(
   try {
     const zoneCheck = assertDeliveryEligibleForOrder({
       deliveryType,
-      customerLat: lat,
-      customerLng: lng,
+      customerLat: customerLat,
+      customerLng: customerLng,
       restaurantData: restaurantRaw,
       restaurantCoords: restaurantLocation,
     });
@@ -1080,14 +1240,24 @@ export async function createOrder(
     checkoutSessionId: null,
     groupId,
     estimatedDeliveryTime,
-    driverId: payload.driverId ?? null,
-    assignedDriverId: null,
+    driverId: payload.driverId ?? (payload.seedDriverLocation ? customerUid : null),
+    assignedDriverId: payload.seedDriverLocation ? customerUid : null,
     driverName: null,
     driverPhone: null,
     driverVehicle: null,
-    driverLocation: null,
-    deliveryLocation: payload.deliveryLocation,
-    deliveryAddress: payload.deliveryLocation.address,
+    driverLocation: payload.seedDriverLocation
+      ? {
+          latitude: payload.seedDriverLocation.latitude,
+          longitude: payload.seedDriverLocation.longitude,
+          lat: payload.seedDriverLocation.latitude,
+          lng: payload.seedDriverLocation.longitude,
+          heading: null,
+          speed: null,
+          timestamp: serverTimestamp(),
+        }
+      : null,
+    deliveryLocation: deliveryLocationWrite,
+    deliveryAddress: deliveryLocationWrite.address,
     customerLocation: customerLocationRecord,
     restaurant: restaurantSnapshot,
     customer: customerSnapshot,
@@ -1099,7 +1269,7 @@ export async function createOrder(
       avatar: null,
     },
     userLocation,
-    restaurantLocation,
+    restaurantLocation: restaurantLocationWrite,
     notes: null,
     acceptedAt: null,
     preparedAt: null,
@@ -1134,6 +1304,53 @@ export async function createOrder(
     });
     throw err;
   }
+
+  console.log('[ORDER CREATE COORDS]', {
+    orderId,
+    customerLocation: {
+      latitude: customerLocationRecord.latitude,
+      longitude: customerLocationRecord.longitude,
+    },
+    restaurantLocation: {
+      latitude: restaurantLocationWrite.latitude,
+      longitude: restaurantLocationWrite.longitude,
+    },
+    deliveryLocation: {
+      latitude: deliveryLocationWrite.latitude,
+      longitude: deliveryLocationWrite.longitude,
+      address: deliveryLocationWrite.address,
+    },
+  });
+
+  try {
+    const written = await getDocFromServer(doc(db, 'orders', orderId));
+    const data = written.data() ?? {};
+    const cl = (data.customerLocation ?? null) as Record<string, unknown> | null;
+    const dl = (data.deliveryLocation ?? null) as Record<string, unknown> | null;
+    const rl = (data.restaurantLocation ?? null) as Record<string, unknown> | null;
+    console.log('[E2E VERIFY] FIRESTORE DOC AFTER createOrder()', {
+      orderId,
+      customerLocation: {
+        latitude: cl?.latitude ?? cl?.lat ?? null,
+        longitude: cl?.longitude ?? cl?.lng ?? null,
+        raw: cl,
+      },
+      deliveryLocation: {
+        latitude: dl?.latitude ?? dl?.lat ?? null,
+        longitude: dl?.longitude ?? dl?.lng ?? null,
+        raw: dl,
+      },
+      restaurantLocation: {
+        latitude: rl?.latitude ?? rl?.lat ?? null,
+        longitude: rl?.longitude ?? rl?.lng ?? null,
+        raw: rl,
+      },
+      driverLocation: data.driverLocation ?? null,
+    });
+  } catch (err) {
+    console.warn('[E2E VERIFY] failed to re-read order after createOrder', err);
+  }
+
   return orderId;
 }
 

@@ -393,6 +393,39 @@ export default function CheckoutPremiumScreen() {
         customerLocation = delivery.customerLocation;
       }
 
+      let restaurantLocationForLog: {
+        latitude: number;
+        longitude: number;
+        address?: string | null;
+      } | null = null;
+      try {
+        const rl = await fetchRestaurantLocation(restaurantId);
+        restaurantLocationForLog = {
+          latitude: rl.latitude,
+          longitude: rl.longitude,
+          address: rl.address,
+        };
+      } catch {
+        restaurantLocationForLog = null;
+      }
+
+      console.log('[E2E VERIFY] BEFORE createOrder()', {
+        customerLocation: customerLocation
+          ? {
+              latitude: customerLocation.latitude,
+              longitude: customerLocation.longitude,
+            }
+          : null,
+        deliveryLocation: {
+          latitude: deliveryLocation.lat,
+          longitude: deliveryLocation.lng,
+          address: deliveryLocation.address,
+        },
+        restaurantLocation: restaurantLocationForLog,
+        restaurantId,
+        fulfillmentMode,
+      });
+
       if (
         COMPLETE_MEAL_CHECKOUT_ENTRY_ENABLED &&
         fundingMode === 'complete_meal'

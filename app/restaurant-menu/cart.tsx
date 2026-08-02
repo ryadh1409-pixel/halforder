@@ -23,7 +23,7 @@ import { useCart } from '../../services/CartContext';
 import { auth, ensureAuthReady } from '../../services/firebase';
 import { createOrder } from '../../services/orderService';
 import { assertRestaurantAcceptsNewOrders } from '@/services/adminRestaurantManagement';
-import { resolveDeliveryLocationForCheckout } from '../../services/location';
+import { fetchRestaurantLocation, resolveDeliveryLocationForCheckout } from '../../services/location';
 import { showError, showFriendlyError } from '../../utils/toast';
 
 export default function CartScreen() {
@@ -106,6 +106,36 @@ export default function CartScreen() {
     try {
       await assertRestaurantAcceptsNewOrders(restaurantId);
       const delivery = await resolveDeliveryLocationForCheckout({ required: true });
+      let restaurantLocationForLog: {
+        latitude: number;
+        longitude: number;
+        address?: string | null;
+      } | null = null;
+      try {
+        const rl = await fetchRestaurantLocation(restaurantId);
+        restaurantLocationForLog = {
+          latitude: rl.latitude,
+          longitude: rl.longitude,
+          address: rl.address,
+        };
+      } catch {
+        restaurantLocationForLog = null;
+      }
+      console.log('[E2E VERIFY] BEFORE createOrder()', {
+        customerLocation: delivery.customerLocation
+          ? {
+              latitude: delivery.customerLocation.latitude,
+              longitude: delivery.customerLocation.longitude,
+            }
+          : null,
+        deliveryLocation: {
+          latitude: delivery.lat,
+          longitude: delivery.lng,
+          address: delivery.address,
+        },
+        restaurantLocation: restaurantLocationForLog,
+        restaurantId,
+      });
       const orderId = await createOrder({
         userId: user.uid,
         restaurantId,
