@@ -43,7 +43,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const WINDOW_H = Dimensions.get('window').height;
-const MAP_HEIGHT = Math.round(WINDOW_H * 0.45);
+const MAP_HEIGHT = Math.round(WINDOW_H * 0.62);
 
 function vehicleFromOrder(order: RestaurantOrder): DriverVehicleInfo {
   const d = order.driver;
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   lightRoot: { flex: 1, backgroundColor: '#0B0816', padding: 24 },
   mapSection: {
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#E8EEF4',
     overflow: 'hidden',
   },
   mapOverlay: {

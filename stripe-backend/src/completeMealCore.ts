@@ -414,6 +414,41 @@ export async function cancelCompleteMealCampaignCore(
   return {ok: true};
 }
 
+/** Extract GPS coords from a restaurant Firestore document, trying common field shapes. */
+function extractRestaurantLatLng(
+  doc: Record<string, unknown>,
+): {lat: number; lng: number} | null {
+  const tryNum = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) && !(Math.abs(v as number) < 0.001)
+      ? (v as number)
+      : null;
+
+  // Root-level lat/lng or latitude/longitude
+  const rootLat = tryNum(doc.latitude) ?? tryNum(doc.lat);
+  const rootLng = tryNum(doc.longitude) ?? tryNum(doc.lng);
+  if (rootLat !== null && rootLng !== null) return {lat: rootLat, lng: rootLng};
+
+  // Nested deliveryLocation object
+  const dl = doc.deliveryLocation;
+  if (dl && typeof dl === "object" && !Array.isArray(dl)) {
+    const d = dl as Record<string, unknown>;
+    const dlLat = tryNum(d.latitude) ?? tryNum(d.lat);
+    const dlLng = tryNum(d.longitude) ?? tryNum(d.lng);
+    if (dlLat !== null && dlLng !== null) return {lat: dlLat, lng: dlLng};
+  }
+
+  // Nested location object
+  const loc = doc.location;
+  if (loc && typeof loc === "object" && !Array.isArray(loc)) {
+    const l = loc as Record<string, unknown>;
+    const lLat = tryNum(l.latitude) ?? tryNum(l.lat);
+    const lLng = tryNum(l.longitude) ?? tryNum(l.lng);
+    if (lLat !== null && lLng !== null) return {lat: lLat, lng: lLng};
+  }
+
+  return null;
+}
+
 async function createOrderFromCampaign(
   campaignId: string,
   campaign: Record<string, unknown>,
@@ -429,6 +464,7 @@ async function createOrderFromCampaign(
     .doc(`restaurants/${draft.restaurantId}`)
     .get();
   const restaurant = restaurantSnap.data() ?? {};
+  const restaurantCoords = extractRestaurantLatLng(restaurant);
   const userSnap = await admin.firestore().doc(`users/${ownerUid}`).get();
   const user = userSnap.data() ?? {};
 
@@ -463,6 +499,10 @@ async function createOrderFromCampaign(
     driverId: null,
     assignedDriverId: null,
     deliveryLocation: draft.deliveryLocation,
+    // Actual restaurant GPS (separate from customer delivery location)
+    restaurantLocation: restaurantCoords
+      ? {lat: restaurantCoords.lat, lng: restaurantCoords.lng}
+      : null,
     userLocation: {
       lat: draft.deliveryLocation.lat,
       lng: draft.deliveryLocation.lng,
@@ -486,8 +526,9 @@ async function createOrderFromCampaign(
             : null,
       address:
         typeof restaurant.address === "string" ? restaurant.address : null,
-      latitude: draft.deliveryLocation.lat,
-      longitude: draft.deliveryLocation.lng,
+      // Use actual restaurant coordinates, not customer delivery location
+      latitude: restaurantCoords?.lat ?? null,
+      longitude: restaurantCoords?.lng ?? null,
     },
     customerSnapshot: {
       id: ownerUid,

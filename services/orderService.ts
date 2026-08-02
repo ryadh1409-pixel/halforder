@@ -379,9 +379,13 @@ function mapDocToRestaurantOrderFromData(
         ? data.venueId
       : fallbackRestaurantId ?? '';
   const restaurantObj =
-    data.restaurant && typeof data.restaurant === 'object'
+    (data.restaurant && typeof data.restaurant === 'object'
       ? (data.restaurant as Record<string, unknown>)
-      : null;
+      : null) ??
+    // completeMeal orders save the snapshot under "restaurantSnapshot" key
+    (data.restaurantSnapshot && typeof data.restaurantSnapshot === 'object'
+      ? (data.restaurantSnapshot as Record<string, unknown>)
+      : null);
   const deliveryType: 'delivery' | 'pickup' =
     data.deliveryType === 'pickup' ? 'pickup' : 'delivery';
   const deliveryAddress =
@@ -400,6 +404,17 @@ function mapDocToRestaurantOrderFromData(
     typeof restaurantObj.longitude === 'number'
       ? { lat: restaurantObj.latitude, lng: restaurantObj.longitude }
       : null);
+
+  // DEBUG — remove after confirming coordinates
+  console.log('[OrderService] COORDS', d.id, {
+    rawCustomerLoc: JSON.stringify(data.customerLocation),
+    rawUserLoc: JSON.stringify(data.userLocation),
+    rawDeliveryLoc: JSON.stringify(data.deliveryLocation),
+    rawRestaurantLoc: JSON.stringify(data.restaurantLocation),
+    restaurantObjLatLng: restaurantObj ? { lat: restaurantObj.latitude, lng: restaurantObj.longitude } : null,
+    parsedCustomerLoc: JSON.stringify(customerLoc),
+    parsedRestaurantLoc: JSON.stringify(restLoc),
+  });
 
   const status = parseStatus(data.status);
   const customerObj =
