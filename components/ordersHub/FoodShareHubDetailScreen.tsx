@@ -1,6 +1,9 @@
 import { FoodShareInviteButton } from '@/components/foodShare/FoodShareInviteButton';
 import { FoodShareHubCard } from '@/components/ordersHub/FoodShareHubCard';
 import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
+import { OrderFeedbackModal } from '@/components/feedback/OrderFeedbackModal';
+import type { OrderFeedbackPayload } from '@/components/feedback/OrderFeedbackModal';
+import { hasSubmittedFeedback, submitOrderFeedback } from '@/services/feedback/orderFeedbackService';
 import { formatPaidAtLabel } from '@/lib/orderReceipt';
 import { receiptNumberFromId } from '@/lib/orderPricing';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
@@ -131,6 +134,8 @@ export function FoodShareHubDetailScreen({
   const [paymentRaw, setPaymentRaw] = useState<Record<string, unknown> | null>(
     null,
   );
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [alreadyRated, setAlreadyRated] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -213,6 +218,14 @@ export function FoodShareHubDetailScreen({
   }, [id, kind, myUid]);
 
   const timeline = useMemo(() => buildTimeline(hubItem), [hubItem]);
+
+  // Check if user already left feedback for this match
+  useEffect(() => {
+    if (!myUid || kind !== 'match' || !id) return;
+    hasSubmittedFeedback(id, myUid)
+      .then(setAlreadyRated)
+      .catch(() => setAlreadyRated(false));
+  }, [id, kind, myUid]);
   const schedule = useMemo(() => {
     const raw = shareRaw ?? {};
     return {
@@ -414,7 +427,49 @@ export function FoodShareHubDetailScreen({
             timeLabel={schedule.timeLabel}
           />
         ) : null}
+
+        {/* Feedback — only show for completed/delivered match orders */}
+        {kind === 'match' &&
+        match &&
+        ['COMPLETED', 'DELIVERED'].includes(
+          String(match.lifecycle ?? '').toUpperCase(),
+        ) ? (
+          alreadyRated ? (
+            <View style={styles.feedbackDone}>
+              <Text style={styles.feedbackDoneEmoji}>⭐</Text>
+              <Text style={styles.feedbackDoneText}>
+                You've already rated this order. Thank you!
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [
+                styles.feedbackBtn,
+                pressed && styles.feedbackBtnPressed,
+              ]}
+              onPress={() => setFeedbackOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Rate your experience"
+            >
+              <Text style={styles.feedbackBtnEmoji}>⭐</Text>
+              <Text style={styles.feedbackBtnText}>Rate Your Experience</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.6)" />
+            </Pressable>
+          )
+        ) : null}
       </ScrollView>
+
+      <OrderFeedbackModal
+        visible={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        isPickup={schedule.pickupOrDelivery.toLowerCase().includes('pickup')}
+        restaurantName={hubItem.restaurantName}
+        onSubmit={async (payload: OrderFeedbackPayload) => {
+          await submitOrderFeedback(id, myUid, hubItem.restaurantName, payload);
+          setAlreadyRated(true);
+          setFeedbackOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -567,4 +622,43 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   ctaText: { color: '#FFF', fontWeight: '800' },
+  feedbackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(250,204,21,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(250,204,21,0.28)',
+  },
+  feedbackBtnPressed: { opacity: 0.75 },
+  feedbackBtnEmoji: { fontSize: 20 },
+  feedbackBtnText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  feedbackDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  feedbackDoneEmoji: { fontSize: 18 },
+  feedbackDoneText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#86EFAC',
+  },
 });

@@ -115,6 +115,11 @@ function SwipeFoodCardInner({ card }: Props) {
   const youPay = formatShareCurrency(card.pricing.displaySubtotal);
   const saving = card.pricing.totalSaving;
 
+  // Mini fee breakdown — shown on card when fees are non-zero
+  const showDeliveryFee = !card.pricing.freeDelivery && card.pricing.sharedDeliveryFee > 0;
+  const showServiceFee = !card.pricing.freeServiceFee && card.pricing.sharedServiceFee > 0;
+  const hasMiniBreakdown = !isPickup && (showDeliveryFee || showServiceFee);
+
   // No window means the share is open-ended, so it is simply live right now.
   const availabilityText = availability
     ? availability.detail
@@ -261,6 +266,39 @@ function SwipeFoodCardInner({ card }: Props) {
             />
           </Pressable>
         </View>
+
+        {hasMiniBreakdown ? (
+          <View style={styles.feeBreakdownRow}>
+            {showDeliveryFee ? (
+              <View style={styles.feePill}>
+                <Text style={styles.feePillIcon}>🚚</Text>
+                <View>
+                  <Text style={styles.feePillLabel}>Delivery</Text>
+                  <Text style={styles.feePillValue}>
+                    {formatShareCurrency(card.pricing.sharedDeliveryFee)}{' '}
+                    <Text style={styles.feePillOf}>
+                      of {formatShareCurrency(card.pricing.originalDeliveryFee)}
+                    </Text>
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            {showServiceFee ? (
+              <View style={styles.feePill}>
+                <Text style={styles.feePillIcon}>⚡</Text>
+                <View>
+                  <Text style={styles.feePillLabel}>Service Fee</Text>
+                  <Text style={styles.feePillValue}>
+                    {formatShareCurrency(card.pricing.sharedServiceFee)}{' '}
+                    <Text style={styles.feePillOf}>
+                      of {formatShareCurrency(card.pricing.originalServiceFee)}
+                    </Text>
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={styles.pillRow}>
           {saving > 0 ? (
@@ -583,4 +621,41 @@ const styles = StyleSheet.create({
   },
   statusBadgeMatched: { backgroundColor: 'rgba(168, 85, 247, 0.92)' },
   statusBadgeReady: { backgroundColor: 'rgba(34, 197, 94, 0.92)' },
+  feeBreakdownRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 2,
+  },
+  feePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  feePillIcon: { fontSize: 13 },
+  feePillLabel: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: 1,
+  },
+  feePillValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#C4B5FD',
+  },
+  feePillOf: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.35)',
+  },
 });
