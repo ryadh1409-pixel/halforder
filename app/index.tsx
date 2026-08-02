@@ -1,4 +1,4 @@
-import AppLogo from '../components/AppLogo';
+import AppLoadingScreen from '../components/AppLoadingScreen';
 import { ONBOARDING_COMPLETE_KEY } from '../constants/onboarding';
 import { useUserTermsStatus } from '../hooks/useUserTermsStatus';
 import { isRegisteredAuthUser } from '@/lib/authSession';
@@ -8,7 +8,7 @@ import { fetchOnboardingConfig } from '../services/onboardingAdmin';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 
 type GateState =
   | { phase: 'loading' }
@@ -118,31 +118,13 @@ export default function Index() {
     waitingForTerms ||
     (gateReady && !onboardingDone)
   ) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingTop: 60,
-          backgroundColor: '#0B0816',
-        }}
-      >
-        <AppLogo size={112} marginTop={0} />
-        <ActivityIndicator size="large" style={{ marginTop: 40 }} />
-      </View>
-    );
+    return <AppLoadingScreen />;
   }
 
   /** Registered: transparent shell while orchestrator navigates to role home. */
   if (isRegisteredAuthUser(user)) {
-    return <View style={{ flex: 1, backgroundColor: '#0B0816' }} />;
+    return <AppLoadingScreen />;
   }
 
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <AppLogo size={112} marginTop={0} />
-      <ActivityIndicator size="large" style={{ marginTop: 40 }} />
-    </View>
-  );
+  return <AppLoadingScreen />;
 }
