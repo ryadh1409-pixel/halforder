@@ -3,6 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+const GOLD = '#F59E0B';
+const GOLD_BG = 'rgba(245,158,11,0.07)';
+const GOLD_BORDER = 'rgba(245,158,11,0.22)';
+
 import type { DeliveryMode } from '@/components/restaurant/DeliveryOptions';
 
 type Props = {
@@ -42,7 +46,7 @@ export function QuickInfoCards({
             <Ionicons
               name="bicycle-outline"
               size={16}
-              color={isFree ? '#22C55E' : RP.textMuted}
+              color={isFree ? GOLD : RP.textMuted}
             />
           </View>
           {isFree && (
@@ -97,8 +101,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardAccent: {
-    borderColor: 'rgba(34,197,94,0.25)',
-    backgroundColor: 'rgba(34,197,94,0.05)',
+    borderColor: GOLD_BORDER,
+    backgroundColor: GOLD_BG,
   },
   cardTop: {
     flexDirection: 'row',
@@ -117,21 +121,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapAccent: {
-    backgroundColor: 'rgba(34,197,94,0.10)',
-    borderColor: 'rgba(34,197,94,0.2)',
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderColor: 'rgba(245,158,11,0.25)',
   },
   freePill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 20,
-    backgroundColor: 'rgba(34,197,94,0.15)',
+    backgroundColor: 'rgba(245,158,11,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.3)',
+    borderColor: 'rgba(245,158,11,0.3)',
   },
   freePillTxt: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#22C55E',
+    color: GOLD,
     letterSpacing: 0.8,
   },
   cardTitle: {
@@ -140,7 +144,7 @@ const styles = StyleSheet.create({
     color: RP.text,
     lineHeight: 19,
   },
-  cardTitleAccent: { color: '#22C55E' },
+  cardTitleAccent: { color: GOLD },
   cardSub: {
     marginTop: 4,
     fontSize: 11,
@@ -156,5 +160,5 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: RP.border,
   },
-  barAccent: { backgroundColor: '#22C55E' },
+  barAccent: { backgroundColor: GOLD },
 });

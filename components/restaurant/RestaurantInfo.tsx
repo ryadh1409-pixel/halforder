@@ -25,31 +25,35 @@ type Props = {
   promoLabels?: string[];
 };
 
+const GOLD = '#F59E0B';
+const GOLD_BG = 'rgba(245,158,11,0.10)';
+const GOLD_BORDER = 'rgba(245,158,11,0.22)';
+
 // ── Stat chip ─────────────────────────────────────────────────────────────────
 function StatChip({
   icon,
   label,
   value,
-  accent,
+  free,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
-  accent?: boolean;
+  free?: boolean;
 }) {
   return (
-    <View style={styles.stat}>
-      <View style={[styles.statIconWrap, accent && styles.statIconAccent]}>
-        <Ionicons
-          name={icon}
-          size={14}
-          color={accent ? '#22C55E' : RP.textMuted}
-        />
-      </View>
+    <View style={[styles.stat, free && styles.statFree]}>
+      <Ionicons
+        name={icon}
+        size={16}
+        color={free ? GOLD : RP.textMuted}
+        style={styles.statIcon}
+      />
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statVal, accent && styles.statValAccent]}>
+      <Text style={[styles.statVal, free && styles.statValFree]}>
         {value}
       </Text>
+      {free && <View style={styles.statFreeDot} />}
     </View>
   );
 }
@@ -79,7 +83,9 @@ export function RestaurantInfo({
     deliveryFeeLabel.toLowerCase().includes('free') ||
     deliveryFeeLabel === 'CA$0.00';
   const isFreeService =
-    serviceFeeLabel === 'FREE' || serviceFeeLabel === 'CA$0.00';
+    serviceFeeLabel === 'FREE' ||
+    serviceFeeLabel === 'CA$0.00' ||
+    serviceFeeLabel.toLowerCase().includes('free');
 
   return (
     <View style={styles.card}>
@@ -140,14 +146,14 @@ export function RestaurantInfo({
           icon="bicycle-outline"
           label="Delivery"
           value={deliveryFeeLabel}
-          accent={isFreeDelivery}
+          free={isFreeDelivery}
         />
         <View style={styles.statDivider} />
         <StatChip
           icon="receipt-outline"
           label="Service"
-          value={serviceFeeLabel}
-          accent={isFreeService}
+          value={isFreeService ? 'FREE' : serviceFeeLabel}
+          free={isFreeService}
         />
         {distanceLabel != null && (
           <>
@@ -289,37 +295,54 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: RP.border,
+    gap: 0,
   },
-  stat: { flex: 1, alignItems: 'center', gap: 5, paddingHorizontal: 2 },
-  statIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: RP.surface,
+  stat: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+    gap: 4,
+    position: 'relative',
   },
-  statIconAccent: {
-    backgroundColor: 'rgba(34,197,94,0.10)',
+  statFree: {
+    backgroundColor: GOLD_BG,
+    borderWidth: 1,
+    borderColor: GOLD_BORDER,
   },
+  statIcon: { marginBottom: 0 },
   statLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
     color: RP.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.6,
+    textAlign: 'center',
   },
   statVal: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: RP.text,
     textAlign: 'center',
+    lineHeight: 14,
   },
-  statValAccent: { color: '#22C55E' },
+  statValFree: { color: GOLD },
+  statFreeDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: GOLD,
+  },
   statDivider: {
-    width: StyleSheet.hairlineWidth,
+    width: 1,
     backgroundColor: RP.border,
-    marginHorizontal: 2,
+    marginTop: 6,
+    marginBottom: 6,
+    marginHorizontal: 3,
   },
 
   // Address
