@@ -12,7 +12,7 @@
       "backgroundColor": "#ffffff"
     },
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "icon": "./assets/icon.png",
       "supportsTablet": true,
