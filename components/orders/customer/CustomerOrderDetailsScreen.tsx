@@ -562,9 +562,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
                   : (order.status ?? 'pending').replace(/_/g, ' ')}
               </Text>
             </View>
-            <View style={[styles.chip, { backgroundColor: payChip.bg }]}>
-              <Text style={[styles.chipText, { color: payChip.fg }]}>{payChip.label}</Text>
-            </View>
+            {order.paymentStatus !== 'paid' ? (
+              <View style={[styles.chip, { backgroundColor: payChip.bg }]}>
+                <Text style={[styles.chipText, { color: payChip.fg }]}>{payChip.label}</Text>
+              </View>
+            ) : null}
           </View>
           {!delivered ? (
             <>

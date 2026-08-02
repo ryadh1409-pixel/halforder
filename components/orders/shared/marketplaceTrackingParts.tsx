@@ -71,7 +71,7 @@ export function paymentBadge(paymentStatus: RestaurantOrder['paymentStatus']): {
 } {
   switch (paymentStatus) {
     case 'paid':
-      return { label: 'Paid', bg: 'rgba(34,197,94,0.25)', fg: '#22C55E' };
+      return { label: 'Payment Confirmed', bg: 'rgba(34,197,94,0.25)', fg: '#22C55E' };
     case 'processing':
       return { label: 'Processing', bg: 'rgba(245,158,11,0.2)', fg: '#F59E0B' };
     case 'failed':
