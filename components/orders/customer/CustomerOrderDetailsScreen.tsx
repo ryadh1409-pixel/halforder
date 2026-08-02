@@ -906,13 +906,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#0E1218',
   },
   liveMapPreviewHost: {
-    minHeight: 180,
+    height: 180,
+    width: '100%',
     borderRadius: 18,
     overflow: 'hidden',
   },
   liveMapPreview: {
-    height: 180,
-    width: '100%',
+    ...StyleSheet.absoluteFillObject,
   },
   pinCard: {
     marginHorizontal: 16,
@@ -1085,8 +1085,9 @@ const styles = StyleSheet.create({
   mapHost: { borderRadius: 14, overflow: 'hidden', minHeight: 200 },
   mapReal: { height: 220, width: '100%' },
   mapPlaceholder: {
-    height: 200,
-    borderRadius: 14,
+    height: 180,
+    width: '100%',
+    borderRadius: 18,
     backgroundColor: '#151126',
     alignItems: 'center',
     justifyContent: 'center',

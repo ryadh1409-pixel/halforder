@@ -1,6 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import {
+  areMapCoordinatesDistinct,
+  DEFAULT_SINGLE_POINT_LAT_DELTA,
+  DEFAULT_SINGLE_POINT_LNG_DELTA,
+} from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import type { MapRendererProps } from './types';
 
@@ -38,9 +43,24 @@ export default function NativeMap({
   // Hooks must all be called before any conditional return.
   useEffect(() => {
     if (!MapView) return;
-    if (!fitToCoordinates || fitToCoordinates.length < 2 || !mapRef.current) return;
+    if (!fitToCoordinates || fitToCoordinates.length < 1 || !mapRef.current) return;
     const t = setTimeout(() => {
       try {
+        // Overlapping markers → default street-level region (avoid single-point zoom).
+        if (!areMapCoordinatesDistinct(fitToCoordinates)) {
+          const c = fitToCoordinates[0];
+          mapRef.current?.animateToRegion?.(
+            {
+              latitude: c.latitude,
+              longitude: c.longitude,
+              latitudeDelta: DEFAULT_SINGLE_POINT_LAT_DELTA,
+              longitudeDelta: DEFAULT_SINGLE_POINT_LNG_DELTA,
+            },
+            500,
+          );
+          return;
+        }
+        if (fitToCoordinates.length < 2) return;
         mapRef.current?.fitToCoordinates(fitToCoordinates, {
           edgePadding: fitEdgePadding,
           animated: true,

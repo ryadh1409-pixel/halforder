@@ -6,7 +6,7 @@
 import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { collectMapCoordinates, toMapCoordinate } from '@/lib/location/coordinates';
-import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
+import { fitMapToCoordinates, areMapCoordinatesDistinct } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import { haversineDistanceKm } from '@/lib/haversine';
 import type { RestaurantOrder } from '@/services/orderService';
@@ -244,10 +244,11 @@ function TrackingMapInner({
         note: 'this map path uses fitToCoordinates / animateToRegion only — animateCamera() is never called',
       });
 
-      if (pts.length === 1) {
-        console.log('[MAP RUNTIME] animateToRegion() called (single point)', {
+      if (pts.length === 1 || !areMapCoordinatesDistinct(pts)) {
+        console.log('[MAP RUNTIME] animateToRegion() called (single / overlapping point)', {
           fitId,
           coordinate: pts[0],
+          pointCount: pts.length,
         });
         mapRef.current?.animateToRegion(
           { ...pts[0], latitudeDelta: 0.02, longitudeDelta: 0.02 },
@@ -379,7 +380,7 @@ function TrackingMapInner({
   const recenter = useCallback(() => {
     setTracking(true);
     const pts = fitPoints.length ? fitPoints : markerPoints;
-    if (pts.length === 1) {
+    if (pts.length === 1 || !areMapCoordinatesDistinct(pts)) {
       mapRef.current?.animateToRegion({ ...pts[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
     } else {
       fitMapToCoordinates(mapRef.current, pts, FIT_PAD);
