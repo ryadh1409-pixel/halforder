@@ -13,7 +13,7 @@
     "test": "npm run build && node --test test/webhook-logic.test.cjs test/foodShareDispatchOrder.test.cjs"
   },
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "lib/index.js",
   "dependencies": {
