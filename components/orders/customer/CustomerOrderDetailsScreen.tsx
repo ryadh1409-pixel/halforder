@@ -677,61 +677,6 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Google Maps</Text>
-          {delivered ? (
-            <View style={styles.completedCard}>
-              <Text style={styles.completedCardTitle}>Delivery complete</Text>
-              <Text style={styles.completedCardBody}>
-                {deliveredAtLabel
-                  ? `Delivered ${deliveredAtLabel}`
-                  : 'Thanks for ordering with us.'}
-              </Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.mapHint}>
-                {order.status === 'on_the_way' ||
-                order.status === 'picked_up' ||
-                order.status === 'arrived_customer'
-                  ? 'Driver location updates automatically.'
-                  : 'Map highlights restaurant and dropoff.'}
-              </Text>
-              <View style={styles.mapHost}>
-                {mapPoints.length > 0 ? (
-                  <MapRenderer
-                    style={styles.mapReal}
-                    initialRegion={{
-                      latitude: mapPoints[0].latitude,
-                      longitude: mapPoints[0].longitude,
-                      latitudeDelta: 0.08,
-                      longitudeDelta: 0.08,
-                    }}
-                    markers={mapMarkers}
-                    polylines={
-                      mapPoints.length >= 2
-                        ? [
-                            {
-                              id: 'route',
-                              coordinates: mapPoints,
-                              strokeWidth: 4,
-                              strokeColor: '#22C55E',
-                            },
-                          ]
-                        : []
-                    }
-                    webTitle="Google Maps"
-                    webSubtitle="Restaurant → dropoff route"
-                  />
-                ) : (
-                  <View style={styles.mapPlaceholder}>
-                    <Text style={styles.muted}>Map preview unavailable</Text>
-                  </View>
-                )}
-              </View>
-            </>
-          )}
-        </View>
 
         {isIWantOrder(order) ? (
           <IWantTimeline order={order} variant="dark" />
@@ -805,45 +750,51 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
             style={styles.mapOpenBtn}
             onPress={() => {
               void (async () => {
-                const loc = order.restaurantLocation;
-                if (
-                  !loc ||
-                  !Number.isFinite(loc.lat) ||
-                  !Number.isFinite(loc.lng)
-                ) {
-                  showError('Restaurant location unavailable');
+                // Show delivery address as a pinned location — NOT turn-by-turn navigation.
+                // Customers are at home waiting; they don't drive to the restaurant.
+                const delivLoc = order.deliveryLocation;
+                const restLoc = order.restaurantLocation;
+
+                // Prefer delivery address (customer's home), fall back to restaurant.
+                const loc = delivLoc ?? restLoc;
+                if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) {
+                  showError('Location unavailable');
                   return;
                 }
-                const coords = `${loc.lat},${loc.lng}`;
-                // Directions from the user's current location → restaurant (nav-ready).
-                const webDirectionsUrl =
-                  `https://www.google.com/maps/dir/?api=1` +
-                  `&destination=${encodeURIComponent(coords)}` +
-                  `&travelmode=driving&dir_action=navigate`;
-                const appUrl =
-                  Platform.OS === 'ios'
-                    ? `comgooglemaps://?daddr=${encodeURIComponent(coords)}&directionsmode=driving`
-                    : `google.navigation:q=${encodeURIComponent(coords)}`;
+
+                const lat = loc.lat;
+                const lng = loc.lng;
+                const label = delivLoc
+                  ? encodeURIComponent(delivLoc.address ?? 'Delivery address')
+                  : encodeURIComponent('Restaurant');
+
+                // Web: search pin (no navigation)
+                const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+                // iOS app: show pin without starting navigation
+                const iosAppUrl = `comgooglemaps://?q=${lat},${lng}&zoom=15`;
+                // Android app: show location without navigation
+                const androidAppUrl = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
+
+                const appUrl = Platform.OS === 'ios' ? iosAppUrl : androidAppUrl;
                 try {
-                  const canOpenApp = await Linking.canOpenURL(appUrl).catch(
-                    () => false,
-                  );
+                  const canOpenApp = await Linking.canOpenURL(appUrl).catch(() => false);
                   if (canOpenApp) {
                     await Linking.openURL(appUrl);
                     return;
                   }
                 } catch {
-                  /* fall through to web directions */
+                  /* fall through to web */
                 }
                 try {
-                  await Linking.openURL(webDirectionsUrl);
+                  await Linking.openURL(webUrl);
                 } catch {
                   showError('Could not open Google Maps');
                 }
               })();
             }}
           >
-            <Text style={styles.mapOpenBtnText}>Open in Google Maps</Text>
+            <Text style={styles.mapOpenBtnText}>View delivery location</Text>
           </Pressable>
 
           <View style={styles.helpBlock}>
