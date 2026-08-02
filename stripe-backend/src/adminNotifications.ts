@@ -106,19 +106,40 @@ export const onPaymentCompleted = functions
     const wasPaid = paymentBefore === "paid" || paymentBefore === "succeeded";
     if (!isPaid || wasPaid) return;
 
-    const orderId    = context.params.orderId as string;
-    const userId     = typeof after.userId === "string" ? after.userId : "—";
-    const total      = typeof after.total === "number" ? `$${after.total.toFixed(2)}` :
-                       typeof after.grandTotal === "number" ? `$${after.grandTotal.toFixed(2)}` : "—";
-    const restaurant = typeof after.restaurantName === "string" ? after.restaurantName :
-                       (after.restaurant as Record<string, unknown>)?.name ?? "—";
-    const method     = typeof after.paymentMethod === "string" ? after.paymentMethod : "Card";
+    const orderId     = context.params.orderId as string;
+    const userId      = typeof after.userId === "string" ? after.userId : "—";
+    const total       = typeof after.total === "number" ? `$${after.total.toFixed(2)}` :
+                        typeof after.grandTotal === "number" ? `$${after.grandTotal.toFixed(2)}` : "—";
+    const subtotal    = typeof after.subtotal === "number" ? `$${after.subtotal.toFixed(2)}` : "—";
+    const deliveryFee = typeof after.deliveryFee === "number" ? `$${after.deliveryFee.toFixed(2)}` : null;
+    const serviceFee  = typeof after.serviceFee === "number" ? `$${after.serviceFee.toFixed(2)}` : null;
+    const restaurant  = typeof after.restaurantName === "string" ? after.restaurantName :
+                        (after.restaurant as Record<string, unknown>)?.name ?? "—";
+    const method      = typeof after.paymentMethod === "string" ? after.paymentMethod : "Card";
     const fulfillment = typeof after.fulfillmentMode === "string" ? after.fulfillmentMode : "delivery";
     const time        = now();
 
-    // Try to fetch user email from Firestore
+    // Delivery address
+    const deliveryLoc = after.deliveryLocation as Record<string, unknown> | undefined;
+    const deliveryAddress = typeof deliveryLoc?.address === "string"
+      ? deliveryLoc.address
+      : typeof after.deliveryAddress === "string" ? after.deliveryAddress : "—";
+    const lat = typeof deliveryLoc?.lat === "number" ? deliveryLoc.lat : null;
+    const lng = typeof deliveryLoc?.lng === "number" ? deliveryLoc.lng : null;
+    const mapsLink = lat && lng
+      ? `https://www.google.com/maps?q=${lat},${lng}`
+      : deliveryAddress !== "—"
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`
+        : null;
+
+    // Order items
+    type OrderItem = { name?: string; qty?: number; price?: number };
+    const items: OrderItem[] = Array.isArray(after.items) ? (after.items as OrderItem[]) : [];
+
+    // Fetch user profile
     let userEmail = "—";
     let userName  = "—";
+    let userPhone = "—";
     try {
       const userDoc = await admin.firestore().collection("users").doc(userId).get();
       const u = userDoc.data() as Record<string, unknown> | undefined;
@@ -126,32 +147,96 @@ export const onPaymentCompleted = functions
         userEmail = typeof u.email === "string" ? u.email : "—";
         userName  = typeof u.displayName === "string" ? u.displayName :
                     typeof u.name === "string" ? u.name : "—";
+        userPhone = typeof u.phone === "string" ? u.phone :
+                    typeof u.phoneNumber === "string" ? u.phoneNumber :
+                    typeof u.whatsapp === "string" ? u.whatsapp : "—";
       }
     } catch {
       // non-fatal
     }
 
+    // Build items HTML
+    const itemsHtml = items.length > 0
+      ? items.map((item) => {
+          const name = item.name ?? "Item";
+          const qty  = item.qty ?? 1;
+          const price = typeof item.price === "number" ? `$${(item.price * qty).toFixed(2)}` : "";
+          return `<tr>
+            <td style="padding:6px 0;color:#374151;font-size:13px;">${qty}× ${name}</td>
+            <td style="padding:6px 0;color:#374151;font-size:13px;text-align:right;">${price}</td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="2" style="padding:6px 0;color:#9CA3AF;font-size:13px;">No items recorded</td></tr>`;
+
     const html = `
-      <div style="font-family:sans-serif;max-width:560px;margin:auto;background:#f9fafb;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+      <div style="font-family:sans-serif;max-width:580px;margin:auto;background:#f9fafb;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+        <!-- Header -->
         <div style="background:#16A34A;padding:20px 24px;">
           <h2 style="color:#fff;margin:0;font-size:20px;">💳 Payment Received</h2>
           <p style="color:#BBF7D0;margin:4px 0 0;font-size:13px;">${APP_NAME} · ${time}</p>
         </div>
-        <div style="padding:24px;">
-          <div style="background:#ECFDF5;border-radius:10px;padding:14px 18px;margin-bottom:20px;text-align:center;">
+
+        <!-- Total -->
+        <div style="padding:20px 24px 0;">
+          <div style="background:#ECFDF5;border-radius:10px;padding:14px 18px;text-align:center;">
             <p style="margin:0;font-size:13px;color:#166534;">Total charged</p>
-            <p style="margin:4px 0 0;font-size:32px;font-weight:900;color:#15803D;">${total}</p>
+            <p style="margin:4px 0 0;font-size:36px;font-weight:900;color:#15803D;">${total}</p>
           </div>
+        </div>
+
+        <!-- Customer info -->
+        <div style="padding:20px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">👤 Customer</p>
           <table style="width:100%;border-collapse:collapse;">
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;width:140px;">Order ID</td><td style="padding:8px 0;color:#374151;font-family:monospace;font-size:12px;">${orderId}</td></tr>
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;">Customer</td><td style="padding:8px 0;font-weight:700;color:#111827;">${userName}</td></tr>
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;">Customer email</td><td style="padding:8px 0;color:#374151;">${userEmail}</td></tr>
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;">Restaurant</td><td style="padding:8px 0;font-weight:700;color:#111827;">${String(restaurant)}</td></tr>
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;">Payment method</td><td style="padding:8px 0;color:#374151;">${method}</td></tr>
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;">Fulfillment</td><td style="padding:8px 0;color:#374151;">${fulfillment}</td></tr>
-            <tr><td style="padding:8px 0;color:#6B7280;font-size:13px;">Time</td><td style="padding:8px 0;color:#374151;">${time}</td></tr>
+            <tr><td style="padding:6px 0;color:#6B7280;font-size:13px;width:130px;">Name</td><td style="padding:6px 0;font-weight:700;color:#111827;">${userName}</td></tr>
+            <tr><td style="padding:6px 0;color:#6B7280;font-size:13px;">Email</td><td style="padding:6px 0;color:#374151;">${userEmail}</td></tr>
+            <tr><td style="padding:6px 0;color:#6B7280;font-size:13px;">Phone</td><td style="padding:6px 0;color:#374151;">${userPhone}</td></tr>
+            <tr><td style="padding:6px 0;color:#6B7280;font-size:13px;">User ID</td><td style="padding:6px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${userId}</td></tr>
           </table>
         </div>
+
+        <!-- Delivery location -->
+        <div style="padding:16px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">📍 Delivery Location</p>
+          <p style="margin:0;font-size:13px;color:#374151;">${deliveryAddress}</p>
+          ${mapsLink ? `<a href="${mapsLink}" style="display:inline-block;margin-top:8px;font-size:12px;color:#2563EB;text-decoration:none;">📌 Open in Google Maps →</a>` : ""}
+        </div>
+
+        <!-- Order items -->
+        <div style="padding:16px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">🍽️ Order Items — ${String(restaurant)}</p>
+          <table style="width:100%;border-collapse:collapse;">
+            ${itemsHtml}
+          </table>
+        </div>
+
+        <!-- Pricing breakdown -->
+        <div style="padding:16px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">💰 Pricing</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Subtotal</td><td style="padding:5px 0;color:#374151;text-align:right;">${subtotal}</td></tr>
+            ${deliveryFee ? `<tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Delivery fee</td><td style="padding:5px 0;color:#374151;text-align:right;">${deliveryFee}</td></tr>` : ""}
+            ${serviceFee ? `<tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Service fee</td><td style="padding:5px 0;color:#374151;text-align:right;">${serviceFee}</td></tr>` : ""}
+            <tr style="border-top:1px solid #E5E7EB;">
+              <td style="padding:8px 0;font-weight:800;color:#111827;font-size:14px;">Total</td>
+              <td style="padding:8px 0;font-weight:900;color:#15803D;text-align:right;font-size:16px;">${total}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Order meta -->
+        <div style="padding:16px 24px 20px;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">🧾 Order Details</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;width:130px;">Order ID</td><td style="padding:5px 0;color:#374151;font-family:monospace;font-size:11px;">${orderId}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Payment method</td><td style="padding:5px 0;color:#374151;">${method}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Fulfillment</td><td style="padding:5px 0;color:#374151;">${fulfillment}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Time</td><td style="padding:5px 0;color:#374151;">${time}</td></tr>
+          </table>
+        </div>
+
+        <!-- Footer -->
         <div style="background:#F3F4F6;padding:12px 24px;text-align:center;">
           <p style="margin:0;font-size:12px;color:#9CA3AF;">${APP_NAME} Admin · Auto-generated notification</p>
         </div>
@@ -163,7 +248,7 @@ export const onPaymentCompleted = functions
       await transport.sendMail({
         from: `"${APP_NAME} Admin" <${GMAIL_USER}>`,
         to: ADMIN_EMAIL,
-        subject: `💳 Payment ${total} — ${String(restaurant)}`,
+        subject: `💳 ${total} — ${String(restaurant)} · ${userName}`,
         html,
       });
       functions.logger.info("onPaymentCompleted: email sent", { orderId, total });
