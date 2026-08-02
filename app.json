@@ -17,7 +17,6 @@
       "icon": "./assets/icon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.halforder.app",
-      "deploymentTarget": "16.0",
       "buildNumber": "3",
       "usesAppleSignIn": true,
       "entitlements": {
