@@ -1,9 +1,22 @@
 import React, { useEffect, useRef } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import type { MapRendererProps } from './types';
+
+// Graceful fallback when react-native-maps native module is not in the binary
+// (e.g. old dev client). Prevents the barrel export crash.
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+try {
+  const rnm = require('react-native-maps');
+  MapView = rnm.default;
+  Marker = rnm.Marker;
+  Polyline = rnm.Polyline;
+} catch {
+  // Native module missing — will render fallback view below.
+}
 
 export default function NativeMap({
   style,
@@ -20,9 +33,11 @@ export default function NativeMap({
   fitToCoordinates,
   fitEdgePadding = { top: 80, right: 40, bottom: 120, left: 40 },
 }: MapRendererProps) {
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<any>(null);
 
+  // Hooks must all be called before any conditional return.
   useEffect(() => {
+    if (!MapView) return;
     if (!fitToCoordinates || fitToCoordinates.length < 2 || !mapRef.current) return;
     const t = setTimeout(() => {
       try {
@@ -36,6 +51,14 @@ export default function NativeMap({
     }, 200);
     return () => clearTimeout(t);
   }, [fitToCoordinates, fitEdgePadding]);
+
+  if (!MapView) {
+    return (
+      <View style={[{ alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a2e' }]}>
+        <Text style={{ color: '#888', fontSize: 13 }}>Map unavailable in this build</Text>
+      </View>
+    );
+  }
 
   return (
     <MapView
