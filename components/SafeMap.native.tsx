@@ -1,9 +1,20 @@
 import React from 'react';
+import { Text, View } from 'react-native';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 
-const MapView = require('react-native-maps').default;
-const Marker = require('react-native-maps').Marker;
-const Polyline = require('react-native-maps').Polyline;
+// Gracefully handle missing native module (e.g. old dev client binary).
+let MapView: React.ComponentType<any> | null = null;
+let Marker: React.ComponentType<any> | null = null;
+let Polyline: React.ComponentType<any> | null = null;
+
+try {
+  const rnm = require('react-native-maps');
+  MapView = rnm.default;
+  Marker = rnm.Marker;
+  Polyline = rnm.Polyline;
+} catch {
+  // Native module not available — will render fallback below.
+}
 
 export { Marker, Polyline };
 
@@ -19,10 +30,24 @@ export default function SafeMap(props: {
   children?: React.ReactNode;
   [key: string]: unknown;
 }) {
-  const { children, ...rest } = props;
+  const { children, style, ...rest } = props;
+
+  if (!MapView) {
+    return (
+      <View
+        style={[
+          { alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a2e' },
+          style as object,
+        ]}
+      >
+        <Text style={{ color: '#888', fontSize: 13 }}>Map unavailable in this build</Text>
+      </View>
+    );
+  }
+
   const provider = getNativeMapProvider();
   return (
-    <MapView {...rest} provider={provider}>
+    <MapView {...rest} style={style} provider={provider}>
       {children}
     </MapView>
   );
