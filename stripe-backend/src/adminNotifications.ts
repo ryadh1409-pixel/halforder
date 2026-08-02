@@ -18,6 +18,65 @@ const ADMIN_EMAIL = "ryadh1409@gmail.com";
 const GMAIL_USER  = "ryadh1409@gmail.com";
 const APP_NAME    = "HalfOrder";
 
+// ── Expo Push ─────────────────────────────────────────────────────────────────
+
+async function sendExpoPush(
+  token: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>,
+): Promise<void> {
+  const payload: Record<string, unknown> = {
+    to: token,
+    title,
+    body,
+    sound: "default",
+    priority: "high",
+    channelId: "default",
+  };
+  if (data) payload.data = data;
+
+  try {
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([payload]),
+    });
+    const json = (await res.json()) as { data?: Array<{ status?: string; message?: string }> };
+    const ticket = json.data?.[0];
+    if (ticket?.status === "error") {
+      functions.logger.warn("sendExpoPush: ticket error", ticket.message);
+    } else {
+      functions.logger.info("sendExpoPush: sent", { title, token: token.slice(0, 20) });
+    }
+  } catch (err) {
+    functions.logger.error("sendExpoPush: fetch failed", err);
+  }
+}
+
+/** Fetch all Expo push tokens for users with role=admin. */
+async function getAdminPushTokens(): Promise<string[]> {
+  const snap = await admin.firestore()
+    .collection("users")
+    .where("role", "==", "admin")
+    .get();
+
+  const tokens: string[] = [];
+  for (const doc of snap.docs) {
+    const data = doc.data() as Record<string, unknown>;
+    const token =
+      typeof data.expoPushToken === "string" ? data.expoPushToken.trim() :
+      typeof data.pushToken === "string" ? data.pushToken.trim() : "";
+    if (token.startsWith("ExponentPushToken[") || token.startsWith("ExpoPushToken[")) {
+      tokens.push(token);
+    }
+  }
+  return tokens;
+}
+
 // ── Mailer ────────────────────────────────────────────────────────────────────
 
 function makeTransport(password: string) {
@@ -119,17 +178,33 @@ export const onPaymentCompleted = functions
     const fulfillment = typeof after.fulfillmentMode === "string" ? after.fulfillmentMode : "delivery";
     const time        = now();
 
-    // Delivery address
+    // ── Customer delivery address ─────────────────────────────────────────────
     const deliveryLoc = after.deliveryLocation as Record<string, unknown> | undefined;
     const deliveryAddress = typeof deliveryLoc?.address === "string"
       ? deliveryLoc.address
       : typeof after.deliveryAddress === "string" ? after.deliveryAddress : "—";
-    const lat = typeof deliveryLoc?.lat === "number" ? deliveryLoc.lat : null;
-    const lng = typeof deliveryLoc?.lng === "number" ? deliveryLoc.lng : null;
-    const mapsLink = lat && lng
-      ? `https://www.google.com/maps?q=${lat},${lng}`
+    const delivLat = typeof deliveryLoc?.lat === "number" ? deliveryLoc.lat : null;
+    const delivLng = typeof deliveryLoc?.lng === "number" ? deliveryLoc.lng : null;
+    const delivMapsLink = delivLat && delivLng
+      ? `https://www.google.com/maps?q=${delivLat},${delivLng}`
       : deliveryAddress !== "—"
         ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`
+        : null;
+
+    // ── Restaurant address ────────────────────────────────────────────────────
+    const restaurantObj = after.restaurant as Record<string, unknown> | undefined;
+    const restaurantAddress =
+      typeof restaurantObj?.address === "string" ? restaurantObj.address :
+      typeof after.restaurantAddress === "string" ? after.restaurantAddress : null;
+    const restLocObj = after.restaurantLocation as Record<string, unknown> | undefined;
+    const restLat = typeof restLocObj?.lat === "number" ? restLocObj.lat :
+                    typeof restLocObj?.latitude === "number" ? restLocObj.latitude : null;
+    const restLng = typeof restLocObj?.lng === "number" ? restLocObj.lng :
+                    typeof restLocObj?.longitude === "number" ? restLocObj.longitude : null;
+    const restMapsLink = restLat && restLng
+      ? `https://www.google.com/maps?q=${restLat},${restLng}`
+      : restaurantAddress
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurantAddress)}`
         : null;
 
     // Order items
@@ -196,12 +271,20 @@ export const onPaymentCompleted = functions
           </table>
         </div>
 
-        <!-- Delivery location -->
+        <!-- Customer delivery location -->
         <div style="padding:16px 24px 0;">
-          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">📍 Delivery Location</p>
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">🏠 Customer Delivery Address</p>
           <p style="margin:0;font-size:13px;color:#374151;">${deliveryAddress}</p>
-          ${mapsLink ? `<a href="${mapsLink}" style="display:inline-block;margin-top:8px;font-size:12px;color:#2563EB;text-decoration:none;">📌 Open in Google Maps →</a>` : ""}
+          ${delivMapsLink ? `<a href="${delivMapsLink}" style="display:inline-block;margin-top:8px;font-size:12px;color:#2563EB;text-decoration:none;">📌 Open in Google Maps →</a>` : ""}
         </div>
+
+        <!-- Restaurant location -->
+        ${(restaurantAddress || restMapsLink) ? `
+        <div style="padding:16px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">🍽️ Restaurant Location (Pickup)</p>
+          ${restaurantAddress ? `<p style="margin:0;font-size:13px;color:#374151;">${restaurantAddress}</p>` : ""}
+          ${restMapsLink ? `<a href="${restMapsLink}" style="display:inline-block;margin-top:8px;font-size:12px;color:#2563EB;text-decoration:none;">📍 Open Restaurant in Google Maps →</a>` : ""}
+        </div>` : ""}
 
         <!-- Order items -->
         <div style="padding:16px 24px 0;">
@@ -243,16 +326,37 @@ export const onPaymentCompleted = functions
       </div>
     `;
 
-    try {
-      const transport = makeTransport(gmailAppPassword.value());
-      await transport.sendMail({
-        from: `"${APP_NAME} Admin" <${GMAIL_USER}>`,
-        to: ADMIN_EMAIL,
-        subject: `💳 ${total} — ${String(restaurant)} · ${userName}`,
-        html,
-      });
-      functions.logger.info("onPaymentCompleted: email sent", { orderId, total });
-    } catch (err) {
-      functions.logger.error("onPaymentCompleted: email failed", err);
-    }
+    // ── Push notification (runs in parallel with email) ───────────────────────
+    const pushPromise = getAdminPushTokens().then((tokens) =>
+      Promise.all(
+        tokens.map((token) =>
+          sendExpoPush(
+            token,
+            `💳 طلب جديد — ${total}`,
+            `${String(restaurant)} · ${userName}`,
+            { orderId, screen: "admin-notifications" },
+          ),
+        ),
+      ),
+    ).catch((err) => {
+      functions.logger.error("onPaymentCompleted: push failed", err);
+    });
+
+    // ── Email ────────────────────────────────────────────────────────────────
+    const emailPromise = (async () => {
+      try {
+        const transport = makeTransport(gmailAppPassword.value());
+        await transport.sendMail({
+          from: `"${APP_NAME} Admin" <${GMAIL_USER}>`,
+          to: ADMIN_EMAIL,
+          subject: `💳 ${total} — ${String(restaurant)} · ${userName}`,
+          html,
+        });
+        functions.logger.info("onPaymentCompleted: email sent", { orderId, total });
+      } catch (err) {
+        functions.logger.error("onPaymentCompleted: email failed", err);
+      }
+    })();
+
+    await Promise.all([pushPromise, emailPromise]);
   });
