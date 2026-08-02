@@ -48,7 +48,7 @@ describe('syncMarketplaceLifecyclePatch', () => {
     expect(synced.deliveryStatus).toBe('driver_assigned');
   });
 
-  it('builds repair patch for uMIF inconsistent production state', () => {
+  it('builds repair patch that clears premature driver ids on ready_for_pickup', () => {
     const repair = buildLifecycleConsistencyRepairPatch({
       id: 'uMIFqPqbxlE9AjNp7dAx',
       status: 'payment_confirmed',
@@ -58,8 +58,10 @@ describe('syncMarketplaceLifecyclePatch', () => {
       assignedDriverId: '9XN334yG4hOglrOYfsehHPDM5zP2',
     });
     expect(repair).toEqual({
-      status: 'driver_assigned',
-      deliveryStatus: 'driver_assigned',
+      status: 'ready_for_pickup',
+      deliveryStatus: 'ready_for_pickup',
+      driverId: null,
+      assignedDriverId: null,
     });
   });
 });

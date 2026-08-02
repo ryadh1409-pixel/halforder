@@ -191,16 +191,20 @@ export function sanitizeOrderPatchAgainstRegression(
     if (!ds || EARLY_COURIER_VALUES.has(ds)) {
       delete safe.deliveryStatus;
     }
-    if (safe.driverId === null || safe.assignedDriverId === null) {
-      delete safe.driverId;
-      delete safe.assignedDriverId;
-      delete safe.driverName;
-      delete safe.driverPhone;
-    }
+    // Do NOT strip driverId/assignedDriverId null clears here — kitchen may release
+    // to marketplace (ready_for_pickup) and must clear premature/stale assignment.
   }
 
+  // Only protect against unassign after a real driver claim.
   if (currentRank >= ORDER_STAGE_RANK.driver_assigned) {
-    if (safe.driverId === null || safe.assignedDriverId === null) {
+    const releasingToMarketplace =
+      norm(safe.deliveryStatus) === 'ready_for_pickup' ||
+      norm(safe.status) === 'ready_for_pickup' ||
+      norm(safe.updatedBy) === 'restaurantready';
+    if (
+      !releasingToMarketplace &&
+      (safe.driverId === null || safe.assignedDriverId === null)
+    ) {
       delete safe.driverId;
       delete safe.assignedDriverId;
       delete safe.driverName;

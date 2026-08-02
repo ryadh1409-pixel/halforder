@@ -105,13 +105,6 @@ export function syncMarketplaceLifecyclePatch(
     }
   }
 
-  const assignsDriver =
-    (typeof out.driverId === "string" && out.driverId.length > 0) ||
-    (typeof out.assignedDriverId === "string" && out.assignedDriverId.length > 0);
-  if (assignsDriver && out.deliveryStatus === undefined && out.status === undefined) {
-    out.deliveryStatus = "driver_assigned";
-    out.status = "driver_assigned";
-  }
-
+  // Never invent driver_assigned from driverId alone — claim must set courier explicitly.
   return out;
 }

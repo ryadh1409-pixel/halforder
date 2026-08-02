@@ -53,6 +53,11 @@ export function buildRestaurantKitchenPatch(action: RestaurantKitchenAction): Ki
         updatedBy: 'restaurantReady',
         preparedAt: serverTimestamp(),
         readyAt: serverTimestamp(),
+        // Marketplace release must be unassigned until a driver accepts.
+        driverId: null,
+        assignedDriverId: null,
+        driverName: null,
+        driverPhone: null,
       };
     case 'picked_up':
       return {
@@ -100,11 +105,46 @@ export function optimisticRestaurantOrderPatch(
   if (action === 'ready') {
     base.preparedAtMs = base.preparedAtMs ?? now;
     base.readyAtMs = now;
+    base.driverId = null;
+    base.assignedDriverId = null;
+    base.driverName = null;
+    base.driverPhone = null;
   }
   if (action === 'picked_up') {
     base.pickedUpAtMs = now;
   }
   return base;
+}
+
+function hasNonEmptyDriverId(order: OrderStageInput): boolean {
+  const id = order.driverId ?? order.assignedDriverId;
+  return typeof id === 'string' && id.trim().length > 0;
+}
+
+/** True when driver ids are set without a real driver claim (blocks marketplace publish). */
+function hasPrematureDriverAssignment(order: OrderStageInput): boolean {
+  if (!hasNonEmptyDriverId(order)) return false;
+  const status = normField(order.status);
+  const ds = normField(order.deliveryStatus);
+  if (
+    status === 'driver_assigned' ||
+    ds === 'driver_assigned' ||
+    status === 'picked_up' ||
+    ds === 'picked_up' ||
+    status === 'delivered' ||
+    ds === 'delivered' ||
+    ds === 'heading_to_restaurant' ||
+    ds === 'arrived_restaurant' ||
+    ds === 'arriving_restaurant' ||
+    ds === 'on_the_way' ||
+    ds === 'near_customer'
+  ) {
+    return false;
+  }
+  const row = order as Record<string, unknown>;
+  const pin = typeof row.deliveryPin === 'string' ? row.deliveryPin.trim() : '';
+  if (/^\d{4}$/.test(pin)) return false;
+  return true;
 }
 
 export function isDuplicateKitchenTransition(
@@ -121,7 +161,22 @@ export function isDuplicateKitchenTransition(
   const deliveryMatch =
     nextDelivery === undefined ||
     normField(current.deliveryStatus) === normField(nextDelivery);
-  return statusMatch && deliveryMatch;
+  if (!statusMatch || !deliveryMatch) return false;
+
+  // Re-apply ready when clearing a premature/stale driver id so the pool can publish.
+  const clearingDriver =
+    patch.driverId === null ||
+    patch.assignedDriverId === null;
+  if (
+    clearingDriver &&
+    hasPrematureDriverAssignment(current) &&
+    (normField(nextStatus) === 'ready_for_pickup' ||
+      normField(nextDelivery) === 'ready_for_pickup')
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export function isLegalRestaurantKitchenAction(
@@ -229,14 +284,22 @@ export async function applyRestaurantKitchenAction(
   }
 
   if (!isLegalRestaurantKitchenAction(current, action)) {
-    console.warn('[RESTAURANT ACTION] rejected illegal transition', {
-      orderId: id,
-      action,
-      derivedStage: deriveOrderStage(current),
-      status: current.status ?? null,
-      deliveryStatus: current.deliveryStatus ?? null,
-    });
-    return 'skipped_illegal';
+    // Allow ready re-apply when order is already ready_for_pickup but still has a
+    // premature driver id that blocks marketplace pool publish (not a real claim).
+    const alreadyReady =
+      action === 'ready' &&
+      (normField(current.status) === 'ready_for_pickup' ||
+        normField(current.deliveryStatus) === 'ready_for_pickup');
+    if (!(alreadyReady && hasPrematureDriverAssignment(current))) {
+      console.warn('[RESTAURANT ACTION] rejected illegal transition', {
+        orderId: id,
+        action,
+        derivedStage: deriveOrderStage(current),
+        status: current.status ?? null,
+        deliveryStatus: current.deliveryStatus ?? null,
+      });
+      return 'skipped_illegal';
+    }
   }
 
   const patch = buildRestaurantKitchenPatch(action) as Record<string, unknown>;

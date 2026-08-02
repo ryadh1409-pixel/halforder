@@ -59,6 +59,30 @@ describe('deriveOrderStage', () => {
     expect(deriveOrderStage(order)).toBe('driver_assigned');
   });
 
+  it('allows clearing premature driver ids when restaurant marks ready_for_pickup', () => {
+    const current: OrderStageInput = {
+      id: 'o1',
+      paymentStatus: 'paid',
+      status: 'preparing',
+      deliveryStatus: 'preparing',
+      driverId: 'stale-driver',
+      assignedDriverId: 'stale-driver',
+    };
+    const safe = sanitizeOrderPatchAgainstRegression(current, {
+      status: 'ready_for_pickup',
+      deliveryStatus: 'ready_for_pickup',
+      driverId: null,
+      assignedDriverId: null,
+      driverName: null,
+      driverPhone: null,
+      updatedBy: 'restaurantReady',
+    });
+    expect(safe.status).toBe('ready_for_pickup');
+    expect(safe.deliveryStatus).toBe('ready_for_pickup');
+    expect(safe.driverId).toBeNull();
+    expect(safe.assignedDriverId).toBeNull();
+  });
+
   it('does not invent driver_assigned from driverId while kitchen/courier still pending', () => {
     expect(
       deriveOrderStage({

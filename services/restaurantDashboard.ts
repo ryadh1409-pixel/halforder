@@ -274,6 +274,11 @@ export async function markOrderReady(orderId: string): Promise<void> {
     readyAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     estimatedDeliveryTime: 20,
+    driverId: null,
+    assignedDriverId: null,
+    driverName: null,
+    driverPhone: null,
+    updatedBy: 'restaurantReady',
   });
 }
 

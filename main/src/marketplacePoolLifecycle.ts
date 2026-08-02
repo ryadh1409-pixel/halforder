@@ -38,6 +38,51 @@ export function hasDriverAssigned(data: DocumentData): boolean {
   );
 }
 
+/**
+ * True only after a real driver claim/accept — not bare driverId leftovers.
+ * Kitchen ready_for_pickup + stale driverId must NOT count as assigned.
+ */
+export function hasMarketplaceDriverClaimed(data: DocumentData): boolean {
+  if (!hasDriverAssigned(data)) return false;
+
+  const status = kitchenStatus(data).trim().toLowerCase();
+  const courierRaw =
+    typeof data.deliveryStatus === "string" ? data.deliveryStatus.trim().toLowerCase() : "";
+  const courier = normalizeMarketplaceDeliveryStatus(data.deliveryStatus);
+
+  if (
+    status === "driver_assigned" ||
+    status === "picked_up" ||
+    status === "delivered" ||
+    status === "completed" ||
+    courier === "driver_assigned" ||
+    courier === "picked_up" ||
+    courier === "delivered" ||
+    courier === "cancelled"
+  ) {
+    return true;
+  }
+
+  if (
+    courierRaw === "heading_to_restaurant" ||
+    courierRaw === "arrived_restaurant" ||
+    courierRaw === "arriving_restaurant" ||
+    courierRaw === "driver_at_restaurant" ||
+    courierRaw === "on_the_way" ||
+    courierRaw === "near_customer" ||
+    courierRaw === "driver_accepted" ||
+    courierRaw === "driver_on_way"
+  ) {
+    return true;
+  }
+
+  // Driver arrived uses ready_for_pickup but claim always writes deliveryPin.
+  const pin = typeof data.deliveryPin === "string" ? data.deliveryPin.trim() : "";
+  if (/^\d{4}$/.test(pin)) return true;
+
+  return false;
+}
+
 function kitchenStatus(data: DocumentData): string {
   return typeof data.status === "string" ? data.status : "";
 }
@@ -67,6 +112,8 @@ function isCourierStatusPoolEligible(data: DocumentData): boolean {
 export function shouldPublishToDriverPool(data: DocumentData): boolean {
   if (data.deliveryType !== "delivery") return false;
   if (!isPaidMarketplaceDelivery(data)) return false;
+  // Real claim OR any leftover driver id blocks publish until cleared.
+  if (hasMarketplaceDriverClaimed(data)) return false;
   if (hasDriverAssigned(data)) return false;
   if (isExplicitlyBlockedFromPool(data)) return false;
   if (isPoolExpiredByAge(data)) return false;
@@ -83,7 +130,7 @@ export function evaluateMarketplacePublishDebug(
   const checks = {
     isDelivery: data.deliveryType === "delivery",
     isPaid: isPaidMarketplaceDelivery(data),
-    noDriver: !hasDriverAssigned(data),
+    noDriver: !hasMarketplaceDriverClaimed(data) && !hasDriverAssigned(data),
     notBlocked: !isExplicitlyBlockedFromPool(data),
     notExpiredByAge: !isPoolExpiredByAge(data),
     notKitchenTerminal: !isKitchenTerminalForPool(data),
@@ -123,7 +170,7 @@ export function evaluateMarketplacePublishDebug(
 }
 
 export function shouldRemoveFromDriverPool(data: DocumentData): boolean {
-  if (hasDriverAssigned(data)) return true;
+  if (hasMarketplaceDriverClaimed(data)) return true;
   if (isPoolExpiredByAge(data)) return true;
   if (data.marketplaceArchived === true) return true;
   if (isKitchenTerminalForPool(data)) return true;
@@ -133,7 +180,7 @@ export function shouldRemoveFromDriverPool(data: DocumentData): boolean {
 }
 
 export function marketplacePoolRemoveReason(data: DocumentData): string {
-  if (hasDriverAssigned(data)) return "driver_assigned";
+  if (hasMarketplaceDriverClaimed(data)) return "driver_assigned";
   if (data.marketplaceArchived === true) return "marketplace_archived";
   if (isKitchenTerminalForPool(data)) {
     return `kitchen:${kitchenStatus(data)}`;

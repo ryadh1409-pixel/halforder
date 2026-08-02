@@ -19,7 +19,9 @@ import {normalizeMarketplaceDeliveryStatus} from "./marketplaceDeliveryStatus.js
 import {
   evaluateMarketplacePublishDebug,
   hasDriverAssigned,
+  hasMarketplaceDriverClaimed,
   marketplacePoolRemoveReason,
+  shouldPublishToDriverPool,
   shouldRemoveFromDriverPool,
 } from "./marketplacePoolLifecycle.js";
 import {isDriverFulfillmentAdvanced} from "./driverFulfillmentGuard.js";
@@ -165,6 +167,31 @@ async function handleOrderWrite(
     }
   }
 
+  // Clear premature driver ids so READY_FOR_PICKUP can enter the pool unassigned.
+  // Real claims keep deliveryPin / driver_assigned courier and are left alone.
+  if (
+    hasDriverAssigned(data) &&
+    !hasMarketplaceDriverClaimed(data) &&
+    shouldPublishToDriverPool({...data, driverId: null, assignedDriverId: null})
+  ) {
+    logger.info("[marketplace-clear-premature-driver]", {
+      orderId,
+      driverId: data.driverId ?? null,
+      assignedDriverId: data.assignedDriverId ?? null,
+      status: data.status ?? null,
+      deliveryStatus: data.deliveryStatus ?? null,
+    });
+    await db.collection("orders").doc(orderId).update({
+      driverId: null,
+      assignedDriverId: null,
+      driverName: null,
+      driverPhone: null,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: "syncDriverMarketplacePool:clearPrematureDriver",
+    });
+    return;
+  }
+
   const debug = evaluateMarketplacePublishDebug(orderId, data);
 
   logger.info("[marketplace-debug-visibility]", debug);
@@ -191,7 +218,7 @@ async function handleOrderWrite(
     readyAtMs: timestampToMillis(data.readyAt),
   });
 
-  if (hasDriverAssigned(data)) {
+  if (hasMarketplaceDriverClaimed(data)) {
     logger.info("[marketplace-driver-assigned]", {
       orderId,
       driverId: data.driverId ?? null,

@@ -19,6 +19,18 @@ const REGRESSIVE_COURIER_VALUES = new Set([
   "",
 ]);
 
+const CLAIMED_OR_LATER_COURIER = new Set([
+  "driver_assigned",
+  "heading_to_restaurant",
+  "arrived_restaurant",
+  "arriving_restaurant",
+  "picked_up",
+  "on_the_way",
+  "near_customer",
+  "delivered",
+  "completed",
+]);
+
 export function courierStatusRaw(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -30,6 +42,17 @@ export function isDriverFulfillmentAdvanced(deliveryStatus: unknown): boolean {
   const normalized = normalizeMarketplaceDeliveryStatus(deliveryStatus);
   return (
     normalized === "ready_for_pickup" ||
+    normalized === "picked_up" ||
+    normalized === "delivered"
+  );
+}
+
+function isDriverClaimedCourier(deliveryStatus: unknown): boolean {
+  const raw = courierStatusRaw(deliveryStatus);
+  if (CLAIMED_OR_LATER_COURIER.has(raw)) return true;
+  const normalized = normalizeMarketplaceDeliveryStatus(deliveryStatus);
+  return (
+    normalized === "driver_assigned" ||
     normalized === "picked_up" ||
     normalized === "delivered"
   );
@@ -60,7 +83,11 @@ export function guardPatchForDriverFulfillment(
     }
   }
 
-  if (safe.driverId === null || safe.assignedDriverId === null) {
+  // Only block unassign after a real claim — kitchen ready_for_pickup may clear stale ids.
+  if (
+    isDriverClaimedCourier(current.deliveryStatus) &&
+    (safe.driverId === null || safe.assignedDriverId === null)
+  ) {
     delete safe.driverId;
     delete safe.assignedDriverId;
     delete safe.driverName;

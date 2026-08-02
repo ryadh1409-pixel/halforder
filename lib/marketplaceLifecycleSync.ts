@@ -122,14 +122,6 @@ export function syncMarketplaceLifecyclePatch(
     }
   }
 
-  const assignsDriver =
-    (typeof out.driverId === 'string' && out.driverId.length > 0) ||
-    (typeof out.assignedDriverId === 'string' && out.assignedDriverId.length > 0);
-  if (assignsDriver && out.deliveryStatus === undefined && out.status === undefined) {
-    out.deliveryStatus = 'driver_assigned';
-    out.status = 'driver_assigned';
-  }
-
   return out;
 }
 
@@ -146,10 +138,25 @@ export function buildLifecycleConsistencyRepairPatch(
     (typeof current.driverId === 'string' && current.driverId.length > 0) ||
     (typeof current.assignedDriverId === 'string' && current.assignedDriverId.length > 0);
 
-  if (hasDriver && !['picked_up', 'completed', 'delivered', 'cancelled'].includes(kitchen)) {
-    if (courier === 'ready_for_pickup' || kitchen === 'payment_confirmed' || !kitchen) {
-      patch.status = 'driver_assigned';
-      patch.deliveryStatus = 'driver_assigned';
+  const pin =
+    typeof (current as Record<string, unknown>).deliveryPin === 'string'
+      ? String((current as Record<string, unknown>).deliveryPin).trim()
+      : '';
+  const claimedCourier =
+    courier === 'driver_assigned' ||
+    courier === 'picked_up' ||
+    courier === 'delivered' ||
+    courier === 'heading_to_restaurant' ||
+    courier === 'arrived_restaurant' ||
+    /^\d{4}$/.test(pin);
+
+  // Premature driver ids on kitchen-ready orders: clear them (do not invent driver_assigned).
+  if (hasDriver && !claimedCourier && !['picked_up', 'completed', 'delivered', 'cancelled'].includes(kitchen)) {
+    patch.driverId = null;
+    patch.assignedDriverId = null;
+    if (courier === 'ready_for_pickup' || kitchen === 'ready_for_pickup') {
+      patch.status = 'ready_for_pickup';
+      patch.deliveryStatus = 'ready_for_pickup';
     }
   } else if (courier && kitchenLagsCourier(current, courier)) {
     const paired = pairedKitchenForCourier(courier);
