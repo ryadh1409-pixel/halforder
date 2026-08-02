@@ -3654,6 +3654,33 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    /**
+     * HalfOrder Partner Wallets (Restaurant / Driver).
+     * Independent from customer wallet / Stripe / earnings ledgers.
+     */
+    function canReadPartnerHalfOrderWalletDoc() {
+      return isAdmin()
+        || (
+          resource.data.ownerType == 'restaurant'
+          && ownsRestaurantWalletOwnerId(resource.data.ownerId)
+        )
+        || (
+          resource.data.ownerType == 'driver'
+          && isSignedIn()
+          && resource.data.ownerId == request.auth.uid
+        );
+    }
+    match /halfOrderPartnerWallets/{walletId} {
+      allow read: if canReadPartnerHalfOrderWalletDoc();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /halfOrderPartnerWalletCredits/{creditId} {
+      allow read: if canReadPartnerHalfOrderWalletDoc();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
     /** Admin push campaign history / delivery tracking. */
     match /pushCampaigns/{campaignId} {
       allow read, create, update, delete: if isAdmin();

@@ -645,6 +645,11 @@ export default function AdminScreen() {
                   onPress={() => router.push(adminRoutes.wallet as never)}
                 />
                 <ActionCard
+                  icon="briefcase-outline"
+                  label="Wallets"
+                  onPress={() => router.push(adminRoutes.wallets as never)}
+                />
+                <ActionCard
                   icon="images-outline"
                   label="Home banners"
                   onPress={() => router.push(adminRoutes.homeBanners as never)}

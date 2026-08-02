@@ -78,4 +78,12 @@ export const adminRoutes = {
     `/(tabs)/admin/wallet/${encodeURIComponent(id)}`,
   walletConfig: '/(tabs)/admin/wallet-config',
   walletTransfer: '/(tabs)/admin/wallet-transfer',
+  /** HalfOrder Partner Wallets (Restaurant / Driver — admin send balance). */
+  wallets: '/(tabs)/admin/wallets',
+  walletsRestaurants: '/(tabs)/admin/wallets/restaurants',
+  walletsDrivers: '/(tabs)/admin/wallets/drivers',
+  walletsRestaurant: (id: string) =>
+    `/(tabs)/admin/wallets/restaurant/${encodeURIComponent(id)}`,
+  walletsDriver: (id: string) =>
+    `/(tabs)/admin/wallets/driver/${encodeURIComponent(id)}`,
 } as const;

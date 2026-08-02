@@ -168,6 +168,19 @@ export default function AdminLayout() {
           name="wallet-transfer"
           options={{ title: 'Wallet Transfer' }}
         />
+        <Stack.Screen name="wallets/index" options={{ title: 'Wallets' }} />
+        <Stack.Screen
+          name="wallets/restaurants"
+          options={{ title: 'Restaurant Wallets' }}
+        />
+        <Stack.Screen
+          name="wallets/drivers"
+          options={{ title: 'Driver Wallets' }}
+        />
+        <Stack.Screen
+          name="wallets/[ownerType]/[ownerId]"
+          options={{ title: 'Partner Wallet' }}
+        />
         <Stack.Screen
           name="test-order-flow"
           options={{ title: 'Order Flow Test' }}
