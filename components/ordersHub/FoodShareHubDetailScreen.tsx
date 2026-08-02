@@ -351,7 +351,6 @@ export function FoodShareHubDetailScreen({
             />
             <Row label="Payment Method" value={paymentMethodLabel} />
             <Row label="Payment Status" value={String(paymentStatusLabel)} />
-            <Row label="Stripe Transaction ID" value={stripeTxnId ?? '—'} />
             <Row label="Paid At" value={formatPaidAtLabel(paidAtRaw)} />
           </Section>
         ) : null}

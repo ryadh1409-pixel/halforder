@@ -51,6 +51,12 @@ export function isActiveOrderStatus(status: string): boolean {
 /** All admin-visible timestamps use Toronto (product region). */
 const TORONTO_LOCALE: Intl.DateTimeFormatOptions = {
   timeZone: 'America/Toronto',
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
 };
 
 export function firestoreTimeToMs(v: unknown): number | null {
