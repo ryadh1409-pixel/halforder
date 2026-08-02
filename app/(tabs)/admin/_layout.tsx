@@ -155,6 +155,19 @@ export default function AdminLayout() {
           name="cashback-rewards"
           options={{ title: 'Cashback Rewards' }}
         />
+        <Stack.Screen name="wallet/index" options={{ title: 'Admin Wallet' }} />
+        <Stack.Screen
+          name="wallet/[id]"
+          options={{ title: 'Wallet Transaction' }}
+        />
+        <Stack.Screen
+          name="wallet-config"
+          options={{ title: 'Wallet Configuration' }}
+        />
+        <Stack.Screen
+          name="wallet-transfer"
+          options={{ title: 'Wallet Transfer' }}
+        />
         <Stack.Screen
           name="test-order-flow"
           options={{ title: 'Order Flow Test' }}

@@ -13,6 +13,7 @@ const DRIVER_TAB_SCREEN_OPTIONS = {
 /** Explicit hrefs — never bare `/profile` (collides with `(tabs)`). */
 const TAB_INDEX = { title: 'Hub', href: '/(driver)' as const };
 const TAB_EARNINGS = { title: 'Earnings', href: '/(driver)/earnings' as const };
+const TAB_WALLET = { title: 'Wallet', href: '/(driver)/wallet' as const };
 const TAB_DRIVER_PROFILE = {
   href: '/(driver)/driver-profile' as const,
   tabBarLabel: 'Profile',
@@ -39,6 +40,8 @@ function DriverTabsNavigator() {
       <Tabs.Screen name="index" options={TAB_INDEX} />
       <Tabs.Screen name="dispatch" options={TAB_HIDDEN} />
       <Tabs.Screen name="earnings" options={TAB_EARNINGS} />
+      <Tabs.Screen name="wallet" options={TAB_WALLET} />
+      <Tabs.Screen name="wallet-transaction/[id]" options={TAB_HIDDEN} />
       <Tabs.Screen name="driver-profile" options={TAB_DRIVER_PROFILE} />
       <Tabs.Screen name="account-settings" options={TAB_HIDDEN} />
       <Tabs.Screen name="dashboard" options={TAB_HIDDEN} />

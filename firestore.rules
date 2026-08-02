@@ -3604,6 +3604,56 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    /**
+     * Earnings Wallet System (Restaurant / Driver / Admin).
+     * Server (Admin SDK) credits ledgers on order completion.
+     * Clients: owner read-only; Admin configures + transfers.
+     */
+    function ownsRestaurantWalletOwnerId(ownerId) {
+      return isSignedIn()
+        && ownerId is string
+        && ownerId.size() > 0
+        && (
+          ownerId == request.auth.uid
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid))
+                .data.get('restaurantId', '') == ownerId
+          )
+          || (
+            exists(/databases/$(database)/documents/restaurants/$(ownerId))
+            && get(/databases/$(database)/documents/restaurants/$(ownerId))
+                .data.get('ownerId', '') == request.auth.uid
+          )
+        );
+    }
+    function canReadEarningsWalletDoc() {
+      return isAdmin()
+        || (
+          resource.data.ownerType == 'restaurant'
+          && ownsRestaurantWalletOwnerId(resource.data.ownerId)
+        )
+        || (
+          resource.data.ownerType == 'driver'
+          && isSignedIn()
+          && resource.data.ownerId == request.auth.uid
+        )
+        || (
+          resource.data.ownerType == 'admin'
+          && isAdmin()
+        );
+    }
+    match /earningsWallets/{walletId} {
+      allow read: if canReadEarningsWalletDoc();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /earningsLedger/{txId} {
+      allow read: if canReadEarningsWalletDoc();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
     /** Admin push campaign history / delivery tracking. */
     match /pushCampaigns/{campaignId} {
       allow read, create, update, delete: if isAdmin();

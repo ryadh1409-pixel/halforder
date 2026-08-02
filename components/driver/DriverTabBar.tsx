@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const TABS: { name: DriverTabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { name: 'index', label: 'Hub', icon: 'grid' },
   { name: 'earnings', label: 'Earnings', icon: 'cash' },
+  { name: 'wallet', label: 'Wallet', icon: 'wallet' },
   { name: 'driver-profile', label: 'Profile', icon: 'person' },
 ];
 

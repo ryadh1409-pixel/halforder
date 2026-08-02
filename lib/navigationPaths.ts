@@ -6,6 +6,7 @@ export const DRIVER_ROUTES = {
   hub: '/(driver)',
   dispatch: '/(driver)/dispatch',
   earnings: '/(driver)/earnings',
+  wallet: '/(driver)/wallet',
   /** Driver profile tab — unique path (not `(tabs)/profile`). */
   profile: '/(driver)/driver-profile',
   accountSettings: '/(driver)/account-settings',
@@ -18,11 +19,12 @@ export const DRIVER_ROUTES = {
   order: (orderId: string) => customerOrderDetailHref(orderId),
 } as const;
 
-export type DriverTabKey = 'index' | 'earnings' | 'driver-profile';
+export type DriverTabKey = 'index' | 'earnings' | 'wallet' | 'driver-profile';
 
 export const DRIVER_TAB_HREFS: Record<DriverTabKey, Href> = {
   index: DRIVER_ROUTES.hub,
   earnings: DRIVER_ROUTES.earnings,
+  wallet: DRIVER_ROUTES.wallet,
   'driver-profile': DRIVER_ROUTES.profile,
 };
 

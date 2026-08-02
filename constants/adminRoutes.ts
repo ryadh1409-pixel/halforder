@@ -72,4 +72,10 @@ export const adminRoutes = {
   userActivity: '/(tabs)/admin/user-activity',
   /** All user feedback — order, restaurant, driver ratings + comments. */
   feedback: '/(tabs)/admin/feedback',
+  /** Earnings Wallet System (Restaurant / Driver / Admin ledgers). */
+  wallet: '/(tabs)/admin/wallet',
+  walletTransaction: (id: string) =>
+    `/(tabs)/admin/wallet/${encodeURIComponent(id)}`,
+  walletConfig: '/(tabs)/admin/wallet-config',
+  walletTransfer: '/(tabs)/admin/wallet-transfer',
 } as const;
