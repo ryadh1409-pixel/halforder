@@ -45,6 +45,23 @@ import {
 } from '@/services/location';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
+import {
+  defaultCheckoutAddress,
+  subscribeCheckoutCustomerSnapshot,
+  syncProfileLocationToAddressBook,
+} from '@/services/checkoutCustomerPrefs';
+import {
+  EMPTY_CHECKOUT_DELIVERY_PREFS,
+  summarizeDeliveryPrefs,
+  type CheckoutAddressBookEntry,
+  type CheckoutDeliveryPrefs,
+} from '@/types/checkoutCustomerPrefs';
+import {
+  displayFromStoredProfilePhone,
+  isProfilePhoneStorageEmpty,
+  profilePhoneForFirestore,
+} from '@/lib/profileWhatsAppPhone';
+import { isRegisteredAuthUser } from '@/lib/authSession';
 import { OUTSIDE_DELIVERY_AREA_MESSAGE } from '@/lib/delivery/deliveryEligibility';
 import {
   restaurantPromoWaivesDeliveryFee,
@@ -128,6 +145,11 @@ export default function CheckoutPremiumScreen() {
     null,
   );
   const [useHalfOrderCash, setUseHalfOrderCash] = useState(false);
+  const [deliveryPrefs, setDeliveryPrefs] = useState<CheckoutDeliveryPrefs>({
+    ...EMPTY_CHECKOUT_DELIVERY_PREFS,
+  });
+  const [addressBook, setAddressBook] = useState<CheckoutAddressBookEntry[]>([]);
+  const [checkoutPhone, setCheckoutPhone] = useState('');
 
   const cartItems = useMemo(
     () =>
@@ -205,13 +227,29 @@ export default function CheckoutPremiumScreen() {
     };
   }, [user?.uid, user?.isAnonymous]);
 
+  const selectedAddress = useMemo(
+    () => defaultCheckoutAddress(addressBook),
+    [addressBook],
+  );
+
+  const mapCoords = useMemo(() => {
+    if (
+      selectedAddress &&
+      Number.isFinite(selectedAddress.latitude) &&
+      Number.isFinite(selectedAddress.longitude)
+    ) {
+      return { lat: selectedAddress.latitude, lng: selectedAddress.longitude };
+    }
+    return userCoords;
+  }, [selectedAddress, userCoords]);
+
   const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
-    customerEntity: userCoords,
+    customerEntity: mapCoords,
     restaurantEntity: profile?.raw,
     restaurantRaw: profile?.raw,
     mode: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
-    locationResolving: locationLoading && !userCoords,
-    locationReady,
+    locationResolving: locationLoading && !mapCoords,
+    locationReady: locationReady || Boolean(mapCoords),
   });
 
   const waiveDeliveryFee = restaurantPromoWaivesDeliveryFee(profile?.raw);
@@ -317,18 +355,60 @@ export default function CheckoutPremiumScreen() {
     }
   }, [promo, restaurantId, setPromo, subtotal]);
 
+  useEffect(() => {
+    const uid = isRegisteredAuthUser(user) ? user!.uid : null;
+    if (!uid) {
+      setDeliveryPrefs({ ...EMPTY_CHECKOUT_DELIVERY_PREFS });
+      setAddressBook([]);
+      setCheckoutPhone('');
+      return undefined;
+    }
+    return subscribeCheckoutCustomerSnapshot(uid, (snap) => {
+      setDeliveryPrefs(snap.deliveryPrefs);
+      setAddressBook(snap.addressBook);
+      setCheckoutPhone(snap.phone || snap.phoneNumber);
+    });
+  }, [user]);
+
   useFocusEffect(
     useCallback(() => {
       void refreshCustomerLocation();
-    }, [refreshCustomerLocation]),
+      const uid = isRegisteredAuthUser(user) ? user!.uid : null;
+      if (uid) {
+        void syncProfileLocationToAddressBook(uid).then(setAddressBook).catch(() => {
+          /* keep live snapshot */
+        });
+      }
+    }, [refreshCustomerLocation, user]),
   );
 
   const addressPrimary =
     fulfillmentMode === 'pickup'
       ? (profile?.address ?? 'Restaurant pickup')
-      : (customerAddressLine ?? 'Enable location access');
-  const addressSecondary = fulfillmentMode === 'pickup' ? 'Pickup parking — side entrance' : 'Leave at door · Add delivery notes at checkout';
-  const phoneDisplay = '+1 (416) 555-0199';
+      : (selectedAddress?.address?.trim() ||
+          customerAddressLine ||
+          'Add a delivery address');
+  const addressSecondary =
+    fulfillmentMode === 'pickup'
+      ? 'Pickup parking — side entrance'
+      : summarizeDeliveryPrefs(deliveryPrefs);
+  const instructionsSubtitle = summarizeDeliveryPrefs(deliveryPrefs);
+  const addressRowSubtitle =
+    fulfillmentMode === 'delivery'
+      ? selectedAddress?.label
+        ? `${selectedAddress.label}${
+            deliveryPrefs.buzzer.trim()
+              ? ` · Buzzer ${deliveryPrefs.buzzer.trim()}`
+              : ''
+          }`
+        : deliveryPrefs.buzzer.trim()
+          ? `Buzzer ${deliveryPrefs.buzzer.trim()}`
+          : 'Choose or add a delivery address'
+      : (profile?.name ?? 'Restaurant');
+  const phoneDigits = profilePhoneForFirestore(checkoutPhone);
+  const phoneDisplay = isProfilePhoneStorageEmpty(phoneDigits)
+    ? 'Add phone number'
+    : displayFromStoredProfilePhone(checkoutPhone);
 
   async function submitOrder() {
     console.log('[CHECKOUT NEXT CLICKED]', {
@@ -384,7 +464,23 @@ export default function CheckoutPremiumScreen() {
           };
         }
       } else {
-        const delivery = await resolveDeliveryLocationForCheckout({ required: true });
+        const delivery = await resolveDeliveryLocationForCheckout({
+          required: true,
+          manual: selectedAddress
+            ? {
+                address: selectedAddress.address,
+                formattedAddress:
+                  selectedAddress.formattedAddress ?? selectedAddress.address,
+                latitude: selectedAddress.latitude,
+                longitude: selectedAddress.longitude,
+                placeId: selectedAddress.placeId,
+                city: selectedAddress.city,
+                province: selectedAddress.province,
+                country: selectedAddress.country,
+                postalCode: selectedAddress.postalCode,
+              }
+            : null,
+        });
         deliveryLocation = {
           lat: delivery.lat,
           lng: delivery.lng,
@@ -635,7 +731,7 @@ export default function CheckoutPremiumScreen() {
     cartItems.length === 0 ||
     authLoading ||
     (fulfillmentMode === 'delivery' &&
-      (distanceCheckLoading || !userCoords || eligibility.blocked));
+      (distanceCheckLoading || !mapCoords || eligibility.blocked));
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -658,19 +754,19 @@ export default function CheckoutPremiumScreen() {
           />
         ) : null}
 
-        {fulfillmentMode === 'delivery' && userCoords ? (
+        {fulfillmentMode === 'delivery' && mapCoords ? (
           <DeliveryMapCard
-            center={{ latitude: userCoords.lat, longitude: userCoords.lng }}
+            center={{ latitude: mapCoords.lat, longitude: mapCoords.lng }}
             markers={[
               {
                 id: 'drop',
-                latitude: userCoords.lat,
-                longitude: userCoords.lng,
+                latitude: mapCoords.lat,
+                longitude: mapCoords.lng,
               },
             ]}
             addressPrimary={addressPrimary}
             addressSecondary={addressSecondary}
-            onEditPin={() => void refreshCustomerLocation()}
+            onEditPin={() => router.push('/location' as never)}
           />
         ) : fulfillmentMode === 'delivery' && distanceCheckLoading ? (
           <View style={styles.locationLoading}>
@@ -684,40 +780,31 @@ export default function CheckoutPremiumScreen() {
           <AddressRow
             icon="location-outline"
             title={addressPrimary}
-            subtitle={
-              fulfillmentMode === 'delivery'
-                ? 'Apartment buzzer 402'
-                : restaurantName
-            }
+            subtitle={addressRowSubtitle}
             onPress={() =>
-              Alert.alert(
-                'Address',
-                'Address book syncing with Firestore — coming shortly.',
+              router.push(
+                (fulfillmentMode === 'delivery'
+                  ? '/checkout-addresses'
+                  : '/location') as never,
               )
             }
           />
           <AddressRow
             icon="chatbubble-ellipses-outline"
             title="Delivery instructions"
-            subtitle="Meet at my door • Add instructions & photo drop-off guides"
-            subtitlePlaceholder
+            subtitle={instructionsSubtitle}
+            subtitlePlaceholder={
+              instructionsSubtitle === 'Add delivery instructions'
+            }
             onPress={() =>
-              Alert.alert(
-                'Delivery instructions',
-                'Photo references + gate codes persist on `orders.notes` in the next Firebase schema rev.',
-              )
+              router.push('/checkout-delivery-instructions' as never)
             }
           />
           <AddressRow
             icon="call-outline"
             title={phoneDisplay}
             subtitle="Driver can call when nearby"
-            onPress={() =>
-              Alert.alert(
-                'Phone',
-                'Wire this row to `users/{uid}.phoneNumber`.',
-              )
-            }
+            onPress={() => router.push('/checkout-phone' as never)}
             last
           />
         </View>
