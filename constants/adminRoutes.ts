@@ -70,4 +70,6 @@ export const adminRoutes = {
   referralDashboard: '/(tabs)/admin/referral-dashboard',
   /** Live user activity — sign-ins, page views, button clicks. */
   userActivity: '/(tabs)/admin/user-activity',
+  /** All user feedback — order, restaurant, driver ratings + comments. */
+  feedback: '/(tabs)/admin/feedback',
 } as const;

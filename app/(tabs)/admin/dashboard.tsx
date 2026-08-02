@@ -405,6 +405,16 @@ export default function AdminDashboardScreen() {
               <Text style={styles.cardValue}>{stats.ordersToday}</Text>
               <Text style={styles.cardCta}>Today only →</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.card, styles.feedbackCard]}
+              activeOpacity={0.85}
+              onPress={() => router.push(adminRoutes.feedback as never)}
+            >
+              <Text style={styles.cardLabel}>User Feedback</Text>
+              <Text style={styles.feedbackEmoji}>⭐</Text>
+              <Text style={styles.cardSub}>Order, restaurant & driver ratings</Text>
+              <Text style={styles.cardCta}>Read all feedback →</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
       </ScrollView>
@@ -521,6 +531,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: COLORS.textMuted,
+  },
+  feedbackCard: {
+    borderColor: 'rgba(251,191,36,0.35)',
+    borderWidth: 1,
+  },
+  feedbackEmoji: {
+    fontSize: 28,
+    marginVertical: 4,
   },
   errorBox: {
     backgroundColor: COLORS.dangerBg,

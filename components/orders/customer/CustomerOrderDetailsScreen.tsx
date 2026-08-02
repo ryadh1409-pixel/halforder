@@ -3,6 +3,9 @@ import { CustomerMarketplaceTimeline } from '@/components/order/CustomerMarketpl
 import { IWantTimeline } from '@/components/iWant/IWantTimeline';
 import { isIWantOrder } from '@/lib/iWantTimeline';
 import { OrderRatingPrompt } from '@/components/order-rating-prompt';
+import { OrderFeedbackModal, type OrderFeedbackPayload } from '@/components/feedback/OrderFeedbackModal';
+import { hasSubmittedFeedback, submitOrderFeedback } from '@/services/feedback/orderFeedbackService';
+import { useAuth } from '@/services/AuthContext';
 import { DeliveryProgressBar } from '@/components/order/DeliveryProgressBar';
 import { OrderPaymentTimeline } from '@/components/order/OrderPaymentTimeline';
 import { OrderReceiptBreakdown } from '@/components/orders/OrderReceiptBreakdown';
@@ -70,6 +73,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [restaurantMeta, setRestaurantMeta] = useState<{
     name: string;
     image: string | null;
@@ -81,6 +85,8 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   }>({ avatar: null, phone: null });
   const [cancelling, setCancelling] = useState(false);
   const [ratePromptVisible, setRatePromptVisible] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [alreadyRated, setAlreadyRated] = useState(false);
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -239,6 +245,11 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
   }, [order, order.deliveryStatus, order.id, order.status]);
 
   useCustomerOrderLifecycleAlert(order);
+
+  useEffect(() => {
+    if (!user || !delivered) return;
+    hasSubmittedFeedback(order.id, user.uid).then(setAlreadyRated).catch(() => {});
+  }, [user, order.id, delivered]);
 
   const timelineIndex = useMemo(() => customerMarketplaceTimelineIndex(order), [order]);
   const timelineProgress = useMemo(() => {
@@ -442,6 +453,18 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
     paymentStatus: order.paymentStatus,
   });
 
+  async function handleFeedbackSubmit(payload: OrderFeedbackPayload) {
+    if (!user) return;
+    await submitOrderFeedback(
+      order.id,
+      user.uid,
+      restaurantMeta.name,
+      payload,
+      'fullorder',
+    );
+    setAlreadyRated(true);
+  }
+
   async function onCancel() {
     if (!cancelAllowed || cancelling) return;
     setCancelling(true);
@@ -559,9 +582,22 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
               </View>
             </>
           ) : (
-            <View style={styles.completedBadge}>
-              <Text style={styles.completedBadgeText}>✓ Delivered</Text>
-            </View>
+            <>
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedBadgeText}>✓ Delivered</Text>
+              </View>
+              {alreadyRated ? (
+                <Text style={styles.alreadyRatedText}>⭐ You've already rated this order</Text>
+              ) : (
+                <Pressable
+                  style={styles.feedbackBtn}
+                  onPress={() => setFeedbackOpen(true)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.feedbackBtnText}>⭐ Rate Your Experience</Text>
+                </Pressable>
+              )}
+            </>
           )}
         </View>
 
@@ -852,6 +888,14 @@ export function CustomerOrderDetailsScreen({ order }: { order: RestaurantOrder }
           ) : null}
         </View>
       </ScrollView>
+
+      <OrderFeedbackModal
+        visible={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        onSubmit={handleFeedbackSubmit}
+        isPickup={order.fulfillmentMode === 'pickup'}
+        restaurantName={restaurantMeta.name}
+      />
     </SafeAreaView>
   );
 }
@@ -941,6 +985,29 @@ const styles = StyleSheet.create({
   },
   etaWrap: { marginTop: 12, paddingHorizontal: 16 },
   progressWrap: { marginTop: 16, paddingHorizontal: 16 },
+  feedbackBtn: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: 'rgba(124,58,237,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.4)',
+    alignItems: 'center',
+  },
+  feedbackBtnText: {
+    color: '#C084FC',
+    fontWeight: '900',
+    fontSize: 15,
+  },
+  alreadyRatedText: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FBBF24',
+    textAlign: 'center',
+  },
   completedBadge: {
     marginTop: 16,
     marginHorizontal: 16,

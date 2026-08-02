@@ -8,7 +8,10 @@ import {
 } from 'firebase/firestore';
 
 export type OrderFeedbackDoc = OrderFeedbackPayload & {
-  matchId: string;
+  /** matchId for HalfOrder/Swipe orders, orderId for FullOrder/Marketplace orders */
+  orderId: string;
+  /** 'halforder' | 'fullorder' */
+  orderType: 'halforder' | 'fullorder';
   userId: string;
   restaurantName: string | null;
   submittedAt: unknown;
@@ -16,17 +19,19 @@ export type OrderFeedbackDoc = OrderFeedbackPayload & {
 
 /**
  * Save order feedback to Firestore.
- * Collection: orderFeedback / {matchId}_{userId}
+ * Collection: orderFeedback / {orderId}_{userId}
  */
 export async function submitOrderFeedback(
-  matchId: string,
+  orderId: string,
   userId: string,
   restaurantName: string | null,
   payload: OrderFeedbackPayload,
+  orderType: 'halforder' | 'fullorder' = 'halforder',
 ): Promise<void> {
-  const docId = `${matchId}_${userId}`;
+  const docId = `${orderId}_${userId}`;
   await setDoc(doc(db, 'orderFeedback', docId), {
-    matchId,
+    orderId,
+    orderType,
     userId,
     restaurantName: restaurantName ?? null,
     orderRating: payload.orderRating,
@@ -34,17 +39,17 @@ export async function submitOrderFeedback(
     driverRating: payload.driverRating ?? null,
     comment: payload.comment,
     submittedAt: serverTimestamp(),
-  } satisfies Omit<OrderFeedbackDoc, 'submittedAt'> & { submittedAt: unknown });
+  });
 }
 
 /**
- * Returns true if the user has already submitted feedback for this match.
+ * Returns true if the user has already submitted feedback for this order.
  */
 export async function hasSubmittedFeedback(
-  matchId: string,
+  orderId: string,
   userId: string,
 ): Promise<boolean> {
-  const docId = `${matchId}_${userId}`;
+  const docId = `${orderId}_${userId}`;
   const snap = await getDoc(doc(db, 'orderFeedback', docId));
   return snap.exists();
 }
