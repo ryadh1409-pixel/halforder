@@ -97,7 +97,7 @@ export function normalizeFoodShareCostBreakdown(
 }
 
 export function formatShareCurrency(amount: number): string {
-  return `$${amount.toFixed(2)}`;
+  return `CA$${amount.toFixed(2)}`;
 }
 
 export function formatTimeRemaining(expiresAtMs: number | null): string {
