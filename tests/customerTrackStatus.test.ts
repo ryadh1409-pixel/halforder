@@ -130,10 +130,10 @@ describe('resolveCustomerTrackStep', () => {
       }),
     ).toBe('driver_at_restaurant');
     expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe(
-      'Driver arrived at restaurant',
+      'Driver waiting at restaurant',
     );
     expect(customerTrackStepLabel('driver_at_restaurant')).toBe(
-      'Driver arrived at restaurant',
+      'Driver waiting at restaurant',
     );
   });
 
@@ -170,7 +170,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('picked_up');
-    expect(customerTrackHeaderTitle('picked_up')).toBe('Order picked up');
+    expect(customerTrackHeaderTitle('picked_up')).toBe('Driver picked up order');
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
@@ -179,7 +179,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('delivered');
-    expect(customerTrackHeaderTitle('delivered')).toBe('Your order has been delivered! 🎉');
+    expect(customerTrackHeaderTitle('delivered')).toBe('Delivered');
   });
 
   it('advances to picked_up when only deliveryStatus is picked_up (driver pickup patch)', () => {
@@ -248,7 +248,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('delivered');
-    expect(customerTrackHeaderTitle('delivered')).toBe('Your order has been delivered! 🎉');
+    expect(customerTrackHeaderTitle('delivered')).toBe('Delivered');
   });
 
   it('uses furthest-forward signal from deliveryStatus not kitchen status', () => {

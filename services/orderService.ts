@@ -32,7 +32,10 @@ import {
   resolveOrderFreshnessMs,
   resolveOrderUpdatedAtMs,
 } from '@/lib/orderSnapshotFreshness';
-import { customerOrderSnapshotSignature } from '@/lib/customerOrderSnapshotSignature';
+import {
+  customerOrderSnapshotSignature,
+  driverLocationFingerprint,
+} from '@/lib/customerOrderSnapshotSignature';
 import { logStatusRead } from '@/lib/orderTerminalStatus';
 import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
@@ -1870,6 +1873,7 @@ export function subscribeCustomerOrderById(
   let lastEmittedOrder: RestaurantOrder | null = null;
   let lastEmittedUpdatedAtMs = 0;
   let lastEmittedCourierRank = 0;
+  let lastDriverLocationSig = '';
   let completionLocked = false;
   let serverBootstrapDone = false;
   let serverRefreshInFlight = false;
@@ -1908,6 +1912,7 @@ export function subscribeCustomerOrderById(
       lastEmittedOrder = null;
       lastEmittedUpdatedAtMs = 0;
       lastEmittedCourierRank = 0;
+      lastDriverLocationSig = '';
       completionLocked = false;
       return;
     }
@@ -1942,6 +1947,7 @@ export function subscribeCustomerOrderById(
         completionLocked,
         currentStatus: lastEmittedOrder?.status ?? null,
         currentDeliveryStatus: lastEmittedOrder?.deliveryStatus ?? null,
+        lastDriverLocationSig,
       };
 
       const gateDecision = evaluateCustomerSnapshotFreshness(raw, meta, currentState);
@@ -2016,6 +2022,10 @@ export function subscribeCustomerOrderById(
           ? Math.max(lastEmittedUpdatedAtMs, mappedUpdatedAtMs)
           : lastEmittedUpdatedAtMs;
       lastEmittedCourierRank = Math.max(lastEmittedCourierRank, mappedRank);
+      const nextDriverSig = driverLocationFingerprint(raw);
+      if (nextDriverSig) {
+        lastDriverLocationSig = nextDriverSig;
+      }
       if (isOrderCompleted(mapped)) {
         completionLocked = true;
       }

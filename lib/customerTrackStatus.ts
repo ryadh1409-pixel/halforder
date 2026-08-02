@@ -41,7 +41,7 @@ export const DELIVERY_STAGES = [
   },
   {
     key: 'driver_at_restaurant',
-    label: 'Driver arrived at restaurant',
+    label: 'Driver waiting at restaurant',
     statuses: [
       'driver_at_restaurant',
       'arrived_restaurant',
@@ -50,7 +50,7 @@ export const DELIVERY_STAGES = [
   },
   {
     key: 'picked_up',
-    label: 'Picked up',
+    label: 'Driver picked up order',
     statuses: ['picked_up'],
   },
   {
@@ -265,15 +265,15 @@ export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
     case 'driver_assigned':
       return 'Driver heading to restaurant';
     case 'driver_at_restaurant':
-      return 'Driver arrived at restaurant';
+      return 'Driver waiting at restaurant';
     case 'picked_up':
-      return 'Order picked up';
+      return 'Driver picked up order';
     case 'on_the_way':
       return 'Driver on the way';
     case 'driver_nearby':
       return 'Driver nearby';
     case 'delivered':
-      return 'Your order has been delivered! 🎉';
+      return 'Delivered';
     case 'cancelled':
       return 'Order cancelled';
     default:
@@ -297,17 +297,17 @@ export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
     case 'ready_for_pickup':
       return 'Your order is ready — matching you with a courier.';
     case 'driver_assigned':
-      return 'Your courier is heading to the restaurant.';
+      return 'Driver assigned — heading to the restaurant.';
     case 'driver_at_restaurant':
-      return 'Your courier has arrived at the restaurant.';
+      return 'Driver waiting at the restaurant for your order.';
     case 'picked_up':
-      return 'Your courier has your order.';
+      return 'Driver picked up your order.';
     case 'on_the_way':
-      return 'Your order is on the way to you.';
+      return 'Driver on the way to you.';
     case 'driver_nearby':
-      return 'Your courier is almost there.';
+      return 'Driver nearby — almost there.';
     case 'delivered':
-      return 'Enjoy your meal.';
+      return 'Your order has been delivered.';
     case 'cancelled':
       return 'This delivery is no longer active.';
     default:

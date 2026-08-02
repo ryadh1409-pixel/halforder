@@ -63,7 +63,7 @@ describe('customerMarketplaceTimeline', () => {
       driverId: 'driver-1',
     });
     expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('driver_at_restaurant');
-    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Driver arrived at restaurant');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Driver waiting at restaurant');
   });
 
   it('returns -1 when cancelled', () => {

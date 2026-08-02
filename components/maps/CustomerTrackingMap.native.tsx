@@ -1,7 +1,7 @@
 /**
  * Customer live tracking map — native only.
- * Uses native Google Maps pins (no custom React children) to avoid the
- * PROVIDER_GOOGLE / iOS blank-snapshot bug (react-native-maps#3384).
+ * Restaurant/home use native pins; driver uses a flat vehicle marker with
+ * tracksViewChanges={false} (avoids PROVIDER_GOOGLE / iOS blank-snapshot bug).
  */
 import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
@@ -19,7 +19,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 // ── Lazy-load react-native-maps ───────────────────────────────────────────────
 let MapView: any = null;
@@ -125,6 +125,7 @@ function TrackingMapInner({
   const provider = useMemo(() => getNativeMapProvider(), []);
   const [mapReady,  setMapReady]  = useState(false);
   const [tracking,  setTracking]  = useState(true);
+  const hadDriverRef = useRef(false);
 
   useEffect(() => {
     console.log('[MAP RUNTIME] MapView provider', {
@@ -138,7 +139,18 @@ function TrackingMapInner({
     });
   }, [provider]);
 
-  // ── Marker definitions (native pins — no custom children) ──────────────────
+  // When the live driver GPS first appears, re-enable auto camera fit.
+  useEffect(() => {
+    if (driver && !hadDriverRef.current) {
+      hadDriverRef.current = true;
+      setTracking(true);
+    }
+    if (!driver) {
+      hadDriverRef.current = false;
+    }
+  }, [driver?.latitude, driver?.longitude]);
+
+  // ── Marker definitions ─────────────────────────────────────────────────────
   const markers = useMemo(() => {
     const list: { id: string; coordinate: LatLng; title: string; pinColor: string; zIndex: number }[] = [];
     if (restaurant) list.push({ id: 'restaurant', coordinate: restaurant, title: 'Restaurant', pinColor: PIN_RESTAURANT, zIndex: 10 });
@@ -472,7 +484,7 @@ function TrackingMapInner({
           />
         )}
 
-        {/* Native pins — no custom children, works on iOS Google Maps */}
+        {/* Restaurant + home: native pins. Driver: rotating vehicle marker. */}
         {markers.map((m) =>
           m.id === 'driver' && driverAnim && MarkerAnimated ? (
             <MarkerAnimated
@@ -480,12 +492,34 @@ function TrackingMapInner({
               identifier={m.id}
               coordinate={driverAnim as never}
               title={m.title}
-              pinColor={m.pinColor}
               flat
               rotation={typeof driverHeading === 'number' ? driverHeading : 0}
+              anchor={{ x: 0.5, y: 0.5 }}
               zIndex={m.zIndex}
+              tracksViewChanges={false}
               calloutEnabled={false}
-            />
+            >
+              <View style={styles.vehicleMarker} pointerEvents="none">
+                <Text style={styles.vehicleEmoji}>🚗</Text>
+              </View>
+            </MarkerAnimated>
+          ) : m.id === 'driver' ? (
+            <Marker
+              key={m.id}
+              identifier={m.id}
+              coordinate={m.coordinate}
+              title={m.title}
+              flat
+              rotation={typeof driverHeading === 'number' ? driverHeading : 0}
+              anchor={{ x: 0.5, y: 0.5 }}
+              zIndex={m.zIndex}
+              tracksViewChanges={false}
+              calloutEnabled={false}
+            >
+              <View style={styles.vehicleMarker} pointerEvents="none">
+                <Text style={styles.vehicleEmoji}>🚗</Text>
+              </View>
+            </Marker>
           ) : (
             <Marker
               key={m.id}
@@ -729,6 +763,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
+  },
+
+  vehicleMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderWidth: 2,
+    borderColor: '#1E1B4B',
+  },
+  vehicleEmoji: {
+    fontSize: 24,
   },
 
   recenterBtn: {

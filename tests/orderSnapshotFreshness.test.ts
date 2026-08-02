@@ -116,6 +116,50 @@ describe('orderSnapshotFreshness', () => {
     expect(decision.reason).toBe('older_updatedAt_same_stage');
   });
 
+  it('accepts same-stage equal updatedAt when driverLocation moves', () => {
+    const decision = evaluateCustomerSnapshotFreshness(
+      {
+        status: 'payment_confirmed',
+        deliveryStatus: 'driver_assigned',
+        updatedAtMs: T3,
+        driverId: 'd1',
+        driverLocation: { lat: 43.66, lng: -79.39, heading: 90 },
+      },
+      { fromCache: false, hasPendingWrites: false },
+      {
+        lastCourierRank: DELIVERY_STAGE_RANK.driver_assigned,
+        lastUpdatedAtMs: T3,
+        hasServerSnapshot: true,
+        completionLocked: false,
+        lastDriverLocationSig: '43.65,-79.38,0',
+      },
+    );
+    expect(decision.apply).toBe(true);
+    expect(decision.reason).toBe('driver_location_update');
+  });
+
+  it('rejects same-stage equal updatedAt when driverLocation is unchanged', () => {
+    const decision = evaluateCustomerSnapshotFreshness(
+      {
+        status: 'payment_confirmed',
+        deliveryStatus: 'driver_assigned',
+        updatedAtMs: T3,
+        driverId: 'd1',
+        driverLocation: { latitude: 43.65, longitude: -79.38, heading: 12 },
+      },
+      { fromCache: false, hasPendingWrites: false },
+      {
+        lastCourierRank: DELIVERY_STAGE_RANK.driver_assigned,
+        lastUpdatedAtMs: T3,
+        hasServerSnapshot: true,
+        completionLocked: false,
+        lastDriverLocationSig: '43.65,-79.38,12',
+      },
+    );
+    expect(decision.apply).toBe(false);
+    expect(decision.reason).toBe('duplicate_snapshot');
+  });
+
   it('rejects delivery stage regression from cache', () => {
     const decision = evaluateCustomerSnapshotFreshness(
       {

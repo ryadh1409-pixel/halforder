@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import type { DriverLiveCoordinate } from '@/types/location';
 import {
+  getCurrentGpsReadingSafe,
   gpsReadingToDriverCoord,
   requestForegroundLocationPermission,
   resetDriverLocationThrottle,
@@ -47,22 +48,30 @@ export function useDriverLocationTracking(
       if (!mounted || permission !== 'granted') return;
       setPermissionGranted(true);
 
+      const writeCoord = (coord: DriverLiveCoordinate) => {
+        if (!mounted) return;
+        setCurrent(coord);
+        setSyncing(true);
+        void syncDriverLiveLocation(oid, did, coord, { force: true })
+          .then((written) => {
+            if (!mounted) return;
+            if (written) setLastSyncedAt(Date.now());
+          })
+          .finally(() => {
+            if (mounted) setSyncing(false);
+          });
+      };
+
+      // Seed immediately so customers see the vehicle before the watch fires.
+      const seed = await getCurrentGpsReadingSafe({ highAccuracy: true });
+      if (mounted && seed) {
+        writeCoord(gpsReadingToDriverCoord(seed));
+      }
+
       try {
         const subscription = await watchGpsPosition(
           (reading: GpsReading) => {
-            if (!mounted) return;
-            const coord = gpsReadingToDriverCoord(reading);
-            setCurrent(coord);
-            setSyncing(true);
-            // Write every GPS update to orders/{id}.driverLocation (user tracking field).
-            void syncDriverLiveLocation(oid, did, coord, { force: true })
-              .then((written) => {
-                if (!mounted) return;
-                if (written) setLastSyncedAt(Date.now());
-              })
-              .finally(() => {
-                if (mounted) setSyncing(false);
-              });
+            writeCoord(gpsReadingToDriverCoord(reading));
           },
           {
             timeIntervalMs: 2000,

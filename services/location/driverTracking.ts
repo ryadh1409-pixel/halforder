@@ -127,7 +127,11 @@ export async function syncDriverLiveLocation(
     { driverLocation: payload },
     { op: 'batch-update' },
   );
-  batch.update(doc(db, 'orders', oid), { driverLocation: payload });
+  // Bump root updatedAt so customer listeners (freshness gate) apply GPS patches.
+  batch.update(doc(db, 'orders', oid), {
+    driverLocation: payload,
+    updatedAt: serverTimestamp(),
+  });
   batch.set(
     doc(db, 'live_locations', oid),
     {

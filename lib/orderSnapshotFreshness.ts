@@ -1,3 +1,4 @@
+import { driverLocationFingerprint } from '@/lib/customerOrderSnapshotSignature';
 import { isDeliveryStageRegression, resolveDeliveryStageRank } from '@/lib/deliveryStageRank';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import { safeToMillis } from '@/utils/safeToMillis';
@@ -59,6 +60,8 @@ export type CustomerSnapshotState = {
   completionLocked: boolean;
   currentStatus?: unknown;
   currentDeliveryStatus?: unknown;
+  /** Prior `driverLocation` fingerprint — allows GPS-only patches with equal `updatedAt`. */
+  lastDriverLocationSig?: string;
 };
 
 /**
@@ -110,6 +113,11 @@ export function evaluateCustomerSnapshotFreshness(
     state.lastUpdatedAtMs > 0 &&
     updatedAtMs === state.lastUpdatedAtMs
   ) {
+    const incomingDriverSig = driverLocationFingerprint(raw);
+    const prevDriverSig = state.lastDriverLocationSig ?? '';
+    if (incomingDriverSig && incomingDriverSig !== prevDriverSig) {
+      return { apply: true, reason: 'driver_location_update' };
+    }
     return { apply: false, reason: 'duplicate_snapshot' };
   }
 
@@ -176,6 +184,7 @@ export class OrderSnapshotFreshnessGate {
   private completionLocked = false;
   private lastStatus: unknown = null;
   private lastDeliveryStatus: unknown = null;
+  private lastDriverLocationSig = '';
 
   getState(): CustomerSnapshotState {
     return {
@@ -185,6 +194,7 @@ export class OrderSnapshotFreshnessGate {
       completionLocked: this.completionLocked,
       currentStatus: this.lastStatus,
       currentDeliveryStatus: this.lastDeliveryStatus,
+      lastDriverLocationSig: this.lastDriverLocationSig,
     };
   }
 
@@ -208,6 +218,10 @@ export class OrderSnapshotFreshnessGate {
     }
     this.lastStatus = raw.status ?? this.lastStatus;
     this.lastDeliveryStatus = raw.deliveryStatus ?? this.lastDeliveryStatus;
+    const driverSig = driverLocationFingerprint(raw);
+    if (driverSig) {
+      this.lastDriverLocationSig = driverSig;
+    }
     if (!meta.fromCache || isOrderCompleted(raw)) {
       this.hasServerSnapshot = true;
     }
@@ -228,6 +242,10 @@ export class OrderSnapshotFreshnessGate {
     }
     this.lastStatus = raw.status ?? this.lastStatus;
     this.lastDeliveryStatus = raw.deliveryStatus ?? this.lastDeliveryStatus;
+    const driverSig = driverLocationFingerprint(raw);
+    if (driverSig) {
+      this.lastDriverLocationSig = driverSig;
+    }
     if (isOrderCompleted(raw)) {
       this.completionLocked = true;
     }
