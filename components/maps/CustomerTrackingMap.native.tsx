@@ -21,12 +21,23 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, {
-  AnimatedRegion,
-  Marker,
-  MarkerAnimated,
-  Polyline,
-} from 'react-native-maps';
+// Lazy-load react-native-maps so the module doesn't crash in dev clients
+// that were built before the native module was added.
+let MapView: any = null;
+let AnimatedRegion: any = null;
+let Marker: any = null;
+let MarkerAnimated: any = null;
+let Polyline: any = null;
+try {
+  const rnm = require('react-native-maps');
+  MapView = rnm.default;
+  AnimatedRegion = rnm.AnimatedRegion;
+  Marker = rnm.Marker;
+  MarkerAnimated = rnm.MarkerAnimated;
+  Polyline = rnm.Polyline;
+} catch {
+  // Native module not available in this build (dev client)
+}
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -67,7 +78,7 @@ function TrackingMapInner({
   driverHeading: number | null;
   routeCoordinates: LatLng[];
 }) {
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<any>(null);
   const driverAnimRef = useRef<AnimatedRegion | null>(null);
   const lastDriverRef = useRef<LatLng | null>(null);
   const seededRef = useRef(false);
@@ -156,6 +167,14 @@ function TrackingMapInner({
     }, 420);
     return () => clearTimeout(t);
   }, [mapReady, followDriver, fitPoints]);
+
+  if (!MapView) {
+    return (
+      <View style={styles.loadingWrap}>
+        <Text style={styles.loadingText}>Map unavailable in this build</Text>
+      </View>
+    );
+  }
 
   if (!initialRegion) {
     return (
