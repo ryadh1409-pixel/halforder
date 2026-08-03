@@ -5,7 +5,17 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { deleteField, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 
 import type { DriverLiveCoordinate } from '@/types/location';
 import { db } from '@/services/firebase';
@@ -58,6 +68,8 @@ type Listener = (coord: DriverLiveCoordinate | null) => void;
 type SessionState = {
   orderId: string;
   driverId: string;
+  /** Same-group sibling order ids — one GPS stream mirrored for every customer. */
+  mirrorOrderIds: string[];
   current: DriverLiveCoordinate | null;
   permissionGranted: boolean;
   running: boolean;
@@ -83,22 +95,65 @@ function setSession(next: SessionState | null): void {
   emit();
 }
 
+/**
+ * HalfOrder / Swipe / group batches use multiple order docs with one groupId.
+ * Both customers subscribe to their own order — mirror the same live GPS onto
+ * each assigned sibling so there is still exactly one GPS publisher.
+ */
+async function resolveGroupMirrorOrderIds(
+  orderId: string,
+  driverId: string,
+): Promise<string[]> {
+  try {
+    const primarySnap = await getDoc(doc(db, 'orders', orderId));
+    if (!primarySnap.exists()) return [];
+    const data = primarySnap.data() as Record<string, unknown>;
+    const groupId = typeof data.groupId === 'string' ? data.groupId.trim() : '';
+    if (!groupId) return [];
+
+    const snap = await getDocs(
+      query(collection(db, 'orders'), where('groupId', '==', groupId)),
+    );
+    const mirrors: string[] = [];
+    for (const d of snap.docs) {
+      if (d.id === orderId) continue;
+      const row = d.data() as Record<string, unknown>;
+      const assigned =
+        (typeof row.driverId === 'string' && row.driverId.trim()) ||
+        (typeof row.assignedDriverId === 'string' && row.assignedDriverId.trim()) ||
+        '';
+      if (assigned === driverId) mirrors.push(d.id);
+    }
+    return mirrors;
+  } catch (e) {
+    logLocationDebug('[DRIVER LIVE SHARE] mirror resolve failed', {
+      orderId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return [];
+  }
+}
+
 /** Best-effort privacy cleanup — stop exposing live GPS after the delivery ends. */
 async function clearLiveSharingArtifacts(
   orderId: string,
   driverId: string,
+  mirrorOrderIds: string[] = [],
 ): Promise<void> {
   const oid = orderId.trim();
   const did = driverId.trim();
   if (!oid || !did) return;
 
-  try {
-    await updateDoc(doc(db, 'orders', oid), {
-      driverLocation: deleteField(),
-      updatedAt: serverTimestamp(),
-    });
-  } catch {
-    /* rules may require coords-only patches — stop publishing is enough */
+  const targets = [oid, ...mirrorOrderIds.map((id) => id.trim()).filter(Boolean)];
+  for (const target of targets) {
+    try {
+      await updateDoc(doc(db, 'orders', target), {
+        driverLocation: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch {
+      /* rules may require coords-only patches — stop publishing is enough */
+    }
   }
 
   try {
@@ -153,11 +208,15 @@ async function writeCoord(
     heading: coord.heading ?? null,
     accuracy: meta?.accuracy ?? null,
     timestamp: meta?.capturedAtMs ?? Date.now(),
+    mirrorOrderIds: session.mirrorOrderIds,
   });
   session = { ...session, current: coord };
   emit();
   try {
-    await syncDriverLiveLocation(orderId, driverId, coord, { force: true });
+    await syncDriverLiveLocation(orderId, driverId, coord, {
+      force: true,
+      mirrorOrderIds: session.mirrorOrderIds,
+    });
   } catch (e) {
     logLocationDebug('[DRIVER LIVE SHARE] write failed', {
       orderId,
@@ -204,6 +263,7 @@ export async function startDriverLiveSharing(
     setSession({
       orderId: oid,
       driverId: did,
+      mirrorOrderIds: [],
       current: null,
       permissionGranted: false,
       running: false,
@@ -212,14 +272,24 @@ export async function startDriverLiveSharing(
     return false;
   }
 
+  const mirrorOrderIds = await resolveGroupMirrorOrderIds(oid, did);
+
   setSession({
     orderId: oid,
     driverId: did,
+    mirrorOrderIds,
     current: null,
     permissionGranted: true,
     running: true,
   });
   await writeEnabledOrderId(oid);
+
+  console.log('[DRIVER LIVE SHARE] started', {
+    orderId: oid,
+    driverId: did,
+    mirrorOrderIds,
+    timestamp: Date.now(),
+  });
 
   const seed = await getCurrentGpsReadingSafe({ highAccuracy: true });
   if (seed && session?.running && session.orderId === oid) {
@@ -282,6 +352,11 @@ export async function stopDriverLiveSharing(
       orderId: prev.orderId,
       reason,
     });
+    console.log('[DRIVER LIVE SHARE] stopped', {
+      orderId: prev.orderId,
+      reason,
+      timestamp: Date.now(),
+    });
     if (
       reason === 'delivered' ||
       reason === 'cancelled' ||
@@ -297,7 +372,11 @@ export async function stopDriverLiveSharing(
       reason === 'unassigned' ||
       reason === 'logout'
     ) {
-      await clearLiveSharingArtifacts(prev.orderId, prev.driverId);
+      await clearLiveSharingArtifacts(
+        prev.orderId,
+        prev.driverId,
+        prev.mirrorOrderIds,
+      );
     }
   } else if (
     reason === 'declined' ||

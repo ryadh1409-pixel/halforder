@@ -48,7 +48,12 @@ function stillAssignedToDriver(order: ActiveDelivery, driverId: string): boolean
  * Driver-shell host:
  * - presents Enable Live Location after Accept
  * - resumes GPS only for orders the driver explicitly enabled
- * - stops automatically on delivered / cancelled / unassigned
+ * - stops automatically on delivered / cancelled / confirmed unassigned
+ *
+ * CRITICAL: Never treat "order not yet in the active feed" as unassigned.
+ * After accept, the feed can lag behind live sharing start — stopping then
+ * cleared AsyncStorage + deleted orders.driverLocation and left customers
+ * stuck on "Waiting for driver location…".
  */
 function DriverLiveSharingHostInner() {
   const uid = useAuthUid();
@@ -137,7 +142,16 @@ function DriverLiveSharingHostInner() {
 
       if (session?.running) {
         const match = orders.find((o) => o.id === session.orderId);
-        if (!match || !stillAssignedToDriver(match, driverId)) {
+        if (!match) {
+          // Feed lag after accept — keep publishing. Do NOT stop or clear GPS.
+          console.log('[DRIVER LIVE SHARE] keep_running_feed_lag', {
+            orderId: session.orderId,
+            feedCount: orders.length,
+            timestamp: Date.now(),
+          });
+          return;
+        }
+        if (!stillAssignedToDriver(match, driverId)) {
           await stopDriverLiveSharing('unassigned');
           return;
         }
@@ -151,6 +165,7 @@ function DriverLiveSharingHostInner() {
 
       const enabledId = await getEnabledDriverLiveShareOrderId();
       if (!enabledId || declinedRef.current.has(enabledId)) return;
+
       const primary = orders.find(
         (o) =>
           o.id === enabledId &&
@@ -159,8 +174,25 @@ function DriverLiveSharingHostInner() {
       );
       if (primary) {
         await ensureDriverLiveSharing(primary.id, driverId);
-      } else {
-        await stopDriverLiveSharing('unassigned');
+        return;
+      }
+
+      const enabledInFeed = orders.find((o) => o.id === enabledId);
+      if (!enabledInFeed) {
+        // Enabled order not in feed yet (post-accept race) — wait, do not clear.
+        console.log('[DRIVER LIVE SHARE] wait_for_feed', {
+          enabledId,
+          feedCount: orders.length,
+          timestamp: Date.now(),
+        });
+        return;
+      }
+
+      // Order is in the feed but no longer assigned / already terminal.
+      if (!stillAssignedToDriver(enabledInFeed, driverId) || isTerminalDriverOrder(enabledInFeed)) {
+        await stopDriverLiveSharing(
+          isTerminalDriverOrder(enabledInFeed) ? 'cancelled' : 'unassigned',
+        );
       }
     })();
 

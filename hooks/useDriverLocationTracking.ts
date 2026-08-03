@@ -5,6 +5,7 @@ import type { DriverLiveCoordinate } from '@/types/location';
 import {
   ensureDriverLiveSharing,
   isDriverLiveSharingActive,
+  startDriverLiveSharing,
   subscribeDriverLiveSharing,
 } from '@/services/location/driverLiveSharingSession';
 import { getForegroundPermissionStatus } from '@/services/location/gps';
@@ -18,8 +19,9 @@ export type DriverLocationTrackingState = {
 
 /**
  * Subscribe to the driver-shell live sharing session for map display.
- * Publishing is owned by DriverLiveSharingHost / post-accept Enable flow.
- * If OS permission is already granted and sharing was enabled, silently resumes.
+ * On Active Delivery, if OS permission is already granted, ensure the
+ * canonical GPS pipeline is running for this order (covers feed-lag recovery
+ * when AsyncStorage enable-flag was cleared incorrectly).
  */
 export function useDriverLocationTracking(
   orderId: string | null | undefined,
@@ -55,7 +57,15 @@ export function useDriverLocationTracking(
       setSyncing(true);
       try {
         if (!isDriverLiveSharingActive(oid, did)) {
-          await ensureDriverLiveSharing(oid, did);
+          const resumed = await ensureDriverLiveSharing(oid, did);
+          if (!resumed) {
+            const perm = await getForegroundPermissionStatus();
+            if (perm === 'granted') {
+              // Active Delivery is open for this order and OS location is allowed —
+              // start the single canonical publisher (does not open a second stream).
+              await startDriverLiveSharing(oid, did);
+            }
+          }
         }
         if (mounted) {
           const perm = await getForegroundPermissionStatus();

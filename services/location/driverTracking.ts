@@ -206,12 +206,15 @@ async function writeCompanionDriverProfile(
  * Companions (best-effort, must not fail the canonical write):
  * - live_locations/{orderId}
  * - drivers/{driverId}.liveLocation
+ *
+ * For shared/group deliveries, optional mirrorOrderIds receive the same
+ * driverLocation payload (one GPS publisher, every customer order updated).
  */
 export async function syncDriverLiveLocation(
   orderId: string,
   driverId: string,
   coord: DriverLiveCoordinate,
-  options?: { force?: boolean },
+  options?: { force?: boolean; mirrorOrderIds?: string[] },
 ): Promise<boolean> {
   const oid = orderId.trim();
   const did = driverId.trim();
@@ -223,8 +226,11 @@ export async function syncDriverLiveLocation(
   }
 
   const payload = buildDriverLocationFirestorePayload(coord);
+  const mirrors = (options?.mirrorOrderIds ?? [])
+    .map((id) => id.trim())
+    .filter((id) => id && id !== oid);
 
-  // Prefer a single batch when rules allow all three; fall back to canonical-first.
+  // Prefer a single batch when rules allow all targets; fall back to canonical-first.
   try {
     const batch = writeBatch(db);
     traceOrderWriteFromPatch(
@@ -238,6 +244,12 @@ export async function syncDriverLiveLocation(
       driverLocation: payload,
       updatedAt: serverTimestamp(),
     });
+    for (const mirrorId of mirrors) {
+      batch.update(doc(db, 'orders', mirrorId), {
+        driverLocation: payload,
+        updatedAt: serverTimestamp(),
+      });
+    }
     batch.set(
       doc(db, 'live_locations', oid),
       {
@@ -257,6 +269,9 @@ export async function syncDriverLiveLocation(
     );
     await batch.commit();
     logDriverFirestoreWrite(`orders/${oid}`, coord, true);
+    for (const mirrorId of mirrors) {
+      logDriverFirestoreWrite(`orders/${mirrorId}`, coord, true);
+    }
     logDriverFirestoreWrite(`live_locations/${oid}`, coord, true);
     logDriverFirestoreWrite(`drivers/${did}`, coord, true);
     return true;
@@ -266,6 +281,11 @@ export async function syncDriverLiveLocation(
     // customers from receiving orders/{id}.driverLocation.
     await writeCanonicalOrderDriverLocation(oid, coord, payload);
     await Promise.all([
+      ...mirrors.map((mirrorId) =>
+        writeCanonicalOrderDriverLocation(mirrorId, coord, payload).catch((e) => {
+          logDriverFirestoreWrite(`orders/${mirrorId}`, coord, false, e);
+        }),
+      ),
       writeCompanionLiveLocation(oid, did, coord, payload),
       writeCompanionDriverProfile(did, coord, payload),
     ]);

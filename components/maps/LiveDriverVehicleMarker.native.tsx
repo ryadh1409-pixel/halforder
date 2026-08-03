@@ -9,7 +9,7 @@ export type LiveDriverVehicleMarkerProps = {
   heading?: number;
   title?: string;
   zIndex?: number;
-  /** Kept for API compatibility with useLiveDriverMarker; position uses `coordinate`. */
+  /** Kept for API compatibility with useLiveDriverMarker. */
   animatedCoordinate?: unknown | null;
 };
 
@@ -17,21 +17,21 @@ export type LiveDriverVehicleMarkerProps = {
  * Uber-style vehicle marker — shared by Driver, Customer, and Admin maps.
  * Canonical position comes from `orders.driverLocation` / live GPS session.
  *
- * Custom marker children need a brief `tracksViewChanges={true}` window or
- * react-native-maps paints a blank (invisible) vehicle.
+ * Uses a native pinColor fallback under the custom chrome so the vehicle
+ * never disappears if custom marker bitmaps fail to paint.
  */
 export function LiveDriverVehicleMarker({
   coordinate,
   heading = 0,
   title = 'Driver',
-  zIndex = 30,
+  zIndex = 40,
 }: LiveDriverVehicleMarkerProps) {
   const rotation = Number.isFinite(heading) ? heading : 0;
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
   useEffect(() => {
     setTracksViewChanges(true);
-    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    const t = setTimeout(() => setTracksViewChanges(false), 1000);
     return () => clearTimeout(t);
   }, [coordinate.latitude, coordinate.longitude, rotation, title]);
 
@@ -60,11 +60,13 @@ export function LiveDriverVehicleMarker({
       identifier="live-driver"
       coordinate={coordinate}
       title={title}
+      description="Live driver"
       flat
       rotation={rotation}
       anchor={{ x: 0.5, y: 0.5 }}
       zIndex={zIndex}
       tracksViewChanges={tracksViewChanges}
+      pinColor="#16A34A"
     >
       <View style={styles.vehicleMarker} pointerEvents="none">
         <Text style={styles.vehicleEmoji}>🚗</Text>
@@ -77,14 +79,14 @@ const styles = StyleSheet.create({
   vehicleMarker: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.98)',
     borderWidth: 2,
     borderColor: '#166534',
   },
   vehicleEmoji: {
-    fontSize: 24,
+    fontSize: 26,
   },
 });
