@@ -183,8 +183,8 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('on_the_way');
-    expect(customerTrackHeaderTitle('on_the_way')).toBe('On the way');
-    expect(customerTrackStepLabel('on_the_way')).toBe('On the way');
+    expect(customerTrackHeaderTitle('on_the_way')).toBe('Heading your way');
+    expect(customerTrackStepLabel('on_the_way')).toBe('Heading your way');
 
     expect(
       resolveCustomerTrackStep({
@@ -194,8 +194,8 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('driver_nearby');
-    expect(customerTrackHeaderTitle('driver_nearby')).toBe('Nearby');
-    expect(customerTrackStepLabel('driver_nearby')).toBe('Nearby');
+    expect(customerTrackHeaderTitle('driver_nearby')).toBe('Arriving soon');
+    expect(customerTrackStepLabel('driver_nearby')).toBe('Driver is nearby');
   });
 
   it('maps picked_up and delivered', () => {

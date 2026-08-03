@@ -34,6 +34,7 @@ export type TrackOrderPresentationProps = {
   etaPrimary: string;
   etaSecondary: string;
   routeCoordinates: { latitude: number; longitude: number }[];
+  etaMinutes?: number | null;
   driverFirstName: string;
   vehicle: DriverVehicleInfo;
   hasAssignedDriver: boolean;
@@ -58,6 +59,7 @@ export function TrackOrderPresentation({
   etaPrimary,
   etaSecondary,
   routeCoordinates,
+  etaMinutes = null,
   driverFirstName,
   vehicle,
   hasAssignedDriver,
@@ -83,6 +85,7 @@ export function TrackOrderPresentation({
           <CustomerTrackingMap
             order={order}
             routeCoordinates={routeCoordinates}
+            etaMinutes={etaMinutes}
             e2eCapture={e2eCapture}
             e2ePhase={e2ePhase}
           />

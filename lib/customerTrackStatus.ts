@@ -65,12 +65,12 @@ export const DELIVERY_STAGES = [
   },
   {
     key: 'on_the_way',
-    label: 'On the way',
+    label: 'Heading your way',
     statuses: ['on_the_way', 'heading_to_customer', 'en_route_to_customer'],
   },
   {
     key: 'driver_nearby',
-    label: 'Nearby',
+    label: 'Driver is nearby',
     statuses: ['near_customer', 'arrived_customer', 'arrived_nearby'],
   },
   { key: 'delivered', label: 'Delivered', statuses: ['delivered', 'completed'] },
@@ -310,9 +310,9 @@ export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
     case 'picked_up':
       return 'Picked up';
     case 'on_the_way':
-      return 'On the way';
+      return 'Heading your way';
     case 'driver_nearby':
-      return 'Nearby';
+      return 'Arriving soon';
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
@@ -342,9 +342,9 @@ export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
     case 'picked_up':
       return 'Your order was picked up.';
     case 'on_the_way':
-      return 'Driver on the way to you.';
+      return 'Your driver is heading to you.';
     case 'driver_nearby':
-      return 'Driver nearby — almost there.';
+      return 'Driver is nearby — almost there.';
     case 'delivered':
       return 'Your order has been delivered.';
     case 'cancelled':

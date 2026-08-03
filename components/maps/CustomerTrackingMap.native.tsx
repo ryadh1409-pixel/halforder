@@ -5,6 +5,7 @@
  */
 import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
 import { LiveDriverVehicleMarker } from '@/components/maps/LiveDriverVehicleMarker';
+import { RouteEtaBadge } from '@/components/maps/RouteEtaBadge';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { collectMapCoordinates, toMapCoordinate } from '@/lib/location/coordinates';
@@ -18,6 +19,18 @@ import {
   MAP_Z_RESTAURANT,
   offsetDriverFromStops,
 } from '@/lib/maps/mapMarkerLayers';
+import {
+  cameraFitEdgePadding,
+  cameraRegionDeltas,
+  formatRouteEtaBadge,
+  metersBetween,
+  resolveCustomerMapCameraMode,
+  selectCameraFocusPoints,
+  shouldRefitApproachCamera,
+  type CustomerMapCameraMode,
+} from '@/lib/maps/customerApproachCamera';
+import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
+import { resolveCustomerTrackStep } from '@/lib/customerTrackStatus';
 import { haversineDistanceKm } from '@/lib/haversine';
 import { useGroupDeliverySiblingStops } from '@/hooks/useGroupDeliverySiblingStops';
 import {
@@ -99,6 +112,7 @@ class MapErrorBoundary extends Component<
 }
 
 const FIT_PAD = { top: 130, right: 50, bottom: 80, left: 50 };
+const FIT_ANIM_MS = 650;
 
 // Pin colours — native Google Maps pins (no custom React children)
 const PIN_RESTAURANT = '#F59E0B'; // amber
@@ -114,6 +128,8 @@ function TrackingMapInner({
   driverHeading,
   routeCoordinates,
   expectDriver = false,
+  cameraMode = 'overview',
+  etaMinutes = null,
   e2eCapture,
   e2ePhase,
 }: {
@@ -125,6 +141,8 @@ function TrackingMapInner({
   driverHeading:    number | null;
   routeCoordinates: LatLng[];
   expectDriver?: boolean;
+  cameraMode?: CustomerMapCameraMode;
+  etaMinutes?: number | null;
   e2eCapture?: boolean;
   e2ePhase?: string;
 }) {
@@ -135,6 +153,8 @@ function TrackingMapInner({
   const lastRegionRef = useRef<Record<string, number> | null>(null);
   const regionAtFitRef = useRef<Record<string, number> | null>(null);
   const fitSeqRef = useRef(0);
+  const lastFitDriverRef = useRef<LatLng | null>(null);
+  const lastCameraModeRef = useRef<CustomerMapCameraMode>(cameraMode);
   const provider = useMemo(() => getNativeMapProvider(), []);
   const [mapReady,  setMapReady]  = useState(false);
   const [tracking,  setTracking]  = useState(true);
@@ -264,9 +284,38 @@ function TrackingMapInner({
   );
 
   const fitPoints = useMemo(() => {
-    if (routeCoordinates.length >= 2) return collectMapCoordinates(...routeCoordinates, ...markerPoints);
+    const focus = selectCameraFocusPoints({
+      mode: cameraMode,
+      restaurant,
+      driver: driverDisplay,
+      customer: dropoff,
+      routeCoordinates:
+        cameraMode === 'approach' || cameraMode === 'arriving'
+          ? routeCoordinates
+          : [],
+    });
+    if (focus.length >= 1) return collectMapCoordinates(...focus);
+
+    if (
+      cameraMode === 'overview' &&
+      routeCoordinates.length >= 2
+    ) {
+      return collectMapCoordinates(...routeCoordinates, ...markerPoints);
+    }
     return markerPoints;
-  }, [routeCoordinates, markerPoints]);
+  }, [
+    cameraMode,
+    restaurant,
+    driverDisplay,
+    dropoff,
+    routeCoordinates,
+    markerPoints,
+  ]);
+
+  const etaBadgeLabel = useMemo(
+    () => formatRouteEtaBadge(etaMinutes, cameraMode),
+    [etaMinutes, cameraMode],
+  );
 
   const initialRegion = useMemo(() => computeFitRegion(markerPoints), [markerPoints]);
 
@@ -276,123 +325,98 @@ function TrackingMapInner({
     console.log('[TrackingMap] dropoff:', JSON.stringify(dropoff));
     console.log('[TrackingMap] driver:', JSON.stringify(displayDriver));
     console.log('[TrackingMap] markerCount:', markerPoints.length);
-  }, [restaurant?.latitude, dropoff?.latitude, displayDriver?.latitude]);
+    console.log('[TrackingMap] cameraMode:', cameraMode);
+  }, [restaurant?.latitude, dropoff?.latitude, displayDriver?.latitude, cameraMode]);
 
-  // Auto-fit after map ready / when points change
+  const runCameraFit = useCallback(
+    (force: boolean) => {
+      if (!mapReady) return;
+      const modeChanged = lastCameraModeRef.current !== cameraMode;
+      const allow = shouldRefitApproachCamera({
+        tracking,
+        modeChanged,
+        force,
+        lastFitDriver: lastFitDriverRef.current,
+        driver: driverDisplay,
+        minMoveMeters:
+          cameraMode === 'arriving' ? 35 : cameraMode === 'approach' ? 55 : 90,
+      });
+      if (!allow) return;
+
+      const pts = fitPoints.length ? fitPoints : markerPoints;
+      if (!pts.length) return;
+
+      lastCameraModeRef.current = cameraMode;
+      if (driverDisplay) lastFitDriverRef.current = driverDisplay;
+
+      const pad = cameraFitEdgePadding(cameraMode);
+      const deltas = cameraRegionDeltas(cameraMode);
+      fitSeqRef.current += 1;
+      const fitId = fitSeqRef.current;
+      regionAtFitRef.current = lastRegionRef.current;
+
+      console.log('[MAP RUNTIME] approach camera fit', {
+        fitId,
+        cameraMode,
+        force,
+        modeChanged,
+        pointCount: pts.length,
+      });
+
+      if (pts.length === 1 || !areMapCoordinatesDistinct(pts)) {
+        mapRef.current?.animateToRegion(
+          { ...pts[0], ...deltas },
+          FIT_ANIM_MS,
+        );
+      } else if (cameraMode === 'arriving' || cameraMode === 'approach') {
+        // Prefer a soft region animation for approach modes (less flash than repeated fitToCoordinates).
+        const lats = pts.map((p) => p.latitude);
+        const lngs = pts.map((p) => p.longitude);
+        const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        const midLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+        const spanLat = Math.max(Math.max(...lats) - Math.min(...lats), deltas.latitudeDelta);
+        const spanLng = Math.max(Math.max(...lngs) - Math.min(...lngs), deltas.longitudeDelta);
+        mapRef.current?.animateToRegion(
+          {
+            latitude: midLat,
+            longitude: midLng,
+            latitudeDelta: spanLat * 1.6,
+            longitudeDelta: spanLng * 1.6,
+          },
+          FIT_ANIM_MS,
+        );
+      } else {
+        fitMapToCoordinates(mapRef.current, pts, pad ?? FIT_PAD);
+      }
+    },
+    [
+      mapReady,
+      tracking,
+      cameraMode,
+      driverDisplay,
+      fitPoints,
+      markerPoints,
+    ],
+  );
+
+  // Auto-fit after map ready / when points change (throttled in approach modes)
   useEffect(() => {
     if (!mapReady || !tracking) {
       console.log('[MAP RUNTIME] fit effect gated', { mapReady, tracking });
       return;
     }
-    const pts = fitPoints.length ? fitPoints : markerPoints;
-    if (!pts.length) return;
     const t = setTimeout(() => {
-      const layout = layoutRef.current;
-      const regionBefore = lastRegionRef.current;
-      regionAtFitRef.current = regionBefore;
-      fitSeqRef.current += 1;
-      const fitId = fitSeqRef.current;
+      runCameraFit(false);
+    }, cameraMode === 'approach' || cameraMode === 'arriving' ? 420 : 600);
+    return () => clearTimeout(t);
+  }, [mapReady, tracking, fitPoints, markerPoints, cameraMode, runCameraFit]);
 
-      console.log('[MAP RUNTIME] about to fit', {
-        fitId,
-        mapReady,
-        tracking,
-        layout,
-        layoutZero:
-          !layout || layout.width < 2 || layout.height < 2,
-        regionBefore,
-        pointCount: pts.length,
-        animateCameraCalled: false,
-        note: 'this map path uses fitToCoordinates / animateToRegion only — animateCamera() is never called',
-      });
-
-      if (pts.length === 1 || !areMapCoordinatesDistinct(pts)) {
-        console.log('[MAP RUNTIME] animateToRegion() called (single / overlapping point)', {
-          fitId,
-          coordinate: pts[0],
-          pointCount: pts.length,
-        });
-        mapRef.current?.animateToRegion(
-          { ...pts[0], latitudeDelta: 0.02, longitudeDelta: 0.02 },
-          500,
-        );
-      } else {
-        fitMapToCoordinates(mapRef.current, pts, FIT_PAD);
-      }
-
-      // Screenshot immediately after camera request
-      const shotDelay = setTimeout(async () => {
-        const regionAfter = lastRegionRef.current;
-        const before = regionAtFitRef.current;
-        const regionChanged =
-          !!before &&
-          !!regionAfter &&
-          (Math.abs((before.latitude ?? 0) - (regionAfter.latitude ?? 0)) > 1e-6 ||
-            Math.abs((before.longitude ?? 0) - (regionAfter.longitude ?? 0)) > 1e-6 ||
-            Math.abs((before.latitudeDelta ?? 0) - (regionAfter.latitudeDelta ?? 0)) > 1e-6 ||
-            Math.abs((before.longitudeDelta ?? 0) - (regionAfter.longitudeDelta ?? 0)) > 1e-6);
-
-        console.log('[MAP RUNTIME] post-fit region check', {
-          fitId,
-          regionBefore: before,
-          regionAfter,
-          regionChanged,
-          layout: layoutRef.current,
-          possibleIgnoreReasons: !regionChanged
-            ? [
-                !layout || layout.width < 2 || layout.height < 2
-                  ? 'zero_or_tiny_layout'
-                  : null,
-                !mapReady ? 'map_not_ready' : null,
-                before == null
-                  ? 'no_onRegionChangeComplete_yet'
-                  : null,
-                before &&
-                regionAfter &&
-                Math.abs((before.latitude ?? 0) - (regionAfter.latitude ?? 0)) < 1e-6 &&
-                Math.abs((before.latitudeDelta ?? 0) - (regionAfter.latitudeDelta ?? 0)) < 1e-6
-                  ? 'region_already_matched_fit_target_or_native_ignored'
-                  : null,
-              ].filter(Boolean)
-            : [],
-        });
-
-        if (!wrapRef.current) return;
-        try {
-          const { captureRef } = require('react-native-view-shot') as {
-            captureRef: (
-              target: View,
-              opts: { format: string; quality: number; result: string },
-            ) => Promise<string>;
-          };
-          const uri = await captureRef(wrapRef.current, {
-            format: 'png',
-            quality: 1,
-            result: 'tmpfile',
-          });
-          console.log('[MAP RUNTIME] screenshot immediately after fitToCoordinates()', {
-            fitId,
-            uri,
-            regionChanged,
-            markerCount: markers.length,
-          });
-        } catch (err) {
-          console.warn(
-            '[MAP RUNTIME] post-fit screenshot failed',
-            err instanceof Error ? err.message : String(err),
-          );
-        }
-      }, 250);
-      // stash clear on effect cleanup via outer return
-      (mapRef as any)._postFitShot = shotDelay;
-    }, 600);
-    return () => {
-      clearTimeout(t);
-      if ((mapRef as any)._postFitShot) {
-        clearTimeout((mapRef as any)._postFitShot);
-      }
-    };
-  }, [mapReady, tracking, fitPoints, markerPoints, markers.length]);
+  // When camera mode changes (e.g. on_the_way → nearby), re-enable tracking once.
+  useEffect(() => {
+    if (cameraMode === 'approach' || cameraMode === 'arriving' || cameraMode === 'to_restaurant') {
+      setTracking(true);
+    }
+  }, [cameraMode]);
 
   // DEV E2E: screenshot after markers + fit settle (re-capture when marker count changes)
   useEffect(() => {
@@ -441,13 +465,10 @@ function TrackingMapInner({
 
   const recenter = useCallback(() => {
     setTracking(true);
-    const pts = fitPoints.length ? fitPoints : markerPoints;
-    if (pts.length === 1 || !areMapCoordinatesDistinct(pts)) {
-      mapRef.current?.animateToRegion({ ...pts[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
-    } else {
-      fitMapToCoordinates(mapRef.current, pts, FIT_PAD);
-    }
-  }, [fitPoints, markerPoints]);
+    // Force a fresh fit on recenter even for small driver moves.
+    lastFitDriverRef.current = null;
+    requestAnimationFrame(() => runCameraFit(true));
+  }, [runCameraFit]);
 
   if (!MapView) {
     return <View style={styles.center}><ActivityIndicator color="#A855F7" /></View>;
@@ -592,6 +613,11 @@ function TrackingMapInner({
         </View>
       ) : null}
 
+      <RouteEtaBadge
+        label={etaBadgeLabel}
+        visible={Boolean(etaBadgeLabel) && !showWaitingBanner}
+      />
+
       {/* Recenter button */}
       <Pressable
         style={[styles.recenterBtn, tracking && styles.recenterActive]}
@@ -608,6 +634,8 @@ function TrackingMapInner({
 export type CustomerTrackingMapProps = {
   order: RestaurantOrder;
   routeCoordinates?: LatLng[];
+  /** Optional live ETA minutes from parent (avoids duplicate Directions). */
+  etaMinutes?: number | null;
   /** DEV: capture map screenshot after markers settle */
   e2eCapture?: boolean;
   e2ePhase?: string;
@@ -616,6 +644,7 @@ export type CustomerTrackingMapProps = {
 export function CustomerTrackingMap({
   order,
   routeCoordinates: prop,
+  etaMinutes: etaProp,
   e2eCapture,
   e2ePhase,
 }: CustomerTrackingMapProps) {
@@ -852,6 +881,40 @@ export function CustomerTrackingMap({
   });
 
   const routeCoordinates = prop ?? internalRoute.coordinates;
+  const etaMinutes =
+    etaProp != null && Number.isFinite(etaProp)
+      ? etaProp
+      : internalRoute.etaMinutes;
+
+  const trackStep = useMemo(() => resolveCustomerTrackStep(order), [order]);
+  const mapLeg = useMemo(
+    () => deliveryMapLegFromStatuses(order.deliveryStatus, order.status),
+    [order.deliveryStatus, order.status],
+  );
+  const driverCustomerMeters = useMemo(
+    () => metersBetween(driver, dropoff),
+    [driver?.latitude, driver?.longitude, dropoff?.latitude, dropoff?.longitude],
+  );
+  const cameraMode = useMemo(
+    () =>
+      resolveCustomerMapCameraMode({
+        step: trackStep,
+        leg: mapLeg,
+        driverCustomerMeters,
+        delivered:
+          trackStep === 'delivered' ||
+          order.status === 'delivered' ||
+          order.status === 'completed' ||
+          order.deliveryStatus === 'delivered',
+      }),
+    [
+      trackStep,
+      mapLeg,
+      driverCustomerMeters,
+      order.status,
+      order.deliveryStatus,
+    ],
+  );
 
   const pickupLabel  = order.restaurant?.address?.trim() || order.restaurant?.name || 'Restaurant';
   const dropoffLabel = order.deliveryLocation?.address?.trim() || order.customer?.address || 'Your address';
@@ -869,6 +932,8 @@ export function CustomerTrackingMap({
         driverHeading={driverHeading}
         routeCoordinates={routeCoordinates}
         expectDriver={Boolean(order.driverId || order.assignedDriverId)}
+        cameraMode={cameraMode}
+        etaMinutes={etaMinutes}
         e2eCapture={e2eCapture}
         e2ePhase={e2ePhase}
       />

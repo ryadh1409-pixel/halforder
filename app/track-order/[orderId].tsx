@@ -16,6 +16,10 @@ import {
   logCustomerTrackingUi,
   resolveCustomerTrackingUi,
 } from '@/lib/customerTrackingLog';
+import {
+  customerTrackStepSubtitle,
+  resolveCustomerTrackStep,
+} from '@/lib/customerTrackStatus';
 import { ORDER_CHAT_TYPE } from '@/constants/orderChat';
 import { orderRoomHref } from '@/services/orderChat';
 import {
@@ -396,13 +400,12 @@ function TrackOrderScreen() {
       delivered={delivered}
       deliveredAtLabel={deliveredAtLabel}
       title={trackingUi?.title ?? 'Order update'}
-      subtitle={
-        trackingUi?.displayStatus ?? 'We’ll keep this page updated in real time.'
-      }
+      subtitle={customerTrackStepSubtitle(resolveCustomerTrackStep(order))}
       progress={trackingUi?.progress ?? 0.1}
       etaPrimary={etaDisplay.primary}
       etaSecondary={etaDisplay.secondary}
       routeCoordinates={liveRoute.coordinates}
+      etaMinutes={liveRoute.etaMinutes}
       driverFirstName={driverFirstName(order)}
       vehicle={
         hasAssignedDriver ? vehicleFromOrder(order) : { ...EMPTY_DRIVER_VEHICLE }
