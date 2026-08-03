@@ -918,15 +918,15 @@ export async function createOrder(
         restaurantLocation: restaurantLocationWrite,
         deliveryType,
         // Prevent stale driver assignment from a prior unpaid attempt advancing lifecycle.
+        // Do NOT rewrite status / paymentStatus / deliveryStatus here — this unpaid doc is
+        // already filtered to awaiting_payment + unpaid, and lifecycle fields must go through
+        // protectedUpdateOrder (rawUpdateOrder would log LEGACY ORDER WRITER DETECTED).
         driverId: null,
         assignedDriverId: null,
         driverLocation: null,
         driverName: null,
         driverPhone: null,
         driverVehicle: null,
-        deliveryStatus: 'pending',
-        status: 'awaiting_payment',
-        paymentStatus: 'unpaid',
       };
 
       if (checkoutFinalTotal != null) {
@@ -974,6 +974,23 @@ export async function createOrder(
             checkoutFinalTotalCents: checkoutCents,
             clearedStalePaymentIntent: priorCents != null && priorCents !== checkoutCents,
           }),
+        );
+      }
+
+      const existingDeliveryStatus =
+        typeof existingData.deliveryStatus === 'string'
+          ? existingData.deliveryStatus.trim().toLowerCase()
+          : '';
+      if (existingDeliveryStatus && existingDeliveryStatus !== 'pending') {
+        // Rare: unpaid doc with drifted courier status. Must use rawUpdateOrder —
+        // protectedUpdateOrder treats pending as a downgrade and would no-op.
+        await rawUpdateOrder(
+          existingDoc.id,
+          { deliveryStatus: 'pending', updatedAt: serverTimestamp() },
+          {
+            fileName: 'services/orderService.ts',
+            functionName: 'createOrder:reuseUnpaid:resetDeliveryStatus',
+          },
         );
       }
 
