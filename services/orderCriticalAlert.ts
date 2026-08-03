@@ -1,3 +1,13 @@
+/**
+ * Canonical critical order alarm engine (admin / restaurant / driver).
+ *
+ * Apple-compliant behavior (no Critical Alerts entitlement):
+ * - Looping in-app audio while the alert is active and the app process can play sound
+ * - At most ONE local notification when starting from background (banner/lock-screen cue)
+ * - Remote push carries the custom bundled sound for killed/suspended wake
+ * - Never repeatedly schedule local notifications (App Store / UX risk)
+ * - Auto-stop after timeout; explicit ack stops immediately
+ */
 import {
   CRITICAL_ORDER_CHANNEL_ID,
   CRITICAL_ORDER_SOUND_NAME,
@@ -8,7 +18,7 @@ import {
 import { isExpoGo } from '@/constants/runtimeEnvironment';
 import { Audio, type AVPlaybackStatus } from 'expo-av';
 import * as Notifications from 'expo-notifications';
-import { AppState, Platform } from 'react-native';
+import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 export type { OrderAlertEvent, OrderAlertRole };
 export type CriticalOrderAlertInput = {
@@ -19,13 +29,17 @@ export type CriticalOrderAlertInput = {
   body: string;
   /** Auto-stop after this many ms (default 5 minutes). */
   timeoutMs?: number;
+  /**
+   * When false, skip the one-shot local notification (e.g. remote push already
+   * presented an OS banner). Defaults to true only when app is not active.
+   */
+  presentLocalNotification?: boolean;
 };
 
 export type CriticalOrderAlertKey = string;
 
 const ALERT_SOUND = require('@/assets/sounds/order_critical_alert.wav');
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-const REINFORCE_INTERVAL_MS = 12_000;
 
 export { CRITICAL_ORDER_CHANNEL_ID, CRITICAL_ORDER_SOUND_NAME, criticalOrderAlertKey };
 
@@ -33,21 +47,34 @@ type ActiveAlert = {
   key: CriticalOrderAlertKey;
   input: CriticalOrderAlertInput;
   sound: Audio.Sound | null;
-  reinforceTimer: ReturnType<typeof setInterval> | null;
   timeoutTimer: ReturnType<typeof setTimeout> | null;
   localNotificationIds: string[];
   startedAt: number;
 };
 
 const active = new Map<CriticalOrderAlertKey, ActiveAlert>();
+let appStateSub: { remove: () => void } | null = null;
 
-function logOrderAlert(
-  fields: Record<string, unknown>,
-): void {
+function logOrderAlert(fields: Record<string, unknown>): void {
   console.log('[ORDER ALERT]', {
     ...fields,
     timestamp: Date.now(),
     file: 'services/orderCriticalAlert.ts',
+  });
+}
+
+function ensureAppStateWatch(): void {
+  if (appStateSub || Platform.OS === 'web') return;
+  appStateSub = AppState.addEventListener('change', (next: AppStateStatus) => {
+    if (next !== 'active') return;
+    // Resume looping audio when returning to foreground with an active alert.
+    for (const entry of active.values()) {
+      if (!entry.sound) {
+        void playLoopingSound(entry);
+      } else {
+        void entry.sound.playAsync().catch(() => undefined);
+      }
+    }
   });
 }
 
@@ -69,18 +96,25 @@ async function playLoopingSound(entry: ActiveAlert): Promise<boolean> {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       allowsRecordingIOS: false,
-      staysActiveInBackground: true,
+      // Do not claim indefinite background audio (needs UIBackgroundModes audio
+      // and can fail App Store review if used as a notification spam substitute).
+      staysActiveInBackground: false,
       shouldDuckAndroid: false,
       playThroughEarpieceAndroid: false,
     });
-    const { sound } = await Audio.Sound.createAsync(
-      ALERT_SOUND,
-      {
-        shouldPlay: true,
-        isLooping: true,
-        volume: 1.0,
-      },
-    );
+    if (entry.sound) {
+      try {
+        await entry.sound.unloadAsync();
+      } catch {
+        /* ignore */
+      }
+      entry.sound = null;
+    }
+    const { sound } = await Audio.Sound.createAsync(ALERT_SOUND, {
+      shouldPlay: true,
+      isLooping: true,
+      volume: 1.0,
+    });
     entry.sound = sound;
     sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
       if (!status.isLoaded) return;
@@ -101,7 +135,10 @@ async function playLoopingSound(entry: ActiveAlert): Promise<boolean> {
   }
 }
 
-async function presentLocalReinforcement(entry: ActiveAlert): Promise<boolean> {
+/** One-shot local banner — never called on a timer. */
+async function presentOneShotLocalNotification(
+  entry: ActiveAlert,
+): Promise<boolean> {
   if (Platform.OS === 'web' || isExpoGo) return false;
   try {
     const { status } = await Notifications.getPermissionsAsync();
@@ -143,10 +180,6 @@ async function presentLocalReinforcement(entry: ActiveAlert): Promise<boolean> {
 }
 
 async function tearDown(entry: ActiveAlert, reason: string): Promise<void> {
-  if (entry.reinforceTimer) {
-    clearInterval(entry.reinforceTimer);
-    entry.reinforceTimer = null;
-  }
   if (entry.timeoutTimer) {
     clearTimeout(entry.timeoutTimer);
     entry.timeoutTimer = null;
@@ -209,6 +242,8 @@ export async function startCriticalOrderAlert(
   const orderId = input.orderId.trim();
   if (!orderId) return null;
 
+  ensureAppStateWatch();
+
   const key = criticalOrderAlertKey(input.role, input.event, orderId);
   if (active.has(key)) {
     logOrderAlert({
@@ -225,7 +260,6 @@ export async function startCriticalOrderAlert(
     key,
     input: { ...input, orderId },
     sound: null,
-    reinforceTimer: null,
     timeoutTimer: null,
     localNotificationIds: [],
     startedAt: Date.now(),
@@ -233,13 +267,12 @@ export async function startCriticalOrderAlert(
   active.set(key, entry);
 
   const soundPlayed = await playLoopingSound(entry);
-  const notificationScheduled = await presentLocalReinforcement(entry);
 
-  entry.reinforceTimer = setInterval(() => {
-    if (!active.has(key)) return;
-    // Keep reinforcing while the process is alive (foreground or background JS).
-    void presentLocalReinforcement(entry);
-  }, REINFORCE_INTERVAL_MS);
+  const wantLocal =
+    input.presentLocalNotification ?? AppState.currentState !== 'active';
+  const notificationScheduled = wantLocal
+    ? await presentOneShotLocalNotification(entry)
+    : false;
 
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   entry.timeoutTimer = setTimeout(() => {

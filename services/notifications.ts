@@ -10,7 +10,12 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE, RESTAURANT_NEW_ORDER_PUSH_TYPE } from '../constants/pushTypes';
+import {
+  HALF_ORDER_PAIR_JOIN_PUSH_TYPE,
+  RESTAURANT_NEW_ORDER_PUSH_TYPE,
+  DRIVER_READY_FOR_PICKUP_PUSH_TYPE,
+  ADMIN_NEW_ORDER_PUSH_TYPE,
+} from '../constants/pushTypes';
 import {
   CRITICAL_ORDER_CHANNEL_ID,
   CRITICAL_ORDER_SOUND_NAME,
@@ -119,7 +124,9 @@ export function configureForegroundNotificationHandler(): void {
         shouldPlaySound: true,
         shouldSetBadge:
           data?.type === RESTAURANT_NEW_ORDER_PUSH_TYPE ||
-          data?.type === 'admin_new_order_created',
+          data?.type === ADMIN_NEW_ORDER_PUSH_TYPE ||
+          data?.type === DRIVER_READY_FOR_PICKUP_PUSH_TYPE ||
+          data?.type === 'critical_order_alert',
         shouldShowBanner: true,
         shouldShowList: true,
       };

@@ -109,6 +109,8 @@ export function OrderCriticalAlertBridge() {
         orderId: parsed.orderId,
         title,
         body,
+        // Remote/local OS banner already presented — do not schedule another.
+        presentLocalNotification: false,
       });
     });
 
