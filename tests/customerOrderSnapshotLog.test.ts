@@ -16,7 +16,7 @@ describe('logCustomerOrderSnapshot', () => {
         status: 'ready_for_pickup',
         deliveryStatus: 'waiting_driver',
         marketplaceCourierStatus: 'ready_for_pickup',
-        derivedCustomerStage: 'ready_for_pickup',
+        derivedCustomerStage: 'preparing',
         updatedAt: 12345,
       }),
     );

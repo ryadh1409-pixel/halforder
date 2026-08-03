@@ -1,5 +1,6 @@
 import { normalizeMarketplaceDeliveryStatus } from '@/lib/orderStatus';
 import {
+  canonicalizeCustomerTrackStep,
   customerTrackStepIndex,
   customerTrackStepLabel,
   DELIVERY_STAGES,
@@ -43,7 +44,7 @@ export function customerTrackStepFlags(
     return allDone;
   }
 
-  const activeIdx = customerTrackStepIndex(step);
+  const activeIdx = customerTrackStepIndex(canonicalizeCustomerTrackStep(step));
   const flags: Record<string, boolean> = {};
   for (let i = 0; i < DELIVERY_STAGES.length; i += 1) {
     flags[DELIVERY_STAGES[i].key] = activeIdx >= 0 && i <= activeIdx;

@@ -14,9 +14,9 @@ describe('customer courier timeline progression', () => {
       driverId: 'd1',
     };
     expect(resolveCustomerCourierRank(order)).toBe(2);
-    expect(resolveCustomerTrackStep(order)).toBe('driver_at_restaurant');
-    expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe('Waiting at restaurant');
-    expect(customerTrackStepLabel('driver_at_restaurant')).toBe('Waiting at restaurant');
+    expect(resolveCustomerTrackStep(order)).toBe('waiting_at_restaurant');
+    expect(customerTrackHeaderTitle('waiting_at_restaurant')).toBe('Waiting at restaurant');
+    expect(customerTrackStepLabel('waiting_at_restaurant')).toBe('Waiting at restaurant');
   });
 
   it('maps picked_up to Picked up', () => {

@@ -86,6 +86,6 @@ describe('customer track step alignment', () => {
     expect(resolveCustomerDeliveryStage(order)).toBe(
       CUSTOMER_DELIVERY_STAGE.DRIVER_AT_RESTAURANT,
     );
-    expect(resolveCustomerTrackStep(order)).toBe('driver_at_restaurant');
+    expect(resolveCustomerTrackStep(order)).toBe('waiting_at_restaurant');
   });
 });

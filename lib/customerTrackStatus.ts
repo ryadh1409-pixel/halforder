@@ -11,7 +11,13 @@ import { isOrderCompleted } from '@/lib/orderCompletion';
 import type { OrderStageInput } from '@/services/orderStage';
 import { safeToMillis } from '@/utils/safeToMillis';
 
-/** Delivery progress steps — matched against live `status` and `deliveryStatus`. */
+/**
+ * Canonical ordered delivery timeline — one entry per logical stage id.
+ *
+ * Semantic merge: kitchen/courier "ready / waiting / arrived at restaurant"
+ * aliases resolve to a single `waiting_at_restaurant` stage (after driver_assigned).
+ * Never emit both `ready_for_pickup` and `driver_at_restaurant` as timeline rows.
+ */
 export const DELIVERY_STAGES = [
   {
     key: 'order_placed',
@@ -25,11 +31,6 @@ export const DELIVERY_STAGES = [
   },
   { key: 'preparing', label: 'Preparing', statuses: ['preparing'] },
   {
-    key: 'ready_for_pickup',
-    label: 'Waiting at restaurant',
-    statuses: ['ready_for_pickup', 'waiting_driver', 'awaiting_driver', 'ready'],
-  },
-  {
     key: 'driver_assigned',
     label: 'Driver assigned',
     statuses: [
@@ -40,12 +41,21 @@ export const DELIVERY_STAGES = [
     ],
   },
   {
-    key: 'driver_at_restaurant',
+    key: 'waiting_at_restaurant',
     label: 'Waiting at restaurant',
     statuses: [
+      // Kitchen ready / pool waiting (clamped to preparing until a driver exists)
+      'ready_for_pickup',
+      'waiting_driver',
+      'awaiting_driver',
+      'ready',
+      // Driver arrived / waiting at restaurant
       'driver_at_restaurant',
       'arrived_restaurant',
       'arriving_restaurant',
+      'driver_waiting',
+      'waiting_at_restaurant',
+      'arrived',
     ],
   },
   {
@@ -67,7 +77,14 @@ export const DELIVERY_STAGES = [
 ] as const;
 
 export type CustomerTrackStep = (typeof DELIVERY_STAGES)[number]['key'];
-export type CustomerTrackPhase = CustomerTrackStep | 'cancelled';
+
+/** Legacy timeline ids — map to `waiting_at_restaurant` (never render as separate rows). */
+export type LegacyCustomerTrackStep = 'ready_for_pickup' | 'driver_at_restaurant';
+
+export type CustomerTrackPhase =
+  | CustomerTrackStep
+  | LegacyCustomerTrackStep
+  | 'cancelled';
 
 /** @deprecated Use DELIVERY_STAGES */
 export const CUSTOMER_TRACK_STEPS = DELIVERY_STAGES.map((s) => ({
@@ -88,6 +105,21 @@ for (let i = 0; i < DELIVERY_STAGES.length; i += 1) {
   for (const status of DELIVERY_STAGES[i].statuses) {
     STATUS_TO_STAGE_INDEX.set(status, i);
   }
+}
+
+/** Collapse legacy / alias stage ids onto the canonical timeline id. */
+export function canonicalizeCustomerTrackStep(
+  step: CustomerTrackPhase,
+): CustomerTrackPhase {
+  if (step === 'ready_for_pickup' || step === 'driver_at_restaurant') {
+    return 'waiting_at_restaurant';
+  }
+  return step;
+}
+
+function hasAssignedDriver(order: OrderStageInput): boolean {
+  const id = order.driverId ?? order.assignedDriverId;
+  return typeof id === 'string' && id.trim().length > 0;
 }
 
 function norm(value: unknown): string {
@@ -147,7 +179,7 @@ function courierStageFromOrder(order: OrderStageInput): CustomerTrackStep | null
   if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DELIVERED) return 'delivered';
   if (deliveryStage === CUSTOMER_DELIVERY_STAGE.PICKED_UP) return 'picked_up';
   if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DRIVER_AT_RESTAURANT) {
-    return 'driver_at_restaurant';
+    return 'waiting_at_restaurant';
   }
   if (deliveryStage === CUSTOMER_DELIVERY_STAGE.DRIVER_ASSIGNED) return 'driver_assigned';
   return null;
@@ -207,9 +239,9 @@ export function resolveCustomerTrackStep(
     logResolvedCustomerTrackStep(order, step);
     return step;
   }
-  if (courierStep === 'driver_at_restaurant') {
-    logResolvedCustomerTrackStep(order, 'driver_at_restaurant');
-    return 'driver_at_restaurant';
+  if (courierStep === 'waiting_at_restaurant') {
+    logResolvedCustomerTrackStep(order, 'waiting_at_restaurant');
+    return 'waiting_at_restaurant';
   }
   if (courierStep === 'driver_assigned') {
     logResolvedCustomerTrackStep(order, 'driver_assigned');
@@ -221,6 +253,15 @@ export function resolveCustomerTrackStep(
   const courierIndex = stageIndexFromField(order.deliveryStatus);
   let index = Math.max(kitchenIndex, courierIndex);
   if (index < 0) index = STAGE_INDEX.order_placed;
+
+  // Kitchen/pool "ready / waiting_driver" maps onto waiting_at_restaurant in the
+  // status table, but that stage must not appear before driver_assigned.
+  if (
+    index === STAGE_INDEX.waiting_at_restaurant &&
+    !hasAssignedDriver(order)
+  ) {
+    index = STAGE_INDEX.preparing;
+  }
 
   const step = indexToStep(index);
   logResolvedCustomerTrackStep(order, step);
@@ -242,29 +283,29 @@ function logResolvedCustomerTrackStep(
 }
 
 export function customerTrackStepIndex(step: CustomerTrackPhase): number {
-  if (step === 'cancelled') return -1;
-  return STAGE_INDEX[step] ?? 0;
+  const canonical = canonicalizeCustomerTrackStep(step);
+  if (canonical === 'cancelled') return -1;
+  return STAGE_INDEX[canonical as CustomerTrackStep] ?? 0;
 }
 
 export function customerTrackStepLabel(step: CustomerTrackPhase): string {
-  if (step === 'cancelled') return 'Order cancelled';
-  const match = DELIVERY_STAGES.find((s) => s.key === step);
+  const canonical = canonicalizeCustomerTrackStep(step);
+  if (canonical === 'cancelled') return 'Order cancelled';
+  const match = DELIVERY_STAGES.find((s) => s.key === canonical);
   return match?.label ?? 'Order update';
 }
 
 /** Track-order header title — maps current Firestore lifecycle to customer-facing copy. */
 export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
-  switch (step) {
+  switch (canonicalizeCustomerTrackStep(step)) {
     case 'order_placed':
       return 'Restaurant reviewing your order';
     case 'restaurant_accepted':
     case 'preparing':
       return 'Restaurant is preparing your order';
-    case 'ready_for_pickup':
-      return 'Waiting at restaurant';
     case 'driver_assigned':
       return 'Driver assigned';
-    case 'driver_at_restaurant':
+    case 'waiting_at_restaurant':
       return 'Waiting at restaurant';
     case 'picked_up':
       return 'Picked up';
@@ -287,18 +328,16 @@ export function customerTrackStepTitle(step: CustomerTrackPhase): string {
 }
 
 export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
-  switch (step) {
+  switch (canonicalizeCustomerTrackStep(step)) {
     case 'order_placed':
       return 'The restaurant will confirm your order shortly.';
     case 'restaurant_accepted':
       return 'Your order has been accepted.';
     case 'preparing':
       return 'Your food is being prepared.';
-    case 'ready_for_pickup':
-      return 'Your order is ready — matching you with a courier.';
     case 'driver_assigned':
       return 'Driver assigned — heading to the restaurant.';
-    case 'driver_at_restaurant':
+    case 'waiting_at_restaurant':
       return 'Driver waiting at the restaurant for your order.';
     case 'picked_up':
       return 'Your order was picked up.';
@@ -316,10 +355,11 @@ export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
 }
 
 export function customerTrackProgress(step: CustomerTrackPhase): number {
-  if (step === 'cancelled') return 0;
-  const idx = customerTrackStepIndex(step);
+  const canonical = canonicalizeCustomerTrackStep(step);
+  if (canonical === 'cancelled') return 0;
+  const idx = customerTrackStepIndex(canonical);
   if (idx < 0) return 0.08;
-  if (step === 'delivered') return 1;
+  if (canonical === 'delivered') return 1;
   return Math.min(1, (idx + 1) / DELIVERY_STAGES.length);
 }
 

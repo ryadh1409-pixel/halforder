@@ -5,13 +5,21 @@ import {
 } from '@/lib/customerMarketplaceTimeline';
 
 describe('customerMarketplaceTimeline', () => {
-  it('exposes Uber-style fulfillment steps', () => {
+  it('exposes Uber-style fulfillment steps with a single Waiting at restaurant', () => {
     const labels = CUSTOMER_MARKETPLACE_TIMELINE.map((s) => s.label);
+    const keys = CUSTOMER_MARKETPLACE_TIMELINE.map((s) => s.key);
     expect(labels).toContain('Restaurant accepted');
     expect(labels).toContain('Preparing');
-    expect(labels).toContain('Waiting at restaurant');
     expect(labels).toContain('Driver assigned');
+    expect(labels).toContain('Waiting at restaurant');
     expect(labels).toContain('Delivered');
+    expect(labels.filter((l) => l === 'Waiting at restaurant')).toHaveLength(1);
+    expect(keys.filter((k) => k === 'waiting_at_restaurant')).toHaveLength(1);
+    expect(keys).not.toContain('ready_for_pickup');
+    expect(keys).not.toContain('driver_at_restaurant');
+    expect(keys.indexOf('driver_assigned')).toBeLessThan(
+      keys.indexOf('waiting_at_restaurant'),
+    );
   });
 
   it('starts at Order placed for payment_confirmed marketplace docs', () => {
@@ -46,24 +54,33 @@ describe('customerMarketplaceTimeline', () => {
     expect(steps.find((s) => s.id === 'driver_assigned')?.completed).toBe(false);
   });
 
-  it('shows Waiting at restaurant when kitchen marks ready_for_pickup', () => {
+  it('stays on Preparing when kitchen marks ready_for_pickup without a driver', () => {
     const idx = customerMarketplaceTimelineIndex({
       status: 'ready_for_pickup',
       paymentStatus: 'paid',
       deliveryStatus: 'waiting_driver',
     });
-    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Waiting at restaurant');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('preparing');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Preparing');
   });
 
-  it('shows Waiting at restaurant when driver arrives (ready_for_pickup + driverId)', () => {
+  it('shows Waiting at restaurant once when driver arrives (ready_for_pickup + driverId)', () => {
     const idx = customerMarketplaceTimelineIndex({
       status: 'ready_for_pickup',
       paymentStatus: 'paid',
       deliveryStatus: 'ready_for_pickup',
       driverId: 'driver-1',
     });
-    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('driver_at_restaurant');
+    expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.key).toBe('waiting_at_restaurant');
     expect(CUSTOMER_MARKETPLACE_TIMELINE[idx]?.label).toBe('Waiting at restaurant');
+    const steps = buildCustomerTimelineRenderSteps({
+      status: 'ready_for_pickup',
+      paymentStatus: 'paid',
+      deliveryStatus: 'ready_for_pickup',
+      driverId: 'driver-1',
+    });
+    expect(steps.filter((s) => s.label === 'Waiting at restaurant')).toHaveLength(1);
+    expect(steps.filter((s) => s.id === 'waiting_at_restaurant')).toHaveLength(1);
   });
 
   it('returns -1 when cancelled', () => {
@@ -116,7 +133,7 @@ describe('customerMarketplaceTimeline', () => {
     expect(byId.order_placed?.completed).toBe(true);
     expect(byId.driver_assigned?.completed).toBe(true);
     expect(byId.driver_assigned?.current).toBe(true);
-    expect(byId.driver_at_restaurant?.completed).toBe(false);
+    expect(byId.waiting_at_restaurant?.completed).toBe(false);
     expect(byId.delivered?.completed).toBe(false);
   });
 });

@@ -47,6 +47,7 @@ export function buildCustomerTimelineRenderSteps(
   const terminal = isOrderCompleted(order);
   const flags = customerTrackStepFlags(currentStep, order);
 
+  // One row per canonical stage id — never duplicate by label.
   return CUSTOMER_MARKETPLACE_TIMELINE.map((step) => ({
     id: step.key,
     label: step.label,

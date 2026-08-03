@@ -1,7 +1,9 @@
 import {
+  canonicalizeCustomerTrackStep,
   customerTrackHeaderTitle,
   customerTrackStepIndex,
   customerTrackStepLabel,
+  DELIVERY_STAGES,
   resolveCustomerTrackStep,
 } from '@/lib/customerTrackStatus';
 import {
@@ -13,6 +15,34 @@ describe('normalizeMarketplaceDeliveryStatus', () => {
   it('preserves preparing (does not map to pending)', () => {
     expect(normalizeMarketplaceDeliveryStatus('preparing')).toBe(
       MARKETPLACE_DELIVERY_STATUS.PREPARING,
+    );
+  });
+});
+
+describe('DELIVERY_STAGES canonical list', () => {
+  it('has unique stage keys and exactly one Waiting at restaurant', () => {
+    const keys = DELIVERY_STAGES.map((s) => s.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.filter((k) => k === 'waiting_at_restaurant')).toHaveLength(1);
+    expect(keys).not.toContain('ready_for_pickup');
+    expect(keys).not.toContain('driver_at_restaurant');
+    expect(DELIVERY_STAGES.map((s) => s.label).filter((l) => l === 'Waiting at restaurant')).toHaveLength(
+      1,
+    );
+  });
+
+  it('orders Driver assigned before Waiting at restaurant', () => {
+    expect(customerTrackStepIndex('driver_assigned')).toBeLessThan(
+      customerTrackStepIndex('waiting_at_restaurant'),
+    );
+  });
+
+  it('canonicalizes legacy waiting aliases to waiting_at_restaurant', () => {
+    expect(canonicalizeCustomerTrackStep('ready_for_pickup')).toBe(
+      'waiting_at_restaurant',
+    );
+    expect(canonicalizeCustomerTrackStep('driver_at_restaurant')).toBe(
+      'waiting_at_restaurant',
     );
   });
 });
@@ -53,37 +83,37 @@ describe('resolveCustomerTrackStep', () => {
     ).toBe('preparing');
   });
 
-  it('maps ready_for_pickup from kitchen status', () => {
+  it('keeps kitchen ready_for_pickup without driver on preparing (not waiting)', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
         status: 'ready_for_pickup',
         deliveryStatus: 'ready_for_pickup',
       }),
-    ).toBe('ready_for_pickup');
-    expect(customerTrackHeaderTitle('ready_for_pickup')).toBe(
-      'Waiting at restaurant',
+    ).toBe('preparing');
+    expect(customerTrackHeaderTitle('preparing')).toBe(
+      'Restaurant is preparing your order',
     );
   });
 
-  it('maps awaiting_driver courier alias to ready_for_pickup', () => {
+  it('maps awaiting_driver without driver to preparing', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
         status: 'ready_for_pickup',
         deliveryStatus: 'awaiting_driver',
       }),
-    ).toBe('ready_for_pickup');
+    ).toBe('preparing');
   });
 
-  it('maps waiting_driver courier to ready_for_pickup', () => {
+  it('maps waiting_driver without driver to preparing', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
         status: 'payment_confirmed',
         deliveryStatus: 'waiting_driver',
       }),
-    ).toBe('ready_for_pickup');
+    ).toBe('preparing');
   });
 
   it('maps driver_assigned when driver is set', () => {
@@ -120,7 +150,7 @@ describe('resolveCustomerTrackStep', () => {
     ).toBe('order_placed');
   });
 
-  it('maps driver_at_restaurant when assigned driver and courier ready_for_pickup', () => {
+  it('maps waiting_at_restaurant when assigned driver and courier ready_for_pickup', () => {
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',
@@ -128,11 +158,18 @@ describe('resolveCustomerTrackStep', () => {
         deliveryStatus: 'ready_for_pickup',
         driverId: 'driver-1',
       }),
-    ).toBe('driver_at_restaurant');
-    expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe(
+    ).toBe('waiting_at_restaurant');
+    expect(customerTrackHeaderTitle('waiting_at_restaurant')).toBe(
       'Waiting at restaurant',
     );
+    expect(customerTrackStepLabel('waiting_at_restaurant')).toBe(
+      'Waiting at restaurant',
+    );
+    // Legacy ids still resolve labels via canonicalize
     expect(customerTrackStepLabel('driver_at_restaurant')).toBe(
+      'Waiting at restaurant',
+    );
+    expect(customerTrackHeaderTitle('ready_for_pickup')).toBe(
       'Waiting at restaurant',
     );
   });
