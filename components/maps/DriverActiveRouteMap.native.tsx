@@ -39,7 +39,7 @@ export function DriverActiveRouteMap({
   const routeLeg = useMemo(() => {
     if (!order) return 'to_restaurant' as const;
     return deliveryMapLegFromStatuses(
-      order.marketplaceCourierStatus ?? order.firestoreDeliveryStatus,
+      order.firestoreDeliveryStatus || order.marketplaceCourierStatus,
       order.status,
     );
   }, [

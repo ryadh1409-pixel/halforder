@@ -1,3 +1,4 @@
+import { canonicalDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';
 import { isOrderCompleted } from '@/lib/orderCompletion';
 import { lifecyclePriorityFromCourier } from '@/lib/orderLifecyclePriority';
 import {
@@ -511,11 +512,11 @@ function courierBadgeTextForStage(stage: DerivedOrderStage): string {
     case 'preparing':
       return 'In kitchen';
     case 'driver_assignment':
-      return 'Awaiting driver';
+      return 'Waiting at restaurant';
     case 'driver_assigned':
-      return 'Driver en route';
+      return 'Driver assigned';
     case 'picked_up':
-      return 'Out for delivery';
+      return 'Picked up';
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
@@ -561,7 +562,7 @@ function primaryActionTextForPresentation(
   if (flags.canReady) return 'Mark Ready';
   if (flags.canAssignDriver) return 'Assign Driver';
   if (stage === 'driver_assignment') return 'Waiting for Driver';
-  if (stage === 'picked_up') return 'Out for Delivery';
+  if (stage === 'picked_up') return 'Picked up';
   if (stage === 'delivered' || stage === 'cancelled') return null;
   if (stage === 'preparing' && kitchenSubstage === 'accepted') return 'Start Preparing';
   return null;
@@ -603,7 +604,9 @@ export function getRestaurantOrderPresentation(
     derivedStage,
     badgeText: badgeTextForDerivedStage(derivedStage, kitchenSubstage),
     badgeColor: badgeColorForDerivedStage(derivedStage),
-    courierBadgeText: courierBadgeTextForStage(derivedStage),
+    courierBadgeText: order
+      ? canonicalDeliveryStatusLabel(order.deliveryStatus, order.status)
+      : courierBadgeTextForStage(derivedStage),
     actionText: primaryActionTextForPresentation(derivedStage, kitchenSubstage, flags),
     canAccept,
     canReject,
@@ -681,7 +684,7 @@ export function customerStageTitle(stage: DerivedOrderStage): string {
     case 'driver_assigned':
       return 'Driver assigned';
     case 'picked_up':
-      return 'Driver is on the way';
+      return 'Picked up';
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
@@ -717,13 +720,13 @@ export function customerStageSubtitle(stage: DerivedOrderStage): string {
 export function driverMarketplaceStageLabel(stage: DerivedOrderStage): string {
   switch (stage) {
     case 'preparing':
-      return 'Restaurant preparing';
+      return 'Preparing';
     case 'driver_assignment':
-      return 'Ready for pickup';
+      return 'Waiting at restaurant';
     case 'driver_assigned':
-      return 'Assigned to you';
+      return 'Driver assigned';
     case 'picked_up':
-      return 'Out for delivery';
+      return 'Picked up';
     case 'delivered':
       return 'Delivered';
     default:

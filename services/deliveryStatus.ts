@@ -1,4 +1,4 @@
-/** @deprecated Import from `@/lib/orderStatus` — re-exported for backward compatibility. */
+/** @deprecated Prefer `@/lib/orderStatus` + `@/lib/canonicalDeliveryStage`. */
 export {
   DELIVERY_STATUS,
   MARKETPLACE_DELIVERY_STATUS,
@@ -10,5 +10,6 @@ export {
   isDriverMarketplaceClaimable,
   isDriverMarketplaceRemoved,
   isPaidMarketplaceDeliveryOrder,
-  marketplaceDeliveryStatusLabel,
 } from '@/lib/orderStatus';
+
+export { marketplaceDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';

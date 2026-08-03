@@ -26,7 +26,7 @@ export const DELIVERY_STAGES = [
   { key: 'preparing', label: 'Preparing', statuses: ['preparing'] },
   {
     key: 'ready_for_pickup',
-    label: 'Ready for pickup',
+    label: 'Waiting at restaurant',
     statuses: ['ready_for_pickup', 'waiting_driver', 'awaiting_driver', 'ready'],
   },
   {
@@ -41,7 +41,7 @@ export const DELIVERY_STAGES = [
   },
   {
     key: 'driver_at_restaurant',
-    label: 'Driver waiting at restaurant',
+    label: 'Waiting at restaurant',
     statuses: [
       'driver_at_restaurant',
       'arrived_restaurant',
@@ -50,17 +50,17 @@ export const DELIVERY_STAGES = [
   },
   {
     key: 'picked_up',
-    label: 'Driver picked up order',
+    label: 'Picked up',
     statuses: ['picked_up'],
   },
   {
     key: 'on_the_way',
-    label: 'Driver on the way',
+    label: 'On the way',
     statuses: ['on_the_way', 'heading_to_customer', 'en_route_to_customer'],
   },
   {
     key: 'driver_nearby',
-    label: 'Driver nearby',
+    label: 'Nearby',
     statuses: ['near_customer', 'arrived_customer', 'arrived_nearby'],
   },
   { key: 'delivered', label: 'Delivered', statuses: ['delivered', 'completed'] },
@@ -261,17 +261,17 @@ export function customerTrackHeaderTitle(step: CustomerTrackPhase): string {
     case 'preparing':
       return 'Restaurant is preparing your order';
     case 'ready_for_pickup':
-      return 'Ready for pickup - Driver on the way';
+      return 'Waiting at restaurant';
     case 'driver_assigned':
-      return 'Driver heading to restaurant';
+      return 'Driver assigned';
     case 'driver_at_restaurant':
-      return 'Driver waiting at restaurant';
+      return 'Waiting at restaurant';
     case 'picked_up':
-      return 'Driver picked up order';
+      return 'Picked up';
     case 'on_the_way':
-      return 'Driver on the way';
+      return 'On the way';
     case 'driver_nearby':
-      return 'Driver nearby';
+      return 'Nearby';
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
@@ -301,7 +301,7 @@ export function customerTrackStepSubtitle(step: CustomerTrackPhase): string {
     case 'driver_at_restaurant':
       return 'Driver waiting at the restaurant for your order.';
     case 'picked_up':
-      return 'Driver picked up your order.';
+      return 'Your order was picked up.';
     case 'on_the_way':
       return 'Driver on the way to you.';
     case 'driver_nearby':

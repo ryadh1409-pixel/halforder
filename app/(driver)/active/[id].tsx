@@ -12,7 +12,7 @@ import {
   isActiveDeliveryComplete,
 } from '@/lib/driverDeliveryCompletion';
 import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
-import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
+import { marketplaceDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';
 import { useDriverActiveOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
@@ -188,7 +188,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
     if (!order) return [];
     const driver = driverLocationForMap ?? order.driverLocation;
     const leg = deliveryMapLegFromStatuses(
-      order.marketplaceCourierStatus ?? order.firestoreDeliveryStatus,
+      order.firestoreDeliveryStatus || order.marketplaceCourierStatus,
       order.status,
     );
     const destination =
@@ -286,8 +286,13 @@ export default function DriverActiveDeliveryDetailsScreen() {
 
   const activeOrder = order;
 
-  const courierStatus = activeOrder.marketplaceCourierStatus;
-  const statusLabel = marketplaceDeliveryStatusLabel(courierStatus);
+  // Same Firestore field as Driver Hub — never derive from route/UI state.
+  const courierStatus =
+    activeOrder.firestoreDeliveryStatus || activeOrder.marketplaceCourierStatus;
+  const statusLabel = marketplaceDeliveryStatusLabel(
+    courierStatus,
+    activeOrder.status,
+  );
   const routeDestination = activeOrder.deliveryAddress;
 
   function onCall(phone: string | null | undefined, label: string) {

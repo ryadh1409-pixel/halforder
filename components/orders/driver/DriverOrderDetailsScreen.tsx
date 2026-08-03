@@ -6,7 +6,7 @@ import {
   driverMarketplaceFulfillmentStatusHint,
   getDriverMarketplaceFulfillmentButton,
 } from '@/lib/driverMarketplaceFulfillment';
-import { marketplaceDeliveryStatusLabel } from '@/lib/orderStatus';
+import { marketplaceDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';
 import type { RestaurantOrder } from '@/services/orderService';
 import {
   acceptQueuedDeliveryOrder,

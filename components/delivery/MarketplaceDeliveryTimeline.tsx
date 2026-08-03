@@ -1,8 +1,9 @@
 import {
   MARKETPLACE_DELIVERY_STATUS,
-  marketplaceDeliveryStatusLabel,
+  normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import { marketplaceDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -25,15 +26,18 @@ function stepIndex(status: MarketplaceDeliveryStatus): number {
 export function MarketplaceDeliveryTimeline({
   status,
 }: {
-  status: MarketplaceDeliveryStatus;
+  /** Raw Firestore `deliveryStatus` (same field as Hub / status pill). */
+  status: unknown;
 }) {
-  const currentIndex = stepIndex(status);
+  const normalized = normalizeMarketplaceDeliveryStatus(status);
+  const currentIndex = stepIndex(normalized);
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Delivery timeline</Text>
       {STEPS.map((step, index) => {
         const done =
-          currentIndex >= index || status === MARKETPLACE_DELIVERY_STATUS.DELIVERED;
+          currentIndex >= index ||
+          normalized === MARKETPLACE_DELIVERY_STATUS.DELIVERED;
         return (
           <View key={step} style={styles.row}>
             <View style={[styles.dot, done && styles.dotDone]} />

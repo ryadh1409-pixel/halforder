@@ -1,9 +1,9 @@
 import {
   MARKETPLACE_DELIVERY_STATUS,
-  marketplaceDeliveryStatusLabel,
   normalizeMarketplaceDeliveryStatus,
   type MarketplaceDeliveryStatus,
 } from '@/lib/orderStatus';
+import { canonicalDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';
 import {
   buildMarketplaceDeliveryCompletionPatch,
   logDeliveryCompletionAfter,
@@ -84,19 +84,9 @@ export function getDriverMarketplaceFulfillmentButton(
   return null;
 }
 
-/** Driver Hub status line for assigned active deliveries. */
+/** Driver Hub / Map / timeline — same label source as every other surface. */
 export function driverHubActiveStatusLabel(deliveryStatus: unknown): string {
-  const courier = normalizeMarketplaceDeliveryStatus(deliveryStatus);
-  if (courier === MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED) {
-    return 'Waiting for restaurant';
-  }
-  if (courier === MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP) {
-    return 'Ready for pickup';
-  }
-  if (courier === MARKETPLACE_DELIVERY_STATUS.PICKED_UP) {
-    return 'Out for delivery';
-  }
-  return marketplaceDeliveryStatusLabel(deliveryStatus);
+  return canonicalDeliveryStatusLabel(deliveryStatus);
 }
 
 export function driverMarketplaceFulfillmentStatusHint(

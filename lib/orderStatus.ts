@@ -132,31 +132,6 @@ export function isPaidMarketplaceDeliveryOrder(data: {
   return data.deliveryType === 'delivery' && ps === 'paid';
 }
 
-export function marketplaceDeliveryStatusLabel(
-  deliveryStatus: unknown,
-): string {
-  switch (normalizeMarketplaceDeliveryStatus(deliveryStatus)) {
-    case MARKETPLACE_DELIVERY_STATUS.PENDING:
-      return 'Awaiting restaurant';
-    case MARKETPLACE_DELIVERY_STATUS.ACCEPTED:
-      return 'Restaurant accepted';
-    case MARKETPLACE_DELIVERY_STATUS.PREPARING:
-      return 'Preparing';
-    case MARKETPLACE_DELIVERY_STATUS.READY_FOR_PICKUP:
-      return 'Ready for pickup';
-    case MARKETPLACE_DELIVERY_STATUS.DRIVER_ASSIGNED:
-      return 'Driver assigned';
-    case MARKETPLACE_DELIVERY_STATUS.PICKED_UP:
-      return 'Picked up';
-    case MARKETPLACE_DELIVERY_STATUS.DELIVERED:
-      return 'Delivered';
-    case MARKETPLACE_DELIVERY_STATUS.CANCELLED:
-      return 'Cancelled';
-    default:
-      return 'Order';
-  }
-}
-
 /** @deprecated Use MARKETPLACE_DELIVERY_STATUS — kept for imports. */
 export const DELIVERY_STATUS = MARKETPLACE_DELIVERY_STATUS;
 

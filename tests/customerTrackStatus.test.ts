@@ -62,7 +62,7 @@ describe('resolveCustomerTrackStep', () => {
       }),
     ).toBe('ready_for_pickup');
     expect(customerTrackHeaderTitle('ready_for_pickup')).toBe(
-      'Ready for pickup - Driver on the way',
+      'Waiting at restaurant',
     );
   });
 
@@ -95,7 +95,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('driver_assigned');
-    expect(customerTrackHeaderTitle('driver_assigned')).toBe('Driver heading to restaurant');
+    expect(customerTrackHeaderTitle('driver_assigned')).toBe('Driver assigned');
   });
 
   it('does not invent driver_assigned from driverId while deliveryStatus is still pending', () => {
@@ -130,10 +130,10 @@ describe('resolveCustomerTrackStep', () => {
       }),
     ).toBe('driver_at_restaurant');
     expect(customerTrackHeaderTitle('driver_at_restaurant')).toBe(
-      'Driver waiting at restaurant',
+      'Waiting at restaurant',
     );
     expect(customerTrackStepLabel('driver_at_restaurant')).toBe(
-      'Driver waiting at restaurant',
+      'Waiting at restaurant',
     );
   });
 
@@ -146,8 +146,8 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('on_the_way');
-    expect(customerTrackHeaderTitle('on_the_way')).toBe('Driver on the way');
-    expect(customerTrackStepLabel('on_the_way')).toBe('Driver on the way');
+    expect(customerTrackHeaderTitle('on_the_way')).toBe('On the way');
+    expect(customerTrackStepLabel('on_the_way')).toBe('On the way');
 
     expect(
       resolveCustomerTrackStep({
@@ -157,8 +157,8 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('driver_nearby');
-    expect(customerTrackHeaderTitle('driver_nearby')).toBe('Driver nearby');
-    expect(customerTrackStepLabel('driver_nearby')).toBe('Driver nearby');
+    expect(customerTrackHeaderTitle('driver_nearby')).toBe('Nearby');
+    expect(customerTrackStepLabel('driver_nearby')).toBe('Nearby');
   });
 
   it('maps picked_up and delivered', () => {
@@ -170,7 +170,7 @@ describe('resolveCustomerTrackStep', () => {
         driverId: 'driver-1',
       }),
     ).toBe('picked_up');
-    expect(customerTrackHeaderTitle('picked_up')).toBe('Driver picked up order');
+    expect(customerTrackHeaderTitle('picked_up')).toBe('Picked up');
     expect(
       resolveCustomerTrackStep({
         paymentStatus: 'paid',

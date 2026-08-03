@@ -26,7 +26,7 @@ export default function DriverActiveScreen() {
           {
             driverId: o.driverId,
             assignedDriverId: o.assignedDriverId,
-            deliveryStatus: o.marketplaceCourierStatus,
+            deliveryStatus: o.firestoreDeliveryStatus || o.marketplaceCourierStatus,
             status: o.status,
             deliveredAtMs: o.deliveredAtMs ?? null,
           },
