@@ -33,7 +33,7 @@ export function DriverActiveRouteMap({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    minHeight: 200,
+    minHeight: 280,
     borderRadius: 12,
     backgroundColor: '#f1f5f9',
     padding: 16,

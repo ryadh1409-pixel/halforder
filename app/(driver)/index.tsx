@@ -334,9 +334,12 @@ export default function DriverHubScreen() {
         }
         marketplaceLog.acceptSuccess(order.id, { driverId: uid });
         setAvailableOrders((prev) => prev.filter((candidate) => candidate.id !== order.id));
-        // Before navigation / continuing on Hub — request live location for this delivery.
+        // Enable live GPS, then open Active Delivery map immediately (Uber Eats–style).
         await promptEnableLiveLocation(order.id, uid);
-        showSuccess('Order accepted — active delivery is on your Hub');
+        const { setDriverActiveRouteOrderId } = await import('@/lib/driverHubOrdersStore');
+        setDriverActiveRouteOrderId(order.id);
+        showSuccess('Order accepted — opening live navigation');
+        router.replace(DRIVER_ROUTES.activeOrder(order.id) as never);
       } catch (e) {
         console.error('[driver] accept order failed', e);
         showUserError(e, {

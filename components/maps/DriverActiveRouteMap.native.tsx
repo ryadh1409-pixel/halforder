@@ -1,5 +1,6 @@
 import type { ActiveDelivery, DeliveryLocation } from '@/services/delivery';
 import { LiveDriverVehicleMarker } from '@/components/maps/LiveDriverVehicleMarker';
+import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
@@ -104,10 +105,22 @@ export function DriverActiveRouteMap({
     [order?.customerLocation],
   );
 
+  const liveRoute = useLiveDeliveryRoute({
+    restaurant: restaurantCoord,
+    driver: driverCoord,
+    customer: customerCoord,
+    enabled: Boolean(driverCoord && (restaurantCoord || customerCoord)),
+    deliveryStatus: order?.firestoreDeliveryStatus || order?.marketplaceCourierStatus,
+    kitchenStatus: order?.status,
+  });
+
   const destinationCoord =
     routeLeg === 'to_customer' ? customerCoord : restaurantCoord;
 
   const routePoints = useMemo(() => {
+    if (liveRoute.coordinates.length >= 2) {
+      return liveRoute.coordinates;
+    }
     const list: MapLatLng[] = [];
     if (driverCoord) list.push(driverCoord);
     if (destinationCoord) list.push(destinationCoord);
@@ -118,29 +131,36 @@ export function DriverActiveRouteMap({
         Number.isFinite(p.latitude) &&
         Number.isFinite(p.longitude),
     );
-  }, [driverCoord, destinationCoord, points]);
+  }, [liveRoute.coordinates, driverCoord, destinationCoord, points]);
 
-  /** Fit driver + active destination; keep both fixed pins when available. */
+  /**
+   * Fit Driver + Restaurant + Customer whenever available so the whole trip
+   * is visible (Uber Eats–style), not only the active leg.
+   */
   const fitPoints = useMemo(() => {
     const list: MapLatLng[] = [];
-    if (driverCoord) list.push(driverCoord);
-    if (destinationCoord) list.push(destinationCoord);
-    if (restaurantCoord && routeLeg === 'to_customer') {
-      // After pickup still keep restaurant context loosely — prefer destination.
-    }
+    const pushUnique = (c: MapLatLng | null | undefined) => {
+      if (!c) return;
+      if (
+        list.some(
+          (p) =>
+            Math.abs(p.latitude - c.latitude) < 1e-6 &&
+            Math.abs(p.longitude - c.longitude) < 1e-6,
+        )
+      ) {
+        return;
+      }
+      list.push(c);
+    };
+    pushUnique(driverCoord);
+    pushUnique(restaurantCoord);
+    pushUnique(customerCoord);
     if (list.length >= 1) return list;
-    if (restaurantCoord) list.push(restaurantCoord);
-    if (customerCoord) list.push(customerCoord);
     if (routePoints.length > 0) return routePoints;
     return list;
-  }, [
-    driverCoord,
-    destinationCoord,
-    restaurantCoord,
-    customerCoord,
-    routePoints,
-    routeLeg,
-  ]);
+  }, [driverCoord, restaurantCoord, customerCoord, routePoints]);
+
+  const missingStops = !restaurantCoord || !customerCoord;
 
   useEffect(() => {
     const map = (mapRef?.current as MapView | null) ?? localMapRef.current;
@@ -162,9 +182,9 @@ export function DriverActiveRouteMap({
     try {
       if (fitPoints.length >= 2) {
         fitMapToCoordinates(map as never, fitPoints, {
-          top: 48,
+          top: 56,
           right: 48,
-          bottom: 48,
+          bottom: 56,
           left: 48,
         });
       } else if (driverCoord) {
@@ -205,13 +225,16 @@ export function DriverActiveRouteMap({
     }
   };
 
-  const hasStaticPins = Boolean(restaurantCoord || customerCoord);
-  const showWaitingBanner = awaitingFirstFix || waitingForLiveUpdate;
+  const hasAnyCoord = Boolean(
+    driverCoord || restaurantCoord || customerCoord || routePoints.length > 0,
+  );
 
-  if (!driverCoord && !hasStaticPins && routePoints.length === 0) {
+  if (!hasAnyCoord) {
     return (
       <View style={styles.fallback}>
-        <Text style={styles.fallbackText}>Waiting for driver location…</Text>
+        <Text style={styles.fallbackText}>
+          Loading delivery map…{'\n'}Waiting for restaurant and customer locations.
+        </Text>
       </View>
     );
   }
@@ -221,6 +244,7 @@ export function DriverActiveRouteMap({
     routePoints[0] ??
     restaurantCoord ??
     customerCoord ??
+    driverCoord ??
     null;
 
   if (
@@ -230,10 +254,23 @@ export function DriverActiveRouteMap({
   ) {
     return (
       <View style={styles.fallback}>
-        <Text style={styles.fallbackText}>Waiting for driver location…</Text>
+        <Text style={styles.fallbackText}>
+          Loading delivery map…{'\n'}Waiting for restaurant and customer locations.
+        </Text>
       </View>
     );
   }
+
+  const showWaitingBanner =
+    awaitingFirstFix || waitingForLiveUpdate || missingStops;
+
+  const waitingMessage = missingStops
+    ? !restaurantCoord && !customerCoord
+      ? 'Waiting for restaurant and customer locations…'
+      : !restaurantCoord
+        ? 'Waiting for restaurant location…'
+        : 'Waiting for customer location…'
+    : 'Waiting for driver location…';
 
   return (
     <View style={styles.wrap}>
@@ -295,7 +332,7 @@ export function DriverActiveRouteMap({
 
       {showWaitingBanner ? (
         <View style={styles.waitingBanner} pointerEvents="none">
-          <Text style={styles.waitingText}>Waiting for driver location…</Text>
+          <Text style={styles.waitingText}>{waitingMessage}</Text>
         </View>
       ) : null}
     </View>
@@ -303,18 +340,23 @@ export function DriverActiveRouteMap({
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: '100%', height: 220, borderRadius: 12, overflow: 'hidden' },
-  map: { width: '100%', height: 220 },
+  wrap: { width: '100%', height: 280, borderRadius: 12, overflow: 'hidden' },
+  map: { width: '100%', height: 280 },
   fallback: {
     width: '100%',
-    height: 220,
+    height: 280,
     borderRadius: 12,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
   },
-  fallbackText: { color: '#64748b', fontWeight: '600', textAlign: 'center' },
+  fallbackText: {
+    color: '#64748b',
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   waitingBanner: {
     position: 'absolute',
     left: 12,

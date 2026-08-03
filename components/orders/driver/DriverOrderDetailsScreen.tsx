@@ -19,6 +19,8 @@ import { ROLE_ORDER_UPDATE_ERROR, showUserError } from '@/services/errors';
 import { showError, showNotice, showSuccess } from '@/utils/toast';
 import * as Linking from 'expo-linking';
 import { orderRoomHref } from '@/services/orderChat';
+import { DRIVER_ROUTES } from '@/lib/navigationPaths';
+import { setDriverActiveRouteOrderId } from '@/lib/driverHubOrdersStore';
 import { promptEnableLiveLocation } from '@/services/location/promptEnableLiveLocation';
 import {
   ensureDriverLiveSharing,
@@ -100,8 +102,9 @@ export function DriverOrderDetailsScreen({ order }: { order: RestaurantOrder }) 
         return;
       }
       await promptEnableLiveLocation(order.id, driverProfile.id);
-      showSuccess('Order accepted');
-      showNotice('Head to the restaurant', 'Pickup instructions are below.');
+      setDriverActiveRouteOrderId(order.id);
+      showSuccess('Order accepted — opening live navigation');
+      router.replace(DRIVER_ROUTES.activeOrder(order.id) as never);
     } catch (error) {
       showUserError(error, {
         role: 'driver',
