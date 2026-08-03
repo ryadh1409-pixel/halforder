@@ -93,6 +93,10 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
   const refreshInFlightRef = useRef(false);
   /** Once the user saves a delivery pin, GPS refresh must not overwrite it. */
   const preferCanonicalRef = useRef(false);
+  const addressLineRef = useRef(addressLine);
+  const userCoordsRef = useRef(userCoords);
+  addressLineRef.current = addressLine;
+  userCoordsRef.current = userCoords;
 
   const applyCanonicalDeliveryLocation = useCallback(
     async (location: SavedLocation) => {
@@ -102,6 +106,16 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
         !Number.isFinite(location.latitude) ||
         !Number.isFinite(location.longitude)
       ) {
+        return;
+      }
+
+      const prevCoords = userCoordsRef.current;
+      const sameCoords =
+        prevCoords != null &&
+        Math.abs(prevCoords.lat - location.latitude) < 1e-7 &&
+        Math.abs(prevCoords.lng - location.longitude) < 1e-7;
+      const sameLine = addressLineRef.current === line;
+      if (preferCanonicalRef.current && sameCoords && sameLine) {
         return;
       }
 

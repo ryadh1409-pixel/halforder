@@ -98,6 +98,42 @@ export function parseCheckoutAddressBook(raw: unknown): CheckoutAddressBookEntry
     .filter((e): e is CheckoutAddressBookEntry => e != null);
 }
 
+export function checkoutDeliveryPrefsEqual(
+  a: CheckoutDeliveryPrefs,
+  b: CheckoutDeliveryPrefs,
+): boolean {
+  return (
+    a.apartment === b.apartment &&
+    a.buzzer === b.buzzer &&
+    a.unit === b.unit &&
+    a.floor === b.floor &&
+    a.gateCode === b.gateCode &&
+    a.handoff === b.handoff &&
+    a.notes === b.notes
+  );
+}
+
+export function checkoutAddressBooksEqual(
+  a: CheckoutAddressBookEntry[],
+  b: CheckoutAddressBookEntry[],
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((entry, i) => {
+    const other = b[i];
+    return (
+      entry.id === other.id &&
+      entry.address === other.address &&
+      entry.formattedAddress === other.formattedAddress &&
+      entry.latitude === other.latitude &&
+      entry.longitude === other.longitude &&
+      entry.label === other.label &&
+      entry.isDefault === other.isDefault &&
+      (entry.placeId ?? '') === (other.placeId ?? '') &&
+      (entry.city ?? '') === (other.city ?? '')
+    );
+  });
+}
+
 export type CheckoutCustomerSnapshot = {
   deliveryPrefs: CheckoutDeliveryPrefs;
   addressBook: CheckoutAddressBookEntry[];
@@ -428,7 +464,7 @@ export function defaultCheckoutAddress(
 /**
  * True when the address-book default already mirrors the profile pin.
  */
-function addressBookMatchesProfile(
+export function addressBookMatchesProfile(
   book: CheckoutAddressBookEntry[],
   profile: SavedLocation,
 ): boolean {

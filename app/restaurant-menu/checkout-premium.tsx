@@ -51,6 +51,9 @@ import {
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import {
+  addressBookMatchesProfile,
+  checkoutAddressBooksEqual,
+  checkoutDeliveryPrefsEqual,
   fetchCheckoutCustomerSnapshotFromServer,
   resolveCheckoutDeliveryAddress,
   subscribeCheckoutCustomerSnapshot,
@@ -63,6 +66,7 @@ import {
   type CheckoutDeliveryPrefs,
 } from '@/types/checkoutCustomerPrefs';
 import type { SavedLocation } from '@/types/savedLocation';
+import { savedLocationsEqual } from '@/lib/location/savedLocationEqual';
 import {
   displayFromStoredProfilePhone,
   isProfilePhoneStorageEmpty,
@@ -86,7 +90,7 @@ import { showError, showFriendlyError, showSuccess } from '@/utils/toast';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -125,6 +129,20 @@ export default function CheckoutPremiumScreen() {
     locationReady,
     applyCanonicalDeliveryLocation,
   } = useHomeMarketplaceLocation();
+  const applyCanonicalRef = useRef(applyCanonicalDeliveryLocation);
+  applyCanonicalRef.current = applyCanonicalDeliveryLocation;
+  const marketplaceDebugRef = useRef({
+    userCoords,
+    marketplaceAddressLine,
+    locationReady,
+    locationLoading,
+  });
+  marketplaceDebugRef.current = {
+    userCoords,
+    marketplaceAddressLine,
+    locationReady,
+    locationLoading,
+  };
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler({
@@ -255,7 +273,12 @@ export default function CheckoutPremiumScreen() {
         ? 'users/{uid}.location (canonical)'
         : 'checkoutAddressBook fallback',
     });
-  }, [selectedAddress, profileDeliveryLocation]);
+  }, [
+    selectedAddress?.address,
+    selectedAddress?.latitude,
+    selectedAddress?.longitude,
+    profileDeliveryLocation,
+  ]);
 
   useEffect(() => {
     const uid = isRegisteredAuthUser(user) ? user!.uid : null;
@@ -270,6 +293,7 @@ export default function CheckoutPremiumScreen() {
         }
       : null;
 
+    const ctx = marketplaceDebugRef.current;
     void (async () => {
       let asyncStorageCache: unknown = null;
       try {
@@ -299,10 +323,10 @@ export default function CheckoutPremiumScreen() {
         asyncStorageMarketplaceCache: asyncStorageCache,
         contextState: {
           name: 'HomeMarketplaceLocationContext',
-          userCoords,
-          marketplaceAddressLine,
-          locationReady,
-          locationLoading,
+          userCoords: ctx.userCoords,
+          marketplaceAddressLine: ctx.marketplaceAddressLine,
+          locationReady: ctx.locationReady,
+          locationLoading: ctx.locationLoading,
         },
         profileDeliveryLocation: profileDeliveryLocation
           ? {
@@ -326,8 +350,8 @@ export default function CheckoutPremiumScreen() {
         documentPath: `users/${uid}`,
         asyncStorageKey: MARKETPLACE_USER_LOCATION_KEY,
         contextState: {
-          userCoords,
-          marketplaceAddressLine,
+          userCoords: ctx.userCoords,
+          marketplaceAddressLine: ctx.marketplaceAddressLine,
         },
         address: finalAddress,
         coordinates: finalCoordinates,
@@ -336,13 +360,11 @@ export default function CheckoutPremiumScreen() {
   }, [
     user,
     fulfillmentMode,
-    selectedAddress,
+    selectedAddress?.address,
+    selectedAddress?.latitude,
+    selectedAddress?.longitude,
     profileDeliveryLocation,
     addressBook,
-    userCoords,
-    marketplaceAddressLine,
-    locationReady,
-    locationLoading,
   ]);
 
   const mapCoords = useMemo(() => {
@@ -490,31 +512,69 @@ export default function CheckoutPremiumScreen() {
       return undefined;
     }
     return subscribeCheckoutCustomerSnapshot(uid, (snap) => {
-      setDeliveryPrefs(snap.deliveryPrefs);
-      setAddressBook(snap.addressBook);
-      setProfileDeliveryLocation(snap.profileDeliveryLocation);
-      setCheckoutPhone(snap.phone || snap.phoneNumber);
+      setDeliveryPrefs((prev) =>
+        checkoutDeliveryPrefsEqual(prev, snap.deliveryPrefs)
+          ? prev
+          : snap.deliveryPrefs,
+      );
+      setAddressBook((prev) =>
+        checkoutAddressBooksEqual(prev, snap.addressBook)
+          ? prev
+          : snap.addressBook,
+      );
+      setProfileDeliveryLocation((prev) =>
+        savedLocationsEqual(prev, snap.profileDeliveryLocation)
+          ? prev
+          : snap.profileDeliveryLocation,
+      );
+      setCheckoutPhone((prev) => {
+        const next = snap.phone || snap.phoneNumber;
+        return prev === next ? prev : next;
+      });
       if (snap.profileDeliveryLocation) {
-        void applyCanonicalDeliveryLocation(snap.profileDeliveryLocation);
+        void applyCanonicalRef.current(snap.profileDeliveryLocation);
       }
     });
-  }, [user, applyCanonicalDeliveryLocation]);
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
       // Do NOT refresh GPS here — that overwrites marketplaceAddressLine with a stale pin.
+      // Depend only on `user` so marketplace context updates cannot re-trigger this while focused.
       const uid = isRegisteredAuthUser(user) ? user!.uid : null;
-      if (!uid) return;
+      if (!uid) return undefined;
+
+      let cancelled = false;
       void (async () => {
         try {
           const snap = await fetchCheckoutCustomerSnapshotFromServer(uid);
-          setDeliveryPrefs(snap.deliveryPrefs);
-          setAddressBook(snap.addressBook);
-          setProfileDeliveryLocation(snap.profileDeliveryLocation);
-          setCheckoutPhone(snap.phone || snap.phoneNumber);
+          if (cancelled) return;
+
+          setDeliveryPrefs((prev) =>
+            checkoutDeliveryPrefsEqual(prev, snap.deliveryPrefs)
+              ? prev
+              : snap.deliveryPrefs,
+          );
+          setAddressBook((prev) =>
+            checkoutAddressBooksEqual(prev, snap.addressBook)
+              ? prev
+              : snap.addressBook,
+          );
+          setProfileDeliveryLocation((prev) =>
+            savedLocationsEqual(prev, snap.profileDeliveryLocation)
+              ? prev
+              : snap.profileDeliveryLocation,
+          );
+          setCheckoutPhone((prev) => {
+            const next = snap.phone || snap.phoneNumber;
+            return prev === next ? prev : next;
+          });
+
           if (snap.profileDeliveryLocation) {
-            await applyCanonicalDeliveryLocation(snap.profileDeliveryLocation);
+            await applyCanonicalRef.current(snap.profileDeliveryLocation);
           }
+
+          const ctx = marketplaceDebugRef.current;
           logLocationDebug('[CHECKOUT LOAD]', {
             source: 'checkout focus reload (server)',
             documentPath: `users/${uid}`,
@@ -527,28 +587,35 @@ export default function CheckoutPremiumScreen() {
                 }
               : null,
             contextState: {
-              userCoords,
-              marketplaceAddressLine,
-              locationReady,
-              locationLoading,
+              userCoords: ctx.userCoords,
+              marketplaceAddressLine: ctx.marketplaceAddressLine,
+              locationReady: ctx.locationReady,
+              locationLoading: ctx.locationLoading,
             },
           });
-          if (snap.profileDeliveryLocation) {
+
+          if (
+            snap.profileDeliveryLocation &&
+            !addressBookMatchesProfile(
+              snap.addressBook,
+              snap.profileDeliveryLocation,
+            )
+          ) {
             const book = await syncProfileLocationToAddressBook(uid);
-            setAddressBook(book);
+            if (cancelled) return;
+            setAddressBook((prev) =>
+              checkoutAddressBooksEqual(prev, book) ? prev : book,
+            );
           }
         } catch {
           /* keep live snapshot */
         }
       })();
-    }, [
-      user,
-      userCoords,
-      marketplaceAddressLine,
-      locationReady,
-      locationLoading,
-      applyCanonicalDeliveryLocation,
-    ]),
+
+      return () => {
+        cancelled = true;
+      };
+    }, [user]),
   );
 
   const addressPrimary =
