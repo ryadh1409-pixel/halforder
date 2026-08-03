@@ -61,7 +61,6 @@ export function DriverActiveRouteMap({
   const localMapRef = useRef<MapView | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [followDriver, setFollowDriver] = useState(true);
-  const lastFitDriverRef = useRef<MapLatLng | null>(null);
 
   const routeLeg = useMemo(() => {
     if (!order) return 'to_restaurant' as const;
@@ -162,61 +161,73 @@ export function DriverActiveRouteMap({
 
   const missingStops = !restaurantCoord || !customerCoord;
 
+  /** `overview` = one-shot fit of trip markers; `follow` = track the car only. */
+  const cameraPhaseRef = useRef<'overview' | 'follow'>('overview');
+  const lastFollowCoordRef = useRef<MapLatLng | null>(null);
+
+  // Destination switch (pickup → delivery): one overview fit, then follow again.
+  useEffect(() => {
+    setFollowDriver(true);
+    cameraPhaseRef.current = 'overview';
+    lastFollowCoordRef.current = null;
+  }, [routeLeg]);
+
   useEffect(() => {
     const map = (mapRef?.current as MapView | null) ?? localMapRef.current;
-    if (!mapReady || !map || fitPoints.length === 0 || !followDriver) return;
-
-    const firstFit = !lastFitDriverRef.current;
-    const movedFar =
-      !!driverCoord &&
-      !!lastFitDriverRef.current &&
-      haversineDistanceKm(
-        lastFitDriverRef.current.latitude,
-        lastFitDriverRef.current.longitude,
-        driverCoord.latitude,
-        driverCoord.longitude,
-      ) > 0.08;
-
-    if (!firstFit && !movedFar) return;
+    if (!mapReady || !map || !followDriver) return;
 
     try {
-      if (fitPoints.length >= 2) {
+      if (cameraPhaseRef.current === 'overview') {
+        // Wait until at least two trip points exist (e.g. Driver+Restaurant, or R+C).
+        if (fitPoints.length < 2) return;
+
         fitMapToCoordinates(map as never, fitPoints, {
           top: 56,
           right: 48,
           bottom: 56,
           left: 48,
         });
-      } else if (driverCoord) {
-        map.animateToRegion(
-          {
-            latitude: driverCoord.latitude,
-            longitude: driverCoord.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          },
-          450,
-        );
+        cameraPhaseRef.current = 'follow';
+        if (driverCoord) lastFollowCoordRef.current = driverCoord;
+        return;
       }
-      if (driverCoord) lastFitDriverRef.current = driverCoord;
+
+      // Follow mode — center on the vehicle only; never refit all markers.
+      if (!driverCoord) return;
+      const prev = lastFollowCoordRef.current;
+      if (prev) {
+        const movedKm = haversineDistanceKm(
+          prev.latitude,
+          prev.longitude,
+          driverCoord.latitude,
+          driverCoord.longitude,
+        );
+        // Ignore tiny GPS jitter so the camera doesn't jump.
+        if (movedKm < 0.012) return;
+      }
+      lastFollowCoordRef.current = driverCoord;
+      map.animateToRegion(
+        {
+          latitude: driverCoord.latitude,
+          longitude: driverCoord.longitude,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        },
+        700,
+      );
     } catch {
       /* map not ready */
     }
   }, [
     mapReady,
+    followDriver,
     fitPoints,
     driverCoord,
-    destinationCoord,
-    followDriver,
+    restaurantCoord,
+    customerCoord,
     routeLeg,
     mapRef,
   ]);
-
-  // Re-fit when the destination leg switches (pickup → dropoff).
-  useEffect(() => {
-    setFollowDriver(true);
-    lastFitDriverRef.current = null;
-  }, [routeLeg]);
 
   const setMapRef = (instance: MapView | null) => {
     localMapRef.current = instance;
