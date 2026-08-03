@@ -13,13 +13,15 @@ import {
   showDriverNewDeliveryAlert,
   showRestaurantLifecycleAlert,
 } from '@/lib/orderLifecycleAlertUi';
+import { stopCriticalOrderAlert } from '@/services/orderCriticalAlert';
 import type { OrderStageInput } from '@/services/orderStage';
 import { useEffect, useRef } from 'react';
 
 function useLifecycleAlertOnChange<T extends string>(
   order: OrderStageInput | null | undefined,
   resolveKey: (order: OrderStageInput) => T | null,
-  showAlert: (key: T) => void,
+  showAlert: (key: T, orderId: string) => void,
+  onClearCritical?: (orderId: string, prevKey: T) => void,
 ): void {
   const lastKeyRef = useRef<string | null>(null);
   const initializedRef = useRef(false);
@@ -27,8 +29,8 @@ function useLifecycleAlertOnChange<T extends string>(
 
   useEffect(() => {
     if (!order) return;
+    const orderId = (order as { id?: string }).id?.trim() ?? '';
     const nextKey = resolveKey(order);
-    if (!nextKey) return;
 
     if (!initializedRef.current) {
       initializedRef.current = true;
@@ -37,9 +39,15 @@ function useLifecycleAlertOnChange<T extends string>(
     }
 
     if (lastKeyRef.current === nextKey) return;
+    const prev = lastKeyRef.current as T | null;
     lastKeyRef.current = nextKey;
-    showAlert(nextKey);
-  }, [dependencyKey, order, resolveKey, showAlert]);
+    if (prev && !nextKey && onClearCritical && orderId) {
+      onClearCritical(orderId, prev);
+      return;
+    }
+    if (!nextKey) return;
+    showAlert(nextKey, orderId);
+  }, [dependencyKey, order, resolveKey, showAlert, onClearCritical]);
 }
 
 export function useCustomerOrderLifecycleAlert(
@@ -48,7 +56,7 @@ export function useCustomerOrderLifecycleAlert(
   useLifecycleAlertOnChange(
     order,
     resolveCustomerLifecycleAlertKey,
-    showCustomerLifecycleAlert,
+    (key) => showCustomerLifecycleAlert(key),
   );
 }
 
@@ -69,6 +77,16 @@ export function useDriverActiveOrderLifecycleAlert(
     order,
     resolveDriverActiveLifecycleAlertKey,
     showDriverLifecycleAlert,
+    (orderId, prevKey) => {
+      if (prevKey === 'ready_for_pickup') {
+        void stopCriticalOrderAlert({
+          role: 'driver',
+          event: 'ready_for_pickup',
+          orderId,
+          reason: 'lifecycle',
+        });
+      }
+    },
   );
 }
 
@@ -92,18 +110,30 @@ export function useRestaurantOrdersLifecycleAlerts(
       if (!orderId) continue;
 
       const nextKey = resolveRestaurantLifecycleAlertKey(order);
-      if (!nextKey) continue;
 
       if (!initializedRef.current) {
-        lastByOrderRef.current.set(orderId, nextKey);
+        if (nextKey) lastByOrderRef.current.set(orderId, nextKey);
         continue;
       }
 
       const prevKey = lastByOrderRef.current.get(orderId);
       if (prevKey === nextKey) continue;
 
-      lastByOrderRef.current.set(orderId, nextKey);
-      showRestaurantLifecycleAlert(nextKey);
+      if (prevKey === 'new_paid_order' && nextKey !== 'new_paid_order') {
+        void stopCriticalOrderAlert({
+          role: 'restaurant',
+          event: 'new_order',
+          orderId,
+          reason: 'lifecycle',
+        });
+      }
+
+      if (nextKey) {
+        lastByOrderRef.current.set(orderId, nextKey);
+        showRestaurantLifecycleAlert(nextKey, orderId);
+      } else {
+        lastByOrderRef.current.delete(orderId);
+      }
     }
 
     initializedRef.current = true;
@@ -132,7 +162,7 @@ export function useDriverAvailableOrderAlerts(
       }
       if (seenIdsRef.current.has(orderId)) continue;
       seenIdsRef.current.add(orderId);
-      showDriverNewDeliveryAlert();
+      showDriverNewDeliveryAlert(orderId);
     }
 
     initializedRef.current = true;
@@ -161,18 +191,30 @@ export function useDriverActiveOrdersLifecycleAlerts(
       if (!orderId) continue;
 
       const nextKey = resolveDriverActiveLifecycleAlertKey(order);
-      if (!nextKey) continue;
 
       if (!initializedRef.current) {
-        lastByOrderRef.current.set(orderId, nextKey);
+        if (nextKey) lastByOrderRef.current.set(orderId, nextKey);
         continue;
       }
 
       const prevKey = lastByOrderRef.current.get(orderId);
       if (prevKey === nextKey) continue;
 
-      lastByOrderRef.current.set(orderId, nextKey);
-      showDriverLifecycleAlert(nextKey);
+      if (prevKey === 'ready_for_pickup' && nextKey !== 'ready_for_pickup') {
+        void stopCriticalOrderAlert({
+          role: 'driver',
+          event: 'ready_for_pickup',
+          orderId,
+          reason: 'lifecycle',
+        });
+      }
+
+      if (nextKey) {
+        lastByOrderRef.current.set(orderId, nextKey);
+        showDriverLifecycleAlert(nextKey, orderId);
+      } else {
+        lastByOrderRef.current.delete(orderId);
+      }
     }
 
     initializedRef.current = true;

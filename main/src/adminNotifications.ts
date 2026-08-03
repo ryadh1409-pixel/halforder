@@ -72,7 +72,7 @@ async function sendExpoPush(
   title: string,
   body: string,
   data: Record<string, string>,
-  options?: {badge?: number; channelId?: string},
+  options?: {badge?: number; channelId?: string; sound?: string},
 ): Promise<void> {
   if (tokens.length === 0) return;
   try {
@@ -86,7 +86,7 @@ async function sendExpoPush(
         to,
         title,
         body,
-        sound: "default",
+        sound: options?.sound ?? "default",
         priority: "high",
         channelId: options?.channelId ?? "halforder",
         ...(typeof options?.badge === "number" ? {badge: options.badge} : {}),
@@ -116,6 +116,7 @@ async function createAdminNotification(input: {
   deepLink?: string | null;
   badge?: number;
   channelId?: string;
+  sound?: string;
 }): Promise<void> {
   const recipients = await listAdminRecipients();
   const sentTo = recipients.map((r) => r.uid);
@@ -143,22 +144,29 @@ async function createAdminNotification(input: {
     input.deepLink ||
     (input.orderId ? `/(tabs)/admin/order/${encodeURIComponent(input.orderId)}` : "");
 
+  const pushData: Record<string, string> = {
+    type: `admin_${input.type}`,
+    adminNotificationId: ref.id,
+    ...(input.orderId ? {orderId: input.orderId} : {}),
+    ...(input.reportId ? {reportId: input.reportId} : {}),
+    ...(input.userId ? {userId: input.userId} : {}),
+    ...(input.paymentId ? {paymentId: input.paymentId} : {}),
+    ...(deepLink ? {deepLink} : {}),
+  };
+  if (input.type === "new_order_created") {
+    pushData.role = "admin";
+    pushData.event = "new_order";
+  }
+
   await sendExpoPush(
     recipients.map((r) => r.token).filter((token): token is string => Boolean(token)),
     input.title,
     input.body,
-    {
-      type: `admin_${input.type}`,
-      adminNotificationId: ref.id,
-      ...(input.orderId ? {orderId: input.orderId} : {}),
-      ...(input.reportId ? {reportId: input.reportId} : {}),
-      ...(input.userId ? {userId: input.userId} : {}),
-      ...(input.paymentId ? {paymentId: input.paymentId} : {}),
-      ...(deepLink ? {deepLink} : {}),
-    },
+    pushData,
     {
       badge: input.badge,
       channelId: input.channelId,
+      sound: input.sound,
     },
   );
 
@@ -294,7 +302,8 @@ export const notifyAdminsOnOrderCreated = onDocumentWritten(
       hostName: hostName || null,
       deepLink: `/(tabs)/admin/dashboard?focusOrderId=${encodeURIComponent(orderId)}`,
       badge,
-      channelId: "halforder",
+      channelId: "critical_orders",
+      sound: "order_critical_alert.wav",
       metadata: {
         orderId,
         restaurantName: restaurantName || null,

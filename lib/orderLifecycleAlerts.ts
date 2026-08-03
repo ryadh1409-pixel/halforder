@@ -108,6 +108,7 @@ export function resolveCustomerLifecycleAlertKey(
     case 'ready_for_pickup':
       return 'ready_for_pickup';
     case 'driver_assigned':
+    case 'waiting_at_restaurant':
     case 'driver_at_restaurant':
       return 'driver_assigned';
     case 'picked_up':

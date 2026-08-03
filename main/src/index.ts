@@ -30,6 +30,7 @@ export {
   notifyAdminsOnUserSuspended,
 } from "./adminNotifications.js";
 export {notifyRestaurantOnNewOrder} from "./restaurantNewOrderNotifications.js";
+export {notifyDriverOnReadyForPickup} from "./driverReadyForPickupNotifications.js";
 export {
   notifyOrderChatMessageCreated,
   provisionDriverChatOnAssignment,

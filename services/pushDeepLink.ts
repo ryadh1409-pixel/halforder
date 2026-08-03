@@ -14,6 +14,7 @@ import {
   logNotificationOpened,
   logNotificationReceived,
 } from './notificationTracking';
+import { stopCriticalOrderAlertsForOrder } from './orderCriticalAlert';
 
 type NavigateFn = (href: string) => void;
 
@@ -101,6 +102,12 @@ export function wirePushNotificationDeepLinks(navigate: NavigateFn): () => void 
       const data = (content.data ?? {}) as Record<string, unknown>;
       void logNotificationOpened(response.notification.request.identifier);
       void bumpCampaignOpened(data.campaignId);
+
+      const orderId =
+        typeof data.orderId === 'string' ? data.orderId.trim() : '';
+      if (orderId) {
+        void stopCriticalOrderAlertsForOrder(orderId, 'ack');
+      }
 
       const link = resolvePushNavigation(data);
       if (link) {

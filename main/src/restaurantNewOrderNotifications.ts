@@ -183,7 +183,7 @@ async function sendRestaurantNewOrderPush(input: {
   const deepLink =
     `/(host)/orders?focusOrderId=${encodeURIComponent(input.orderId)}`;
 
-  await fetch(EXPO_PUSH_SEND_URL, {
+  const res = await fetch(EXPO_PUSH_SEND_URL, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -194,18 +194,32 @@ async function sendRestaurantNewOrderPush(input: {
         to: input.token,
         title: "New Order Received",
         body,
-        sound: "default",
+        sound: "order_critical_alert.wav",
         priority: "high",
-        channelId: "restaurant_orders",
+        channelId: "critical_orders",
         badge: input.badge,
         data: {
           type: "restaurant_new_order",
           orderId: input.orderId,
+          role: "restaurant",
+          event: "new_order",
           deepLink,
         },
       },
     ]),
   });
+
+  // Parse Expo ticket so token failures are visible in Cloud logs.
+  try {
+    const text = await res.text();
+    logger.info("[restaurant-new-order] expo_response", {
+      orderId: input.orderId,
+      httpStatus: res.status,
+      body: text.slice(0, 500),
+    });
+  } catch {
+    /* ignore */
+  }
 }
 
 export const notifyRestaurantOnNewOrder = onDocumentWritten(

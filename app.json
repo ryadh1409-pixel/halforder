@@ -182,8 +182,8 @@
       [
         "expo-notifications",
         {
-          "sounds": [],
-          "enableBackgroundRemoteNotifications": true
+"sounds": ["./assets/sounds/order_critical_alert.wav"],
+            "enableBackgroundRemoteNotifications": true
         }
       ],
       "expo-router",

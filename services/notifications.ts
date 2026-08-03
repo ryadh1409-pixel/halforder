@@ -11,6 +11,10 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { HALF_ORDER_PAIR_JOIN_PUSH_TYPE, RESTAURANT_NEW_ORDER_PUSH_TYPE } from '../constants/pushTypes';
+import {
+  CRITICAL_ORDER_CHANNEL_ID,
+  CRITICAL_ORDER_SOUND_NAME,
+} from '../constants/criticalOrderAlert';
 
 let foregroundHandlerConfigured = false;
 
@@ -56,6 +60,14 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
     vibrationPattern: [0, 250, 150, 250],
     lightColor: '#A855F7',
     sound: 'default',
+    enableVibrate: true,
+  });
+  await Notifications.setNotificationChannelAsync(CRITICAL_ORDER_CHANNEL_ID, {
+    name: 'Critical Orders',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 400, 200, 400, 200, 400],
+    lightColor: '#EF4444',
+    sound: CRITICAL_ORDER_SOUND_NAME,
     enableVibrate: true,
   });
 }

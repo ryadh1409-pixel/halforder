@@ -127,6 +127,23 @@ export async function registerExpoPushTokenAndSyncToFirestore(
     return;
   }
 
+  // Critical partner alerts require a token — request once when undetermined.
+  if (permission === Notifications.PermissionStatus.UNDETERMINED) {
+    try {
+      const requested = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      });
+      permission = requested.status;
+    } catch (e) {
+      console.error('[push] requestPermissionsAsync failed:', e);
+      return;
+    }
+  }
+
   if (permission !== Notifications.PermissionStatus.GRANTED) {
     console.log(
       '[push] Notification permission denied or not determined; skipping Expo token sync.',

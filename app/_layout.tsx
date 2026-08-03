@@ -5,6 +5,7 @@ import 'react-native-svg';
 
 import { AbandonedCheckoutNotificationListener } from '@/components/AbandonedCheckoutNotificationListener';
 import { AdminSupportInboundListener } from '@/components/AdminSupportInboundListener';
+import { OrderCriticalAlertBridge } from '@/components/alerts/OrderCriticalAlertBridge';
 import { AppBadgeSync } from '@/components/AppBadgeSync';
 import { AppLocationSync } from '@/components/AppLocationSync';
 import { BootstrapShell } from '@/components/BootstrapShell';
@@ -182,6 +183,7 @@ export default function RootLayout() {
                 <CartProvider>
                   <BootstrapShell>
                     <PushNotificationDeepLinkListener />
+                    <OrderCriticalAlertBridge />
                     <AbandonedCheckoutNotificationListener />
                     <AdminSupportInboundListener />
                     <AppBadgeSync />

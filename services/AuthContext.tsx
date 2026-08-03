@@ -1048,6 +1048,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     try {
+      const { stopAllCriticalOrderAlerts } = await import(
+        '@/services/orderCriticalAlert'
+      );
+      await stopAllCriticalOrderAlerts('logout');
+    } catch {
+      /* best-effort */
+    }
+    try {
       await firebaseSignOut(auth);
     } finally {
       settledAuthUidRef.current = null;
