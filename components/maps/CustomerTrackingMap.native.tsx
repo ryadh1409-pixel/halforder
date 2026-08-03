@@ -35,7 +35,7 @@ import { haversineDistanceKm } from '@/lib/haversine';
 import { useGroupDeliverySiblingStops } from '@/hooks/useGroupDeliverySiblingStops';
 import {
   resolveDeliveryCustomerStops,
-  type DeliveryStopSource,
+  restaurantOrderToDeliveryStopSource,
 } from '@/lib/maps/deliveryStops';
 import type { RestaurantOrder } from '@/services/orderService';
 import { Ionicons } from '@expo/vector-icons';
@@ -111,6 +111,10 @@ class MapErrorBoundary extends Component<
   }
 }
 
+function mapDevLog(...args: unknown[]) {
+  if (__DEV__) mapDevLog(...args);
+}
+
 const FIT_PAD = { top: 130, right: 50, bottom: 80, left: 50 };
 const FIT_ANIM_MS = 650;
 
@@ -130,6 +134,7 @@ function TrackingMapInner({
   expectDriver = false,
   cameraMode = 'overview',
   etaMinutes = null,
+  lite = false,
   e2eCapture,
   e2ePhase,
 }: {
@@ -143,6 +148,8 @@ function TrackingMapInner({
   expectDriver?: boolean;
   cameraMode?: CustomerMapCameraMode;
   etaMinutes?: number | null;
+  /** Compact non-interactive map for home Active Order Card. */
+  lite?: boolean;
   e2eCapture?: boolean;
   e2ePhase?: string;
 }) {
@@ -181,7 +188,7 @@ function TrackingMapInner({
   } = useLiveDriverMarker(liveInput);
 
   useEffect(() => {
-    console.log('[MAP RUNTIME] MapView provider', {
+    mapDevLog('[MAP RUNTIME] MapView provider', {
       provider,
       providerLabel:
         provider === 'google'
@@ -202,7 +209,7 @@ function TrackingMapInner({
 
   useEffect(() => {
     if (displayDriver) return;
-    console.log('[LIVE DRIVER MARKER]', {
+    mapDevLog('[LIVE DRIVER MARKER]', {
       received: null,
       renderDecision: 'hide',
       reason: awaitingFirstFix
@@ -231,7 +238,7 @@ function TrackingMapInner({
       list.push({
         id: 'restaurant',
         coordinate: restaurant,
-        title: '🍴 Restaurant',
+        title: 'Restaurant',
         pinColor: PIN_RESTAURANT,
         zIndex: MAP_Z_RESTAURANT,
       });
@@ -240,7 +247,7 @@ function TrackingMapInner({
       list.push({
         id: 'home',
         coordinate: dropoff,
-        title: '🏠 Your home',
+        title: 'Your home',
         pinColor: PIN_HOME,
         zIndex: MAP_Z_CUSTOMER_ACTIVE,
       });
@@ -249,7 +256,7 @@ function TrackingMapInner({
       list.push({
         id: stop.id,
         coordinate: stop.coordinate,
-        title: `🏠 ${stop.title}`,
+        title: stop.title,
         pinColor: '#2563EB',
         zIndex: MAP_Z_CUSTOMER,
       });
@@ -258,18 +265,23 @@ function TrackingMapInner({
       list.push({
         id: 'driver',
         coordinate: driverDisplay,
-        title: '🚗 Driver',
+        title: 'Driver',
         pinColor: PIN_DRIVER,
         zIndex: MAP_Z_DRIVER,
       });
     }
-    console.log('[TrackingMap] markers.length =', list.length);
-    console.log('[TrackingMap] markers[] =', list.map((m) => ({
-      id: m.id,
-      title: m.title,
-      lat: m.coordinate.latitude,
-      lng: m.coordinate.longitude,
-    })));
+    if (__DEV__) {
+      mapDevLog('[TrackingMap] markers.length =', list.length);
+      mapDevLog(
+        '[TrackingMap] markers[] =',
+        list.map((m) => ({
+          id: m.id,
+          title: m.title,
+          lat: m.coordinate.latitude,
+          lng: m.coordinate.longitude,
+        })),
+      );
+    }
     return list;
   }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, driverDisplay?.latitude, driverDisplay?.longitude, extraCustomerStops]);
 
@@ -321,11 +333,11 @@ function TrackingMapInner({
 
   // Debug
   useEffect(() => {
-    console.log('[TrackingMap] restaurant:', JSON.stringify(restaurant));
-    console.log('[TrackingMap] dropoff:', JSON.stringify(dropoff));
-    console.log('[TrackingMap] driver:', JSON.stringify(displayDriver));
-    console.log('[TrackingMap] markerCount:', markerPoints.length);
-    console.log('[TrackingMap] cameraMode:', cameraMode);
+    if (__DEV__) mapDevLog('[TrackingMap] restaurant:', JSON.stringify(restaurant));
+    if (__DEV__) mapDevLog('[TrackingMap] dropoff:', JSON.stringify(dropoff));
+    if (__DEV__) mapDevLog('[TrackingMap] driver:', JSON.stringify(displayDriver));
+    if (__DEV__) mapDevLog('[TrackingMap] markerCount:', markerPoints.length);
+    if (__DEV__) mapDevLog('[TrackingMap] cameraMode:', cameraMode);
   }, [restaurant?.latitude, dropoff?.latitude, displayDriver?.latitude, cameraMode]);
 
   const runCameraFit = useCallback(
@@ -355,7 +367,7 @@ function TrackingMapInner({
       const fitId = fitSeqRef.current;
       regionAtFitRef.current = lastRegionRef.current;
 
-      console.log('[MAP RUNTIME] approach camera fit', {
+      mapDevLog('[MAP RUNTIME] approach camera fit', {
         fitId,
         cameraMode,
         force,
@@ -402,7 +414,7 @@ function TrackingMapInner({
   // Auto-fit after map ready / when points change (throttled in approach modes)
   useEffect(() => {
     if (!mapReady || !tracking) {
-      console.log('[MAP RUNTIME] fit effect gated', { mapReady, tracking });
+      if (__DEV__) mapDevLog('[MAP RUNTIME] fit effect gated', { mapReady, tracking });
       return;
     }
     const t = setTimeout(() => {
@@ -441,7 +453,7 @@ function TrackingMapInner({
           result: 'tmpfile',
         });
         capturedRef.current = captureKey as never;
-        console.log('[E2E VERIFY] SCREENSHOT CAPTURED', {
+        mapDevLog('[E2E VERIFY] SCREENSHOT CAPTURED', {
           phase: e2ePhase ?? 'unknown',
           captureKey,
           markerCount: markers.length,
@@ -454,7 +466,7 @@ function TrackingMapInner({
           uri,
         });
       } catch (err) {
-        console.warn(
+        if (__DEV__) console.warn(
           '[E2E VERIFY] screenshot failed',
           err instanceof Error ? err.message : String(err),
         );
@@ -464,11 +476,36 @@ function TrackingMapInner({
   }, [e2eCapture, e2ePhase, mapReady, markers]);
 
   const recenter = useCallback(() => {
+    if (lite) return;
     setTracking(true);
     // Force a fresh fit on recenter even for small driver moves.
     lastFitDriverRef.current = null;
     requestAnimationFrame(() => runCameraFit(true));
-  }, [runCameraFit]);
+  }, [runCameraFit, lite]);
+
+  const showWaitingBanner = Boolean(expectDriver && !displayDriver && !lite);
+
+  useEffect(() => {
+    if (!showWaitingBanner) {
+      if (expectDriver && displayDriver) {
+        mapDevLog('[WAITING BANNER CLEARED]', {
+          latitude: displayDriver.latitude,
+          longitude: displayDriver.longitude,
+        });
+      }
+      return;
+    }
+    mapDevLog('[WAITING BANNER]', {
+      visible: true,
+      reason: 'no_valid_driver_coordinate',
+      expectDriver,
+    });
+  }, [
+    showWaitingBanner,
+    expectDriver,
+    displayDriver?.latitude,
+    displayDriver?.longitude,
+  ]);
 
   if (!MapView) {
     return <View style={styles.center}><ActivityIndicator color="#A855F7" /></View>;
@@ -478,33 +515,6 @@ function TrackingMapInner({
     return <View style={styles.center}><ActivityIndicator color="#A855F7" /></View>;
   }
 
-  // Only wait when we have no valid display coordinate (last-known counts as valid).
-  const showWaitingBanner = Boolean(expectDriver && !displayDriver);
-
-  useEffect(() => {
-    if (showWaitingBanner) {
-      console.log('[WAITING BANNER]', {
-        visible: true,
-        reason: 'no_valid_driver_coordinate',
-        expectDriver,
-        timestamp: Date.now(),
-      });
-      return;
-    }
-    if (expectDriver && displayDriver) {
-      console.log('[WAITING BANNER CLEARED]', {
-        latitude: displayDriver.latitude,
-        longitude: displayDriver.longitude,
-        timestamp: Date.now(),
-      });
-    }
-  }, [
-    showWaitingBanner,
-    expectDriver,
-    displayDriver?.latitude,
-    displayDriver?.longitude,
-  ]);
-
   return (
     <View
       style={styles.mapWrap}
@@ -513,7 +523,7 @@ function TrackingMapInner({
       onLayout={(e) => {
         const { width, height, x, y } = e.nativeEvent.layout;
         layoutRef.current = { width, height, x, y };
-        console.log('[MAP RUNTIME] onLayout()', {
+        mapDevLog('[MAP RUNTIME] onLayout()', {
           width,
           height,
           x,
@@ -534,20 +544,17 @@ function TrackingMapInner({
         showsMyLocationButton={false}
         rotateEnabled={false}
         pitchEnabled={false}
-        zoomEnabled
-        zoomTapEnabled
-        scrollEnabled
+        zoomEnabled={!lite}
+        zoomTapEnabled={!lite}
+        scrollEnabled={!lite}
         toolbarEnabled={false}
         onMapReady={() => {
           const layout = layoutRef.current;
-          console.log('[MAP RUNTIME] MapView onMapReady()', {
+          mapDevLog('[MAP RUNTIME] MapView onMapReady()', {
             provider,
             layout,
             layoutZero: !layout || layout.width < 2 || layout.height < 2,
-            hasFitToCoordinates: typeof mapRef.current?.fitToCoordinates === 'function',
-            hasAnimateCamera: typeof mapRef.current?.animateCamera === 'function',
-            hasAnimateToRegion: typeof mapRef.current?.animateToRegion === 'function',
-            initialRegion,
+            lite,
           });
           setMapReady(true);
         }}
@@ -558,16 +565,8 @@ function TrackingMapInner({
           longitudeDelta: number;
         }) => {
           lastRegionRef.current = region;
-          console.log('[MAP RUNTIME] onRegionChangeComplete()', {
-            latitude: region.latitude,
-            longitude: region.longitude,
-            latitudeDelta: region.latitudeDelta,
-            longitudeDelta: region.longitudeDelta,
-            vsRegionAtFit: regionAtFitRef.current,
-          });
         }}
-        onPanDrag={() => setTracking(false)}
-        onTouchStart={() => setTracking(false)}
+        onPanDrag={lite ? undefined : () => setTracking(false)}
       >
         {/* Route polyline */}
         {routeCoordinates.length >= 2 && (
@@ -600,7 +599,7 @@ function TrackingMapInner({
           <LiveDriverVehicleMarker
             coordinate={driverDisplay}
             heading={resolvedHeading}
-            title="🚗 Driver"
+            title="Driver"
             animatedCoordinate={animatedCoordinate}
             zIndex={MAP_Z_DRIVER}
           />
@@ -613,19 +612,24 @@ function TrackingMapInner({
         </View>
       ) : null}
 
-      <RouteEtaBadge
-        label={etaBadgeLabel}
-        visible={Boolean(etaBadgeLabel) && !showWaitingBanner}
-      />
+      {!lite ? (
+        <RouteEtaBadge
+          label={etaBadgeLabel}
+          visible={Boolean(etaBadgeLabel) && !showWaitingBanner}
+        />
+      ) : null}
 
       {/* Recenter button */}
-      <Pressable
-        style={[styles.recenterBtn, tracking && styles.recenterActive]}
-        onPress={recenter}
-        accessibilityLabel="Show all markers"
-      >
-        <Ionicons name="scan-outline" size={22} color="#fff" />
-      </Pressable>
+      {!lite ? (
+        <Pressable
+          style={[styles.recenterBtn, tracking && styles.recenterActive]}
+          onPress={recenter}
+          accessibilityRole="button"
+          accessibilityLabel="Recenter map on delivery"
+        >
+          <Ionicons name="scan-outline" size={22} color="#fff" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -636,6 +640,8 @@ export type CustomerTrackingMapProps = {
   routeCoordinates?: LatLng[];
   /** Optional live ETA minutes from parent (avoids duplicate Directions). */
   etaMinutes?: number | null;
+  /** Compact non-interactive map for home Active Order Card. */
+  lite?: boolean;
   /** DEV: capture map screenshot after markers settle */
   e2eCapture?: boolean;
   e2ePhase?: string;
@@ -645,6 +651,7 @@ export function CustomerTrackingMap({
   order,
   routeCoordinates: prop,
   etaMinutes: etaProp,
+  lite = false,
   e2eCapture,
   e2ePhase,
 }: CustomerTrackingMapProps) {
@@ -697,30 +704,14 @@ export function CustomerTrackingMap({
       ? order.driverLocation.heading
       : null;
 
-  const siblingStops = useGroupDeliverySiblingStops(order.groupId, order.id);
+  const siblingStops = useGroupDeliverySiblingStops(
+    lite ? null : order.groupId,
+    lite ? null : order.id,
+  );
 
   const sharedCustomerStops = useMemo(() => {
-    const source: DeliveryStopSource = {
-      id: order.id,
-      groupId: order.groupId,
-      status: order.status,
-      deliveryStatus: order.deliveryStatus,
-      restaurantName: order.restaurant?.name ?? null,
-      restaurantLocation: order.restaurantLocation,
-      customerName: order.customer?.name ?? null,
-      customerLocation: order.customerLocation ?? order.deliveryLocation ?? order.userLocation,
-      deliveryAddress: order.deliveryAddress,
-      deliveryStops: (order as { deliveryStops?: unknown }).deliveryStops,
-      dropoffs: (order as { dropoffs?: unknown }).dropoffs,
-      customers: (order as { customers?: unknown }).customers,
-      dropoffLat: (order as { dropoffLat?: number | null }).dropoffLat ?? null,
-      dropoffLng: (order as { dropoffLng?: number | null }).dropoffLng ?? null,
-      dropoffName: (order as { dropoffName?: string | null }).dropoffName ?? null,
-      pickupName: (order as { pickupName?: string | null }).pickupName ?? null,
-      pickupLat: (order as { pickupLat?: number | null }).pickupLat ?? null,
-      pickupLng: (order as { pickupLng?: number | null }).pickupLng ?? null,
-      createdAtMs: order.createdAtMs,
-    };
+    if (lite) return [];
+    const source = restaurantOrderToDeliveryStopSource(order);
     const stops = resolveDeliveryCustomerStops(source, siblingStops);
     return stops
       .filter((stop) => {
@@ -735,18 +726,8 @@ export function CustomerTrackingMap({
         title: stop.label,
       }));
   }, [
-    order.id,
-    order.groupId,
-    order.status,
-    order.deliveryStatus,
-    order.restaurant?.name,
-    order.restaurantLocation,
-    order.customer?.name,
-    order.customerLocation,
-    order.deliveryLocation,
-    order.userLocation,
-    order.deliveryAddress,
-    order.createdAtMs,
+    lite,
+    order,
     siblingStops,
     dropoff?.latitude,
     dropoff?.longitude,
@@ -834,13 +815,13 @@ export function CustomerTrackingMap({
     const dRD = dist(restaurant, driver);
     const dCD = dist(dropoff, driver);
 
-    console.log('[MARKERS INVESTIGATION] orderId=', order.id);
-    console.log('[MARKERS INVESTIGATION] Restaurant', restaurantAudit);
-    console.log('[MARKERS INVESTIGATION] Customer', customerAudit);
-    console.log('[MARKERS INVESTIGATION] Driver', driverAudit);
-    console.log('[MARKERS INVESTIGATION] markers.length (expected in TrackingMapInner)=', plannedMarkers.length);
-    console.log('[MARKERS INVESTIGATION] markers[]=', plannedMarkers);
-    console.log('[MARKERS INVESTIGATION] distances_meters', {
+    if (__DEV__) mapDevLog('[MARKERS INVESTIGATION] orderId=', order.id);
+    if (__DEV__) mapDevLog('[MARKERS INVESTIGATION] Restaurant', restaurantAudit);
+    if (__DEV__) mapDevLog('[MARKERS INVESTIGATION] Customer', customerAudit);
+    if (__DEV__) mapDevLog('[MARKERS INVESTIGATION] Driver', driverAudit);
+    if (__DEV__) mapDevLog('[MARKERS INVESTIGATION] markers.length (expected in TrackingMapInner)=', plannedMarkers.length);
+    if (__DEV__) mapDevLog('[MARKERS INVESTIGATION] markers[]=', plannedMarkers);
+    mapDevLog('[MARKERS INVESTIGATION] distances_meters', {
       restaurant_customer_m: dRC,
       restaurant_driver_m: dRD,
       customer_driver_m: dCD,
@@ -897,17 +878,20 @@ export function CustomerTrackingMap({
   );
   const cameraMode = useMemo(
     () =>
-      resolveCustomerMapCameraMode({
-        step: trackStep,
-        leg: mapLeg,
-        driverCustomerMeters,
-        delivered:
-          trackStep === 'delivered' ||
-          order.status === 'delivered' ||
-          order.status === 'completed' ||
-          order.deliveryStatus === 'delivered',
-      }),
+      lite
+        ? 'overview'
+        : resolveCustomerMapCameraMode({
+            step: trackStep,
+            leg: mapLeg,
+            driverCustomerMeters,
+            delivered:
+              trackStep === 'delivered' ||
+              order.status === 'delivered' ||
+              order.status === 'completed' ||
+              order.deliveryStatus === 'delivered',
+          }),
     [
+      lite,
       trackStep,
       mapLeg,
       driverCustomerMeters,
@@ -933,7 +917,8 @@ export function CustomerTrackingMap({
         routeCoordinates={routeCoordinates}
         expectDriver={Boolean(order.driverId || order.assignedDriverId)}
         cameraMode={cameraMode}
-        etaMinutes={etaMinutes}
+        etaMinutes={lite ? null : etaMinutes}
+        lite={lite}
         e2eCapture={e2eCapture}
         e2ePhase={e2ePhase}
       />
@@ -951,20 +936,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
-  },
-
-  vehicleMarker: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderWidth: 2,
-    borderColor: '#1E1B4B',
-  },
-  vehicleEmoji: {
-    fontSize: 24,
   },
 
   waitingBanner: {

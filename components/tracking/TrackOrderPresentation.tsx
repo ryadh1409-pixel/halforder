@@ -99,11 +99,17 @@ export function TrackOrderPresentation({
           <Pressable
             onPress={onClose}
             style={styles.circleBtn}
+            accessibilityRole="button"
             accessibilityLabel="Close tracking"
           >
             <Ionicons name="close" size={22} color={UE.text} />
           </Pressable>
-          <Pressable onPress={onHelp} style={styles.helpPill} accessibilityLabel="Help">
+          <Pressable
+            onPress={onHelp}
+            style={styles.helpPill}
+            accessibilityRole="button"
+            accessibilityLabel="Help"
+          >
             <Text style={styles.helpTxt}>Help</Text>
           </Pressable>
         </View>

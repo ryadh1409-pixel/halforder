@@ -377,3 +377,51 @@ export function activeDeliveryToStopSource(
     customers: order.customers,
   };
 }
+
+/** Build a DeliveryStopSource from a mapped RestaurantOrder-shaped object. */
+export function restaurantOrderToDeliveryStopSource(order: {
+  id: string;
+  groupId?: string | null;
+  status?: unknown;
+  deliveryStatus?: unknown;
+  restaurant?: { name?: string | null } | null;
+  restaurantLocation?: unknown;
+  customer?: { name?: string | null } | null;
+  customerLocation?: unknown;
+  deliveryLocation?: unknown;
+  userLocation?: unknown;
+  deliveryAddress?: string | null;
+  createdAtMs?: number | null;
+  deliveryStops?: unknown;
+  dropoffs?: unknown;
+  customers?: unknown;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
+  dropoffName?: string | null;
+  pickupName?: string | null;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+}): DeliveryStopSource {
+  return {
+    id: order.id,
+    groupId: order.groupId ?? null,
+    status: order.status,
+    deliveryStatus: order.deliveryStatus,
+    restaurantName: order.restaurant?.name ?? null,
+    restaurantLocation: order.restaurantLocation,
+    customerName: order.customer?.name ?? null,
+    customerLocation:
+      order.customerLocation ?? order.deliveryLocation ?? order.userLocation,
+    deliveryAddress: order.deliveryAddress ?? null,
+    deliveryStops: order.deliveryStops,
+    dropoffs: order.dropoffs,
+    customers: order.customers,
+    dropoffLat: order.dropoffLat ?? null,
+    dropoffLng: order.dropoffLng ?? null,
+    dropoffName: order.dropoffName ?? null,
+    pickupName: order.pickupName ?? null,
+    pickupLat: order.pickupLat ?? null,
+    pickupLng: order.pickupLng ?? null,
+    createdAtMs: order.createdAtMs ?? null,
+  };
+}

@@ -3,13 +3,14 @@
  */
 import { UE } from '@/constants/uberEatsTheme';
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   label: string | null;
@@ -17,7 +18,7 @@ type Props = {
 };
 
 export function RouteEtaBadge({ label, visible }: Props) {
-  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const open = useSharedValue(0);
   const pulse = useSharedValue(1);
 
@@ -44,7 +45,9 @@ export function RouteEtaBadge({ label, visible }: Props) {
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.wrap, { top: Math.round(height * 0.36) }, anim]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.wrap, { top: Math.max(insets.top, 12) + 56 }, anim]}
     >
       <Text style={styles.label}>{label}</Text>
     </Animated.View>

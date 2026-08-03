@@ -5,11 +5,13 @@
 import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import { UE } from '@/constants/uberEatsTheme';
 import { customerTrackProgress, resolveCustomerTrackStep } from '@/lib/customerTrackStatus';
+import { driverDisplayInitials } from '@/lib/driverDisplayInitials';
+import { stableMapLatLng } from '@/lib/maps/stableMapLatLng';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import type { RestaurantOrder } from '@/services/orderService';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Image,
   Pressable,
@@ -30,14 +32,6 @@ type Props = {
   onDismiss: () => void;
 };
 
-function driverInitials(name: string | null | undefined): string {
-  const n = (name ?? '').trim();
-  if (!n) return 'D';
-  const parts = n.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
-  return `${parts[0].slice(0, 1)}${parts[parts.length - 1].slice(0, 1)}`.toUpperCase();
-}
-
 export function ActiveOrderCard({
   order,
   statusLabel,
@@ -54,23 +48,29 @@ export function ActiveOrderCard({
     transform: [{ translateY: (1 - appear.value) * -16 }],
   }));
 
-  const driverCoord = order.driverLocation
-    ? { latitude: order.driverLocation.lat, longitude: order.driverLocation.lng }
-    : null;
-  const restaurantCoord = order.restaurantLocation
-    ? {
-        latitude: order.restaurantLocation.lat,
-        longitude: order.restaurantLocation.lng,
-      }
-    : order.restaurant.latitude != null && order.restaurant.longitude != null
-      ? {
-          latitude: order.restaurant.latitude,
-          longitude: order.restaurant.longitude,
-        }
-      : null;
-  const customerCoord = order.deliveryLocation
-    ? { latitude: order.deliveryLocation.lat, longitude: order.deliveryLocation.lng }
-    : null;
+  const driverCoord = useMemo(
+    () =>
+      stableMapLatLng(order.driverLocation?.lat, order.driverLocation?.lng),
+    [order.driverLocation?.lat, order.driverLocation?.lng],
+  );
+  const restaurantCoord = useMemo(
+    () =>
+      stableMapLatLng(
+        order.restaurantLocation?.lat ?? order.restaurant.latitude,
+        order.restaurantLocation?.lng ?? order.restaurant.longitude,
+      ),
+    [
+      order.restaurantLocation?.lat,
+      order.restaurantLocation?.lng,
+      order.restaurant.latitude,
+      order.restaurant.longitude,
+    ],
+  );
+  const customerCoord = useMemo(
+    () =>
+      stableMapLatLng(order.deliveryLocation?.lat, order.deliveryLocation?.lng),
+    [order.deliveryLocation?.lat, order.deliveryLocation?.lng],
+  );
 
   const route = useLiveDeliveryRoute({
     enabled: true,
@@ -97,28 +97,42 @@ export function ActiveOrderCard({
 
   return (
     <Animated.View style={[styles.wrap, anim]}>
-      <Pressable
-        style={styles.card}
-        onPress={() => {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onOpenTracking();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Open live order tracking"
-      >
-        <View style={styles.mapSlot} pointerEvents="none">
-          <CustomerTrackingMap order={order} />
-          <View style={styles.mapScrim} />
-        </View>
+      <View style={styles.card}>
+        <Pressable
+          style={styles.mapSlot}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onOpenTracking();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open live order tracking"
+        >
+          <CustomerTrackingMap
+            order={order}
+            routeCoordinates={route.coordinates}
+            etaMinutes={route.etaMinutes}
+            lite
+          />
+        </Pressable>
 
-        <View style={styles.body}>
+        <Pressable
+          style={styles.body}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onOpenTracking();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Active order: ${statusLabel}`}
+        >
           <View style={styles.topRow}>
             <View style={styles.driverBlock}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarTxt}>{driverInitials(driverName)}</Text>
+                  <Text style={styles.avatarTxt}>
+                    {driverDisplayInitials(driverName)}
+                  </Text>
                 </View>
               )}
               <View style={styles.titles}>
@@ -142,12 +156,12 @@ export function ActiveOrderCard({
               ) : null}
               <Pressable
                 hitSlop={12}
-                onPress={(e) => {
-                  e.stopPropagation?.();
+                onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   onDismiss();
                 }}
                 style={styles.dismiss}
+                accessibilityRole="button"
                 accessibilityLabel="Minimize active order"
               >
                 <Ionicons name="chevron-down" size={20} color={UE.textMuted} />
@@ -155,8 +169,18 @@ export function ActiveOrderCard({
             </View>
           </View>
 
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+          <View
+            style={styles.progressTrack}
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: Math.round(progress * 100),
+            }}
+          >
+            <View
+              style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]}
+            />
           </View>
 
           {pin ? (
@@ -165,8 +189,8 @@ export function ActiveOrderCard({
               <Text style={styles.pinValue}>{pin}</Text>
             </View>
           ) : null}
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -192,10 +216,6 @@ const styles = StyleSheet.create({
   mapSlot: {
     height: 128,
     backgroundColor: UE.surface,
-  },
-  mapScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
   },
   body: {
     paddingHorizontal: 14,
@@ -264,9 +284,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   dismiss: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: UE.surface,

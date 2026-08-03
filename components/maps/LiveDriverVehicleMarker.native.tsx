@@ -2,8 +2,9 @@ import {
   MAP_Z_DRIVER,
 } from '@/lib/maps/mapMarkerLayers';
 import type { MapLatLng } from '@/lib/maps/liveDriverMarker';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 
 export type LiveDriverVehicleMarkerProps = {
@@ -45,33 +46,19 @@ export function LiveDriverVehicleMarker({
   }, []);
 
   useEffect(() => {
-    if (!primedRef.current) return;
-    // Heading-only chrome refresh — brief tracksViewChanges, then freeze again.
-    setTracksViewChanges(true);
-    const t = setTimeout(() => setTracksViewChanges(false), 400);
-    return () => clearTimeout(t);
-  }, [rotation]);
-
-  useEffect(() => {
+    if (!__DEV__) return;
     console.log('[LIVE DRIVER MARKER UPDATED]', {
-      received: {
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-        heading: rotation,
-      },
-      renderDecision: 'show',
-      reason: null,
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      heading: rotation,
       tracksViewChanges,
-      zIndex,
       animated: Boolean(animatedCoordinate),
-      timestamp: Date.now(),
     });
   }, [
     coordinate.latitude,
     coordinate.longitude,
     rotation,
     tracksViewChanges,
-    zIndex,
     animatedCoordinate,
   ]);
 
@@ -92,10 +79,11 @@ export function LiveDriverVehicleMarker({
       zIndex={zIndex}
       tracksViewChanges={tracksViewChanges}
       pinColor="#16A34A"
+      accessibilityLabel="Driver location"
     >
       <View style={styles.vehicleMarker} pointerEvents="none">
         <View style={styles.vehicleInner}>
-          <Text style={styles.vehicleEmoji}>🚗</Text>
+          <Ionicons name="navigate" size={22} color="#166534" />
         </View>
       </View>
     </MarkerComponent>
@@ -106,9 +94,9 @@ const styles = StyleSheet.create({
   vehicleMarker: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#FFFFFF',
     borderWidth: 2.5,
     borderColor: '#166534',
@@ -128,12 +116,9 @@ const styles = StyleSheet.create({
   vehicleInner: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
-  },
-  vehicleEmoji: {
-    fontSize: 28,
   },
 });

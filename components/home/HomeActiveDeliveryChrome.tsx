@@ -9,10 +9,12 @@ import { ActiveOrderCard } from '@/components/home/ActiveOrderCard';
 import { FloatingTrackingBubble } from '@/components/home/FloatingTrackingBubble';
 import { useHomeActiveDelivery } from '@/hooks/useHomeActiveDelivery';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
+import { driverDisplayInitials } from '@/lib/driverDisplayInitials';
 import {
   readDismissedHomeActiveOrders,
   setHomeActiveOrderDismissed,
 } from '@/lib/homeActiveDeliveryDismiss';
+import { stableMapLatLng } from '@/lib/maps/stableMapLatLng';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -63,21 +65,27 @@ export function HomeActiveDeliveryChrome({ children }: Props) {
 
   const collapsed = Boolean(orderId && dismissedIds.has(orderId));
 
-  const driverCoord = order?.driverLocation
-    ? { latitude: order.driverLocation.lat, longitude: order.driverLocation.lng }
-    : null;
-  const restaurantCoord = order?.restaurantLocation
-    ? {
-        latitude: order.restaurantLocation.lat,
-        longitude: order.restaurantLocation.lng,
-      }
-    : null;
-  const customerCoord = order?.deliveryLocation
-    ? {
-        latitude: order.deliveryLocation.lat,
-        longitude: order.deliveryLocation.lng,
-      }
-    : null;
+  const driverCoord = useMemo(
+    () =>
+      stableMapLatLng(order?.driverLocation?.lat, order?.driverLocation?.lng),
+    [order?.driverLocation?.lat, order?.driverLocation?.lng],
+  );
+  const restaurantCoord = useMemo(
+    () =>
+      stableMapLatLng(
+        order?.restaurantLocation?.lat,
+        order?.restaurantLocation?.lng,
+      ),
+    [order?.restaurantLocation?.lat, order?.restaurantLocation?.lng],
+  );
+  const customerCoord = useMemo(
+    () =>
+      stableMapLatLng(
+        order?.deliveryLocation?.lat,
+        order?.deliveryLocation?.lng,
+      ),
+    [order?.deliveryLocation?.lat, order?.deliveryLocation?.lng],
+  );
 
   const route = useLiveDeliveryRoute({
     enabled: Boolean(order && collapsed),
@@ -103,12 +111,10 @@ export function HomeActiveDeliveryChrome({ children }: Props) {
     typeof order?.driver?.avatar === 'string' ? order.driver.avatar : null;
   const driverName =
     order?.driver?.name?.trim() || order?.driverName?.trim() || 'Driver';
-  const initials = useMemo(() => {
-    const parts = driverName.split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return 'D';
-    if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
-    return `${parts[0].slice(0, 1)}${parts[parts.length - 1].slice(0, 1)}`.toUpperCase();
-  }, [driverName]);
+  const initials = useMemo(
+    () => driverDisplayInitials(driverName),
+    [driverName],
+  );
 
   const etaLabel =
     typeof route.etaMinutes === 'number' && Number.isFinite(route.etaMinutes)

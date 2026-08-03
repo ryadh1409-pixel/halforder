@@ -4,7 +4,7 @@
  */
 import { UE } from '@/constants/uberEatsTheme';
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -13,8 +13,6 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const WINDOW_H = Dimensions.get('window').height;
 
 export type TrackingSheetSnap = 'peek' | 'mid' | 'full';
 
@@ -25,10 +23,10 @@ type Props = {
   onSnapChange?: (snap: TrackingSheetSnap) => void;
 };
 
-function snapsFor(sheetH: number, bottomPad: number) {
+function snapsFor(windowH: number, sheetH: number, bottomPad: number) {
   const peekVisible = 228 + bottomPad;
-  const midVisible = Math.round(WINDOW_H * 0.48);
-  const fullVisible = Math.round(WINDOW_H * 0.88);
+  const midVisible = Math.round(windowH * 0.48);
+  const fullVisible = Math.round(windowH * 0.88);
   return {
     peek: Math.max(0, sheetH - peekVisible),
     mid: Math.max(0, sheetH - midVisible),
@@ -59,9 +57,13 @@ function nearestSnap(
 
 export function TrackingBottomSheet({ children, preferFull = false, onSnapChange }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
   const bottomPad = Math.max(insets.bottom, 12);
-  const sheetH = Math.round(WINDOW_H * 0.92);
-  const points = useMemo(() => snapsFor(sheetH, bottomPad), [sheetH, bottomPad]);
+  const sheetH = Math.round(windowH * 0.92);
+  const points = useMemo(
+    () => snapsFor(windowH, sheetH, bottomPad),
+    [windowH, sheetH, bottomPad],
+  );
 
   const translateY = useSharedValue(points.mid);
   const dragStart = useSharedValue(points.mid);
@@ -115,9 +117,15 @@ export function TrackingBottomSheet({ children, preferFull = false, onSnapChange
         sheetStyle,
       ]}
       pointerEvents="box-none"
+      accessibilityRole="summary"
+      accessibilityLabel="Delivery details"
     >
       <GestureDetector gesture={pan}>
-        <View style={styles.handleHit}>
+        <View
+          style={styles.handleHit}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Drag to resize delivery details"
+        >
           <View style={styles.grabber} />
         </View>
       </GestureDetector>

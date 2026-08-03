@@ -50,11 +50,19 @@ export function DeliveryStatusHeader({
       </View>
 
       {delivered ? (
-        <View style={styles.doneBadge}>
+        <View style={styles.doneBadge} accessibilityRole="text">
           <Text style={styles.doneTxt}>Delivered</Text>
         </View>
       ) : (
-        <View style={styles.track}>
+        <View
+          style={styles.track}
+          accessibilityRole="progressbar"
+          accessibilityValue={{
+            min: 0,
+            max: 100,
+            now: Math.round(pct * 100),
+          }}
+        >
           <View style={[styles.fill, { width: `${Math.round(pct * 100)}%` }]} />
         </View>
       )}

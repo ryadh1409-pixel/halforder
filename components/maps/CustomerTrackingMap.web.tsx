@@ -8,6 +8,7 @@ export function CustomerTrackingMap({
   order: RestaurantOrder;
   routeCoordinates?: { latitude: number; longitude: number }[];
   etaMinutes?: number | null;
+  lite?: boolean;
   e2eCapture?: boolean;
   e2ePhase?: string;
 }) {

@@ -1,3 +1,8 @@
+/**
+ * Canonical live driver marker — position animates via AnimatedRegion;
+ * React state updates only when the displayable fix meaningfully changes
+ * (cuts parent map re-renders without changing GPS business logic).
+ */
 import { haversineDistanceKm } from '@/lib/haversine';
 import {
   driverMarkerAnimationDurationMs,
@@ -6,6 +11,7 @@ import {
   type LiveDriverLocationInput,
   type MapLatLng,
 } from '@/lib/maps/liveDriverMarker';
+import { roundCoordKey } from '@/lib/maps/stableMapLatLng';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 let AnimatedRegionCtor: any = null;
@@ -36,6 +42,11 @@ function toCoord(input: LiveDriverLocationInput): MapLatLng | null {
   });
 }
 
+function headingBucket(deg: number): number {
+  // ~3° buckets — enough for rotation UX without thrashing React.
+  return Math.round(deg / 3) * 3;
+}
+
 /**
  * Retains last known driver GPS and smoothly animates between updates.
  * Shared by Driver / Customer / Admin live maps.
@@ -51,6 +62,13 @@ export function useLiveDriverMarker(
 
   const lastCoordRef = useRef<MapLatLng | null>(toCoord(live));
   const lastHeadingRef = useRef<number>(0);
+  const publishedKeyRef = useRef<string | null>(
+    (() => {
+      const c = toCoord(live);
+      return c ? roundCoordKey(c.latitude, c.longitude) : null;
+    })(),
+  );
+  const publishedHeadingBucketRef = useRef(0);
   const seededRef = useRef(false);
   const animRef = useRef<any>(null);
 
@@ -67,7 +85,6 @@ export function useLiveDriverMarker(
 
     setWaitingForLiveUpdate(false);
     setAwaitingFirstFix(false);
-    setCoordinate(liveCoord);
 
     const nextHeading = resolveDriverMarkerHeading({
       reportedHeading: liveHeading,
@@ -76,7 +93,17 @@ export function useLiveDriverMarker(
       previousHeading: lastHeadingRef.current,
     });
     lastHeadingRef.current = nextHeading;
-    setHeading(nextHeading);
+
+    const key = roundCoordKey(liveCoord.latitude, liveCoord.longitude);
+    const hBucket = headingBucket(nextHeading);
+    if (publishedKeyRef.current !== key) {
+      publishedKeyRef.current = key;
+      setCoordinate(liveCoord);
+    }
+    if (publishedHeadingBucketRef.current !== hBucket) {
+      publishedHeadingBucketRef.current = hBucket;
+      setHeading(nextHeading);
+    }
 
     if (!AnimatedRegionCtor) {
       lastCoordRef.current = liveCoord;

@@ -33,7 +33,7 @@ import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { toMapCoordinate } from '@/lib/location/coordinates';
 import {
   resolveDeliveryCustomerStops,
-  type DeliveryStopSource,
+  restaurantOrderToDeliveryStopSource,
 } from '@/lib/maps/deliveryStops';
 import { UE } from '@/constants/uberEatsTheme';
 import { formatOrderDateTimeAbsolute } from '@/utils/time';
@@ -225,28 +225,7 @@ function TrackOrderScreen() {
 
   const sharedRouteWaypoints = useMemo(() => {
     if (!order) return [] as { latitude: number; longitude: number }[];
-    const source: DeliveryStopSource = {
-      id: order.id,
-      groupId: order.groupId,
-      status: order.status,
-      deliveryStatus: order.deliveryStatus,
-      restaurantName: order.restaurant?.name ?? null,
-      restaurantLocation: order.restaurantLocation,
-      customerName: order.customer?.name ?? null,
-      customerLocation:
-        order.customerLocation ?? order.deliveryLocation ?? order.userLocation,
-      deliveryAddress: order.deliveryAddress,
-      deliveryStops: (order as { deliveryStops?: unknown }).deliveryStops,
-      dropoffs: (order as { dropoffs?: unknown }).dropoffs,
-      customers: (order as { customers?: unknown }).customers,
-      dropoffLat: (order as { dropoffLat?: number | null }).dropoffLat ?? null,
-      dropoffLng: (order as { dropoffLng?: number | null }).dropoffLng ?? null,
-      dropoffName: (order as { dropoffName?: string | null }).dropoffName ?? null,
-      pickupName: (order as { pickupName?: string | null }).pickupName ?? null,
-      pickupLat: (order as { pickupLat?: number | null }).pickupLat ?? null,
-      pickupLng: (order as { pickupLng?: number | null }).pickupLng ?? null,
-      createdAtMs: order.createdAtMs,
-    };
+    const source = restaurantOrderToDeliveryStopSource(order);
     const stops = resolveDeliveryCustomerStops(source, siblingStops);
     if (!customerCoord) {
       return stops.slice(1).map((s) => s.coordinate);
