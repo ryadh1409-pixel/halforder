@@ -14,7 +14,7 @@ export function activeDeliveryToDriverOrder(row: ActiveDelivery): DriverOrder {
 
   return {
     id: row.id,
-    groupId: null,
+    groupId: row.groupId ?? null,
     restaurantId: null,
     deliveryStatus,
     expired: false,
@@ -34,8 +34,8 @@ export function activeDeliveryToDriverOrder(row: ActiveDelivery): DriverOrder {
     restaurantLat: row.restaurantLocation?.lat ?? null,
     restaurantLng: row.restaurantLocation?.lng ?? null,
     deliveryAddress: row.deliveryAddress,
-    deliveryLat: row.customerLocation?.lat ?? null,
-    deliveryLng: row.customerLocation?.lng ?? null,
+    deliveryLat: row.dropoffLat ?? row.customerLocation?.lat ?? null,
+    deliveryLng: row.dropoffLng ?? row.customerLocation?.lng ?? null,
     notes: row.notes,
     restaurantLocation: row.restaurantLocation,
     customerLocation: row.customerLocation,
@@ -50,5 +50,11 @@ export function activeDeliveryToDriverOrder(row: ActiveDelivery): DriverOrder {
     assignedDriverId: row.assignedDriverId,
     marketplaceArchived: false,
     earningsRecorded: false,
+    dropoffName: row.dropoffName,
+    dropoffLat: row.dropoffLat,
+    dropoffLng: row.dropoffLng,
+    pickupName: row.pickupName,
+    pickupLat: row.pickupLat,
+    pickupLng: row.pickupLng,
   };
 }

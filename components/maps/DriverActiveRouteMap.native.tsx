@@ -4,6 +4,12 @@ import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
+import {
+  activeDeliveryToStopSource,
+  resolveActiveCustomerStop,
+  resolveDeliveryCustomerStops,
+  resolveDeliveryRestaurantStop,
+} from '@/lib/maps/deliveryStops';
 import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import { haversineDistanceKm } from '@/lib/haversine';
@@ -15,6 +21,8 @@ import MapView, { Marker, Polyline } from 'react-native-maps';
 export type DriverActiveRouteMapProps = {
   mapRef: React.RefObject<unknown>;
   order: ActiveDelivery;
+  /** Same-group / shared-batch siblings for multi-customer stops. */
+  siblingOrders?: ActiveDelivery[];
   currentLocation: DeliveryLocation | null;
   points: { latitude: number; longitude: number }[];
 };
@@ -55,12 +63,16 @@ function extractLiveInput(
 export function DriverActiveRouteMap({
   mapRef,
   order,
+  siblingOrders = [],
   currentLocation,
   points,
 }: DriverActiveRouteMapProps) {
   const localMapRef = useRef<MapView | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [followDriver, setFollowDriver] = useState(true);
+  const cameraPhaseRef = useRef<'overview' | 'follow'>('overview');
+  const lastFollowCoordRef = useRef<MapLatLng | null>(null);
+  const lastOverviewKeyRef = useRef<string>('');
 
   const routeLeg = useMemo(() => {
     if (!order) return 'to_restaurant' as const;
@@ -94,27 +106,59 @@ export function DriverActiveRouteMap({
     animatedCoordinate,
   } = useLiveDriverMarker(liveInput);
 
-  const restaurantCoord = useMemo(
-    () => toLatLng(order?.restaurantLocation ?? null),
-    [order?.restaurantLocation],
+  const stopSources = useMemo(() => {
+    const primary = activeDeliveryToStopSource(order);
+    const siblings = siblingOrders.map(activeDeliveryToStopSource);
+    return { primary, siblings };
+  }, [order, siblingOrders]);
+
+  const restaurantStop = useMemo(
+    () => resolveDeliveryRestaurantStop(stopSources.primary),
+    [stopSources.primary],
   );
 
-  const customerCoord = useMemo(
-    () => toLatLng(order?.customerLocation ?? null),
-    [order?.customerLocation],
+  const customerStops = useMemo(
+    () => resolveDeliveryCustomerStops(stopSources.primary, stopSources.siblings),
+    [stopSources.primary, stopSources.siblings],
   );
+
+  const activeCustomer = useMemo(
+    () =>
+      resolveActiveCustomerStop(
+        customerStops,
+        order.firestoreDeliveryStatus || order.marketplaceCourierStatus,
+        order.status,
+      ),
+    [
+      customerStops,
+      order.firestoreDeliveryStatus,
+      order.marketplaceCourierStatus,
+      order.status,
+    ],
+  );
+
+  const restaurantCoord = restaurantStop?.coordinate ?? null;
+  const destinationCoord =
+    routeLeg === 'to_customer'
+      ? activeCustomer?.coordinate ?? null
+      : restaurantCoord;
+
+  const remainingCustomerCoords = useMemo(() => {
+    if (routeLeg !== 'to_customer' || !activeCustomer) return [];
+    return customerStops
+      .filter((s) => !s.delivered && s.id !== activeCustomer.id)
+      .map((s) => s.coordinate);
+  }, [routeLeg, activeCustomer, customerStops]);
 
   const liveRoute = useLiveDeliveryRoute({
     restaurant: restaurantCoord,
     driver: driverCoord,
-    customer: customerCoord,
-    enabled: Boolean(driverCoord && (restaurantCoord || customerCoord)),
+    customer: activeCustomer?.coordinate ?? customerStops[0]?.coordinate ?? null,
+    remainingCustomers: remainingCustomerCoords,
+    enabled: Boolean(driverCoord && (restaurantCoord || customerStops.length > 0)),
     deliveryStatus: order?.firestoreDeliveryStatus || order?.marketplaceCourierStatus,
     kitchenStatus: order?.status,
   });
-
-  const destinationCoord =
-    routeLeg === 'to_customer' ? customerCoord : restaurantCoord;
 
   const routePoints = useMemo(() => {
     if (liveRoute.coordinates.length >= 2) {
@@ -123,6 +167,7 @@ export function DriverActiveRouteMap({
     const list: MapLatLng[] = [];
     if (driverCoord) list.push(driverCoord);
     if (destinationCoord) list.push(destinationCoord);
+    for (const c of remainingCustomerCoords) list.push(c);
     if (list.length >= 2) return list;
     return (points ?? []).filter(
       (p) =>
@@ -130,12 +175,8 @@ export function DriverActiveRouteMap({
         Number.isFinite(p.latitude) &&
         Number.isFinite(p.longitude),
     );
-  }, [liveRoute.coordinates, driverCoord, destinationCoord, points]);
+  }, [liveRoute.coordinates, driverCoord, destinationCoord, remainingCustomerCoords, points]);
 
-  /**
-   * Fit Driver + Restaurant + Customer whenever available so the whole trip
-   * is visible (Uber Eats–style), not only the active leg.
-   */
   const fitPoints = useMemo(() => {
     const list: MapLatLng[] = [];
     const pushUnique = (c: MapLatLng | null | undefined) => {
@@ -153,24 +194,28 @@ export function DriverActiveRouteMap({
     };
     pushUnique(driverCoord);
     pushUnique(restaurantCoord);
-    pushUnique(customerCoord);
+    for (const stop of customerStops) pushUnique(stop.coordinate);
     if (list.length >= 1) return list;
     if (routePoints.length > 0) return routePoints;
     return list;
-  }, [driverCoord, restaurantCoord, customerCoord, routePoints]);
+  }, [driverCoord, restaurantCoord, customerStops, routePoints]);
 
-  const missingStops = !restaurantCoord || !customerCoord;
+  const overviewKey = useMemo(() => {
+    const destId = activeCustomer?.id ?? routeLeg;
+    const stopSig = customerStops.map((s) => s.id).join(',');
+    return `${routeLeg}:${destId}:${stopSig}:${customerStops.length}`;
+  }, [routeLeg, activeCustomer?.id, customerStops]);
 
-  /** `overview` = one-shot fit of trip markers; `follow` = track the car only. */
-  const cameraPhaseRef = useRef<'overview' | 'follow'>('overview');
-  const lastFollowCoordRef = useRef<MapLatLng | null>(null);
+  const missingStops = !restaurantCoord || customerStops.length === 0;
 
-  // Destination switch (pickup → delivery): one overview fit, then follow again.
   useEffect(() => {
-    setFollowDriver(true);
-    cameraPhaseRef.current = 'overview';
-    lastFollowCoordRef.current = null;
-  }, [routeLeg]);
+    if (overviewKey !== lastOverviewKeyRef.current) {
+      lastOverviewKeyRef.current = overviewKey;
+      setFollowDriver(true);
+      cameraPhaseRef.current = 'overview';
+      lastFollowCoordRef.current = null;
+    }
+  }, [overviewKey]);
 
   useEffect(() => {
     const map = (mapRef?.current as MapView | null) ?? localMapRef.current;
@@ -178,9 +223,7 @@ export function DriverActiveRouteMap({
 
     try {
       if (cameraPhaseRef.current === 'overview') {
-        // Wait until at least two trip points exist (e.g. Driver+Restaurant, or R+C).
         if (fitPoints.length < 2) return;
-
         fitMapToCoordinates(map as never, fitPoints, {
           top: 56,
           right: 48,
@@ -192,7 +235,6 @@ export function DriverActiveRouteMap({
         return;
       }
 
-      // Follow mode — center on the vehicle only; never refit all markers.
       if (!driverCoord) return;
       const prev = lastFollowCoordRef.current;
       if (prev) {
@@ -202,7 +244,6 @@ export function DriverActiveRouteMap({
           driverCoord.latitude,
           driverCoord.longitude,
         );
-        // Ignore tiny GPS jitter so the camera doesn't jump.
         if (movedKm < 0.012) return;
       }
       lastFollowCoordRef.current = driverCoord;
@@ -223,9 +264,7 @@ export function DriverActiveRouteMap({
     followDriver,
     fitPoints,
     driverCoord,
-    restaurantCoord,
-    customerCoord,
-    routeLeg,
+    overviewKey,
     mapRef,
   ]);
 
@@ -237,7 +276,7 @@ export function DriverActiveRouteMap({
   };
 
   const hasAnyCoord = Boolean(
-    driverCoord || restaurantCoord || customerCoord || routePoints.length > 0,
+    driverCoord || restaurantCoord || customerStops.length > 0 || routePoints.length > 0,
   );
 
   if (!hasAnyCoord) {
@@ -254,7 +293,7 @@ export function DriverActiveRouteMap({
     fitPoints[0] ??
     routePoints[0] ??
     restaurantCoord ??
-    customerCoord ??
+    customerStops[0]?.coordinate ??
     driverCoord ??
     null;
 
@@ -276,7 +315,7 @@ export function DriverActiveRouteMap({
     awaitingFirstFix || waitingForLiveUpdate || missingStops;
 
   const waitingMessage = missingStops
-    ? !restaurantCoord && !customerCoord
+    ? !restaurantCoord && customerStops.length === 0
       ? 'Waiting for restaurant and customer locations…'
       : !restaurantCoord
         ? 'Waiting for restaurant location…'
@@ -301,31 +340,41 @@ export function DriverActiveRouteMap({
         showsMyLocationButton={false}
         toolbarEnabled={false}
       >
-        {restaurantCoord ? (
+        {restaurantStop ? (
           <Marker
-            coordinate={restaurantCoord}
-            title="Restaurant"
-            description="Pickup"
+            coordinate={restaurantStop.coordinate}
+            title={`🍴 ${restaurantStop.label}`}
+            description="Restaurant · Pickup"
             pinColor="#F59E0B"
             zIndex={10}
           />
         ) : null}
 
-        {customerCoord ? (
-          <Marker
-            coordinate={customerCoord}
-            title="Customer"
-            description="Dropoff"
-            pinColor="#2563EB"
-            zIndex={10}
-          />
-        ) : null}
+        {customerStops.map((stop, index) => {
+          const isActive =
+            routeLeg === 'to_customer' && activeCustomer?.id === stop.id;
+          return (
+            <Marker
+              key={stop.id}
+              coordinate={stop.coordinate}
+              title={`🏠 ${stop.label}`}
+              description={
+                isActive
+                  ? `Customer ${index + 1} · Current dropoff`
+                  : `Customer ${index + 1} · Dropoff`
+              }
+              pinColor={isActive ? '#16A34A' : '#2563EB'}
+              zIndex={isActive ? 20 : 12}
+              opacity={stop.delivered ? 0.45 : 1}
+            />
+          );
+        })}
 
         {driverCoord ? (
           <LiveDriverVehicleMarker
             coordinate={driverCoord}
             heading={driverHeading}
-            title="You"
+            title="🚗 You"
             animatedCoordinate={animatedCoordinate}
           />
         ) : null}

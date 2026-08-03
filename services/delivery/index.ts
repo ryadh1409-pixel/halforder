@@ -159,6 +159,20 @@ export type ActiveDelivery = DeliveryQueueOrder & {
   timeline: { type: string; actor: string; at: number | null; note: string | null }[];
   driverName: string | null;
   driverPhone: string | null;
+  /** Shared-batch id when present (marketplace group / food-share). */
+  groupId: string | null;
+  customerName: string | null;
+  /** Food-share / swipe fields already stored on orders. */
+  dropoffName: string | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
+  pickupName: string | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  /** Forward-compatible stop lists when present on the doc. */
+  deliveryStops: unknown;
+  dropoffs: unknown;
+  customers: unknown;
 };
 
 function parseLatLng(value: unknown): LatLng | null {
@@ -455,6 +469,29 @@ function mapActiveDelivery(
           : null,
       ) ??
       parseLatLng(data.customerLocation),
+    groupId: typeof data.groupId === 'string' ? data.groupId : null,
+    customerName: pickNonEmptyString(data.customerName, data.dropoffName),
+    dropoffName: pickNonEmptyString(data.dropoffName),
+    dropoffLat:
+      typeof data.dropoffLat === 'number' && Number.isFinite(data.dropoffLat)
+        ? data.dropoffLat
+        : null,
+    dropoffLng:
+      typeof data.dropoffLng === 'number' && Number.isFinite(data.dropoffLng)
+        ? data.dropoffLng
+        : null,
+    pickupName: pickNonEmptyString(data.pickupName),
+    pickupLat:
+      typeof data.pickupLat === 'number' && Number.isFinite(data.pickupLat)
+        ? data.pickupLat
+        : null,
+    pickupLng:
+      typeof data.pickupLng === 'number' && Number.isFinite(data.pickupLng)
+        ? data.pickupLng
+        : null,
+    deliveryStops: data.deliveryStops ?? null,
+    dropoffs: data.dropoffs ?? null,
+    customers: data.customers ?? null,
     driverLocation: (() => {
       const parsed = parseLatLng(data.driverLocation);
       if (!parsed || !data.driverLocation || typeof data.driverLocation !== 'object') {

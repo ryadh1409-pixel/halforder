@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 export type DriverActiveRouteMapProps = {
   mapRef: React.RefObject<unknown>;
   order: ActiveDelivery;
+  siblingOrders?: ActiveDelivery[];
   currentLocation: DeliveryLocation | null;
   points: { latitude: number; longitude: number }[];
 };

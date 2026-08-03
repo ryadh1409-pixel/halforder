@@ -30,16 +30,21 @@ function pointKey(p: LatLngLiteral | null | undefined): string {
   return `${roundCoord(p.latitude)},${roundCoord(p.longitude)}`;
 }
 
+function waypointsKey(points: LatLngLiteral[]): string {
+  return points.map(pointKey).join('|');
+}
+
 /**
  * Live Google Directions for the active delivery leg:
  * - before pickup: Driver → Restaurant
- * - after pickup: Driver → Customer
- * Falls back to a straight path + haversine ETA when Directions fails.
+ * - after pickup: Driver → current customer (optional remaining customers as waypoints)
  */
 export function useLiveDeliveryRoute(params: {
   restaurant: LatLngLiteral | null;
   driver: LatLngLiteral | null;
   customer: LatLngLiteral | null;
+  /** Remaining customer stops after the active destination (shared deliveries). */
+  remainingCustomers?: LatLngLiteral[];
   enabled?: boolean;
   deliveryStatus?: unknown;
   kitchenStatus?: unknown;
@@ -48,6 +53,7 @@ export function useLiveDeliveryRoute(params: {
     restaurant,
     driver,
     customer,
+    remainingCustomers = [],
     enabled = true,
     deliveryStatus,
     kitchenStatus,
@@ -56,10 +62,11 @@ export function useLiveDeliveryRoute(params: {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const lastFetchRef = useRef<{ at: number; driverKey: string; leg: string }>({
+  const lastFetchRef = useRef<{ at: number; driverKey: string; leg: string; wp: string }>({
     at: 0,
     driverKey: '',
     leg: '',
+    wp: '',
   });
 
   const routeLeg = useMemo(
@@ -68,21 +75,28 @@ export function useLiveDeliveryRoute(params: {
   );
 
   const destination = routeLeg === 'to_customer' ? customer : restaurant;
+  const waypoints =
+    routeLeg === 'to_customer' && remainingCustomers.length > 0
+      ? remainingCustomers
+      : [];
 
   const fallbackPath = useMemo(() => {
     const pts: LatLngLiteral[] = [];
     if (driver) pts.push(driver);
     if (destination) pts.push(destination);
+    for (const wp of waypoints) pts.push(wp);
     if (pts.length >= 2) return pts;
-    // Before driver GPS: show restaurant ↔ customer context.
     if (restaurant) pts.push(restaurant);
     if (customer && (!restaurant || customer !== restaurant)) pts.push(customer);
+    for (const wp of remainingCustomers) pts.push(wp);
     return pts;
   }, [
     pointKey(driver),
     pointKey(destination),
     pointKey(restaurant),
     pointKey(customer),
+    waypointsKey(waypoints),
+    waypointsKey(remainingCustomers),
     routeLeg,
   ]);
 
@@ -131,6 +145,7 @@ export function useLiveDeliveryRoute(params: {
     }
 
     const driverKey = pointKey(driver);
+    const wpKey = waypointsKey(waypoints);
     const now = Date.now();
     const prev = lastFetchRef.current;
     let movedEnough = true;
@@ -148,12 +163,14 @@ export function useLiveDeliveryRoute(params: {
     }
     const intervalElapsed = now - prev.at >= REFETCH_INTERVAL_MS;
     const legChanged = prev.leg !== routeLeg;
+    const waypointsChanged = prev.wp !== wpKey;
     const shouldFetch =
       prev.at === 0 ||
       movedEnough ||
       intervalElapsed ||
       prev.driverKey !== driverKey ||
-      legChanged;
+      legChanged ||
+      waypointsChanged;
 
     if (!shouldFetch && coordinates.length >= 2) {
       setDistanceKm(fallbackMetrics.distanceKm);
@@ -188,18 +205,38 @@ export function useLiveDeliveryRoute(params: {
         const result = await fetchDirections({
           origin,
           destination: dest,
+          waypoints: waypoints.length > 0 ? waypoints : undefined,
           mode: 'driving',
         });
         if (cancelled) return;
-        lastFetchRef.current = { at: Date.now(), driverKey, leg: routeLeg };
+        lastFetchRef.current = {
+          at: Date.now(),
+          driverKey,
+          leg: routeLeg,
+          wp: wpKey,
+        };
         setCoordinates(
           result.coordinates.length >= 2 ? result.coordinates : fallbackPath,
         );
-        setDistanceKm(result.distanceMeters / 1000);
-        setEtaMinutes(Math.max(1, Math.round(result.durationSeconds / 60)));
+        // ETA to the active destination = first leg when waypoints exist.
+        const firstLeg = result.legs[0];
+        setDistanceKm(
+          (firstLeg?.distanceMeters ?? result.distanceMeters) / 1000,
+        );
+        setEtaMinutes(
+          Math.max(
+            1,
+            Math.round((firstLeg?.durationSeconds ?? result.durationSeconds) / 60),
+          ),
+        );
       } catch {
         if (cancelled) return;
-        lastFetchRef.current = { at: Date.now(), driverKey, leg: routeLeg };
+        lastFetchRef.current = {
+          at: Date.now(),
+          driverKey,
+          leg: routeLeg,
+          wp: wpKey,
+        };
         setCoordinates(fallbackPath);
         setDistanceKm(fallbackMetrics.distanceKm);
         setEtaMinutes(fallbackMetrics.etaMinutes);
@@ -218,6 +255,7 @@ export function useLiveDeliveryRoute(params: {
     pointKey(restaurant),
     pointKey(driver),
     pointKey(customer),
+    waypointsKey(waypoints),
     routeLeg,
     fallbackMetrics.distanceKm,
     fallbackMetrics.etaMinutes,

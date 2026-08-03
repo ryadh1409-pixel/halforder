@@ -14,6 +14,7 @@ import {
 import { deliveryMapLegFromStatuses } from '@/lib/maps/deliveryRouteStage';
 import { marketplaceDeliveryStatusLabel } from '@/lib/canonicalDeliveryStage';
 import { useDriverActiveOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
+import { useOptionalDriverActiveOrdersFeed } from '@/contexts/DriverActiveOrdersContext';
 import { useActiveDelivery } from '@/hooks/useActiveDelivery';
 import { useDriverLocationTracking } from '@/hooks/useDriverLocationTracking';
 import { useAuth } from '@/services/AuthContext';
@@ -63,6 +64,16 @@ export default function DriverActiveDeliveryDetailsScreen() {
   const [exitingToHub, setExitingToHub] = useState(false);
   const listenersEnabled = !exitingToHub;
   const { order, loading } = useActiveDelivery(id, user?.uid, { enabled: listenersEnabled });
+  const activeOrdersFeed = useOptionalDriverActiveOrdersFeed();
+
+  const siblingOrders = useMemo(() => {
+    if (!order || !activeOrdersFeed?.orders?.length) return [];
+    const gid = order.groupId?.trim();
+    if (!gid) return [];
+    return activeOrdersFeed.orders.filter(
+      (row) => row.id !== order.id && row.groupId === gid,
+    );
+  }, [order, activeOrdersFeed?.orders]);
   const [busy, setBusy] = useState(false);
   const mapRef = useRef<unknown>(null);
   const [customerCallPhone, setCustomerCallPhone] = useState<string | null>(null);
@@ -345,6 +356,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
             <DriverActiveRouteMap
               mapRef={mapRef}
               order={order}
+              siblingOrders={siblingOrders}
               currentLocation={driverLocationForMap}
               points={points}
             />

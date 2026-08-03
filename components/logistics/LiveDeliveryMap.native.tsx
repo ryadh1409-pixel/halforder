@@ -23,6 +23,7 @@ function LiveDeliveryMapInner({
   polylineCoords,
   restaurant,
   dropoff,
+  extraDropoffs = [],
   driver,
   driverHeading,
   dark = true,
@@ -54,11 +55,12 @@ function LiveDeliveryMapInner({
       collectMapCoordinates(
         restaurant ? { latitude: restaurant.latitude, longitude: restaurant.longitude } : null,
         dropoff ? { latitude: dropoff.latitude, longitude: dropoff.longitude } : null,
+        ...extraDropoffs.map((s) => s.coordinate),
         displayDriver
           ? { latitude: displayDriver.latitude, longitude: displayDriver.longitude }
           : null,
       ),
-    [restaurant, dropoff, displayDriver],
+    [restaurant, dropoff, extraDropoffs, displayDriver],
   );
 
   useEffect(() => {
@@ -107,6 +109,16 @@ function LiveDeliveryMapInner({
             <Pin color="#38BDF8" glyph="📍" />
           </Marker>
         ) : null}
+        {extraDropoffs.map((stop) => (
+          <Marker
+            key={stop.id}
+            coordinate={stop.coordinate}
+            title={stop.title}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <Pin color="#2563EB" glyph="🏠" />
+          </Marker>
+        ))}
         {displayDriver ? (
           <LiveDriverVehicleMarker
             coordinate={displayDriver}

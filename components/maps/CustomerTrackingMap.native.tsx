@@ -11,6 +11,11 @@ import { collectMapCoordinates, toMapCoordinate } from '@/lib/location/coordinat
 import { fitMapToCoordinates, areMapCoordinatesDistinct } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
 import { haversineDistanceKm } from '@/lib/haversine';
+import { useGroupDeliverySiblingStops } from '@/hooks/useGroupDeliverySiblingStops';
+import {
+  resolveDeliveryCustomerStops,
+  type DeliveryStopSource,
+} from '@/lib/maps/deliveryStops';
 import type { RestaurantOrder } from '@/services/orderService';
 import { Ionicons } from '@expo/vector-icons';
 import React, {
@@ -96,6 +101,7 @@ const PIN_DRIVER     = '#7C3AED'; // purple
 function TrackingMapInner({
   restaurant,
   dropoff,
+  extraCustomerStops = [],
   driver,
   driverHeading,
   routeCoordinates,
@@ -105,6 +111,8 @@ function TrackingMapInner({
 }: {
   restaurant:       LatLng | null;
   dropoff:          LatLng | null;
+  /** Other shared-delivery customers (excluding the viewer's home when possible). */
+  extraCustomerStops?: { id: string; coordinate: LatLng; title: string }[];
   driver:           LatLng | null;
   driverHeading:    number | null;
   routeCoordinates: LatLng[];
@@ -167,9 +175,18 @@ function TrackingMapInner({
   // ── Marker definitions ─────────────────────────────────────────────────────
   const markers = useMemo(() => {
     const list: { id: string; coordinate: LatLng; title: string; pinColor: string; zIndex: number }[] = [];
-    if (restaurant) list.push({ id: 'restaurant', coordinate: restaurant, title: 'Restaurant', pinColor: PIN_RESTAURANT, zIndex: 10 });
-    if (dropoff)    list.push({ id: 'home',       coordinate: dropoff,    title: 'Your home',  pinColor: PIN_HOME,       zIndex: 10 });
-    if (displayDriver) list.push({ id: 'driver', coordinate: displayDriver, title: 'Driver', pinColor: PIN_DRIVER, zIndex: 20 });
+    if (restaurant) list.push({ id: 'restaurant', coordinate: restaurant, title: '🍴 Restaurant', pinColor: PIN_RESTAURANT, zIndex: 10 });
+    if (dropoff)    list.push({ id: 'home',       coordinate: dropoff,    title: '🏠 Your home',  pinColor: PIN_HOME,       zIndex: 10 });
+    for (const stop of extraCustomerStops) {
+      list.push({
+        id: stop.id,
+        coordinate: stop.coordinate,
+        title: `🏠 ${stop.title}`,
+        pinColor: '#2563EB',
+        zIndex: 11,
+      });
+    }
+    if (displayDriver) list.push({ id: 'driver', coordinate: displayDriver, title: '🚗 Driver', pinColor: PIN_DRIVER, zIndex: 20 });
     console.log('[TrackingMap] markers.length =', list.length);
     console.log('[TrackingMap] markers[] =', list.map((m) => ({
       id: m.id,
@@ -178,11 +195,16 @@ function TrackingMapInner({
       lng: m.coordinate.longitude,
     })));
     return list;
-  }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, displayDriver?.latitude, displayDriver?.longitude]);
+  }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, displayDriver?.latitude, displayDriver?.longitude, extraCustomerStops]);
 
   const markerPoints = useMemo(
-    () => collectMapCoordinates(restaurant, dropoff, displayDriver),
-    [restaurant, dropoff, displayDriver],
+    () => collectMapCoordinates(
+      restaurant,
+      dropoff,
+      displayDriver,
+      ...extraCustomerStops.map((s) => s.coordinate),
+    ),
+    [restaurant, dropoff, displayDriver, extraCustomerStops],
   );
 
   const fitPoints = useMemo(() => {
@@ -564,6 +586,66 @@ export function CustomerTrackingMap({
       ? order.driverLocation.heading
       : null;
 
+  const siblingStops = useGroupDeliverySiblingStops(order.groupId, order.id);
+
+  const sharedCustomerStops = useMemo(() => {
+    const source: DeliveryStopSource = {
+      id: order.id,
+      groupId: order.groupId,
+      status: order.status,
+      deliveryStatus: order.deliveryStatus,
+      restaurantName: order.restaurant?.name ?? null,
+      restaurantLocation: order.restaurantLocation,
+      customerName: order.customer?.name ?? null,
+      customerLocation: order.customerLocation ?? order.deliveryLocation ?? order.userLocation,
+      deliveryAddress: order.deliveryAddress,
+      deliveryStops: (order as { deliveryStops?: unknown }).deliveryStops,
+      dropoffs: (order as { dropoffs?: unknown }).dropoffs,
+      customers: (order as { customers?: unknown }).customers,
+      dropoffLat: (order as { dropoffLat?: number | null }).dropoffLat ?? null,
+      dropoffLng: (order as { dropoffLng?: number | null }).dropoffLng ?? null,
+      dropoffName: (order as { dropoffName?: string | null }).dropoffName ?? null,
+      pickupName: (order as { pickupName?: string | null }).pickupName ?? null,
+      pickupLat: (order as { pickupLat?: number | null }).pickupLat ?? null,
+      pickupLng: (order as { pickupLng?: number | null }).pickupLng ?? null,
+      createdAtMs: order.createdAtMs,
+    };
+    const stops = resolveDeliveryCustomerStops(source, siblingStops);
+    return stops
+      .filter((stop) => {
+        if (!dropoff) return true;
+        const dlat = Math.abs(stop.coordinate.latitude - dropoff.latitude);
+        const dlng = Math.abs(stop.coordinate.longitude - dropoff.longitude);
+        return dlat > 1e-5 || dlng > 1e-5;
+      })
+      .map((stop) => ({
+        id: stop.id,
+        coordinate: stop.coordinate,
+        title: stop.label,
+      }));
+  }, [
+    order.id,
+    order.groupId,
+    order.status,
+    order.deliveryStatus,
+    order.restaurant?.name,
+    order.restaurantLocation,
+    order.customer?.name,
+    order.customerLocation,
+    order.deliveryLocation,
+    order.userLocation,
+    order.deliveryAddress,
+    order.createdAtMs,
+    siblingStops,
+    dropoff?.latitude,
+    dropoff?.longitude,
+  ]);
+
+  const remainingForRoute = useMemo(
+    () => sharedCustomerStops.map((s) => s.coordinate),
+    [sharedCustomerStops],
+  );
+
   // ── Per-marker include/exclude audit (data investigation) ──────────────────
   useEffect(() => {
     const deliveryIsNullIsland =
@@ -681,6 +763,7 @@ export function CustomerTrackingMap({
     restaurant,
     driver,
     customer: dropoff,
+    remainingCustomers: remainingForRoute,
     enabled: prop == null,
     deliveryStatus: order.deliveryStatus,
     kitchenStatus: order.status,
@@ -699,6 +782,7 @@ export function CustomerTrackingMap({
         key={order.id}
         restaurant={restaurant}
         dropoff={dropoff}
+        extraCustomerStops={sharedCustomerStops}
         driver={driver}
         driverHeading={driverHeading}
         routeCoordinates={routeCoordinates}

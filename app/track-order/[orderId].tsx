@@ -25,8 +25,13 @@ import {
   type RestaurantOrder,
 } from '@/services/orderService';
 import { useCustomerOrderLifecycleAlert } from '@/hooks/useOrderLifecycleAlerts';
+import { useGroupDeliverySiblingStops } from '@/hooks/useGroupDeliverySiblingStops';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
 import { toMapCoordinate } from '@/lib/location/coordinates';
+import {
+  resolveDeliveryCustomerStops,
+  type DeliveryStopSource,
+} from '@/lib/maps/deliveryStops';
 import { formatOrderDateTimeAbsolute } from '@/utils/time';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -238,10 +243,50 @@ function TrackOrderScreen() {
   const driverCoord =
     order?.driverLocation != null ? toMapCoordinate(order.driverLocation) : null;
 
+  const siblingStops = useGroupDeliverySiblingStops(order?.groupId, order?.id);
+
+  const sharedRouteWaypoints = useMemo(() => {
+    if (!order) return [] as { latitude: number; longitude: number }[];
+    const source: DeliveryStopSource = {
+      id: order.id,
+      groupId: order.groupId,
+      status: order.status,
+      deliveryStatus: order.deliveryStatus,
+      restaurantName: order.restaurant?.name ?? null,
+      restaurantLocation: order.restaurantLocation,
+      customerName: order.customer?.name ?? null,
+      customerLocation:
+        order.customerLocation ?? order.deliveryLocation ?? order.userLocation,
+      deliveryAddress: order.deliveryAddress,
+      deliveryStops: (order as { deliveryStops?: unknown }).deliveryStops,
+      dropoffs: (order as { dropoffs?: unknown }).dropoffs,
+      customers: (order as { customers?: unknown }).customers,
+      dropoffLat: (order as { dropoffLat?: number | null }).dropoffLat ?? null,
+      dropoffLng: (order as { dropoffLng?: number | null }).dropoffLng ?? null,
+      dropoffName: (order as { dropoffName?: string | null }).dropoffName ?? null,
+      pickupName: (order as { pickupName?: string | null }).pickupName ?? null,
+      pickupLat: (order as { pickupLat?: number | null }).pickupLat ?? null,
+      pickupLng: (order as { pickupLng?: number | null }).pickupLng ?? null,
+      createdAtMs: order.createdAtMs,
+    };
+    const stops = resolveDeliveryCustomerStops(source, siblingStops);
+    if (!customerCoord) {
+      return stops.slice(1).map((s) => s.coordinate);
+    }
+    return stops
+      .filter((stop) => {
+        const dlat = Math.abs(stop.coordinate.latitude - customerCoord.latitude);
+        const dlng = Math.abs(stop.coordinate.longitude - customerCoord.longitude);
+        return dlat > 1e-5 || dlng > 1e-5;
+      })
+      .map((s) => s.coordinate);
+  }, [order, siblingStops, customerCoord]);
+
   const liveRoute = useLiveDeliveryRoute({
     restaurant: restaurantCoord,
     driver: driverCoord,
     customer: customerCoord,
+    remainingCustomers: sharedRouteWaypoints,
     enabled: !!order && !delivered,
     deliveryStatus: order?.deliveryStatus,
     kitchenStatus: order?.status,
