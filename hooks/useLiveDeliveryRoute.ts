@@ -1,5 +1,9 @@
 import { haversineDistanceKm } from '@/lib/haversine';
 import {
+  deliveryMapLegFromStatuses,
+  type DeliveryMapLeg,
+} from '@/lib/maps/deliveryRouteStage';
+import {
   estimateEtaFromDistanceKm,
   fetchDirections,
   type LatLngLiteral,
@@ -11,6 +15,7 @@ export type LiveDeliveryRouteMetrics = {
   distanceKm: number | null;
   etaMinutes: number | null;
   loading: boolean;
+  routeLeg: DeliveryMapLeg;
 };
 
 const REFETCH_MIN_MOVE_KM = 0.08;
@@ -26,68 +31,93 @@ function pointKey(p: LatLngLiteral | null | undefined): string {
 }
 
 /**
- * Live Google Directions route Restaurant → Driver → Customer plus ETA/distance.
- * Falls back to a straight multi-stop path + haversine ETA when Directions fails.
+ * Live Google Directions for the active delivery leg:
+ * - before pickup: Driver → Restaurant
+ * - after pickup: Driver → Customer
+ * Falls back to a straight path + haversine ETA when Directions fails.
  */
 export function useLiveDeliveryRoute(params: {
   restaurant: LatLngLiteral | null;
   driver: LatLngLiteral | null;
   customer: LatLngLiteral | null;
   enabled?: boolean;
+  deliveryStatus?: unknown;
+  kitchenStatus?: unknown;
 }): LiveDeliveryRouteMetrics {
-  const { restaurant, driver, customer, enabled = true } = params;
+  const {
+    restaurant,
+    driver,
+    customer,
+    enabled = true,
+    deliveryStatus,
+    kitchenStatus,
+  } = params;
   const [coordinates, setCoordinates] = useState<LatLngLiteral[]>([]);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const lastFetchRef = useRef<{ at: number; driverKey: string }>({
+  const lastFetchRef = useRef<{ at: number; driverKey: string; leg: string }>({
     at: 0,
     driverKey: '',
+    leg: '',
   });
+
+  const routeLeg = useMemo(
+    () => deliveryMapLegFromStatuses(deliveryStatus, kitchenStatus),
+    [deliveryStatus, kitchenStatus],
+  );
+
+  const destination = routeLeg === 'to_customer' ? customer : restaurant;
 
   const fallbackPath = useMemo(() => {
     const pts: LatLngLiteral[] = [];
-    if (restaurant) pts.push(restaurant);
     if (driver) pts.push(driver);
-    if (customer) pts.push(customer);
+    if (destination) pts.push(destination);
+    if (pts.length >= 2) return pts;
+    // Before driver GPS: show restaurant ↔ customer context.
+    if (restaurant) pts.push(restaurant);
+    if (customer && (!restaurant || customer !== restaurant)) pts.push(customer);
     return pts;
   }, [
-    pointKey(restaurant),
     pointKey(driver),
+    pointKey(destination),
+    pointKey(restaurant),
     pointKey(customer),
+    routeLeg,
   ]);
 
   const fallbackMetrics = useMemo(() => {
-    if (!driver || !customer) {
-      if (restaurant && customer) {
-        const km = haversineDistanceKm(
-          restaurant.latitude,
-          restaurant.longitude,
-          customer.latitude,
-          customer.longitude,
-        );
-        const eta = estimateEtaFromDistanceKm(km);
-        return {
-          distanceKm: km,
-          etaMinutes: Math.max(1, Math.round(eta.durationSeconds / 60)),
-        };
-      }
-      return { distanceKm: null as number | null, etaMinutes: null as number | null };
+    if (driver && destination) {
+      const km = haversineDistanceKm(
+        driver.latitude,
+        driver.longitude,
+        destination.latitude,
+        destination.longitude,
+      );
+      const eta = estimateEtaFromDistanceKm(km);
+      return {
+        distanceKm: km,
+        etaMinutes: Math.max(1, Math.round(eta.durationSeconds / 60)),
+      };
     }
-    const km = haversineDistanceKm(
-      driver.latitude,
-      driver.longitude,
-      customer.latitude,
-      customer.longitude,
-    );
-    const eta = estimateEtaFromDistanceKm(km);
-    return {
-      distanceKm: km,
-      etaMinutes: Math.max(1, Math.round(eta.durationSeconds / 60)),
-    };
+    if (restaurant && customer) {
+      const km = haversineDistanceKm(
+        restaurant.latitude,
+        restaurant.longitude,
+        customer.latitude,
+        customer.longitude,
+      );
+      const eta = estimateEtaFromDistanceKm(km);
+      return {
+        distanceKm: km,
+        etaMinutes: Math.max(1, Math.round(eta.durationSeconds / 60)),
+      };
+    }
+    return { distanceKm: null as number | null, etaMinutes: null as number | null };
   }, [
-    pointKey(restaurant),
     pointKey(driver),
+    pointKey(destination),
+    pointKey(restaurant),
     pointKey(customer),
   ]);
 
@@ -117,11 +147,15 @@ export function useLiveDeliveryRoute(params: {
       }
     }
     const intervalElapsed = now - prev.at >= REFETCH_INTERVAL_MS;
+    const legChanged = prev.leg !== routeLeg;
     const shouldFetch =
-      prev.at === 0 || movedEnough || intervalElapsed || prev.driverKey !== driverKey;
+      prev.at === 0 ||
+      movedEnough ||
+      intervalElapsed ||
+      prev.driverKey !== driverKey ||
+      legChanged;
 
     if (!shouldFetch && coordinates.length >= 2) {
-      // Still refresh haversine ETA between Directions fetches.
       setDistanceKm(fallbackMetrics.distanceKm);
       setEtaMinutes(fallbackMetrics.etaMinutes);
       return;
@@ -132,25 +166,17 @@ export function useLiveDeliveryRoute(params: {
       setLoading(true);
       try {
         let origin: LatLngLiteral | null = null;
-        let destination: LatLngLiteral | null = null;
-        let waypoints: LatLngLiteral[] | undefined;
+        let dest: LatLngLiteral | null = null;
 
-        if (restaurant && driver && customer) {
-          origin = restaurant;
-          waypoints = [driver];
-          destination = customer;
-        } else if (driver && customer) {
+        if (driver && destination) {
           origin = driver;
-          destination = customer;
+          dest = destination;
         } else if (restaurant && customer) {
           origin = restaurant;
-          destination = customer;
-        } else if (restaurant && driver) {
-          origin = driver;
-          destination = restaurant;
+          dest = customer;
         }
 
-        if (!origin || !destination) {
+        if (!origin || !dest) {
           if (!cancelled) {
             setCoordinates(fallbackPath);
             setDistanceKm(fallbackMetrics.distanceKm);
@@ -161,28 +187,19 @@ export function useLiveDeliveryRoute(params: {
 
         const result = await fetchDirections({
           origin,
-          destination,
-          waypoints,
+          destination: dest,
           mode: 'driving',
         });
         if (cancelled) return;
-        lastFetchRef.current = { at: Date.now(), driverKey };
+        lastFetchRef.current = { at: Date.now(), driverKey, leg: routeLeg };
         setCoordinates(
           result.coordinates.length >= 2 ? result.coordinates : fallbackPath,
         );
-        // Remaining distance/ETA = driver → customer (last leg when R→D→C).
-        const remaining =
-          result.legs.length > 1
-            ? result.legs[result.legs.length - 1]
-            : {
-                distanceMeters: result.distanceMeters,
-                durationSeconds: result.durationSeconds,
-              };
-        setDistanceKm(remaining.distanceMeters / 1000);
-        setEtaMinutes(Math.max(1, Math.round(remaining.durationSeconds / 60)));
+        setDistanceKm(result.distanceMeters / 1000);
+        setEtaMinutes(Math.max(1, Math.round(result.durationSeconds / 60)));
       } catch {
         if (cancelled) return;
-        lastFetchRef.current = { at: Date.now(), driverKey };
+        lastFetchRef.current = { at: Date.now(), driverKey, leg: routeLeg };
         setCoordinates(fallbackPath);
         setDistanceKm(fallbackMetrics.distanceKm);
         setEtaMinutes(fallbackMetrics.etaMinutes);
@@ -201,6 +218,7 @@ export function useLiveDeliveryRoute(params: {
     pointKey(restaurant),
     pointKey(driver),
     pointKey(customer),
+    routeLeg,
     fallbackMetrics.distanceKm,
     fallbackMetrics.etaMinutes,
   ]);
@@ -210,5 +228,6 @@ export function useLiveDeliveryRoute(params: {
     distanceKm: distanceKm ?? fallbackMetrics.distanceKm,
     etaMinutes: etaMinutes ?? fallbackMetrics.etaMinutes,
     loading,
+    routeLeg,
   };
 }

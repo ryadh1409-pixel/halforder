@@ -4,7 +4,9 @@
  * tracksViewChanges={false} (avoids PROVIDER_GOOGLE / iOS blank-snapshot bug).
  */
 import { TrackingMapFallbackCard } from '@/components/maps/TrackingMapFallback';
+import { LiveDriverVehicleMarker } from '@/components/maps/LiveDriverVehicleMarker';
 import { useLiveDeliveryRoute } from '@/hooks/useLiveDeliveryRoute';
+import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { collectMapCoordinates, toMapCoordinate } from '@/lib/location/coordinates';
 import { fitMapToCoordinates, areMapCoordinatesDistinct } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
@@ -23,16 +25,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 // ── Lazy-load react-native-maps ───────────────────────────────────────────────
 let MapView: any = null;
-let AnimatedRegion: any = null;
 let Marker: any = null;
-let MarkerAnimated: any = null;
 let Polyline: any = null;
 try {
   const rnm = require('react-native-maps');
   MapView        = rnm.default ?? rnm.MapView ?? rnm;
-  AnimatedRegion = rnm.AnimatedRegion;
   Marker         = rnm.Marker;
-  MarkerAnimated = rnm.MarkerAnimated;
   Polyline       = rnm.Polyline;
 } catch (e: any) {
   console.error('[CustomerTrackingMap] react-native-maps failed:', e?.message ?? e);
@@ -101,6 +99,7 @@ function TrackingMapInner({
   driver,
   driverHeading,
   routeCoordinates,
+  expectDriver = false,
   e2eCapture,
   e2ePhase,
 }: {
@@ -109,14 +108,12 @@ function TrackingMapInner({
   driver:           LatLng | null;
   driverHeading:    number | null;
   routeCoordinates: LatLng[];
+  expectDriver?: boolean;
   e2eCapture?: boolean;
   e2ePhase?: string;
 }) {
   const mapRef    = useRef<any>(null);
   const wrapRef   = useRef<View>(null);
-  const animRef   = useRef<any>(null);
-  const lastDriverRef = useRef<LatLng | null>(null);
-  const seededRef = useRef(false);
   const capturedRef = useRef<string | false>(false);
   const layoutRef = useRef<{ width: number; height: number; x: number; y: number } | null>(null);
   const lastRegionRef = useRef<Record<string, number> | null>(null);
@@ -126,6 +123,26 @@ function TrackingMapInner({
   const [mapReady,  setMapReady]  = useState(false);
   const [tracking,  setTracking]  = useState(true);
   const hadDriverRef = useRef(false);
+
+  const liveInput = useMemo(
+    () =>
+      driver
+        ? {
+            latitude: driver.latitude,
+            longitude: driver.longitude,
+            heading: driverHeading,
+          }
+        : null,
+    [driver?.latitude, driver?.longitude, driverHeading],
+  );
+
+  const {
+    coordinate: displayDriver,
+    heading: resolvedHeading,
+    awaitingFirstFix,
+    waitingForLiveUpdate,
+    animatedCoordinate,
+  } = useLiveDriverMarker(liveInput);
 
   useEffect(() => {
     console.log('[MAP RUNTIME] MapView provider', {
@@ -141,21 +158,18 @@ function TrackingMapInner({
 
   // When the live driver GPS first appears, re-enable auto camera fit.
   useEffect(() => {
-    if (driver && !hadDriverRef.current) {
+    if (displayDriver && !hadDriverRef.current) {
       hadDriverRef.current = true;
       setTracking(true);
     }
-    if (!driver) {
-      hadDriverRef.current = false;
-    }
-  }, [driver?.latitude, driver?.longitude]);
+  }, [displayDriver?.latitude, displayDriver?.longitude]);
 
   // ── Marker definitions ─────────────────────────────────────────────────────
   const markers = useMemo(() => {
     const list: { id: string; coordinate: LatLng; title: string; pinColor: string; zIndex: number }[] = [];
     if (restaurant) list.push({ id: 'restaurant', coordinate: restaurant, title: 'Restaurant', pinColor: PIN_RESTAURANT, zIndex: 10 });
     if (dropoff)    list.push({ id: 'home',       coordinate: dropoff,    title: 'Your home',  pinColor: PIN_HOME,       zIndex: 10 });
-    if (driver)     list.push({ id: 'driver',     coordinate: driver,     title: 'Driver',     pinColor: PIN_DRIVER,     zIndex: 20 });
+    if (displayDriver) list.push({ id: 'driver', coordinate: displayDriver, title: 'Driver', pinColor: PIN_DRIVER, zIndex: 20 });
     console.log('[TrackingMap] markers.length =', list.length);
     console.log('[TrackingMap] markers[] =', list.map((m) => ({
       id: m.id,
@@ -164,11 +178,11 @@ function TrackingMapInner({
       lng: m.coordinate.longitude,
     })));
     return list;
-  }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, driver?.latitude, driver?.longitude]);
+  }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, displayDriver?.latitude, displayDriver?.longitude]);
 
   const markerPoints = useMemo(
-    () => collectMapCoordinates(restaurant, dropoff, driver),
-    [restaurant, dropoff, driver],
+    () => collectMapCoordinates(restaurant, dropoff, displayDriver),
+    [restaurant, dropoff, displayDriver],
   );
 
   const fitPoints = useMemo(() => {
@@ -182,51 +196,9 @@ function TrackingMapInner({
   useEffect(() => {
     console.log('[TrackingMap] restaurant:', JSON.stringify(restaurant));
     console.log('[TrackingMap] dropoff:', JSON.stringify(dropoff));
-    console.log('[TrackingMap] driver:', JSON.stringify(driver));
+    console.log('[TrackingMap] driver:', JSON.stringify(displayDriver));
     console.log('[TrackingMap] markerCount:', markerPoints.length);
-  }, [restaurant?.latitude, dropoff?.latitude, driver?.latitude]);
-
-  const seedPoint = driver ?? markerPoints[0] ?? null;
-
-  // Seed animated region for driver
-  useEffect(() => {
-    if (!seedPoint || !AnimatedRegion) return;
-    if (!animRef.current) {
-      animRef.current = new AnimatedRegion({
-        latitude:      seedPoint.latitude,
-        longitude:     seedPoint.longitude,
-        latitudeDelta:  0,
-        longitudeDelta: 0,
-      });
-      seededRef.current = false;
-    }
-  }, [seedPoint?.latitude, seedPoint?.longitude]);
-
-  // Animate driver movement
-  useEffect(() => {
-    if (!driver || !animRef.current) return;
-    const anim = animRef.current;
-    if (!seededRef.current) {
-      anim.setValue({ ...driver, latitudeDelta: 0, longitudeDelta: 0 });
-      lastDriverRef.current = driver;
-      seededRef.current = true;
-      return;
-    }
-    const prev = lastDriverRef.current;
-    const km   = prev ? haversineDistanceKm(prev.latitude, prev.longitude, driver.latitude, driver.longitude) : 0;
-    const duration = Math.min(2200, Math.max(700, Math.round(km * 12000)));
-    lastDriverRef.current = driver;
-    anim
-      .timing({
-        latitude:      driver.latitude,
-        longitude:     driver.longitude,
-        latitudeDelta:  0,
-        longitudeDelta: 0,
-        duration,
-        useNativeDriver: false,
-      } as never)
-      .start();
-  }, [driver?.latitude, driver?.longitude]);
+  }, [restaurant?.latitude, dropoff?.latitude, displayDriver?.latitude]);
 
   // Auto-fit after map ready / when points change
   useEffect(() => {
@@ -407,7 +379,8 @@ function TrackingMapInner({
     return <View style={styles.center}><ActivityIndicator color="#A855F7" /></View>;
   }
 
-  const driverAnim = animRef.current;
+  const showWaitingBanner =
+    waitingForLiveUpdate || (awaitingFirstFix && expectDriver);
 
   return (
     <View
@@ -484,43 +457,10 @@ function TrackingMapInner({
           />
         )}
 
-        {/* Restaurant + home: native pins. Driver: rotating vehicle marker. */}
-        {markers.map((m) =>
-          m.id === 'driver' && driverAnim && MarkerAnimated ? (
-            <MarkerAnimated
-              key={m.id}
-              identifier={m.id}
-              coordinate={driverAnim as never}
-              title={m.title}
-              flat
-              rotation={typeof driverHeading === 'number' ? driverHeading : 0}
-              anchor={{ x: 0.5, y: 0.5 }}
-              zIndex={m.zIndex}
-              tracksViewChanges={false}
-              calloutEnabled={false}
-            >
-              <View style={styles.vehicleMarker} pointerEvents="none">
-                <Text style={styles.vehicleEmoji}>🚗</Text>
-              </View>
-            </MarkerAnimated>
-          ) : m.id === 'driver' ? (
-            <Marker
-              key={m.id}
-              identifier={m.id}
-              coordinate={m.coordinate}
-              title={m.title}
-              flat
-              rotation={typeof driverHeading === 'number' ? driverHeading : 0}
-              anchor={{ x: 0.5, y: 0.5 }}
-              zIndex={m.zIndex}
-              tracksViewChanges={false}
-              calloutEnabled={false}
-            >
-              <View style={styles.vehicleMarker} pointerEvents="none">
-                <Text style={styles.vehicleEmoji}>🚗</Text>
-              </View>
-            </Marker>
-          ) : (
+        {/* Restaurant + home: native pins. Driver: shared live vehicle marker. */}
+        {markers
+          .filter((m) => m.id !== 'driver')
+          .map((m) => (
             <Marker
               key={m.id}
               identifier={m.id}
@@ -530,9 +470,23 @@ function TrackingMapInner({
               zIndex={m.zIndex}
               calloutEnabled={false}
             />
-          ),
-        )}
+          ))}
+
+        {displayDriver ? (
+          <LiveDriverVehicleMarker
+            coordinate={displayDriver}
+            heading={resolvedHeading}
+            title="Driver"
+            animatedCoordinate={animatedCoordinate}
+          />
+        ) : null}
       </MapView>
+
+      {showWaitingBanner ? (
+        <View style={styles.waitingBanner} pointerEvents="none">
+          <Text style={styles.waitingText}>Waiting for driver location…</Text>
+        </View>
+      ) : null}
 
       {/* Recenter button */}
       <Pressable
@@ -728,6 +682,8 @@ export function CustomerTrackingMap({
     driver,
     customer: dropoff,
     enabled: prop == null,
+    deliveryStatus: order.deliveryStatus,
+    kitchenStatus: order.status,
   });
 
   const routeCoordinates = prop ?? internalRoute.coordinates;
@@ -746,6 +702,7 @@ export function CustomerTrackingMap({
         driver={driver}
         driverHeading={driverHeading}
         routeCoordinates={routeCoordinates}
+        expectDriver={Boolean(order.driverId || order.assignedDriverId)}
         e2eCapture={e2eCapture}
         e2ePhase={e2ePhase}
       />
@@ -777,6 +734,23 @@ const styles = StyleSheet.create({
   },
   vehicleEmoji: {
     fontSize: 24,
+  },
+
+  waitingBanner: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 72,
+    borderRadius: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  waitingText: {
+    color: '#F8FAFC',
+    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
   },
 
   recenterBtn: {

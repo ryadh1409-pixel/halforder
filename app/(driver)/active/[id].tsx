@@ -341,7 +341,7 @@ export default function DriverActiveDeliveryDetailsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live route</Text>
-          {points.length > 0 && order ? (
+          {order ? (
             <DriverActiveRouteMap
               mapRef={mapRef}
               order={order}
@@ -350,13 +350,14 @@ export default function DriverActiveDeliveryDetailsScreen() {
             />
           ) : (
             <View style={styles.mapFallback}>
-              <Text style={styles.meta}>
-                {permissionGranted
-                  ? 'Waiting for live coordinates…'
-                  : 'Enable location permission for realtime route'}
-              </Text>
+              <Text style={styles.meta}>Waiting for driver location…</Text>
             </View>
           )}
+          {!permissionGranted ? (
+            <Text style={[styles.meta, { marginTop: 8 }]}>
+              Enable location permission for realtime route
+            </Text>
+          ) : null}
           <View style={styles.mapsRow}>
             <Pressable
               style={styles.secondaryBtn}

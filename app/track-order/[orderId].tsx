@@ -243,6 +243,8 @@ function TrackOrderScreen() {
     driver: driverCoord,
     customer: customerCoord,
     enabled: !!order && !delivered,
+    deliveryStatus: order?.deliveryStatus,
+    kitchenStatus: order?.status,
   });
 
   const etaDisplay = useMemo(() => {

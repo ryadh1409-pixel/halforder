@@ -1,3 +1,5 @@
+import { LiveDriverVehicleMarker } from '@/components/maps/LiveDriverVehicleMarker';
+import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { regionFromCoordinates, collectMapCoordinates } from '@/lib/location/coordinates';
 import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
@@ -27,74 +29,99 @@ function LiveDeliveryMapInner({
 }: LiveDeliveryMapProps) {
   const mapRef = useRef<MapView | null>(null);
 
+  const liveInput = useMemo(
+    () =>
+      driver
+        ? {
+            latitude: driver.latitude,
+            longitude: driver.longitude,
+            heading: driverHeading ?? null,
+          }
+        : null,
+    [driver?.latitude, driver?.longitude, driverHeading],
+  );
+
+  const {
+    coordinate: displayDriver,
+    heading: resolvedHeading,
+    awaitingFirstFix,
+    waitingForLiveUpdate,
+    animatedCoordinate,
+  } = useLiveDriverMarker(liveInput);
+
   const markerPoints = useMemo(
     () =>
       collectMapCoordinates(
         restaurant ? { latitude: restaurant.latitude, longitude: restaurant.longitude } : null,
         dropoff ? { latitude: dropoff.latitude, longitude: dropoff.longitude } : null,
-        driver ? { latitude: driver.latitude, longitude: driver.longitude } : null,
+        displayDriver
+          ? { latitude: displayDriver.latitude, longitude: displayDriver.longitude }
+          : null,
       ),
-    [restaurant, dropoff, driver],
+    [restaurant, dropoff, displayDriver],
   );
 
   useEffect(() => {
     if (!mapRef.current || markerPoints.length < 1) return;
-    fitMapToCoordinates(mapRef.current, markerPoints);
+    fitMapToCoordinates(mapRef.current as never, markerPoints);
   }, [markerPoints]);
 
   const initial = useMemo(() => regionFromCoordinates(markerPoints), [markerPoints]);
   const mapProvider = getNativeMapProvider();
+  const showWaitingBanner = waitingForLiveUpdate || (awaitingFirstFix && Boolean(driver));
 
   if (!initial) {
     return (
       <View style={[styles.fallback, dark && styles.fallbackDark]}>
         <ActivityIndicator color="#22C55E" />
-        <Text style={styles.fallbackText}>Waiting for GPS coordinates…</Text>
+        <Text style={styles.fallbackText}>Waiting for driver location…</Text>
       </View>
     );
   }
 
   return (
-    <MapView
-      ref={mapRef}
-      style={styles.map}
-      provider={mapProvider}
-      initialRegion={initial}
-      userInterfaceStyle={dark ? 'dark' : 'light'}
-      showsUserLocation={false}
-      showsMyLocationButton={false}
-    >
-      {polylineCoords.length >= 2 ? (
-        <Polyline
-          coordinates={polylineCoords}
-          strokeColor="rgba(168, 85, 247, 0.9)"
-          strokeWidth={4}
-        />
+    <View style={styles.map}>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFillObject}
+        provider={mapProvider}
+        initialRegion={initial}
+        userInterfaceStyle={dark ? 'dark' : 'light'}
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+      >
+        {polylineCoords.length >= 2 ? (
+          <Polyline
+            coordinates={polylineCoords}
+            strokeColor="rgba(168, 85, 247, 0.9)"
+            strokeWidth={4}
+          />
+        ) : null}
+        {restaurant ? (
+          <Marker coordinate={restaurant} title="Restaurant" anchor={{ x: 0.5, y: 1 }}>
+            <Pin color="#A855F7" glyph="🍽" />
+          </Marker>
+        ) : null}
+        {dropoff ? (
+          <Marker coordinate={dropoff} title="Customer" anchor={{ x: 0.5, y: 1 }}>
+            <Pin color="#38BDF8" glyph="📍" />
+          </Marker>
+        ) : null}
+        {displayDriver ? (
+          <LiveDriverVehicleMarker
+            coordinate={displayDriver}
+            heading={resolvedHeading}
+            title="Driver"
+            animatedCoordinate={animatedCoordinate}
+          />
+        ) : null}
+      </MapView>
+      {showWaitingBanner ? (
+        <View style={styles.waitingBanner} pointerEvents="none">
+          <Text style={styles.waitingText}>Waiting for driver location…</Text>
+        </View>
       ) : null}
-      {restaurant ? (
-        <Marker coordinate={restaurant} title="Restaurant" anchor={{ x: 0.5, y: 1 }}>
-          <Pin color="#A855F7" glyph="🍽" />
-        </Marker>
-      ) : null}
-      {dropoff ? (
-        <Marker coordinate={dropoff} title="Customer" anchor={{ x: 0.5, y: 1 }}>
-          <Pin color="#38BDF8" glyph="📍" />
-        </Marker>
-      ) : null}
-      {driver ? (
-        <Marker
-          coordinate={driver}
-          title="Driver"
-          rotation={typeof driverHeading === 'number' ? driverHeading : 0}
-          flat
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <View style={styles.driverBubble}>
-            <Text style={styles.driverGlyph}>🚗</Text>
-          </View>
-        </Marker>
-      ) : null}
-    </MapView>
+    </View>
   );
 }
 
@@ -115,6 +142,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     textAlign: 'center',
     marginTop: 10,
+  },
+  waitingBanner: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  waitingText: {
+    color: '#F8FAFC',
+    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
   },
   pinWrap: { alignItems: 'center' },
   pinHead: {
@@ -137,17 +180,6 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     marginTop: -1,
   },
-  driverBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#22C55E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  driverGlyph: { fontSize: 18 },
 });
 
 export type { MapCoord, LiveDeliveryMapProps } from './liveDeliveryMapTypes';
