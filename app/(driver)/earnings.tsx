@@ -4,7 +4,6 @@ import { subscribeDriverPayoutPercent } from '@/services/driverPayoutSettings';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -89,20 +88,15 @@ export default function DriverEarningsScreen() {
           {stats.breakdown.length === 0 ? (
             <Text style={styles.empty}>Complete a delivery to see earnings here.</Text>
           ) : (
-            <FlatList
-              data={stats.breakdown}
-              keyExtractor={(item) => item.orderId}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={styles.row}>
-                  <View style={styles.rowBody}>
-                    <Text style={styles.rowTitle}>#{item.orderId.slice(-6).toUpperCase()}</Text>
-                    <Text style={styles.rowMeta}>{formatDeliveryTime(item.deliveredAtMs)}</Text>
-                  </View>
-                  <Text style={styles.rowEarning}>+${item.earning.toFixed(2)}</Text>
+            stats.breakdown.map((item) => (
+              <View key={item.orderId} style={styles.row}>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>#{item.orderId.slice(-6).toUpperCase()}</Text>
+                  <Text style={styles.rowMeta}>{formatDeliveryTime(item.deliveredAtMs)}</Text>
                 </View>
-              )}
-            />
+                <Text style={styles.rowEarning}>+${item.earning.toFixed(2)}</Text>
+              </View>
+            ))
           )}
         </ScrollView>
       )}

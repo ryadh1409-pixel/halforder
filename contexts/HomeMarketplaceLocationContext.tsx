@@ -203,23 +203,39 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
   }, [applyCanonicalDeliveryLocation]);
 
   useEffect(() => {
-    preferCanonicalRef.current = false;
     let cancelled = false;
     void (async () => {
       const uid = user?.uid?.trim();
-      if (uid && !user?.isAnonymous) {
-        try {
-          const { fetchSavedLocationFromServer } = await import(
-            '@/services/location/savedLocationFirestore'
-          );
-          const saved = await fetchSavedLocationFromServer('users', uid);
-          if (!cancelled && saved.location) {
-            await applyCanonicalDeliveryLocation(saved.location);
-            return;
-          }
-        } catch {
-          /* fall through to GPS */
+      // Only clear the canonical lock on logout — resetting it on remount races GPS
+      // refresh against the in-flight profile fetch and can flash a stale city pin.
+      if (!uid || user?.isAnonymous) {
+        preferCanonicalRef.current = false;
+        await refreshLocationRef.current();
+        if (!cancelled) {
+          setLocationReady(true);
+          setLocationLoading(false);
+          refreshInFlightRef.current = false;
         }
+        return;
+      }
+      try {
+        const { fetchSavedLocationFromServer } = await import(
+          '@/services/location/savedLocationFirestore'
+        );
+        const saved = await fetchSavedLocationFromServer('users', uid);
+        if (!cancelled && saved.location) {
+          await applyCanonicalDeliveryLocation(saved.location);
+          return;
+        }
+      } catch {
+        /* fall through to GPS */
+      }
+      if (preferCanonicalRef.current) {
+        if (!cancelled) {
+          setLocationReady(true);
+          setLocationLoading(false);
+        }
+        return;
       }
       await refreshLocationRef.current();
       if (!cancelled) {

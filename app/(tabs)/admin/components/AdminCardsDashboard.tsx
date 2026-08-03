@@ -26,7 +26,6 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -131,15 +130,13 @@ export function AdminCardsDashboard() {
           </View>
         </View>
       </View>
-      <FlatList
-        data={remote}
-        keyExtractor={(item) => item.docId}
-        numColumns={2}
-        scrollEnabled={false}
-        style={{ minHeight: listMinHeight }}
-        columnWrapperStyle={{ gap: COL_GAP, marginBottom: COL_GAP }}
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item: slot }) => {
+      <View
+        style={[
+          styles.cardGrid,
+          { minHeight: listMinHeight },
+        ]}
+      >
+        {remote.map((slot) => {
           const configured =
             slot.title.trim().length > 0 || slot.image.trim().length > 0;
           const priceLabel =
@@ -160,7 +157,7 @@ export function AdminCardsDashboard() {
             availabilityNow,
           );
           return (
-            <View style={{ width: cellW }}>
+            <View key={slot.docId} style={{ width: cellW }}>
               <AdminFoodCardTile
                 cardId={slot.docId}
                 title={slot.title || `Slot ${slot.docId}`}
@@ -177,8 +174,8 @@ export function AdminCardsDashboard() {
               />
             </View>
           );
-        }}
-      />
+        })}
+      </View>
       <Text style={styles.footerId}>
         Signed in: {auth.currentUser?.uid ?? '—'}
       </Text>
@@ -190,6 +187,11 @@ const styles = StyleSheet.create({
   wrap: { paddingBottom: 8 },
   center: { padding: 24, alignItems: 'center' },
   loadingText: { marginTop: 10, color: COLORS.textMuted },
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: COL_GAP,
+  },
   headTitle: {
     fontSize: 17,
     fontWeight: '700',

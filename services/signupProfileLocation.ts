@@ -4,6 +4,7 @@ import {
   requestForegroundLocationPermission,
 } from '@/services/location/gps';
 import { resolveAddressFromGps } from '@/services/location/resolveAddressFromGps';
+import { prepareLocationWritePayload } from '@/lib/location/sanitizeFirestorePayload';
 import {
   doc,
   getDoc,
@@ -65,8 +66,9 @@ export async function saveUserProfileLocation(
     country,
   };
 
-  await setDoc(
-    ref,
+  const payload = prepareLocationWritePayload(
+    'saveUserProfileLocation',
+    `users/${id}`,
     {
       location,
       latitude: fields.latitude,
@@ -76,8 +78,9 @@ export async function saveUserProfileLocation(
       country,
       lastLocationUpdatedAt: serverTimestamp(),
     },
-    { merge: true },
   );
+
+  await setDoc(ref, payload, { merge: true });
 }
 
 /** Request permission → GPS → reverse geocode → Firestore. */

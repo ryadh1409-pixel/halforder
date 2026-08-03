@@ -18,6 +18,7 @@ import {
   parseSavedLocation,
   savedLocationToFirestore,
 } from '@/lib/location/parseSavedLocation';
+import { prepareLocationWritePayload } from '@/lib/location/sanitizeFirestorePayload';
 import type { AccountLocationRole } from '@/services/location/accountLocationRole';
 import { logRoleGps } from '@/services/location/accountLocationRole';
 import { syncDriverProfileBaseLocation } from '@/services/location/driverTracking';
@@ -218,7 +219,9 @@ export async function saveAccountSavedLocation(
       firestorePayload.city = base.city ?? '';
       if (options?.label) {
         firestorePayload.locationLabel = options.label;
-        firestorePayload.type = deliveryType;
+        if (deliveryType) {
+          firestorePayload.type = deliveryType;
+        }
         firestorePayload.locationCustomLabel =
           options.label === 'custom' ? customLabel : '';
       }
@@ -234,6 +237,11 @@ export async function saveAccountSavedLocation(
   const documentPath = `${collection}/${id}`;
   const existing = await getDoc(ref);
   const writeMethod = existing.exists() ? 'updateDoc' : 'setDoc';
+  const safePayload = prepareLocationWritePayload(
+    'saveAccountSavedLocation',
+    documentPath,
+    firestorePayload,
+  );
 
   logLocationDebug('[SAVE LOCATION] writing…', {
     firestoreDocumentPath: documentPath,
@@ -249,9 +257,9 @@ export async function saveAccountSavedLocation(
 
   try {
     if (existing.exists()) {
-      await updateDoc(ref, firestorePayload);
+      await updateDoc(ref, safePayload);
     } else {
-      await setDoc(ref, firestorePayload);
+      await setDoc(ref, safePayload);
     }
     logLocationDebug('[SAVE LOCATION] write success', {
       firestoreDocumentPath: documentPath,

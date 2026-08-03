@@ -22,6 +22,7 @@ import {
   readSavedLocationFromDoc,
   saveAccountSavedLocation,
 } from '@/services/location/savedLocationFirestore';
+import { prepareLocationWritePayload } from '@/lib/location/sanitizeFirestorePayload';
 import {
   doc,
   getDoc,
@@ -69,17 +70,22 @@ function parseAddressEntry(raw: unknown): CheckoutAddressBookEntry | null {
   if (!id || !address || !Number.isFinite(lat) || !Number.isFinite(lng)) {
     return null;
   }
+  const placeId = asStr(d.placeId);
+  const city = asStr(d.city);
+  const province = asStr(d.province);
+  const country = asStr(d.country);
+  const postalCode = asStr(d.postalCode);
   return {
     id,
     address,
     formattedAddress: asStr(d.formattedAddress) || address,
     latitude: lat,
     longitude: lng,
-    placeId: asStr(d.placeId) || undefined,
-    city: asStr(d.city) || undefined,
-    province: asStr(d.province) || undefined,
-    country: asStr(d.country) || undefined,
-    postalCode: asStr(d.postalCode) || undefined,
+    ...(placeId ? { placeId } : {}),
+    ...(city ? { city } : {}),
+    ...(province ? { province } : {}),
+    ...(country ? { country } : {}),
+    ...(postalCode ? { postalCode } : {}),
     label: asStr(d.label) || 'Address',
     isDefault: d.isDefault === true,
   };
@@ -186,8 +192,9 @@ export async function saveCheckoutDeliveryPrefs(
   uid: string,
   prefs: CheckoutDeliveryPrefs,
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'users', uid),
+  const payload = prepareLocationWritePayload(
+    'saveCheckoutDeliveryPrefs',
+    `users/${uid}`,
     {
       checkoutDeliveryPrefs: {
         apartment: prefs.apartment.trim(),
@@ -195,13 +202,13 @@ export async function saveCheckoutDeliveryPrefs(
         unit: prefs.unit.trim(),
         floor: prefs.floor.trim(),
         gateCode: prefs.gateCode.trim(),
-        handoff: prefs.handoff,
+        handoff: prefs.handoff ?? null,
         notes: prefs.notes.trim(),
       },
       updatedAt: serverTimestamp(),
     },
-    { merge: true },
   );
+  await setDoc(doc(db, 'users', uid), payload, { merge: true });
 }
 
 export async function saveCheckoutPhone(
@@ -231,12 +238,33 @@ function toSavedLocation(entry: CheckoutAddressBookEntry): SavedLocation {
     formattedAddress: entry.formattedAddress ?? entry.address,
     latitude: entry.latitude,
     longitude: entry.longitude,
-    placeId: entry.placeId,
-    city: entry.city,
-    province: entry.province,
-    country: entry.country,
-    postalCode: entry.postalCode,
+    ...(entry.placeId ? { placeId: entry.placeId } : {}),
+    ...(entry.city ? { city: entry.city } : {}),
+    ...(entry.province ? { province: entry.province } : {}),
+    ...(entry.country ? { country: entry.country } : {}),
+    ...(entry.postalCode ? { postalCode: entry.postalCode } : {}),
   };
+}
+
+/** Firestore-safe address-book row — never includes `undefined` fields. */
+function serializeAddressBookEntry(
+  entry: CheckoutAddressBookEntry,
+): Record<string, unknown> {
+  const row: Record<string, unknown> = {
+    id: entry.id,
+    address: entry.address.trim(),
+    formattedAddress: (entry.formattedAddress ?? entry.address).trim(),
+    latitude: entry.latitude,
+    longitude: entry.longitude,
+    label: (entry.label || 'Address').trim() || 'Address',
+    isDefault: entry.isDefault === true,
+  };
+  if (entry.placeId?.trim()) row.placeId = entry.placeId.trim();
+  if (entry.city?.trim()) row.city = entry.city.trim();
+  if (entry.province?.trim()) row.province = entry.province.trim();
+  if (entry.country?.trim()) row.country = entry.country.trim();
+  if (entry.postalCode?.trim()) row.postalCode = entry.postalCode.trim();
+  return row;
 }
 
 async function writeAddressBook(
@@ -254,15 +282,17 @@ async function writeAddressBook(
   }
   const defaultEntry = normalized.find((e) => e.isDefault) ?? null;
 
-  await setDoc(
-    doc(db, 'users', uid),
+  const payload = prepareLocationWritePayload(
+    'writeAddressBook',
+    `users/${uid}`,
     {
-      checkoutAddressBook: normalized,
+      checkoutAddressBook: normalized.map(serializeAddressBookEntry),
       defaultCheckoutAddressId: defaultEntry?.id ?? null,
       updatedAt: serverTimestamp(),
     },
-    { merge: true },
   );
+
+  await setDoc(doc(db, 'users', uid), payload, { merge: true });
 
   if (defaultEntry && mirrorDefaultToProfile) {
     // Preserve address type / custom label already on the customer profile.
@@ -276,7 +306,8 @@ async function writeAddressBook(
       ...(existingLabel
         ? {
             label: existingLabel,
-            customLabel: existingLabel === 'custom' ? existingCustom : null,
+            customLabel:
+              existingLabel === 'custom' ? existingCustom ?? null : null,
           }
         : {}),
     });
@@ -308,13 +339,15 @@ export async function upsertCheckoutAddress(
     formattedAddress: input.location.formattedAddress ?? input.location.address,
     latitude: input.location.latitude,
     longitude: input.location.longitude,
-    placeId: input.location.placeId,
-    city: input.location.city,
-    province: input.location.province,
-    country: input.location.country,
-    postalCode: input.location.postalCode,
     label: (input.label ?? 'Address').trim() || 'Address',
     isDefault: makeDefault,
+    ...(input.location.placeId ? { placeId: input.location.placeId } : {}),
+    ...(input.location.city ? { city: input.location.city } : {}),
+    ...(input.location.province ? { province: input.location.province } : {}),
+    ...(input.location.country ? { country: input.location.country } : {}),
+    ...(input.location.postalCode
+      ? { postalCode: input.location.postalCode }
+      : {}),
   };
   const idx = book.findIndex((e) => e.id === id);
   if (idx >= 0) book[idx] = next;
@@ -376,11 +409,11 @@ export function resolveCheckoutDeliveryAddress(input: {
     formattedAddress: profile.formattedAddress ?? profile.address,
     latitude: profile.latitude,
     longitude: profile.longitude,
-    placeId: profile.placeId,
-    city: profile.city,
-    province: profile.province,
-    country: profile.country,
-    postalCode: profile.postalCode,
+    ...(profile.placeId ? { placeId: profile.placeId } : {}),
+    ...(profile.city ? { city: profile.city } : {}),
+    ...(profile.province ? { province: profile.province } : {}),
+    ...(profile.country ? { country: profile.country } : {}),
+    ...(profile.postalCode ? { postalCode: profile.postalCode } : {}),
     label: bookDefault?.label ?? 'Home',
     isDefault: true,
   };
@@ -447,13 +480,15 @@ export async function syncProfileLocationToAddressBook(
       saved.location.formattedAddress ?? saved.location.address,
     latitude: saved.location.latitude,
     longitude: saved.location.longitude,
-    placeId: saved.location.placeId,
-    city: saved.location.city,
-    province: saved.location.province,
-    country: saved.location.country,
-    postalCode: saved.location.postalCode,
     label: displayLabel,
     isDefault: true,
+    ...(saved.location.placeId ? { placeId: saved.location.placeId } : {}),
+    ...(saved.location.city ? { city: saved.location.city } : {}),
+    ...(saved.location.province ? { province: saved.location.province } : {}),
+    ...(saved.location.country ? { country: saved.location.country } : {}),
+    ...(saved.location.postalCode
+      ? { postalCode: saved.location.postalCode }
+      : {}),
   };
 
   let book = snap.addressBook.map((e) => ({ ...e, isDefault: false }));

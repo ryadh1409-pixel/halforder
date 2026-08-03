@@ -18,7 +18,6 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -213,28 +212,24 @@ export default function AdminPushCenterScreen() {
               style={styles.input}
             />
             <View style={styles.userList}>
-              <FlatList
-                data={filteredUsers}
-                keyExtractor={(u) => u.id}
-                scrollEnabled={false}
-                renderItem={({ item }) => {
-                  const on = !!selected[item.id];
-                  return (
-                    <Pressable
-                      style={[styles.userRow, on && styles.userRowOn]}
-                      onPress={() => toggleUser(item.id)}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.userName}>{item.name}</Text>
-                        <Text style={styles.userEmail}>
-                          {item.email ?? item.id}
-                        </Text>
-                      </View>
-                      <Text style={styles.check}>{on ? '✓' : ''}</Text>
-                    </Pressable>
-                  );
-                }}
-              />
+              {filteredUsers.map((item) => {
+                const on = !!selected[item.id];
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.userRow, on && styles.userRowOn]}
+                    onPress={() => toggleUser(item.id)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName}>{item.name}</Text>
+                      <Text style={styles.userEmail}>
+                        {item.email ?? item.id}
+                      </Text>
+                    </View>
+                    <Text style={styles.check}>{on ? '✓' : ''}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </>
         ) : null}

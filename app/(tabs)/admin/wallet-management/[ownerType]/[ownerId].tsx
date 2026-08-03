@@ -24,7 +24,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -215,33 +214,29 @@ export default function AdminWalletManagementDetailScreen() {
           {entries.length === 0 ? (
             <Text style={styles.empty}>No wallet transactions yet.</Text>
           ) : (
-            <FlatList
-              data={entries}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.row}
-                  onPress={() =>
-                    router.push(adminRoutes.walletTransaction(item.id) as never)
-                  }
-                >
-                  <View style={styles.rowBody}>
-                    <Text style={styles.rowTitle}>
-                      {formatWalletMoney(item.signedAmount)} · {item.type}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      {item.reason ?? item.notes ?? item.description ?? '—'}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      {formatWalletLocalDate(item.createdAt)} ·{' '}
-                      {formatWalletLocalTime(item.createdAt)} · {item.status}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#8A829E" />
-                </Pressable>
-              )}
-            />
+            entries.map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.row}
+                onPress={() =>
+                  router.push(adminRoutes.walletTransaction(item.id) as never)
+                }
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>
+                    {formatWalletMoney(item.signedAmount)} · {item.type}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    {item.reason ?? item.notes ?? item.description ?? '—'}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    {formatWalletLocalDate(item.createdAt)} ·{' '}
+                    {formatWalletLocalTime(item.createdAt)} · {item.status}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#8A829E" />
+              </Pressable>
+            ))
           )}
         </ScrollView>
       )}

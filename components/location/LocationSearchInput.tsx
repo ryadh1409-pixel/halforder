@@ -2,7 +2,6 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -152,15 +151,17 @@ function PlacesAutocompleteField({
       ) : null}
 
       {showDropdown && suggestions.length > 0 ? (
-        <FlatList
-          data={suggestions}
-          keyExtractor={(item) => item.placeId}
-          renderItem={renderSuggestion}
+        <ScrollView
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
-          scrollEnabled={suggestions.length > 3}
           style={styles.suggestionsList}
-        />
+        >
+          {suggestions.map((item) => (
+            <React.Fragment key={item.placeId}>
+              {renderSuggestion({ item })}
+            </React.Fragment>
+          ))}
+        </ScrollView>
       ) : null}
     </View>
   );

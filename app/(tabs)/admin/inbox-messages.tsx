@@ -18,7 +18,6 @@ import { showError, showSuccess } from '@/utils/toast';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -223,17 +222,14 @@ export default function AdminInboxMessagesScreen() {
               <ActivityIndicator color={COLORS.primary} />
             ) : (
               <View style={styles.userList}>
-                <FlatList
-                  data={filteredUsers}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                  ListEmptyComponent={
-                    <Text style={styles.muted}>No users found.</Text>
-                  }
-                  renderItem={({ item }) => {
+                {filteredUsers.length === 0 ? (
+                  <Text style={styles.muted}>No users found.</Text>
+                ) : (
+                  filteredUsers.map((item) => {
                     const on = !!selected[item.id];
                     return (
                       <Pressable
+                        key={item.id}
                         style={[styles.userRow, on && styles.userRowOn]}
                         onPress={() => toggleUser(item.id)}
                       >
@@ -248,8 +244,8 @@ export default function AdminInboxMessagesScreen() {
                         <Text style={styles.check}>{on ? '✓' : ''}</Text>
                       </Pressable>
                     );
-                  }}
-                />
+                  })
+                )}
               </View>
             )}
             <Text style={styles.muted}>

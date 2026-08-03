@@ -25,7 +25,6 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -227,30 +226,25 @@ export default function AdminCustomerWalletDetailScreen() {
           {entries.length === 0 ? (
             <Text style={styles.empty}>No ledger entries yet.</Text>
           ) : (
-            <FlatList
-              data={entries}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={styles.row}>
-                  <Text style={styles.rowTitle}>
-                    {formatWalletMoney(item.delta)} · {item.type}
-                  </Text>
-                  <Text style={styles.rowMeta}>
-                    {item.reason ?? '—'}
-                  </Text>
-                  <Text style={styles.rowMeta}>
-                    Prev {formatWalletMoney(item.previousBalance)} → New{' '}
-                    {formatWalletMoney(item.newBalance)}
-                  </Text>
-                  <Text style={styles.rowMeta}>
-                    {formatWalletLocalDate(item.createdAt)} ·{' '}
-                    {formatWalletLocalTime(item.createdAt)}
-                    {item.adminUid ? ` · Admin ${item.adminUid.slice(0, 8)}…` : ''}
-                  </Text>
-                </View>
-              )}
-            />
+            entries.map((item) => (
+              <View key={item.id} style={styles.row}>
+                <Text style={styles.rowTitle}>
+                  {formatWalletMoney(item.delta)} · {item.type}
+                </Text>
+                <Text style={styles.rowMeta}>
+                  {item.reason ?? '—'}
+                </Text>
+                <Text style={styles.rowMeta}>
+                  Prev {formatWalletMoney(item.previousBalance)} → New{' '}
+                  {formatWalletMoney(item.newBalance)}
+                </Text>
+                <Text style={styles.rowMeta}>
+                  {formatWalletLocalDate(item.createdAt)} ·{' '}
+                  {formatWalletLocalTime(item.createdAt)}
+                  {item.adminUid ? ` · Admin ${item.adminUid.slice(0, 8)}…` : ''}
+                </Text>
+              </View>
+            ))
           )}
 
           <Text style={[styles.sectionTitle, { marginTop: 18 }]}>
@@ -259,23 +253,18 @@ export default function AdminCustomerWalletDetailScreen() {
           {adjustments.length === 0 ? (
             <Text style={styles.empty}>No admin adjustments yet.</Text>
           ) : (
-            <FlatList
-              data={adjustments}
-              keyExtractor={(item) => `adj_${item.id}`}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={styles.row}>
-                  <Text style={styles.rowTitle}>
-                    {formatWalletMoney(item.delta)} · {item.type}
-                  </Text>
-                  <Text style={styles.rowMeta}>{item.reason ?? '—'}</Text>
-                  <Text style={styles.rowMeta}>
-                    {formatWalletLocalDate(item.createdAt)} ·{' '}
-                    {formatWalletLocalTime(item.createdAt)}
-                  </Text>
-                </View>
-              )}
-            />
+            adjustments.map((item) => (
+              <View key={`adj_${item.id}`} style={styles.row}>
+                <Text style={styles.rowTitle}>
+                  {formatWalletMoney(item.delta)} · {item.type}
+                </Text>
+                <Text style={styles.rowMeta}>{item.reason ?? '—'}</Text>
+                <Text style={styles.rowMeta}>
+                  {formatWalletLocalDate(item.createdAt)} ·{' '}
+                  {formatWalletLocalTime(item.createdAt)}
+                </Text>
+              </View>
+            ))
           )}
         </ScrollView>
       )}

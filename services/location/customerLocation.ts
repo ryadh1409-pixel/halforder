@@ -3,6 +3,7 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { CustomerLocationRecord, DeliveryAddressBundle } from '@/types/location';
 import type { SavedLocation } from '@/types/savedLocation';
 import { auth, db } from '@/services/firebase';
+import { prepareLocationWritePayload } from '@/lib/location/sanitizeFirestorePayload';
 
 import { buildCustomerLocationRecord } from './customerLocationRecord';
 import { resolveDeliveryLocationForOrder } from './productionGps';
@@ -17,16 +18,17 @@ export async function persistCustomerLocation(
 ): Promise<void> {
   const uid = userId.trim();
   if (!uid) return;
-  await setDoc(
-    doc(db, 'users', uid),
+  const payload = prepareLocationWritePayload(
+    'persistCustomerLocation',
+    `users/${uid}`,
     {
       customerLocation: buildCustomerLocationRecord(latitude, longitude),
       latitude,
       longitude,
       lastLocationUpdatedAt: serverTimestamp(),
     },
-    { merge: true },
   );
+  await setDoc(doc(db, 'users', uid), payload, { merge: true });
 }
 
 export type ResolveDeliveryLocationOptions = {

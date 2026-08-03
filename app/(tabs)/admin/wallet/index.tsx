@@ -24,7 +24,6 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -197,36 +196,32 @@ export default function AdminWalletScreen() {
           {entries.length === 0 ? (
             <Text style={styles.empty}>No wallet transactions yet.</Text>
           ) : (
-            <FlatList
-              data={entries}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.row}
-                  onPress={() =>
-                    router.push(adminRoutes.walletTransaction(item.id) as never)
-                  }
-                >
-                  <View style={styles.rowBody}>
-                    <Text style={styles.rowTitle}>
-                      {formatWalletMoney(item.signedAmount)} · {item.type}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      Source: {item.source ?? item.adminSnapshot?.source ?? '—'}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      Ref: {item.referenceId ?? item.adminSnapshot?.referenceId ?? '—'}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      {formatWalletLocalDate(item.createdAt)} ·{' '}
-                      {formatWalletLocalTime(item.createdAt)} · {item.status}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#8A829E" />
-                </Pressable>
-              )}
-            />
+            entries.map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.row}
+                onPress={() =>
+                  router.push(adminRoutes.walletTransaction(item.id) as never)
+                }
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>
+                    {formatWalletMoney(item.signedAmount)} · {item.type}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    Source: {item.source ?? item.adminSnapshot?.source ?? '—'}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    Ref: {item.referenceId ?? item.adminSnapshot?.referenceId ?? '—'}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    {formatWalletLocalDate(item.createdAt)} ·{' '}
+                    {formatWalletLocalTime(item.createdAt)} · {item.status}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#8A829E" />
+              </Pressable>
+            ))
           )}
         </ScrollView>
       )}
