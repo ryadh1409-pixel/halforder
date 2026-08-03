@@ -172,6 +172,20 @@ function TrackingMapInner({
     }
   }, [displayDriver?.latitude, displayDriver?.longitude]);
 
+  useEffect(() => {
+    if (displayDriver) return;
+    console.log('[LIVE DRIVER MARKER]', {
+      received: null,
+      renderDecision: 'hide',
+      reason: awaitingFirstFix
+        ? 'awaiting_first_fix'
+        : waitingForLiveUpdate
+          ? 'waiting_for_live_update'
+          : 'no_valid_driver_coordinate',
+      expectDriver,
+    });
+  }, [displayDriver, awaitingFirstFix, waitingForLiveUpdate, expectDriver]);
+
   // ── Marker definitions ─────────────────────────────────────────────────────
   const markers = useMemo(() => {
     const list: { id: string; coordinate: LatLng; title: string; pinColor: string; zIndex: number }[] = [];
@@ -401,8 +415,8 @@ function TrackingMapInner({
     return <View style={styles.center}><ActivityIndicator color="#A855F7" /></View>;
   }
 
-  const showWaitingBanner =
-    waitingForLiveUpdate || (awaitingFirstFix && expectDriver);
+  // Only wait when we have no valid display coordinate (last-known counts as valid).
+  const showWaitingBanner = Boolean(expectDriver && !displayDriver);
 
   return (
     <View
@@ -498,8 +512,9 @@ function TrackingMapInner({
           <LiveDriverVehicleMarker
             coordinate={displayDriver}
             heading={resolvedHeading}
-            title="Driver"
+            title="🚗 Driver"
             animatedCoordinate={animatedCoordinate}
+            zIndex={40}
           />
         ) : null}
       </MapView>

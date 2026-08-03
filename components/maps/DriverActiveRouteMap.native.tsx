@@ -275,6 +275,27 @@ export function DriverActiveRouteMap({
     }
   };
 
+  useEffect(() => {
+    if (driverCoord) return;
+    console.log('[LIVE DRIVER MARKER]', {
+      received: null,
+      renderDecision: 'hide',
+      reason: awaitingFirstFix
+        ? 'awaiting_first_fix'
+        : waitingForLiveUpdate
+          ? 'waiting_for_live_update'
+          : 'no_valid_driver_coordinate',
+      currentLocation: Boolean(currentLocation),
+      orderDriverLocation: Boolean(order?.driverLocation),
+    });
+  }, [
+    driverCoord,
+    awaitingFirstFix,
+    waitingForLiveUpdate,
+    currentLocation,
+    order?.driverLocation,
+  ]);
+
   const hasAnyCoord = Boolean(
     driverCoord || restaurantCoord || customerStops.length > 0 || routePoints.length > 0,
   );
@@ -311,8 +332,7 @@ export function DriverActiveRouteMap({
     );
   }
 
-  const showWaitingBanner =
-    awaitingFirstFix || waitingForLiveUpdate || missingStops;
+  const showWaitingBanner = missingStops || !driverCoord;
 
   const waitingMessage = missingStops
     ? !restaurantCoord && customerStops.length === 0
@@ -376,6 +396,7 @@ export function DriverActiveRouteMap({
             heading={driverHeading}
             title="🚗 You"
             animatedCoordinate={animatedCoordinate}
+            zIndex={40}
           />
         ) : null}
 

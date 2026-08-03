@@ -866,6 +866,15 @@ export function subscribeActiveDelivery(
             firestoreDeliveryStatus: mapped?.firestoreDeliveryStatus ?? null,
           });
         }
+        console.log('[DRIVER FIRESTORE READ]', {
+          documentPath: `orders/${snap.id}`,
+          latitude: mapped?.driverLocation?.lat ?? null,
+          longitude: mapped?.driverLocation?.lng ?? null,
+          heading: mapped?.driverLocation?.heading ?? null,
+          timestamp: Date.now(),
+          source: 'subscribeActiveDelivery',
+          fromCache: meta.fromCache,
+        });
         onData(mapped, meta);
       } catch (err) {
         warnMalformedDeliveryDoc(orderId, 'subscribeActiveDelivery snapshot', err);

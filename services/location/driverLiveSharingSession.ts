@@ -140,9 +140,20 @@ async function writeCoord(
   orderId: string,
   driverId: string,
   coord: DriverLiveCoordinate,
+  meta?: { accuracy?: number | null; capturedAtMs?: number | null },
 ): Promise<void> {
   if (!session?.running) return;
   if (session.orderId !== orderId || session.driverId !== driverId) return;
+  // Temporary pipeline trace.
+  console.log('[DRIVER GPS]', {
+    orderId,
+    driverId,
+    latitude: coord.latitude,
+    longitude: coord.longitude,
+    heading: coord.heading ?? null,
+    accuracy: meta?.accuracy ?? null,
+    timestamp: meta?.capturedAtMs ?? Date.now(),
+  });
   session = { ...session, current: coord };
   emit();
   try {
@@ -150,6 +161,15 @@ async function writeCoord(
   } catch (e) {
     logLocationDebug('[DRIVER LIVE SHARE] write failed', {
       orderId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    console.log('[DRIVER FIRESTORE WRITE]', {
+      documentPath: `orders/${orderId}`,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: false,
       error: e instanceof Error ? e.message : String(e),
     });
   }
@@ -203,7 +223,21 @@ export async function startDriverLiveSharing(
 
   const seed = await getCurrentGpsReadingSafe({ highAccuracy: true });
   if (seed && session?.running && session.orderId === oid) {
-    await writeCoord(oid, did, gpsReadingToDriverCoord(seed));
+    await writeCoord(oid, did, gpsReadingToDriverCoord(seed), {
+      accuracy: seed.accuracy,
+      capturedAtMs: seed.capturedAtMs,
+    });
+  } else {
+    console.log('[DRIVER GPS]', {
+      orderId: oid,
+      driverId: did,
+      latitude: null,
+      longitude: null,
+      heading: null,
+      accuracy: null,
+      timestamp: Date.now(),
+      note: 'seed_unavailable_waiting_for_watch',
+    });
   }
 
   try {
@@ -211,7 +245,10 @@ export async function startDriverLiveSharing(
     watchSub = await watchGpsPosition(
       (reading: GpsReading) => {
         if (!session?.running || session.orderId !== oid) return;
-        void writeCoord(oid, did, gpsReadingToDriverCoord(reading));
+        void writeCoord(oid, did, gpsReadingToDriverCoord(reading), {
+          accuracy: reading.accuracy,
+          capturedAtMs: reading.capturedAtMs,
+        });
       },
       {
         timeIntervalMs: 2000,

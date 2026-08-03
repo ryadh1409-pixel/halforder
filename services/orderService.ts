@@ -1983,6 +1983,35 @@ export function subscribeCustomerOrderById(
         );
         logServerOrCacheOrder(snap.id, raw, meta, `subscribeCustomerOrderById:ignored:${gateDecision.reason}`);
         logCustomerTrackingSnapshot(snap.id, raw, { ...meta, freshnessReason: gateDecision.reason }, 'ignored_stale');
+
+        // Map-only: never drop a newer live driver GPS when lifecycle gate rejects.
+        const incomingDriverSig = driverLocationFingerprint(raw);
+        if (
+          lastEmittedOrder &&
+          incomingDriverSig &&
+          incomingDriverSig !== lastDriverLocationSig
+        ) {
+          const mappedDriver = parseLatLng(raw.driverLocation);
+          if (mappedDriver) {
+            lastDriverLocationSig = incomingDriverSig;
+            lastEmittedOrder = {
+              ...lastEmittedOrder,
+              driverLocation: mappedDriver,
+            };
+            console.log('[DRIVER FIRESTORE READ]', {
+              documentPath: `orders/${snap.id}`,
+              latitude: mappedDriver.lat,
+              longitude: mappedDriver.lng,
+              heading: mappedDriver.heading ?? null,
+              timestamp: Date.now(),
+              source: 'subscribeCustomerOrderById:gps_merge',
+            });
+            logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
+            onData(lastEmittedOrder);
+            return;
+          }
+        }
+
         if (lastEmittedOrder) {
           logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
           onData(lastEmittedOrder);
@@ -2054,6 +2083,16 @@ export function subscribeCustomerOrderById(
         hasPendingWrites: meta.hasPendingWrites,
       });
       logCustomerTrackingUi(snap.id, mapped, meta.source);
+      const driverLoc = mapped.driverLocation;
+      console.log('[DRIVER FIRESTORE READ]', {
+        documentPath: `orders/${snap.id}`,
+        latitude: driverLoc?.lat ?? null,
+        longitude: driverLoc?.lng ?? null,
+        heading: driverLoc?.heading ?? null,
+        timestamp: Date.now(),
+        source: 'subscribeCustomerOrderById',
+        fromCache: meta.fromCache,
+      });
       onData(mapped);
 
       if (meta.fromCache && !isOrderCompleted(raw)) {

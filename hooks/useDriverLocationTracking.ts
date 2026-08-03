@@ -7,6 +7,7 @@ import {
   isDriverLiveSharingActive,
   subscribeDriverLiveSharing,
 } from '@/services/location/driverLiveSharingSession';
+import { getForegroundPermissionStatus } from '@/services/location/gps';
 
 export type DriverLocationTrackingState = {
   current: DriverLiveCoordinate | null;
@@ -54,11 +55,13 @@ export function useDriverLocationTracking(
       setSyncing(true);
       try {
         if (!isDriverLiveSharingActive(oid, did)) {
-          // Resume only when OS permission already granted (no second modal here).
           await ensureDriverLiveSharing(oid, did);
         }
         if (mounted) {
-          setPermissionGranted(isDriverLiveSharingActive(oid, did));
+          const perm = await getForegroundPermissionStatus();
+          setPermissionGranted(
+            isDriverLiveSharingActive(oid, did) || perm === 'granted',
+          );
         }
       } finally {
         if (mounted) setSyncing(false);
