@@ -1,11 +1,17 @@
 import { useAuth } from '@/services/AuthContext';
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import { getCurrentGpsReading } from '@/services/location/gps';
 import { runDedupedGpsRequest } from '@/services/location/gpsRequestGate';
 import { getSessionGpsReading } from '@/services/location/gpsSession';
-import { setMarketplaceUserLocationCache } from '@/services/location/locationLocalCache';
+import { subscribeCanonicalDeliveryLocation } from '@/services/location/canonicalDeliveryLocationBridge';
+import {
+  MARKETPLACE_USER_LOCATION_KEY,
+  setMarketplaceUserLocationCache,
+} from '@/services/location/locationLocalCache';
 import { resolveAddressFromGps } from '@/services/location/resolveAddressFromGps';
 import type { ResolvedAddressFromGps } from '@/services/location/resolveAddressFromGps';
 import type { GpsReading } from '@/services/location/gps';
+import type { SavedLocation } from '@/types/savedLocation';
 import React, {
   createContext,
   useCallback,
@@ -28,6 +34,8 @@ type HomeMarketplaceLocationValue = {
   locationReady: boolean;
   locationLoading: boolean;
   refreshLocation: () => Promise<void>;
+  /** Overwrite GPS/cache with canonical `users/{uid}.location`. */
+  applyCanonicalDeliveryLocation: (location: SavedLocation) => Promise<void>;
 };
 
 const HomeMarketplaceLocationContext =
@@ -48,6 +56,13 @@ function formatHomeAddressLine(
   }
   if (resolved.city?.trim()) return resolved.city.trim();
   return `${reading.latitude.toFixed(4)}, ${reading.longitude.toFixed(4)}`;
+}
+
+function formatCanonicalAddressLine(location: SavedLocation): string {
+  const full =
+    location.formattedAddress?.trim() || location.address.trim();
+  if (!full) return HOME_LOCATION_UNAVAILABLE_LABEL;
+  return full;
 }
 
 async function resolveHomeLocationFromGps(): Promise<{
@@ -76,8 +91,45 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
   const [locationReady, setLocationReady] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
   const refreshInFlightRef = useRef(false);
+  /** Once the user saves a delivery pin, GPS refresh must not overwrite it. */
+  const preferCanonicalRef = useRef(false);
+
+  const applyCanonicalDeliveryLocation = useCallback(
+    async (location: SavedLocation) => {
+      const line = formatCanonicalAddressLine(location);
+      if (line === HOME_LOCATION_UNAVAILABLE_LABEL) return;
+      if (
+        !Number.isFinite(location.latitude) ||
+        !Number.isFinite(location.longitude)
+      ) {
+        return;
+      }
+
+      preferCanonicalRef.current = true;
+      const coords = { lat: location.latitude, lng: location.longitude };
+      setUserCoords(coords);
+      setAddressLine(line);
+      setLocationReady(true);
+      setLocationLoading(false);
+
+      await setMarketplaceUserLocationCache({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        addressLine: line,
+        capturedAt: Date.now(),
+      });
+
+      logLocationDebug('[MARKETPLACE CONTEXT] applied canonical delivery', {
+        addressLine: line,
+        coordinates: coords,
+        asyncStorageKey: MARKETPLACE_USER_LOCATION_KEY,
+      });
+    },
+    [],
+  );
 
   const applySessionCoordsIfFresh = useCallback(async (): Promise<boolean> => {
+    if (preferCanonicalRef.current) return false;
     const recent = getSessionGpsReading();
     if (!recent) return false;
     setUserCoords({ lat: recent.latitude, lng: recent.longitude });
@@ -106,6 +158,14 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
       return;
     }
 
+    // Do not clobber the saved delivery pin with a fresh GPS reverse-geocode.
+    if (preferCanonicalRef.current) {
+      logLocationDebug('[MARKETPLACE CONTEXT] skip GPS refresh (canonical pin active)');
+      setLocationLoading(false);
+      setLocationReady(true);
+      return;
+    }
+
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
     setLocationLoading(true);
@@ -113,6 +173,7 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
     try {
       try {
         const resolved = await resolveHomeLocationFromGps();
+        if (preferCanonicalRef.current) return;
         setUserCoords(resolved.coords);
         setAddressLine(resolved.addressLine);
         return;
@@ -136,8 +197,30 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
   refreshLocationRef.current = refreshLocation;
 
   useEffect(() => {
+    return subscribeCanonicalDeliveryLocation((location) => {
+      void applyCanonicalDeliveryLocation(location);
+    });
+  }, [applyCanonicalDeliveryLocation]);
+
+  useEffect(() => {
+    preferCanonicalRef.current = false;
     let cancelled = false;
     void (async () => {
+      const uid = user?.uid?.trim();
+      if (uid && !user?.isAnonymous) {
+        try {
+          const { fetchSavedLocationFromServer } = await import(
+            '@/services/location/savedLocationFirestore'
+          );
+          const saved = await fetchSavedLocationFromServer('users', uid);
+          if (!cancelled && saved.location) {
+            await applyCanonicalDeliveryLocation(saved.location);
+            return;
+          }
+        } catch {
+          /* fall through to GPS */
+        }
+      }
       await refreshLocationRef.current();
       if (!cancelled) {
         setLocationReady(true);
@@ -148,7 +231,7 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
     return () => {
       cancelled = true;
     };
-  }, [user?.uid]);
+  }, [user?.uid, user?.isAnonymous, applyCanonicalDeliveryLocation]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return undefined;
@@ -173,8 +256,16 @@ export function HomeMarketplaceLocationProvider({ children }: { children: ReactN
       locationReady,
       locationLoading,
       refreshLocation,
+      applyCanonicalDeliveryLocation,
     }),
-    [userCoords, addressLine, locationReady, locationLoading, refreshLocation],
+    [
+      userCoords,
+      addressLine,
+      locationReady,
+      locationLoading,
+      refreshLocation,
+      applyCanonicalDeliveryLocation,
+    ],
   );
 
   return (

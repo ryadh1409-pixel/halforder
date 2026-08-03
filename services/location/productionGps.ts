@@ -239,9 +239,9 @@ export type DeliveryLocationResolveOptions = {
   required?: boolean;
   persistToProfile?: boolean;
   userId?: string;
-  /** Saved Firestore profile — used only after live GPS + geocode fail. */
+  /** Saved Firestore profile pin — preferred over live GPS when usable. */
   savedProfile?: SavedLocation | null;
-  /** Manual Places/geocode selection — last resort before error. */
+  /** Selected checkout address — highest priority when usable. */
   manual?: SavedLocation | null;
 };
 
@@ -262,7 +262,10 @@ async function resolveSavedProfileForUser(
 }
 
 /**
- * Fallback: live GPS + reverse geocode → session GPS + geocode → saved profile → manual.
+ * Resolve delivery dropoff for checkout/orders.
+ * Prefer the customer's selected / saved delivery address (canonical profile pin).
+ * Live GPS is only used when no usable saved/manual address exists, and must not
+ * overwrite a saved delivery address during order placement.
  */
 export async function resolveDeliveryLocationForOrder(
   options: DeliveryLocationResolveOptions = {},
@@ -270,10 +273,38 @@ export async function resolveDeliveryLocationForOrder(
   const { required = true, persistToProfile = true, userId = '' } = options;
   const uid = userId.trim();
 
+  if (isUsableSavedLocation(options.manual)) {
+    logLocationDebug('[DELIVERY LOCATION]', {
+      source: 'manual_checkout_address',
+      address: options.manual.address,
+    });
+    logLocationDebug('[CHECKOUT RECEIVES]', {
+      source: 'manual',
+      address: options.manual.address,
+      lat: options.manual.latitude,
+      lng: options.manual.longitude,
+    });
+    return bundleFromSavedLocation(options.manual);
+  }
+
+  const savedProfile = await resolveSavedProfileForUser(uid, options.savedProfile);
+  if (savedProfile) {
+    logLocationDebug('[DELIVERY LOCATION]', {
+      source: 'saved_profile',
+      address: savedProfile.address,
+    });
+    logLocationDebug('[CHECKOUT RECEIVES]', {
+      source: 'saved_profile',
+      address: savedProfile.address,
+      lat: savedProfile.latitude,
+      lng: savedProfile.longitude,
+    });
+    return bundleFromSavedLocation(savedProfile);
+  }
+
   try {
-    const { reading, location } = await runDedupedGpsRequest(
-      'delivery:live_gps',
-      () => resolveProductionGpsSavedLocation({ forceFresh: true }),
+    const { location } = await runDedupedGpsRequest('delivery:live_gps', () =>
+      resolveProductionGpsSavedLocation({ forceFresh: true }),
     );
     logLocationDebug('[DELIVERY LOCATION]', { source: 'live_gps' });
 
@@ -285,6 +316,12 @@ export async function resolveDeliveryLocationForOrder(
       }
     }
 
+    logLocationDebug('[CHECKOUT RECEIVES]', {
+      source: 'live_gps',
+      address: location.address,
+      lat: location.latitude,
+      lng: location.longitude,
+    });
     return bundleFromSavedLocation(location);
   } catch (freshError) {
     const recent = getSessionGpsReading();
@@ -299,17 +336,6 @@ export async function resolveDeliveryLocationForOrder(
         logLocationDebug('[DELIVERY LOCATION]', { source: 'session_gps_geocode' });
         return bundleFromSavedLocation(geocoded);
       }
-    }
-
-    const savedProfile = await resolveSavedProfileForUser(uid, options.savedProfile);
-    if (savedProfile) {
-      logLocationDebug('[DELIVERY LOCATION]', { source: 'saved_profile' });
-      return bundleFromSavedLocation(savedProfile);
-    }
-
-    if (isUsableSavedLocation(options.manual)) {
-      logLocationDebug('[DELIVERY LOCATION]', { source: 'manual_search' });
-      return bundleFromSavedLocation(options.manual);
     }
 
     if (required) {

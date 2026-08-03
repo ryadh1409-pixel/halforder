@@ -4,8 +4,9 @@ import { PartnerHalfOrderBalanceCard } from '@/components/partnerWallet/PartnerH
 import { PartnerWalletCreditHistory } from '@/components/partnerWallet/PartnerWalletCreditHistory';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminColors as COLORS } from '@/constants/adminTheme';
+import { confirmWalletBalanceChange } from '@/lib/confirmWalletBalanceChange';
 import {
-  sendPartnerWalletBalance,
+  adminSetPartnerWalletBalance,
   subscribePartnerWallet,
   subscribePartnerWalletCredits,
 } from '@/services/halfOrderPartnerWallet';
@@ -22,6 +23,7 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -45,9 +47,10 @@ export default function AdminPartnerWalletDetailScreen() {
   const [wallet, setWallet] = useState<HalfOrderPartnerWallet | null>(null);
   const [credits, setCredits] = useState<HalfOrderPartnerWalletCredit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [sending, setSending] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [newBalance, setNewBalance] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!authorized || !ownerType || !ownerId) return undefined;
@@ -67,29 +70,59 @@ export default function AdminPartnerWalletDetailScreen() {
     };
   }, [authorized, ownerType, ownerId]);
 
-  const onSend = async () => {
-    if (!user?.uid || !ownerType || !ownerId) return;
-    const n = Number.parseFloat(amount.trim());
-    if (!Number.isFinite(n) || n <= 0) {
-      showError('Enter a valid amount greater than zero.');
+  const currentBalance = wallet?.currentBalance ?? 0;
+
+  const closeEdit = () => {
+    if (saving) return;
+    setEditOpen(false);
+    setNewBalance('');
+    setReason('');
+  };
+
+  const openEdit = () => {
+    setNewBalance(currentBalance.toFixed(2));
+    setReason('');
+    setEditOpen(true);
+  };
+
+  const onSave = async () => {
+    if (saving || !user?.uid || !ownerType || !ownerId) return;
+    const raw = String(newBalance).replace(/,/g, '').trim();
+    if (!raw) {
+      showError('New balance is required.');
       return;
     }
-    setSending(true);
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      showError('Enter a valid new balance of zero or greater.');
+      return;
+    }
+    const reasonTrim = reason.trim();
+    if (!reasonTrim) {
+      showError('Reason is required.');
+      return;
+    }
+
+    const confirmed = await confirmWalletBalanceChange(currentBalance, parsed);
+    if (!confirmed) return;
+
+    setSaving(true);
     try {
-      await sendPartnerWalletBalance({
+      await adminSetPartnerWalletBalance({
         ownerType,
         ownerId,
-        amount: n,
-        note,
-        actorUid: user.uid,
+        newBalance: parsed,
+        reason: reasonTrim,
+        adminUid: user.uid,
       });
-      showSuccess('Balance added by HalfOrder');
-      setAmount('');
-      setNote('');
+      showSuccess('Wallet balance updated.');
+      setEditOpen(false);
+      setNewBalance('');
+      setReason('');
     } catch (err) {
       showError(getUserFriendlyError(err));
     } finally {
-      setSending(false);
+      setSaving(false);
     }
   };
 
@@ -129,46 +162,76 @@ export default function AdminPartnerWalletDetailScreen() {
           </Text>
 
           <PartnerHalfOrderBalanceCard
-            balance={wallet?.currentBalance ?? 0}
+            balance={currentBalance}
             updatedAt={wallet?.updatedAt ?? null}
           />
 
-          <View style={styles.sendCard}>
-            <Text style={styles.sendTitle}>Send Balance</Text>
-            <Text style={styles.sendHelp}>
-              Balance added by HalfOrder appears instantly in credit history.
-            </Text>
-            <Text style={styles.label}>Amount ($)</Text>
-            <AppTextInput
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-            />
-            <Text style={styles.label}>Optional Note</Text>
-            <AppTextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="Note (optional)"
-            />
-            <Pressable
-              style={[styles.sendBtn, sending && { opacity: 0.6 }]}
-              onPress={onSend}
-              disabled={sending}
-            >
-              <Text style={styles.sendBtnText}>
-                {sending ? 'Sending…' : 'Send Balance'}
-              </Text>
-            </Pressable>
-          </View>
+          <Pressable style={styles.editBtn} onPress={openEdit}>
+            <Text style={styles.editBtnText}>Edit Balance</Text>
+          </Pressable>
 
           <PartnerWalletCreditHistory
             credits={credits}
             orderIdLabel={ownerType === 'restaurant' ? 'Order ID' : 'Delivery ID'}
-            emptyText="No credits yet."
+            emptyText="No wallet history yet."
           />
         </ScrollView>
       )}
+
+      <Modal
+        visible={editOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeEdit}
+      >
+        <SafeAreaView style={styles.modalScreen} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Balance</Text>
+            <Pressable onPress={closeEdit} disabled={saving} hitSlop={12}>
+              <Text style={styles.closeText}>Close</Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.label}>Current Balance</Text>
+            <Text style={styles.readonly}>CA${currentBalance.toFixed(2)}</Text>
+
+            <Text style={styles.label}>New Balance ($)</Text>
+            <AppTextInput
+              value={newBalance}
+              onChangeText={setNewBalance}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              editable={!saving}
+            />
+
+            <Text style={styles.label}>Reason (required)</Text>
+            <AppTextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder="e.g. External bank payout"
+              editable={!saving}
+            />
+
+            <Pressable
+              style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+              onPress={onSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.cancelBtn, saving && { opacity: 0.6 }]}
+              onPress={closeEdit}
+              disabled={saving}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -184,24 +247,43 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48 },
   ownerId: { color: '#8A829E', fontSize: 12, marginBottom: 12, fontWeight: '600' },
   empty: { color: '#8A829E', padding: 20 },
-  sendCard: {
-    backgroundColor: '#151022',
-    borderRadius: 14,
-    padding: 16,
+  editBtn: {
+    marginTop: 4,
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.22)',
-    gap: 6,
-  },
-  sendTitle: { color: '#F5F3FF', fontWeight: '800', fontSize: 17 },
-  sendHelp: { color: '#8A829E', marginBottom: 8, lineHeight: 18 },
-  label: { color: '#C4B5FD', fontWeight: '600', marginTop: 8 },
-  sendBtn: {
-    marginTop: 14,
     backgroundColor: COLORS.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  sendBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  editBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  modalScreen: { flex: 1, backgroundColor: COLORS.background },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalTitle: { color: '#F5F3FF', fontSize: 18, fontWeight: '800' },
+  closeText: { color: '#C4B5FD', fontWeight: '700' },
+  modalContent: { padding: 16, gap: 8, paddingBottom: 40 },
+  label: { color: '#C4B5FD', fontWeight: '600', marginTop: 8 },
+  readonly: { color: '#F5F3FF', fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  saveBtn: {
+    marginTop: 20,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  saveBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  cancelBtn: {
+    marginTop: 10,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+  },
+  cancelText: { color: '#C4B5FD', fontWeight: '700', fontSize: 16 },
 });

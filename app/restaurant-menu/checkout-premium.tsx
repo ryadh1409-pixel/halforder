@@ -39,14 +39,20 @@ import { createOrder } from '@/services/orderService';
 import { applyPromoCode } from '@/services/promoCodes';
 import { resolveRestaurantTaxRate } from '@/services/platformFees';
 import { computeOrderPricing } from '@/lib/orderPricing';
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import {
   fetchRestaurantLocation,
   resolveDeliveryLocationForCheckout,
 } from '@/services/location';
+import {
+  MARKETPLACE_USER_LOCATION_KEY,
+  readMarketplaceUserLocationCache,
+} from '@/services/location/locationLocalCache';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
 import { useDeliveryEligibility } from '@/hooks/useDeliveryEligibility';
 import {
-  defaultCheckoutAddress,
+  fetchCheckoutCustomerSnapshotFromServer,
+  resolveCheckoutDeliveryAddress,
   subscribeCheckoutCustomerSnapshot,
   syncProfileLocationToAddressBook,
 } from '@/services/checkoutCustomerPrefs';
@@ -56,6 +62,7 @@ import {
   type CheckoutAddressBookEntry,
   type CheckoutDeliveryPrefs,
 } from '@/types/checkoutCustomerPrefs';
+import type { SavedLocation } from '@/types/savedLocation';
 import {
   displayFromStoredProfilePhone,
   isProfilePhoneStorageEmpty,
@@ -113,10 +120,10 @@ export default function CheckoutPremiumScreen() {
   const { items: menuItems, loading: menuLoading } = useMenu(restaurantId || null);
   const {
     userCoords,
-    addressLine: customerAddressLine,
+    addressLine: marketplaceAddressLine,
     locationLoading,
     locationReady,
-    refreshLocation: refreshCustomerLocation,
+    applyCanonicalDeliveryLocation,
   } = useHomeMarketplaceLocation();
 
   const scrollY = useSharedValue(0);
@@ -149,6 +156,8 @@ export default function CheckoutPremiumScreen() {
     ...EMPTY_CHECKOUT_DELIVERY_PREFS,
   });
   const [addressBook, setAddressBook] = useState<CheckoutAddressBookEntry[]>([]);
+  const [profileDeliveryLocation, setProfileDeliveryLocation] =
+    useState<SavedLocation | null>(null);
   const [checkoutPhone, setCheckoutPhone] = useState('');
 
   const cartItems = useMemo(
@@ -228,11 +237,116 @@ export default function CheckoutPremiumScreen() {
   }, [user?.uid, user?.isAnonymous]);
 
   const selectedAddress = useMemo(
-    () => defaultCheckoutAddress(addressBook),
-    [addressBook],
+    () =>
+      resolveCheckoutDeliveryAddress({
+        profileDeliveryLocation,
+        addressBook,
+      }),
+    [profileDeliveryLocation, addressBook],
   );
 
+  useEffect(() => {
+    logLocationDebug('[CART]', {
+      deliveryAddress: selectedAddress?.address ?? null,
+      deliveryCoordinates: selectedAddress
+        ? { lat: selectedAddress.latitude, lng: selectedAddress.longitude }
+        : null,
+      source: profileDeliveryLocation
+        ? 'users/{uid}.location (canonical)'
+        : 'checkoutAddressBook fallback',
+    });
+  }, [selectedAddress, profileDeliveryLocation]);
+
+  useEffect(() => {
+    const uid = isRegisteredAuthUser(user) ? user!.uid : null;
+    if (!uid || fulfillmentMode === 'pickup') return;
+
+    const finalAddress =
+      selectedAddress?.address?.trim() || 'Add a delivery address';
+    const finalCoordinates = selectedAddress
+      ? {
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude,
+        }
+      : null;
+
+    void (async () => {
+      let asyncStorageCache: unknown = null;
+      try {
+        asyncStorageCache = await readMarketplaceUserLocationCache();
+      } catch {
+        asyncStorageCache = null;
+      }
+
+      logLocationDebug('[CHECKOUT OPENS]', {
+        whereLoadedFrom: profileDeliveryLocation
+          ? 'Firestore users/{uid}.location (canonical profile pin)'
+          : addressBook.length > 0
+            ? 'Firestore users/{uid}.checkoutAddressBook (fallback)'
+            : 'none — empty',
+        firestorePath: `users/${uid}`,
+        firestoreFieldsRead: [
+          'location',
+          'address',
+          'formattedAddress',
+          'checkoutAddressBook',
+        ],
+        asyncStorageKeys: [
+          MARKETPLACE_USER_LOCATION_KEY,
+          '@ourfood/delivery_location_cache (legacy, cleared only)',
+          '@ourfood/live_gps_bias',
+        ],
+        asyncStorageMarketplaceCache: asyncStorageCache,
+        contextState: {
+          name: 'HomeMarketplaceLocationContext',
+          userCoords,
+          marketplaceAddressLine,
+          locationReady,
+          locationLoading,
+        },
+        profileDeliveryLocation: profileDeliveryLocation
+          ? {
+              address: profileDeliveryLocation.address,
+              coordinates: {
+                latitude: profileDeliveryLocation.latitude,
+                longitude: profileDeliveryLocation.longitude,
+              },
+            }
+          : null,
+        addressBookDefault: addressBook.find((e) => e.isDefault) ?? addressBook[0] ?? null,
+        finalAddressDisplayed: finalAddress,
+        finalCoordinates,
+        zustandCheckoutStoreAddressPrimary: useCheckoutStore.getState().addressPrimary,
+      });
+
+      logLocationDebug('[CHECKOUT LOAD]', {
+        source: profileDeliveryLocation
+          ? 'users/{uid}.location'
+          : 'checkoutAddressBook / empty',
+        documentPath: `users/${uid}`,
+        asyncStorageKey: MARKETPLACE_USER_LOCATION_KEY,
+        contextState: {
+          userCoords,
+          marketplaceAddressLine,
+        },
+        address: finalAddress,
+        coordinates: finalCoordinates,
+      });
+    })();
+  }, [
+    user,
+    fulfillmentMode,
+    selectedAddress,
+    profileDeliveryLocation,
+    addressBook,
+    userCoords,
+    marketplaceAddressLine,
+    locationReady,
+    locationLoading,
+  ]);
+
   const mapCoords = useMemo(() => {
+    // Delivery map pin must follow canonical profile location — never GPS context.
     if (
       selectedAddress &&
       Number.isFinite(selectedAddress.latitude) &&
@@ -240,15 +354,26 @@ export default function CheckoutPremiumScreen() {
     ) {
       return { lat: selectedAddress.latitude, lng: selectedAddress.longitude };
     }
-    return userCoords;
-  }, [selectedAddress, userCoords]);
+    if (
+      profileDeliveryLocation &&
+      Number.isFinite(profileDeliveryLocation.latitude) &&
+      Number.isFinite(profileDeliveryLocation.longitude)
+    ) {
+      return {
+        lat: profileDeliveryLocation.latitude,
+        lng: profileDeliveryLocation.longitude,
+      };
+    }
+    return null;
+  }, [selectedAddress, profileDeliveryLocation]);
 
   const { eligibility, distanceLoading: distanceCheckLoading } = useDeliveryEligibility({
     customerEntity: mapCoords,
     restaurantEntity: profile?.raw,
     restaurantRaw: profile?.raw,
     mode: fulfillmentMode === 'pickup' ? 'pickup' : 'delivery',
-    locationResolving: locationLoading && !mapCoords,
+    locationResolving:
+      fulfillmentMode === 'delivery' && !mapCoords && (locationLoading || !locationReady),
     locationReady: locationReady || Boolean(mapCoords),
   });
 
@@ -360,33 +485,79 @@ export default function CheckoutPremiumScreen() {
     if (!uid) {
       setDeliveryPrefs({ ...EMPTY_CHECKOUT_DELIVERY_PREFS });
       setAddressBook([]);
+      setProfileDeliveryLocation(null);
       setCheckoutPhone('');
       return undefined;
     }
     return subscribeCheckoutCustomerSnapshot(uid, (snap) => {
       setDeliveryPrefs(snap.deliveryPrefs);
       setAddressBook(snap.addressBook);
+      setProfileDeliveryLocation(snap.profileDeliveryLocation);
       setCheckoutPhone(snap.phone || snap.phoneNumber);
+      if (snap.profileDeliveryLocation) {
+        void applyCanonicalDeliveryLocation(snap.profileDeliveryLocation);
+      }
     });
-  }, [user]);
+  }, [user, applyCanonicalDeliveryLocation]);
 
   useFocusEffect(
     useCallback(() => {
-      void refreshCustomerLocation();
+      // Do NOT refresh GPS here — that overwrites marketplaceAddressLine with a stale pin.
       const uid = isRegisteredAuthUser(user) ? user!.uid : null;
-      if (uid) {
-        void syncProfileLocationToAddressBook(uid).then(setAddressBook).catch(() => {
+      if (!uid) return;
+      void (async () => {
+        try {
+          const snap = await fetchCheckoutCustomerSnapshotFromServer(uid);
+          setDeliveryPrefs(snap.deliveryPrefs);
+          setAddressBook(snap.addressBook);
+          setProfileDeliveryLocation(snap.profileDeliveryLocation);
+          setCheckoutPhone(snap.phone || snap.phoneNumber);
+          if (snap.profileDeliveryLocation) {
+            await applyCanonicalDeliveryLocation(snap.profileDeliveryLocation);
+          }
+          logLocationDebug('[CHECKOUT LOAD]', {
+            source: 'checkout focus reload (server)',
+            documentPath: `users/${uid}`,
+            asyncStorageKey: MARKETPLACE_USER_LOCATION_KEY,
+            address: snap.profileDeliveryLocation?.address ?? null,
+            coordinates: snap.profileDeliveryLocation
+              ? {
+                  latitude: snap.profileDeliveryLocation.latitude,
+                  longitude: snap.profileDeliveryLocation.longitude,
+                }
+              : null,
+            contextState: {
+              userCoords,
+              marketplaceAddressLine,
+              locationReady,
+              locationLoading,
+            },
+          });
+          if (snap.profileDeliveryLocation) {
+            const book = await syncProfileLocationToAddressBook(uid);
+            setAddressBook(book);
+          }
+        } catch {
           /* keep live snapshot */
-        });
-      }
-    }, [refreshCustomerLocation, user]),
+        }
+      })();
+    }, [
+      user,
+      userCoords,
+      marketplaceAddressLine,
+      locationReady,
+      locationLoading,
+      applyCanonicalDeliveryLocation,
+    ]),
   );
 
   const addressPrimary =
     fulfillmentMode === 'pickup'
       ? (profile?.address ?? 'Restaurant pickup')
-      : (selectedAddress?.address?.trim() ||
-          customerAddressLine ||
+      : (selectedAddress?.formattedAddress?.trim() ||
+          selectedAddress?.address?.trim() ||
+          profileDeliveryLocation?.formattedAddress?.trim() ||
+          profileDeliveryLocation?.address?.trim() ||
           'Add a delivery address');
   const addressSecondary =
     fulfillmentMode === 'pickup'
@@ -466,6 +637,7 @@ export default function CheckoutPremiumScreen() {
       } else {
         const delivery = await resolveDeliveryLocationForCheckout({
           required: true,
+          persistToProfile: false,
           manual: selectedAddress
             ? {
                 address: selectedAddress.address,
@@ -479,7 +651,8 @@ export default function CheckoutPremiumScreen() {
                 country: selectedAddress.country,
                 postalCode: selectedAddress.postalCode,
               }
-            : null,
+            : profileDeliveryLocation,
+          savedProfile: profileDeliveryLocation,
         });
         deliveryLocation = {
           lat: delivery.lat,
@@ -487,6 +660,15 @@ export default function CheckoutPremiumScreen() {
           address: delivery.address,
         };
         customerLocation = delivery.customerLocation;
+        logLocationDebug('[ORDER]', {
+          deliveryAddress: deliveryLocation.address,
+          deliveryCoordinates: {
+            latitude: deliveryLocation.lat,
+            longitude: deliveryLocation.lng,
+          },
+          source: 'checkout selectedAddress → resolveDeliveryLocationForCheckout',
+          profileDeliveryLocationAddress: profileDeliveryLocation?.address ?? null,
+        });
       }
 
       let restaurantLocationForLog: {

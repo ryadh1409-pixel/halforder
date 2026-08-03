@@ -20,7 +20,7 @@ export type HalfOrderPartnerWalletCredit = {
   walletId: string;
   ownerType: PartnerWalletOwnerType;
   ownerId: string;
-  /** Always a positive credit amount. */
+  /** Positive credit amount, or abs(adjustment) for balance edits. */
   amount: number;
   balanceAfter: number;
   /** Optional linked order / delivery id. */
@@ -29,6 +29,13 @@ export type HalfOrderPartnerWalletCredit = {
   description: string;
   /** Firestore server timestamp — never client Date.now() for event time. */
   createdAt: unknown;
+  /** Present on admin direct balance edits. */
+  type?: 'admin_balance_adjustment' | 'credit' | null;
+  previousBalance?: number | null;
+  newBalance?: number | null;
+  adjustmentAmount?: number | null;
+  reason?: string | null;
+  adminUid?: string | null;
 };
 
 export function partnerWalletDocId(

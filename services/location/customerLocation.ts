@@ -38,7 +38,7 @@ export type ResolveDeliveryLocationOptions = {
 };
 
 /**
- * Resolve delivery coordinates for checkout — live GPS first, never stale profile-only.
+ * Resolve delivery coordinates for checkout — saved/manual address first.
  */
 export async function resolveDeliveryLocationForCheckout(
   options: ResolveDeliveryLocationOptions = {},

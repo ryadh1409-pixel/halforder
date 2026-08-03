@@ -78,6 +78,12 @@ export const adminRoutes = {
     `/(tabs)/admin/wallet/${encodeURIComponent(id)}`,
   walletConfig: '/(tabs)/admin/wallet-config',
   walletTransfer: '/(tabs)/admin/wallet-transfer',
+  /** Admin wallet management (restaurant / driver / customer adjust + audit). */
+  walletManagement: '/(tabs)/admin/wallet-management',
+  walletManagementDetail: (ownerType: 'restaurant' | 'driver', ownerId: string) =>
+    `/(tabs)/admin/wallet-management/${ownerType}/${encodeURIComponent(ownerId)}`,
+  walletManagementCustomer: (userId: string) =>
+    `/(tabs)/admin/wallet-management/customer/${encodeURIComponent(userId)}`,
   /** HalfOrder Partner Wallets (Restaurant / Driver — admin send balance). */
   wallets: '/(tabs)/admin/wallets',
   walletsRestaurants: '/(tabs)/admin/wallets/restaurants',

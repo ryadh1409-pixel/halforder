@@ -7,12 +7,16 @@ import {
   formatWalletMoney,
 } from '@/lib/earningsWalletFormat';
 import { subscribeEarningsLedgerEntry } from '@/services/earningsWallet';
+import type { UserRole } from '@/services/userService';
 import type { EarningsLedgerEntry } from '@/types/earningsWallet';
-import { requireRole } from '@/utils/requireRole';
+import { useRequireRole } from '@/utils/requireRole';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+/** Stable role list — never recreate between renders. */
+const ADMIN_ROLES: UserRole[] = ['admin'];
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -24,10 +28,15 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export default function AdminWalletTransactionScreen() {
-  const { authorized, loading: roleLoading } = requireRole(['admin']);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // All hooks must run unconditionally on every render (Rules of Hooks).
+  const { authorized, loading: roleLoading } = useRequireRole(ADMIN_ROLES);
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
   const [entry, setEntry] = useState<EarningsLedgerEntry | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const rawId = params.id;
+  const idValue = Array.isArray(rawId) ? rawId[0] : rawId;
+  const id = typeof idValue === 'string' ? idValue.trim() : '';
 
   useEffect(() => {
     if (!authorized || !id) return undefined;
@@ -41,6 +50,7 @@ export default function AdminWalletTransactionScreen() {
     );
   }, [authorized, id]);
 
+  // Conditional UI only — after every hook above has already run.
   if (roleLoading || !authorized) {
     return (
       <View style={styles.centered}>
@@ -73,10 +83,47 @@ export default function AdminWalletTransactionScreen() {
             value={entry.referenceId ?? entry.adminSnapshot?.referenceId ?? '—'}
           />
           <Row label="Order ID" value={entry.orderId ?? '—'} />
-          <Row label="Notes" value={entry.notes ?? entry.reason ?? '—'} />
+          <Row
+            label="Notes"
+            value={entry.note ?? entry.notes ?? entry.reason ?? '—'}
+          />
+          {entry.reason ? <Row label="Reason" value={entry.reason} /> : null}
+          {entry.walletType ? (
+            <Row label="Wallet Type" value={entry.walletType} />
+          ) : null}
+          {entry.walletOwnerId ? (
+            <Row label="Wallet Owner" value={entry.walletOwnerId} />
+          ) : null}
+          {entry.customerUid ? (
+            <Row label="Customer UID" value={entry.customerUid} />
+          ) : null}
+          {entry.previousBalance != null ? (
+            <Row
+              label="Previous Balance"
+              value={formatWalletMoney(entry.previousBalance)}
+            />
+          ) : null}
+          {entry.newBalance != null ? (
+            <Row
+              label="New Balance"
+              value={formatWalletMoney(entry.newBalance)}
+            />
+          ) : null}
+          {entry.adjustmentAmount != null ? (
+            <Row
+              label="Adjustment Amount"
+              value={formatWalletMoney(entry.adjustmentAmount)}
+            />
+          ) : null}
+          {entry.adminUid || entry.createdBy ? (
+            <Row
+              label="Admin UID"
+              value={entry.adminUid ?? entry.createdBy ?? '—'}
+            />
+          ) : null}
           <Row
             label="Balance After Transaction"
-            value={formatWalletMoney(entry.runningBalance)}
+            value={formatWalletMoney(entry.balanceAfter ?? entry.runningBalance)}
           />
         </ScrollView>
       )}

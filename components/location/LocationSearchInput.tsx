@@ -15,7 +15,7 @@ import type { LocationPalette } from '@/components/location/locationPalette';
 import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { useLocationPickerMount } from '@/hooks/useLocationPickerMount';
 import { displaySavedAddressTypeLabel } from '@/lib/location/userLocationLabel';
-import { syncProfileLocationToAddressBook } from '@/services/checkoutCustomerPrefs';
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import { logRoleGps, type AccountLocationRole } from '@/services/location/accountLocationRole';
 import { useLocationSearch } from '@/services/location/useLocationSearch';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
@@ -282,7 +282,7 @@ export function LocationSearchInput({
       if (collection === 'users' && accountId) {
         try {
           await refreshFromServer();
-          await syncProfileLocationToAddressBook(accountId);
+          // Address book sync runs inside saveAccountSavedLocation.
         } catch {
           /* profile save already succeeded */
         }
@@ -374,6 +374,22 @@ export function LocationSearchInput({
         throw new Error('Choose a valid address with coordinates before saving.');
       }
 
+      logLocationDebug('[SAVE LOCATION] button pressed', {
+        firestoreDocumentPath: `${collection}/${accountId}`,
+        collection,
+        documentId: accountId,
+        fullAddress: location.address,
+        coordinates: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+        label: showAddressLabelsRef.current ? selectedLabelRef.current : null,
+        customLabel:
+          showAddressLabelsRef.current && selectedLabelRef.current === 'custom'
+            ? customLabelTextRef.current.trim() || null
+            : null,
+      });
+
       await persist(location, {
         ...buildPersistOptions(),
         gpsAccuracy: location.gpsAccuracy ?? gpsAccuracyRef.current,
@@ -396,6 +412,7 @@ export function LocationSearchInput({
     accountId,
     afterCustomerSave,
     buildPersistOptions,
+    collection,
     persist,
     resolveDraftForSave,
     selectedLocation,

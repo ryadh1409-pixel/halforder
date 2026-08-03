@@ -38,6 +38,11 @@ export type SaveAccountLocationOptions = {
   customLabel?: string | null;
   gpsAccuracy?: number | null;
   role?: AccountLocationRole;
+  /**
+   * When true, skip mirroring into `checkoutAddressBook`.
+   * Used when the address book write is already mirroring into profile.
+   */
+  skipAddressBookSync?: boolean;
 };
 
 function collectionToRole(collection: AccountLocationCollection): AccountLocationRole {
@@ -226,11 +231,58 @@ export async function saveAccountSavedLocation(
   }
 
   const ref = doc(db, collection, id);
+  const documentPath = `${collection}/${id}`;
   const existing = await getDoc(ref);
-  if (existing.exists()) {
-    await updateDoc(ref, firestorePayload);
-  } else {
-    await setDoc(ref, firestorePayload);
+  const writeMethod = existing.exists() ? 'updateDoc' : 'setDoc';
+
+  logLocationDebug('[SAVE LOCATION] writing…', {
+    firestoreDocumentPath: documentPath,
+    collection,
+    documentId: id,
+    fullAddress: base.address,
+    formattedAddress: base.formattedAddress ?? base.address,
+    coordinates: { latitude: base.latitude, longitude: base.longitude },
+    label: options?.label ?? null,
+    customLabel: options?.label === 'custom' ? customLabel || null : null,
+    writeMethod,
+  });
+
+  try {
+    if (existing.exists()) {
+      await updateDoc(ref, firestorePayload);
+    } else {
+      await setDoc(ref, firestorePayload);
+    }
+    logLocationDebug('[SAVE LOCATION] write success', {
+      firestoreDocumentPath: documentPath,
+      collection,
+      documentId: id,
+      fullAddress: base.address,
+      coordinates: { latitude: base.latitude, longitude: base.longitude },
+      label: options?.label ?? null,
+      writeMethod,
+      success: true,
+    });
+    logLocationDebug('[PROFILE SAVE]', {
+      documentPath,
+      collection,
+      documentId: id,
+      savedAddress: base.address,
+      savedCoordinates: { lat: base.latitude, lng: base.longitude },
+      label: options?.label ?? null,
+      writeMethod,
+      success: true,
+    });
+  } catch (err) {
+    logLocationDebug('[SAVE LOCATION] write FAILED', {
+      firestoreDocumentPath: documentPath,
+      collection,
+      documentId: id,
+      writeMethod,
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   }
 
   if (collection === 'drivers') {
@@ -270,8 +322,45 @@ export async function saveAccountSavedLocation(
     city: base.city,
   });
 
-  return {
+  const result: SavedLocation = {
     ...base,
     updatedAt: Date.now(),
   };
+
+  // Push canonical delivery pin into HomeMarketplaceLocationContext + AsyncStorage.
+  if (collection === 'users') {
+    try {
+      const { publishCanonicalDeliveryLocation } = await import(
+        '@/services/location/canonicalDeliveryLocationBridge'
+      );
+      publishCanonicalDeliveryLocation(result);
+      logLocationDebug('[MARKETPLACE CONTEXT] published canonical after profile save', {
+        address: result.address,
+        coordinates: { lat: result.latitude, lng: result.longitude },
+      });
+    } catch {
+      /* context refresh is best-effort */
+    }
+  }
+
+  // Canonical customer delivery pin → keep checkout address book in lockstep.
+  if (collection === 'users' && options?.skipAddressBookSync !== true) {
+    try {
+      const { syncProfileLocationToAddressBook } = await import(
+        '@/services/checkoutCustomerPrefs'
+      );
+      await syncProfileLocationToAddressBook(id);
+      logLocationDebug('[LOCATION CACHE INVALIDATED]', {
+        reason: 'profile_save_synced_address_book',
+        accountId: id,
+      });
+    } catch (err) {
+      logLocationDebug('[LOCATION SYNC] address book sync failed', {
+        accountId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return result;
 }

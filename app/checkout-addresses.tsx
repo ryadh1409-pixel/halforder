@@ -9,6 +9,7 @@ import {
   deleteCheckoutAddress,
   fetchCheckoutCustomerSnapshot,
   setDefaultCheckoutAddress,
+  syncProfileLocationToAddressBook,
   upsertCheckoutAddress,
 } from '@/services/checkoutCustomerPrefs';
 import {
@@ -17,6 +18,7 @@ import {
 } from '@/services/checkoutAddressEditSession';
 import { useAuth } from '@/services/AuthContext';
 import { fetchSavedLocationFromServer } from '@/services/location/savedLocationFirestore';
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import type { CheckoutAddressBookEntry } from '@/types/checkoutCustomerPrefs';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
 import { showError, showSuccess } from '@/utils/toast';
@@ -54,6 +56,11 @@ export default function CheckoutAddressesScreen() {
       const pendingEdit = takePendingCheckoutAddressEdit();
       if (pendingEdit) {
         const saved = await fetchSavedLocationFromServer('users', uid);
+        logLocationDebug('[LOCATION LOAD] addresses pending edit', {
+          uid,
+          hasProfile: Boolean(saved.location),
+          mode: pendingEdit.mode,
+        });
         if (saved.location) {
           const next = await upsertCheckoutAddress(uid, {
             id: pendingEdit.mode === 'edit' ? pendingEdit.id : undefined,
@@ -65,21 +72,14 @@ export default function CheckoutAddressesScreen() {
           return;
         }
       }
-      const snap = await fetchCheckoutCustomerSnapshot(uid);
-      // Seed book from profile location when empty.
-      if (snap.addressBook.length === 0) {
-        const saved = await fetchSavedLocationFromServer('users', uid);
-        if (saved.location) {
-          const next = await upsertCheckoutAddress(uid, {
-            location: saved.location,
-            label: 'Home',
-            makeDefault: true,
-          });
-          setBook(next);
-          return;
-        }
-      }
-      setBook(snap.addressBook);
+      // Always re-sync from canonical profile location so Addresses never lags Profile.
+      const synced = await syncProfileLocationToAddressBook(uid);
+      logLocationDebug('[LOCATION LOAD] addresses screen', {
+        uid,
+        bookCount: synced.length,
+        defaultAddress: defaultCheckoutAddress(synced)?.address ?? null,
+      });
+      setBook(synced);
     } catch (e) {
       showError(getUserFriendlyError(e));
       try {

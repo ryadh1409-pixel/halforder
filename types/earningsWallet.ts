@@ -18,6 +18,12 @@ export type EarningsLedgerTxType =
   | 'admin_transfer_in'
   | 'restaurant_transfer_in'
   | 'driver_transfer_in'
+  | 'admin_manual_credit'
+  | 'admin_manual_debit'
+  | 'admin_manual_customer_credit'
+  | 'admin_manual_customer_debit'
+  | 'admin_balance_adjustment'
+  | 'deposit'
   | 'withdrawal'
   | 'adjustment';
 
@@ -124,9 +130,13 @@ export type EarningsLedgerEntry = {
   /** Signed delta applied to currentBalance (+ credit / − debit). */
   signedAmount: number;
   runningBalance: number;
+  /** Alias of runningBalance on deposit rows (and similar credits). */
+  balanceAfter?: number | null;
   orderId: string | null;
   description: string;
   notes: string | null;
+  /** Optional deposit note (mirrors notes when present). */
+  note?: string | null;
   source: string | null;
   sender: string | null;
   reason: string | null;
@@ -139,6 +149,17 @@ export type EarningsLedgerEntry = {
   /** Firestore server timestamp — never client Date.now() for event time. */
   createdAt: unknown;
   completedAt?: unknown;
+  /** Admin uid for deposits / admin-authored ledger rows. */
+  createdBy?: string | null;
+  /** Manual adjustment audit fields (partner wallet target). */
+  walletOwnerId?: string | null;
+  walletType?: 'restaurant' | 'driver' | null;
+  previousBalance?: number | null;
+  newBalance?: number | null;
+  adminUid?: string | null;
+  /** Customer wallet adjustment audit. */
+  customerUid?: string | null;
+  adjustmentAmount?: number | null;
 };
 
 export const ADMIN_EARNINGS_WALLET_ID = 'admin_platform';

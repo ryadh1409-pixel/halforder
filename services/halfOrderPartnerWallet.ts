@@ -63,13 +63,17 @@ function mapCredit(
   id: string,
   data: Record<string, unknown>,
 ): HalfOrderPartnerWalletCredit {
+  const type =
+    data.type === 'admin_balance_adjustment' || data.type === 'credit'
+      ? data.type
+      : null;
   return {
     id,
     walletId: String(data.walletId ?? ''),
     ownerType: data.ownerType as PartnerWalletOwnerType,
     ownerId: String(data.ownerId ?? ''),
     amount: money(Number(data.amount ?? 0)),
-    balanceAfter: money(Number(data.balanceAfter ?? 0)),
+    balanceAfter: money(Number(data.balanceAfter ?? data.newBalance ?? 0)),
     orderId: data.orderId == null || data.orderId === '' ? null : String(data.orderId),
     note: data.note == null || data.note === '' ? null : String(data.note),
     description:
@@ -77,6 +81,25 @@ function mapCredit(
         ? data.description.trim()
         : 'Balance added by HalfOrder',
     createdAt: data.createdAt ?? null,
+    type,
+    previousBalance:
+      data.previousBalance == null ? null : money(Number(data.previousBalance)),
+    newBalance:
+      data.newBalance == null && data.balanceAfter == null
+        ? null
+        : money(Number(data.newBalance ?? data.balanceAfter ?? 0)),
+    adjustmentAmount:
+      data.adjustmentAmount == null
+        ? null
+        : money(Number(data.adjustmentAmount)),
+    reason:
+      typeof data.reason === 'string' && data.reason.trim()
+        ? data.reason.trim()
+        : null,
+    adminUid:
+      typeof data.adminUid === 'string' && data.adminUid.trim()
+        ? data.adminUid.trim()
+        : null,
   };
 }
 
@@ -118,7 +141,12 @@ export function subscribePartnerWalletCredits(
       onChange(
         snap.docs
           .map((d) => mapCredit(d.id, d.data() as Record<string, unknown>))
-          .filter((c) => c.amount > 0),
+          .filter(
+            (c) =>
+              c.type === 'admin_balance_adjustment' ||
+              c.amount > 0 ||
+              (c.adjustmentAmount != null && c.adjustmentAmount !== 0),
+          ),
       );
     },
     (err) => onError?.(err),
@@ -203,6 +231,100 @@ export async function sendPartnerWalletBalance(
   });
 
   return { creditId: creditRef.id, balanceAfter };
+}
+
+export type AdminSetPartnerWalletBalanceInput = {
+  ownerType: PartnerWalletOwnerType;
+  ownerId: string;
+  newBalance: number;
+  reason: string;
+  adminUid: string;
+};
+
+/**
+ * Admin sets restaurant/driver HalfOrder wallet to an exact balance.
+ * Writes an immutable admin_balance_adjustment history row.
+ */
+export async function adminSetPartnerWalletBalance(
+  input: AdminSetPartnerWalletBalanceInput,
+): Promise<{
+  creditId: string;
+  previousBalance: number;
+  newBalance: number;
+  adjustmentAmount: number;
+}> {
+  const ownerId = input.ownerId.trim();
+  if (!ownerId) throw new Error('Wallet owner is required.');
+  const reason = input.reason.trim();
+  if (!reason) throw new Error('Reason is required.');
+  const adminUid = input.adminUid.trim();
+  if (!adminUid) throw new Error('Admin is required.');
+  const target = money(input.newBalance);
+  if (!(target >= 0) || !Number.isFinite(target)) {
+    throw new Error('New balance must be zero or greater.');
+  }
+
+  const walletId = partnerWalletDocId(input.ownerType, ownerId);
+  const walletRef = doc(db, PARTNER_WALLETS_COLLECTION, walletId);
+  const creditId = `admin_balance_adjustment_${adminUid.slice(0, 8)}_${Math.random().toString(36).slice(2, 10)}`;
+  const creditRef = doc(db, PARTNER_WALLET_CREDITS_COLLECTION, creditId);
+
+  let previousBalance = 0;
+  let newBalance = target;
+  let adjustmentAmount = 0;
+
+  await runTransaction(db, async (tx) => {
+    const [walletSnap, creditSnap] = await Promise.all([
+      tx.get(walletRef),
+      tx.get(creditRef),
+    ]);
+    if (creditSnap.exists()) {
+      throw new Error('Adjustment already recorded.');
+    }
+    previousBalance = money(Number(walletSnap.data()?.currentBalance ?? 0));
+    newBalance = target;
+    adjustmentAmount = money(newBalance - previousBalance);
+    if (adjustmentAmount === 0) {
+      throw new Error('New balance is the same as the current balance.');
+    }
+    const now = serverTimestamp();
+
+    tx.set(creditRef, {
+      walletId,
+      ownerType: input.ownerType,
+      ownerId,
+      type: 'admin_balance_adjustment',
+      amount: money(Math.abs(adjustmentAmount)),
+      adjustmentAmount,
+      previousBalance,
+      newBalance,
+      balanceAfter: newBalance,
+      orderId: null,
+      note: reason,
+      reason,
+      adminUid,
+      description: 'Admin balance adjustment',
+      createdAt: now,
+      createdBy: adminUid,
+      timestamp: now,
+    });
+
+    tx.set(
+      walletRef,
+      {
+        ownerType: input.ownerType,
+        ownerId,
+        currentBalance: newBalance,
+        updatedAt: now,
+        createdAt: walletSnap.exists()
+          ? walletSnap.data()?.createdAt ?? now
+          : now,
+      },
+      { merge: true },
+    );
+  });
+
+  return { creditId, previousBalance, newBalance, adjustmentAmount };
 }
 
 /** Admin list helpers — read-only scans of partner directories. */

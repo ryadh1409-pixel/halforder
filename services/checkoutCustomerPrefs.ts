@@ -11,6 +11,7 @@ import {
 } from '@/types/checkoutCustomerPrefs';
 import type { SavedLocation } from '@/types/savedLocation';
 import { db } from '@/services/firebase';
+import { logLocationDebug } from '@/lib/location/locationDebugLog';
 import {
   displaySavedAddressTypeLabel,
   readSavedLocationCustomLabelFromUserDoc,
@@ -18,11 +19,13 @@ import {
 } from '@/lib/location/userLocationLabel';
 import {
   fetchSavedLocationFromServer,
+  readSavedLocationFromDoc,
   saveAccountSavedLocation,
 } from '@/services/location/savedLocationFirestore';
 import {
   doc,
   getDoc,
+  getDocFromServer,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -92,15 +95,18 @@ export function parseCheckoutAddressBook(raw: unknown): CheckoutAddressBookEntry
 export type CheckoutCustomerSnapshot = {
   deliveryPrefs: CheckoutDeliveryPrefs;
   addressBook: CheckoutAddressBookEntry[];
+  /**
+   * Canonical delivery pin from `users/{uid}.location` (+ denorm fields).
+   * Checkout display and order creation must prefer this over addressBook.
+   */
+  profileDeliveryLocation: SavedLocation | null;
   phone: string;
   phoneNumber: string;
 };
 
-export async function fetchCheckoutCustomerSnapshot(
-  uid: string,
-): Promise<CheckoutCustomerSnapshot> {
-  const snap = await getDoc(doc(db, 'users', uid));
-  const data = snap.data() as Record<string, unknown> | undefined;
+function snapshotFromUserData(
+  data: Record<string, unknown> | undefined,
+): CheckoutCustomerSnapshot {
   const phone =
     asStr(data?.phone) ||
     asStr(data?.phoneNumber) ||
@@ -109,9 +115,42 @@ export async function fetchCheckoutCustomerSnapshot(
   return {
     deliveryPrefs: parseCheckoutDeliveryPrefs(data?.checkoutDeliveryPrefs),
     addressBook: parseCheckoutAddressBook(data?.checkoutAddressBook),
+    profileDeliveryLocation: readSavedLocationFromDoc(data),
     phone,
     phoneNumber: asStr(data?.phoneNumber) || phone,
   };
+}
+
+export async function fetchCheckoutCustomerSnapshot(
+  uid: string,
+): Promise<CheckoutCustomerSnapshot> {
+  const snap = await getDoc(doc(db, 'users', uid));
+  return snapshotFromUserData(
+    snap.data() as Record<string, unknown> | undefined,
+  );
+}
+
+/** Force-refresh from Firestore server — bypasses local persistence cache. */
+export async function fetchCheckoutCustomerSnapshotFromServer(
+  uid: string,
+): Promise<CheckoutCustomerSnapshot> {
+  const snap = await getDocFromServer(doc(db, 'users', uid));
+  const result = snapshotFromUserData(
+    snap.data() as Record<string, unknown> | undefined,
+  );
+  logLocationDebug('[CHECKOUT LOAD]', {
+    source: 'users/{uid} getDocFromServer',
+    documentPath: `users/${uid}`,
+    address: result.profileDeliveryLocation?.address ?? null,
+    coordinates: result.profileDeliveryLocation
+      ? {
+          lat: result.profileDeliveryLocation.latitude,
+          lng: result.profileDeliveryLocation.longitude,
+        }
+      : null,
+    addressBookCount: result.addressBook.length,
+  });
+  return result;
 }
 
 export function subscribeCheckoutCustomerSnapshot(
@@ -122,18 +161,22 @@ export function subscribeCheckoutCustomerSnapshot(
   return onSnapshot(
     doc(db, 'users', uid),
     (docSnap) => {
-      const data = docSnap.data() as Record<string, unknown> | undefined;
-      const phone =
-        asStr(data?.phone) ||
-        asStr(data?.phoneNumber) ||
-        asStr(data?.whatsapp) ||
-        '';
-      onChange({
-        deliveryPrefs: parseCheckoutDeliveryPrefs(data?.checkoutDeliveryPrefs),
-        addressBook: parseCheckoutAddressBook(data?.checkoutAddressBook),
-        phone,
-        phoneNumber: asStr(data?.phoneNumber) || phone,
+      const result = snapshotFromUserData(
+        docSnap.data() as Record<string, unknown> | undefined,
+      );
+      logLocationDebug('[CHECKOUT LOAD]', {
+        source: 'users/{uid} onSnapshot',
+        documentPath: `users/${uid}`,
+        address: result.profileDeliveryLocation?.address ?? null,
+        coordinates: result.profileDeliveryLocation
+          ? {
+              lat: result.profileDeliveryLocation.latitude,
+              lng: result.profileDeliveryLocation.longitude,
+            }
+          : null,
+        addressBookCount: result.addressBook.length,
       });
+      onChange(result);
     },
     (err) => onError?.(err),
   );
@@ -199,7 +242,9 @@ function toSavedLocation(entry: CheckoutAddressBookEntry): SavedLocation {
 async function writeAddressBook(
   uid: string,
   book: CheckoutAddressBookEntry[],
+  options?: { mirrorDefaultToProfile?: boolean },
 ): Promise<void> {
+  const mirrorDefaultToProfile = options?.mirrorDefaultToProfile !== false;
   const normalized = book.map((e) => ({
     ...e,
     isDefault: e.isDefault === true,
@@ -219,7 +264,7 @@ async function writeAddressBook(
     { merge: true },
   );
 
-  if (defaultEntry) {
+  if (defaultEntry && mirrorDefaultToProfile) {
     // Preserve address type / custom label already on the customer profile.
     const snap = await getDoc(doc(db, 'users', uid));
     const data = snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
@@ -227,6 +272,7 @@ async function writeAddressBook(
     const existingCustom = readSavedLocationCustomLabelFromUserDoc(data);
     await saveAccountSavedLocation('users', uid, toSavedLocation(defaultEntry), {
       role: 'user',
+      skipAddressBookSync: true,
       ...(existingLabel
         ? {
             label: existingLabel,
@@ -310,33 +356,118 @@ export async function deleteCheckoutAddress(
   return book;
 }
 
+/**
+ * Build the checkout display/order address from the canonical profile pin.
+ * Address-book metadata (id/label) is retained when present; coordinates/address
+ * always come from `users.location`.
+ */
+export function resolveCheckoutDeliveryAddress(input: {
+  profileDeliveryLocation: SavedLocation | null;
+  addressBook: CheckoutAddressBookEntry[];
+}): CheckoutAddressBookEntry | null {
+  const profile = input.profileDeliveryLocation;
+  if (!profile?.address?.trim()) {
+    return defaultCheckoutAddress(input.addressBook);
+  }
+  const bookDefault = defaultCheckoutAddress(input.addressBook);
+  return {
+    id: bookDefault?.id ?? 'profile_delivery',
+    address: profile.address,
+    formattedAddress: profile.formattedAddress ?? profile.address,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    placeId: profile.placeId,
+    city: profile.city,
+    province: profile.province,
+    country: profile.country,
+    postalCode: profile.postalCode,
+    label: bookDefault?.label ?? 'Home',
+    isDefault: true,
+  };
+}
+
 export function defaultCheckoutAddress(
   book: CheckoutAddressBookEntry[],
 ): CheckoutAddressBookEntry | null {
   return book.find((e) => e.isDefault) ?? book[0] ?? null;
 }
 
+/**
+ * True when the address-book default already mirrors the profile pin.
+ */
+function addressBookMatchesProfile(
+  book: CheckoutAddressBookEntry[],
+  profile: SavedLocation,
+): boolean {
+  const def = defaultCheckoutAddress(book);
+  if (!def) return false;
+  const sameAddress =
+    def.address.trim() === profile.address.trim() ||
+    (def.formattedAddress ?? '').trim() ===
+      (profile.formattedAddress ?? profile.address).trim();
+  const sameCoords =
+    Math.abs(def.latitude - profile.latitude) < 1e-7 &&
+    Math.abs(def.longitude - profile.longitude) < 1e-7;
+  return sameAddress && sameCoords;
+}
+
 /** Keep address book in sync with the canonical profile `location` after `/location` edits. */
 export async function syncProfileLocationToAddressBook(
   uid: string,
 ): Promise<CheckoutAddressBookEntry[]> {
-  const saved = await fetchSavedLocationFromServer('users', uid);
-  const snap = await fetchCheckoutCustomerSnapshot(uid);
-  if (!saved.location) return snap.addressBook;
+  const id = uid.trim();
+  if (!id) return [];
+
+  const saved = await fetchSavedLocationFromServer('users', id);
+  const snap = await fetchCheckoutCustomerSnapshot(id);
+  if (!saved.location) {
+    logLocationDebug('[LOCATION SYNC] profile→addressBook skipped (no profile location)', {
+      uid: id,
+      bookCount: snap.addressBook.length,
+    });
+    return snap.addressBook;
+  }
+
+  if (addressBookMatchesProfile(snap.addressBook, saved.location)) {
+    logLocationDebug('[LOCATION SYNC] address book already matches profile', {
+      uid: id,
+      address: saved.location.address,
+    });
+    return snap.addressBook;
+  }
+
   const displayLabel =
     displaySavedAddressTypeLabel(saved.label, saved.customLabel) || 'Home';
   const def = defaultCheckoutAddress(snap.addressBook);
-  if (def) {
-    return upsertCheckoutAddress(uid, {
-      id: def.id,
-      location: saved.location,
-      label: displayLabel,
-      makeDefault: true,
-    });
-  }
-  return upsertCheckoutAddress(uid, {
-    location: saved.location,
+  const idToUse = def?.id?.trim() || newAddressId();
+  const next: CheckoutAddressBookEntry = {
+    id: idToUse,
+    address: saved.location.address,
+    formattedAddress:
+      saved.location.formattedAddress ?? saved.location.address,
+    latitude: saved.location.latitude,
+    longitude: saved.location.longitude,
+    placeId: saved.location.placeId,
+    city: saved.location.city,
+    province: saved.location.province,
+    country: saved.location.country,
+    postalCode: saved.location.postalCode,
     label: displayLabel,
-    makeDefault: true,
+    isDefault: true,
+  };
+
+  let book = snap.addressBook.map((e) => ({ ...e, isDefault: false }));
+  const idx = book.findIndex((e) => e.id === idToUse);
+  if (idx >= 0) book[idx] = next;
+  else book = [...book, next];
+
+  // Profile is already SSOT — do not mirror book back into profile (avoids loops).
+  await writeAddressBook(id, book, { mirrorDefaultToProfile: false });
+  logLocationDebug('[LOCATION SYNC] profile→addressBook', {
+    uid: id,
+    address: next.address,
+    entryId: next.id,
+    bookCount: book.length,
   });
+  return book;
 }

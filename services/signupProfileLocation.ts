@@ -4,7 +4,14 @@ import {
   requestForegroundLocationPermission,
 } from '@/services/location/gps';
 import { resolveAddressFromGps } from '@/services/location/resolveAddressFromGps';
-import { doc, onSnapshot, serverTimestamp, setDoc, type Unsubscribe } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  type Unsubscribe,
+} from 'firebase/firestore';
 
 export type ProfileLocationFields = {
   latitude: number;
@@ -15,9 +22,8 @@ export type ProfileLocationFields = {
 };
 
 /**
- * Persist profile location for nearby matching (nested + top-level fields).
- * Does not replace delivery `location.address` helpers used elsewhere —
- * merges the matching fields the sign-up flow requires.
+ * Persist profile matching fields (city/province/country + coords).
+ * Merges into nested `location` without wiping an existing delivery `address`.
  */
 export async function saveUserProfileLocation(
   uid: string,
@@ -38,16 +44,29 @@ export async function saveUserProfileLocation(
     throw new Error('Invalid location coordinates.');
   }
 
+  const ref = doc(db, 'users', id);
+  const existing = await getDoc(ref);
+  const prevData = existing.exists()
+    ? (existing.data() as Record<string, unknown>)
+    : undefined;
+  const prevNested =
+    prevData?.location && typeof prevData.location === 'object'
+      ? (prevData.location as Record<string, unknown>)
+      : {};
+
   const location = {
+    ...prevNested,
     latitude: fields.latitude,
     longitude: fields.longitude,
+    lat: fields.latitude,
+    lng: fields.longitude,
     city,
     province,
     country,
   };
 
   await setDoc(
-    doc(db, 'users', id),
+    ref,
     {
       location,
       latitude: fields.latitude,

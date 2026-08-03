@@ -9,19 +9,19 @@ import {
 } from '@/lib/earningsWalletFormat';
 import { useAuth } from '@/services/AuthContext';
 import {
-  adminDepositEarningsWallet,
+  adminSetEarningsWalletBalance,
   subscribeEarningsLedger,
   subscribeEarningsWallet,
 } from '@/services/earningsWallet';
 import type { EarningsLedgerEntry, EarningsWalletDoc } from '@/types/earningsWallet';
-import { ADMIN_EARNINGS_OWNER_ID } from '@/types/earningsWallet';
 import type { UserRole } from '@/services/userService';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 import { useRequireRole } from '@/utils/requireRole';
 import { showError, showSuccess } from '@/utils/toast';
+import { confirmWalletBalanceChange } from '@/lib/confirmWalletBalanceChange';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -34,96 +34,110 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-/** Stable role list — never recreate between renders. */
 const ADMIN_ROLES: UserRole[] = ['admin'];
 
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statTile}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-    </View>
-  );
+function parseOwnerType(raw: unknown): 'restaurant' | 'driver' | null {
+  if (raw === 'restaurant' || raw === 'driver') return raw;
+  return null;
 }
 
-export default function AdminWalletScreen() {
-  // All hooks must run unconditionally on every render (Rules of Hooks).
+export default function AdminWalletManagementDetailScreen() {
   const { authorized, loading: roleLoading } = useRequireRole(ADMIN_ROLES);
   const { user } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ ownerType?: string; ownerId?: string }>();
+  const ownerType = useMemo(
+    () => parseOwnerType(params.ownerType),
+    [params.ownerType],
+  );
+  const ownerId = typeof params.ownerId === 'string' ? params.ownerId : '';
+
   const [wallet, setWallet] = useState<EarningsWalletDoc | null>(null);
   const [entries, setEntries] = useState<EarningsLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addFundsOpen, setAddFundsOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [depositing, setDepositing] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [newBalance, setNewBalance] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!authorized) return undefined;
+    if (!authorized || !ownerType || !ownerId) return undefined;
     const unsubW = subscribeEarningsWallet(
-      'admin',
-      ADMIN_EARNINGS_OWNER_ID,
+      ownerType,
+      ownerId,
       (w) => {
         setWallet(w);
         setLoading(false);
       },
       () => setLoading(false),
     );
-    const unsubL = subscribeEarningsLedger(
-      'admin',
-      ADMIN_EARNINGS_OWNER_ID,
-      setEntries,
-    );
+    const unsubL = subscribeEarningsLedger(ownerType, ownerId, setEntries);
     return () => {
       unsubW();
       unsubL();
     };
-  }, [authorized]);
+  }, [authorized, ownerType, ownerId]);
 
-  const closeDeposit = () => {
-    if (depositing) return;
-    setAddFundsOpen(false);
-    setAmount('');
-    setNote('');
+  const closeEdit = () => {
+    if (saving) return;
+    setEditOpen(false);
+    setNewBalance('');
+    setReason('');
   };
 
-  const onDeposit = async () => {
-    if (depositing) return;
-    const raw = String(amount).replace(/,/g, '').trim();
+  const openEdit = () => {
+    setNewBalance((wallet?.currentBalance ?? 0).toFixed(2));
+    setReason('');
+    setEditOpen(true);
+  };
+
+  const onSaveEdit = async () => {
+    if (saving || !ownerType || !ownerId) return;
+    const raw = String(newBalance).replace(/,/g, '').trim();
     if (!raw) {
-      showError('Deposit amount is required.');
+      showError('New balance is required.');
       return;
     }
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || !(parsed > 0)) {
-      showError('Enter a valid amount greater than zero.');
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      showError('Enter a valid new balance of zero or greater.');
+      return;
+    }
+    const reasonTrim = reason.trim();
+    if (!reasonTrim) {
+      showError('Reason is required.');
       return;
     }
     const adminUid = user?.uid?.trim() ?? '';
     if (!adminUid) {
-      showError('You must be signed in as an admin to deposit funds.');
+      showError('You must be signed in as an admin.');
       return;
     }
-    setDepositing(true);
+
+    const previous = wallet?.currentBalance ?? 0;
+    const confirmed = await confirmWalletBalanceChange(previous, parsed);
+    if (!confirmed) return;
+
+    setSaving(true);
     try {
-      const result = await adminDepositEarningsWallet({
-        amount: parsed,
-        note,
+      const result = await adminSetEarningsWalletBalance({
+        ownerType,
+        ownerId,
+        newBalance: parsed,
+        reason: reasonTrim,
         adminUid,
       });
-      showSuccess(`Deposit complete. Ref ${result.referenceId}`);
-      setAddFundsOpen(false);
-      setAmount('');
-      setNote('');
+      showSuccess(`Balance updated. Ref ${result.referenceId}`);
+      setEditOpen(false);
+      setNewBalance('');
+      setReason('');
     } catch (err) {
       showError(getUserFriendlyError(err));
     } finally {
-      setDepositing(false);
+      setSaving(false);
     }
   };
 
-  // Conditional UI only — after every hook above has already run.
   if (roleLoading || !authorized) {
     return (
       <View style={styles.centered}>
@@ -132,65 +146,69 @@ export default function AdminWalletScreen() {
     );
   }
 
+  if (!ownerType || !ownerId) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <AdminHeader
+          title="Wallet"
+          fallbackRoute={adminRoutes.walletManagement}
+        />
+        <Text style={styles.empty}>Wallet not found.</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const title =
+    ownerType === 'restaurant' ? 'Restaurant Wallet' : 'Driver Wallet';
+  const totalEarnings = formatWalletMoney(
+    wallet?.totalEarnings ||
+      wallet?.lifetimeEarnings ||
+      wallet?.restaurantTotalEarnings ||
+      0,
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <AdminHeader title="Admin Wallet" fallbackRoute={adminRoutes.home} />
+      <AdminHeader title={title} fallbackRoute={adminRoutes.walletManagement} />
       {loading ? (
-        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 24 }} />
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={{ marginTop: 24 }}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.actions}>
-            <Pressable style={styles.actionBtn} onPress={() => setAddFundsOpen(true)}>
-              <Ionicons name="add-circle-outline" size={18} color="#fff" />
-              <Text style={styles.actionText}>Add Funds</Text>
-            </Pressable>
-            <Pressable
-              style={styles.actionBtn}
-              onPress={() => router.push(adminRoutes.walletTransfer as never)}
-            >
-              <Ionicons name="swap-horizontal" size={18} color="#fff" />
-              <Text style={styles.actionText}>Transfer</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionBtn, styles.actionSecondary]}
-              onPress={() => router.push(adminRoutes.walletConfig as never)}
-            >
-              <Ionicons name="settings-outline" size={18} color={COLORS.primary} />
-              <Text style={[styles.actionText, { color: COLORS.primary }]}>Config</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.ownerId} numberOfLines={1}>
+            {ownerId}
+          </Text>
 
           <View style={styles.hero}>
             <Text style={styles.heroLabel}>Current Balance</Text>
             <Text style={styles.heroValue}>
               {formatWalletMoney(wallet?.currentBalance)}
             </Text>
+            <Text style={styles.heroMeta}>Total Earnings: {totalEarnings}</Text>
+            <Text style={styles.heroMeta}>
+              Pending: {formatWalletMoney(wallet?.pendingBalance)}
+            </Text>
           </View>
 
-          <View style={styles.grid}>
-            <StatTile label="Total Revenue" value={formatWalletMoney(wallet?.totalRevenue)} />
-            <StatTile
-              label="Restaurant Commissions"
-              value={formatWalletMoney(wallet?.restaurantCommissions)}
-            />
-            <StatTile
-              label="Driver Commissions"
-              value={formatWalletMoney(wallet?.driverCommissions)}
-            />
-            <StatTile label="Service Fees" value={formatWalletMoney(wallet?.serviceFees)} />
-            <StatTile label="Platform Fees" value={formatWalletMoney(wallet?.platformFees)} />
-            <StatTile
-              label="Promo Bonus Paid"
-              value={formatWalletMoney(wallet?.promotionalBonusPaid)}
-            />
-            <StatTile
-              label="Transfers Sent"
-              value={formatWalletMoney(wallet?.totalTransfersSent)}
-            />
-            <StatTile
-              label="Net Platform Revenue"
-              value={formatWalletMoney(wallet?.netPlatformRevenue)}
-            />
+          <View style={styles.actions}>
+            <Pressable style={styles.actionBtn} onPress={openEdit}>
+              <Ionicons name="create-outline" size={18} color="#fff" />
+              <Text style={styles.actionText}>Edit Balance</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionBtn, styles.actionSecondary]}
+              onPress={() =>
+                router.push(adminRoutes.walletTransfer as never)
+              }
+            >
+              <Ionicons name="swap-horizontal" size={18} color={COLORS.primary} />
+              <Text style={[styles.actionText, { color: COLORS.primary }]}>
+                Transfer
+              </Text>
+            </Pressable>
           </View>
 
           <Text style={styles.sectionTitle}>Transaction History</Text>
@@ -213,10 +231,7 @@ export default function AdminWalletScreen() {
                       {formatWalletMoney(item.signedAmount)} · {item.type}
                     </Text>
                     <Text style={styles.rowMeta}>
-                      Source: {item.source ?? item.adminSnapshot?.source ?? '—'}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      Ref: {item.referenceId ?? item.adminSnapshot?.referenceId ?? '—'}
+                      {item.reason ?? item.notes ?? item.description ?? '—'}
                     </Text>
                     <Text style={styles.rowMeta}>
                       {formatWalletLocalDate(item.createdAt)} ·{' '}
@@ -232,19 +247,19 @@ export default function AdminWalletScreen() {
       )}
 
       <Modal
-        visible={addFundsOpen}
+        visible={editOpen}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={closeDeposit}
+        onRequestClose={closeEdit}
       >
         <SafeAreaView style={styles.modalScreen} edges={['top', 'bottom']}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Deposit Funds</Text>
+            <Text style={styles.modalTitle}>Edit Balance</Text>
             <Pressable
-              onPress={closeDeposit}
+              onPress={closeEdit}
               hitSlop={12}
               style={styles.modalClose}
-              disabled={depositing}
+              disabled={saving}
             >
               <Ionicons name="close" size={22} color="#F5F3FF" />
             </Pressable>
@@ -253,34 +268,41 @@ export default function AdminWalletScreen() {
             contentContainerStyle={styles.modalContent}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.label}>Deposit Amount ($)</Text>
+            <Text style={styles.label}>Current Balance</Text>
+            <Text style={styles.readonly}>
+              {formatWalletMoney(wallet?.currentBalance)}
+            </Text>
+
+            <Text style={styles.label}>New Balance ($)</Text>
             <AppTextInput
-              value={amount}
-              onChangeText={setAmount}
+              value={newBalance}
+              onChangeText={setNewBalance}
               keyboardType="decimal-pad"
               placeholder="0.00"
-              editable={!depositing}
+              editable={!saving}
             />
-            <Text style={styles.label}>Optional Note</Text>
+
+            <Text style={styles.label}>Reason (required)</Text>
             <AppTextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="Note (optional)"
-              editable={!depositing}
+              value={reason}
+              onChangeText={setReason}
+              placeholder="e.g. Bank transfer payout 2026-08-02"
+              editable={!saving}
             />
+
             <Pressable
-              style={[styles.confirmBtn, depositing && { opacity: 0.6 }]}
-              onPress={onDeposit}
-              disabled={depositing}
+              style={[styles.confirmBtn, saving && { opacity: 0.6 }]}
+              onPress={onSaveEdit}
+              disabled={saving}
             >
               <Text style={styles.confirmText}>
-                {depositing ? 'Depositing…' : 'Deposit'}
+                {saving ? 'Saving…' : 'Save'}
               </Text>
             </Pressable>
             <Pressable
-              style={[styles.cancelBtn, depositing && { opacity: 0.6 }]}
-              onPress={closeDeposit}
-              disabled={depositing}
+              style={[styles.cancelBtn, saving && { opacity: 0.6 }]}
+              onPress={closeEdit}
+              disabled={saving}
             >
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
@@ -300,18 +322,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   content: { padding: 16, paddingBottom: 40 },
-  depositFundsBtn: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
+  ownerId: { color: '#8A829E', marginBottom: 10, fontSize: 12 },
+  hero: {
+    backgroundColor: 'rgba(168, 85, 247, 0.14)',
+    borderRadius: 14,
+    padding: 18,
     marginBottom: 12,
   },
-  depositFundsText: { color: '#fff', fontWeight: '800', fontSize: 17 },
-  actions: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  heroLabel: { color: '#C4B5FD', fontWeight: '600' },
+  heroValue: {
+    color: '#F5F3FF',
+    fontSize: 32,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  heroMeta: { color: '#8A829E', marginTop: 6, fontSize: 13 },
+  actions: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -328,27 +354,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   actionText: { color: '#fff', fontWeight: '700' },
-  hero: {
-    backgroundColor: 'rgba(168, 85, 247, 0.14)',
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 12,
+  sectionTitle: {
+    color: '#F5F3FF',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 10,
   },
-  heroLabel: { color: '#C4B5FD', fontWeight: '600' },
-  heroValue: { color: '#F5F3FF', fontSize: 32, fontWeight: '800', marginTop: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
-  statTile: {
-    width: '47%',
-    backgroundColor: '#151022',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.18)',
-  },
-  statLabel: { color: '#8A829E', fontSize: 11, fontWeight: '600' },
-  statValue: { color: '#F5F3FF', fontSize: 16, fontWeight: '700', marginTop: 4 },
-  sectionTitle: { color: '#F5F3FF', fontSize: 17, fontWeight: '700', marginBottom: 10 },
-  empty: { color: '#8A829E' },
+  empty: { color: '#8A829E', padding: 16 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -377,6 +389,25 @@ const styles = StyleSheet.create({
   },
   modalContent: { padding: 16, gap: 8, paddingBottom: 40 },
   label: { color: '#C4B5FD', fontWeight: '600', marginTop: 8 },
+  readonly: {
+    color: '#F5F3FF',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  typeRow: { flexDirection: 'row', gap: 10 },
+  typeBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  typeBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  typeText: { color: '#C4B5FD', fontWeight: '700', textAlign: 'center', fontSize: 13 },
+  typeTextActive: { color: '#fff' },
   confirmBtn: {
     marginTop: 20,
     backgroundColor: COLORS.primary,

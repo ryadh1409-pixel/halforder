@@ -12,7 +12,9 @@ const PAL = {
 };
 
 function formatCad(amount: number): string {
-  return `CA$${Math.max(0, amount).toFixed(2)}`;
+  const n = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100;
+  const sign = n < 0 ? '-' : '';
+  return `${sign}CA$${Math.abs(n).toFixed(2)}`;
 }
 
 function localDate(value: unknown): string {
@@ -56,34 +58,65 @@ export const PartnerWalletCreditHistory = memo(function PartnerWalletCreditHisto
 }: Props) {
   return (
     <View style={styles.section}>
-      <Text style={styles.title}>Credit History</Text>
+      <Text style={styles.title}>Wallet History</Text>
       {credits.length === 0 ? (
         <Text style={styles.empty}>{emptyText}</Text>
       ) : (
-        credits.map((c) => (
-          <View key={c.id} style={styles.row}>
-            <View style={styles.rowTop}>
-              <Text style={styles.amount}>+{formatCad(c.amount)}</Text>
-              <Text style={styles.meta}>
-                {localDate(c.createdAt)} · {localTime(c.createdAt)}
+        credits.map((c) => {
+          const isAdjustment = c.type === 'admin_balance_adjustment';
+          const displayAmount = isAdjustment
+            ? c.adjustmentAmount ?? c.amount
+            : c.amount;
+          const amountLabel = isAdjustment
+            ? formatCad(displayAmount)
+            : `+${formatCad(displayAmount)}`;
+          return (
+            <View key={c.id} style={styles.row}>
+              <View style={styles.rowTop}>
+                <Text style={styles.amount}>{amountLabel}</Text>
+                <Text style={styles.meta}>
+                  {localDate(c.createdAt)} · {localTime(c.createdAt)}
+                </Text>
+              </View>
+              {isAdjustment ? (
+                <>
+                  <Text style={styles.line}>
+                    Type: admin_balance_adjustment
+                  </Text>
+                  <Text style={styles.line}>
+                    Previous: {formatCad(c.previousBalance ?? 0)} → New:{' '}
+                    {formatCad(c.newBalance ?? c.balanceAfter)}
+                  </Text>
+                  {c.reason || c.note ? (
+                    <Text style={styles.note} numberOfLines={3}>
+                      Reason: {c.reason ?? c.note}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.line}>
+                    {orderIdLabel}: {c.orderId ?? '—'}
+                  </Text>
+                  <Text style={styles.line}>
+                    Balance after credit: {formatCad(c.balanceAfter)}
+                  </Text>
+                  {c.note ? (
+                    <Text style={styles.note} numberOfLines={2}>
+                      {c.note}
+                    </Text>
+                  ) : null}
+                </>
+              )}
+              <Text style={styles.footnote}>
+                {c.description ||
+                  (isAdjustment
+                    ? 'Admin balance adjustment'
+                    : 'Balance added by HalfOrder')}
               </Text>
             </View>
-            <Text style={styles.line}>
-              {orderIdLabel}: {c.orderId ?? '—'}
-            </Text>
-            <Text style={styles.line}>
-              Balance after credit: {formatCad(c.balanceAfter)}
-            </Text>
-            {c.note ? (
-              <Text style={styles.note} numberOfLines={2}>
-                {c.note}
-              </Text>
-            ) : null}
-            <Text style={styles.footnote}>
-              {c.description || 'Balance added by HalfOrder'}
-            </Text>
-          </View>
-        ))
+          );
+        })
       )}
     </View>
   );
