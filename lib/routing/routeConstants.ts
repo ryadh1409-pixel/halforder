@@ -69,6 +69,8 @@ export function getRouteGroupFromPathname(pathname: string): RouteGroup {
   }
 
   // Canonical host tabs resolve without group tokens in pathname.
+  // `orders` / `wallet` are intentionally omitted — bare `/orders` and `/wallet`
+  // also exist outside `(host)`. Host shell access must use segments for those.
   const root = firstPathSegment(pathname);
   if (root === 'dashboard' || root === 'menu') return '(host)';
 

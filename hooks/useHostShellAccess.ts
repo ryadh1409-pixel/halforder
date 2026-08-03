@@ -3,12 +3,13 @@ import { getRouteGroupFromPathname } from '@/lib/routing/routeConstants';
 import { normalizeRoleForRouting } from '@/lib/routing/roleTypes';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
-import { usePathname } from 'expo-router';
+import { usePathname, useSegments } from 'expo-router';
 import { useMemo } from 'react';
 
 /** Whether `(host)` layout may mount — active restaurant workspace only. */
 export function useHostShellAccess() {
   const pathname = usePathname();
+  const segments = useSegments();
   const { user, loading, authReady, roleResolved, firestoreUserRole } = useAuth();
   const {
     ready: workspaceReady,
@@ -20,7 +21,12 @@ export function useHostShellAccess() {
     const signedIn = isRegisteredAuthUser(user);
     const role = normalizeRoleForRouting(routingWorkspace);
     const authSettled = authReady && !loading;
-    const onHostPath = getRouteGroupFromPathname(pathname) === '(host)';
+    // Pathname alone is insufficient: Expo strips `(host)` for some tabs, and
+    // bare `/wallet` / `/orders` collide with non-host routes. Segments keep the
+    // group token while the restaurant tab shell is active.
+    const onHostPath =
+      getRouteGroupFromPathname(pathname) === '(host)' ||
+      segments.includes('(host)');
     const isRestaurant =
       workspaceReady &&
       routingWorkspace === 'restaurant' &&
@@ -57,6 +63,7 @@ export function useHostShellAccess() {
     pathname,
     roleResolved,
     routingWorkspace,
+    segments,
     user,
     workspaceReady,
   ]);

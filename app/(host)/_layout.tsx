@@ -1,4 +1,5 @@
 import { useHostShellAccess } from '@/hooks/useHostShellAccess';
+import { HOST_TAB_HREFS } from '@/lib/navigationPaths';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -14,6 +15,9 @@ export const unstable_settings = {
 /**
  * Passive restaurant host shell — no navigation side effects.
  * Wrong-role recovery is handled by {@link StartupRedirectOrchestrator} at root.
+ *
+ * Explicit tab hrefs (same pattern as driver) — bare `/wallet` collides with
+ * customer `app/wallet`, and bare `/orders` collides with `app/orders`.
  */
 export default function HostLayout() {
   const { canRenderShell, showShellLoading } = useHostShellAccess();
@@ -49,6 +53,7 @@ export default function HostLayout() {
         name="dashboard"
         options={{
           title: 'Dashboard',
+          href: HOST_TAB_HREFS.dashboard,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="storefront-outline" size={size} color={color} />
           ),
@@ -58,6 +63,7 @@ export default function HostLayout() {
         name="orders"
         options={{
           title: 'Orders',
+          href: HOST_TAB_HREFS.orders,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt-outline" size={size} color={color} />
           ),
@@ -67,6 +73,7 @@ export default function HostLayout() {
         name="menu"
         options={{
           title: 'Menu',
+          href: HOST_TAB_HREFS.menu,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="restaurant-outline" size={size} color={color} />
           ),
@@ -76,6 +83,7 @@ export default function HostLayout() {
         name="wallet"
         options={{
           title: 'Wallet',
+          href: HOST_TAB_HREFS.wallet,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet-outline" size={size} color={color} />
           ),

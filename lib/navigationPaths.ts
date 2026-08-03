@@ -81,12 +81,17 @@ export const HOST_ROUTES = {
   dashboard: '/(host)/dashboard',
   orders: '/(host)/orders',
   menu: '/(host)/menu',
+  /** Explicit group path — bare `/wallet` collides with customer `app/wallet`. */
+  wallet: '/(host)/wallet',
+  walletTransaction: (id: string) =>
+    `/(host)/wallet-transaction/${encodeURIComponent(id)}` as const,
 } as const;
 
-export type HostTabKey = 'dashboard' | 'orders' | 'menu';
+export type HostTabKey = 'dashboard' | 'orders' | 'menu' | 'wallet';
 
 export const HOST_TAB_HREFS: Record<HostTabKey, Href> = {
   dashboard: HOST_ROUTES.dashboard,
   orders: HOST_ROUTES.orders,
   menu: HOST_ROUTES.menu,
+  wallet: HOST_ROUTES.wallet,
 };
