@@ -1738,6 +1738,41 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       );
     });
 
+    it('allows continuous moving ultra-light driverLocation writes (GPX sequence)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv_move'), { name: 'Driver Move' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc_move'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          driverId: 'drv_move',
+          assignedDriverId: 'drv_move',
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          totalPrice: 10,
+          items: [{ id: 'i1', name: 'Salad', price: 10, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv_move').firestore();
+      // ~100m steps — continuous live tracking write shape
+      const path = [
+        [45.4215, -75.6972],
+        [45.4225, -75.6958],
+        [45.4235, -75.6944],
+        [45.4245, -75.693],
+        [45.4255, -75.6916],
+      ] as const;
+      for (const [lat, lng] of path) {
+        await assertSucceeds(
+          updateDoc(doc(db, 'orders', 'loc_move'), {
+            driverLocation: driverLiveLocationPayload(lat, lng),
+          }),
+        );
+      }
+    });
+
     it('denies driverLocation+updatedAt write without deliveryType', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv_ud'), { name: 'Driver UD' });
