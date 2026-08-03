@@ -842,130 +842,202 @@ export function subscribeActiveDelivery(
   );
 }
 
+type ActiveOrdersObserver = (orders: ActiveDelivery[]) => void;
+
+type ActiveOrdersFeed = {
+  refCount: number;
+  unsub: Unsubscribe | null;
+  cancelled: boolean;
+  observers: Set<ActiveOrdersObserver>;
+  last: ActiveDelivery[];
+  started: boolean;
+};
+
+const activeOrdersFeeds = new Map<string, ActiveOrdersFeed>();
+
+function emitActiveOrdersFeed(feed: ActiveOrdersFeed, rows: ActiveDelivery[]): void {
+  feed.last = rows;
+  for (const observer of feed.observers) {
+    try {
+      observer(rows);
+    } catch (err) {
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.error('[subscribeDriverActiveOrders] observer error', err);
+      }
+    }
+  }
+}
+
+function openActiveOrdersFeed(driverId: string, feed: ActiveOrdersFeed): void {
+  if (feed.started) return;
+  feed.started = true;
+
+  runListenerBootstrap(
+    'subscribeDriverActiveOrders',
+    async () => {
+      try {
+        await ensureAuthRoleClaim('driver');
+      } catch (err) {
+        logDeliveryListenError('subscribeDriverActiveOrders ensureAuthRoleClaim', err);
+      }
+      if (feed.cancelled) return;
+
+      try {
+        await ensureDriverPresenceDoc(driverId);
+      } catch (err) {
+        logDeliveryListenError('subscribeDriverActiveOrders ensureDriverPresenceDoc', err);
+      }
+      if (feed.cancelled) return;
+
+      const authUid = auth.currentUser?.uid?.trim() ?? '';
+      if (!authUid || authUid !== driverId.trim()) {
+        emitActiveOrdersFeed(feed, []);
+        return;
+      }
+
+      const activeFilters = {
+        assignedDriverId: authUid,
+        deliveryType: 'delivery',
+        orderBy: 'createdAt desc',
+      };
+      await logDriverQueryStart({
+        listener: 'subscribeDriverActiveOrders',
+        collection: 'orders',
+        filters: activeFilters,
+      });
+      if (feed.cancelled) return;
+
+      try {
+        feed.unsub = onSnapshot(
+          query(
+            collection(db, 'orders'),
+            where('assignedDriverId', '==', authUid),
+            where('deliveryType', '==', 'delivery'),
+            orderBy('createdAt', 'desc'),
+          ),
+          (snap) => {
+            if (feed.cancelled) return;
+            try {
+              const rows: ActiveDelivery[] = [];
+              const queryName = 'subscribeDriverActiveOrders';
+              for (const d of snap.docs) {
+                const raw = d.data();
+                logQuerySource(
+                  d.id,
+                  raw.status,
+                  raw.deliveryStatus,
+                  queryName,
+                  {
+                    firestorePath: `orders/${d.id}`,
+                    driverId: raw.driverId,
+                    assignedDriverId: raw.assignedDriverId,
+                    fromCache: snap.metadata.fromCache,
+                  },
+                );
+                if (isRawDriverActiveTerminal(raw)) {
+                  logDriverActiveFilter(d.id, raw, false, 'terminal_raw_status', queryName);
+                  continue;
+                }
+                const mapped = safeMapActiveDelivery(d);
+                if (!mapped) {
+                  logDriverActiveFilter(d.id, raw, false, 'map_failed', queryName);
+                  continue;
+                }
+                if (!ACTIVE_DELIVERY_STATUSES.includes(mapped.deliveryStatus)) {
+                  logDriverActiveFilter(d.id, raw, false, 'inactive_lifecycle_status', queryName);
+                  continue;
+                }
+                if (isEffectivelyDelivered(mapped)) {
+                  logDriverActiveFilter(d.id, raw, false, 'effectively_delivered', queryName);
+                  continue;
+                }
+                if (isDriverHubOrderForceCompleted(mapped.id)) {
+                  logDriverActiveFilter(d.id, raw, false, 'force_completed', queryName);
+                  continue;
+                }
+                if (mapped.marketplaceCourierStatus === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
+                  logDriverActiveFilter(d.id, raw, false, 'courier_delivered', queryName);
+                  continue;
+                }
+                logDriverActiveFilter(d.id, raw, true, undefined, queryName);
+                rows.push(mapped);
+              }
+              rows.sort((a, b) => {
+                const ca = a.createdAtMs ?? 0;
+                const cb = b.createdAtMs ?? 0;
+                if (ca !== cb) return cb - ca;
+                return a.id.localeCompare(b.id);
+              });
+              emitActiveOrdersFeed(feed, rows);
+            } catch (err) {
+              warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
+              emitActiveOrdersFeed(feed, []);
+            }
+          },
+          (error) => {
+            logDriverQueryError('subscribeDriverActiveOrders', error);
+            if (isFirestorePermissionDenied(error)) {
+              emitActiveOrdersFeed(feed, []);
+              return;
+            }
+            safeListenerError('subscribeDriverActiveOrders', () =>
+              emitActiveOrdersFeed(feed, []),
+            )(error);
+          },
+        );
+      } catch (error) {
+        logDriverQueryError('subscribeDriverActiveOrders.setup', error);
+        emitActiveOrdersFeed(feed, []);
+      }
+    },
+    () => emitActiveOrdersFeed(feed, []),
+  );
+}
+
+/**
+ * Canonical active-orders listener. Multiple callers share one Firestore
+ * `onSnapshot` per driver until the last subscriber unsubscribes.
+ */
 export function subscribeDriverActiveOrders(
   driverId: string,
   onData: (orders: ActiveDelivery[]) => void,
 ): Unsubscribe {
-  let unsub: Unsubscribe | null = null;
-  let cancelled = false;
+  const uid = driverId.trim();
+  if (!uid) {
+    onData([]);
+    return () => undefined;
+  }
 
-  runListenerBootstrap('subscribeDriverActiveOrders', async () => {
-    try {
-      await ensureAuthRoleClaim('driver');
-    } catch (err) {
-      logDeliveryListenError('subscribeDriverActiveOrders ensureAuthRoleClaim', err);
-    }
-    if (cancelled) return;
-
-    try {
-      await ensureDriverPresenceDoc(driverId);
-    } catch (err) {
-      logDeliveryListenError('subscribeDriverActiveOrders ensureDriverPresenceDoc', err);
-    }
-    if (cancelled) return;
-
-    const authUid = auth.currentUser?.uid?.trim() ?? '';
-    if (!authUid || authUid !== driverId.trim()) {
-      onData([]);
-      return;
-    }
-
-    const activeFilters = {
-      assignedDriverId: authUid,
-      deliveryType: 'delivery',
-      orderBy: 'createdAt desc',
+  let feed = activeOrdersFeeds.get(uid);
+  if (!feed) {
+    feed = {
+      refCount: 0,
+      unsub: null,
+      cancelled: false,
+      observers: new Set(),
+      last: [],
+      started: false,
     };
-    await logDriverQueryStart({
-      listener: 'subscribeDriverActiveOrders',
-      collection: 'orders',
-      filters: activeFilters,
-    });
+    activeOrdersFeeds.set(uid, feed);
+  }
 
-    try {
-      unsub = onSnapshot(
-        query(
-          collection(db, 'orders'),
-          where('assignedDriverId', '==', authUid),
-          where('deliveryType', '==', 'delivery'),
-          orderBy('createdAt', 'desc'),
-        ),
-        (snap) => {
-          if (cancelled) return;
-          try {
-            const rows: ActiveDelivery[] = [];
-            const queryName = 'subscribeDriverActiveOrders';
-            for (const d of snap.docs) {
-              const raw = d.data();
-              logQuerySource(
-                d.id,
-                raw.status,
-                raw.deliveryStatus,
-                queryName,
-                {
-                  firestorePath: `orders/${d.id}`,
-                  driverId: raw.driverId,
-                  assignedDriverId: raw.assignedDriverId,
-                  fromCache: snap.metadata.fromCache,
-                },
-              );
-              if (isRawDriverActiveTerminal(raw)) {
-                logDriverActiveFilter(d.id, raw, false, 'terminal_raw_status', queryName);
-                continue;
-              }
-              const mapped = safeMapActiveDelivery(d);
-              if (!mapped) {
-                logDriverActiveFilter(d.id, raw, false, 'map_failed', queryName);
-                continue;
-              }
-              if (!ACTIVE_DELIVERY_STATUSES.includes(mapped.deliveryStatus)) {
-                logDriverActiveFilter(d.id, raw, false, 'inactive_lifecycle_status', queryName);
-                continue;
-              }
-              if (isEffectivelyDelivered(mapped)) {
-                logDriverActiveFilter(d.id, raw, false, 'effectively_delivered', queryName);
-                continue;
-              }
-              if (isDriverHubOrderForceCompleted(mapped.id)) {
-                logDriverActiveFilter(d.id, raw, false, 'force_completed', queryName);
-                continue;
-              }
-              if (mapped.marketplaceCourierStatus === MARKETPLACE_DELIVERY_STATUS.DELIVERED) {
-                logDriverActiveFilter(d.id, raw, false, 'courier_delivered', queryName);
-                continue;
-              }
-              logDriverActiveFilter(d.id, raw, true, undefined, queryName);
-              rows.push(mapped);
-            }
-            rows.sort((a, b) => {
-              const ca = a.createdAtMs ?? 0;
-              const cb = b.createdAtMs ?? 0;
-              if (ca !== cb) return cb - ca;
-              return a.id.localeCompare(b.id);
-            });
-            onData(rows);
-          } catch (err) {
-            warnMalformedDeliveryDoc(driverId, 'subscribeDriverActiveOrders snapshot', err);
-            onData([]);
-          }
-        },
-        (error) => {
-          logDriverQueryError('subscribeDriverActiveOrders', error);
-          if (isFirestorePermissionDenied(error)) {
-            onData([]);
-            return;
-          }
-          safeListenerError('subscribeDriverActiveOrders', () => onData([]))(error);
-        },
-      );
-    } catch (error) {
-      logDriverQueryError('subscribeDriverActiveOrders.setup', error);
-      onData([]);
-    }
-  }, () => onData([]));
+  feed.refCount += 1;
+  feed.observers.add(onData);
+  if (feed.started) {
+    onData(feed.last);
+  }
+  openActiveOrdersFeed(uid, feed);
 
   return () => {
-    cancelled = true;
-    unsub?.();
+    const current = activeOrdersFeeds.get(uid);
+    if (!current) return;
+    current.observers.delete(onData);
+    current.refCount = Math.max(0, current.refCount - 1);
+    if (current.refCount > 0) return;
+    current.cancelled = true;
+    current.unsub?.();
+    activeOrdersFeeds.delete(uid);
   };
 }
 

@@ -1,4 +1,5 @@
 import { EnableLiveLocationModal } from '@/components/driver/EnableLiveLocationModal';
+import { useOptionalDriverActiveOrdersFeed } from '@/contexts/DriverActiveOrdersContext';
 import { isEffectivelyDelivered } from '@/lib/driverCourierSnapshotMerge';
 import { subscribeDriverHubActiveOrderRemove } from '@/lib/driverHubOrdersStore';
 import { MARKETPLACE_DELIVERY_STATUS } from '@/lib/orderStatus';
@@ -16,10 +17,7 @@ import {
   registerLiveLocationPromptHost,
   type LiveLocationPromptRequest,
 } from '@/services/location/promptEnableLiveLocation';
-import {
-  subscribeDriverActiveOrders,
-  type ActiveDelivery,
-} from '@/services/delivery';
+import type { ActiveDelivery } from '@/services/delivery';
 import { showError, showSuccess } from '@/utils/toast';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -54,6 +52,7 @@ function stillAssignedToDriver(order: ActiveDelivery, driverId: string): boolean
  */
 function DriverLiveSharingHostInner() {
   const uid = useAuthUid();
+  const sharedFeed = useOptionalDriverActiveOrdersFeed();
   const [prompt, setPrompt] = useState<LiveLocationPromptRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const resolveRef = useRef<((enabled: boolean) => void) | null>(null);
@@ -126,44 +125,47 @@ function DriverLiveSharingHostInner() {
       return undefined;
     }
 
-    const unsub = subscribeDriverActiveOrders(driverId, (orders) => {
-      void (async () => {
-        const session = getDriverLiveSharingSession();
+    // Prefer shared shell feed — never open a second active-orders listener.
+    const feed = sharedFeed;
+    if (!feed || feed.driverId !== driverId) {
+      return undefined;
+    }
 
-        if (session?.running) {
-          const match = orders.find((o) => o.id === session.orderId);
-          if (!match || !stillAssignedToDriver(match, driverId)) {
-            await stopDriverLiveSharing('unassigned');
-            return;
-          }
-          if (isTerminalDriverOrder(match)) {
-            await stopDriverLiveSharing(
-              isEffectivelyDelivered(match) ? 'delivered' : 'cancelled',
-            );
-          }
+    const orders = feed.orders;
+    void (async () => {
+      const session = getDriverLiveSharingSession();
+
+      if (session?.running) {
+        const match = orders.find((o) => o.id === session.orderId);
+        if (!match || !stillAssignedToDriver(match, driverId)) {
+          await stopDriverLiveSharing('unassigned');
           return;
         }
-
-        const enabledId = await getEnabledDriverLiveShareOrderId();
-        if (!enabledId || declinedRef.current.has(enabledId)) return;
-        const primary = orders.find(
-          (o) =>
-            o.id === enabledId &&
-            stillAssignedToDriver(o, driverId) &&
-            !isTerminalDriverOrder(o),
-        );
-        if (primary) {
-          await ensureDriverLiveSharing(primary.id, driverId);
-        } else {
-          await stopDriverLiveSharing('unassigned');
+        if (isTerminalDriverOrder(match)) {
+          await stopDriverLiveSharing(
+            isEffectivelyDelivered(match) ? 'delivered' : 'cancelled',
+          );
         }
-      })();
-    });
+        return;
+      }
 
-    return () => {
-      unsub();
-    };
-  }, [uid]);
+      const enabledId = await getEnabledDriverLiveShareOrderId();
+      if (!enabledId || declinedRef.current.has(enabledId)) return;
+      const primary = orders.find(
+        (o) =>
+          o.id === enabledId &&
+          stillAssignedToDriver(o, driverId) &&
+          !isTerminalDriverOrder(o),
+      );
+      if (primary) {
+        await ensureDriverLiveSharing(primary.id, driverId);
+      } else {
+        await stopDriverLiveSharing('unassigned');
+      }
+    })();
+
+    return undefined;
+  }, [uid, sharedFeed?.driverId, sharedFeed?.orders]);
 
   return (
     <EnableLiveLocationModal

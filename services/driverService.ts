@@ -42,7 +42,8 @@ import {
   resolveDriverOnline,
   updateDriverOnlineStatus,
 } from '@/services/driverPresence';
-import { acceptOrderWithLock } from '@/services/delivery';
+import { acceptOrderWithLock, subscribeDriverActiveOrders } from '@/services/delivery';
+import { activeDeliveryToDriverOrder } from '@/lib/activeDeliveryToDriverOrder';
 import { logStatusWrite, orderDocumentPath } from '@/lib/orderTerminalStatus';
 import {
   prepareProtectedOrderPatch,
@@ -1504,26 +1505,92 @@ export function getDriverActiveOrders(
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
   const uid = driverId.trim();
-  return subscribeToDriverOrders(uid, (rows) => {
-    onData(filterHubActiveDriverOrders(rows, uid));
+  // Canonical active list — shares the multiplexed assignedDriverId listener.
+  return subscribeDriverActiveOrders(uid, (rows) => {
+    const mapped = rows.map(activeDeliveryToDriverOrder);
+    onData(filterHubActiveDriverOrders(mapped, uid));
   });
 }
 
-/** Recent completed marketplace deliveries for Driver Hub history. */
+/** Recent completed marketplace deliveries for Driver Hub history (separate from active). */
 export function getDriverCompletedDeliveries(
   driverId: string,
   onData: (orders: DriverOrder[]) => void,
 ): Unsubscribe {
   const uid = driverId.trim();
-  return subscribeToDriverOrders(uid, (rows) => {
-    const completed = rows
-      .filter((o) => isDriverCompletedMarketplaceOrder(o, uid))
-      .sort((a, b) => (b.deliveredAtMs ?? b.createdAtMs ?? 0) - (a.deliveredAtMs ?? a.createdAtMs ?? 0));
-    onData(completed);
-  });
+  const noopUnsub = () => {};
+  let unsub: Unsubscribe | null = null;
+  let cancelled = false;
+
+  runListenerBootstrap('getDriverCompletedDeliveries', async () => {
+    const authUid = await prepareDriverFirestoreAccess(uid);
+    if (cancelled || !authUid) {
+      onData([]);
+      return;
+    }
+
+    await logDriverQueryStart({
+      listener: 'getDriverCompletedDeliveries',
+      collection: 'orders',
+      filters: {
+        assignedDriverId: authUid,
+        deliveryType: 'delivery',
+        orderBy: 'createdAt desc',
+      },
+    });
+
+    try {
+      unsub = onSnapshot(
+        query(
+          collection(db, 'orders'),
+          where('assignedDriverId', '==', authUid),
+          where('deliveryType', '==', 'delivery'),
+          orderBy('createdAt', 'desc'),
+        ),
+        (snap) => {
+          if (cancelled) return;
+          try {
+            const rows = snap.docs
+              .map((docSnap) => mapDriverOrder(docSnap))
+              .filter((o) => isDriverCompletedMarketplaceOrder(o, authUid))
+              .sort(
+                (a, b) =>
+                  (b.deliveredAtMs ?? b.createdAtMs ?? 0) -
+                  (a.deliveredAtMs ?? a.createdAtMs ?? 0),
+              );
+            onData(rows);
+          } catch (err) {
+            logDriverQueryError('getDriverCompletedDeliveries', err);
+            onData([]);
+          }
+        },
+        (error) => {
+          logDriverQueryError('getDriverCompletedDeliveries', error);
+          if (isFirestorePermissionDenied(error)) {
+            onData([]);
+            return;
+          }
+          safeListenerError('getDriverCompletedDeliveries', () => onData([]))(error);
+        },
+      );
+    } catch (error) {
+      logDriverQueryError('getDriverCompletedDeliveries.setup', error);
+      onData([]);
+    }
+  }, () => onData([]));
+
+  return () => {
+    cancelled = true;
+    unsub?.();
+    unsub = null;
+    void noopUnsub;
+  };
 }
 
-// Backward compatible alias
+/**
+ * @deprecated Prefer {@link getDriverActiveOrders} / {@link getDriverCompletedDeliveries}.
+ * Dual driverId+assignedDriverId queries caused QUERY SOURCE DUPLICATE DOC noise.
+ */
 export const subscribeDriverOrders = subscribeToDriverOrders;
 
 export { updateDriverOnlineStatus, driverPresenceDoc, resolveDriverOnline, DRIVER_PRESENCE_COLLECTION };

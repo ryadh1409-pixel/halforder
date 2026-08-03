@@ -38,8 +38,9 @@ import {
   subscribeDriverHubActiveOrderRemove,
   subscribeDriverHubCompletedBump,
 } from '@/lib/driverHubOrdersStore';
+import { activeDeliveryToDriverOrder } from '@/lib/activeDeliveryToDriverOrder';
+import { useDriverActiveOrdersFeed } from '@/contexts/DriverActiveOrdersContext';
 import {
-  getDriverActiveOrders,
   getDriverCompletedDeliveries,
   subscribeAvailableOrders,
   type DriverOrder,
@@ -173,6 +174,7 @@ export default function DriverHubScreen() {
     rating: profileRating,
     setOnlineStatus: toggleOnline,
   } = useDriverPresenceContext();
+  const sharedActiveFeed = useDriverActiveOrdersFeed();
   const [availableOrders, setAvailableOrders] = useState<DriverOrder[]>([]);
   const [activeOrders, setActiveOrders] = useState<DriverOrder[]>([]);
   const [completedOrders, setCompletedOrders] = useState<DriverOrder[]>([]);
@@ -258,21 +260,27 @@ export default function DriverHubScreen() {
     logListenerSubscribe('hub.availableOrders');
     const unsubAvailable = subscribeAvailableOrders(applyAvailableOrders);
 
-    logListenerSubscribe('hub.activeOrders');
-    const unsubActive = getDriverActiveOrders(uid, applyActiveOrders);
-
     logListenerSubscribe('hub.completedDeliveries');
     const unsubCompleted = getDriverCompletedDeliveries(uid, applyCompletedOrders);
 
     return () => {
       logListenerUnsubscribe('hub.availableOrders');
       unsubAvailable();
-      logListenerUnsubscribe('hub.activeOrders');
-      unsubActive();
       logListenerUnsubscribe('hub.completedDeliveries');
       unsubCompleted();
     };
-  }, [uid, isOnline, applyAvailableOrders, applyActiveOrders, applyCompletedOrders]);
+  }, [uid, isOnline, applyAvailableOrders, applyCompletedOrders]);
+
+  // Active deliveries — shared shell feed only (no second Firestore list listener).
+  useEffect(() => {
+    if (!uid || !isOnline) {
+      activeSigRef.current = '';
+      setActiveOrders([]);
+      return;
+    }
+    const mapped = sharedActiveFeed.orders.map(activeDeliveryToDriverOrder);
+    applyActiveOrders(mapped);
+  }, [uid, isOnline, sharedActiveFeed.orders, applyActiveOrders]);
 
   useEffect(() => {
     if (!uid) return undefined;

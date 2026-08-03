@@ -3,6 +3,7 @@ import { DriverFallbackScreen } from '@/components/driver/DriverFallbackScreen';
 import { DriverLiveSharingHost } from '@/components/driver/DriverLiveSharingHost';
 import DriverTabsNavigator from '@/components/driver/DriverTabsNavigator';
 import { DriverPresenceProvider } from '@/contexts/DriverPresenceContext';
+import { DriverActiveOrdersProvider } from '@/contexts/DriverActiveOrdersContext';
 import { DriverRealtimeProvider } from '@/contexts/DriverRealtimeContext';
 import { DriverShellProvider } from '@/contexts/DriverShellContext';
 import { useActiveWorkspace } from '@/hooks/useActiveWorkspace';
@@ -97,13 +98,15 @@ function DriverStackGateInner() {
 
   return (
     <DriverRealtimeProvider uid={uid}>
-      <DriverPresenceProvider uid={uid}>
-        <DriverShellProvider>
-          <RouteGroupMonitor />
-          <DriverLiveSharingHost />
-          <DriverTabsNavigator />
-        </DriverShellProvider>
-      </DriverPresenceProvider>
+      <DriverActiveOrdersProvider uid={uid}>
+        <DriverPresenceProvider uid={uid}>
+          <DriverShellProvider>
+            <RouteGroupMonitor />
+            <DriverLiveSharingHost />
+            <DriverTabsNavigator />
+          </DriverShellProvider>
+        </DriverPresenceProvider>
+      </DriverActiveOrdersProvider>
     </DriverRealtimeProvider>
   );
 }

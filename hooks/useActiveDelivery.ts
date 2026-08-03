@@ -1,4 +1,3 @@
-import { logQuerySource } from '@/lib/driverActiveOrderFilter';
 import {
   DRIVER_SNAPSHOT_SOURCE_PRIORITY,
   isEffectivelyDelivered,
@@ -10,9 +9,9 @@ import {
   markDriverHubOrderCompleted,
   rememberDriverActiveDelivery,
 } from '@/lib/driverHubOrdersStore';
+import { useOptionalDriverActiveOrdersFeed } from '@/contexts/DriverActiveOrdersContext';
 import {
   subscribeActiveDelivery,
-  subscribeDriverActiveOrders,
   type ActiveDelivery,
 } from '@/services/delivery';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
@@ -31,12 +30,14 @@ function shouldIgnoreLowerPrioritySnapshot(
   const sourcePriority = DRIVER_SNAPSHOT_SOURCE_PRIORITY[source] ?? 0;
   const docPriority = DRIVER_SNAPSHOT_SOURCE_PRIORITY.active_delivery;
   if (sourcePriority < docPriority) {
-    console.log('[ACTIVE DELIVERY] skipping duplicate subscription snapshot — doc listener is authoritative', {
-      source,
-      sourcePriority,
-      docPriority,
-      docFromCache: docListener.fromCache,
-    });
+    if (__DEV__) {
+      console.log('[ACTIVE DELIVERY] skipping list bootstrap — doc listener is authoritative', {
+        source,
+        sourcePriority,
+        docPriority,
+        docFromCache: docListener.fromCache,
+      });
+    }
     return true;
   }
   return false;
@@ -78,7 +79,8 @@ function applySnapshot(
 
 /**
  * Live order for `/(driver)/active/[id]`.
- * `subscribeActiveDelivery` (doc listener) is authoritative; driver list is bootstrap-only.
+ * Doc listener is authoritative. List bootstrap comes from the shared shell feed
+ * (no second Firestore list subscription).
  */
 export function useActiveDelivery(
   orderId: string | null | undefined,
@@ -94,6 +96,7 @@ export function useActiveDelivery(
     hasServerSnapshot: false,
     fromCache: true,
   });
+  const sharedFeed = useOptionalDriverActiveOrdersFeed();
 
   useEffect(() => {
     sourcesLoggedRef.current.clear();
@@ -128,33 +131,21 @@ export function useActiveDelivery(
       },
     );
 
-    const did = typeof driverId === 'string' ? driverId.trim() : '';
-    if (!did) {
-      return () => {
-        unsubDoc();
-      };
-    }
-
-    const unsubList = subscribeDriverActiveOrders(did, (rows) => {
-      const match = Array.isArray(rows) ? rows.find((r) => r.id === orderId) : null;
-      if (match) {
-        logQuerySource(match.id, match.status, match.deliveryStatus, 'useActiveDelivery.driverList', {
-          firestorePath: `orders/${match.id}`,
-          driverId: match.driverId,
-          assignedDriverId: match.assignedDriverId,
-          entersActiveList: true,
-        });
-        applySnapshot(setOrder, 'driver_orders', match, docListenerRef.current);
-      }
-      setLoading(false);
-      setError(null);
-    });
-
     return () => {
       unsubDoc();
-      unsubList();
     };
-  }, [orderId, driverId, enabled]);
+  }, [orderId, enabled]);
+
+  // Bootstrap from shared list feed — no extra onSnapshot.
+  useEffect(() => {
+    if (!enabled || !orderId || !sharedFeed) return;
+    const did = typeof driverId === 'string' ? driverId.trim() : '';
+    if (did && sharedFeed.driverId !== did) return;
+    const match = sharedFeed.orders.find((r) => r.id === orderId) ?? null;
+    if (!match) return;
+    applySnapshot(setOrder, 'driver_orders', match, docListenerRef.current);
+    setLoading((prev) => (prev ? false : prev));
+  }, [enabled, orderId, driverId, sharedFeed?.driverId, sharedFeed?.orders]);
 
   return useMemo(
     () => ({
