@@ -1,8 +1,9 @@
-import { FeaturedSection } from '@/components/home/FeaturedSection';
-import { HomeHeader } from '@/components/home/HomeHeader';
-import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
-import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
 import { AbandonedCheckoutRecoveryCard } from '@/components/home/AbandonedCheckoutRecoveryCard';
+import { FeaturedSection } from '@/components/home/FeaturedSection';
+import { HomeActiveDeliveryChrome } from '@/components/home/HomeActiveDeliveryChrome';
+import { HomeHeader } from '@/components/home/HomeHeader';
+import { HomeFeedSkeleton } from '@/components/home/HomeFeedSkeleton';
+import { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
 import { RepeatOrderCard } from '@/components/home/RepeatOrderCard';
 import { UE } from '@/constants/uberEatsTheme';
 import { useHomeMarketplaceLocation } from '@/contexts/HomeMarketplaceLocationContext';
@@ -26,6 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 /**
  * Uber Eats–style marketplace home — Firestore realtime restaurants, horizontal rails.
+ * Active delivery chrome is presentation-only (existing listeners + track-order route).
  */
 export function UberEatsHomeScreen() {
   const router = useRouter();
@@ -108,65 +110,69 @@ export function UberEatsHomeScreen() {
         onNotificationsPress={() => router.push('/inbox' as never)}
         unreadNotifications={unreadNotifications}
       />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing || locationLoading}
-            onRefresh={onRefresh}
-            tintColor={UE.text}
-          />
-        }
-        contentContainerStyle={styles.content}
-      >
-        {showBanners ? (
-          <PromoBannerCarousel
-            banners={banners}
-            onNavigate={onBannerNavigate}
-          />
-        ) : null}
-
-        {loading && restaurants.length === 0 ? (
-          <HomeFeedSkeleton showBanner={showBannerSkeleton} />
-        ) : null}
-
-        {error ? <Text style={styles.err}>{error}</Text> : null}
-
-        {!loading || restaurants.length > 0 ? (
-          <>
-            {abandonedCheckout ? (
-              <AbandonedCheckoutRecoveryCard
-                card={abandonedCheckout}
-                completing={abandonedCompleting}
-                onCompleteOrder={onCompleteAbandoned}
-              />
-            ) : null}
-
-            {repeatOrder ? (
-              <RepeatOrderCard
-                recommendation={repeatOrder}
-                ordering={repeatOrdering}
-                onOrderAgain={onOrderAgain}
-              />
-            ) : null}
-
-            <FeaturedSection
-              title="Featured near you"
-              restaurants={featured}
-              onRestaurantPress={openRestaurant}
+      <HomeActiveDeliveryChrome>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing || locationLoading}
+              onRefresh={onRefresh}
+              tintColor={UE.text}
             />
+          }
+          contentContainerStyle={styles.content}
+        >
+          {showBanners ? (
+            <PromoBannerCarousel
+              banners={banners}
+              onNavigate={onBannerNavigate}
+            />
+          ) : null}
 
-            {!loading && restaurants.length === 0 ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>No restaurants found</Text>
-                <Text style={styles.emptySub}>Check back later for new spots near you.</Text>
-              </View>
-            ) : null}
+          {loading && restaurants.length === 0 ? (
+            <HomeFeedSkeleton showBanner={showBannerSkeleton} />
+          ) : null}
 
-            <View style={{ height: 120 }} />
-          </>
-        ) : null}
-      </ScrollView>
+          {error ? <Text style={styles.err}>{error}</Text> : null}
+
+          {!loading || restaurants.length > 0 ? (
+            <>
+              {abandonedCheckout ? (
+                <AbandonedCheckoutRecoveryCard
+                  card={abandonedCheckout}
+                  completing={abandonedCompleting}
+                  onCompleteOrder={onCompleteAbandoned}
+                />
+              ) : null}
+
+              {repeatOrder ? (
+                <RepeatOrderCard
+                  recommendation={repeatOrder}
+                  ordering={repeatOrdering}
+                  onOrderAgain={onOrderAgain}
+                />
+              ) : null}
+
+              <FeaturedSection
+                title="Featured near you"
+                restaurants={featured}
+                onRestaurantPress={openRestaurant}
+              />
+
+              {!loading && restaurants.length === 0 ? (
+                <View style={styles.empty}>
+                  <Text style={styles.emptyTitle}>No restaurants found</Text>
+                  <Text style={styles.emptySub}>
+                    Check back later for new spots near you.
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={{ height: 120 }} />
+            </>
+          ) : null}
+        </ScrollView>
+      </HomeActiveDeliveryChrome>
     </SafeAreaView>
   );
 }

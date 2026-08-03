@@ -1,4 +1,7 @@
+export { ActiveOrderCard } from '@/components/home/ActiveOrderCard';
 export { FeaturedSection } from '@/components/home/FeaturedSection';
+export { FloatingTrackingBubble } from '@/components/home/FloatingTrackingBubble';
+export { HomeActiveDeliveryChrome } from '@/components/home/HomeActiveDeliveryChrome';
 export { HomeHeader } from '@/components/home/HomeHeader';
 export { PromoBannerCarousel } from '@/components/home/PromoBannerCarousel';
 export { RestaurantCard } from '@/components/home/RestaurantCard';
