@@ -12,6 +12,14 @@ import {
 } from '@/lib/maps/deliveryStops';
 import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
+import {
+  MAP_Z_CUSTOMER,
+  MAP_Z_CUSTOMER_ACTIVE,
+  MAP_Z_DRIVER,
+  MAP_Z_POLYLINE,
+  MAP_Z_RESTAURANT,
+  offsetDriverFromStops,
+} from '@/lib/maps/mapMarkerLayers';
 import { haversineDistanceKm } from '@/lib/haversine';
 import { validMapCoord, type MapLatLng } from '@/lib/maps/liveDriverMarker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -142,6 +150,15 @@ export function DriverActiveRouteMap({
     routeLeg === 'to_customer'
       ? activeCustomer?.coordinate ?? null
       : restaurantCoord;
+
+  const driverDisplay = useMemo(
+    () =>
+      offsetDriverFromStops(driverCoord, [
+        restaurantCoord,
+        ...customerStops.map((s) => s.coordinate),
+      ]),
+    [driverCoord, restaurantCoord, customerStops],
+  );
 
   const remainingCustomerCoords = useMemo(() => {
     if (routeLeg !== 'to_customer' || !activeCustomer) return [];
@@ -366,7 +383,7 @@ export function DriverActiveRouteMap({
             title={`🍴 ${restaurantStop.label}`}
             description="Restaurant · Pickup"
             pinColor="#F59E0B"
-            zIndex={10}
+            zIndex={MAP_Z_RESTAURANT}
           />
         ) : null}
 
@@ -384,19 +401,19 @@ export function DriverActiveRouteMap({
                   : `Customer ${index + 1} · Dropoff`
               }
               pinColor={isActive ? '#16A34A' : '#2563EB'}
-              zIndex={isActive ? 20 : 12}
+              zIndex={isActive ? MAP_Z_CUSTOMER_ACTIVE : MAP_Z_CUSTOMER}
               opacity={stop.delivered ? 0.45 : 1}
             />
           );
         })}
 
-        {driverCoord ? (
+        {driverDisplay ? (
           <LiveDriverVehicleMarker
-            coordinate={driverCoord}
+            coordinate={driverDisplay}
             heading={driverHeading}
             title="🚗 You"
             animatedCoordinate={animatedCoordinate}
-            zIndex={40}
+            zIndex={MAP_Z_DRIVER}
           />
         ) : null}
 
@@ -407,6 +424,7 @@ export function DriverActiveRouteMap({
             strokeWidth={4}
             lineCap="round"
             lineJoin="round"
+            zIndex={MAP_Z_POLYLINE}
           />
         ) : null}
       </MapView>

@@ -1,4 +1,5 @@
 import AppHeader from '@/components/AppHeader';
+import { CustomerTrackingMap } from '@/components/maps/CustomerTrackingMap';
 import OrderActions from '@/components/orders/OrderActions';
 import OrderItems from '@/components/orders/OrderItems';
 import OrderTimeline from '@/components/orders/OrderTimeline';
@@ -282,6 +283,18 @@ export default function RestaurantMarketplaceOrderDetailScreen() {
           <OrderTimeline status={merchantStatus ?? 'pending'} />
         </View>
 
+        {Platform.OS !== 'web' &&
+        displayOrder &&
+        (displayOrder.driverId || displayOrder.assignedDriverId) &&
+        displayOrder.paymentStatus === 'paid' ? (
+          <View style={styles.card}>
+            <Text style={styles.section}>Live delivery</Text>
+            <View style={styles.liveMapWrap}>
+              <CustomerTrackingMap order={displayOrder} />
+            </View>
+          </View>
+        ) : null}
+
         <OrderItems items={order.items} itemCount={itemCount} />
 
         <PaymentSummary
@@ -345,6 +358,12 @@ const styles = StyleSheet.create({
   value: { color: '#FFFFFF', fontWeight: '600', marginTop: 2 },
   link: { color: '#2563EB', fontWeight: '700', marginTop: 2 },
   waiting: { color: '#B7BDC9', fontWeight: '700' },
+  liveMapWrap: {
+    height: 280,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
   emptyTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 20 },
   emptySub: { color: '#7D8493', fontWeight: '600', marginTop: 8, textAlign: 'center' },
 });

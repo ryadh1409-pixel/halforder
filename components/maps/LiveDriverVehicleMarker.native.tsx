@@ -1,39 +1,56 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Marker } from 'react-native-maps';
-
+import {
+  MAP_Z_DRIVER,
+} from '@/lib/maps/mapMarkerLayers';
 import type { MapLatLng } from '@/lib/maps/liveDriverMarker';
+import React, { useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Marker } from 'react-native-maps';
 
 export type LiveDriverVehicleMarkerProps = {
   coordinate: MapLatLng;
   heading?: number;
   title?: string;
   zIndex?: number;
-  /** Kept for API compatibility with useLiveDriverMarker. */
+  /** AnimatedRegion from useLiveDriverMarker — updates position without remounting. */
   animatedCoordinate?: unknown | null;
 };
 
+const MarkerAnimated =
+  // Marker.Animated exists on native react-native-maps builds.
+  (Marker as unknown as { Animated?: typeof Marker }).Animated ?? Marker;
+
 /**
- * Uber-style vehicle marker — shared by Driver, Customer, and Admin maps.
- * Canonical position comes from `orders.driverLocation` / live GPS session.
- *
- * Uses a native pinColor fallback under the custom chrome so the vehicle
- * never disappears if custom marker bitmaps fail to paint.
+ * Canonical Uber-style vehicle marker — shared by Driver, Customer, Restaurant, Admin.
+ * Position source: `orders.driverLocation` / live GPS session (display-only here).
  */
 export function LiveDriverVehicleMarker({
   coordinate,
   heading = 0,
   title = 'Driver',
-  zIndex = 40,
+  zIndex = MAP_Z_DRIVER,
+  animatedCoordinate = null,
 }: LiveDriverVehicleMarkerProps) {
   const rotation = Number.isFinite(heading) ? heading : 0;
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  const primedRef = useRef(false);
 
   useEffect(() => {
+    // Prime custom view once, then freeze bitmap so GPS ticks never flicker.
     setTracksViewChanges(true);
-    const t = setTimeout(() => setTracksViewChanges(false), 1000);
+    const t = setTimeout(() => {
+      setTracksViewChanges(false);
+      primedRef.current = true;
+    }, 900);
     return () => clearTimeout(t);
-  }, [coordinate.latitude, coordinate.longitude, rotation, title]);
+  }, []);
+
+  useEffect(() => {
+    if (!primedRef.current) return;
+    // Heading-only chrome refresh — brief tracksViewChanges, then freeze again.
+    setTracksViewChanges(true);
+    const t = setTimeout(() => setTracksViewChanges(false), 400);
+    return () => clearTimeout(t);
+  }, [rotation]);
 
   useEffect(() => {
     console.log('[LIVE DRIVER MARKER UPDATED]', {
@@ -46,6 +63,7 @@ export function LiveDriverVehicleMarker({
       reason: null,
       tracksViewChanges,
       zIndex,
+      animated: Boolean(animatedCoordinate),
       timestamp: Date.now(),
     });
   }, [
@@ -54,12 +72,18 @@ export function LiveDriverVehicleMarker({
     rotation,
     tracksViewChanges,
     zIndex,
+    animatedCoordinate,
   ]);
 
+  const MarkerComponent = animatedCoordinate ? MarkerAnimated : Marker;
+  const coordinateProp = animatedCoordinate
+    ? { coordinate: animatedCoordinate as never }
+    : { coordinate };
+
   return (
-    <Marker
+    <MarkerComponent
       identifier="live-driver"
-      coordinate={coordinate}
+      {...coordinateProp}
       title={title}
       description="Live driver"
       flat
@@ -70,9 +94,11 @@ export function LiveDriverVehicleMarker({
       pinColor="#16A34A"
     >
       <View style={styles.vehicleMarker} pointerEvents="none">
-        <Text style={styles.vehicleEmoji}>🚗</Text>
+        <View style={styles.vehicleInner}>
+          <Text style={styles.vehicleEmoji}>🚗</Text>
+        </View>
       </View>
-    </Marker>
+    </MarkerComponent>
   );
 }
 
@@ -80,14 +106,34 @@ const styles = StyleSheet.create({
   vehicleMarker: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    borderWidth: 2,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2.5,
     borderColor: '#166534',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOpacity: 0.28,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 3 },
+      },
+      android: {
+        elevation: 8,
+      },
+      default: {},
+    }),
+  },
+  vehicleInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
   },
   vehicleEmoji: {
-    fontSize: 26,
+    fontSize: 28,
   },
 });

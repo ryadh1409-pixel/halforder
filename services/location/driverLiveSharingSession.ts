@@ -157,12 +157,29 @@ async function clearLiveSharingArtifacts(
   const targets = [oid, ...mirrorOrderIds.map((id) => id.trim()).filter(Boolean)];
   for (const target of targets) {
     try {
+      // Ultra-light only — must match firestore.rules hasOnly(['driverLocation']).
+      // Bundling updatedAt fails the ultra-light path and left stale GPS after stop.
       await updateDoc(doc(db, 'orders', target), {
         driverLocation: deleteField(),
-        updatedAt: serverTimestamp(),
       });
-    } catch {
-      /* rules may require coords-only patches — stop publishing is enough */
+      console.log('[ORDER DRIVER LOCATION WRITE]', {
+        documentPath: `orders/${target}`,
+        success: true,
+        mode: 'ultra_light_deleteField',
+        timestamp: Date.now(),
+        file: 'services/location/driverLiveSharingSession.ts',
+        function: 'clearLiveSharingArtifacts',
+      });
+    } catch (e) {
+      console.log('[ORDER DRIVER LOCATION WRITE]', {
+        documentPath: `orders/${target}`,
+        success: false,
+        mode: 'ultra_light_deleteField',
+        error: e instanceof Error ? e.message : String(e),
+        timestamp: Date.now(),
+        file: 'services/location/driverLiveSharingSession.ts',
+        function: 'clearLiveSharingArtifacts',
+      });
     }
   }
 

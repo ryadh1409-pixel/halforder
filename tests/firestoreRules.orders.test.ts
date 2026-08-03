@@ -1688,6 +1688,31 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       };
     }
 
+    it('allows ultra-light driverLocation deleteField without deliveryType (privacy clear)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv_del'), { name: 'Driver Del' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc_del'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          driverId: 'drv_del',
+          assignedDriverId: 'drv_del',
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          totalPrice: 10,
+          items: [{ id: 'i1', name: 'Salad', price: 10, qty: 1 }],
+          driverLocation: driverLiveLocationPayload(45.42, -75.69),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const { deleteField } = await import('firebase/firestore');
+      const db = te().authenticatedContext('drv_del').firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'loc_del'), { driverLocation: deleteField() }),
+      );
+    });
+
     it('allows ultra-light driverLocation-only write without deliveryType (picked_up)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv_ul'), { name: 'Driver UL' });

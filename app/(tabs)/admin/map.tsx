@@ -32,6 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type LiveAdminOrder = {
   id: string;
+  groupId: string | null;
   restaurantName: string;
   customerName: string;
   driverId: string | null;
@@ -227,6 +228,7 @@ function mapLiveOrder(id: string, data: Record<string, unknown>): LiveAdminOrder
 
   return {
     id,
+    groupId: pickString(data.groupId),
     restaurantName,
     customerName,
     driverId,
@@ -328,6 +330,22 @@ export default function AdminLiveOrderMapScreen() {
     () => (selectedId ? orders.find((o) => o.id === selectedId) ?? null : null),
     [orders, selectedId],
   );
+
+  const selectedExtraDropoffs = useMemo(() => {
+    if (!selected?.groupId) return [];
+    return orders
+      .filter(
+        (o) =>
+          o.id !== selected.id &&
+          o.groupId === selected.groupId &&
+          o.customer != null,
+      )
+      .map((o, index) => ({
+        id: `sibling-${o.id}`,
+        coordinate: o.customer!,
+        title: o.customerName || `Customer ${index + 2}`,
+      }));
+  }, [orders, selected]);
 
   useEffect(() => {
     const driverId = selected?.driverId ?? null;
@@ -490,6 +508,7 @@ export default function AdminLiveOrderMapScreen() {
             polylineCoords={selected.polyline}
             restaurant={selected.restaurant}
             dropoff={selected.customer}
+            extraDropoffs={selectedExtraDropoffs}
             driver={selected.driver}
             driverHeading={selected.driverHeading}
             dark

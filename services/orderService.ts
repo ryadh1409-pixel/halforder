@@ -65,6 +65,7 @@ import {
 import { parseLegacyLatLng } from '@/lib/location/coordinates';
 import { fetchRestaurantLocation, restaurantLocationToLegacy } from '@/services/location/restaurantLocation';
 import { isValidGpsCoordinates } from '@/services/location/productionGps';
+import { syncDriverLiveLocation } from '@/services/location/driverTracking';
 import type { DeliveryDistanceTier } from '@/types/deliveryEligibility';
 import type { CustomerLocationRecord } from '@/types/location';
 import { formatOrderTime } from '@/utils/time';
@@ -1826,26 +1827,29 @@ export async function updateOrderStatus(
   await applyProtectedOrderPatch(orderId, patch);
 }
 
-/** Live driver pin on the order (for customer map). */
+/** Live driver pin on the order — delegates to canonical publisher write path. */
 export async function updateOrderDriverLocation(
   orderId: string,
   location: LatLng,
+  driverId?: string | null,
 ): Promise<void> {
-  await rawUpdateOrder(
+  const did =
+    (typeof driverId === 'string' && driverId.trim()) ||
+    auth.currentUser?.uid ||
+    '';
+  if (!did) {
+    throw new Error('updateOrderDriverLocation requires an authenticated driver');
+  }
+  await syncDriverLiveLocation(
     orderId,
+    did,
     {
-      driverLocation: {
-        lat: location.lat,
-        lng: location.lng,
-        ...(typeof location.heading === 'number' && Number.isFinite(location.heading)
-          ? { heading: location.heading }
-          : {}),
-      },
+      latitude: location.lat,
+      longitude: location.lng,
+      heading: location.heading ?? null,
+      speed: null,
     },
-    {
-      fileName: 'orderService.ts',
-      functionName: 'updateOrderDriverLocation',
-    },
+    { force: true },
   );
 }
 

@@ -167,6 +167,30 @@ function DriverLiveSharingHostInner() {
           return;
         }
         if (!stillAssignedToDriver(match, driverId)) {
+          // Confirm against Firestore before wiping GPS — feed flickers can
+          // briefly omit assignment fields without the order being unassigned.
+          try {
+            const { doc, getDoc } = await import('firebase/firestore');
+            const { db } = await import('@/services/firebase');
+            const snap = await getDoc(doc(db, 'orders', session.orderId));
+            if (snap.exists()) {
+              const data = snap.data() as Record<string, unknown>;
+              const assigned =
+                (typeof data.driverId === 'string' && data.driverId.trim()) ||
+                (typeof data.assignedDriverId === 'string' &&
+                  data.assignedDriverId.trim()) ||
+                '';
+              if (assigned === driverId) {
+                console.log('[DRIVER LIVE SHARE] keep_running_assignment_flicker', {
+                  orderId: session.orderId,
+                  timestamp: Date.now(),
+                });
+                return;
+              }
+            }
+          } catch {
+            /* fall through to stop */
+          }
           await stopDriverLiveSharing('unassigned');
           return;
         }

@@ -10,6 +10,14 @@ import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { collectMapCoordinates, toMapCoordinate } from '@/lib/location/coordinates';
 import { fitMapToCoordinates, areMapCoordinatesDistinct } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
+import {
+  MAP_Z_CUSTOMER,
+  MAP_Z_CUSTOMER_ACTIVE,
+  MAP_Z_DRIVER,
+  MAP_Z_POLYLINE,
+  MAP_Z_RESTAURANT,
+  offsetDriverFromStops,
+} from '@/lib/maps/mapMarkerLayers';
 import { haversineDistanceKm } from '@/lib/haversine';
 import { useGroupDeliverySiblingStops } from '@/hooks/useGroupDeliverySiblingStops';
 import {
@@ -187,20 +195,54 @@ function TrackingMapInner({
   }, [displayDriver, awaitingFirstFix, waitingForLiveUpdate, expectDriver]);
 
   // ── Marker definitions ─────────────────────────────────────────────────────
+  const driverDisplay = useMemo(
+    () =>
+      offsetDriverFromStops(displayDriver, [
+        restaurant,
+        dropoff,
+        ...extraCustomerStops.map((s) => s.coordinate),
+      ]),
+    [displayDriver, restaurant, dropoff, extraCustomerStops],
+  );
+
   const markers = useMemo(() => {
     const list: { id: string; coordinate: LatLng; title: string; pinColor: string; zIndex: number }[] = [];
-    if (restaurant) list.push({ id: 'restaurant', coordinate: restaurant, title: '🍴 Restaurant', pinColor: PIN_RESTAURANT, zIndex: 10 });
-    if (dropoff)    list.push({ id: 'home',       coordinate: dropoff,    title: '🏠 Your home',  pinColor: PIN_HOME,       zIndex: 10 });
+    if (restaurant) {
+      list.push({
+        id: 'restaurant',
+        coordinate: restaurant,
+        title: '🍴 Restaurant',
+        pinColor: PIN_RESTAURANT,
+        zIndex: MAP_Z_RESTAURANT,
+      });
+    }
+    if (dropoff) {
+      list.push({
+        id: 'home',
+        coordinate: dropoff,
+        title: '🏠 Your home',
+        pinColor: PIN_HOME,
+        zIndex: MAP_Z_CUSTOMER_ACTIVE,
+      });
+    }
     for (const stop of extraCustomerStops) {
       list.push({
         id: stop.id,
         coordinate: stop.coordinate,
         title: `🏠 ${stop.title}`,
         pinColor: '#2563EB',
-        zIndex: 11,
+        zIndex: MAP_Z_CUSTOMER,
       });
     }
-    if (displayDriver) list.push({ id: 'driver', coordinate: displayDriver, title: '🚗 Driver', pinColor: PIN_DRIVER, zIndex: 20 });
+    if (driverDisplay) {
+      list.push({
+        id: 'driver',
+        coordinate: driverDisplay,
+        title: '🚗 Driver',
+        pinColor: PIN_DRIVER,
+        zIndex: MAP_Z_DRIVER,
+      });
+    }
     console.log('[TrackingMap] markers.length =', list.length);
     console.log('[TrackingMap] markers[] =', list.map((m) => ({
       id: m.id,
@@ -209,16 +251,16 @@ function TrackingMapInner({
       lng: m.coordinate.longitude,
     })));
     return list;
-  }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, displayDriver?.latitude, displayDriver?.longitude, extraCustomerStops]);
+  }, [restaurant?.latitude, restaurant?.longitude, dropoff?.latitude, dropoff?.longitude, driverDisplay?.latitude, driverDisplay?.longitude, extraCustomerStops]);
 
   const markerPoints = useMemo(
     () => collectMapCoordinates(
       restaurant,
       dropoff,
-      displayDriver,
+      driverDisplay,
       ...extraCustomerStops.map((s) => s.coordinate),
     ),
-    [restaurant, dropoff, displayDriver, extraCustomerStops],
+    [restaurant, dropoff, driverDisplay, extraCustomerStops],
   );
 
   const fitPoints = useMemo(() => {
@@ -514,6 +556,7 @@ function TrackingMapInner({
             strokeWidth={4}
             lineCap="round"
             lineJoin="round"
+            zIndex={MAP_Z_POLYLINE}
           />
         )}
 
@@ -532,13 +575,13 @@ function TrackingMapInner({
             />
           ))}
 
-        {displayDriver ? (
+        {driverDisplay ? (
           <LiveDriverVehicleMarker
-            coordinate={displayDriver}
+            coordinate={driverDisplay}
             heading={resolvedHeading}
             title="🚗 Driver"
             animatedCoordinate={animatedCoordinate}
-            zIndex={40}
+            zIndex={MAP_Z_DRIVER}
           />
         ) : null}
       </MapView>

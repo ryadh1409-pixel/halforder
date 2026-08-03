@@ -3,6 +3,14 @@ import { useLiveDriverMarker } from '@/hooks/useLiveDriverMarker';
 import { regionFromCoordinates, collectMapCoordinates } from '@/lib/location/coordinates';
 import { fitMapToCoordinates } from '@/lib/maps/fitMapRegion';
 import { getNativeMapProvider } from '@/lib/maps/iosMapProvider';
+import {
+  MAP_Z_CUSTOMER,
+  MAP_Z_CUSTOMER_ACTIVE,
+  MAP_Z_DRIVER,
+  MAP_Z_POLYLINE,
+  MAP_Z_RESTAURANT,
+  offsetDriverFromStops,
+} from '@/lib/maps/mapMarkerLayers';
 import type { LiveDeliveryMapProps } from './liveDeliveryMapTypes';
 import React, { memo, useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -45,22 +53,32 @@ function LiveDeliveryMapInner({
   const {
     coordinate: displayDriver,
     heading: resolvedHeading,
-    awaitingFirstFix,
-    waitingForLiveUpdate,
     animatedCoordinate,
   } = useLiveDriverMarker(liveInput);
+
+  const driverDisplay = useMemo(
+    () =>
+      offsetDriverFromStops(displayDriver, [
+        restaurant,
+        dropoff,
+        ...extraDropoffs.map((s) => s.coordinate),
+      ]),
+    [displayDriver, restaurant, dropoff, extraDropoffs],
+  );
 
   const markerPoints = useMemo(
     () =>
       collectMapCoordinates(
-        restaurant ? { latitude: restaurant.latitude, longitude: restaurant.longitude } : null,
+        restaurant
+          ? { latitude: restaurant.latitude, longitude: restaurant.longitude }
+          : null,
         dropoff ? { latitude: dropoff.latitude, longitude: dropoff.longitude } : null,
         ...extraDropoffs.map((s) => s.coordinate),
-        displayDriver
-          ? { latitude: displayDriver.latitude, longitude: displayDriver.longitude }
+        driverDisplay
+          ? { latitude: driverDisplay.latitude, longitude: driverDisplay.longitude }
           : null,
       ),
-    [restaurant, dropoff, extraDropoffs, displayDriver],
+    [restaurant, dropoff, extraDropoffs, driverDisplay],
   );
 
   useEffect(() => {
@@ -70,7 +88,7 @@ function LiveDeliveryMapInner({
 
   const initial = useMemo(() => regionFromCoordinates(markerPoints), [markerPoints]);
   const mapProvider = getNativeMapProvider();
-  const showWaitingBanner = waitingForLiveUpdate || (awaitingFirstFix && Boolean(driver));
+  const showWaitingBanner = Boolean(driver) && !driverDisplay;
 
   if (!initial) {
     return (
@@ -97,15 +115,26 @@ function LiveDeliveryMapInner({
             coordinates={polylineCoords}
             strokeColor="rgba(168, 85, 247, 0.9)"
             strokeWidth={4}
+            zIndex={MAP_Z_POLYLINE}
           />
         ) : null}
         {restaurant ? (
-          <Marker coordinate={restaurant} title="Restaurant" anchor={{ x: 0.5, y: 1 }}>
+          <Marker
+            coordinate={restaurant}
+            title="Restaurant"
+            anchor={{ x: 0.5, y: 1 }}
+            zIndex={MAP_Z_RESTAURANT}
+          >
             <Pin color="#A855F7" glyph="🍽" />
           </Marker>
         ) : null}
         {dropoff ? (
-          <Marker coordinate={dropoff} title="Customer" anchor={{ x: 0.5, y: 1 }}>
+          <Marker
+            coordinate={dropoff}
+            title="Customer"
+            anchor={{ x: 0.5, y: 1 }}
+            zIndex={MAP_Z_CUSTOMER_ACTIVE}
+          >
             <Pin color="#38BDF8" glyph="📍" />
           </Marker>
         ) : null}
@@ -115,16 +144,18 @@ function LiveDeliveryMapInner({
             coordinate={stop.coordinate}
             title={stop.title}
             anchor={{ x: 0.5, y: 1 }}
+            zIndex={MAP_Z_CUSTOMER}
           >
             <Pin color="#2563EB" glyph="🏠" />
           </Marker>
         ))}
-        {displayDriver ? (
+        {driverDisplay ? (
           <LiveDriverVehicleMarker
-            coordinate={displayDriver}
+            coordinate={driverDisplay}
             heading={resolvedHeading}
             title="Driver"
             animatedCoordinate={animatedCoordinate}
+            zIndex={MAP_Z_DRIVER}
           />
         ) : null}
       </MapView>
