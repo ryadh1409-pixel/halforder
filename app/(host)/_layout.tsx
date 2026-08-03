@@ -1,4 +1,5 @@
 import { useHostShellAccess } from '@/hooks/useHostShellAccess';
+import { HostRestaurantOrdersProvider } from '@/contexts/HostRestaurantOrdersContext';
 import { HOST_TAB_HREFS } from '@/lib/navigationPaths';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
@@ -36,61 +37,63 @@ export default function HostLayout() {
   }
 
   return (
-    <Tabs
-      {...({ id: 'host' } as object)}
-      initialRouteName="dashboard"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: ACTIVE,
-        tabBarInactiveTintColor: INACTIVE,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabLabel,
-      }}
-    >
-      <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="bank-account" options={{ href: null }} />
-      <Tabs.Screen
-        name="dashboard"
-        options={{
-          title: 'Dashboard',
-          href: HOST_TAB_HREFS.dashboard,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="storefront-outline" size={size} color={color} />
-          ),
+    <HostRestaurantOrdersProvider>
+      <Tabs
+        {...({ id: 'host' } as object)}
+        initialRouteName="dashboard"
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: ACTIVE,
+          tabBarInactiveTintColor: INACTIVE,
+          tabBarStyle: styles.tabBar,
+          tabBarLabelStyle: styles.tabLabel,
         }}
-      />
-      <Tabs.Screen
-        name="orders"
-        options={{
-          title: 'Orders',
-          href: HOST_TAB_HREFS.orders,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="receipt-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="menu"
-        options={{
-          title: 'Menu',
-          href: HOST_TAB_HREFS.menu,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="restaurant-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          title: 'Wallet',
-          href: HOST_TAB_HREFS.wallet,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen name="wallet-transaction/[id]" options={{ href: null }} />
-    </Tabs>
+      >
+        <Tabs.Screen name="index" options={{ href: null }} />
+        <Tabs.Screen name="bank-account" options={{ href: null }} />
+        <Tabs.Screen
+          name="dashboard"
+          options={{
+            title: 'Dashboard',
+            href: HOST_TAB_HREFS.dashboard,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="storefront-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="orders"
+          options={{
+            title: 'Orders',
+            href: HOST_TAB_HREFS.orders,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="receipt-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="menu"
+          options={{
+            title: 'Menu',
+            href: HOST_TAB_HREFS.menu,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="restaurant-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="wallet"
+          options={{
+            title: 'Wallet',
+            href: HOST_TAB_HREFS.wallet,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="wallet-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen name="wallet-transaction/[id]" options={{ href: null }} />
+      </Tabs>
+    </HostRestaurantOrdersProvider>
   );
 }
 

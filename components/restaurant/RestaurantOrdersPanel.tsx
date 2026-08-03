@@ -19,6 +19,7 @@ import {
   restaurantOrderFilterEmptyTitle,
   type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
+import { useHostRestaurantOrdersUi } from '@/contexts/HostRestaurantOrdersContext';
 import { useRestaurantOrdersLifecycleAlerts } from '@/hooks/useOrderLifecycleAlerts';
 import { useRestaurantOrders } from '@/hooks/useRestaurantOrders';
 import { clearOrderStageLock } from '@/lib/orderStageLock';
@@ -115,8 +116,13 @@ export function RestaurantOrdersPanel({
   title = 'Orders',
   onDashboardMetrics,
 }: Props) {
-  const [mode, setMode] = useState<OrdersMode>('active');
-  const [filter, setFilter] = useState<RestaurantOrderListFilter>('new');
+  const sharedUi = useHostRestaurantOrdersUi();
+  const [localMode, setLocalMode] = useState<OrdersMode>('active');
+  const [localFilter, setLocalFilter] = useState<RestaurantOrderListFilter>('new');
+  const mode = sharedUi?.mode ?? localMode;
+  const filter = sharedUi?.filter ?? localFilter;
+  const setMode = sharedUi?.setMode ?? setLocalMode;
+  const setFilter = sharedUi?.setFilter ?? setLocalFilter;
   const [archivedSearch, setArchivedSearch] = useState('');
   const [archiveStatus, setArchiveStatus] = useState<ArchiveStatusFilter>('all');
   const [archiveDate, setArchiveDate] = useState<ArchiveDateFilter>('all');

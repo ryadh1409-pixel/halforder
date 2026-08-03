@@ -1,46 +1,20 @@
 import { RestaurantOrdersPanel } from '@/components/restaurant/RestaurantOrdersPanel';
 import { useAuth } from '@/services/AuthContext';
-import { db } from '@/services/firebase';
 import { useFocusEffect } from '@react-navigation/native';
-import { doc, onSnapshot } from 'firebase/firestore';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const PAGE = '#FFFFFF';
 const PRIMARY = '#A855F7';
 
-/** Restaurant Orders tab — live kitchen queue (realtime). */
+/**
+ * Restaurant Orders tab — same live feed as Dashboard
+ * ({@link HostRestaurantOrdersProvider} / {@link RestaurantOrdersPanel}).
+ */
 export default function HostOrdersScreen() {
   const { user, loading: authLoading } = useAuth();
   const uid = user?.uid ?? null;
-  const [timezone, setTimezone] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(Boolean(uid));
-
-  useEffect(() => {
-    if (!uid) {
-      setTimezone(null);
-      setProfileLoading(false);
-      return undefined;
-    }
-    setProfileLoading(true);
-    const unsub = onSnapshot(
-      doc(db, 'restaurants', uid),
-      (snap) => {
-        const data = snap.data() as { timezone?: unknown; timeZone?: unknown } | undefined;
-        const tz =
-          typeof data?.timezone === 'string' && data.timezone.trim()
-            ? data.timezone.trim()
-            : typeof data?.timeZone === 'string' && data.timeZone.trim()
-              ? data.timeZone.trim()
-              : null;
-        setTimezone(tz);
-        setProfileLoading(false);
-      },
-      () => setProfileLoading(false),
-    );
-    return unsub;
-  }, [uid]);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,7 +22,7 @@ export default function HostOrdersScreen() {
     }, []),
   );
 
-  if (authLoading || profileLoading) {
+  if (authLoading) {
     return (
       <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
         <ActivityIndicator size="large" color={PRIMARY} />
@@ -78,7 +52,6 @@ export default function HostOrdersScreen() {
       >
         <RestaurantOrdersPanel
           restaurantId={uid}
-          restaurantTimeZone={timezone}
           title="Order management"
         />
       </ScrollView>

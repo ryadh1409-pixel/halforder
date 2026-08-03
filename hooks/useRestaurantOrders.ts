@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   isRestaurantOrderArchived,
   matchesRestaurantOrderFilter,
   type RestaurantOrderListFilter,
 } from '@/constants/restaurantOrderFilters';
+import { useHostRestaurantOrdersFeed } from '@/contexts/HostRestaurantOrdersContext';
+import {
+  useRestaurantOrdersFeed,
+  type RestaurantOrdersFeed,
+} from '@/hooks/useRestaurantOrdersFeed';
+import { applyStageLockToOrder } from '@/lib/orderStageLock';
 import {
   archiveOrderForRestaurant,
   hideOrderForRestaurant,
   restoreOrderForRestaurant,
 } from '@/services/orderArchiveService';
-import { applyStageLockToOrder } from '@/lib/orderStageLock';
-import { areRestaurantOrderListsEqual } from '@/lib/restaurantOrderListDedup';
-import {
-  resetRestaurantOrderCleanupState,
-  scheduleRestaurantOrderCleanup,
-} from '@/services/orderCleanupService';
-import {
-  subscribeActiveRestaurantOrders,
-  subscribeRestaurantArchivedOrders,
-  type RestaurantOrder,
-} from '@/services/orderService';
+import type { RestaurantOrder } from '@/services/orderService';
 
 export type RestaurantOrdersOptimisticMap = Record<
   string,
@@ -39,44 +35,39 @@ function normField(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-function mergeRestaurantOrderLists(
-  active: RestaurantOrder[],
-  archived: RestaurantOrder[],
-): RestaurantOrder[] {
-  const byId = new Map<string, RestaurantOrder>();
-  for (const order of archived) byId.set(order.id, order);
-  for (const order of active) byId.set(order.id, order);
-  return Array.from(byId.values());
-}
-
+/**
+ * Kitchen order list + optimistic UI on top of the shared (or local) feed.
+ * Prefer {@link HostRestaurantOrdersProvider} so Dashboard and Orders share one listener.
+ */
 export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   const {
-    restaurantId,
+    restaurantId: restaurantIdRaw,
     restaurantTimeZone,
     filter = 'new',
     enableAutoCleanup = true,
   } = options;
+  const restaurantId = restaurantIdRaw?.trim() || null;
 
-  const [activeOrders, setActiveOrders] = useState<RestaurantOrder[]>([]);
-  const [archivedOrders, setArchivedOrders] = useState<RestaurantOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [optimistic, setOptimistic] = useState<RestaurantOrdersOptimisticMap>({});
+  const hostFeed = useHostRestaurantOrdersFeed();
+  const canUseHostFeed =
+    hostFeed != null &&
+    restaurantId != null &&
+    hostFeed.restaurantId === restaurantId;
+
+  const localFeed = useRestaurantOrdersFeed({
+    restaurantId: canUseHostFeed ? null : restaurantId,
+    restaurantTimeZone,
+    enableAutoCleanup: canUseHostFeed ? false : enableAutoCleanup,
+  });
+
+  const feed: RestaurantOrdersFeed = canUseHostFeed ? hostFeed : localFeed;
+
+  const [optimistic, setOptimistic] = useState<RestaurantOrdersOptimisticMap>(
+    {},
+  );
   const [kitchenOptimistic, setKitchenOptimistic] = useState<
     Record<string, Partial<RestaurantOrder>>
   >({});
-
-  const lastCleanupScheduleKeyRef = useRef<string>('');
-
-  const timeZone =
-    typeof restaurantTimeZone === 'string' && restaurantTimeZone.trim()
-      ? restaurantTimeZone.trim()
-      : undefined;
-
-  const orders = useMemo(
-    () => mergeRestaurantOrderLists(activeOrders, archivedOrders),
-    [activeOrders, archivedOrders],
-  );
 
   const mergeKitchenOptimistic = useCallback(
     (order: RestaurantOrder): RestaurantOrder => {
@@ -107,75 +98,12 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   }, []);
 
   useEffect(() => {
-    if (!restaurantId) {
-      setActiveOrders([]);
-      setArchivedOrders([]);
-      setLoading(false);
-      setError(null);
-      setOptimistic({});
-      setKitchenOptimistic({});
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    let activeReady = false;
-    let archivedReady = false;
-
-    const maybeDoneLoading = () => {
-      if (activeReady && archivedReady) setLoading(false);
-    };
-
-    const unsubActive = subscribeActiveRestaurantOrders(
-      restaurantId,
-      (rows) => {
-        const list = Array.isArray(rows) ? rows : [];
-        setActiveOrders((prev) =>
-          areRestaurantOrderListsEqual(prev, list) ? prev : list,
-        );
-        activeReady = true;
-        setError(null);
-        maybeDoneLoading();
-
-        if (!enableAutoCleanup) return;
-
-        const scheduleKey = `${restaurantId}:${list.length}:${list[0]?.id ?? ''}`;
-        if (lastCleanupScheduleKeyRef.current === scheduleKey) return;
-        lastCleanupScheduleKeyRef.current = scheduleKey;
-        scheduleRestaurantOrderCleanup(restaurantId, list);
-      },
-      { timeZone },
-    );
-
-    const unsubArchived = subscribeRestaurantArchivedOrders(
-      restaurantId,
-      (rows) => {
-        const list = Array.isArray(rows) ? rows : [];
-        setArchivedOrders((prev) =>
-          areRestaurantOrderListsEqual(prev, list) ? prev : list,
-        );
-        archivedReady = true;
-        maybeDoneLoading();
-      },
-      { timeZone },
-    );
-
-    return () => {
-      unsubActive();
-      unsubArchived();
-      resetRestaurantOrderCleanupState(restaurantId);
-      lastCleanupScheduleKeyRef.current = '';
-    };
-  }, [restaurantId, timeZone, enableAutoCleanup]);
-
-  useEffect(() => {
-    if (!orders.length) return;
+    if (!feed.orders.length) return;
     setKitchenOptimistic((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const id of Object.keys(next)) {
-        const order = orders.find((o) => o.id === id);
+        const order = feed.orders.find((o) => o.id === id);
         const patch = next[id];
         if (!order || !patch) continue;
         const statusMatch =
@@ -191,7 +119,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       }
       return changed ? next : prev;
     });
-  }, [orders]);
+  }, [feed.orders]);
 
   const clearOptimistic = useCallback((orderId: string) => {
     setOptimistic((prev) => {
@@ -210,8 +138,8 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   );
 
   const displayOrders = useMemo(
-    () => orders.map(mergeKitchenOptimistic),
-    [orders, mergeKitchenOptimistic],
+    () => feed.orders.map(mergeKitchenOptimistic),
+    [feed.orders, mergeKitchenOptimistic],
   );
 
   const visibleOrders = useMemo(() => {
@@ -225,7 +153,10 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
           return filter === 'archived';
         }
         if (filter === 'archived') {
-          return isRestaurantOrderArchived(order) || matchesRestaurantOrderFilter(order, filter);
+          return (
+            isRestaurantOrderArchived(order) ||
+            matchesRestaurantOrderFilter(order, filter)
+          );
         }
         if (isRestaurantOrderArchived(order)) return false;
         return matchesRestaurantOrderFilter(order, filter);
@@ -234,12 +165,12 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
   }, [displayOrders, optimistic, filter]);
 
   useEffect(() => {
-    if (!orders.length) return;
+    if (!feed.orders.length) return;
     setOptimistic((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const id of Object.keys(next)) {
-        const order = orders.find((o) => o.id === id);
+        const order = feed.orders.find((o) => o.id === id);
         if (!order) continue;
         const action = next[id];
         if (action === 'hide' || action === 'archive') {
@@ -255,7 +186,7 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
       }
       return changed ? next : prev;
     });
-  }, [orders]);
+  }, [feed.orders]);
 
   const archiveOrder = useCallback(
     async (orderId: string) => {
@@ -300,9 +231,9 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
     () => ({
       orders: visibleOrders,
       allOrders: displayOrders,
-      loading,
-      error,
-      timeZone,
+      loading: feed.loading,
+      error: feed.error,
+      timeZone: feed.timeZone,
       archiveOrder,
       hideOrder,
       restoreOrder,
@@ -313,9 +244,9 @@ export function useRestaurantOrders(options: UseRestaurantOrdersOptions) {
     [
       visibleOrders,
       displayOrders,
-      loading,
-      error,
-      timeZone,
+      feed.loading,
+      feed.error,
+      feed.timeZone,
       archiveOrder,
       hideOrder,
       restoreOrder,
