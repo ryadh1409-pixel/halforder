@@ -36,7 +36,7 @@ export function LiveDriverVehicleMarker({
   }, [coordinate.latitude, coordinate.longitude, rotation, title]);
 
   useEffect(() => {
-    console.log('[LIVE DRIVER MARKER]', {
+    console.log('[LIVE DRIVER MARKER UPDATED]', {
       received: {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
@@ -46,6 +46,7 @@ export function LiveDriverVehicleMarker({
       reason: null,
       tracksViewChanges,
       zIndex,
+      timestamp: Date.now(),
     });
   }, [
     coordinate.latitude,

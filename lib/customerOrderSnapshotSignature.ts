@@ -5,8 +5,14 @@ export function driverLocationFingerprint(raw: Record<string, unknown>): string 
   const loc = raw.driverLocation;
   if (!loc || typeof loc !== 'object') return '';
   const o = loc as Record<string, unknown>;
-  const lat = o.lat ?? o.latitude ?? '';
-  const lng = o.lng ?? o.longitude ?? '';
+  const latRaw = o.lat ?? o.latitude;
+  const lngRaw = o.lng ?? o.longitude;
+  const lat = typeof latRaw === 'number' ? latRaw : Number(latRaw);
+  const lng = typeof lngRaw === 'number' ? lngRaw : Number(lngRaw);
+  // Empty / unparseable maps must not produce a truthy fingerprint like ",," —
+  // that previously blocked GPS merge forever while mapped.driverLocation stayed null.
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  if (Math.abs(lat) < 0.001 && Math.abs(lng) < 0.001) return '';
   const heading = typeof o.heading === 'number' && Number.isFinite(o.heading) ? o.heading : '';
   return `${lat},${lng},${heading}`;
 }

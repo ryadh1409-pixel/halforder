@@ -1998,7 +1998,7 @@ export function subscribeCustomerOrderById(
               ...lastEmittedOrder,
               driverLocation: mappedDriver,
             };
-            console.log('[DRIVER FIRESTORE READ]', {
+            console.log('[CUSTOMER DRIVER LOCATION READ]', {
               documentPath: `orders/${snap.id}`,
               latitude: mappedDriver.lat,
               longitude: mappedDriver.lng,
@@ -2049,6 +2049,26 @@ export function subscribeCustomerOrderById(
           { fromCache: meta.fromCache, source: meta.source },
         );
         logCustomerTrackingSnapshot(snap.id, raw, meta, 'regression_blocked');
+
+        // Map-only: lifecycle regression must never suppress live GPS.
+        const incomingDriverSig = driverLocationFingerprint(raw);
+        const mappedDriver = parseLatLng(raw.driverLocation);
+        if (mappedDriver && incomingDriverSig && incomingDriverSig !== lastDriverLocationSig) {
+          lastDriverLocationSig = incomingDriverSig;
+          lastEmittedOrder = {
+            ...lastEmittedOrder,
+            driverLocation: mappedDriver,
+          };
+          console.log('[CUSTOMER DRIVER LOCATION READ]', {
+            documentPath: `orders/${snap.id}`,
+            latitude: mappedDriver.lat,
+            longitude: mappedDriver.lng,
+            heading: mappedDriver.heading ?? null,
+            timestamp: Date.now(),
+            source: 'subscribeCustomerOrderById:regression_gps_merge',
+          });
+        }
+
         logCustomerTrackingUi(snap.id, lastEmittedOrder, meta.source);
         onData(lastEmittedOrder);
         scheduleServerRefresh('emit_regression_blocked');
@@ -2084,7 +2104,14 @@ export function subscribeCustomerOrderById(
       });
       logCustomerTrackingUi(snap.id, mapped, meta.source);
       const driverLoc = mapped.driverLocation;
-      console.log('[DRIVER FIRESTORE READ]', {
+      console.log('[FIRESTORE SNAPSHOT]', {
+        documentPath: `orders/${snap.id}`,
+        deliveryStatus: mapped.deliveryStatus,
+        status: mapped.status,
+        fromCache: meta.fromCache,
+        timestamp: Date.now(),
+      });
+      console.log('[CUSTOMER DRIVER LOCATION READ]', {
         documentPath: `orders/${snap.id}`,
         latitude: driverLoc?.lat ?? null,
         longitude: driverLoc?.lng ?? null,

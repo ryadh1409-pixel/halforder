@@ -218,11 +218,12 @@ function TrackOrderScreen() {
         status: order.status,
         updatedAt: null,
         updatedAtMs: order.updatedAtMs,
+        driverLocation: order.driverLocation ?? null,
       },
       'track-order-render',
     );
     logCustomerTrackingUi(orderId, order, 'track-order');
-  }, [order, orderId, order?.status, order?.deliveryStatus]);
+  }, [order, orderId, order?.status, order?.deliveryStatus, order?.driverLocation]);
 
   const deliveredAtLabel = useMemo(() => {
     if (!order) return null;

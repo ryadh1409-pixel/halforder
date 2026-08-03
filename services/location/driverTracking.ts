@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDistance } from 'geolib';
 
 import { traceOrderWriteFromPatch } from '@/lib/orderWriteTrace';
@@ -24,7 +24,11 @@ export function buildDriverLocationRecord(coord: DriverLiveCoordinate): DriverLo
   };
 }
 
-/** Dual-write canonical + legacy lat/lng for backward-compatible readers. */
+/**
+ * Dual-write canonical + legacy lat/lng for backward-compatible readers.
+ * Keys must stay within firestore.rules `driverLocationMapOk` hasOnly list
+ * (no `accuracy` — not allowed by rules).
+ */
 export function buildDriverLocationFirestorePayload(coord: DriverLiveCoordinate): Record<string, unknown> {
   const canonical = buildDriverLocationRecord(coord);
   return {
@@ -73,28 +77,8 @@ export function resetDriverLocationThrottle(orderId: string, driverId: string): 
   throttleByKey.delete(`${driverId}:${orderId}`);
 }
 
-function logDriverFirestoreWrite(
-  path: string,
-  coord: DriverLiveCoordinate,
-  ok: boolean,
-  error?: unknown,
-): void {
-  // Temporary pipeline trace — keep until live vehicle is verified in the field.
-  console.log('[DRIVER FIRESTORE WRITE]', {
-    documentPath: path,
-    latitude: coord.latitude,
-    longitude: coord.longitude,
-    heading: coord.heading ?? null,
-    timestamp: Date.now(),
-    success: ok,
-    error: ok
-      ? null
-      : error instanceof Error
-        ? error.message
-        : error != null
-          ? String(error)
-          : null,
-  });
+function logPublish(stage: string, payload: Record<string, unknown>): void {
+  console.log(stage, payload);
 }
 
 /** Profile / dispatch base — updates `drivers/{driverId}` live coordinates (no order). */
@@ -121,13 +105,39 @@ export async function syncDriverProfileBaseLocation(
       },
       { merge: true },
     );
-    logDriverFirestoreWrite(path, coord, true);
+    logPublish('[DRIVER FIRESTORE WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: true,
+    });
   } catch (e) {
-    logDriverFirestoreWrite(path, coord, false, e);
+    logPublish('[DRIVER FIRESTORE WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
     throw e;
   }
 }
 
+/**
+ * Canonical write — MUST match firestore ultra-light path:
+ *   affectedKeys().hasOnly(['driverLocation'])
+ *   && auth.uid == driverId | assignedDriverId
+ *
+ * Writing `{ driverLocation, updatedAt }` together FAILS that path and then
+ * falls through to isValidDriverLocationOnlyPatch which requires
+ * deliveryType == 'delivery'. Orders without that field (common on food-share /
+ * half-order / some marketplace docs) silently never receive GPS — while the
+ * local driver session + route keep working. That is the customer waiting bug.
+ */
 async function writeCanonicalOrderDriverLocation(
   orderId: string,
   coord: DriverLiveCoordinate,
@@ -141,15 +151,54 @@ async function writeCanonicalOrderDriverLocation(
     { driverLocation: payload },
     { op: 'update' },
   );
+
+  logPublish('[DRIVER LOCATION PUBLISH]', {
+    orderId,
+    documentPath: path,
+    latitude: coord.latitude,
+    longitude: coord.longitude,
+    heading: coord.heading ?? null,
+    speed: coord.speed ?? null,
+    timestamp: Date.now(),
+  });
+
   try {
+    // Ultra-light: ONLY driverLocation (no root updatedAt).
     await updateDoc(doc(db, 'orders', orderId), {
       driverLocation: payload,
+    });
+    logPublish('[ORDER DRIVER LOCATION WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: true,
+      mode: 'ultra_light_driverLocation_only',
+    });
+  } catch (e) {
+    logPublish('[ORDER DRIVER LOCATION WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: false,
+      mode: 'ultra_light_driverLocation_only',
+      error: e instanceof Error ? e.message : String(e),
+      file: 'services/location/driverTracking.ts',
+      function: 'writeCanonicalOrderDriverLocation',
+    });
+    throw e;
+  }
+
+  // Best-effort freshness bump — never required for GPS delivery (fingerprint path).
+  try {
+    await updateDoc(doc(db, 'orders', orderId), {
       updatedAt: serverTimestamp(),
     });
-    logDriverFirestoreWrite(path, coord, true);
-  } catch (e) {
-    logDriverFirestoreWrite(path, coord, false, e);
-    throw e;
+  } catch {
+    /* ignore — GPS already landed on canonical field */
   }
 }
 
@@ -170,10 +219,25 @@ async function writeCompanionLiveLocation(
       },
       { merge: true },
     );
-    logDriverFirestoreWrite(path, coord, true);
+    logPublish('[DRIVER FIRESTORE WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: true,
+    });
   } catch (e) {
-    // Companion only — never block the canonical orders/{id}.driverLocation write.
-    logDriverFirestoreWrite(path, coord, false, e);
+    logPublish('[DRIVER FIRESTORE WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+      note: 'companion_only_canonical_already_written',
+    });
   }
 }
 
@@ -192,23 +256,38 @@ async function writeCompanionDriverProfile(
       },
       { merge: true },
     );
-    logDriverFirestoreWrite(path, coord, true);
+    logPublish('[DRIVER FIRESTORE WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: true,
+    });
   } catch (e) {
-    logDriverFirestoreWrite(path, coord, false, e);
+    logPublish('[DRIVER FIRESTORE WRITE]', {
+      documentPath: path,
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      heading: coord.heading ?? null,
+      timestamp: Date.now(),
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+      note: 'companion_only_canonical_already_written',
+    });
   }
 }
 
 /**
  * Throttled live driver GPS sync.
- * Canonical source of truth for every tracking screen:
+ *
+ * Canonical source of truth (customers + all tracking screens):
  *   orders/{orderId}.driverLocation
  *
- * Companions (best-effort, must not fail the canonical write):
- * - live_locations/{orderId}
- * - drivers/{driverId}.liveLocation
- *
- * For shared/group deliveries, optional mirrorOrderIds receive the same
- * driverLocation payload (one GPS publisher, every customer order updated).
+ * Architecture:
+ * 1. Write canonical order field alone (ultra-light rules-compatible).
+ * 2. Mirror to sibling group orders (HalfOrder / Swipe / group) — same payload.
+ * 3. Best-effort companions (live_locations, drivers) — never block #1.
  */
 export async function syncDriverLiveLocation(
   orderId: string,
@@ -230,65 +309,32 @@ export async function syncDriverLiveLocation(
     .map((id) => id.trim())
     .filter((id) => id && id !== oid);
 
-  // Prefer a single batch when rules allow all targets; fall back to canonical-first.
-  try {
-    const batch = writeBatch(db);
-    traceOrderWriteFromPatch(
-      'driverTracking.ts',
-      'syncDriverLiveLocation',
-      oid,
-      { driverLocation: payload },
-      { op: 'batch-update' },
-    );
-    batch.update(doc(db, 'orders', oid), {
-      driverLocation: payload,
-      updatedAt: serverTimestamp(),
-    });
-    for (const mirrorId of mirrors) {
-      batch.update(doc(db, 'orders', mirrorId), {
-        driverLocation: payload,
-        updatedAt: serverTimestamp(),
-      });
-    }
-    batch.set(
-      doc(db, 'live_locations', oid),
-      {
-        orderId: oid,
-        driverId: did,
-        ...payload,
-      },
-      { merge: true },
-    );
-    batch.set(
-      doc(db, 'drivers', did),
-      {
-        liveLocation: payload,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    await batch.commit();
-    logDriverFirestoreWrite(`orders/${oid}`, coord, true);
-    for (const mirrorId of mirrors) {
-      logDriverFirestoreWrite(`orders/${mirrorId}`, coord, true);
-    }
-    logDriverFirestoreWrite(`live_locations/${oid}`, coord, true);
-    logDriverFirestoreWrite(`drivers/${did}`, coord, true);
-    return true;
-  } catch (batchError) {
-    logDriverFirestoreWrite(`orders/${oid}+companions(batch)`, coord, false, batchError);
-    // Root-cause fix: companion docs (esp. live_locations rules) must not prevent
-    // customers from receiving orders/{id}.driverLocation.
-    await writeCanonicalOrderDriverLocation(oid, coord, payload);
-    await Promise.all([
-      ...mirrors.map((mirrorId) =>
-        writeCanonicalOrderDriverLocation(mirrorId, coord, payload).catch((e) => {
-          logDriverFirestoreWrite(`orders/${mirrorId}`, coord, false, e);
-        }),
-      ),
-      writeCompanionLiveLocation(oid, did, coord, payload),
-      writeCompanionDriverProfile(did, coord, payload),
-    ]);
-    return true;
-  }
+  // 1) Canonical — must succeed for customers to track.
+  await writeCanonicalOrderDriverLocation(oid, coord, payload);
+
+  // 2) Shared-delivery mirrors — same GPS, every customer order doc.
+  await Promise.all(
+    mirrors.map((mirrorId) =>
+      writeCanonicalOrderDriverLocation(mirrorId, coord, payload).catch((e) => {
+        logPublish('[ORDER DRIVER LOCATION WRITE]', {
+          documentPath: `orders/${mirrorId}`,
+          latitude: coord.latitude,
+          longitude: coord.longitude,
+          heading: coord.heading ?? null,
+          timestamp: Date.now(),
+          success: false,
+          error: e instanceof Error ? e.message : String(e),
+          note: 'mirror_failed_primary_ok',
+        });
+      }),
+    ),
+  );
+
+  // 3) Companions — never block canonical.
+  await Promise.all([
+    writeCompanionLiveLocation(oid, did, coord, payload),
+    writeCompanionDriverProfile(did, coord, payload),
+  ]);
+
+  return true;
 }

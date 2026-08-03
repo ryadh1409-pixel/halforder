@@ -418,6 +418,30 @@ function TrackingMapInner({
   // Only wait when we have no valid display coordinate (last-known counts as valid).
   const showWaitingBanner = Boolean(expectDriver && !displayDriver);
 
+  useEffect(() => {
+    if (showWaitingBanner) {
+      console.log('[WAITING BANNER]', {
+        visible: true,
+        reason: 'no_valid_driver_coordinate',
+        expectDriver,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+    if (expectDriver && displayDriver) {
+      console.log('[WAITING BANNER CLEARED]', {
+        latitude: displayDriver.latitude,
+        longitude: displayDriver.longitude,
+        timestamp: Date.now(),
+      });
+    }
+  }, [
+    showWaitingBanner,
+    expectDriver,
+    displayDriver?.latitude,
+    displayDriver?.longitude,
+  ]);
+
   return (
     <View
       style={styles.mapWrap}

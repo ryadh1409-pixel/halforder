@@ -875,6 +875,14 @@ export function subscribeActiveDelivery(
           source: 'subscribeActiveDelivery',
           fromCache: meta.fromCache,
         });
+        console.log('[FIRESTORE SNAPSHOT]', {
+          documentPath: `orders/${snap.id}`,
+          deliveryStatus: mapped?.firestoreDeliveryStatus ?? null,
+          status: mapped?.status ?? null,
+          fromCache: meta.fromCache,
+          timestamp: Date.now(),
+          source: 'subscribeActiveDelivery',
+        });
         onData(mapped, meta);
       } catch (err) {
         warnMalformedDeliveryDoc(orderId, 'subscribeActiveDelivery snapshot', err);

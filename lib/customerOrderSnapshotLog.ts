@@ -39,6 +39,8 @@ export function logCustomerRawDoc(
     status: data.status ?? null,
     updatedAt: data.updatedAt ?? null,
     updatedAtMs: data.updatedAtMs ?? null,
+    hasDriverLocation: data.driverLocation != null,
+    driverLocation: data.driverLocation ?? null,
   });
 }
 

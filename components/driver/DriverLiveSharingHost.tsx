@@ -109,17 +109,32 @@ function DriverLiveSharingHostInner() {
     void declineEnableLiveLocation().finally(() => finishPrompt(false));
   }, [busy, finishPrompt, prompt]);
 
-  // Immediate stop when hub marks the delivery complete (before Firestore prune).
+  // Stop GPS only on definitive delivery completion — never on feed prune / false
+  // terminal signals. firestore_terminal / listener_prune previously mapped to
+  // stop('cancelled') which deleted orders.driverLocation while the courier was
+  // still mid-delivery (picked_up), leaving customers stuck on Waiting…
   useEffect(() => {
     return subscribeDriverHubActiveOrderRemove((orderId, reason) => {
       if (!isDriverLiveSharingActive(orderId)) return;
-      void stopDriverLiveSharing(
+      if (
         reason === 'delivery_completed' ||
-          reason === 'hub_card_deliver' ||
-          reason === 'active_screen_exit'
-          ? 'delivered'
-          : 'cancelled',
-      );
+        reason === 'hub_card_deliver' ||
+        reason === 'active_screen_exit'
+      ) {
+        console.log('[DRIVER LIVE SHARE] stop_on_hub_complete', {
+          orderId,
+          reason,
+          timestamp: Date.now(),
+        });
+        void stopDriverLiveSharing('delivered');
+        return;
+      }
+      console.log('[DRIVER LIVE SHARE] ignore_hub_remove', {
+        orderId,
+        reason,
+        timestamp: Date.now(),
+        note: 'keep_publishing_until_definitive_complete',
+      });
     });
   }, []);
 

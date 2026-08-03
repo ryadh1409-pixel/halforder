@@ -1688,6 +1688,58 @@ integrationDescribe('firestore rules (Firestore emulator)', () => {
       };
     }
 
+    it('allows ultra-light driverLocation-only write without deliveryType (picked_up)', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv_ul'), { name: 'Driver UL' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc_ul'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          // intentionally omit deliveryType — production food-share / some marketplace docs
+          driverId: 'drv_ul',
+          assignedDriverId: 'drv_ul',
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          totalPrice: 10,
+          items: [{ id: 'i1', name: 'Salad', price: 10, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv_ul').firestore();
+      const payload = driverLiveLocationPayload(45.42, -75.69);
+      await assertSucceeds(
+        updateDoc(doc(db, 'orders', 'loc_ul'), { driverLocation: payload }),
+      );
+    });
+
+    it('denies driverLocation+updatedAt write without deliveryType', async () => {
+      await te().withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'drivers', 'drv_ud'), { name: 'Driver UD' });
+        await setDoc(doc(ctx.firestore(), 'orders', 'loc_ud'), {
+          userId: 'cust1',
+          restaurantId: 'rest_abc',
+          paymentStatus: 'paid',
+          driverId: 'drv_ud',
+          assignedDriverId: 'drv_ud',
+          deliveryStatus: 'picked_up',
+          status: 'picked_up',
+          totalPrice: 10,
+          items: [{ id: 'i1', name: 'Salad', price: 10, qty: 1 }],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      });
+      const db = te().authenticatedContext('drv_ud').firestore();
+      const payload = driverLiveLocationPayload(45.42, -75.69);
+      await assertFails(
+        updateDoc(doc(db, 'orders', 'loc_ud'), {
+          driverLocation: payload,
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+
     it('allows assigned driver live location batch (orders + live_locations + drivers)', async () => {
       await te().withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'drivers', 'drv1'), { name: 'Driver One', isOnline: true });
