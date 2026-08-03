@@ -169,6 +169,7 @@ async function writeCanonicalOrderDriverLocation(
     });
     logPublish('[ORDER DRIVER LOCATION WRITE]', {
       documentPath: path,
+      orderId,
       latitude: coord.latitude,
       longitude: coord.longitude,
       heading: coord.heading ?? null,
@@ -179,6 +180,7 @@ async function writeCanonicalOrderDriverLocation(
   } catch (e) {
     logPublish('[ORDER DRIVER LOCATION WRITE]', {
       documentPath: path,
+      orderId,
       latitude: coord.latitude,
       longitude: coord.longitude,
       heading: coord.heading ?? null,

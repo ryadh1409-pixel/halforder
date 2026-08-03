@@ -226,7 +226,7 @@ async function writeCoord(
 ): Promise<boolean> {
   if (!session?.running) return false;
   if (session.orderId !== orderId || session.driverId !== driverId) return false;
-  // Temporary pipeline trace.
+  const startedAt = Date.now();
   console.log('[DRIVER GPS]', {
     orderId,
     driverId,
@@ -235,7 +235,7 @@ async function writeCoord(
     heading: coord.heading ?? null,
     accuracy: meta?.accuracy ?? null,
     speed: coord.speed ?? null,
-    timestamp: meta?.capturedAtMs ?? Date.now(),
+    timestamp: meta?.capturedAtMs ?? startedAt,
     mirrorOrderIds: session.mirrorOrderIds,
     file: 'services/location/driverLiveSharingSession.ts',
     function: 'writeCoord',
@@ -257,10 +257,12 @@ async function writeCoord(
     });
     console.log('[ORDER DRIVER LOCATION WRITE]', {
       documentPath: `orders/${orderId}`,
+      orderId,
       latitude: coord.latitude,
       longitude: coord.longitude,
       heading: coord.heading ?? null,
       timestamp: Date.now(),
+      durationMs: Date.now() - startedAt,
       success: false,
       error: e instanceof Error ? e.message : String(e),
       file: 'services/location/driverLiveSharingSession.ts',

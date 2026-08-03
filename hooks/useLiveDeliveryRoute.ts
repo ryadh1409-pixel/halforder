@@ -220,15 +220,34 @@ export function useLiveDeliveryRoute(params: {
         );
         // ETA to the active destination = first leg when waypoints exist.
         const firstLeg = result.legs[0];
-        setDistanceKm(
-          (firstLeg?.distanceMeters ?? result.distanceMeters) / 1000,
+        const nextDistanceKm =
+          (firstLeg?.distanceMeters ?? result.distanceMeters) / 1000;
+        const nextEtaMinutes = Math.max(
+          1,
+          Math.round((firstLeg?.durationSeconds ?? result.durationSeconds) / 60),
         );
-        setEtaMinutes(
-          Math.max(
-            1,
-            Math.round((firstLeg?.durationSeconds ?? result.durationSeconds) / 60),
-          ),
-        );
+        setDistanceKm(nextDistanceKm);
+        setEtaMinutes(nextEtaMinutes);
+        console.log('[POLYLINE UPDATED]', {
+          routeLeg,
+          pointCount:
+            result.coordinates.length >= 2
+              ? result.coordinates.length
+              : fallbackPath.length,
+          origin,
+          destination: dest,
+          waypointCount: waypoints.length,
+          timestamp: Date.now(),
+          file: 'hooks/useLiveDeliveryRoute.ts',
+        });
+        console.log('[ETA UPDATED]', {
+          routeLeg,
+          distanceKm: nextDistanceKm,
+          etaMinutes: nextEtaMinutes,
+          source: 'google_directions',
+          timestamp: Date.now(),
+          file: 'hooks/useLiveDeliveryRoute.ts',
+        });
       } catch {
         if (cancelled) return;
         lastFetchRef.current = {
@@ -240,23 +259,38 @@ export function useLiveDeliveryRoute(params: {
         setCoordinates(fallbackPath);
         setDistanceKm(fallbackMetrics.distanceKm);
         setEtaMinutes(fallbackMetrics.etaMinutes);
+        console.log('[POLYLINE UPDATED]', {
+          routeLeg,
+          pointCount: fallbackPath.length,
+          source: 'fallback_haversine',
+          timestamp: Date.now(),
+          file: 'hooks/useLiveDeliveryRoute.ts',
+        });
+        console.log('[ETA UPDATED]', {
+          routeLeg,
+          distanceKm: fallbackMetrics.distanceKm,
+          etaMinutes: fallbackMetrics.etaMinutes,
+          source: 'fallback_haversine',
+          timestamp: Date.now(),
+          file: 'hooks/useLiveDeliveryRoute.ts',
+        });
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-
     void run();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by rounded coords
   }, [
     enabled,
-    pointKey(restaurant),
     pointKey(driver),
+    pointKey(destination),
+    pointKey(restaurant),
     pointKey(customer),
     waypointsKey(waypoints),
     routeLeg,
+    fallbackPath,
     fallbackMetrics.distanceKm,
     fallbackMetrics.etaMinutes,
   ]);
