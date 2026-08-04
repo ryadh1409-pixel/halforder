@@ -5,8 +5,6 @@ import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import {
   formatPromotionCampaignCurrent,
-  isMenuItemPromotionTarget,
-  isRestaurantPromotionTarget,
   savePromotionBadgeTarget,
   subscribePromotionBadgeTargets,
   type PromotionBadgeTarget,
@@ -62,15 +60,15 @@ export default function AdminPromotionBadgesScreen() {
 
   const sections = useMemo((): Section[] => {
     const q = queryText.trim().toLowerCase();
-    const restaurantRows = rows
-      .filter(isRestaurantPromotionTarget)
+    const halfOrderRows = rows
+      .filter((r) => r.kind === 'foodShare')
       .filter((r) => matchesQuery(r, q));
-    const menuRows = rows
-      .filter(isMenuItemPromotionTarget)
+    const fullOrderRows = rows
+      .filter((r) => r.kind === 'restaurant' || r.kind === 'menuItem')
       .filter((r) => matchesQuery(r, q));
     return [
-      { title: 'Restaurant Promotions', data: restaurantRows },
-      { title: 'Menu Item Promotions', data: menuRows },
+      { title: 'HalfOrder Promotions', data: halfOrderRows },
+      { title: 'FullOrder Promotions', data: fullOrderRows },
     ];
   }, [rows, queryText]);
 
@@ -136,9 +134,9 @@ export default function AdminPromotionBadgesScreen() {
           renderSectionFooter={({ section }) =>
             section.data.length === 0 ? (
               <Text style={styles.sectionEmpty}>
-                {section.title === 'Menu Item Promotions'
-                  ? 'No menu items found.'
-                  : 'No restaurant promotions found.'}
+                {section.title === 'HalfOrder Promotions'
+                  ? 'No HalfOrder promotions found.'
+                  : 'No FullOrder promotions found.'}
               </Text>
             ) : null
           }
