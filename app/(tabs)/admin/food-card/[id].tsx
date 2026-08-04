@@ -166,6 +166,8 @@ export default function AdminFoodCardDetailScreen() {
       promotionBadge: detail.promotionBadge,
       promotionBadges: detail.promotionBadges,
       fulfillmentMode: detail.fulfillmentMode,
+      promotion1DollarEnabled: detail.promotion1DollarEnabled,
+      promotion1DollarTarget: detail.promotion1DollarTarget,
     };
   }, [detail]);
 

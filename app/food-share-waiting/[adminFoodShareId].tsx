@@ -14,6 +14,9 @@ import {
 } from '@/lib/foodShareUx';
 import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
+import {
+  resolveFoodShareDollarPromoDiscount,
+} from '@/lib/foodShareDollarPromo';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import { cancelWaitingFoodShare } from '@/services/foodShareMatchService';
 import { auth, db } from '@/services/firebase';
@@ -167,6 +170,12 @@ export default function FoodShareWaitingScreen() {
 
   const breakdown = useMemo(() => {
     if (!share) return null;
+    // Waiting user is treated as the host ('first' participant).
+    const promoDiscount = resolveFoodShareDollarPromoDiscount({
+      enabled: share.promotion1DollarEnabled,
+      target: share.promotion1DollarTarget,
+      participant: 'first',
+    });
     return buildAdminShareCostBreakdown(
       share.originalPrice,
       share.sharedPrice,
@@ -174,6 +183,7 @@ export default function FoodShareWaitingScreen() {
       {
         promotionBadges: share.promotionBadges,
         shareRaw: shareRaw ?? undefined,
+        promoDiscount,
       },
     );
   }, [share, shareRaw]);

@@ -12,7 +12,14 @@ import {
   FOOD_SHARE_LIFECYCLE_STEPS,
 } from '@/lib/foodShareLifecycle';
 import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
-import { formatShareCurrency } from '@/lib/foodSharePricing';
+import { buildAdminShareCostBreakdown, formatShareCurrency } from '@/lib/foodSharePricing';
+import {
+  isFoodShareDollarPromoEnabled,
+  parseFoodShareDollarPromoTarget,
+  resolveFoodShareDollarPromoDiscount,
+  resolveMatchParticipantRole,
+  type FoodShareDollarPromoTarget,
+} from '@/lib/foodShareDollarPromo';
 import { FOOD_SHARE_ERRORS, FOOD_SHARE_SUCCESS, foodShareErrorMessage } from '@/lib/foodShareUx';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import { FoodShareReportModal } from '@/components/foodShare/FoodShareReportModal';
@@ -58,6 +65,10 @@ export default function FoodShareMatchScreen() {
   );
   const [reportOpen, setReportOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [sharePromo, setSharePromo] = useState<{
+    enabled: boolean;
+    target: FoodShareDollarPromoTarget;
+  } | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -85,6 +96,40 @@ export default function FoodShareMatchScreen() {
     );
     return unsub;
   }, [id]);
+
+  // Load share promo fields so we can compute the correct promoDiscount per participant.
+  useEffect(() => {
+    if (!match?.adminFoodShareId) return undefined;
+    const shareRef = doc(db, 'adminFoodShares', match.adminFoodShareId);
+    const unsub = onSnapshot(shareRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as Record<string, unknown>;
+      setSharePromo({
+        enabled: isFoodShareDollarPromoEnabled(data.promotion1DollarEnabled),
+        target: parseFoodShareDollarPromoTarget(data.promotion1DollarTarget),
+      });
+    });
+    return unsub;
+  }, [match?.adminFoodShareId]);
+
+  // Compute display breakdown with the correct promoDiscount for this participant.
+  const displayBreakdown = useMemo(() => {
+    if (!match) return null;
+    const base = match.costBreakdown;
+    if (!sharePromo) return base;
+    const participant = resolveMatchParticipantRole(myUid, match.users);
+    const promoDiscount = resolveFoodShareDollarPromoDiscount({
+      enabled: sharePromo.enabled,
+      target: sharePromo.target,
+      participant,
+    });
+    return buildAdminShareCostBreakdown(
+      base.originalPrice,
+      base.sharedPrice,
+      base.deliveryShare,
+      { promoDiscount },
+    );
+  }, [match, sharePromo, myUid]);
 
   const partner = useMemo(() => {
     if (!match || !myUid) return null;
@@ -235,7 +280,7 @@ export default function FoodShareMatchScreen() {
     );
   }
 
-  const breakdown = match.costBreakdown;
+  const breakdown = displayBreakdown ?? match.costBreakdown;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
