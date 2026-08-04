@@ -473,12 +473,18 @@ export default function FoodSharePayScreen() {
           )
         ) : phase === 'confirming' ? (
           <View style={styles.confirmBox}>
-            <ActivityIndicator color={c.primary} />
-            <Text style={styles.confirmTitle}>Confirming payment…</Text>
+            <Text style={styles.confirmSuccess}>✓ Payment received</Text>
+            <Text style={styles.confirmTitle}>
+              {isPickup
+                ? 'Your payment is held securely.'
+                : partner
+                  ? `Waiting for ${partner.firstName} to complete payment.`
+                  : 'Waiting for your partner to complete payment.'}
+            </Text>
             <Text style={styles.confirmBody}>
               {isPickup
-                ? 'We will open chat once your payment is held securely.'
-                : 'We will open chat once both payments are confirmed.'}
+                ? "We'll automatically continue once both payments are confirmed."
+                : "You'll automatically continue when both payments are confirmed."}
             </Text>
           </View>
         ) : (
@@ -861,7 +867,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(23,25,35,0.92)',
     marginTop: 8,
   },
-  confirmTitle: { color: '#FFF', fontWeight: '800', fontSize: 16 },
+  confirmSuccess: {
+    color: '#34D399',
+    fontWeight: '900',
+    fontSize: 18,
+    marginBottom: 2,
+  },
+  confirmTitle: { color: '#FFF', fontWeight: '800', fontSize: 16, textAlign: 'center' },
   confirmBody: {
     color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
