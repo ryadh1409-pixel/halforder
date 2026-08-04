@@ -77,7 +77,7 @@ service cloud.firestore {
         && request.resource.data.userId is string
         && request.resource.data.userId == request.auth.uid;
     }
-    /** Customer read: owner, assigned restaurant uid, or assigned driver uid. */
+    /** Customer read: owner, assigned restaurant uid, assigned driver uid, or food-share participant. */
     function ordersReadByParticipant() {
       return request.auth != null
         && (
@@ -85,6 +85,8 @@ service cloud.firestore {
           || isRestaurantVendorActor(resource.data)
           || resource.data.driverId == request.auth.uid
           || resource.data.get('assignedDriverId', '') == request.auth.uid
+          // Both HalfOrder participants (set server-side by Cloud Functions; never client-writable).
+          || request.auth.uid in resource.data.get('participantIds', [])
         );
     }
     /** Role from Auth custom claims (query-safe; set by refreshUserRoleClaims). */

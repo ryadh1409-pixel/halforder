@@ -12,6 +12,7 @@ import {
   FOOD_SHARE_LIFECYCLE_STEPS,
 } from '@/lib/foodShareLifecycle';
 import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
+import { FoodShareOrderTrackingSection } from '@/components/foodShare/FoodShareOrderTrackingSection';
 import { buildAdminShareCostBreakdown, formatShareCurrency } from '@/lib/foodSharePricing';
 import {
   isFoodShareDollarPromoEnabled,
@@ -175,6 +176,13 @@ export default function FoodShareMatchScreen() {
   const anyPaymentCompleted = match
     ? Object.values(match.userPayments).some((payment) => payment.paymentStatus === 'PAID')
     : false;
+
+  // Show order tracking once both payments are confirmed and an order has been placed.
+  const showOrderTracking =
+    !!match?.orderId &&
+    !['WAITING_FOR_PARTNER', 'WAITING_FOR_PAYMENT', 'WAITING_FOR_PAYMENT_CONFIRMATION'].includes(
+      match.lifecycle ?? '',
+    );
 
   const handlePay = () => {
     if (!id) return;
@@ -351,6 +359,10 @@ export default function FoodShareMatchScreen() {
                 : `Pay ${formatShareCurrency(breakdown.grandTotal)}`}
           </Text>
         </Pressable>
+        {showOrderTracking ? (
+          <FoodShareOrderTrackingSection orderId={match.orderId!} />
+        ) : null}
+
         {canDriverChat ? (
           <Pressable style={styles.actionSecondary} onPress={handleDriverChat}>
             <Ionicons name="car-outline" size={18} color="#FFF" />
