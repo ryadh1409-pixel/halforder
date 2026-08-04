@@ -190,6 +190,8 @@ export default function AdminPromotionBadgesScreen() {
         value={editing?.promotionBadge ?? 'none'}
         badges={editing?.promotionBadges}
         destinations={editing?.promotionDestinations}
+        isFoodShare={editing?.kind === 'foodShare'}
+        dollarOneTarget={editing?.dollarOneTarget}
         saving={saving}
         onCancel={() => {
           if (!saving) setEditing(null);

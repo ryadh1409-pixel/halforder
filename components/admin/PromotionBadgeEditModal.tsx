@@ -5,6 +5,7 @@ import {
   type PromotionBadgeValue,
   type PromotionDestinations,
 } from '@/lib/promotionBadge';
+import type { DollarOneTarget } from '@/services/adminPromotionBadges';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,9 +24,17 @@ const TEXT = '#0f172a';
 const MUTED = '#64748b';
 const PRIMARY = '#A855F7';
 
+const DOLLAR_ONE_OPTIONS: { value: DollarOneTarget; label: string }[] = [
+  { value: 'first', label: 'First User' },
+  { value: 'second', label: 'Second User' },
+  { value: 'both', label: 'Both Users' },
+];
+
 export type PromotionCampaignDraft = {
   promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
   promotionDestinations: PromotionDestinations;
+  /** HalfOrder only — which participant gets the $1 promotion. */
+  dollarOneTarget?: DollarOneTarget | null;
 };
 
 export type PromotionBadgeEditModalProps = {
@@ -38,6 +47,9 @@ export type PromotionBadgeEditModalProps = {
   value?: PromotionBadgeValue;
   badges?: ReadonlyArray<Exclude<PromotionBadgeValue, 'none'>>;
   destinations?: PromotionDestinations;
+  /** HalfOrder (foodShare) cards only — show the $1 target selector. */
+  isFoodShare?: boolean;
+  dollarOneTarget?: DollarOneTarget;
   saving?: boolean;
   onCancel: () => void;
   onSave: (next: PromotionCampaignDraft) => void;
@@ -51,6 +63,8 @@ export function PromotionBadgeEditModal({
   value = 'none',
   badges,
   destinations,
+  isFoodShare = false,
+  dollarOneTarget: dollarOneTargetProp,
   saving = false,
   onCancel,
   onSave,
@@ -60,6 +74,8 @@ export function PromotionBadgeEditModal({
   >([]);
   const [draftDestinations, setDraftDestinations] =
     useState<PromotionDestinations>({ ...DEFAULT_PROMOTION_DESTINATIONS });
+  const [draftDollarOneTarget, setDraftDollarOneTarget] =
+    useState<DollarOneTarget | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -74,7 +90,8 @@ export function PromotionBadgeEditModal({
       ...DEFAULT_PROMOTION_DESTINATIONS,
       ...(destinations ?? {}),
     });
-  }, [visible, value, badges, destinations]);
+    setDraftDollarOneTarget(dollarOneTargetProp ?? null);
+  }, [visible, value, badges, destinations, dollarOneTargetProp]);
 
   const toggleBadge = (opt: PromotionBadgeValue) => {
     if (opt === 'none') {
@@ -208,6 +225,56 @@ export function PromotionBadgeEditModal({
                 );
               })}
             </View>
+
+            {isFoodShare ? (
+              <>
+                <Text style={[styles.fieldLabel, styles.metaSpacer]}>
+                  $1 Promotion Target
+                </Text>
+                <Text style={styles.hint}>
+                  Choose which participant receives the $1 promotion.
+                </Text>
+                <View style={styles.promoGroup}>
+                  {DOLLAR_ONE_OPTIONS.map((opt) => {
+                    const selected = draftDollarOneTarget === opt.value;
+                    return (
+                      <Pressable
+                        key={opt.value}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: selected }}
+                        disabled={saving}
+                        onPress={() =>
+                          setDraftDollarOneTarget(
+                            selected ? null : opt.value,
+                          )
+                        }
+                        style={[
+                          styles.promoOption,
+                          selected && styles.promoOptionSelected,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.radioOuter,
+                            selected && styles.checkOuterSelected,
+                          ]}
+                        >
+                          {selected ? <View style={styles.radioInner} /> : null}
+                        </View>
+                        <Text
+                          style={[
+                            styles.promoOptionText,
+                            selected && styles.promoOptionTextSelected,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
           </ScrollView>
 
           <View style={styles.actions}>
@@ -224,6 +291,9 @@ export function PromotionBadgeEditModal({
                 onSave({
                   promotionBadges: draftBadges,
                   promotionDestinations: draftDestinations,
+                  ...(isFoodShare
+                    ? { dollarOneTarget: draftDollarOneTarget }
+                    : {}),
                 })
               }
               disabled={saving}
@@ -322,6 +392,21 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 2,
+    backgroundColor: '#fff',
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(15, 23, 42, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#fff',
   },
   promoOptionText: {

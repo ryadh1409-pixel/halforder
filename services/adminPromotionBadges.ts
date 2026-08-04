@@ -31,6 +31,8 @@ export type PromotionBadgeTargetKind =
   | 'foodShare'
   | 'menuItem';
 
+export type DollarOneTarget = 'first' | 'second' | 'both';
+
 /** One row in the Admin Promotion Badges list. */
 export type PromotionBadgeTarget = {
   key: string;
@@ -45,6 +47,8 @@ export type PromotionBadgeTarget = {
   /** All active campaign badges. */
   promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
   promotionDestinations: PromotionDestinations;
+  /** HalfOrder only: which participant gets the $1 promotion. */
+  dollarOneTarget?: DollarOneTarget;
 };
 
 function badgesFromData(
@@ -79,6 +83,11 @@ function mapRestaurant(
   };
 }
 
+function parseDollarOneTarget(value: unknown): DollarOneTarget | undefined {
+  if (value === 'first' || value === 'second' || value === 'both') return value;
+  return undefined;
+}
+
 function mapFoodShare(
   id: AdminFoodCardSlotId,
   data: Record<string, unknown> | undefined,
@@ -102,6 +111,7 @@ function mapFoodShare(
     promotionDestinations: data
       ? promotionDestinationsFromData(data)
       : { ...DEFAULT_PROMOTION_DESTINATIONS },
+    dollarOneTarget: data ? parseDollarOneTarget(data.dollarOneTarget) : undefined,
   };
 }
 
@@ -301,6 +311,7 @@ export async function saveFoodSharePromotionBadge(
   slotDocId: AdminFoodCardSlotId,
   promotionBadge: PromotionBadgeValue | ReadonlyArray<PromotionBadgeValue>,
   destinations?: PromotionDestinations | null,
+  dollarOneTarget?: DollarOneTarget | null,
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
   if (!uid) throw new Error('Sign in required');
@@ -308,10 +319,11 @@ export async function saveFoodSharePromotionBadge(
   const list = Array.isArray(promotionBadge)
     ? promotionBadge
     : [promotionBadge];
-  await updateDoc(
-    doc(db, 'adminFoodShares', slotDocId),
-    campaignPayload(list, destinations),
-  );
+  const payload: Record<string, unknown> = {
+    ...campaignPayload(list, destinations),
+    dollarOneTarget: dollarOneTarget ?? null,
+  };
+  await updateDoc(doc(db, 'adminFoodShares', slotDocId), payload);
 }
 
 /** Persist campaign fields on a single menu item only. */
@@ -340,6 +352,8 @@ export async function saveMenuItemPromotionBadge(
 export type SavePromotionCampaignInput = {
   promotionBadges: ReadonlyArray<PromotionBadgeValue>;
   promotionDestinations: PromotionDestinations;
+  /** HalfOrder only — which participant gets the $1 promotion. */
+  dollarOneTarget?: DollarOneTarget | null;
 };
 
 export async function savePromotionBadgeTarget(
@@ -356,6 +370,10 @@ export async function savePromotionBadgeTarget(
     typeof promotionBadgeOrCampaign === 'string'
       ? undefined
       : promotionBadgeOrCampaign.promotionDestinations;
+  const dollarOneTarget =
+    typeof promotionBadgeOrCampaign === 'string'
+      ? undefined
+      : promotionBadgeOrCampaign.dollarOneTarget;
 
   if (target.kind === 'restaurant') {
     await saveRestaurantPromotionBadge(target.id, badges, destinations);
@@ -371,6 +389,7 @@ export async function savePromotionBadgeTarget(
     target.id as AdminFoodCardSlotId,
     badges,
     destinations,
+    dollarOneTarget,
   );
 }
 
