@@ -1664,4 +1664,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(118, 118, 128, 0.1)',
   },
   pickerClearText: { color: MUTED, fontSize: 14, fontWeight: '600' },
+
+  fulfillmentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+  fulfillmentChip: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: 'rgba(15, 23, 42, 0.14)',
+    backgroundColor: FIELD_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  fulfillmentChipSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: 'rgba(168, 85, 247, 0.08)',
+  },
+  fulfillmentChipText: {
+    color: MUTED,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  fulfillmentChipTextSelected: {
+    color: PRIMARY,
+    fontWeight: '700',
+  },
 });

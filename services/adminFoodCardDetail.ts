@@ -3,6 +3,7 @@ import {
   isAdminFoodCardSlotId,
   type AdminFoodCardSlotId,
 } from '@/constants/adminFoodCards';
+import type { FoodShareDollarPromoTarget } from '@/lib/foodShareDollarPromo';
 import { formatFirestoreTime } from '@/lib/admin/orderHelpers';
 import { foodShareLifecycleLabel } from '@/lib/foodShareLifecycle';
 import { SWIPE_STALE_WAITING_MS } from '@/lib/swipeMarketplaceStatus';
@@ -97,6 +98,8 @@ export type AdminFoodCardDetail = {
   inviteStats: FoodShareInviteStats;
   chatStatusLabel: string;
   hubStatusLabel: string;
+  promotion1DollarEnabled: boolean;
+  promotion1DollarTarget: FoodShareDollarPromoTarget;
 };
 
 type UserProfileSlice = {
@@ -388,6 +391,8 @@ function buildDetail(input: {
     notifyUserIds: [...notifyIds],
     waitingUsers,
     inviteStats: input.inviteStats,
+    promotion1DollarEnabled: share.promotion1DollarEnabled,
+    promotion1DollarTarget: share.promotion1DollarTarget,
     chatStatusLabel: (() => {
       if (!latestMatch) return '—';
       const lc = String(latestMatch.lifecycle ?? '').toUpperCase();

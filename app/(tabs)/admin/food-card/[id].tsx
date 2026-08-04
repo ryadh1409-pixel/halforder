@@ -75,6 +75,8 @@ function emptyDraft(): FoodSlotDraft {
     restaurantName: 'HalfOrder',
     promotionBadges: [],
     fulfillmentMode: 'delivery',
+    promotion1DollarEnabled: false,
+    promotion1DollarTarget: 'both',
   };
 }
 
@@ -146,7 +148,7 @@ export default function AdminFoodCardDetailScreen() {
   const slotMeta = useMemo((): AdminFoodCardSlot | null => {
     if (!detail || !isAdminFoodCardSlotId(detail.cardId)) return null;
     const idNum = Number.parseInt(detail.cardId, 10) || 1;
-    const fee = Number.parseFloat(detail.deliveryFeeLabel.replace('$', ''));
+    const fee = Number.parseFloat(detail.deliveryFeeLabel.replace(/[^0-9.]/g, ''));
     return {
       docId: detail.cardId as AdminFoodCardSlotId,
       id: idNum,
@@ -211,7 +213,7 @@ export default function AdminFoodCardDetailScreen() {
       sharingPrice: detail.sharedPrice > 0 ? String(detail.sharedPrice) : '',
       deliveryShare:
         detail.deliveryFeeLabel !== '—'
-          ? detail.deliveryFeeLabel.replace('$', '')
+          ? detail.deliveryFeeLabel.replace(/[^0-9.]/g, '')
           : '0',
       venueLocation: detail.pickupAddress === '—' ? '' : detail.pickupAddress,
       active: detail.active,
@@ -223,6 +225,8 @@ export default function AdminFoodCardDetailScreen() {
       restaurantName: detail.restaurantName,
       promotionBadges: detail.promotionBadges,
       fulfillmentMode: detail.fulfillmentMode,
+      promotion1DollarEnabled: detail.promotion1DollarEnabled ?? false,
+      promotion1DollarTarget: detail.promotion1DollarTarget ?? 'both',
     });
     setEditOpen(true);
   }, [detail]);
@@ -330,6 +334,8 @@ export default function AdminFoodCardDetailScreen() {
         restaurantName: draft.restaurantName,
         promotionBadges: draft.promotionBadges,
         fulfillmentMode: draft.fulfillmentMode,
+        promotion1DollarEnabled: draft.promotion1DollarEnabled === true,
+        promotion1DollarTarget: draft.promotion1DollarTarget,
       });
       console.log('[SAVE] completed successfully');
       setEditOpen(false);

@@ -226,56 +226,52 @@ export function PromotionBadgeEditModal({
               })}
             </View>
 
-            {isFoodShare ? (
-              <>
-                <Text style={[styles.fieldLabel, styles.metaSpacer]}>
-                  $1 Promotion Target
-                </Text>
-                <Text style={styles.hint}>
-                  Choose which participant receives the $1 promotion.
-                </Text>
-                <View style={styles.promoGroup}>
-                  {DOLLAR_ONE_OPTIONS.map((opt) => {
-                    const selected = draftDollarOneTarget === opt.value;
-                    return (
-                      <Pressable
-                        key={opt.value}
-                        accessibilityRole="radio"
-                        accessibilityState={{ checked: selected }}
-                        disabled={saving}
-                        onPress={() =>
-                          setDraftDollarOneTarget(
-                            selected ? null : opt.value,
-                          )
-                        }
+          </ScrollView>
+
+          {isFoodShare ? (
+            <View style={styles.dollarOneSection}>
+              <Text style={[styles.fieldLabel, { marginBottom: 4 }]}>
+                $1 Promotion Target
+              </Text>
+              <Text style={[styles.hint, { marginBottom: 10 }]}>
+                Choose which participant receives the $1 promotion.
+              </Text>
+              <View style={styles.promoGroup}>
+                {DOLLAR_ONE_OPTIONS.map((opt) => {
+                  const selected = draftDollarOneTarget === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      activeOpacity={0.7}
+                      disabled={saving}
+                      onPress={() => setDraftDollarOneTarget(opt.value)}
+                      style={[
+                        styles.promoOption,
+                        selected && styles.promoOptionSelected,
+                      ]}
+                    >
+                      <View
                         style={[
-                          styles.promoOption,
-                          selected && styles.promoOptionSelected,
+                          styles.radioOuter,
+                          selected && styles.radioOuterSelected,
                         ]}
                       >
-                        <View
-                          style={[
-                            styles.radioOuter,
-                            selected && styles.checkOuterSelected,
-                          ]}
-                        >
-                          {selected ? <View style={styles.radioInner} /> : null}
-                        </View>
-                        <Text
-                          style={[
-                            styles.promoOptionText,
-                            selected && styles.promoOptionTextSelected,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            ) : null}
-          </ScrollView>
+                        {selected ? <View style={styles.radioInner} /> : null}
+                      </View>
+                      <Text
+                        style={[
+                          styles.promoOptionText,
+                          selected && styles.promoOptionTextSelected,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.actions}>
             <TouchableOpacity
@@ -326,7 +322,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     maxHeight: '92%',
   },
-  scroll: { flexGrow: 0 },
+  scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8 },
   title: {
     color: TEXT,
@@ -399,9 +395,14 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: 'rgba(15, 23, 42, 0.25)',
+    borderColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  radioOuterSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: PRIMARY,
   },
   radioInner: {
     width: 8,
@@ -415,6 +416,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   promoOptionTextSelected: { fontWeight: '700' },
+  dollarOneSection: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(15, 23, 42, 0.08)',
+  },
   actions: {
     flexDirection: 'row',
     gap: 12,
