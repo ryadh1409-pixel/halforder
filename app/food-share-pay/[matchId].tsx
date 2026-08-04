@@ -1,8 +1,14 @@
 import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
 import { confirmCancelMatch } from '@/hooks/useFoodShareUx';
-import { FoodSharePricingCard } from '@/components/foodShare/FoodSharePricingCard';
-import { formatShareCurrency } from '@/lib/foodSharePricing';
+import { buildAdminShareCostBreakdown, formatShareCurrency } from '@/lib/foodSharePricing';
 import { isPickupFulfillment } from '@/lib/foodShareFulfillment';
+import {
+  isFoodShareDollarPromoEnabled,
+  parseFoodShareDollarPromoTarget,
+  resolveFoodShareDollarPromoTargetPrice,
+  resolveMatchParticipantRole,
+  type FoodShareDollarPromoTarget,
+} from '@/lib/foodShareDollarPromo';
 import {
   FOOD_SHARE_ERRORS,
   FOOD_SHARE_SUCCESS,
@@ -22,13 +28,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showError, showSuccess } from '@/utils/toast';
 import { getUserFriendlyError } from '@/services/errors/userFriendlyErrors';
@@ -61,6 +74,11 @@ export default function FoodSharePayScreen() {
   const [confirmingPickup, setConfirmingPickup] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [match, setMatch] = useState<ReturnType<typeof mapMatchDoc> | null>(null);
+  const [sharePromo, setSharePromo] = useState<{
+    enabled: boolean;
+    target: FoodShareDollarPromoTarget;
+  } | null>(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
@@ -136,6 +154,45 @@ export default function FoodSharePayScreen() {
     return unsub;
   }, [id, myUid, router]);
 
+  // Subscribe to share doc to get promo fields for correct per-user amount display
+  useEffect(() => {
+    const shareId = match?.adminFoodShareId;
+    if (!shareId) return undefined;
+    const shareRef = doc(db, 'adminFoodShares', shareId);
+    const unsub = onSnapshot(
+      shareRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as Record<string, unknown>;
+        setSharePromo({
+          enabled: isFoodShareDollarPromoEnabled(data.promotion1DollarEnabled),
+          target: parseFoodShareDollarPromoTarget(data.promotion1DollarTarget),
+        });
+      },
+      () => { /* ignore */ },
+    );
+    return unsub;
+  }, [match?.adminFoodShareId]);
+
+  // Recompute breakdown with promo applied — ensures displayed amount matches Stripe
+  const displayBreakdown = useMemo(() => {
+    if (!match) return null;
+    const base = match.costBreakdown;
+    if (!sharePromo) return base;
+    const participant = resolveMatchParticipantRole(myUid, match.users);
+    const promoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
+      enabled: sharePromo.enabled,
+      target: sharePromo.target,
+      participant,
+    });
+    return buildAdminShareCostBreakdown(
+      base.originalPrice,
+      base.sharedPrice,
+      base.deliveryShare,
+      { promoTargetPrice },
+    );
+  }, [match, sharePromo, myUid]);
+
   const partner = useMemo(() => {
     if (!match || !myUid) return null;
     if (match.userA.uid === myUid) return match.userB;
@@ -153,6 +210,9 @@ export default function FoodSharePayScreen() {
     ? match?.userPayments[partner.uid]?.paymentStatus === 'PAID' ||
       match?.userPayments[partner.uid]?.paymentStatus === 'NOT_REQUIRED'
     : false;
+  const myPaidStatus =
+    phase === 'confirming' ||
+    match?.userPayments[myUid]?.paymentStatus === 'PAID';
   const anyPaymentCompleted = match
     ? Object.values(match.userPayments).some((payment) => payment.paymentStatus === 'PAID')
     : false;
@@ -305,7 +365,7 @@ export default function FoodSharePayScreen() {
     );
   }
 
-  const breakdown = match.costBreakdown;
+  const breakdown = displayBreakdown ?? match.costBreakdown;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -315,11 +375,16 @@ export default function FoodSharePayScreen() {
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </Pressable>
 
+        {/* #4 – Improved page title */}
         <Text style={styles.kicker}>
-          {isPickup ? 'Secure pickup checkout' : 'Secure checkout'}
+          {isPickup ? 'Pickup Checkout' : 'Review & Pay'}
         </Text>
+
+        {/* #5 – Improved restaurant presentation */}
         <Text style={styles.foodName}>{match.foodName}</Text>
-        <Text style={styles.restaurant}>{match.restaurantName}</Text>
+        <Text style={styles.restaurant}>
+          {`from ${match.restaurantName}`}
+        </Text>
 
         {match.foodImageUrl ? (
           <Image source={{ uri: match.foodImageUrl }} style={styles.hero} contentFit="cover" />
@@ -327,14 +392,44 @@ export default function FoodSharePayScreen() {
           <View style={[styles.hero, styles.heroPh]} />
         )}
 
-        <FoodSharePricingCard
-          pricing={breakdown}
-          variant="payment"
-          showTax
-          fulfillmentMode={match.fulfillmentMode ?? 'delivery'}
-          style={styles.glass}
-        />
+        {/* #3 & #9 & #10 – Simplified order summary, no promo rows, YOU PAY emphasis */}
+        <View style={[styles.glass, styles.summaryCard]}>
+          <Text style={styles.sectionLabel}>ORDER SUMMARY</Text>
 
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryRowLabel}>🍽️ Food Share</Text>
+            <Text style={styles.summaryRowValue}>
+              {formatShareCurrency(breakdown.subtotalBeforeTax)}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryRowLabel}>🏛️ Tax</Text>
+            <Text style={styles.summaryRowValue}>
+              {formatShareCurrency(breakdown.tax)}
+            </Text>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          {/* #1 & #9 – YOU PAY: the actual Stripe amount, large and bold */}
+          <View style={styles.youPayRow}>
+            <Text style={styles.youPayLabel}>You Pay</Text>
+            <Text style={styles.youPayAmount}>
+              {formatShareCurrency(breakdown.grandTotal)}
+            </Text>
+          </View>
+
+          {/* Free perks – shown below total, not as price rows */}
+          {(breakdown.freeDelivery || isPickup) ? (
+            <Text style={styles.perkText}>✓ Free Delivery</Text>
+          ) : null}
+          {breakdown.freeServiceFee ? (
+            <Text style={styles.perkText}>✓ No Service Fee</Text>
+          ) : null}
+        </View>
+
+        {/* Pickup host info */}
         {isPickup ? (
           <View style={styles.pickupInfo}>
             <Ionicons name="bag-handle-outline" size={20} color="#C084FC" />
@@ -346,29 +441,12 @@ export default function FoodSharePayScreen() {
           </View>
         ) : null}
 
-        {partner ? (
-          <View style={styles.partnerBanner}>
-            <Ionicons
-              name={partnerPaid ? 'checkmark-circle' : 'time-outline'}
-              size={20}
-              color={partnerPaid ? '#C084FC' : '#F59E0B'}
-            />
-            <Text style={styles.partnerBannerTxt}>
-              {isPickup
-                ? isPickupHost
-                  ? joinerPaid
-                    ? `${partner.firstName} paid — confirm pickup after you pay the restaurant`
-                    : `Waiting for ${partner.firstName} to pay their share`
-                  : partnerPaid
-                    ? `${partner.firstName} is the host — they'll pay at the restaurant`
-                    : `Waiting for ${partner.firstName}`
-                : partnerPaid
-                  ? `${partner.firstName} paid — waiting for match activation`
-                  : `Waiting for ${partner.firstName} to pay their share`}
-            </Text>
-          </View>
+        {/* #6 – Trust indicator above pay button */}
+        {!isPickupHost && phase !== 'confirming' ? (
+          <Text style={styles.trustNote}>🔒 Secure payment powered by Stripe</Text>
         ) : null}
 
+        {/* Pay button / Confirm box — BEFORE waiting status (#2) */}
         {isPickupHost ? (
           joinerPaid ? (
             <Pressable
@@ -404,6 +482,7 @@ export default function FoodSharePayScreen() {
             </Text>
           </View>
         ) : (
+          /* #1 – Button shows "Pay My Share" + per-user amount */
           <Pressable
             style={[styles.payBtn, phase === 'paying' && styles.payBtnDisabled]}
             disabled={phase === 'paying' || cancelling}
@@ -412,12 +491,12 @@ export default function FoodSharePayScreen() {
             {phase === 'paying' ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <>
-                <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
-                <Text style={styles.payBtnTxt}>
-                  Pay {formatShareCurrency(breakdown.grandTotal)} with Stripe
+              <View style={styles.payBtnContent}>
+                <Text style={styles.payBtnPrimary}>Pay My Share</Text>
+                <Text style={styles.payBtnAmount}>
+                  {formatShareCurrency(breakdown.grandTotal)}
                 </Text>
-              </>
+              </View>
             )}
           </Pressable>
         )}
@@ -436,6 +515,144 @@ export default function FoodSharePayScreen() {
           </Pressable>
         ) : null}
 
+        {/* #2 – Waiting status BELOW the pay button
+            #7 – Improved waiting message
+            #8 – Show both participants' payment status */}
+        {partner ? (
+          <View style={styles.participantSection}>
+            <View style={styles.participantDivider} />
+
+            <View style={styles.participantRow}>
+              <Text style={styles.participantName}>👤 You</Text>
+              {myPaidStatus ? (
+                <Text style={styles.statusPaid}>✅ Paid</Text>
+              ) : (
+                <Text style={styles.statusPending}>⏳ Pending</Text>
+              )}
+            </View>
+
+            <View style={styles.participantRow}>
+              <Text style={styles.participantName}>👤 {partner.firstName}</Text>
+              {partnerPaid ? (
+                <Text style={styles.statusPaid}>✅ Paid</Text>
+              ) : (
+                <Text style={styles.statusPending}>⏳ Waiting</Text>
+              )}
+            </View>
+
+            {myPaidStatus && !partnerPaid ? (
+              <Text style={styles.waitingNote}>
+                ✅ Your payment has been received.{'\n'}We'll notify you once both payments are completed.
+              </Text>
+            ) : !myPaidStatus ? (
+              <Text style={styles.waitingNote}>
+                We'll notify you once both payments are completed.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Expandable Order Details — collapsed by default */}
+        <View style={styles.detailsCard}>
+          <Pressable
+            style={styles.detailsHeader}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setDetailsExpanded((v) => !v);
+            }}
+          >
+            <Text style={styles.detailsHeaderTxt}>Price Breakdown</Text>
+            <Ionicons
+              name={detailsExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color="#7D8493"
+            />
+          </Pressable>
+
+          {detailsExpanded ? (
+            <View style={styles.detailsBody}>
+              <View style={styles.detailsDivider} />
+
+              {/* Restaurant & item info */}
+              <DetailRow label="Restaurant" value={match.restaurantName} />
+              <DetailRow label="Food Item" value={match.foodName} />
+
+              <View style={styles.detailsSectionGap} />
+
+              {/* Pricing rows */}
+              <DetailRow
+                label="Original Item Price"
+                value={formatShareCurrency(breakdown.originalPrice)}
+                muted
+              />
+              <DetailRow
+                label="Your Food Share"
+                value={formatShareCurrency(breakdown.sharedPrice)}
+                muted
+              />
+              {breakdown.sharedDeliveryFee > 0 ? (
+                <DetailRow
+                  label="Delivery Fee"
+                  value={formatShareCurrency(breakdown.sharedDeliveryFee)}
+                  muted
+                />
+              ) : (
+                <DetailRow label="Delivery Fee" value="FREE" accent />
+              )}
+              {breakdown.sharedServiceFee > 0 ? (
+                <DetailRow
+                  label="Service Fee"
+                  value={formatShareCurrency(breakdown.sharedServiceFee)}
+                  muted
+                />
+              ) : (
+                <DetailRow label="Service Fee" value="FREE" accent />
+              )}
+
+              {/* Promotion — only visible here, not on main checkout */}
+              {breakdown.promoDiscount > 0 ? (
+                <>
+                  <View style={styles.detailsSectionGap} />
+                  <DetailRow
+                    label="🏷️ Limited Time Offer"
+                    value={`−${formatShareCurrency(breakdown.promoDiscount)}`}
+                    accent
+                  />
+                </>
+              ) : null}
+
+              <View style={styles.detailsSectionGap} />
+
+              {/* Totals */}
+              <DetailRow
+                label="Subtotal (before tax)"
+                value={formatShareCurrency(breakdown.subtotalBeforeTax)}
+                muted
+              />
+              <DetailRow
+                label="Tax (HST 13%)"
+                value={formatShareCurrency(breakdown.tax)}
+                muted
+              />
+
+              <View style={styles.detailsDivider} />
+
+              <DetailRow
+                label="Your Share"
+                value={formatShareCurrency(breakdown.grandTotal)}
+                bold
+              />
+              {partner ? (
+                <DetailRow
+                  label={`${partner.firstName}'s Share`}
+                  value={formatShareCurrency(breakdown.grandTotal)}
+                  muted
+                />
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
         <Text style={styles.secureNote}>
           {isPickup
             ? 'Pickup payments are held securely by HalfOrder and released to reimburse the host after pickup confirmation.'
@@ -446,14 +663,53 @@ export default function FoodSharePayScreen() {
   );
 }
 
-function CostRow({ label, value }: { label: string; value: string }) {
+// Reusable row inside the expandable details section
+function DetailRow({
+  label,
+  value,
+  muted = false,
+  accent = false,
+  bold = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  accent?: boolean;
+  bold?: boolean;
+}) {
   return (
-    <View style={styles.costRow}>
-      <Text style={styles.costLabel}>{label}</Text>
-      <Text style={styles.costValue}>{value}</Text>
+    <View style={detailRowStyles.row}>
+      <Text style={[detailRowStyles.label, muted && detailRowStyles.labelMuted]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          detailRowStyles.value,
+          muted && detailRowStyles.valueMuted,
+          accent && detailRowStyles.valueAccent,
+          bold && detailRowStyles.valueBold,
+        ]}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
+
+const detailRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  label: { color: '#FFF', fontSize: 13, fontWeight: '600', flex: 1, paddingRight: 8 },
+  labelMuted: { color: '#B7BDC9' },
+  value: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  valueMuted: { color: '#B7BDC9', fontWeight: '600' },
+  valueAccent: { color: '#34D399', fontWeight: '700' },
+  valueBold: { color: '#C084FC', fontSize: 14, fontWeight: '900' },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#0B0816' },
@@ -480,10 +736,9 @@ const styles = StyleSheet.create({
   foodName: { fontSize: 26, fontWeight: '900', color: '#FFF', marginTop: 4 },
   restaurant: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#B7BDC9',
     marginBottom: 16,
-    textTransform: 'uppercase',
   },
   hero: {
     width: '100%',
@@ -501,6 +756,54 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
+  // Simplified summary card
+  summaryCard: {},
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7D8493',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 14,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  summaryRowLabel: { color: '#B7BDC9', fontSize: 14, fontWeight: '600' },
+  summaryRowValue: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginVertical: 12,
+  },
+  // YOU PAY — large & prominent
+  youPayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  youPayLabel: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  youPayAmount: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#C084FC',
+    letterSpacing: -0.5,
+  },
+  perkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#34D399',
+    marginTop: 2,
+  },
+  // Pickup info
   pickupInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -519,53 +822,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 19,
   },
-  section: {
+  // #6 Trust indicator
+  trustNote: {
+    textAlign: 'center',
+    color: '#7D8493',
     fontSize: 12,
-    fontWeight: '800',
-    color: '#B7BDC9',
-    textTransform: 'uppercase',
-    marginBottom: 12,
-    letterSpacing: 0.4,
+    fontWeight: '600',
+    marginBottom: 10,
   },
-  costRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  costLabel: { color: '#B7BDC9', fontWeight: '600' },
-  costValue: { color: '#FFF', fontWeight: '800' },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.12)',
-  },
-  totalLabel: { color: '#FFF', fontWeight: '900', fontSize: 16 },
-  totalValue: { color: '#C084FC', fontWeight: '900', fontSize: 18 },
-  partnerBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(23,25,35,0.92)',
-    marginBottom: 16,
-  },
-  partnerBannerTxt: { flex: 1, color: '#FFF', fontWeight: '600', fontSize: 14 },
+  // Pay button — redesigned for "Pay My Share + amount"
   payBtn: {
-    height: 54,
+    height: 60,
     borderRadius: 999,
     backgroundColor: '#0B0816',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 8,
+    marginTop: 4,
   },
   payBtnDisabled: { opacity: 0.7 },
   payBtnTxt: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
+  payBtnContent: { alignItems: 'center', gap: 2 },
+  payBtnPrimary: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
+  payBtnAmount: { color: 'rgba(255,255,255,0.75)', fontWeight: '700', fontSize: 14 },
   cancelLink: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -588,6 +868,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  // #2 & #7 & #8 — Participant payment status section (below button)
+  participantSection: {
+    marginTop: 20,
+  },
+  participantDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 16,
+  },
+  participantRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  participantName: {
+    color: '#B7BDC9',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusPaid: {
+    color: '#34D399',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusPending: {
+    color: '#F59E0B',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  waitingNote: {
+    marginTop: 10,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   secureNote: {
     marginTop: 16,
     textAlign: 'center',
@@ -595,6 +912,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  // Expandable Order Details card
+  detailsCard: {
+    borderRadius: 20,
+    marginBottom: 14,
+    backgroundColor: 'rgba(23,25,35,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  detailsHeaderTxt: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#7D8493',
+  },
+  detailsBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  detailsDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginVertical: 10,
+  },
+  detailsSectionGap: { height: 6 },
   primaryBtn: {
     marginTop: 20,
     backgroundColor: c.primary,
