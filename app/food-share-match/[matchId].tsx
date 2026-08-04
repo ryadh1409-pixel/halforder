@@ -16,7 +16,7 @@ import { buildAdminShareCostBreakdown, formatShareCurrency } from '@/lib/foodSha
 import {
   isFoodShareDollarPromoEnabled,
   parseFoodShareDollarPromoTarget,
-  resolveFoodShareDollarPromoDiscount,
+  resolveFoodShareDollarPromoTargetPrice,
   resolveMatchParticipantRole,
   type FoodShareDollarPromoTarget,
 } from '@/lib/foodShareDollarPromo';
@@ -118,7 +118,7 @@ export default function FoodShareMatchScreen() {
     const base = match.costBreakdown;
     if (!sharePromo) return base;
     const participant = resolveMatchParticipantRole(myUid, match.users);
-    const promoDiscount = resolveFoodShareDollarPromoDiscount({
+    const promoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
       enabled: sharePromo.enabled,
       target: sharePromo.target,
       participant,
@@ -127,7 +127,7 @@ export default function FoodShareMatchScreen() {
       base.originalPrice,
       base.sharedPrice,
       base.deliveryShare,
-      { promoDiscount },
+      { promoTargetPrice },
     );
   }, [match, sharePromo, myUid]);
 

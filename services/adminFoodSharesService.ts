@@ -18,6 +18,7 @@ import {
 import {
   isFoodShareDollarPromoEnabled,
   parseFoodShareDollarPromoTarget,
+  resolveFoodShareDollarPromoTargetPrice,
 } from '@/lib/foodShareDollarPromo';
 import {
   parsePromotionBadge,
@@ -117,11 +118,13 @@ export function adminFoodShareToSwipeCard(
     {
       fulfillmentMode: share.fulfillmentMode,
       promotionBadges: share.promotionBadges,
-      // Preview $1 on swipe only when Both Users — first/second applied at payment.
-      promoDiscount:
-        share.promotion1DollarEnabled && share.promotion1DollarTarget === 'both'
-          ? 1
-          : 0,
+      // Treat the swipe viewer as potential 'first' participant — same assumption
+      // as the waiting screen. Aligns swipe price with pricing summary & checkout.
+      promoTargetPrice: resolveFoodShareDollarPromoTargetPrice({
+        enabled: share.promotion1DollarEnabled,
+        target: share.promotion1DollarTarget,
+        participant: 'first',
+      }),
       shareRaw: {
         promotionBadges: share.promotionBadges,
         promotionBadge: share.promotionBadge,

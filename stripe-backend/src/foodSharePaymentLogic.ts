@@ -83,6 +83,8 @@ export function quoteFoodSharePayment(input: {
   serviceFee?: number | null;
   taxRate?: number | null;
   promoDiscount?: number | null;
+  /** Target Price promotion — final amount participant pays. Takes precedence over promoDiscount. */
+  promoTargetPrice?: number | null;
   originalFoodPrice?: number | null;
   shareRaw?: Record<string, unknown> | null;
 }): FoodSharePaymentQuote {
@@ -110,9 +112,13 @@ export function quoteFoodSharePayment(input: {
     : Math.round(originalServiceFeeCents / 2);
   const serviceFeeCents = sharedServiceFeeCents;
 
-  const promoDiscountCents = Math.round(
-    Math.max(0, input.promoDiscount ?? 0) * 100,
-  );
+  // Target Price: discount = subtotal − targetPrice. Fixed discount: backward-compatible.
+  const subtotalForPromoCents =
+    foodShareCents + deliveryShareCents + serviceFeeCents;
+  const promoDiscountCents =
+    input.promoTargetPrice != null && input.promoTargetPrice >= 0
+      ? Math.max(0, subtotalForPromoCents - Math.round(input.promoTargetPrice * 100))
+      : Math.round(Math.max(0, input.promoDiscount ?? 0) * 100);
   const taxRate = parseTaxRate(input.taxRate ?? DEFAULT_TAX_RATE);
 
   const taxableCents = Math.max(

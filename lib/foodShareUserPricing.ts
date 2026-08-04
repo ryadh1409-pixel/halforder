@@ -51,6 +51,13 @@ export type BuildFoodShareUserPricingInput = {
   shareRaw?: Record<string, unknown> | null;
   /** When pickup, delivery fee is always $0 (Delivery pricing unchanged). */
   fulfillmentMode?: 'delivery' | 'pickup';
+  /**
+   * Target Price promotion: the final amount the participant pays (e.g. CA$1).
+   * When set, promoDiscount is computed as  max(0, subtotal − promoTargetPrice)
+   * so the total equals the target price exactly.
+   * Takes precedence over promoDiscount when both are provided.
+   */
+  promoTargetPrice?: number | null;
 };
 
 function roundMoney(n: number): number {
@@ -102,7 +109,6 @@ export function buildFoodShareUserPricing(
     ? true
     : restaurantPromoWaivesDeliveryFee(promoSource);
   const freeServiceFee = restaurantPromoWaivesServiceFee(promoSource);
-  const promoDiscount = roundMoney(input.promoDiscount ?? 0);
   const taxRate =
     typeof input.taxRate === 'number' && Number.isFinite(input.taxRate)
       ? input.taxRate
@@ -110,6 +116,14 @@ export function buildFoodShareUserPricing(
 
   const sharedDeliveryFee = freeDelivery ? 0 : userDeliveryShare;
   const sharedServiceFee = freeServiceFee ? 0 : splitHalf(originalServiceFee);
+
+  // Target Price: discount = subtotal − targetPrice  (total === targetPrice).
+  // Fixed discount: discount = promoDiscount (backward-compatible).
+  const subtotalForPromo = sharedFoodPrice + sharedDeliveryFee + sharedServiceFee;
+  const promoDiscount =
+    input.promoTargetPrice != null && input.promoTargetPrice >= 0
+      ? roundMoney(Math.max(0, subtotalForPromo - input.promoTargetPrice))
+      : roundMoney(input.promoDiscount ?? 0);
 
   const foodSaving = roundMoney(Math.max(0, originalFoodPrice - sharedFoodPrice));
   const sharedDeliverySaving = freeDelivery
@@ -198,6 +212,8 @@ export function pricingFromShareDoc(
   extras?: {
     originalServiceFee?: number | null;
     promoDiscount?: number | null;
+    /** Target Price promotion — takes precedence over promoDiscount. */
+    promoTargetPrice?: number | null;
     taxRate?: number | null;
   },
 ): FoodShareUserPricing {
@@ -215,6 +231,7 @@ export function pricingFromShareDoc(
     },
     originalServiceFee: extras?.originalServiceFee,
     promoDiscount: extras?.promoDiscount,
+    promoTargetPrice: extras?.promoTargetPrice,
     taxRate: extras?.taxRate,
   });
 }

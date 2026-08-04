@@ -19,6 +19,8 @@ export function buildAdminShareCostBreakdown(
   options?: {
     originalServiceFee?: number | null;
     promoDiscount?: number | null;
+    /** Target Price promotion — takes precedence over promoDiscount. */
+    promoTargetPrice?: number | null;
     taxRate?: number | null;
     promotionBadges?: ReadonlyArray<PromotionBadgeValue | string>;
     shareRaw?: Record<string, unknown> | null;
@@ -37,6 +39,7 @@ export function buildAdminShareCostBreakdown(
     {
       originalServiceFee: options?.originalServiceFee,
       promoDiscount: options?.promoDiscount,
+      promoTargetPrice: options?.promoTargetPrice,
       taxRate: options?.taxRate,
     },
   );

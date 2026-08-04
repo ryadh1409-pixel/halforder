@@ -15,7 +15,7 @@ import {
 } from '@/lib/foodShareInvite';
 import { setPendingFoodShareInviteId } from '@/lib/foodShareInvitePending';
 import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
-import { resolveFoodShareDollarPromoDiscount } from '@/lib/foodShareDollarPromo';
+import { resolveFoodShareDollarPromoTargetPrice } from '@/lib/foodShareDollarPromo';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import { cancelWaitingFoodShare } from '@/services/foodShareMatchService';
 import { recordFoodShareInviteOpened } from '@/services/foodShareInvite';
@@ -127,7 +127,7 @@ export default function FoodShareDetailScreen() {
     if (!share) return null;
     // Role is unknown before joining — show $1 only when target is 'both'
     // (same behavior as the swipe card). First/second resolved at payment time.
-    const promoDiscount = resolveFoodShareDollarPromoDiscount({
+    const promoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
       enabled: share.promotion1DollarEnabled,
       target: share.promotion1DollarTarget,
       participant: 'both' === share.promotion1DollarTarget ? 'first' : null,
@@ -139,7 +139,7 @@ export default function FoodShareDetailScreen() {
       {
         promotionBadges: share.promotionBadges,
         shareRaw: shareRaw ?? undefined,
-        promoDiscount,
+        promoTargetPrice,
       },
     );
   }, [share, shareRaw]);

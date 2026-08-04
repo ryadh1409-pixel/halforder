@@ -11,7 +11,7 @@ import {
 import {
   isFoodShareDollarPromoEnabled,
   parseFoodShareDollarPromoTarget,
-  resolveFoodShareDollarPromoDiscount,
+  resolveFoodShareDollarPromoTargetPrice,
   resolveMatchParticipantRole,
 } from "./foodShareDollarPromo.js";
 
@@ -283,7 +283,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
   }
 
   const participant = resolveMatchParticipantRole(uid, match.users);
-  const dollarPromoDiscount = resolveFoodShareDollarPromoDiscount({
+  const dollarPromoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
     enabled: isFoodShareDollarPromoEnabled(share.promotion1DollarEnabled),
     target: parseFoodShareDollarPromoTarget(share.promotion1DollarTarget),
     participant,
@@ -297,7 +297,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
     originalFoodPrice:
       typeof share.originalPrice === "number" ? share.originalPrice : null,
     shareRaw: shareRawForQuote,
-    promoDiscount: dollarPromoDiscount,
+    promoTargetPrice: dollarPromoTargetPrice,
   });
 
   const paymentId = foodSharePaymentDocId(matchId, uid);

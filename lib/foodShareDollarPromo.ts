@@ -30,6 +30,7 @@ export function isFoodShareDollarPromoEnabled(raw: unknown): boolean {
 /**
  * Returns $1 or $0 for the paying participant.
  * `participant`: first = match.users[0] / userA; second = match.users[1] / userB.
+ * @deprecated Prefer resolveFoodShareDollarPromoTargetPrice for Target Price semantics.
  */
 export function resolveFoodShareDollarPromoDiscount(input: {
   enabled: boolean;
@@ -40,6 +41,25 @@ export function resolveFoodShareDollarPromoDiscount(input: {
   if (input.target === 'both') return FOOD_SHARE_DOLLAR_PROMO_AMOUNT;
   if (input.target === input.participant) return FOOD_SHARE_DOLLAR_PROMO_AMOUNT;
   return 0;
+}
+
+/**
+ * Returns the promotional TARGET PRICE (e.g. CA$1) when the participant is
+ * eligible, or null when they are not.
+ *
+ * Callers should pass this value as `promoTargetPrice` to
+ * `buildAdminShareCostBreakdown` / `buildFoodShareUserPricing` so the discount
+ * is computed as  (subtotal − targetPrice)  rather than a flat $1 deduction.
+ */
+export function resolveFoodShareDollarPromoTargetPrice(input: {
+  enabled: boolean;
+  target: FoodShareDollarPromoTarget;
+  participant: 'first' | 'second' | null;
+}): number | null {
+  if (!input.enabled || input.participant == null) return null;
+  if (input.target === 'both') return FOOD_SHARE_DOLLAR_PROMO_AMOUNT;
+  if (input.target === input.participant) return FOOD_SHARE_DOLLAR_PROMO_AMOUNT;
+  return null;
 }
 
 export function resolveMatchParticipantRole(

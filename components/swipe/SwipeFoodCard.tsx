@@ -112,7 +112,7 @@ function SwipeFoodCardInner({ card }: Props) {
     [card.availableFromMs, card.availableUntilMs],
   );
 
-  const youPay = formatShareCurrency(card.pricing.displaySubtotal);
+  const youPay = formatShareCurrency(card.pricing.subtotalBeforeTax);
   const saving = card.pricing.totalSaving;
 
   // Mini fee breakdown — shown on card when fees are non-zero
@@ -232,6 +232,17 @@ function SwipeFoodCardInner({ card }: Props) {
             <Text style={styles.deliveryWindowHighlight}>5–7pm</Text>
           </Text>
         </View>
+
+        {card.pricing.promoDiscount > 0 ? (
+          <View style={styles.dollarPromoFeatured}>
+            <Text style={styles.dollarPromoFeaturedLabel}>
+              {'💜 LIMITED TIME OFFER'}
+            </Text>
+            <Text style={styles.dollarPromoFeaturedText}>
+              {'Pay Only ' + youPay}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.priceRow}>
           <View style={styles.priceBlock}>
@@ -593,6 +604,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   pillTxtHot: { color: '#FFE1CE' },
+  dollarPromoFeatured: {
+    backgroundColor: '#7C3AED',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  dollarPromoFeaturedLabel: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  dollarPromoFeaturedText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
   savePill: {
     justifyContent: 'center',
     height: 30,

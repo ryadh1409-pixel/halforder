@@ -200,8 +200,8 @@ function FoodSharePricingCardInner({
       {pricing.promoDiscount > 0 ? (
         <View style={[styles.simpleRow, dark && styles.simpleRowDark]}>
           <View style={styles.simpleRowLeft}>
-            <Text style={styles.simpleRowIcon}>🎟️</Text>
-            <Text style={[styles.simpleRowLabel, dark && styles.textLight]}>Promo Code</Text>
+            <Text style={styles.simpleRowIcon}>🏷️</Text>
+            <Text style={[styles.simpleRowLabel, dark && styles.textLight]}>Limited Time Offer</Text>
           </View>
           <Text style={styles.promoAmount}>−{formatShareCurrency(pricing.promoDiscount)}</Text>
         </View>
@@ -226,7 +226,7 @@ function FoodSharePricingCardInner({
       <View style={[styles.totalRow, dark && styles.totalRowDark]}>
         <Text style={[styles.totalLabel, dark && styles.textLight]}>{totalLabel}</Text>
         <Text style={[styles.totalAmount, dark && styles.totalAmountDark]}>
-          {formatShareCurrency(showTax ? pricing.grandTotal : pricing.displaySubtotal)}
+          {formatShareCurrency(showTax ? pricing.grandTotal : pricing.subtotalBeforeTax)}
         </Text>
       </View>
 

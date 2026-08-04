@@ -15,7 +15,7 @@ import {
 import { TABS_ROUTES, USER_ROUTES } from '@/lib/navigationPaths';
 import { SwipeCinematicBackground } from '@/components/swipe/SwipeCinematicBackground';
 import {
-  resolveFoodShareDollarPromoDiscount,
+  resolveFoodShareDollarPromoTargetPrice,
 } from '@/lib/foodShareDollarPromo';
 import { mapAdminFoodShareDoc } from '@/services/adminFoodSharesService';
 import { cancelWaitingFoodShare } from '@/services/foodShareMatchService';
@@ -171,7 +171,7 @@ export default function FoodShareWaitingScreen() {
   const breakdown = useMemo(() => {
     if (!share) return null;
     // Waiting user is treated as the host ('first' participant).
-    const promoDiscount = resolveFoodShareDollarPromoDiscount({
+    const promoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
       enabled: share.promotion1DollarEnabled,
       target: share.promotion1DollarTarget,
       participant: 'first',
@@ -183,7 +183,7 @@ export default function FoodShareWaitingScreen() {
       {
         promotionBadges: share.promotionBadges,
         shareRaw: shareRaw ?? undefined,
-        promoDiscount,
+        promoTargetPrice,
       },
     );
   }, [share, shareRaw]);

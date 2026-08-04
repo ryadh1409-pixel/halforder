@@ -29,6 +29,22 @@ export function resolveFoodShareDollarPromoDiscount(input: {
   return 0;
 }
 
+/**
+ * Returns the promotional TARGET PRICE (e.g. CA$1) when the participant is
+ * eligible, or null when they are not.
+ * Mirror of client `lib/foodShareDollarPromo.resolveFoodShareDollarPromoTargetPrice`.
+ */
+export function resolveFoodShareDollarPromoTargetPrice(input: {
+  enabled: boolean;
+  target: FoodShareDollarPromoTarget;
+  participant: "first" | "second" | null;
+}): number | null {
+  if (!input.enabled || input.participant == null) return null;
+  if (input.target === "both") return FOOD_SHARE_DOLLAR_PROMO_AMOUNT;
+  if (input.target === input.participant) return FOOD_SHARE_DOLLAR_PROMO_AMOUNT;
+  return null;
+}
+
 export function resolveMatchParticipantRole(
   uid: string,
   users: unknown,
