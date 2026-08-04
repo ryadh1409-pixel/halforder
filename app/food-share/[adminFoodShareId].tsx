@@ -250,7 +250,7 @@ export default function FoodShareDetailScreen() {
 
         <FoodSharePricingCard
           pricing={breakdown}
-          variant="checkout"
+          variant="card"
           showTax={false}
           style={styles.glass}
         />

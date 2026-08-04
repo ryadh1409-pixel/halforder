@@ -283,7 +283,7 @@ export default function FoodShareMatchScreen() {
           <Text style={styles.section}>Checkout summary</Text>
           <FoodSharePricingCard
             pricing={breakdown}
-            variant="checkout"
+            variant="card"
             showTax
             style={styles.pricingCard}
           />

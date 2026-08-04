@@ -283,7 +283,7 @@ export default function FoodShareWaitingScreen() {
 
         <FoodSharePricingCard
           pricing={breakdown}
-          variant="checkout"
+          variant="card"
           showTax={false}
           style={styles.glass}
         />
