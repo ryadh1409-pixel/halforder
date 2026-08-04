@@ -112,7 +112,7 @@ class MapErrorBoundary extends Component<
 }
 
 function mapDevLog(...args: unknown[]) {
-  if (__DEV__) mapDevLog(...args);
+  if (__DEV__) console.log(...args);
 }
 
 const FIT_PAD = { top: 130, right: 50, bottom: 80, left: 50 };
