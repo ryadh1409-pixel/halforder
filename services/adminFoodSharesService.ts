@@ -16,6 +16,10 @@ import {
   type SwipeQueueMarketplaceState,
 } from '@/lib/swipeMarketplaceStatus';
 import {
+  isFoodShareDollarPromoEnabled,
+  parseFoodShareDollarPromoTarget,
+} from '@/lib/foodShareDollarPromo';
+import {
   parsePromotionBadge,
   promotionBadgesFromData,
   promotionDestinationsFromData,
@@ -93,6 +97,12 @@ export function mapAdminFoodShareDoc(
     promotionBadge: promotionBadges[0] ?? parsePromotionBadge(data.promotionBadge),
     promotionBadges,
     promotionDestinations: promotionDestinationsFromData(data),
+    promotion1DollarEnabled: isFoodShareDollarPromoEnabled(
+      data.promotion1DollarEnabled,
+    ),
+    promotion1DollarTarget: parseFoodShareDollarPromoTarget(
+      data.promotion1DollarTarget,
+    ),
   };
 }
 
@@ -107,6 +117,11 @@ export function adminFoodShareToSwipeCard(
     {
       fulfillmentMode: share.fulfillmentMode,
       promotionBadges: share.promotionBadges,
+      // Preview $1 on swipe only when Both Users — first/second applied at payment.
+      promoDiscount:
+        share.promotion1DollarEnabled && share.promotion1DollarTarget === 'both'
+          ? 1
+          : 0,
       shareRaw: {
         promotionBadges: share.promotionBadges,
         promotionBadge: share.promotionBadge,

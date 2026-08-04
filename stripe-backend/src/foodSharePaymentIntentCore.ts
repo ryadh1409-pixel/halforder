@@ -8,6 +8,12 @@ import {
   foodSharePaymentDocId,
   quoteFoodSharePayment,
 } from "./foodSharePaymentLogic.js";
+import {
+  isFoodShareDollarPromoEnabled,
+  parseFoodShareDollarPromoTarget,
+  resolveFoodShareDollarPromoDiscount,
+  resolveMatchParticipantRole,
+} from "./foodShareDollarPromo.js";
 
 function paymentDebugState(input: {
   matchId: string | null;
@@ -276,6 +282,13 @@ export async function runCreateFoodSharePaymentIntent(input: {
     }
   }
 
+  const participant = resolveMatchParticipantRole(uid, match.users);
+  const dollarPromoDiscount = resolveFoodShareDollarPromoDiscount({
+    enabled: isFoodShareDollarPromoEnabled(share.promotion1DollarEnabled),
+    target: parseFoodShareDollarPromoTarget(share.promotion1DollarTarget),
+    participant,
+  });
+
   const quote = quoteFoodSharePayment({
     sharedPrice,
     deliveryShare,
@@ -284,6 +297,7 @@ export async function runCreateFoodSharePaymentIntent(input: {
     originalFoodPrice:
       typeof share.originalPrice === "number" ? share.originalPrice : null,
     shareRaw: shareRawForQuote,
+    promoDiscount: dollarPromoDiscount,
   });
 
   const paymentId = foodSharePaymentDocId(matchId, uid);

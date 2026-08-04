@@ -1,4 +1,5 @@
 import type { FoodShareFulfillmentMode } from '@/lib/foodShareFulfillment';
+import type { FoodShareDollarPromoTarget } from '@/lib/foodShareDollarPromo';
 import type {
   PromotionBadgeValue,
   PromotionDestinations,
@@ -28,6 +29,10 @@ export type AdminFoodShareDoc = {
   /** Active campaign badges (may include free_delivery, etc.). */
   promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
   promotionDestinations: PromotionDestinations;
+  /** Additive — flat $1 promo for swipe participants. */
+  promotion1DollarEnabled: boolean;
+  /** Who receives the $1 promo. Defaults to both. */
+  promotion1DollarTarget: FoodShareDollarPromoTarget;
 };
 
 export type FoodSharePaymentStatus =

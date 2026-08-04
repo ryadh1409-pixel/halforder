@@ -33,6 +33,10 @@ import {
   type PromotionBadgeValue,
 } from '@/lib/promotionBadge';
 import {
+  FOOD_SHARE_DOLLAR_PROMO_TARGET_OPTIONS,
+  type FoodShareDollarPromoTarget,
+} from '@/lib/foodShareDollarPromo';
+import {
   adminFoodShareAvailabilityStatus,
   availabilityDateInput,
   availabilityTimeInput,
@@ -65,6 +69,9 @@ export type FoodSlotDraft = {
   promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
   /** Additive — defaults to delivery. */
   fulfillmentMode: 'delivery' | 'pickup';
+  /** Flat $1 promotion for swipe participants. */
+  promotion1DollarEnabled: boolean;
+  promotion1DollarTarget: FoodShareDollarPromoTarget;
 };
 
 export type FoodSlotEditModalProps = {
@@ -679,6 +686,21 @@ export function FoodSlotEditModal({
       patchDraft({ fulfillmentMode }),
     [patchDraft],
   );
+  const setPromotion1DollarEnabled = useCallback(
+    (promotion1DollarEnabled: boolean) =>
+      patchDraft({
+        promotion1DollarEnabled,
+        promotion1DollarTarget: promotion1DollarEnabled
+          ? draft.promotion1DollarTarget || 'both'
+          : draft.promotion1DollarTarget,
+      }),
+    [patchDraft, draft.promotion1DollarTarget],
+  );
+  const setPromotion1DollarTarget = useCallback(
+    (promotion1DollarTarget: FoodShareDollarPromoTarget) =>
+      patchDraft({ promotion1DollarTarget }),
+    [patchDraft],
+  );
   const togglePromotionBadge = useCallback(
     (value: PromotionBadgeValue) => {
       if (value === 'none') {
@@ -935,6 +957,67 @@ export function FoodSlotEditModal({
                   />
                 ))}
               </View>
+            </Section>
+
+            <Section
+              title="Swipe HalfOrder Card"
+              footnote="Flat $1 checkout promotion for matched swipe participants."
+            >
+              <View style={styles.switchRow}>
+                <View style={styles.windowHead}>
+                  <Text style={styles.rowLabel}>Promotion - $1</Text>
+                  <Text style={styles.windowHint}>
+                    Subtract CA$1.00 for selected participants at payment
+                  </Text>
+                </View>
+                <Switch
+                  value={draft.promotion1DollarEnabled === true}
+                  onValueChange={setPromotion1DollarEnabled}
+                  trackColor={{
+                    false: 'rgba(148, 163, 184, 0.45)',
+                    true: 'rgba(168, 85, 247, 0.45)',
+                  }}
+                  thumbColor={
+                    draft.promotion1DollarEnabled ? PRIMARY : '#f1f5f9'
+                  }
+                  accessibilityLabel="Promotion $1"
+                />
+              </View>
+              {draft.promotion1DollarEnabled ? (
+                <View style={styles.plainRow}>
+                  <Text style={[styles.rowLabel, { marginBottom: 10 }]}>
+                    Apply to
+                  </Text>
+                  <View style={styles.fulfillmentRow}>
+                    {FOOD_SHARE_DOLLAR_PROMO_TARGET_OPTIONS.map((opt) => {
+                      const selected =
+                        draft.promotion1DollarTarget === opt.value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[
+                            styles.fulfillmentChip,
+                            selected && styles.fulfillmentChipSelected,
+                          ]}
+                          onPress={() => setPromotion1DollarTarget(opt.value)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={opt.label}
+                        >
+                          <Text
+                            style={[
+                              styles.fulfillmentChipText,
+                              selected && styles.fulfillmentChipTextSelected,
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
             </Section>
 
             <Section title="Pricing" footnote="Amounts in CAD.">

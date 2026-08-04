@@ -6,6 +6,7 @@ import {
   normalizePromotionBadges,
   type PromotionBadgeValue,
 } from '@/lib/promotionBadge';
+import type { FoodShareDollarPromoTarget } from '@/lib/foodShareDollarPromo';
 import { mapAdminFoodShareDoc } from './adminFoodSharesService';
 import { auth, db } from './firebase';
 import {
@@ -40,6 +41,9 @@ export type AdminFoodCardSlot = {
   promotionBadge: PromotionBadgeValue;
   promotionBadges: Exclude<PromotionBadgeValue, 'none'>[];
   fulfillmentMode: 'delivery' | 'pickup';
+  /** Additive — flat $1 swipe promotion. */
+  promotion1DollarEnabled: boolean;
+  promotion1DollarTarget: FoodShareDollarPromoTarget;
 };
 
 const COLLECTION = 'adminFoodShares';
@@ -79,6 +83,8 @@ function slotFromShare(
     promotionBadge: share.promotionBadge,
     promotionBadges: share.promotionBadges,
     fulfillmentMode: share.fulfillmentMode,
+    promotion1DollarEnabled: share.promotion1DollarEnabled,
+    promotion1DollarTarget: share.promotion1DollarTarget,
   };
 }
 
@@ -126,6 +132,8 @@ export async function saveAdminFoodCardSlot(
     promotionBadge?: PromotionBadgeValue;
     promotionBadges?: readonly (PromotionBadgeValue | string)[];
     fulfillmentMode?: 'delivery' | 'pickup';
+    promotion1DollarEnabled?: boolean;
+    promotion1DollarTarget?: FoodShareDollarPromoTarget;
   },
 ): Promise<void> {
   const uid = auth.currentUser?.uid ?? '';
@@ -207,6 +215,13 @@ export async function saveAdminFoodCardSlot(
     deliveryEnabled: !isPickup,
     promotionBadge,
     promotionBadges,
+    promotion1DollarEnabled: input.promotion1DollarEnabled === true,
+    promotion1DollarTarget:
+      input.promotion1DollarTarget === 'first' ||
+      input.promotion1DollarTarget === 'second' ||
+      input.promotion1DollarTarget === 'both'
+        ? input.promotion1DollarTarget
+        : 'both',
     updatedAt: serverTimestamp(),
     ...(venueLocation
       ? {
