@@ -1,46 +1,47 @@
-import { AdminHeader } from '../../../../components/admin/AdminHeader';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+    collection,
+    doc,
+    getDoc,
+    onSnapshot,
+    query,
+    updateDoc,
+    where,
+} from 'firebase/firestore';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdminBankingInfoCard } from '../../../../components/admin/AdminBankingInfoCard';
+import { AdminHeader } from '../../../../components/admin/AdminHeader';
 import { adminRoutes } from '../../../../constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '../../../../constants/adminTheme';
 import { theme } from '../../../../constants/theme';
 import { adminError, adminLog } from '../../../../lib/admin/adminDebug';
 import {
-  formatFirestoreTime,
-  isActiveOrderStatus,
-  orderCreatorUid,
-  orderParticipantUids,
-  reportDetailText,
+    formatFirestoreTime,
+    isActiveOrderStatus,
+    orderCreatorUid,
+    orderParticipantUids,
+    reportDetailText,
 } from '../../../../lib/admin/orderHelpers';
-import { db } from '../../../../services/firebase';
 import {
-  demoteUserFromAdmin,
-  deleteUserDocumentAsAdmin,
-  promoteUserToAdmin,
+    deleteUserDocumentAsAdmin,
+    demoteUserFromAdmin,
+    promoteUserToAdmin,
 } from '../../../../services/adminUserActions';
 import {
-  extractAdminDriverWalletInfo,
-  extractAdminUserBankingInfo,
+    extractAdminDriverWalletInfo,
+    extractAdminUserBankingInfo,
 } from '../../../../services/adminUserBankingInfo';
 import { useAuth } from '../../../../services/AuthContext';
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  updateDoc,
-  where,
-} from 'firebase/firestore';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { db } from '../../../../services/firebase';
 
 import { systemConfirm } from '../../../../components/SystemDialogHost';
 import { getUserFriendlyError } from '../../../../utils/errorHandler';
@@ -66,8 +67,12 @@ type ReportRow = {
 export default function AdminUserDetailScreen() {
   const router = useRouter();
   const { user: actor, firestoreUserRole } = useAuth();
-  const { id: rawId } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId, matchId: rawMatchId } = useLocalSearchParams<{ id: string; matchId?: string | string[] }>();
   const userId = typeof rawId === 'string' ? rawId.trim() : '';
+  const matchId = useMemo(() => {
+    const v = Array.isArray(rawMatchId) ? rawMatchId[0] : rawMatchId;
+    return typeof v === 'string' ? v.trim() : '';
+  }, [rawMatchId]);
 
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [driverDoc, setDriverDoc] = useState<Record<string, unknown> | null>(
@@ -77,6 +82,11 @@ export default function AdminUserDetailScreen() {
   const [ordersMap, setOrdersMap] = useState<Map<string, OrderRow>>(new Map());
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [acting, setActing] = useState(false);
+  // Food Share match participant state (only used when matchId is provided)
+  const [matchData, setMatchData] = useState<Record<string, unknown> | null>(null);
+  const [hostProfile, setHostProfile] = useState<Record<string, unknown> | null>(null);
+  const [partnerProfile, setPartnerProfile] = useState<Record<string, unknown> | null>(null);
+  const [partnerOrdersMap, setPartnerOrdersMap] = useState<Map<string, OrderRow>>(new Map());
 
   useEffect(() => {
     if (!userId) {
@@ -193,6 +203,72 @@ export default function AdminUserDetailScreen() {
     return () => u();
   }, [userId]);
 
+  // Load match doc when matchId is present
+  useEffect(() => {
+    if (!matchId) return;
+    getDoc(doc(db, 'matches', matchId))
+      .then((snap) => setMatchData(snap.exists() ? (snap.data() ?? {}) : null))
+      .catch(() => setMatchData(null));
+  }, [matchId]);
+
+  // Derive participant UIDs from match doc
+  const hostUid: string = useMemo(() => {
+    if (!matchData) return '';
+    const a = (matchData as Record<string, unknown>).userA;
+    return a != null && typeof (a as Record<string, unknown>).uid === 'string'
+      ? (a as Record<string, unknown>).uid as string
+      : '';
+  }, [matchData]);
+  const partnerUid: string = useMemo(() => {
+    if (!matchData) return '';
+    const b = (matchData as Record<string, unknown>).userB;
+    return b != null && typeof (b as Record<string, unknown>).uid === 'string'
+      ? (b as Record<string, unknown>).uid as string
+      : '';
+  }, [matchData]);
+
+  // Load host and partner user docs
+  useEffect(() => {
+    if (!hostUid || !partnerUid) return;
+    getDoc(doc(db, 'users', hostUid))
+      .then((snap) => setHostProfile(snap.exists() ? (snap.data() ?? {}) : {}))
+      .catch(() => setHostProfile({}));
+    getDoc(doc(db, 'users', partnerUid))
+      .then((snap) => setPartnerProfile(snap.exists() ? (snap.data() ?? {}) : {}))
+      .catch(() => setPartnerProfile({}));
+  }, [hostUid, partnerUid]);
+
+  // Subscribe to orders for partner (only when matchId present)
+  useEffect(() => {
+    if (!partnerUid) return;
+    const unsub = onSnapshot(
+      collection(db, 'orders'),
+      (snap) => {
+        const next = new Map<string, OrderRow>();
+        snap.docs.forEach((d) => {
+          const data = d.data() as Record<string, unknown>;
+          const uids = orderParticipantUids(data);
+          if (!uids.includes(partnerUid)) return;
+          const creator = orderCreatorUid(data);
+          const title =
+            (typeof data.foodName === 'string' ? data.foodName : null) ??
+            (typeof data.restaurantName === 'string' ? data.restaurantName : null) ??
+            d.id.slice(0, 8);
+          next.set(d.id, {
+            id: d.id,
+            title,
+            status: typeof data.status === 'string' ? data.status : '—',
+            role: creator === partnerUid ? 'Restaurant' : 'Participant',
+            createdAt: formatFirestoreTime(data.createdAt),
+          });
+        });
+        setPartnerOrdersMap(next);
+      },
+      (err) => adminError('user-detail', 'partner orders listener error', err),
+    );
+    return () => unsub();
+  }, [partnerUid]);
+
   const orderList = useMemo(() => [...ordersMap.values()], [ordersMap]);
   const stats = useMemo(() => {
     let active = 0;
@@ -203,6 +279,23 @@ export default function AdminUserDetailScreen() {
     });
     return { active, completed, total: orderList.length };
   }, [orderList]);
+
+  const partnerOrderList = useMemo(() => [...partnerOrdersMap.values()], [partnerOrdersMap]);
+  const partnerStats = useMemo(() => {
+    let active = 0;
+    let completed = 0;
+    partnerOrderList.forEach((o) => {
+      if (o.status === 'completed') completed += 1;
+      else if (isActiveOrderStatus(o.status)) active += 1;
+    });
+    return { active, completed, total: partnerOrderList.length };
+  }, [partnerOrderList]);
+
+  const matchPaymentStatus = (uid: string): string => {
+    if (!matchData) return '—';
+    const payments = (matchData as Record<string, unknown>).userPayments as Record<string, Record<string, unknown>> | null | undefined;
+    return typeof payments?.[uid]?.paymentStatus === 'string' ? payments[uid].paymentStatus as string : '—';
+  };
 
   const bankingInfo = useMemo(() => {
     const fromDriver = extractAdminDriverWalletInfo(driverDoc);
@@ -336,37 +429,115 @@ export default function AdminUserDetailScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.card}>
-            <Text style={styles.k}>Display name</Text>
-            <Text style={styles.v}>{displayName}</Text>
-            <Text style={styles.k}>Email</Text>
-            <Text style={styles.v}>{email ?? '—'}</Text>
-            {phone ? (
-              <>
-                <Text style={styles.k}>Phone</Text>
-                <Text style={styles.v}>{phone}</Text>
-              </>
-            ) : null}
-            <Text style={styles.k}>Customer id</Text>
-            <Text style={styles.mono}>{userId}</Text>
-            <Text style={styles.k}>Member since</Text>
-            <Text style={styles.v}>{formatFirestoreTime(profile?.createdAt)}</Text>
-          </View>
+          {matchId && hostUid && partnerUid ? (
+            <>
+              <Text style={styles.section}>👤 Host</Text>
+              <View style={styles.card}>
+                <Text style={styles.k}>Display name</Text>
+                <Text style={styles.v}>{typeof hostProfile?.displayName === 'string' ? hostProfile.displayName : '—'}</Text>
+                <Text style={styles.k}>Email</Text>
+                <Text style={styles.v}>{typeof hostProfile?.email === 'string' ? hostProfile.email : '—'}</Text>
+                {typeof hostProfile?.phoneNumber === 'string' ? (
+                  <>
+                    <Text style={styles.k}>Phone</Text>
+                    <Text style={styles.v}>{hostProfile.phoneNumber as string}</Text>
+                  </>
+                ) : null}
+                <Text style={styles.k}>User ID</Text>
+                <Text style={styles.mono}>{hostUid}</Text>
+                <Text style={styles.k}>Member since</Text>
+                <Text style={styles.v}>{formatFirestoreTime(hostProfile?.createdAt)}</Text>
+                <Text style={styles.k}>Role</Text>
+                <Text style={styles.v}>{typeof hostProfile?.role === 'string' ? hostProfile.role : '—'}</Text>
+                <Text style={styles.k}>Payment status</Text>
+                <Text style={styles.v}>{matchPaymentStatus(hostUid)}</Text>
+              </View>
+              <View style={styles.rowStats}>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{stats.total}</Text>
+                  <Text style={styles.statL}>Total orders</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{stats.active}</Text>
+                  <Text style={styles.statL}>Active</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{stats.completed}</Text>
+                  <Text style={styles.statL}>Completed</Text>
+                </View>
+              </View>
 
-          <View style={styles.rowStats}>
-            <View style={styles.stat}>
-              <Text style={styles.statN}>{stats.total}</Text>
-              <Text style={styles.statL}>Total orders</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statN}>{stats.active}</Text>
-              <Text style={styles.statL}>Active</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statN}>{stats.completed}</Text>
-              <Text style={styles.statL}>Completed</Text>
-            </View>
-          </View>
+              <Text style={styles.section}>👤 Partner</Text>
+              <View style={styles.card}>
+                <Text style={styles.k}>Display name</Text>
+                <Text style={styles.v}>{typeof partnerProfile?.displayName === 'string' ? partnerProfile.displayName : '—'}</Text>
+                <Text style={styles.k}>Email</Text>
+                <Text style={styles.v}>{typeof partnerProfile?.email === 'string' ? partnerProfile.email : '—'}</Text>
+                {typeof partnerProfile?.phoneNumber === 'string' ? (
+                  <>
+                    <Text style={styles.k}>Phone</Text>
+                    <Text style={styles.v}>{partnerProfile.phoneNumber as string}</Text>
+                  </>
+                ) : null}
+                <Text style={styles.k}>User ID</Text>
+                <Text style={styles.mono}>{partnerUid}</Text>
+                <Text style={styles.k}>Member since</Text>
+                <Text style={styles.v}>{formatFirestoreTime(partnerProfile?.createdAt)}</Text>
+                <Text style={styles.k}>Role</Text>
+                <Text style={styles.v}>{typeof partnerProfile?.role === 'string' ? partnerProfile.role : '—'}</Text>
+                <Text style={styles.k}>Payment status</Text>
+                <Text style={styles.v}>{matchPaymentStatus(partnerUid)}</Text>
+              </View>
+              <View style={styles.rowStats}>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{partnerStats.total}</Text>
+                  <Text style={styles.statL}>Total orders</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{partnerStats.active}</Text>
+                  <Text style={styles.statL}>Active</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{partnerStats.completed}</Text>
+                  <Text style={styles.statL}>Completed</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.card}>
+                <Text style={styles.k}>Display name</Text>
+                <Text style={styles.v}>{displayName}</Text>
+                <Text style={styles.k}>Email</Text>
+                <Text style={styles.v}>{email ?? '—'}</Text>
+                {phone ? (
+                  <>
+                    <Text style={styles.k}>Phone</Text>
+                    <Text style={styles.v}>{phone}</Text>
+                  </>
+                ) : null}
+                <Text style={styles.k}>Customer id</Text>
+                <Text style={styles.mono}>{userId}</Text>
+                <Text style={styles.k}>Member since</Text>
+                <Text style={styles.v}>{formatFirestoreTime(profile?.createdAt)}</Text>
+              </View>
+
+              <View style={styles.rowStats}>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{stats.total}</Text>
+                  <Text style={styles.statL}>Total orders</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{stats.active}</Text>
+                  <Text style={styles.statL}>Active</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statN}>{stats.completed}</Text>
+                  <Text style={styles.statL}>Completed</Text>
+                </View>
+              </View>
+            </>
+          )}
 
           <View style={styles.actions}>
             <TouchableOpacity

@@ -82,6 +82,8 @@ export type AdminFoodCardDetail = {
   creatorPhone: string | null;
   matchedUserId: string | null;
   matchedUserName: string | null;
+  matchedEmail: string | null;
+  matchedPhone: string | null;
   matchStatus: string | null;
   paymentStatus: string | null;
   matchId: string | null;
@@ -212,11 +214,19 @@ function buildDetail(input: {
   const waitingUserId = normStr(input.queueRaw?.waitingUserId);
   const waitingFirstName = normStr(input.queueRaw?.waitingUserFirstName);
   const waitingRequest = input.requests.find((r) => r.status === 'WAITING');
-  const ownerUserId = waitingUserId ?? waitingRequest?.userId ?? null;
-  const ownerName =
-    waitingFirstName ?? waitingRequest?.userFirstName ?? null;
 
+  // Resolve latestMatch early so we can fall back to match participants when
+  // there is no active waiting user (e.g. both users have matched and are in
+  // the payment phase — the queue is empty but the match doc has both UIDs).
   const latestMatch = pickLatestMatch(input.matches);
+
+  const ownerUserId =
+    waitingUserId ?? waitingRequest?.userId ?? latestMatch?.userA.uid ?? null;
+  const ownerName =
+    waitingFirstName ??
+    waitingRequest?.userFirstName ??
+    (latestMatch?.userA.uid ? latestMatch.userA.firstName : null) ??
+    null;
   const matchedRequest = input.requests.find((r) => r.status === 'MATCHED');
   const matchId = latestMatch?.id ?? matchedRequest?.matchId ?? null;
 
@@ -365,6 +375,8 @@ function buildDetail(input: {
     creatorPhone: ownerSlice.phone,
     matchedUserId,
     matchedUserName: matchedSlice.displayName ?? matchedUserName,
+    matchedEmail: matchedSlice.email,
+    matchedPhone: matchedSlice.phone,
     matchStatus: latestMatch?.status ?? matchedRequest?.status ?? null,
     paymentStatus,
     matchId,
@@ -552,9 +564,13 @@ export function subscribeAdminFoodCardDetail(
   const syncRelatedProfiles = () => {
     const waitingUserId = normStr(queueRaw?.waitingUserId);
     const waitingRequest = requests.find((r) => r.status === 'WAITING');
-    const ownerUid = waitingUserId ?? waitingRequest?.userId ?? null;
-
     const latest = pickLatestMatch(matches);
+
+    // Fall back to the first match participant when no waiting user exists
+    // (matched + payment phase: queue is empty but match has both UIDs).
+    let ownerUid = waitingUserId ?? waitingRequest?.userId ?? null;
+    if (!ownerUid && latest) ownerUid = latest.users[0] ?? null;
+
     let matchedUid: string | null = null;
     if (latest) {
       const [u0, u1] = latest.users;

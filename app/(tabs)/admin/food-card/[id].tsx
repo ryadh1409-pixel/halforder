@@ -1,57 +1,57 @@
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import {
-  FoodSlotEditModal,
-  type FoodSlotDraft,
+    FoodSlotEditModal,
+    type FoodSlotDraft,
 } from '@/components/admin/FoodSlotEditModal';
 import { systemConfirm } from '@/components/SystemDialogHost';
+import {
+    isAdminFoodCardSlotId,
+    type AdminFoodCardSlotId,
+} from '@/constants/adminFoodCards';
 import { adminRoutes } from '@/constants/adminRoutes';
 import { adminCardShell, adminColors as COLORS } from '@/constants/adminTheme';
 import { theme } from '@/constants/theme';
-import {
-  isAdminFoodCardSlotId,
-  type AdminFoodCardSlotId,
-} from '@/constants/adminFoodCards';
-import { USER_ROUTES } from '@/lib/navigationPaths';
-import { PickerMediaType } from '@/lib/imagePickerMedia';
 import { adminLog } from '@/lib/admin/adminDebug';
 import {
-  adminFoodShareAvailabilityStatus,
-  availabilityDateInput,
-  availabilityStatusLabel,
-  availabilityTimeInput,
-  formatAvailabilityDateTime,
-  nextAvailabilityBoundaryDelay,
-  parseAvailabilityDateTime,
+    adminFoodShareAvailabilityStatus,
+    availabilityDateInput,
+    availabilityStatusLabel,
+    availabilityTimeInput,
+    formatAvailabilityDateTime,
+    nextAvailabilityBoundaryDelay,
+    parseAvailabilityDateTime,
 } from '@/lib/adminFoodShareAvailability';
+import { PickerMediaType } from '@/lib/imagePickerMedia';
+import { USER_ROUTES } from '@/lib/navigationPaths';
+import { formatWaitingElapsed, SWIPE_STALE_WAITING_MS } from '@/lib/swipeMarketplaceStatus';
 import {
-  deleteAdminFoodCardSlot,
-  setAdminFoodCardActive,
-  subscribeAdminFoodCardDetail,
-  type AdminFoodCardDetail,
+    deleteAdminFoodCardSlot,
+    setAdminFoodCardActive,
+    subscribeAdminFoodCardDetail,
+    type AdminFoodCardDetail,
 } from '@/services/adminFoodCardDetail';
 import {
-  saveAdminFoodCardSlot,
-  type AdminFoodCardSlot,
+    saveAdminFoodCardSlot,
+    type AdminFoodCardSlot,
 } from '@/services/adminFoodCardSlots';
-import { adminCancelWaitingMember } from '@/services/foodShareSafety';
-import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
-import { formatWaitingElapsed, SWIPE_STALE_WAITING_MS } from '@/lib/swipeMarketplaceStatus';
 import { auth, storage } from '@/services/firebase';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import * as ImagePicker from 'expo-image-picker';
-import { Image } from 'expo-image';
+import { generateFoodCardAiDescription } from '@/services/foodCardAiDescription';
+import { adminCancelWaitingMember } from '@/services/foodShareSafety';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -730,6 +730,8 @@ export default function AdminFoodCardDetailScreen() {
                 : undefined
             }
           />
+          <Row label="Matched email" value={detail.matchedEmail ?? '—'} />
+          <Row label="Matched phone" value={detail.matchedPhone ?? '—'} />
           <Row label="Match status" value={detail.matchStatus ?? '—'} />
           <Row label="Payment status" value={detail.paymentStatus ?? '—'} />
           <Row label="Match timestamp" value={detail.matchTimestampLabel} />
@@ -794,8 +796,11 @@ export default function AdminFoodCardDetailScreen() {
               label="View user"
               onPress={() => {
                 const uid = detail.creatorUserId ?? detail.matchedUserId;
-                if (uid) router.push(adminRoutes.user(uid) as never);
-                else showError('No user linked to this card yet.');
+                if (!uid) { showError('No user linked to this card yet.'); return; }
+                const route = detail.matchId
+                  ? `${adminRoutes.user(uid)}?matchId=${encodeURIComponent(detail.matchId)}`
+                  : adminRoutes.user(uid);
+                router.push(route as never);
               }}
               disabled={!detail.creatorUserId && !detail.matchedUserId}
             />
