@@ -226,7 +226,7 @@ function SwipeFoodCardInner({ card }: Props) {
         <View style={styles.deliveryWindowBanner}>
           <Ionicons name="time-outline" size={13} color="#A78BFA" />
           <Text style={styles.deliveryWindowText}>
-            Pay anytime · Delivery{' '}
+            🍽️🚚 Prep & delivery:{' '}
             <Text style={styles.deliveryWindowHighlight}>11am–1pm</Text>
             {' '}or{' '}
             <Text style={styles.deliveryWindowHighlight}>5–7pm</Text>
