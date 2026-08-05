@@ -282,6 +282,10 @@ export function useProfileOrders(uid: string | null) {
   const customerIdRowsRef = useRef<ProfileOrderRow[]>([]);
   const legacyRowsRef = useRef<ProfileOrderRow[]>([]);
   const foodShareRowsRef = useRef<ProfileOrderRow[]>([]);
+  // matchDocId → adminFoodShareId, used to suppress cancelled rows on rejoin
+  const foodShareShareIdsRef = useRef<Map<string, string>>(new Map());
+  // adminFoodShareIds where the user currently has a WAITING matchRequest
+  const activeWaitingShareIdsRef = useRef<Set<string>>(new Set());
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current) {
@@ -302,12 +306,22 @@ export function useProfileOrders(uid: string | null) {
   }, [clearRetryTimer]);
 
   const publishMergedRows = useCallback(() => {
+    const waitingShareIds = activeWaitingShareIdsRef.current;
+    const shareIdMap = foodShareShareIdsRef.current;
+    const foodShareRows =
+      waitingShareIds.size === 0
+        ? foodShareRowsRef.current
+        : foodShareRowsRef.current.filter((row) => {
+            if (row.source !== 'food_share' || row.status !== 'cancelled') return true;
+            const shareId = row.matchId != null ? shareIdMap.get(row.matchId) : undefined;
+            return shareId == null || !waitingShareIds.has(shareId);
+          });
     setRows(
       mergeRows([
         ...userIdRowsRef.current,
         ...customerIdRowsRef.current,
         ...legacyRowsRef.current,
-        ...foodShareRowsRef.current,
+        ...foodShareRows,
       ]),
     );
   }, []);
@@ -316,20 +330,43 @@ export function useProfileOrders(uid: string | null) {
     if (!uid) return;
     setRefreshing(true);
     try {
-      const [userIdRows, customerIdRows, legacyRows, matchesSnap] = await Promise.all([
+      const [userIdRows, customerIdRows, legacyRows, matchesSnap, waitingReqSnap] = await Promise.all([
         fetchOrdersFor(uid, 'userId', { fromServer: true }),
         fetchOrdersFor(uid, 'customerId', { fromServer: true }),
         fetchLegacyOrders(uid, { fromServer: true }),
         getDocsFromServer(
           query(collection(db, 'matches'), where('users', 'array-contains', uid)),
         ),
+        getDocsFromServer(
+          query(collection(db, 'matchRequests'), where('userId', '==', uid)),
+        ),
       ]);
       userIdRowsRef.current = userIdRows;
       customerIdRowsRef.current = customerIdRows;
       legacyRowsRef.current = legacyRows;
+      const refreshWaitingIds = new Set<string>();
+      waitingReqSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (String(data?.status ?? '').toUpperCase() !== 'WAITING') return;
+        const shareId = typeof data?.adminFoodShareId === 'string' ? data.adminFoodShareId : '';
+        if (shareId) refreshWaitingIds.add(shareId);
+      });
+      activeWaitingShareIdsRef.current = refreshWaitingIds;
+      const refreshShareIds = new Map<string, string>();
       foodShareRowsRef.current = matchesSnap.docs
-        .map((d) => parseFoodShareMatchRow(d.id, d.data(), uid))
+        .map((d) => {
+          const data = d.data();
+          const row = parseFoodShareMatchRow(d.id, data, uid);
+          if (row?.matchId) {
+            const shareId =
+              typeof data.adminFoodShareId === 'string' ? data.adminFoodShareId :
+              typeof data.foodShareId === 'string' ? data.foodShareId : '';
+            if (shareId) refreshShareIds.set(row.matchId, shareId);
+          }
+          return row;
+        })
         .filter((row): row is ProfileOrderRow => row != null);
+      foodShareShareIdsRef.current = refreshShareIds;
       publishMergedRows();
       setErrorMessage(null);
       setIndexBuilding(false);
@@ -362,6 +399,8 @@ export function useProfileOrders(uid: string | null) {
       customerIdRowsRef.current = [];
       legacyRowsRef.current = [];
       foodShareRowsRef.current = [];
+      foodShareShareIdsRef.current = new Map();
+      activeWaitingShareIdsRef.current = new Set();
       setRows([]);
       setLoading(false);
       setErrorMessage(null);
@@ -445,14 +484,48 @@ export function useProfileOrders(uid: string | null) {
           if (!foodShareGate.shouldApply(snap.metadata.fromCache, snap.docs.length)) {
             return;
           }
+          const newShareIds = new Map<string, string>();
           foodShareRowsRef.current = snap.docs
-            .map((d) => parseFoodShareMatchRow(d.id, d.data(), uid))
+            .map((d) => {
+              const data = d.data();
+              const row = parseFoodShareMatchRow(d.id, data, uid);
+              if (row?.matchId) {
+                const shareId =
+                  typeof data.adminFoodShareId === 'string' ? data.adminFoodShareId :
+                  typeof data.foodShareId === 'string' ? data.foodShareId : '';
+                if (shareId) newShareIds.set(row.matchId, shareId);
+              }
+              return row;
+            })
             .filter((row): row is ProfileOrderRow => row != null);
+          foodShareShareIdsRef.current = newShareIds;
           publishMergedRows();
           setLoading(false);
         },
         () => {
           /* food-share list is best-effort; don't block marketplace orders */
+        },
+      ),
+    );
+
+    const waitingReqGate = new QuerySnapshotFreshnessGate();
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, 'matchRequests'), where('userId', '==', uid)),
+        (snap) => {
+          if (!waitingReqGate.shouldApply(snap.metadata.fromCache, snap.docs.length)) return;
+          const ids = new Set<string>();
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            if (String(data?.status ?? '').toUpperCase() !== 'WAITING') return;
+            const shareId = typeof data?.adminFoodShareId === 'string' ? data.adminFoodShareId : '';
+            if (shareId) ids.add(shareId);
+          });
+          activeWaitingShareIdsRef.current = ids;
+          publishMergedRows();
+        },
+        () => {
+          /* matchRequests is best-effort; don't block main orders */
         },
       ),
     );

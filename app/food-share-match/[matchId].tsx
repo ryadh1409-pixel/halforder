@@ -180,7 +180,7 @@ export default function FoodShareMatchScreen() {
   // Show order tracking once both payments are confirmed and an order has been placed.
   const showOrderTracking =
     !!match?.orderId &&
-    !['WAITING_FOR_PARTNER', 'WAITING_FOR_PAYMENT', 'WAITING_FOR_PAYMENT_CONFIRMATION'].includes(
+    !['CANCELLED', 'WAITING_FOR_PARTNER', 'WAITING_FOR_PAYMENT', 'WAITING_FOR_PAYMENT_CONFIRMATION'].includes(
       match.lifecycle ?? '',
     );
 
