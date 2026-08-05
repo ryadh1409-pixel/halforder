@@ -230,8 +230,31 @@ export async function joinAdminFoodShare(
         const status = String(existingReq.data()?.status ?? '').toUpperCase();
 
         if (status === 'MATCHED') {
-          // Same user already paired on this card — not a "meal full" capacity error.
-          throw new Error(FOOD_SHARE_ERRORS.alreadyMatched);
+          // Allow re-join if the previous match reached a terminal state
+          // (completed, delivered, or cancelled). Block only while still active.
+          const prevMatchId =
+            typeof existingReq.data()?.matchId === 'string'
+              ? (existingReq.data()?.matchId as string).trim()
+              : '';
+          if (prevMatchId) {
+            const prevMatchSnap = await tx.get(doc(db, 'matches', prevMatchId));
+            const prevLifecycle =
+              typeof prevMatchSnap.data()?.lifecycle === 'string'
+                ? String(prevMatchSnap.data()?.lifecycle).toUpperCase()
+                : '';
+            const isTerminal =
+              !prevMatchSnap.exists() ||
+              prevLifecycle === 'COMPLETED' ||
+              prevLifecycle === 'DELIVERED' ||
+              prevLifecycle === 'CANCELLED';
+            if (!isTerminal) {
+              throw new Error(FOOD_SHARE_ERRORS.alreadyMatched);
+            }
+            // Terminal — fall through to allow re-join
+          } else {
+            // No matchId stored — treat as still active to be safe
+            throw new Error(FOOD_SHARE_ERRORS.alreadyMatched);
+          }
         }
 
         // Stale WAITING must not block pairing when someone else is already in the queue.

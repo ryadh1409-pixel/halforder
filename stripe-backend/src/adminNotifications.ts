@@ -360,3 +360,201 @@ export const onPaymentCompleted = functions
 
     await Promise.all([pushPromise, emailPromise]);
   });
+
+// ── 3. Food Share match created ───────────────────────────────────────────────
+
+export const onFoodShareMatch = functions
+  .runWith({ secrets: ["GMAIL_APP_PASSWORD"] })
+  .firestore.document("matches/{matchId}")
+  .onCreate(async (snap, context) => {
+    const matchId = context.params.matchId as string;
+    const data = snap.data() as Record<string, unknown>;
+
+    const foodName      = typeof data.foodName === "string" ? data.foodName : "—";
+    const restaurant    = typeof data.restaurantName === "string" ? data.restaurantName : "—";
+    const lifecycle     = typeof data.lifecycle === "string" ? data.lifecycle : "—";
+    const adminShareId  = typeof data.adminFoodShareId === "string" ? data.adminFoodShareId : "—";
+    const time          = now();
+
+    // Extract userA / userB UIDs
+    const userAObj = data.userA as Record<string, unknown> | undefined;
+    const userBObj = data.userB as Record<string, unknown> | undefined;
+    const uidA = typeof userAObj?.uid === "string" ? userAObj.uid : null;
+    const uidB = typeof userBObj?.uid === "string" ? userBObj.uid : null;
+
+    // Payment statuses
+    const payments = (data.userPayments ?? {}) as Record<string, { paymentStatus?: string; amount?: number }>;
+
+    // Fetch user profiles in parallel
+    type UserProfile = { name: string; email: string; phone: string };
+    async function fetchUser(uid: string | null): Promise<UserProfile> {
+      if (!uid) return { name: "—", email: "—", phone: "—" };
+      try {
+        const doc = await admin.firestore().collection("users").doc(uid).get();
+        const u = doc.data() as Record<string, unknown> | undefined;
+        if (!u) return { name: "—", email: "—", phone: "—" };
+        return {
+          name:  typeof u.displayName === "string" ? u.displayName : typeof u.name === "string" ? u.name : "—",
+          email: typeof u.email === "string" ? u.email : "—",
+          phone: typeof u.phone === "string" ? u.phone : typeof u.phoneNumber === "string" ? u.phoneNumber : typeof u.whatsapp === "string" ? u.whatsapp : "—",
+        };
+      } catch {
+        return { name: "—", email: "—", phone: "—" };
+      }
+    }
+
+    const [profA, profB] = await Promise.all([fetchUser(uidA), fetchUser(uidB)]);
+
+    const payStatusA = uidA && payments[uidA]?.paymentStatus ? payments[uidA].paymentStatus! : "PENDING";
+    const payStatusB = uidB && payments[uidB]?.paymentStatus ? payments[uidB].paymentStatus! : "PENDING";
+
+    function userRow(label: string, prof: UserProfile, uid: string | null, payStatus: string): string {
+      return `
+        <tr><td colspan="2" style="padding:10px 0 4px;font-weight:700;color:#111827;font-size:14px;border-top:1px solid #E5E7EB;">${label}</td></tr>
+        <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;width:140px;">Name</td><td style="padding:4px 0;font-weight:600;color:#111827;">${prof.name}</td></tr>
+        <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Email</td><td style="padding:4px 0;color:#374151;">${prof.email}</td></tr>
+        <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Phone</td><td style="padding:4px 0;color:#374151;">${prof.phone}</td></tr>
+        <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">User ID</td><td style="padding:4px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${uid ?? "—"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Payment</td><td style="padding:4px 0;color:${payStatus === "PAID" ? "#16A34A" : "#D97706"};font-weight:700;">${payStatus}</td></tr>
+      `;
+    }
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:580px;margin:auto;background:#f9fafb;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <div style="background:#7C3AED;padding:20px 24px;">
+          <h2 style="color:#fff;margin:0;font-size:20px;">🤝 New Food Share Match</h2>
+          <p style="color:#DDD6FE;margin:4px 0 0;font-size:13px;">${APP_NAME} · ${time}</p>
+        </div>
+        <div style="padding:20px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">🍽️ Food Share</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;width:140px;">Food</td><td style="padding:4px 0;font-weight:600;color:#111827;">${foodName}</td></tr>
+            <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Restaurant</td><td style="padding:4px 0;color:#374151;">${restaurant}</td></tr>
+            <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Lifecycle</td><td style="padding:4px 0;color:#374151;">${lifecycle}</td></tr>
+            <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Match ID</td><td style="padding:4px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${matchId}</td></tr>
+            <tr><td style="padding:4px 0;color:#6B7280;font-size:13px;">Share ID</td><td style="padding:4px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${adminShareId}</td></tr>
+          </table>
+        </div>
+        <div style="padding:16px 24px 20px;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">👥 Participants</p>
+          <table style="width:100%;border-collapse:collapse;">
+            ${userRow("👤 User A", profA, uidA, payStatusA)}
+            ${userRow("👤 User B", profB, uidB, payStatusB)}
+          </table>
+        </div>
+        <div style="background:#F3F4F6;padding:12px 24px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9CA3AF;">${APP_NAME} Admin · Auto-generated notification</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      const transport = makeTransport(gmailAppPassword.value());
+      await transport.sendMail({
+        from: `"${APP_NAME} Admin" <${GMAIL_USER}>`,
+        to: ADMIN_EMAIL,
+        subject: `🤝 Match: ${foodName} — ${profA.name} & ${profB.name}`,
+        html,
+      });
+      functions.logger.info("onFoodShareMatch: email sent", { matchId });
+    } catch (err) {
+      functions.logger.error("onFoodShareMatch: email failed", err);
+    }
+  });
+
+// ── 4. Food Share card booked / waiting for partner ───────────────────────────
+
+export const onFoodShareWaiting = functions
+  .runWith({ secrets: ["GMAIL_APP_PASSWORD"] })
+  .firestore.document("matchRequests/{requestId}")
+  .onCreate(async (snap, context) => {
+    const requestId = context.params.requestId as string;
+    const data = snap.data() as Record<string, unknown>;
+
+    if (data.status !== "WAITING") return; // only care about waiting bookings
+
+    const adminShareId = typeof data.adminFoodShareId === "string" ? data.adminFoodShareId : null;
+    const userId       = typeof data.userId === "string" ? data.userId : null;
+    const firstName    = typeof data.userFirstName === "string" ? data.userFirstName : "—";
+    const time         = now();
+
+    // Fetch user profile and share card in parallel
+    async function fetchUser(uid: string | null): Promise<{ name: string; email: string; phone: string }> {
+      if (!uid) return { name: firstName, email: "—", phone: "—" };
+      try {
+        const doc = await admin.firestore().collection("users").doc(uid).get();
+        const u = doc.data() as Record<string, unknown> | undefined;
+        if (!u) return { name: firstName, email: "—", phone: "—" };
+        return {
+          name:  typeof u.displayName === "string" ? u.displayName : typeof u.name === "string" ? u.name : firstName,
+          email: typeof u.email === "string" ? u.email : "—",
+          phone: typeof u.phone === "string" ? u.phone : typeof u.phoneNumber === "string" ? u.phoneNumber : typeof u.whatsapp === "string" ? u.whatsapp : "—",
+        };
+      } catch {
+        return { name: firstName, email: "—", phone: "—" };
+      }
+    }
+
+    async function fetchShare(shareId: string | null): Promise<Record<string, unknown>> {
+      if (!shareId) return {};
+      try {
+        const doc = await admin.firestore().collection("adminFoodShares").doc(shareId).get();
+        return (doc.data() as Record<string, unknown>) ?? {};
+      } catch {
+        return {};
+      }
+    }
+
+    const [prof, share] = await Promise.all([fetchUser(userId), fetchShare(adminShareId)]);
+
+    const foodName   = typeof share.foodName === "string" ? share.foodName : "—";
+    const restaurant = typeof share.restaurantName === "string" ? share.restaurantName : "—";
+    const sharedPrice = typeof share.sharedPrice === "number" ? `$${share.sharedPrice.toFixed(2)}` :
+                        typeof share.sharingPrice === "number" ? `$${(share.sharingPrice as number).toFixed(2)}` : "—";
+    const delivFee   = typeof share.deliveryShare === "number" ? `$${(share.deliveryShare as number).toFixed(2)}` : "—";
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:580px;margin:auto;background:#f9fafb;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <div style="background:#F59E0B;padding:20px 24px;">
+          <h2 style="color:#fff;margin:0;font-size:20px;">⏳ Card Booked — Waiting for Partner</h2>
+          <p style="color:#FEF3C7;margin:4px 0 0;font-size:13px;">${APP_NAME} · ${time}</p>
+        </div>
+        <div style="padding:20px 24px 0;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">👤 Customer</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;width:130px;">Name</td><td style="padding:5px 0;font-weight:600;color:#111827;">${prof.name}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Email</td><td style="padding:5px 0;color:#374151;">${prof.email}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Phone</td><td style="padding:5px 0;color:#374151;">${prof.phone}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">User ID</td><td style="padding:5px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${userId ?? "—"}</td></tr>
+          </table>
+        </div>
+        <div style="padding:16px 24px 20px;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;padding-bottom:8px;">🍽️ Food Share Card</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;width:130px;">Food</td><td style="padding:5px 0;font-weight:600;color:#111827;">${foodName}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Restaurant</td><td style="padding:5px 0;color:#374151;">${restaurant}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Shared price</td><td style="padding:5px 0;color:#374151;">${sharedPrice}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Delivery share</td><td style="padding:5px 0;color:#374151;">${delivFee}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Share ID</td><td style="padding:5px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${adminShareId ?? "—"}</td></tr>
+            <tr><td style="padding:5px 0;color:#6B7280;font-size:13px;">Request ID</td><td style="padding:5px 0;color:#9CA3AF;font-family:monospace;font-size:11px;">${requestId}</td></tr>
+          </table>
+        </div>
+        <div style="background:#F3F4F6;padding:12px 24px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9CA3AF;">${APP_NAME} Admin · Auto-generated notification</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      const transport = makeTransport(gmailAppPassword.value());
+      await transport.sendMail({
+        from: `"${APP_NAME} Admin" <${GMAIL_USER}>`,
+        to: ADMIN_EMAIL,
+        subject: `⏳ Booked: ${foodName} — ${prof.name} waiting for partner`,
+        html,
+      });
+      functions.logger.info("onFoodShareWaiting: email sent", { requestId });
+    } catch (err) {
+      functions.logger.error("onFoodShareWaiting: email failed", err);
+    }
+  });
