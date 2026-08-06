@@ -2979,6 +2979,11 @@ service cloud.firestore {
         && !isCurrentUserRestricted();
       // Driver getDoc on a single unassigned pool order (accept / preview).
       allow read: if driverPoolOrderSingleRead();
+      // Food Share: both participants may read orders/{matchId} even before the order
+      // doc is created (resource == null). Cross-doc read on matches/{orderId} avoids
+      // resource.data access, which would fail on a non-existent document.
+      allow read: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/matches/$(orderId)).data.get('users', []);
       // Marketplace checkout: auth uid must match payload userId + field guards.
       allow create: if isValidMarketplaceOrderCreate();
       // HalfOrder / legacy order creates (separate schema; no userId required).
