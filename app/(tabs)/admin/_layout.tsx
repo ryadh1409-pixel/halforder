@@ -39,6 +39,7 @@ export default function AdminLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: 'Admin' }} />
+        <Stack.Screen name="feedback" options={{ title: 'Customer Feedback' }} />
         <Stack.Screen
           name="food-templates"
           options={{ title: 'Food catalog' }}

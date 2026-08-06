@@ -1,4 +1,5 @@
 import { AdminCardsDashboard } from './components/AdminCardsDashboard';
+import { AdminFeedbackSection } from '../../../components/admin/AdminFeedbackSection';
 import { ActionCard } from '../../../components/ActionCard';
 import { AdminStatCard } from '../../../components/AdminStatCard';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
@@ -697,6 +698,11 @@ export default function AdminScreen() {
                   label="Emo Chat"
                   onPress={() => router.push(adminRoutes.emoAiChat as never)}
                 />
+                <ActionCard
+                  icon="star-outline"
+                  label="Feedback"
+                  onPress={() => router.push(adminRoutes.feedback as never)}
+                />
               </View>
 
               <SettingsSection
@@ -763,6 +769,15 @@ export default function AdminScreen() {
               </SettingsSection>
               <View style={[styles.panel, styles.sectionSpacer]}>
                 <AdminCardsDashboard />
+              </View>
+
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                Customer Feedback
+              </Text>
+              <View style={[styles.panel]}>
+                <AdminFeedbackSection
+                  onViewAll={() => router.push(adminRoutes.feedback as never)}
+                />
               </View>
 
               <View style={styles.devLinks}>
