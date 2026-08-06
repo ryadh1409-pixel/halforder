@@ -25,10 +25,12 @@ export async function refreshAuthRoleClaims(): Promise<string | null> {
         : null;
     return role;
   } catch (err) {
-    if (__DEV__) {
-      // eslint-disable-next-line no-console
-      console.warn('[auth] refreshAuthRoleClaims failed', err);
-    }
+    const rec = err && typeof err === 'object' ? (err as Record<string, unknown>) : {};
+    // eslint-disable-next-line no-console
+    console.warn('[auth] refreshAuthRoleClaims failed', {
+      code: rec.code ?? null,
+      message: rec.message ?? (err instanceof Error ? err.message : String(err)),
+    });
     return null;
   }
 }

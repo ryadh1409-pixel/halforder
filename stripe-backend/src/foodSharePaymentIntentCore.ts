@@ -12,7 +12,6 @@ import {
   isFoodShareDollarPromoEnabled,
   parseFoodShareDollarPromoTarget,
   resolveFoodShareDollarPromoTargetPrice,
-  resolveMatchParticipantRole,
 } from "./foodShareDollarPromo.js";
 
 function paymentDebugState(input: {
@@ -282,7 +281,16 @@ export async function runCreateFoodSharePaymentIntent(input: {
     }
   }
 
-  const participant = resolveMatchParticipantRole(uid, match.users);
+  // Determine semantic role: HOST (original waiter / first joiner) vs JOINER (second).
+  // hostUserId is written at match creation for both pickup and delivery.
+  // Fall back to pickupHostUid for legacy pickup matches, then alphabetical as last resort.
+  const hostUserId = typeof match.hostUserId === "string" ? match.hostUserId.trim() : "";
+  const pickupHostUid = typeof match.pickupHostUid === "string" ? match.pickupHostUid.trim() : "";
+  const resolvedHostUid = hostUserId || pickupHostUid;
+  const participant: "first" | "second" = resolvedHostUid
+    ? (uid === resolvedHostUid ? "first" : "second")
+    : (users[0] === uid ? "first" : "second");
+
   const dollarPromoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
     enabled: isFoodShareDollarPromoEnabled(share.promotion1DollarEnabled),
     target: parseFoodShareDollarPromoTarget(share.promotion1DollarTarget),

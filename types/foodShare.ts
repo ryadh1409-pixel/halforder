@@ -99,6 +99,8 @@ export type FoodShareMatchDoc = {
   createdAtMs: number | null;
   /** Additive — missing means delivery (legacy matches). */
   fulfillmentMode?: FoodShareFulfillmentMode;
+  /** Semantic host (original waiter / first joiner) for both pickup and delivery. */
+  hostUserId?: string | null;
   /** Pickup host who pays the restaurant in person (User A). */
   pickupHostUid?: string | null;
   /** Pickup joiner whose in-app payment is held then released to the host. */

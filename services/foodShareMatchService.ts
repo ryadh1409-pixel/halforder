@@ -514,6 +514,7 @@ export async function joinAdminFoodShare(
               },
             }
           : {},
+        hostUserId: partnerUid,
         fulfillmentMode,
         pickupHostUid: isPickup ? pickupHostUid : null,
         pickupJoinerUid: isPickup ? pickupJoinerUid : null,
@@ -746,6 +747,8 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
     userPayments,
     createdAtMs: null,
     fulfillmentMode: resolveFoodShareFulfillmentMode(data),
+    hostUserId:
+      typeof data.hostUserId === 'string' ? data.hostUserId : null,
     pickupHostUid:
       typeof data.pickupHostUid === 'string' ? data.pickupHostUid : null,
     pickupJoinerUid:

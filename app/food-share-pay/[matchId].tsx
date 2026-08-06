@@ -179,7 +179,12 @@ export default function FoodSharePayScreen() {
     if (!match) return null;
     const base = match.costBreakdown;
     if (!sharePromo) return base;
-    const participant = resolveMatchParticipantRole(myUid, match.users);
+    // Resolve HOST/JOINER: prefer hostUserId (all modes), fall back to pickupHostUid
+    // (legacy pickup matches), then alphabetical as last resort (legacy delivery matches).
+    const resolvedHostUid = match.hostUserId ?? match.pickupHostUid ?? null;
+    const participant: 'first' | 'second' = resolvedHostUid
+      ? (myUid === resolvedHostUid ? 'first' : 'second')
+      : resolveMatchParticipantRole(myUid, match.users);
     const promoTargetPrice = resolveFoodShareDollarPromoTargetPrice({
       enabled: sharePromo.enabled,
       target: sharePromo.target,

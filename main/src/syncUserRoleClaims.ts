@@ -59,8 +59,16 @@ export const refreshUserRoleClaims = onCall(async (request) => {
     throw new HttpsError("unauthenticated", "Sign in required");
   }
   const uid = request.auth.uid;
-  const snap = await db.doc(`users/${uid}`).get();
-  const role = normalizeRole(snap.data()?.role);
-  await applyRoleClaims(uid, role);
-  return {role};
+  try {
+    const snap = await db.doc(`users/${uid}`).get();
+    const role = normalizeRole(snap.data()?.role);
+    await applyRoleClaims(uid, role);
+    return {role};
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const code = (err as {code?: string}).code ?? "unknown";
+    logger.error("refreshUserRoleClaims: failed to apply claims", {uid, code, msg});
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Failed to refresh role claims");
+  }
 });

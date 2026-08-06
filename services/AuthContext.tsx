@@ -903,7 +903,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         cred = await signInWithEmailAndPassword(auth, trimmed, password);
       } catch (err: unknown) {
         logError(err);
-        throw new Error(getUserFriendlyError(err));
+        const wrapped = new Error(getUserFriendlyError(err));
+        // Preserve the original Firebase error so crash reporters and upstream
+        // handlers can read the real code/message (e.g. auth/internal-error).
+        (wrapped as Error & { cause?: unknown }).cause = err;
+        throw wrapped;
       }
       // Auth already succeeded — keep the session even if Firestore is briefly offline.
       try {
@@ -946,7 +950,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void syncUserRoleToFirestore(cred.user);
           return;
         }
-        throw new Error(getUserFriendlyError(e));
+        const wrappedPost = new Error(getUserFriendlyError(e));
+        (wrappedPost as Error & { cause?: unknown }).cause = e;
+        throw wrappedPost;
       }
     },
     [],
