@@ -25,6 +25,7 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -747,6 +748,33 @@ export async function deleteAdminFoodCardSlot(
   if (snap.exists()) {
     await deleteDoc(ref);
   }
+}
+
+/**
+ * Real-time subscription to all matches for a given food card slot.
+ * Ordered newest-first. Fires immediately and on every Firestore change.
+ * Only for admin use — no auth gate here (caller must be authed admin).
+ */
+export function subscribeMatchesByAdminFoodShare(
+  adminFoodShareId: string,
+  onData: (matches: import('@/types/foodShare').FoodShareMatchDoc[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db, 'matches'),
+    where('adminFoodShareId', '==', adminFoodShareId),
+    orderBy('createdAt', 'desc'),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const rows = snap.docs.map((d) =>
+        mapMatchDoc(d.id, d.data() as Record<string, unknown>),
+      );
+      onData(rows);
+    },
+    (e) => onError?.(e instanceof Error ? e : new Error(String(e))),
+  );
 }
 
 export { ADMIN_FOOD_CARD_SLOT_IDS };

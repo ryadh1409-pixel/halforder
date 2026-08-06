@@ -1,4 +1,4 @@
-import { AdminFoodCardTile } from '../../../../components/admin/AdminFoodCardTile';
+import { AdminFoodCardWithMatches } from '../../../../components/admin/AdminFoodCardWithMatches';
 import { adminRoutes } from '../../../../constants/adminRoutes';
 import { adminColors as COLORS } from '../../../../constants/adminTheme';
 import {
@@ -14,6 +14,7 @@ import {
   subscribeAdminFoodCardWaitingQueues,
   type AdminFoodCardWaitingQueue,
 } from '../../../../services/adminFoodCardDetail';
+import type { FoodShareMatchDoc } from '../../../../types/foodShare';
 import {
   subscribeAllFoodShareInviteStats,
   type FoodShareInviteStats,
@@ -83,6 +84,12 @@ export function AdminCardsDashboard() {
     const href = adminRoutes.foodCard(docId);
     console.log('[ADMIN CARDS] navigate', href);
     router.push(href as never);
+  };
+
+  const openMatchDetail = (docId: string, _match: FoodShareMatchDoc) => {
+    // Navigate to the card detail screen — the detail screen shows the
+    // full card context. In the future, this can deep-link to the match.
+    openDetail(docId);
   };
 
   const listMinHeight = useMemo(() => {
@@ -158,11 +165,8 @@ export function AdminCardsDashboard() {
           );
           return (
             <View key={slot.docId} style={{ width: cellW }}>
-              <AdminFoodCardTile
-                cardId={slot.docId}
-                title={slot.title || `Slot ${slot.docId}`}
-                restaurantName={slot.restaurantName}
-                imageUri={slot.image}
+              <AdminFoodCardWithMatches
+                slot={slot}
                 priceLabel={priceLabel}
                 sharingPriceLabel={sharingPriceLabel}
                 availabilityStatus={availabilityStatus}
@@ -170,7 +174,8 @@ export function AdminCardsDashboard() {
                 waitingUserName={waitingUserName}
                 staleWaiting={staleWaiting}
                 waitingElapsedLabel={waitingElapsedLabel}
-                onPress={() => openDetail(slot.docId)}
+                onPressCard={() => openDetail(slot.docId)}
+                onPressMatch={(match) => openMatchDetail(slot.docId, match)}
               />
             </View>
           );
