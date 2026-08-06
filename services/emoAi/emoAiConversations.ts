@@ -24,6 +24,8 @@ export type EmoAiConversationDoc = {
   userId: string;
   userName: string;
   userEmail: string;
+  /** Profile photo URL — may be null for users without a photo. */
+  userPhotoUrl: string | null;
   title: string;
   messages: EmoAiMessage[];
   messageCount: number;
@@ -83,6 +85,7 @@ export async function syncEmoAiConversationToFirestore(input: {
   uid: string;
   userName?: string | null;
   userEmail?: string | null;
+  userPhotoUrl?: string | null;
   messages: EmoAiMessage[];
 }): Promise<void> {
   const uid = input.uid.trim();
@@ -106,6 +109,10 @@ export async function syncEmoAiConversationToFirestore(input: {
 
   const userName = (input.userName ?? '').trim() || 'User';
   const userEmail = (input.userEmail ?? '').trim();
+  const userPhotoUrl =
+    typeof input.userPhotoUrl === 'string' && input.userPhotoUrl.trim()
+      ? input.userPhotoUrl.trim()
+      : null;
   const title = titleFromMessages(trimmed);
   const highPriority = conversationIsHighPriority(trimmed);
   const searchText = buildSearchText({
@@ -122,6 +129,7 @@ export async function syncEmoAiConversationToFirestore(input: {
       userId: uid,
       userName,
       userEmail,
+      userPhotoUrl,
       title,
       messages: trimmed,
       messageCount: trimmed.length,
@@ -161,6 +169,10 @@ function parseConversation(
     userId: typeof data.userId === 'string' ? data.userId : id,
     userName: typeof data.userName === 'string' ? data.userName : 'User',
     userEmail: typeof data.userEmail === 'string' ? data.userEmail : '',
+    userPhotoUrl:
+      typeof data.userPhotoUrl === 'string' && data.userPhotoUrl.trim()
+        ? data.userPhotoUrl.trim()
+        : null,
     title: typeof data.title === 'string' ? data.title : 'Conversation',
     messages,
     messageCount:

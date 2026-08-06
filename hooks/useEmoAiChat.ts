@@ -148,6 +148,7 @@ export function useEmoAiChat(uid: string | null) {
           uid,
           userName: nameRef.current,
           userEmail: auth.currentUser?.email ?? null,
+          userPhotoUrl: auth.currentUser?.photoURL ?? null,
           messages: next,
         });
       }

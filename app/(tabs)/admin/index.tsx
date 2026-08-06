@@ -1,5 +1,6 @@
 import { AdminCardsDashboard } from './components/AdminCardsDashboard';
 import { AdminFeedbackSection } from '../../../components/admin/AdminFeedbackSection';
+import { AdminAiConversationsSection } from '../../../components/admin/AdminAiConversationsSection';
 import { ActionCard } from '../../../components/ActionCard';
 import { AdminStatCard } from '../../../components/AdminStatCard';
 import { AdminHeader } from '../../../components/admin/AdminHeader';
@@ -777,6 +778,15 @@ export default function AdminScreen() {
               <View style={[styles.panel]}>
                 <AdminFeedbackSection
                   onViewAll={() => router.push(adminRoutes.feedback as never)}
+                />
+              </View>
+
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                AI Conversations
+              </Text>
+              <View style={[styles.panel]}>
+                <AdminAiConversationsSection
+                  onViewAll={() => router.push(adminRoutes.emoAiChat as never)}
                 />
               </View>
 
