@@ -45,20 +45,26 @@ const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
 type OrderHistoryFilter = 'active' | 'completed' | 'cancelled';
 
 function sectionFromOrder(data: Record<string, unknown>): OrderListSection {
-  const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
+  // Normalize all status fields — same logic as useMarketplaceOrdersFeed.
+  const status =
+    typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
   const deliveryStatus =
     typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
-  if (status === 'cancelled' || status === 'expired' || deliveryStatus === 'cancelled') {
-    return 'cancelled';
-  }
-  if (
-    status === 'completed' ||
-    status === 'delivered' ||
-    deliveryStatus === 'delivered'
-  ) {
+  const orderStatus =
+    typeof data.orderStatus === 'string' ? data.orderStatus.trim().toLowerCase() : '';
+
+  const statusSection = getOrderListSection(status);
+  const deliverySection = getOrderListSection(deliveryStatus);
+  const orderStatusSection = getOrderListSection(orderStatus);
+
+  // Terminal wins: if ANY field says completed/cancelled, trust that over primary status.
+  if (statusSection === 'completed' || deliverySection === 'completed' || orderStatusSection === 'completed') {
     return 'completed';
   }
-  return getOrderListSection(status);
+  if (statusSection === 'cancelled' || deliverySection === 'cancelled' || orderStatusSection === 'cancelled') {
+    return 'cancelled';
+  }
+  return statusSection;
 }
 
 function terminalTimeMs(data: Record<string, unknown>): number | null {

@@ -1,4 +1,5 @@
 import { canCustomerCancelMarketplaceOrder } from '@/lib/customerOrderCancelUx';
+import { isCancelledOrder } from '@/constants/orderStatus';
 import {
   CUSTOMER_DELIVERY_STAGE,
   customerDeliveryStageLabel,
@@ -180,7 +181,9 @@ export function isProfileOrderCancelled(
   const status = typeof order.status === 'string' ? order.status.trim().toLowerCase() : '';
   const ds =
     typeof order.deliveryStatus === 'string' ? order.deliveryStatus.trim().toLowerCase() : '';
-  return status === 'cancelled' || ds === 'cancelled';
+  // Delegate to the canonical CANCELLED_ORDER_STATUSES set so variants like
+  // 'expired', 'rejected', 'refunded', 'void', etc. are all covered.
+  return isCancelledOrder(status) || isCancelledOrder(ds);
 }
 
 export function profileOrderStatusActive(
