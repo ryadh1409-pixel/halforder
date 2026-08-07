@@ -345,15 +345,64 @@ function TrackOrderScreen() {
     );
   }
 
-  if (listenError || !order || !looksLikeMarketplaceRestaurantOrder(order)) {
+  if (listenError) {
     return (
       <SafeAreaView style={styles.lightRoot} edges={['top']}>
         <View style={styles.loadingBox}>
           <Text style={styles.errorText}>
-            {listenError
-              ? 'We couldn’t sync this order yet. Check your connection and try again.'
-              : 'We couldn’t load this delivery yet.'}
+            We couldn't sync this order yet. Check your connection and try again.
           </Text>
+          <Pressable
+            onPress={() => {
+              logPaymentNavigation('track_order_fallback_order_details', { orderId });
+              router.replace(USER_ROUTES.order(orderId) as never);
+            }}
+            style={styles.primaryBtn}
+          >
+            <Text style={styles.primaryBtnText}>Open order details</Text>
+          </Pressable>
+          <Pressable onPress={onClose} style={styles.textBtn}>
+            <Text style={styles.textBtnLabel}>Go back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // HalfOrder: order doc not yet created, or order exists but is HalfOrder format.
+  // orderId.includes('_') reliably identifies HalfOrder matchIds (Firestore auto-IDs never contain '_').
+  const isHalfOrderId = orderId.includes('_');
+  if (!order || !looksLikeMarketplaceRestaurantOrder(order)) {
+    if (isHalfOrderId || (order != null && !looksLikeMarketplaceRestaurantOrder(order))) {
+      return (
+        <SafeAreaView style={styles.lightRoot} edges={['top']}>
+          <View style={styles.waitingBox}>
+            <Text style={styles.waitingTitle}>Preparing Your Order</Text>
+            <Text style={styles.waitingBody}>
+              We're getting everything ready for your delivery. Your meal will be freshly
+              prepared shortly before delivery to ensure the best quality.
+            </Text>
+            <Text style={styles.waitingWindowHeading}>Delivery Window</Text>
+            <Text style={styles.waitingWindowBody}>
+              {'• Before 1:00 PM → 11:00 AM – 1:00 PM\n'}
+              {'• 1:00 PM – 6:30 PM → 5:00 PM – 7:00 PM\n'}
+              {'• After 6:30 PM → Next day, 11:00 AM – 1:00 PM'}
+            </Text>
+            <ActivityIndicator size="small" color="#C084FC" style={styles.waitingSpinner} />
+            <Text style={styles.waitingFooter}>
+              Delivery tracking will appear automatically once your order is ready.
+            </Text>
+            <Pressable onPress={onClose} style={styles.textBtn}>
+              <Text style={styles.textBtnLabel}>Go back</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      );
+    }
+    return (
+      <SafeAreaView style={styles.lightRoot} edges={['top']}>
+        <View style={styles.loadingBox}>
+          <Text style={styles.errorText}>We couldn't load this delivery yet.</Text>
           <Pressable
             onPress={() => {
               logPaymentNavigation('track_order_fallback_order_details', { orderId });
@@ -413,6 +462,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   errorText: { color: UE.promo, fontWeight: '800', fontSize: 16 },
+  waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, paddingHorizontal: 8 },
+  waitingTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 18, textAlign: 'center' },
+  waitingBody: { color: UE.textMuted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  waitingWindowHeading: { color: 'rgba(255,255,255,0.8)', fontWeight: '700', fontSize: 13, alignSelf: 'flex-start', marginTop: 4 },
+  waitingWindowBody: { color: UE.textMuted, fontSize: 13, lineHeight: 20, alignSelf: 'flex-start' },
+  waitingSpinner: { marginTop: 6 },
+  waitingFooter: { color: UE.textMuted, fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
   textBtn: { marginTop: 16, alignSelf: 'flex-start' },
   textBtnLabel: { color: UE.accent, fontWeight: '800', fontSize: 16 },
   primaryBtn: {
