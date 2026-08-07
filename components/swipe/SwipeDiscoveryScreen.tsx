@@ -32,6 +32,8 @@ import type { AdminFoodShareDoc } from '@/types/foodShare';
 import type { SwipeQueueMarketplaceState } from '@/lib/swipeMarketplaceStatus';
 import { isSwipeMarketplaceJoinLocked } from '@/lib/swipeMarketplaceStatus';
 import { showError, showSuccess } from '@/utils/toast';
+import { isAdminUser } from '@/constants/adminUid';
+import { useAuth } from '@/services/AuthContext';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -64,6 +66,10 @@ async function resolveMyFirstName(): Promise<string> {
  */
 export function SwipeDiscoveryScreen() {
   const router = useRouter();
+  const { user, firestoreUserRole } = useAuth();
+  // Pickup mode is admin-only (internal beta). Regular users always see Delivery only.
+  const isAdmin = isAdminUser(user, firestoreUserRole);
+
   const [fulfillmentMode, setFulfillmentMode] =
     useState<FoodShareFulfillmentMode>('delivery');
   const [actionSignal, setActionSignal] = useState<{
@@ -262,6 +268,13 @@ export function SwipeDiscoveryScreen() {
     }
   }, [advanceDeck, current, joiningOrderId, router, setJoining, setLastMatch]);
 
+  // Safety guard: if a non-admin somehow has pickup mode active, reset to delivery.
+  useEffect(() => {
+    if (!isAdmin && fulfillmentMode === 'pickup') {
+      setFulfillmentMode('delivery');
+    }
+  }, [isAdmin, fulfillmentMode]);
+
   const isPickup = fulfillmentMode === 'pickup';
   const splitLabel = lastMatch
     ? isPickup
@@ -288,6 +301,7 @@ export function SwipeDiscoveryScreen() {
             style={[
               styles.modeChip,
               fulfillmentMode === 'delivery' && styles.modeChipActive,
+              !isAdmin && styles.modeChipFull,
             ]}
             onPress={() => selectMode('delivery')}
             accessibilityRole="button"
@@ -302,24 +316,26 @@ export function SwipeDiscoveryScreen() {
               🚚 Delivery
             </Text>
           </Pressable>
-          <Pressable
-            style={[
-              styles.modeChip,
-              fulfillmentMode === 'pickup' && styles.modeChipActive,
-            ]}
-            onPress={() => selectMode('pickup')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: fulfillmentMode === 'pickup' }}
-          >
-            <Text
+          {isAdmin ? (
+            <Pressable
               style={[
-                styles.modeChipTxt,
-                fulfillmentMode === 'pickup' && styles.modeChipTxtActive,
+                styles.modeChip,
+                fulfillmentMode === 'pickup' && styles.modeChipActive,
               ]}
+              onPress={() => selectMode('pickup')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: fulfillmentMode === 'pickup' }}
             >
-              🛍️ Pickup
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.modeChipTxt,
+                  fulfillmentMode === 'pickup' && styles.modeChipTxtActive,
+                ]}
+              >
+                🛍️ Pickup
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <SwipeDeck
@@ -423,6 +439,10 @@ const styles = StyleSheet.create({
   modeChipActive: {
     backgroundColor: 'rgba(168,85,247,0.22)',
     borderColor: 'rgba(168,85,247,0.55)',
+  },
+  /** Non-admin: Delivery chip stretches to fill the full row width. */
+  modeChipFull: {
+    flex: 1,
   },
   modeChipTxt: {
     fontSize: 14,

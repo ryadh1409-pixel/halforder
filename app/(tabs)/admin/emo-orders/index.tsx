@@ -212,7 +212,7 @@ export default function AdminEmoOrdersScreen() {
   if (!ready) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
-        <AdminHeader title="Emo AI Orders" onBack={() => router.back()} />
+        <AdminHeader title="Emo AI Orders" fallbackRoute={adminRoutes.home} />
         <View style={styles.loading}>
           <ActivityIndicator color={COLORS.primary} size="large" />
           <Text style={styles.loadingText}>Loading orders…</Text>
@@ -223,7 +223,7 @@ export default function AdminEmoOrdersScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <AdminHeader title="Emo AI Orders" onBack={() => router.back()} />
+      <AdminHeader title="Emo AI Orders" fallbackRoute={adminRoutes.home} />
 
       {/* ── Analytics bar ── */}
       <View style={styles.analyticsWrap}>

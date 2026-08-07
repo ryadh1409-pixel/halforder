@@ -804,6 +804,29 @@ service cloud.firestore {
                 resource.data.status == 'CANCELLED'
                 && request.resource.data.status in ['WAITING', 'MATCHED']
               )
+              // Re-join after a terminal match: MATCHED → WAITING.
+              // Three guards must all pass:
+              //   1. New matchId must be null (clean re-start, no live match carried over).
+              //   2. Previous matchId (resource.data.matchId) must resolve to a terminal
+              //      match doc (lifecycle COMPLETED / DELIVERED / CANCELLED), or the doc
+              //      must not exist at all.
+              // This prevents a user from abandoning an active match by writing directly
+              // to Firestore, bypassing the client-side terminal check.
+              || (
+                resource.data.status == 'MATCHED'
+                && request.resource.data.status == 'WAITING'
+                && (
+                  !request.resource.data.keys().hasAny(['matchId'])
+                  || request.resource.data.matchId == null
+                )
+                && (
+                  !resource.data.keys().hasAny(['matchId'])
+                  || resource.data.matchId == null
+                  || !exists(/databases/$(database)/documents/matches/$(resource.data.matchId))
+                  || get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.get('lifecycle', '') in ['COMPLETED', 'DELIVERED', 'CANCELLED']
+                  || get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.get('status', '') in ['CANCELLED', 'cancelled']
+                )
+              )
             )
           )
           || (

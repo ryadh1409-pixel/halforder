@@ -690,6 +690,11 @@ export default function AdminScreen() {
                   }
                 />
                 <ActionCard
+                  icon="sparkles-outline"
+                  label="Emo AI Orders"
+                  onPress={() => router.push(adminRoutes.emoOrders as never)}
+                />
+                <ActionCard
                   icon="bulb-outline"
                   label="Emo AI Reports"
                   onPress={() => router.push(adminRoutes.emoAiReports as never)}
@@ -780,6 +785,20 @@ export default function AdminScreen() {
                   onViewAll={() => router.push(adminRoutes.feedback as never)}
                 />
               </View>
+
+              <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
+                Emo AI Orders
+              </Text>
+              <SettingsSection title="I Want Something">
+                <SettingsRow
+                  title="Emo AI Orders"
+                  subtitle="View, search, and monitor all I Want Something concierge orders"
+                  icon="stars"
+                  onPress={() => router.push(adminRoutes.emoOrders as never)}
+                  showChevron
+                  isFirst
+                />
+              </SettingsSection>
 
               <Text style={[styles.sectionHeading, styles.sectionSpacer]}>
                 AI Conversations
