@@ -143,21 +143,29 @@ export function FoodShareHubDetailScreen({
       return undefined;
     }
     if (kind === 'waiting') {
-      return onSnapshot(doc(db, 'adminFoodShares', id), (snap) => {
-        setShareRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
-      });
+      return onSnapshot(
+        doc(db, 'adminFoodShares', id),
+        (snap) => {
+          setShareRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
+        },
+        () => { setShareRaw(null); },
+      );
     }
-    return onSnapshot(doc(db, 'matches', id), (snap) => {
-      if (!snap.exists()) {
-        setMatchRaw(null);
+    return onSnapshot(
+      doc(db, 'matches', id),
+      (snap) => {
+        if (!snap.exists()) {
+          setMatchRaw(null);
+          setLoading(false);
+          return;
+        }
+        const match = mapMatchDoc(snap.id, snap.data() as Record<string, unknown>);
+        match.createdAtMs = safeToMillis((snap.data() as Record<string, unknown>).createdAt);
+        setMatchRaw(match);
         setLoading(false);
-        return;
-      }
-      const match = mapMatchDoc(snap.id, snap.data() as Record<string, unknown>);
-      match.createdAtMs = safeToMillis((snap.data() as Record<string, unknown>).createdAt);
-      setMatchRaw(match);
-      setLoading(false);
-    });
+      },
+      () => { setMatchRaw(null); setLoading(false); },
+    );
   }, [id, kind]);
 
   useEffect(() => {
@@ -179,9 +187,13 @@ export function FoodShareHubDetailScreen({
     const shareId =
       kind === 'waiting' ? id : matchRaw?.adminFoodShareId ?? null;
     if (!shareId) return undefined;
-    return onSnapshot(doc(db, 'adminFoodShares', shareId), (snap) => {
-      setShareRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
-    });
+    return onSnapshot(
+      doc(db, 'adminFoodShares', shareId),
+      (snap) => {
+        setShareRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
+      },
+      () => { setShareRaw(null); },
+    );
   }, [id, kind, matchRaw?.adminFoodShareId]);
 
   useEffect(() => {
@@ -212,9 +224,13 @@ export function FoodShareHubDetailScreen({
       setPaymentRaw(null);
       return undefined;
     }
-    return onSnapshot(doc(db, 'payments', `${id}_${myUid}`), (snap) => {
-      setPaymentRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
-    });
+    return onSnapshot(
+      doc(db, 'payments', `${id}_${myUid}`),
+      (snap) => {
+        setPaymentRaw(snap.exists() ? (snap.data() as Record<string, unknown>) : null);
+      },
+      () => { setPaymentRaw(null); },
+    );
   }, [id, kind, myUid]);
 
   const timeline = useMemo(() => buildTimeline(hubItem), [hubItem]);

@@ -1211,6 +1211,21 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update, delete: if false;
     }
+    // Order-level ratings submitted after delivery (HalfOrder and marketplace).
+    // Doc ID format: {orderId}_{userId}
+    match /orderFeedback/{feedbackId} {
+      // User may create/overwrite their own feedback entry.
+      allow create, update: if isSignedIn()
+        && !isCurrentUserRestricted()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.orderId is string
+        && request.resource.data.orderRating is number
+        && request.resource.data.restaurantRating is number;
+      // User may read their own entry; admin reads all.
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if false;
+    }
     match /invites/{inviteId} {
       allow create: if isSignedIn()
         && !isCurrentUserRestricted()
