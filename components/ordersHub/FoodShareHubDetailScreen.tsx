@@ -377,7 +377,7 @@ export function FoodShareHubDetailScreen({
           </Section>
         ) : null}
 
-        <Section title="Logistics">
+        <Section title="Order Status">
           <Row label="Pickup or delivery" value={schedule.pickupOrDelivery} />
           <Row label="Address" value={schedule.address} />
           <Row
@@ -394,6 +394,18 @@ export function FoodShareHubDetailScreen({
           {match ? (
             <Row label="Lifecycle" value={foodShareLifecycleLabel(match.lifecycle)} />
           ) : null}
+          <View style={styles.freshNote}>
+            <Text style={styles.freshNoteHeading}>🍽 Fresh Preparation</Text>
+            <Text style={styles.freshNoteBody}>
+              Your meal is prepared shortly before delivery to keep it fresh.
+            </Text>
+            <Text style={styles.freshNoteSubHeading}>Delivery Window</Text>
+            <Text style={styles.freshNoteBody}>
+              {'• Before 1:00 PM → 11:00 AM – 1:00 PM\n'}
+              {'• 1:00 PM – 6:30 PM → 5:00 PM – 7:00 PM\n'}
+              {'• After 6:30 PM → Next day, 11:00 AM – 1:00 PM'}
+            </Text>
+          </View>
         </Section>
 
         <Section title="Audit timeline">
@@ -611,6 +623,33 @@ const styles = StyleSheet.create({
   },
   timelineDotDone: { backgroundColor: '#22C55E' },
   timelineCopy: { flex: 1 },
+  freshNote: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 6,
+  },
+  freshNoteHeading: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 2,
+  },
+  freshNoteSubHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  freshNoteBody: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.6)',
+  },
   timelineLabel: { fontSize: 13, fontWeight: '800', color: '#FFF' },
   timelineAt: { fontSize: 12, color: '#B7BDC9', marginTop: 2 },
   title: { fontSize: 20, fontWeight: '800', color: '#FFF' },
