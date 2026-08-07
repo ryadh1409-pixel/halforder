@@ -19,20 +19,40 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const COMPLETED_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
 
 function sectionFromOrder(data: Record<string, unknown>): OrderListSection {
-  const status = typeof data.status === 'string' ? data.status : 'awaiting_payment';
+  // Normalize all status fields to lowercase for reliable comparison.
+  const status =
+    typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
   const deliveryStatus =
     typeof data.deliveryStatus === 'string' ? data.deliveryStatus.trim().toLowerCase() : '';
-  if (status === 'cancelled' || status === 'expired' || deliveryStatus === 'cancelled') {
-    return 'cancelled';
-  }
+  const orderStatus =
+    typeof data.orderStatus === 'string' ? data.orderStatus.trim().toLowerCase() : '';
+
+  // Determine section from each available field, then take the strongest signal.
+  // An order is "completed" if ANY terminal field says so — even if another field
+  // lags behind (e.g., status still says 'payment_confirmed' but deliveryStatus
+  // already says 'delivered').
+  const statusSection = getOrderListSection(status);
+  const deliverySection = getOrderListSection(deliveryStatus);
+  const orderStatusSection = getOrderListSection(orderStatus);
+
+  // Terminal wins: if any field says completed/cancelled, trust that.
   if (
-    status === 'completed' ||
-    status === 'delivered' ||
-    deliveryStatus === 'delivered'
+    statusSection === 'completed' ||
+    deliverySection === 'completed' ||
+    orderStatusSection === 'completed'
   ) {
     return 'completed';
   }
-  return getOrderListSection(status);
+  if (
+    statusSection === 'cancelled' ||
+    deliverySection === 'cancelled' ||
+    orderStatusSection === 'cancelled'
+  ) {
+    return 'cancelled';
+  }
+
+  // No terminal signal → use primary status field.
+  return statusSection;
 }
 
 function terminalTimeMs(data: Record<string, unknown>): number | null {

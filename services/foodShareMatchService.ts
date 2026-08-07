@@ -22,6 +22,7 @@ import { USER_ROUTES } from '@/lib/navigationPaths';
 import { consumePendingFoodShareInviteId } from '@/lib/foodShareInvitePending';
 import { getReadableErrorMessage } from '@/utils/errorMessages';
 import {
+  collection,
   doc,
   getDoc,
   runTransaction,
@@ -448,7 +449,12 @@ export async function joinAdminFoodShare(
   const pickupJoinerUid = uid;
   const [u0, u1] = sortedPair(partnerUid, uid);
   const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
-  const matchChatId = matchId;
+  // Generate a stable, collision-resistant chat room ID that is unique per order.
+  // Using a Firestore auto-ID (not Date.now()) so the ID is not time-dependent
+  // and cannot collide even if the function is called rapidly.
+  // This ID is stored on the match document and is the single source of truth
+  // for which chat room belongs to this order instance.
+  const matchChatId = doc(collection(db, 'matchChats')).id;
   const matchPath = `matches/${matchId}`;
 
   // Rules only allow reading own users/{uid}. Never getDoc the partner profile —
@@ -578,6 +584,10 @@ export async function joinAdminFoodShare(
       fulfillmentMode,
     });
   } else {
+    // Re-order: the match doc already exists (from a previous completed order).
+    // Update matchChatId so both users open the NEW chat room, not the old one.
+    // Without this, the match doc would still point to the previous order's chatId.
+    await setDoc(matchRef, { matchChatId, updatedAt: serverTimestamp() }, { merge: true });
     await setDoc(doc(db, 'matchChats', matchChatId), {
       matchId,
       adminFoodShareId,
@@ -604,6 +614,7 @@ export async function joinAdminFoodShare(
       matchId,
       adminFoodShareId,
       existing: true,
+      matchChatId,
       lifecycle: existingMatch.data()?.lifecycle ?? null,
     });
   }

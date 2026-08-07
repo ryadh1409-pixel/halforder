@@ -102,10 +102,40 @@ export function resolveHubStatus(input: {
     return request?.status === 'WAITING' ? 'waiting_partner' : 'waiting_partner';
   }
 
-  const lc = String(match.lifecycle ?? '').toUpperCase();
-  if (lc === 'COMPLETED' || lc === 'DELIVERED') return 'completed';
-  if (lc === 'MATCHED') return 'active_chat';
-  if (lc === 'ORDER_PLACED' || lc === 'DRIVER_ASSIGNED' || lc === 'PICKED_UP') {
+  const lc = String(match.lifecycle ?? '').toUpperCase().trim();
+  // Normalize secondary status fields for cross-checking.
+  const orderStatusNorm = String(match.orderStatus ?? '').trim().toLowerCase();
+  const deliveryStatusNorm = String(match.deliveryStatus ?? '').trim().toLowerCase();
+
+  // Terminal lifecycle → Past Orders. This list covers all known values from
+  // FoodShareMatchLifecycle plus common backend variants that may arrive at
+  // runtime without matching the TypeScript type.
+  const TERMINAL_LIFECYCLES = new Set([
+    'COMPLETED', 'DELIVERED', 'DELIVERY_COMPLETE', 'DELIVERY_COMPLETED',
+    'DELIVERY_CONFIRMED', 'ORDER_COMPLETED', 'ORDER_DELIVERED', 'FINISHED', 'DONE',
+  ]);
+  // Also treat as terminal if orderStatus or deliveryStatus field says so,
+  // even if lifecycle lags behind (late backend write, stale snapshot).
+  const isTerminalBySecondaryField =
+    orderStatusNorm === 'delivered' ||
+    orderStatusNorm === 'completed' ||
+    orderStatusNorm === 'delivery_completed' ||
+    deliveryStatusNorm === 'delivered' ||
+    deliveryStatusNorm === 'completed';
+
+  if (TERMINAL_LIFECYCLES.has(lc) || isTerminalBySecondaryField) return 'completed';
+
+  // Active delivery-phase lifecycles.
+  if (
+    lc === 'MATCHED' ||
+    lc === 'ORDER_PLACED' ||
+    lc === 'DRIVER_ASSIGNED' ||
+    lc === 'PICKED_UP' ||
+    lc === 'ON_THE_WAY' ||
+    lc === 'NEAR_DESTINATION' ||
+    lc === 'ARRIVING' ||
+    lc === 'ARRIVED'
+  ) {
     return 'active_chat';
   }
 

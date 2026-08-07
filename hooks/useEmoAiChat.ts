@@ -14,8 +14,6 @@ import {
 } from '@/services/emoAi/emoAiHiEmoooReward';
 import { streamEmoAiReply } from '@/services/emoAi/emoAiOpenAi';
 import {
-  loadEmoAiChatStarted,
-  loadEmoAiMessages,
   saveEmoAiChatStarted,
   saveEmoAiMessages,
 } from '@/services/emoAi/emoAiStorage';
@@ -106,32 +104,17 @@ export function useEmoAiChat(uid: string | null) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [loaded, hasStarted, memory] = await Promise.all([
-        loadEmoAiMessages(storageUid),
-        loadEmoAiChatStarted(storageUid),
-        loadEmoAiMemory(uid),
-      ]);
       if (cancelled) return;
-
-      // Persist display name into long-term memory when known.
-      if (uid && nameRef.current) {
+      // Always start with an empty conversation — never restore message history.
+      // Long-term memory (user facts/preferences) is preserved separately and
+      // loaded fresh when the user taps "Start chatting" via startChatting().
+      // Persist display name into long-term memory only when it is available.
+      // nameRef may be null on first render (before the Firestore listener fires).
+      if (uid && nameRef.current?.trim()) {
         void saveEmoAiMemory(uid, { displayName: nameRef.current });
       }
-
-      if (loaded.length === 0 && hasStarted) {
-        // Visible history expired — start clean; greet with memory when available.
-        const greeting =
-          memory.updatedAtMs > 0
-            ? buildMemoryAwareGreeting(memory, nameRef.current)
-            : null;
-        const starters = buildStarterMessages(nameRef.current, greeting);
-        setMessages(starters);
-        setStarted(true);
-        await saveEmoAiMessages(storageUid, starters);
-      } else {
-        setMessages(loaded);
-        setStarted(hasStarted || loaded.length > 0);
-      }
+      setMessages([]);
+      setStarted(false);
       setReady(true);
     })();
     return () => {

@@ -92,7 +92,10 @@ export default function FoodShareChatScreen() {
   const [foodTitle, setFoodTitle] = useState('Meal share');
   const [partnerFirstName, setPartnerFirstName] = useState('Partner');
   const [myFirstName, setMyFirstName] = useState('You');
-  const [matchChatId, setMatchChatId] = useState(id);
+  // Start empty so we wait for the match doc to supply the real (unique) chatId
+  // before subscribing to messages. Avoids showing stale messages from a
+  // previous order between the same two users.
+  const [matchChatId, setMatchChatId] = useState('');
   const [partnerUid, setPartnerUid] = useState('');
   const [matchLifecycle, setMatchLifecycle] = useState('');
   const [adminFoodShareId, setAdminFoodShareId] = useState('');

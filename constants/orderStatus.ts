@@ -66,9 +66,31 @@ export const ACTIVE_ORDER_STATUSES = [
   'arrived_customer',
 ] as const;
 
-export const COMPLETED_ORDER_STATUSES = [ORDER_STATUS.DELIVERED, 'completed'] as const;
+export const COMPLETED_ORDER_STATUSES = [
+  ORDER_STATUS.DELIVERED,
+  'completed',
+  // Backend variants — any of these must map to Past Orders, not Active
+  'delivery_completed',
+  'delivery_confirmed',
+  'order_delivered',
+  'order_completed',
+  'order_complete',
+  'finished',
+  'done',
+  'complete',
+] as const;
 
-export const CANCELLED_ORDER_STATUSES = [ORDER_STATUS.CANCELLED, 'expired', 'rejected'] as const;
+export const CANCELLED_ORDER_STATUSES = [
+  ORDER_STATUS.CANCELLED,
+  'expired',
+  'rejected',
+  // Backend variants
+  'cancellation_confirmed',
+  'order_cancelled',
+  'refunded',
+  'void',
+  'voided',
+] as const;
 
 /** Courier lifecycle — kept in sync with `services/deliveryStatus.ts`. */
 export const DELIVERY_STATUS = {
