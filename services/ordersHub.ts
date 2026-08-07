@@ -76,11 +76,6 @@ export function subscribeFoodShareHub(
   };
 
   const emit = () => {
-    const matchByShare = new Map<string, FoodShareMatchDoc>();
-    for (const m of matches) {
-      if (m.adminFoodShareId) matchByShare.set(m.adminFoodShareId, m);
-    }
-
     const items: FoodShareHubItem[] = [];
     const seen = new Set<string>();
 
@@ -88,10 +83,69 @@ export function subscribeFoodShareHub(
       if (!req.adminFoodShareId) continue;
       bindShare(req.adminFoodShareId);
       const shareRaw = shareCache.get(req.adminFoodShareId) ?? null;
-      const match =
-        (req.matchId ? matches.find((m) => m.id === req.matchId) : null) ??
-        matchByShare.get(req.adminFoodShareId) ??
-        null;
+
+      // CRITICAL: only look up the match by the request's OWN matchId.
+      // Never fall back to "any match for this card" (matchByShare pattern).
+      //
+      // Why this matters for re-orders:
+      //   After Order 1 completes, if the user creates Order 2 they start in
+      //   WAITING state with matchId=null. An old match doc for this card still
+      //   exists with lifecycle=COMPLETED. If we looked it up by adminFoodShareId,
+      //   the new WAITING request would appear to have a COMPLETED match → the
+      //   brand-new order lands in Past Orders immediately. Wrong.
+      //
+      //   By restricting the lookup to req.matchId only, a request with
+      //   matchId=null correctly produces no match → hubItemFromWaiting fires →
+      //   the new order appears in Active Orders as "Waiting for Partner". Correct.
+      const match: FoodShareMatchDoc | null = req.matchId
+        ? (matches.find((m) => m.id === req.matchId) ?? null)
+        : null;
+
+      // ── Debug log: every request → match join ─────────────────────────────
+      const matchOrderId =
+        match != null
+          ? ((match as unknown as Record<string, unknown>).orderId ?? null)
+          : null;
+      const matchLifecycle = match?.lifecycle ?? null;
+      const matchOrderStatus =
+        match != null
+          ? ((match as unknown as Record<string, unknown>).orderStatus ?? null)
+          : null;
+      const matchDeliveryStatus =
+        match != null
+          ? ((match as unknown as Record<string, unknown>).deliveryStatus ?? null)
+          : null;
+      const sectionPreview =
+        !match && req.status === 'WAITING'
+          ? 'active (waiting)'
+          : match
+            ? (() => {
+                const lc = String(match.lifecycle ?? '').toUpperCase();
+                const TERMINAL = new Set([
+                  'COMPLETED','DELIVERED','DELIVERY_COMPLETE','DELIVERY_COMPLETED',
+                  'DELIVERY_CONFIRMED','ORDER_COMPLETED','ORDER_DELIVERED','FINISHED','DONE',
+                ]);
+                const oS = String((match as unknown as Record<string, unknown>).orderStatus ?? '').toLowerCase();
+                const dS = String((match as unknown as Record<string, unknown>).deliveryStatus ?? '').toLowerCase();
+                if (TERMINAL.has(lc) || oS === 'delivered' || oS === 'completed' || dS === 'delivered') return 'completed';
+                if (lc === 'CANCELLED' || match.status === 'CANCELLED') return 'cancelled';
+                return 'active';
+              })()
+            : 'no-match';
+      console.log('[ORDERS HUB] card join', {
+        requestId: req.id,
+        adminFoodShareId: req.adminFoodShareId,
+        reqMatchId: req.matchId ?? '(null — WAITING)',
+        reqStatus: req.status,
+        resolvedMatchId: match?.id ?? '(none)',
+        matchOrderId: matchOrderId ?? '(none)',
+        lifecycle: matchLifecycle ?? '(none)',
+        orderStatus: matchOrderStatus ?? '(none)',
+        deliveryStatus: matchDeliveryStatus ?? '(none)',
+        section: sectionPreview,
+        matchIdEqualsReqMatchId: match ? match.id === req.matchId : 'n/a',
+      });
+      // ─────────────────────────────────────────────────────────────────────
 
       if (req.status === 'WAITING' && !match) {
         const item = hubItemFromWaiting({ request: req, shareRaw, myUid: uid });
@@ -112,6 +166,8 @@ export function subscribeFoodShareHub(
       }
     }
 
+    // Second pass: show any match docs that have no corresponding request
+    // (e.g. partner side when the request is missing or not yet loaded).
     for (const match of matches) {
       const hubId = `match_${match.id}`;
       if (seen.has(hubId)) continue;
@@ -119,13 +175,19 @@ export function subscribeFoodShareHub(
       const shareRaw = shareCache.get(match.adminFoodShareId) ?? null;
       const req =
         requests.find(
-          (r) =>
-            r.adminFoodShareId === match.adminFoodShareId ||
-            r.matchId === match.id,
+          (r) => r.matchId === match.id,
         ) ?? null;
-      items.push(
-        hubItemFromMatch({ match, request: req, shareRaw, myUid: uid }),
-      );
+      const item = hubItemFromMatch({ match, request: req, shareRaw, myUid: uid });
+      console.log('[ORDERS HUB] orphaned match card', {
+        matchId: match.id,
+        adminFoodShareId: match.adminFoodShareId,
+        lifecycle: match.lifecycle,
+        section:
+          item.status === 'completed' ? 'completed'
+          : item.status === 'cancelled' ? 'cancelled'
+          : 'active',
+      });
+      items.push(item);
     }
 
     onData(sortHubItems(items));
