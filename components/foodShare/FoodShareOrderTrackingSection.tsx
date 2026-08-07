@@ -383,7 +383,32 @@ export function FoodShareOrderTrackingSection({ orderId }: { orderId: string }) 
     );
   }
 
-  if (!order) return null;
+  // ── Waiting state: order not yet created (e.g. only one participant paid) ──
+  if (!order) {
+    return (
+      <View style={styles.waitingBox}>
+        <Text style={styles.waitingTitle}>Preparing Your Order</Text>
+        <Text style={styles.waitingBody}>
+          We're getting everything ready for your delivery. Your meal will be
+          freshly prepared shortly before delivery to ensure the best quality.
+        </Text>
+        <Text style={styles.waitingWindowHeading}>Delivery Window</Text>
+        <Text style={styles.waitingWindowBody}>
+          {'• Before 1:00 PM → 11:00 AM – 1:00 PM\n'}
+          {'• 1:00 PM – 6:30 PM → 5:00 PM – 7:00 PM\n'}
+          {'• After 6:30 PM → Next day, 11:00 AM – 1:00 PM'}
+        </Text>
+        <ActivityIndicator
+          size="small"
+          color="#C084FC"
+          style={styles.waitingSpinner}
+        />
+        <Text style={styles.waitingFooter}>
+          Delivery tracking will appear automatically once your order is ready.
+        </Text>
+      </View>
+    );
+  }
 
   // ── Render tracking sections ───────────────────────────────────────────────
   return (
@@ -676,6 +701,33 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   loadingText: { color: '#7D8493', fontSize: 14, fontWeight: '600' },
+  waitingBox: {
+    marginTop: 20,
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: 'rgba(23,25,35,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 8,
+  },
+  waitingTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
+  waitingBody: { fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.6)' },
+  waitingWindowHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  waitingWindowBody: { fontSize: 12, lineHeight: 20, color: 'rgba(255,255,255,0.6)' },
+  waitingSpinner: { marginTop: 10, alignSelf: 'center' },
+  waitingFooter: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    textAlign: 'center',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
   trackingHeader: {
     marginTop: 16,
     borderRadius: 20,

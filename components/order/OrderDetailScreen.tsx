@@ -12,12 +12,40 @@ import { looksLikeMarketplaceRestaurantOrder } from '@/services/orderService';
 import { resolveMarketplaceOrderViewerRole } from '@/services/orderViewerRole';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BG = '#0B0816';
 const BLUE = '#1A6FE8';
 const GRAY = '#7D8493';
+
+function HalfOrderWaitingShell({ onBack }: { onBack?: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[waitingStyles.root, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      <Text style={waitingStyles.title}>Preparing Your Order</Text>
+      <Text style={waitingStyles.body}>
+        We're getting everything ready for your delivery. Your meal will be freshly
+        prepared shortly before delivery to ensure the best quality.
+      </Text>
+      <Text style={waitingStyles.windowHeading}>Delivery Window</Text>
+      <Text style={waitingStyles.windowBody}>
+        {'• Before 1:00 PM → 11:00 AM – 1:00 PM\n'}
+        {'• 1:00 PM – 6:30 PM → 5:00 PM – 7:00 PM\n'}
+        {'• After 6:30 PM → Next day, 11:00 AM – 1:00 PM'}
+      </Text>
+      <ActivityIndicator size="small" color="#C084FC" style={waitingStyles.spinner} />
+      <Text style={waitingStyles.footer}>
+        Delivery tracking will appear automatically once your order is ready.
+      </Text>
+      {onBack ? (
+        <Pressable style={[styles.retryBtn, { backgroundColor: GRAY }]} onPress={onBack}>
+          <Text style={styles.retryBtnText}>Go back</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 function OrderDetailErrorShell({
   title,
@@ -78,6 +106,10 @@ export default function OrderDetailScreen() {
   }
 
   if (detail.phase === 'not_found') {
+    // HalfOrder matchIds always contain '_'; Firestore auto-IDs never do.
+    if (detail.orderId.includes('_')) {
+      return <HalfOrderWaitingShell onBack={() => router.back()} />;
+    }
     return (
       <OrderDetailErrorShell
         title="Order not found"
@@ -133,4 +165,20 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
   },
   retryBtnText: { color: '#FFF', fontWeight: '700' },
+});
+
+const waitingStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    gap: 10,
+  },
+  title: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  body: { fontSize: 14, color: GRAY, fontWeight: '500', lineHeight: 20 },
+  windowHeading: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  windowBody: { fontSize: 13, color: GRAY, lineHeight: 20 },
+  spinner: { marginTop: 6, alignSelf: 'flex-start' },
+  footer: { fontSize: 11, color: GRAY, fontStyle: 'italic', marginTop: 2 },
 });
