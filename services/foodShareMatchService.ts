@@ -584,10 +584,40 @@ export async function joinAdminFoodShare(
       fulfillmentMode,
     });
   } else {
-    // Re-order: the match doc already exists (from a previous completed order).
-    // Update matchChatId so both users open the NEW chat room, not the old one.
-    // Without this, the match doc would still point to the previous order's chatId.
-    await setDoc(matchRef, { matchChatId, updatedAt: serverTimestamp() }, { merge: true });
+    // Re-order: match doc exists from a previous completed/delivered order.
+    // Reset it to a fresh state for the new order so the chat screen starts clean:
+    //   - new matchChatId → brand-new chat room
+    //   - lifecycle reset → chatReadOnly = false (no more "Chat is read-only" banner)
+    //   - stale order fields cleared → no old orderStatus/deliveryStatus bleed-through
+    // The isFoodShareMatchReopenUpdate Firestore rule allows this update only when
+    // the previous lifecycle was terminal (COMPLETED / DELIVERED / CANCELLED).
+    const prevLifecycle = existingMatch.data()?.lifecycle ?? null;
+    console.log('[MATCH POST WRITE]', {
+      operation: 'reopen_existing_match',
+      path: matchPath,
+      matchId,
+      newMatchChatId: matchChatId,
+      prevLifecycle,
+      uid,
+    });
+    await setDoc(matchRef, {
+      matchChatId,
+      // Reset lifecycle so the chat screen shows the correct state.
+      status: 'pending_payment',
+      lifecycle: 'WAITING_FOR_PAYMENT',
+      // Reset payment state for the new order.
+      userPayments: isPickup
+        ? { [pickupHostUid]: { paymentStatus: 'NOT_REQUIRED', role: 'pickup_host' } }
+        : {},
+      paymentStatus: 'pending',
+      // Clear stale order tracking fields from the previous order.
+      orderStatus: null,
+      deliveryStatus: null,
+      // Clear completion timestamps so chatReadOnly cannot trigger from old timestamps.
+      completedAt: null,
+      deliveredAt: null,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
     await setDoc(doc(db, 'matchChats', matchChatId), {
       matchId,
       adminFoodShareId,
@@ -604,7 +634,9 @@ export async function joinAdminFoodShare(
       senderUid: 'system',
       senderRole: 'system',
       senderFirstName: 'HalfOrder',
-      text: `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
+      text: isPickup
+        ? `You're matched for pickup: ${share.foodName}. Your partner pays their share in the app — the host pays the restaurant, then HalfOrder reimburses them after pickup.`
+        : `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
       createdAt: serverTimestamp(),
       sentAt: serverTimestamp(),
       deliveredAt: null,
@@ -614,8 +646,9 @@ export async function joinAdminFoodShare(
       matchId,
       adminFoodShareId,
       existing: true,
-      matchChatId,
-      lifecycle: existingMatch.data()?.lifecycle ?? null,
+      prevLifecycle,
+      newMatchChatId: matchChatId,
+      newLifecycle: 'WAITING_FOR_PAYMENT',
     });
   }
 
@@ -754,7 +787,12 @@ export function mapMatchDoc(id: string, data: Record<string, unknown>): FoodShar
       typeof data.adminFoodShareId === 'string' ? { adminFoodShareId: data.adminFoodShareId } : null,
     ),
     matchChatId:
-      typeof data.matchChatId === 'string' ? data.matchChatId : id,
+      // MUST return '' when matchChatId is absent — NOT id.
+      // Falling back to `id` (matchId) would connect to the wrong chat room
+      // because matchId is the deterministic key reused across all orders between
+      // the same two users on the same card. An empty string signals "no chat yet"
+      // and the chat screen's subscription guard (if (!matchChatId)) handles it.
+      typeof data.matchChatId === 'string' && data.matchChatId ? data.matchChatId : '',
     userPayments,
     createdAtMs: null,
     fulfillmentMode: resolveFoodShareFulfillmentMode(data),

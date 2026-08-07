@@ -867,6 +867,27 @@ service cloud.firestore {
         && request.resource.data.lifecycle == 'CANCELLED'
         && request.resource.data.cancelReason in ['CANCELLED_BY_USER', 'CANCELLED_BY_ADMIN'];
     }
+    /**
+     * Re-order: a completed/delivered match can be reset for a new order.
+     * Resets matchChatId + lifecycle to WAITING_FOR_PAYMENT so the chat screen
+     * starts fresh and chatReadOnly is false for the new order.
+     * Only allowed when the current lifecycle is terminal (COMPLETED/DELIVERED/CANCELLED).
+     */
+    function isFoodShareMatchReopenUpdate() {
+      return isSignedIn()
+        && !isCurrentUserRestricted()
+        && (resource.data.keys().hasAny(['foodShareId']) || resource.data.keys().hasAny(['adminFoodShareId']))
+        && request.auth.uid in resource.data.users
+        && resource.data.lifecycle in ['COMPLETED', 'DELIVERED', 'CANCELLED']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'matchChatId', 'status', 'lifecycle', 'userPayments', 'paymentStatus',
+             'orderStatus', 'deliveryStatus', 'completedAt', 'deliveredAt', 'updatedAt'
+           ])
+        && request.resource.data.lifecycle == 'WAITING_FOR_PAYMENT'
+        && request.resource.data.status == 'pending_payment'
+        && request.resource.data.matchChatId is string
+        && request.resource.data.matchChatId.size() > 0;
+    }
     function isValidAdminFoodShareMatchCreate(matchDocId) {
       return isSignedIn()
         && !isCurrentUserRestricted()
@@ -885,16 +906,19 @@ service cloud.firestore {
         && isAdminFoodShareAvailableNow(request.resource.data.get('adminFoodShareId', request.resource.data.get('foodShareId', '')));
     }
     function isValidMatchChatCreate(chatId) {
+      // chatId is now an auto-generated Firestore ID (NOT equal to matchId).
+      // We verify the request by looking up the real match doc via the matchId field.
       return isSignedIn()
         && !isCurrentUserRestricted()
         && request.resource.data.participantIds is list
         && request.resource.data.participantIds.size() == 2
         && request.auth.uid in request.resource.data.participantIds
-        && request.resource.data.matchId == chatId
+        && request.resource.data.matchId is string
+        && request.resource.data.matchId.size() > 0
         && (request.resource.data.adminFoodShareId is string || request.resource.data.foodShareId is string)
         && request.resource.data.createdAt != null
-        && exists(/databases/$(database)/documents/matches/$(chatId))
-        && request.auth.uid in get(/databases/$(database)/documents/matches/$(chatId)).data.users;
+        && exists(/databases/$(database)/documents/matches/$(request.resource.data.matchId))
+        && request.auth.uid in get(/databases/$(database)/documents/matches/$(request.resource.data.matchId)).data.users;
     }
     /** Meal-share chat participant — matchChats.participantIds with matches.users fallback. */
     function isMatchChatParticipant(chatId) {
@@ -1724,7 +1748,7 @@ service cloud.firestore {
           && request.auth.uid in resource.data.users
         );
       allow create: if isValidFoodMatchCreate(matchId) || isValidAdminFoodShareMatchCreate(matchId);
-      allow update: if isFoodShareMatchCancelUpdate();
+      allow update: if isFoodShareMatchCancelUpdate() || isFoodShareMatchReopenUpdate();
       allow delete: if false;
     }
     match /matchChats/{chatId} {

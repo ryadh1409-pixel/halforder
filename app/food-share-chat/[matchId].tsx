@@ -149,13 +149,31 @@ export default function FoodShareChatScreen() {
         setLoading(false);
         return;
       }
-      const match = mapMatchDoc(snap.id, snap.data() as Record<string, unknown>);
+      const raw = snap.data() as Record<string, unknown>;
+      const match = mapMatchDoc(snap.id, raw);
+      // CRITICAL: must NOT fall back to `id` (matchId) here.
+      // matchId is deterministic and shared across all orders between the same two
+      // users on the same food-share card. If we fell back to matchId we would
+      // reuse the previous order's chat room and show stale messages.
+      // mapMatchDoc already returns '' when the field is absent — that empty string
+      // signals the messages subscription guard (if (!matchChatId)) to stay idle.
+      const resolvedChatId = match.matchChatId; // '' means "no chat yet"
+      console.log('[CHAT SCREEN] match doc resolved', {
+        matchDocId: snap.id,
+        matchChatIdFromDoc: raw.matchChatId ?? '(missing)',
+        resolvedChatId: resolvedChatId || '(empty — subscription will wait)',
+        lifecycle: raw.lifecycle ?? '(missing)',
+        orderStatus: raw.orderStatus ?? '(missing)',
+        deliveryStatus: raw.deliveryStatus ?? '(missing)',
+        completedAt: raw.completedAt ?? '(missing)',
+        deliveredAt: raw.deliveredAt ?? '(missing)',
+        fallbackUsed: !raw.matchChatId,
+      });
       setFoodTitle(match.foodName);
-      setMatchChatId(match.matchChatId || id);
+      setMatchChatId(resolvedChatId);
       setMatchLifecycle(match.lifecycle);
       setAdminFoodShareId(match.adminFoodShareId);
       setOrderStatus(match.orderStatus);
-      const raw = snap.data() as Record<string, unknown>;
       setCompletedAtMs(
         safeToMillis(raw.completedAt) ??
           safeToMillis(raw.deliveredAt) ??
@@ -202,9 +220,52 @@ export default function FoodShareChatScreen() {
     completedAtMs != null &&
     Date.now() - completedAtMs >= CHAT_READ_ONLY_AFTER_MS;
 
+  // ── Debug: log chatReadOnly whenever its inputs change ──────────────────────
   useEffect(() => {
-    if (!matchChatId || chatClosed) return undefined;
+    const now = Date.now();
+    const ageMs = completedAtMs != null ? now - completedAtMs : null;
+    console.log('[CHAT SCREEN] chatReadOnly evaluated', {
+      matchId: id,
+      matchChatId: matchChatId || '(empty)',
+      lifecycle: matchLifecycle || '(empty)',
+      orderStatus: orderStatus ?? '(null)',
+      completedAtMs: completedAtMs ?? '(null)',
+      ageMs: ageMs != null ? `${Math.round(ageMs / 1000)}s` : '(null)',
+      thresholdMs: CHAT_READ_ONLY_AFTER_MS,
+      chatReadOnly,
+      chatClosed,
+      blocked,
+    });
+  }, [id, matchChatId, matchLifecycle, orderStatus, completedAtMs, chatReadOnly, chatClosed, blocked]);
+  // ────────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!matchChatId || chatClosed) {
+      console.log('[CHAT SCREEN] messages subscription SKIPPED', {
+        matchId: id,
+        matchChatId: matchChatId || '(empty — no matchChatId yet)',
+        chatClosed,
+        reason: !matchChatId ? 'matchChatId empty' : 'chat closed',
+      });
+      return undefined;
+    }
+    const queryPath = `matchChats/${matchChatId}/matchMessages`;
+    console.log('[CHAT SCREEN] messages subscription ATTACH', {
+      matchId: id,
+      matchChatId,
+      queryPath,
+      uid: myUid,
+    });
     return subscribeMatchMessages(matchChatId, (next) => {
+      console.log('[CHAT SCREEN] messages snapshot', {
+        matchId: id,
+        matchChatId,
+        queryPath,
+        messageCount: next.length,
+        messageIds: next.map((m) => m.id),
+        firstSenderId: next[0]?.senderId ?? '(none)',
+        lastSenderId: next[next.length - 1]?.senderId ?? '(none)',
+      });
       const prevCount = lastMessageCountRef.current;
       if (prevCount > 0 && next.length > prevCount) {
         const latest = next[next.length - 1];
@@ -215,7 +276,7 @@ export default function FoodShareChatScreen() {
       lastMessageCountRef.current = next.length;
       setMessages(next);
     });
-  }, [matchChatId, myUid, chatClosed]);
+  }, [matchChatId, myUid, chatClosed, id]);
 
   useEffect(() => {
     if (!matchChatId || chatClosed || !myUid) return;
