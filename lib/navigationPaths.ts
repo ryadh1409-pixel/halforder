@@ -54,8 +54,10 @@ export const USER_ROUTES = {
   foodShareChat: (matchId: string) =>
     `/food-share-chat/${encodeURIComponent(matchId)}` as const,
   moneySaved: '/money-saved' as const,
-  /** Emo AI “I Want” concierge ordering wizard. */
+  /** Emo AI “I Want” concierge ordering wizard (legacy step-based). */
   iWant: '/i-want' as const,
+  /** Emo AI Concierge — new conversational flow (/i-want-ai). */
+  iWantAI: '/i-want-ai' as const,
   /** Emo Game hub (UNO / Flip Challenge placeholder). */
   emoGame: '/emo-game' as const,
 } as const;

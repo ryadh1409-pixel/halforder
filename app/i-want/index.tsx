@@ -1,6 +1,7 @@
 import { feeOrFreeLabel, formatHstLabel, moneyLabel } from '@/lib/orderPricing';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { useAuth } from '@/services/AuthContext';
+import { useIWantFeatureFlag } from '@/hooks/useIWantFeatureFlag';
 import { useAccountSavedLocation } from '@/hooks/useAccountSavedLocation';
 import { IWantAddressStep } from '@/components/iWant/IWantAddressStep';
 import { IWantRestaurantStep } from '@/components/iWant/IWantRestaurantStep';
@@ -67,6 +68,27 @@ export default function IWantWizardScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const uid = isRegisteredAuthUser(user) ? user!.uid : null;
+  const { enabled, loading: flagLoading } = useIWantFeatureFlag();
+  const legacyRedirectedRef = React.useRef(false);
+
+  // Guard: redirect non-admins who reach the legacy /i-want route directly
+  React.useEffect(() => {
+    if (flagLoading) return;
+    if (!enabled) {
+      if (legacyRedirectedRef.current) return;
+      legacyRedirectedRef.current = true;
+      if (router.canGoBack()) router.back();
+      else router.replace('/' as never);
+    }
+  }, [enabled, flagLoading, router]);
+
+  if (flagLoading || !enabled) {
+    return (
+      <View style={{ flex: 1, backgroundColor: EMO_AI_BG, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#A855F7" />
+      </View>
+    );
+  }
   const { saved } = useAccountSavedLocation('users', uid);
   const { userCoords } = useHomeMarketplaceLocation();
 

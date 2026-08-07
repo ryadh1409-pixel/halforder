@@ -49,6 +49,10 @@ export const adminRoutes = {
   inboxMessages: '/(tabs)/admin/inbox-messages',
   /** Investor-ready Finance Dashboard (additive). */
   finance: '/(tabs)/admin/finance',
+  /** Emo AI "I Want Something" concierge orders (admin-only internal testing). */
+  emoOrders: '/(tabs)/admin/emo-orders',
+  emoOrder: (id: string) =>
+    `/(tabs)/admin/emo-orders/${encodeURIComponent(id)}`,
   /** Customer → Admin support conversations. */
   supportInbox: '/(tabs)/admin/support-inbox',
   supportThread: (id: string) =>

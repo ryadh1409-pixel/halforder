@@ -494,3 +494,173 @@ export async function geocodeAddressToSavedLocation(
     ...(details.postalCode ? { postalCode: details.postalCode } : {}),
   };
 }
+
+// ── Nearby Search & Text Search — correct APIs for restaurant discovery ────
+
+export type NearbyRestaurantResult = {
+  placeId: string;
+  name: string;
+  address: string | null;
+  lat: number;
+  lng: number;
+  rating: number | null;
+  reviewCount: number | null;
+  priceLevel: number | null;
+  isOpen: boolean | null;
+  photoReference: string | null;
+  types: string[];
+};
+
+type NearbySearchApiResponse = {
+  status: string;
+  error_message?: string;
+  results?: {
+    place_id: string;
+    name?: string;
+    vicinity?: string;
+    geometry?: { location?: { lat: number; lng: number } };
+    rating?: number;
+    user_ratings_total?: number;
+    price_level?: number;
+    opening_hours?: { open_now?: boolean };
+    photos?: { photo_reference: string }[];
+    types?: string[];
+  }[];
+  next_page_token?: string;
+};
+
+function mapNearbyResults(
+  results: NearbySearchApiResponse['results'],
+): NearbyRestaurantResult[] {
+  return (results ?? [])
+    .filter((r) => {
+      const lat = r.geometry?.location?.lat;
+      const lng = r.geometry?.location?.lng;
+      return r.place_id && r.name && Number.isFinite(lat) && Number.isFinite(lng);
+    })
+    .map((r) => ({
+      placeId: r.place_id,
+      name: (r.name ?? '').trim(),
+      address: r.vicinity?.trim() || null,
+      lat: r.geometry!.location!.lat,
+      lng: r.geometry!.location!.lng,
+      rating: typeof r.rating === 'number' ? r.rating : null,
+      reviewCount: typeof r.user_ratings_total === 'number' ? r.user_ratings_total : null,
+      priceLevel: typeof r.price_level === 'number' ? r.price_level : null,
+      isOpen: r.opening_hours?.open_now ?? null,
+      photoReference: r.photos?.[0]?.photo_reference ?? null,
+      types: r.types ?? [],
+    }));
+}
+
+/**
+ * Google Places Nearby Search — the correct API for "find restaurants near me".
+ * Returns up to 20 results sorted by prominence (rating × review count × distance).
+ * Unlike Autocomplete, this is designed specifically for location-based category searches.
+ */
+export async function fetchPlacesNearbySearch(
+  coords: { latitude: number; longitude: number },
+  radiusMeters: number,
+  keyword: string,
+): Promise<NearbyRestaurantResult[]> {
+  let key: string;
+  try {
+    key = requireApiKey();
+  } catch {
+    console.warn('[EmoOrder][NearbySearch] No API key — cannot search.');
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    location: `${coords.latitude},${coords.longitude}`,
+    radius: String(Math.round(radiusMeters)),
+    keyword: keyword.trim(),
+    type: 'restaurant',
+    key,
+    language: 'en',
+  });
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`;
+
+  console.log('[EmoOrder][NearbySearch] Request', {
+    lat: coords.latitude.toFixed(5),
+    lng: coords.longitude.toFixed(5),
+    radiusM: radiusMeters,
+    keyword,
+    type: 'restaurant',
+  });
+
+  const { httpStatus, data } = await fetchGoogleJson<NearbySearchApiResponse>(
+    'place/nearbysearch',
+    key,
+    url,
+  );
+
+  console.log('[EmoOrder][NearbySearch] Response', {
+    httpStatus,
+    googleStatus: data.status,
+    errorMessage: data.error_message ?? null,
+    resultCount: data.results?.length ?? 0,
+  });
+
+  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    console.error('[EmoOrder][NearbySearch] API error:', data.status, data.error_message);
+    return [];
+  }
+
+  return mapNearbyResults(data.results);
+}
+
+/**
+ * Google Places Text Search — broader restaurant discovery by text query.
+ * Used as fallback when Nearby Search returns too few results.
+ */
+export async function fetchPlacesTextSearch(
+  query: string,
+  coords: { latitude: number; longitude: number },
+  radiusMeters: number,
+): Promise<NearbyRestaurantResult[]> {
+  let key: string;
+  try {
+    key = requireApiKey();
+  } catch {
+    console.warn('[EmoOrder][TextSearch] No API key — cannot search.');
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    query: query.trim(),
+    location: `${coords.latitude},${coords.longitude}`,
+    radius: String(Math.round(radiusMeters)),
+    type: 'restaurant',
+    key,
+    language: 'en',
+  });
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
+
+  console.log('[EmoOrder][TextSearch] Request', {
+    query,
+    lat: coords.latitude.toFixed(5),
+    lng: coords.longitude.toFixed(5),
+    radiusM: radiusMeters,
+  });
+
+  const { httpStatus, data } = await fetchGoogleJson<NearbySearchApiResponse>(
+    'place/textsearch',
+    key,
+    url,
+  );
+
+  console.log('[EmoOrder][TextSearch] Response', {
+    httpStatus,
+    googleStatus: data.status,
+    errorMessage: data.error_message ?? null,
+    resultCount: data.results?.length ?? 0,
+  });
+
+  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    console.error('[EmoOrder][TextSearch] API error:', data.status, data.error_message);
+    return [];
+  }
+
+  return mapNearbyResults(data.results);
+}

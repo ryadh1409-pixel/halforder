@@ -8,6 +8,7 @@ import { EmoAiQuickReplies } from '@/components/emoAi/EmoAiQuickReplies';
 import { IWantComposerCta } from '@/components/iWant/IWantComposerCta';
 import { UE } from '@/constants/uberEatsTheme';
 import { useEmoAiChat } from '@/hooks/useEmoAiChat';
+import { useIWantFeatureFlag } from '@/hooks/useIWantFeatureFlag';
 import { isRegisteredAuthUser } from '@/lib/authSession';
 import { USER_ROUTES } from '@/lib/navigationPaths';
 import { useAuth } from '@/services/AuthContext';
@@ -50,9 +51,10 @@ export default function EmoAiScreen() {
   } = useEmoAiChat(uid);
 
   const busy = typing || Boolean(streamingText);
+  const { enabled: iWantEnabled } = useIWantFeatureFlag();
 
   const openIWant = useCallback(() => {
-    router.push(USER_ROUTES.iWant as never);
+    router.push(USER_ROUTES.iWantAI as never);
   }, [router]);
 
   const tabBarBottomOffset = Math.max(14, insets.bottom + 4);
@@ -113,7 +115,7 @@ export default function EmoAiScreen() {
             {!started ? (
               <EmoAiEmptyState
                 onStart={() => void startChatting()}
-                onIWant={openIWant}
+                onIWant={iWantEnabled ? openIWant : undefined}
               />
             ) : (
               <>
@@ -131,7 +133,7 @@ export default function EmoAiScreen() {
                 />
               </>
             )}
-            {started ? (
+            {started && iWantEnabled ? (
               <IWantComposerCta onPress={openIWant} />
             ) : null}
             <EmoAiComposer

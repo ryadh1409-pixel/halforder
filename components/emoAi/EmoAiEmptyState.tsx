@@ -8,7 +8,8 @@ const MASCOT = require('../../assets/emo-ai/tab-avatar.png');
 
 type Props = {
   onStart: () => void;
-  onIWant: () => void;
+  /** Admin-only. Omit (or pass undefined) to hide "I Want Something" entirely. */
+  onIWant?: () => void;
 };
 
 export function EmoAiEmptyState({ onStart, onIWant }: Props) {
@@ -25,7 +26,7 @@ export function EmoAiEmptyState({ onStart, onIWant }: Props) {
       <TouchableOpacity style={styles.btn} onPress={onStart} activeOpacity={0.9}>
         <Text style={styles.btnText}>Start Chatting</Text>
       </TouchableOpacity>
-      <IWantEntryCard onOrder={onIWant} />
+      {onIWant ? <IWantEntryCard onOrder={onIWant} /> : null}
     </ScrollView>
   );
 }
