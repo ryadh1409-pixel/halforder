@@ -5,6 +5,12 @@ import {
   onDocumentUpdated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
+import {
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_CHAT_ID,
+  buildFields,
+  sendTelegramNotification,
+} from "./services/telegramNotifier.js";
 
 const db = getFirestore();
 const EXPO_PUSH_SEND_URL = "https://exp.host/--/api/v2/push/send";
@@ -258,7 +264,12 @@ async function countUnreadAdminNotifications(): Promise<number> {
  * Replaces create-time spam with a single paid-order push.
  */
 export const notifyAdminsOnOrderCreated = onDocumentWritten(
-  {document: "orders/{orderId}", region: "us-central1"},
+  // ── TELEGRAM DEMONSTRATION ───────────────────────────────────────────────
+  // Secrets are declared here so Firebase injects them at runtime.
+  // Every future function that calls sendTelegramNotification() must include
+  // this same `secrets` array in its own function options.
+  // ─────────────────────────────────────────────────────────────────────────
+  {document: "orders/{orderId}", region: "us-central1", secrets: [TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]},
   async (event) => {
     const orderId = event.params.orderId;
     const before = event.data?.before.exists
@@ -312,6 +323,38 @@ export const notifyAdminsOnOrderCreated = onDocumentWritten(
         event: "payment_completed",
       },
     });
+
+    // ── Telegram admin alert ───────────────────────────────────────────────
+    // DEMONSTRATION: one call shows the full integration pattern.
+    //
+    // Future events to add here:
+    //   • notifyAdminsOnReportCreated   → priority: "warning"
+    //   • notifyAdminsOnPaymentIssue    → priority: "critical"
+    //   • notifyAdminsOnUserSuspended   → priority: "warning"
+    //   • notifyAdminsOnHighRiskModeration → priority: "critical"
+    //   • notifyAdminsOnFlaggedMessage  → priority: "info"
+    //
+    // Each requires: secrets: [TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]
+    // ─────────────────────────────────────────────────────────────────────
+    await sendTelegramNotification({
+      emoji: "💰",
+      title: "New Paid Order",
+      message: buildFields([
+        ["Restaurant", restaurantName],
+        ["Customer",   hostName || "Unknown"],
+        ["Items",      itemLabel],
+        ["Total",      `CA${totalLabel}`],
+        ["Order",      `#${orderId.slice(0, 8).toUpperCase()}`],
+        ["Time",       new Date().toLocaleTimeString("en-CA", {
+          timeZone: "America/Toronto",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })],
+      ] as const),
+      priority: "info",
+    });
+    // ─────────────────────────────────────────────────────────────────────
   },
 );
 
