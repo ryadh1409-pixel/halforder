@@ -167,7 +167,11 @@ export function OrdersHubScreen() {
             {active.length > 0 && (
               <View style={styles.subGroup}>
                 {(active.length > 0 && activeOrderRows.length > 0) && (
-                  <Text style={styles.subLabel}>HalfOrder</Text>
+                  <View style={styles.subLabelRow}>
+                    <View style={[styles.subLabelLine, styles.subLabelLineHalf]} />
+                    <Text style={[styles.subLabelText, styles.subLabelTextHalf]}>{'👥  HalfOrder'}</Text>
+                    <View style={[styles.subLabelLine, styles.subLabelLineHalf]} />
+                  </View>
                 )}
                 {active.map((item) => (
                   <FoodShareHubCard key={item.hubId} item={item} />
@@ -182,7 +186,11 @@ export function OrdersHubScreen() {
             {activeOrderRows.length > 0 && (
               <View style={styles.subGroup}>
                 {(active.length > 0 && activeOrderRows.length > 0) && (
-                  <Text style={styles.subLabel}>FullOrder</Text>
+                  <View style={styles.subLabelRow}>
+                    <View style={[styles.subLabelLine, styles.subLabelLineFull]} />
+                    <Text style={[styles.subLabelText, styles.subLabelTextFull]}>{'👑  FullOrder'}</Text>
+                    <View style={[styles.subLabelLine, styles.subLabelLineFull]} />
+                  </View>
                 )}
                 {activeOrderRows.slice(0, 12).map((row) => (
                   <MarketplaceOrderCard
@@ -212,7 +220,11 @@ export function OrdersHubScreen() {
             {completed.length > 0 && (
               <View style={styles.subGroup}>
                 {(completed.length > 0 && completedOrderRows.length > 0) && (
-                  <Text style={styles.subLabel}>HalfOrder</Text>
+                  <View style={styles.subLabelRow}>
+                    <View style={[styles.subLabelLine, styles.subLabelLineHalf]} />
+                    <Text style={[styles.subLabelText, styles.subLabelTextHalf]}>{'👥  HalfOrder'}</Text>
+                    <View style={[styles.subLabelLine, styles.subLabelLineHalf]} />
+                  </View>
                 )}
                 {completed.map((item) => (
                   <FoodShareHubCard key={item.hubId} item={item} />
@@ -224,7 +236,11 @@ export function OrdersHubScreen() {
             {completedOrderRows.length > 0 && (
               <View style={styles.subGroup}>
                 {(completed.length > 0 && completedOrderRows.length > 0) && (
-                  <Text style={styles.subLabel}>FullOrder</Text>
+                  <View style={styles.subLabelRow}>
+                    <View style={[styles.subLabelLine, styles.subLabelLineFull]} />
+                    <Text style={[styles.subLabelText, styles.subLabelTextFull]}>{'👑  FullOrder'}</Text>
+                    <View style={[styles.subLabelLine, styles.subLabelLineFull]} />
+                  </View>
                 )}
                 {completedOrderRows.slice(0, 12).map((row) => (
                   <MarketplaceOrderCard
@@ -250,7 +266,11 @@ export function OrdersHubScreen() {
             {cancelled.length > 0 && (
               <View style={styles.subGroup}>
                 {(cancelled.length > 0 && cancelledOrderRows.length > 0) && (
-                  <Text style={styles.subLabel}>HalfOrder</Text>
+                  <View style={styles.subLabelRow}>
+                    <View style={[styles.subLabelLine, styles.subLabelLineHalf]} />
+                    <Text style={[styles.subLabelText, styles.subLabelTextHalf]}>{'👥  HalfOrder'}</Text>
+                    <View style={[styles.subLabelLine, styles.subLabelLineHalf]} />
+                  </View>
                 )}
                 {cancelled.map((item) => (
                   <FoodShareHubCard key={item.hubId} item={item} />
@@ -261,7 +281,11 @@ export function OrdersHubScreen() {
             {cancelledOrderRows.length > 0 && (
               <View style={styles.subGroup}>
                 {(cancelled.length > 0 && cancelledOrderRows.length > 0) && (
-                  <Text style={styles.subLabel}>FullOrder</Text>
+                  <View style={styles.subLabelRow}>
+                    <View style={[styles.subLabelLine, styles.subLabelLineFull]} />
+                    <Text style={[styles.subLabelText, styles.subLabelTextFull]}>{'👑  FullOrder'}</Text>
+                    <View style={[styles.subLabelLine, styles.subLabelLineFull]} />
+                  </View>
                 )}
                 {cancelledOrderRows.slice(0, 8).map((row) => (
                   <MarketplaceOrderCard
@@ -386,6 +410,38 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.1,
     marginBottom: 10,
+  },
+
+  // ── Redesigned section dividers ──
+  subLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  subLabelLine: {
+    flex: 1,
+    height: 1,
+    opacity: 0.35,
+  },
+  subLabelLineHalf: {
+    backgroundColor: '#A855F7',
+  },
+  subLabelLineFull: {
+    backgroundColor: '#F59E0B',
+  },
+  subLabelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 2.2,
+  },
+  subLabelTextHalf: {
+    color: '#A855F7',
+  },
+  subLabelTextFull: {
+    color: '#F59E0B',
   },
 
   // ── Loaders ──
