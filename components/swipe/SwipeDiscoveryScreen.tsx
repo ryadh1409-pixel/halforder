@@ -84,9 +84,11 @@ export function SwipeDiscoveryScreen() {
   const cards = useSwipeStore((s) => s.cards);
   const joiningOrderId = useSwipeStore((s) => s.joiningOrderId);
   const lastMatch = useSwipeStore((s) => s.lastMatch);
+  const passedIds = useSwipeStore((s) => s.passedIds);
   const setCards = useSwipeStore((s) => s.setCards);
   const setDeckIndex = useSwipeStore((s) => s.setDeckIndex);
   const advanceDeck = useSwipeStore((s) => s.advanceDeck);
+  const passCard = useSwipeStore((s) => s.passCard);
   const setJoining = useSwipeStore((s) => s.setJoining);
   const setLastMatch = useSwipeStore((s) => s.setLastMatch);
   const sharesRef = useRef<AdminFoodShareDoc[]>([]);
@@ -147,9 +149,11 @@ export function SwipeDiscoveryScreen() {
   const filteredCards = useMemo(
     () =>
       cardsWithReferral.filter(
-        (card) => card.fulfillmentMode === fulfillmentMode,
+        (card) =>
+          card.fulfillmentMode === fulfillmentMode &&
+          !passedIds.has(card.adminFoodShareId),
       ),
-    [cardsWithReferral, fulfillmentMode],
+    [cardsWithReferral, fulfillmentMode, passedIds],
   );
 
   const deckLength = filteredCards.length;
@@ -187,8 +191,11 @@ export function SwipeDiscoveryScreen() {
       restaurantId: current.restaurantId,
       direction: 'pass',
     });
-    advanceDeck();
-  }, [advanceDeck, current]);
+    // Suppress this card for the rest of the session (Option A).
+    // The card is filtered out of filteredCards; no advanceDeck() needed
+    // because the deck naturally points to the next card once this one is removed.
+    passCard(current.adminFoodShareId);
+  }, [current, passCard]);
 
   const handleLike = useCallback(async () => {
     const user = auth.currentUser;
