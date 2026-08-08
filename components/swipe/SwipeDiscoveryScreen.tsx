@@ -366,13 +366,22 @@ export function SwipeDiscoveryScreen() {
 
         <SwipeActionButtons
           disabled={!current}
-          likeDisabled={
-            current != null &&
-            isSwipeMarketplaceJoinLocked(current.marketplaceStatus)
-          }
           loading={!!joiningOrderId}
           onPass={() => setActionSignal({ id: Date.now(), direction: 'pass' })}
-          onLike={() => setActionSignal({ id: Date.now(), direction: 'like' })}
+          onLike={() => {
+            // If the card is already locked (matched / ready), show feedback
+            // without triggering the swipe animation — the card should stay on screen.
+            if (current && isSwipeMarketplaceJoinLocked(current.marketplaceStatus)) {
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              showSuccess(
+                current.marketplaceStatus === 'ready'
+                  ? 'Ready for Restaurant'
+                  : 'This meal is already matched',
+              );
+              return;
+            }
+            setActionSignal({ id: Date.now(), direction: 'like' });
+          }}
         />
       </SafeAreaView>
 

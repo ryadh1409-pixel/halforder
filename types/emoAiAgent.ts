@@ -186,6 +186,17 @@ export type EmoAiPlatformContextSnapshot = {
     total: number;
     splitStatus?: string;
   }[];
+  /** HalfOrder food-share matches and waiting requests. */
+  halfOrders: {
+    id: string;
+    type: 'match' | 'waiting';
+    foodName: string;
+    restaurantName: string;
+    lifecycle: string;
+    orderStatus: string;
+    deliveryStatus: string;
+    isActive: boolean;
+  }[];
   memory: EmoAiUserMemory | null;
   recommendations: string[];
   orderAlerts: string[];

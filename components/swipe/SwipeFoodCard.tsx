@@ -6,7 +6,6 @@ import {
   promotionBadgeLabel,
   type PromotionBadgeValue,
 } from '@/lib/promotionBadge';
-import { formatSwipeAvailabilityWindow } from '@/lib/swipeAvailabilityWindow';
 import {
   isSwipeMarketplaceJoinLocked,
   SWIPE_MARKETPLACE_STATUS_LABEL,
@@ -103,15 +102,6 @@ function SwipeFoodCardInner({ card }: Props) {
   const visibleChips = chips.slice(0, MAX_VISIBLE_CHIPS);
   const hiddenChipCount = chips.length - visibleChips.length;
 
-  const availability = useMemo(
-    () =>
-      formatSwipeAvailabilityWindow({
-        availableFromMs: card.availableFromMs,
-        availableUntilMs: card.availableUntilMs,
-      }),
-    [card.availableFromMs, card.availableUntilMs],
-  );
-
   const youPay = formatShareCurrency(card.pricing.subtotalBeforeTax);
   const saving = card.pricing.totalSaving;
 
@@ -119,16 +109,6 @@ function SwipeFoodCardInner({ card }: Props) {
   const showDeliveryFee = !card.pricing.freeDelivery && card.pricing.sharedDeliveryFee > 0;
   const showServiceFee = !card.pricing.freeServiceFee && card.pricing.sharedServiceFee > 0;
   const hasMiniBreakdown = !isPickup && (showDeliveryFee || showServiceFee);
-
-  // No window means the share is open-ended, so it is simply live right now.
-  const availabilityText = availability
-    ? availability.detail
-      ? `${availability.title} • ${availability.detail}`
-      : availability.title
-    : 'Available now';
-  // A green dot reads as "open right now"; anything dated gets a clock.
-  const liveNow = availability == null || availability.tone === 'now';
-  const closingSoon = availability?.tone === 'ending-soon';
 
   return (
     <View style={styles.face}>
@@ -183,21 +163,9 @@ function SwipeFoodCardInner({ card }: Props) {
                 pointerEvents="none"
               />
             ) : null}
-            {liveNow ? (
-              <View style={styles.liveDot} />
-            ) : (
-              <Ionicons
-                name={closingSoon ? 'hourglass-outline' : 'time-outline'}
-                size={11}
-                color={closingSoon ? '#FFC49B' : 'rgba(255,255,255,0.8)'}
-              />
-            )}
-            <Text
-              style={[styles.availTxt, closingSoon && styles.availTxtSoon]}
-              numberOfLines={1}
-              ellipsizeMode="clip"
-            >
-              {availabilityText}
+            <View style={styles.liveDot} />
+            <Text style={styles.availTxt} numberOfLines={1}>
+              Available
             </Text>
           </View>
         </View>

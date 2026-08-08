@@ -1,5 +1,7 @@
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -125,6 +127,110 @@ async function fetchUserOrders(uid: string) {
   return rows;
 }
 
+/** Fetch HalfOrder food-share matches and waiting requests for the current user. */
+async function fetchHalfOrders(
+  uid: string,
+): Promise<EmoAiPlatformContextSnapshot['halfOrders']> {
+  const rows: EmoAiPlatformContextSnapshot['halfOrders'] = [];
+  try {
+    const TERMINAL = new Set([
+      'COMPLETED', 'DELIVERED', 'DELIVERY_COMPLETE', 'DELIVERY_COMPLETED',
+      'DELIVERY_CONFIRMED', 'CANCELLED',
+    ]);
+
+    // 1. Matches the user is part of (no orderBy — avoids composite-index requirement).
+    const matchesSnap = await getDocs(
+      query(
+        collection(db, 'matches'),
+        where('users', 'array-contains', uid),
+        limit(10),
+      ),
+    ).catch(() => null);
+
+    // 2. matchRequests for this user (no orderBy — same reason).
+    const requestsSnap = await getDocs(
+      query(
+        collection(db, 'matchRequests'),
+        where('userId', '==', uid),
+        limit(12),
+      ),
+    ).catch(() => null);
+
+    // Collect adminFoodShareIds to batch-fetch names.
+    const shareIds = new Set<string>();
+    for (const d of matchesSnap?.docs ?? []) {
+      const id = readStr((d.data() as Record<string, unknown>).adminFoodShareId);
+      if (id) shareIds.add(id);
+    }
+    for (const d of requestsSnap?.docs ?? []) {
+      const id = readStr((d.data() as Record<string, unknown>).adminFoodShareId);
+      if (id) shareIds.add(id);
+    }
+
+    // Fetch adminFoodShares names (best-effort, parallel).
+    const shareNames = new Map<string, { foodName: string; restaurantName: string }>();
+    await Promise.all(
+      [...shareIds].map(async (shareId) => {
+        try {
+          const snap = await getDoc(doc(db, 'adminFoodShares', shareId));
+          if (snap.exists()) {
+            const d = snap.data() as Record<string, unknown>;
+            shareNames.set(shareId, {
+              foodName: readStr(d.foodName, d.title) || 'Food Share',
+              restaurantName: readStr(d.restaurantName) || 'Restaurant',
+            });
+          }
+        } catch { /* ignore — name stays unknown */ }
+      }),
+    );
+
+    // Process matches.
+    const seenShareIds = new Set<string>();
+    for (const d of matchesSnap?.docs ?? []) {
+      const data = d.data() as Record<string, unknown>;
+      const shareId = readStr(data.adminFoodShareId);
+      const info = shareNames.get(shareId);
+      const lifecycle = readStr(data.lifecycle, data.status) || 'unknown';
+      const orderStatus = readStr(data.orderStatus) || 'unknown';
+      const deliveryStatus = readStr(data.deliveryStatus) || 'unknown';
+      const isActive = !TERMINAL.has(lifecycle.toUpperCase()) &&
+        lifecycle.toUpperCase() !== 'UNKNOWN';
+      seenShareIds.add(shareId);
+      rows.push({
+        id: d.id,
+        type: 'match',
+        foodName: info?.foodName ?? `Share ${shareId}`,
+        restaurantName: info?.restaurantName ?? 'Restaurant',
+        lifecycle,
+        orderStatus,
+        deliveryStatus,
+        isActive,
+      });
+    }
+
+    // Add WAITING requests not already covered by a match.
+    for (const d of requestsSnap?.docs ?? []) {
+      const data = d.data() as Record<string, unknown>;
+      const status = readStr(data.status).toUpperCase();
+      if (status !== 'WAITING') continue;
+      const shareId = readStr(data.adminFoodShareId);
+      if (seenShareIds.has(shareId)) continue; // match already present
+      const info = shareNames.get(shareId);
+      rows.push({
+        id: d.id,
+        type: 'waiting',
+        foodName: info?.foodName ?? `Share ${shareId}`,
+        restaurantName: info?.restaurantName ?? 'Restaurant',
+        lifecycle: 'WAITING_FOR_PARTNER',
+        orderStatus: 'waiting',
+        deliveryStatus: 'waiting',
+        isActive: true,
+      });
+    }
+  } catch { /* degrade gracefully */ }
+  return rows;
+}
+
 async function fetchPromoLabels(): Promise<{ code: string; label: string }[]> {
   try {
     const snap = await getDocs(query(collection(db, 'promoCodes'), limit(20)));
@@ -170,6 +276,7 @@ export async function buildEmoAiPlatformContext(args: {
 
   const meals = await fetchMenuMeals(venueRows);
   const userOrders = uid ? await fetchUserOrders(uid) : [];
+  const halfOrders = uid ? await fetchHalfOrders(uid) : [];
 
   const recommendations = buildEmoAiRecommendations({
     meals: meals.map((m) => ({
@@ -220,6 +327,7 @@ export async function buildEmoAiPlatformContext(args: {
     })),
     promotions,
     userOrders,
+    halfOrders,
     memory,
     recommendations,
     orderAlerts,
@@ -247,6 +355,17 @@ export function formatPlatformContextForPrompt(
         `- ${o.id.slice(0, 8)}… ${o.restaurantName} | status=${o.status} pay=${o.paymentStatus} delivery=${o.deliveryStatus} total=CA$${o.total.toFixed(2)}`,
     )
     .join('\n');
+
+  const halfOrderLines = ctx.halfOrders
+    .slice(0, 6)
+    .map((h) => {
+      const state =
+        h.type === 'waiting'
+          ? '⏳ Waiting for partner'
+          : `lifecycle=${h.lifecycle} order=${h.orderStatus} delivery=${h.deliveryStatus}`;
+      return `- ${h.foodName} @ ${h.restaurantName} | ${state} [${h.isActive ? 'ACTIVE' : 'PAST'}]`;
+    })
+    .join('\n');
   const promoLines = ctx.promotions
     .slice(0, 8)
     .map((p) => `- ${p.code}: ${p.label}`)
@@ -267,8 +386,11 @@ export function formatPlatformContextForPrompt(
     'Active promotions/coupons:',
     promoLines || '- none loaded',
     '',
-    "User's recent orders:",
+    "User's recent FullOrder deliveries:",
     orderLines || '- none',
+    '',
+    "User's HalfOrder food-share matches (MOST IMPORTANT for order status questions):",
+    halfOrderLines || '- none',
     '',
     'Order alerts:',
     ctx.orderAlerts.slice(0, 5).join('\n') || '- none',
