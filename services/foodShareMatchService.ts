@@ -613,6 +613,10 @@ export async function joinAdminFoodShare(
       // Clear stale order tracking fields from the previous order.
       orderStatus: null,
       deliveryStatus: null,
+      // Clear the old orderId so confirmFoodSharePaymentCore does not return
+      // a stale orderId that makes the client call ensureFoodShareDispatchOrder
+      // before both users have paid.
+      orderId: null,
       // Clear completion timestamps so chatReadOnly cannot trigger from old timestamps.
       completedAt: null,
       deliveredAt: null,

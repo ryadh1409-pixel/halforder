@@ -261,7 +261,11 @@ export async function confirmFoodSharePaymentCore(input: {
     ok: true,
     lifecycle,
     paymentIntentId: pi.id,
-    orderId: dispatchResult?.orderId ?? updated.data()?.orderId ?? null,
+    // Only return orderId if dispatch actually succeeded this cycle.
+    // Reading updated.data()?.orderId would return a stale ID from a prior
+    // completed order (re-order scenario), causing the client to call
+    // ensureFoodShareDispatchOrder before both users have paid.
+    orderId: dispatchResult?.orderId ?? null,
     orderCreated: dispatchResult?.created ?? false,
     poolExists: dispatchResult?.poolExists ?? false,
   };
