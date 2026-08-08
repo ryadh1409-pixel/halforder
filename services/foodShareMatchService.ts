@@ -82,7 +82,19 @@ async function resolvePhotoUrl(uid: string): Promise<string | null> {
 
 type QueueTxResult =
   | { kind: 'waiting' }
-  | { kind: 'matched'; partnerUid: string; partnerFirstName: string };
+  | {
+      kind: 'matched';
+      partnerUid: string;
+      partnerFirstName: string;
+      matchId: string;
+      matchChatId: string;
+      isPickup: boolean;
+      isReopen: boolean;
+      prevLifecycle: string | null;
+      foodName: string;
+      restaurantName: string;
+      costBreakdown: FoodShareCostBreakdown;
+    };
 
 /**
  * Swipe-right on an admin card:
@@ -103,6 +115,14 @@ export async function joinAdminFoodShare(
   const queueRef = doc(db, 'matchQueues', adminFoodShareId);
   const requestRef = doc(db, 'matchRequests', `${adminFoodShareId}_${uid}`);
   const myFirstName = await resolveFirstName(uid);
+  // Pre-fetch own photo before the transaction so it's available inside the
+  // transaction callback (tx.get() calls must all precede tx.set() calls).
+  let myPhoto: string | null = null;
+  try {
+    myPhoto = await resolvePhotoUrl(uid);
+  } catch {
+    myPhoto = null;
+  }
   const requestPath = `matchRequests/${adminFoodShareId}_${uid}`;
 
   console.log('[SHARE SWIPE]', {
@@ -332,7 +352,44 @@ export async function joinAdminFoodShare(
 
       const [u0, u1] = sortedPair(waitingUserId, uid);
       const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
+      const matchRef = doc(db, 'matches', matchId);
 
+      // CRITICAL: read matchRef BEFORE any tx writes (Firestore transaction rule).
+      // By reading here we also learn whether this is a new match or a re-order,
+      // which lets us write the match doc atomically with both matchRequests.
+      // Previously the match doc was written OUTSIDE the transaction, meaning a
+      // failure after commit left both matchRequests MATCHED but no match doc —
+      // permanent inconsistent state that caused "no-match" on the Orders Hub.
+      const existingMatchSnap = await tx.get(matchRef);
+
+      // Derive share fields needed for the match doc.
+      // shareSnap was already read via tx.get(shareRef) at the top of this callback.
+      const shareRaw = shareSnap.data() as Record<string, unknown>;
+      const fulfillmentMode = resolveFoodShareFulfillmentMode(shareRaw);
+      const isPickup = fulfillmentMode === 'pickup';
+      const shareTyped = mapAdminFoodShareDoc(adminFoodShareId, shareRaw);
+      const costBreakdown = buildAdminShareCostBreakdown(
+        shareTyped.originalPrice,
+        shareTyped.sharedPrice,
+        shareTyped.deliveryShare,
+        { fulfillmentMode, promotionBadges: shareTyped.promotionBadges, shareRaw },
+      );
+      /** Waiting user created the share seat → pickup host. */
+      const pickupHostUid = waitingUserId;
+      const pickupJoinerUid = uid;
+      const nameA = u0 === uid ? myFirstName : waitingFirstName;
+      const nameB = u1 === uid ? myFirstName : waitingFirstName;
+      const photoA = u0 === uid ? myPhoto : null;
+      const photoB = u1 === uid ? myPhoto : null;
+      // Generate a stable, collision-resistant chat room ID unique per order instance.
+      const matchChatId = doc(collection(db, 'matchChats')).id;
+      const prevLifecycle: string | null = existingMatchSnap.exists()
+        ? (typeof existingMatchSnap.data()?.lifecycle === 'string'
+            ? String(existingMatchSnap.data()?.lifecycle)
+            : null)
+        : null;
+
+      // Write queue + both matchRequests.
       tx.update(queueRef, {
         waitingUserId: null,
         waitingUserFirstName: null,
@@ -364,17 +421,83 @@ export async function joinAdminFoodShare(
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // Write match doc inside the same transaction — now atomic with matchRequests.
+      if (!existingMatchSnap.exists()) {
+        tx.set(matchRef, {
+          adminFoodShareId,
+          foodShareId: adminFoodShareId,
+          users: [u0, u1],
+          userA: { uid: u0, firstName: nameA, photoUrl: photoA },
+          userB: { uid: u1, firstName: nameB, photoUrl: photoB },
+          foodName: shareTyped.foodName,
+          restaurantName: shareTyped.restaurantName,
+          foodImageUrl: shareTyped.image,
+          status: 'pending_payment',
+          lifecycle: 'WAITING_FOR_PAYMENT',
+          paymentStatus: 'pending',
+          userPayments: isPickup
+            ? { [pickupHostUid]: { paymentStatus: 'NOT_REQUIRED', role: 'pickup_host' } }
+            : {},
+          hostUserId: waitingUserId,
+          fulfillmentMode,
+          pickupHostUid: isPickup ? pickupHostUid : null,
+          pickupJoinerUid: isPickup ? pickupJoinerUid : null,
+          pickupReimbursementStatus: isPickup ? 'HELD' : 'NONE',
+          orderStatus: null,
+          deliveryStatus: null,
+          costBreakdown,
+          matchChatId,
+          matchSource: 'admin_food_share_swipe',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // Re-order: match doc exists from a previous completed/delivered order.
+        // Reset to a fresh state for the new order so the chat screen starts clean.
+        // isFoodShareMatchReopenUpdate allows this only when lifecycle is terminal.
+        tx.set(matchRef, {
+          matchChatId,
+          status: 'pending_payment',
+          lifecycle: 'WAITING_FOR_PAYMENT',
+          userPayments: isPickup
+            ? { [pickupHostUid]: { paymentStatus: 'NOT_REQUIRED', role: 'pickup_host' } }
+            : {},
+          paymentStatus: 'pending',
+          orderStatus: null,
+          deliveryStatus: null,
+          // Clear the old orderId so confirmFoodSharePaymentCore does not return
+          // a stale orderId that makes the client call ensureFoodShareDispatchOrder
+          // before both users have paid.
+          orderId: null,
+          completedAt: null,
+          deliveredAt: null,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+
       console.log('[MATCH TRANSACTION]', {
         phase: 'second_seat',
         matchId,
+        matchChatId,
         partnerUid: waitingUserId,
         uid,
+        isReopen: existingMatchSnap.exists(),
+        prevLifecycle,
       });
 
       return {
         kind: 'matched' as const,
         partnerUid: waitingUserId,
         partnerFirstName: waitingFirstName,
+        matchId,
+        matchChatId,
+        isPickup,
+        isReopen: existingMatchSnap.exists(),
+        prevLifecycle,
+        foodName: shareTyped.foodName,
+        restaurantName: shareTyped.restaurantName,
+        costBreakdown,
       };
     });
   } catch (e) {
@@ -420,262 +543,103 @@ export async function joinAdminFoodShare(
   }
 
   try {
-  const shareSnap = await getDoc(shareRef);
-  if (!shareSnap.exists()) {
-    return { ok: false, error: 'Meal share not found.' };
-  }
-  const share = mapAdminFoodShareDoc(
-    adminFoodShareId,
-    shareSnap.data() as Record<string, unknown>,
-  );
-  const shareRaw = shareSnap.data() as Record<string, unknown>;
-  const fulfillmentMode = resolveFoodShareFulfillmentMode(shareRaw);
-  const isPickup = fulfillmentMode === 'pickup';
-  const costBreakdown = buildAdminShareCostBreakdown(
-    share.originalPrice,
-    share.sharedPrice,
-    share.deliveryShare,
-    {
-      fulfillmentMode,
-      promotionBadges: share.promotionBadges,
-      shareRaw,
-    },
-  );
-
-  const partnerUid = txResult.partnerUid;
-  const partnerFirstNameFromQueue = txResult.partnerFirstName;
-  /** Waiting user created the share seat → pickup host (User A). Joiner pays in-app. */
-  const pickupHostUid = partnerUid;
-  const pickupJoinerUid = uid;
+  // All share data, match doc fields, and matchChatId were computed and written
+  // inside the transaction above. Extract them from txResult.
+  const {
+    partnerUid,
+    partnerFirstName: partnerFirstNameFromQueue,
+    matchId,
+    matchChatId,
+    isPickup,
+    isReopen,
+    prevLifecycle,
+    foodName,
+    restaurantName,
+    costBreakdown,
+  } = txResult;
   const [u0, u1] = sortedPair(partnerUid, uid);
-  const matchId = adminFoodShareMatchId(adminFoodShareId, u0, u1);
-  // Generate a stable, collision-resistant chat room ID that is unique per order.
-  // Using a Firestore auto-ID (not Date.now()) so the ID is not time-dependent
-  // and cannot collide even if the function is called rapidly.
-  // This ID is stored on the match document and is the single source of truth
-  // for which chat room belongs to this order instance.
-  const matchChatId = doc(collection(db, 'matchChats')).id;
   const matchPath = `matches/${matchId}`;
 
-  // Rules only allow reading own users/{uid}. Never getDoc the partner profile —
-  // use queue/tx first names and own photo only.
-  let myPhoto: string | null = null;
-  try {
-    myPhoto = await resolvePhotoUrl(uid);
-  } catch {
-    myPhoto = null;
-  }
-  const nameA = u0 === uid ? myFirstName : partnerFirstNameFromQueue;
-  const nameB = u1 === uid ? myFirstName : partnerFirstNameFromQueue;
-  const photoA = u0 === uid ? myPhoto : null;
-  const photoB = u1 === uid ? myPhoto : null;
-
-  const matchRef = doc(db, 'matches', matchId);
+  // matchChats creation is non-critical: the match doc is already committed
+  // atomically inside the transaction above. A chat creation failure does not
+  // corrupt Firestore — users are matched and can pay; chat is best-effort.
   console.log('[MATCH POST WRITE]', {
-    operation: 'getDoc',
+    operation: isReopen ? 'reopen_existing_match' : 'new_match',
     path: matchPath,
     matchId,
+    matchChatId,
+    isReopen,
+    prevLifecycle,
     uid,
   });
-  let existingMatch;
   try {
-    existingMatch = await getDoc(matchRef);
+    await setDoc(doc(db, 'matchChats', matchChatId), {
+      matchId,
+      adminFoodShareId,
+      foodShareId: adminFoodShareId,
+      participantIds: [u0, u1],
+      foodName,
+      restaurantName,
+      conversationType: 'partner',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await setDoc(doc(db, 'matchChats', matchChatId, 'matchMessages', 'welcome'), {
+      senderId: 'system',
+      senderUid: 'system',
+      senderRole: 'system',
+      senderFirstName: 'HalfOrder',
+      text: isPickup
+        ? `You're matched for pickup: ${foodName}. Your partner pays their share in the app — the host pays the restaurant, then HalfOrder reimburses them after pickup.`
+        : `You're matched to split ${foodName}. Say hi and coordinate with your partner!`,
+      createdAt: serverTimestamp(),
+      sentAt: serverTimestamp(),
+      deliveredAt: null,
+      readAt: null,
+    }, { merge: false }).catch(() => undefined);
   } catch (e) {
-    console.log('[MATCH FAILURE]', {
-      phase: 'post_transaction_match_doc',
-      operation: 'getDoc',
-      path: matchPath,
+    // Log but do not fail — match is already committed in Firestore.
+    console.log('[MATCH POST WRITE FAILURE]', {
+      phase: 'chat_doc',
+      matchId,
+      matchChatId,
       uid,
       error: e instanceof Error ? e.message : String(e),
       code: (e as { code?: string })?.code,
     });
-    throw e;
   }
-  if (!existingMatch.exists()) {
-    console.log('[MATCH POST WRITE]', {
-      operation: 'setDoc(create)',
-      path: matchPath,
-      matchId,
-      users: [u0, u1],
-      uid,
-    });
-    try {
-      await setDoc(matchRef, {
-        adminFoodShareId,
-        foodShareId: adminFoodShareId,
-        users: [u0, u1],
-        userA: { uid: u0, firstName: nameA, photoUrl: photoA },
-        userB: { uid: u1, firstName: nameB, photoUrl: photoB },
-        foodName: share.foodName,
-        restaurantName: share.restaurantName,
-        foodImageUrl: share.image,
-        status: 'pending_payment',
-        lifecycle: 'WAITING_FOR_PAYMENT',
-        paymentStatus: 'pending',
-        userPayments: isPickup
-          ? {
-              [pickupHostUid]: {
-                paymentStatus: 'NOT_REQUIRED',
-                role: 'pickup_host',
-              },
-            }
-          : {},
-        hostUserId: partnerUid,
-        fulfillmentMode,
-        pickupHostUid: isPickup ? pickupHostUid : null,
-        pickupJoinerUid: isPickup ? pickupJoinerUid : null,
-        pickupReimbursementStatus: isPickup ? 'HELD' : 'NONE',
-        orderStatus: null,
-        deliveryStatus: null,
-        costBreakdown,
-        matchChatId,
-        matchSource: 'admin_food_share_swipe',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (e) {
-      console.log('[MATCH FAILURE]', {
-        phase: 'post_transaction_match_doc',
-        operation: 'setDoc(create)',
-        path: matchPath,
-        uid,
-        error: e instanceof Error ? e.message : String(e),
-        code: (e as { code?: string })?.code,
-      });
-      throw e;
-    }
-    const chatPath = `matchChats/${matchChatId}`;
-    console.log('[MATCH POST WRITE]', {
-      operation: 'setDoc(merge)',
-      path: chatPath,
-      uid,
-    });
-    await setDoc(doc(db, 'matchChats', matchChatId), {
-      matchId,
-      adminFoodShareId,
-      foodShareId: adminFoodShareId,
-      participantIds: [u0, u1],
-      foodName: share.foodName,
-      restaurantName: share.restaurantName,
-      conversationType: 'partner',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    await setDoc(doc(db, 'matchChats', matchChatId, 'matchMessages', 'welcome'), {
-      senderId: 'system',
-      senderUid: 'system',
-      senderRole: 'system',
-      senderFirstName: 'HalfOrder',
-      text: isPickup
-        ? `You're matched for pickup: ${share.foodName}. Your partner pays their share in the app — the host pays the restaurant, then HalfOrder reimburses them after pickup.`
-        : `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
-      createdAt: serverTimestamp(),
-      sentAt: serverTimestamp(),
-      deliveredAt: null,
-      readAt: null,
-    }, { merge: false }).catch(() => undefined);
-    console.log('[MATCH SUCCESS]', {
-      matchId,
-      adminFoodShareId,
-      users: [u0, u1],
-      lifecycle: 'WAITING_FOR_PAYMENT',
-      matchChatId,
-      path: matchPath,
-      fulfillmentMode,
-    });
-  } else {
-    // Re-order: match doc exists from a previous completed/delivered order.
-    // Reset it to a fresh state for the new order so the chat screen starts clean:
-    //   - new matchChatId → brand-new chat room
-    //   - lifecycle reset → chatReadOnly = false (no more "Chat is read-only" banner)
-    //   - stale order fields cleared → no old orderStatus/deliveryStatus bleed-through
-    // The isFoodShareMatchReopenUpdate Firestore rule allows this update only when
-    // the previous lifecycle was terminal (COMPLETED / DELIVERED / CANCELLED).
-    const prevLifecycle = existingMatch.data()?.lifecycle ?? null;
-    console.log('[MATCH POST WRITE]', {
-      operation: 'reopen_existing_match',
-      path: matchPath,
-      matchId,
-      newMatchChatId: matchChatId,
-      prevLifecycle,
-      uid,
-    });
-    await setDoc(matchRef, {
-      matchChatId,
-      // Reset lifecycle so the chat screen shows the correct state.
-      status: 'pending_payment',
-      lifecycle: 'WAITING_FOR_PAYMENT',
-      // Reset payment state for the new order.
-      userPayments: isPickup
-        ? { [pickupHostUid]: { paymentStatus: 'NOT_REQUIRED', role: 'pickup_host' } }
-        : {},
-      paymentStatus: 'pending',
-      // Clear stale order tracking fields from the previous order.
-      orderStatus: null,
-      deliveryStatus: null,
-      // Clear the old orderId so confirmFoodSharePaymentCore does not return
-      // a stale orderId that makes the client call ensureFoodShareDispatchOrder
-      // before both users have paid.
-      orderId: null,
-      // Clear completion timestamps so chatReadOnly cannot trigger from old timestamps.
-      completedAt: null,
-      deliveredAt: null,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    await setDoc(doc(db, 'matchChats', matchChatId), {
-      matchId,
-      adminFoodShareId,
-      foodShareId: adminFoodShareId,
-      participantIds: [u0, u1],
-      foodName: share.foodName,
-      restaurantName: share.restaurantName,
-      conversationType: 'partner',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    await setDoc(doc(db, 'matchChats', matchChatId, 'matchMessages', 'welcome'), {
-      senderId: 'system',
-      senderUid: 'system',
-      senderRole: 'system',
-      senderFirstName: 'HalfOrder',
-      text: isPickup
-        ? `You're matched for pickup: ${share.foodName}. Your partner pays their share in the app — the host pays the restaurant, then HalfOrder reimburses them after pickup.`
-        : `You're matched to split ${share.foodName}. Say hi and coordinate with your partner!`,
-      createdAt: serverTimestamp(),
-      sentAt: serverTimestamp(),
-      deliveredAt: null,
-      readAt: null,
-    }, { merge: false }).catch(() => undefined);
-    console.log('[MATCH SUCCESS]', {
-      matchId,
-      adminFoodShareId,
-      existing: true,
-      prevLifecycle,
-      newMatchChatId: matchChatId,
-      newLifecycle: 'WAITING_FOR_PAYMENT',
-    });
-  }
+
+  console.log('[MATCH SUCCESS]', {
+    matchId,
+    adminFoodShareId,
+    users: [u0, u1],
+    lifecycle: 'WAITING_FOR_PAYMENT',
+    matchChatId,
+    path: matchPath,
+    isReopen,
+    prevLifecycle,
+  });
 
   const partnerFirstName = partnerFirstNameFromQueue;
 
   void notifyPairingAwaitingPayment({
     recipientUid: partnerUid,
     partnerFirstName: myFirstName,
-    foodName: share.foodName,
+    foodName,
     matchId,
     adminFoodShareId,
   });
   void notifyPairingAwaitingPayment({
     recipientUid: uid,
     partnerFirstName,
-    foodName: share.foodName,
+    foodName,
     matchId,
     adminFoodShareId,
   });
   void notifyAdminMatchCreated({
     matchId,
     adminFoodShareId,
-    foodName: share.foodName,
+    foodName,
   });
 
   void markFoodShareInviteConverted({
@@ -698,7 +662,7 @@ export async function joinAdminFoodShare(
   };
   } catch (e) {
     console.log('[MATCH FAILURE]', {
-      phase: 'post_transaction_match_doc',
+      phase: 'post_transaction_matched',
       adminFoodShareId,
       uid,
       error: e instanceof Error ? e.message : String(e),

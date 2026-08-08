@@ -881,8 +881,11 @@ service cloud.firestore {
         && resource.data.lifecycle in ['COMPLETED', 'DELIVERED', 'CANCELLED']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'matchChatId', 'status', 'lifecycle', 'userPayments', 'paymentStatus',
-             'orderStatus', 'deliveryStatus', 'completedAt', 'deliveredAt', 'updatedAt'
+             'orderStatus', 'deliveryStatus', 'orderId', 'completedAt', 'deliveredAt', 'updatedAt'
            ])
+        // orderId may only be cleared (set to null), never set to a new value
+        && (!('orderId' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.orderId == null)
         && request.resource.data.lifecycle == 'WAITING_FOR_PAYMENT'
         && request.resource.data.status == 'pending_payment'
         && request.resource.data.matchChatId is string

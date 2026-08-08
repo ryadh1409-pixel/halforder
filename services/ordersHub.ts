@@ -48,6 +48,12 @@ export function subscribeFoodShareHub(
 
   let requests: MatchRequestDoc[] = [];
   let matches: FoodShareMatchDoc[] = [];
+  // Loading gate: suppress emit() until BOTH independent onSnapshot listeners
+  // have fired at least once. Without this, whichever listener fires first
+  // triggers emit() with an empty counterpart array, producing transient
+  // "resolvedMatchId = (none)" / section = "no-match" for MATCHED requests.
+  let requestsLoaded = false;
+  let matchesLoaded = false;
   const shareCache = new Map<string, Record<string, unknown> | null>();
   const shareUnsubs = new Map<string, Unsubscribe>();
 
@@ -76,6 +82,9 @@ export function subscribeFoodShareHub(
   };
 
   const emit = () => {
+    // Wait until both datasets have arrived before emitting.
+    if (!requestsLoaded || !matchesLoaded) return;
+
     const items: FoodShareHubItem[] = [];
     const seen = new Set<string>();
 
@@ -201,6 +210,7 @@ export function subscribeFoodShareHub(
           mapRequest(d.id, d.data() as Record<string, unknown>),
         );
         requests.forEach((r) => bindShare(r.adminFoodShareId));
+        requestsLoaded = true;
         emit();
       },
       (e) => onError?.(e instanceof Error ? e : new Error(String(e))),
@@ -216,6 +226,7 @@ export function subscribeFoodShareHub(
           return mapped;
         });
         matches.forEach((m) => bindShare(m.adminFoodShareId));
+        matchesLoaded = true;
         emit();
       },
       (e) => onError?.(e instanceof Error ? e : new Error(String(e))),
